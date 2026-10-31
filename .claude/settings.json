@@ -1,0 +1,11 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}
