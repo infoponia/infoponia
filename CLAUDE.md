@@ -56,18 +56,52 @@ Estado actual y próximos pasos: `docs/estado.md`. Leelo al empezar cada sesión
 
 ## Tests
 
-- Obligatorios en reglas con dinero, stock o alcance por usuario.
-- Un test por regla numerada, nombrado por la regla (`test_regla_8_13_9_...`).
-- TDD en la capa de servicios. Tests posteriores en vistas.
-- Las pruebas se acumulan: nunca borres ni debilites una prueba existente para que pase. Si una regla
-  cambió, avisá y proponé el cambio de la prueba.
-- Un test de integración (vista con el cliente de prueba de Django) por flujo principal de cada caso de
-  uso. No escribas pruebas de navegador.
+Las pruebas se escriben en `<app>/tests/` y se acumulan: cada tarea corre todas las anteriores.
+
+- Unidad: una prueba por regla de negocio, extensión y postcondición relevante del caso de uso.
+  Son obligatorias, como mínimo, en reglas con dinero, stock o alcance por usuario.
+- Integración: una prueba por flujo principal de cada caso de uso (vista con el cliente de
+  prueba de Django). No escribas pruebas de navegador.
+- Orden en servicios: primero escribí todas las pruebas de las reglas del caso de uso, corrélas y
+  mostrá que fallan; esperá que el estudiante las revise; después implementá el servicio.
+  En vistas y en pantallas sin reglas de negocio, las pruebas van después.
+- Nunca borres ni debilites una prueba existente para que pase. Si una regla cambió, avisá y
+  proponé el cambio de la prueba.
 - Cada prueba arma sus propios datos y no depende de otra.
 - Mientras trabajás, corré solo las pruebas del tema (`python manage.py test core.tests.test_usuario`).
   La suite completa se corre una vez, al terminar la tarea.
 
-## Comandos (PowerShell, Windows)
+### Nombres
+
+Los nombres concretos de esta sección son ejemplos del formato, no archivos ni pruebas que haya
+que crear.
+
+- Archivo por caso de uso: `<app>/tests/test_<codigo_cu>.py`.
+  Ejemplo: `compras/tests/test_cmp_apr_odc.py`.
+- Clases: `<CodigoCu>ServicioTests` (unidad) y `<CodigoCu>VistaTests` (integración).
+  Ejemplo: `CmpAprOdcServicioTests`.
+- Prueba: `test_<origen>_<que_espera>`, en snake_case, sin tildes ni ñ, con el resultado en presente.
+  Formatos según el origen, con un ejemplo cada uno:
+  - Regla del CU, `test_regla_<nombre_regla>_<que_espera>`.
+    Ejemplo: `test_regla_orden_resoluble_rechaza_orden_ya_aprobada`
+  - Regla del modelo, `test_regla_<seccion>_<numero>_<que_espera>`.
+    Ejemplo: `test_regla_8_16_24_orden_resuelta_no_vuelve_a_resolverse`
+  - Extensión, `test_ext_<id>_<que_espera>`.
+    Ejemplo: `test_ext_8b_destino_inactivo_no_registra_cambios`
+  - Postcondición, `test_post_<letra>_<que_espera>`.
+    Ejemplo: `test_post_d_sube_cantidad_en_transito`
+  - Flujo principal, `test_flujo_principal_<que_espera>`.
+    Ejemplo: `test_flujo_principal_aprueba_orden`
+  - Decisión sin caso de uso, `test_d<numero>_<que_espera>`.
+    Ejemplo: `test_d09_un_solo_gerente_activo`
+- Cada prueba tiene un docstring con la fuente exacta (caso de uso y regla, o decisión).
+
+## Comandos
+
+Los comandos de este archivo están escritos para la terminal PowerShell del estudiante, con el
+entorno virtual activo. Cuando los ejecutes vos con la herramienta Bash, que no hereda el entorno
+virtual, reemplazá siempre `python` por `.venv/Scripts/python.exe`
+(por ejemplo, `.venv/Scripts/python.exe manage.py test`).
 
 ```
 .venv\Scripts\Activate.ps1

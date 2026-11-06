@@ -278,3 +278,18 @@ Formato:
   de las cotizaciones), a resolver en el caso de uso de baja del Gerente.
 - Estado: vigente
 
+## D-15 — Tipo del campo telefono
+
+- Fecha: 05/11/2026
+- Decidió: Lautaro Fernández (propuesto por Claude Code durante la Tarea 01, sin objeción)
+- Antes: `telefono` (telefonoX, D-02) es un campo nuevo que no tiene tipo definido en el
+  modelo de dominio.
+- Decisión: `CharField(max_length=20, blank=True)`.
+- Por qué: un teléfono se escribe, no se calcula ni se suma, así que no es numérico. 20
+  caracteres alcanzan para un número local o uno con código de país y separadores
+  (espacios o guiones). `blank=True` porque no todos los roles lo cargan desde el alta.
+- Fuentes: D-02 (mapeo telefonoX → `telefono`); D-05 (registrar el tipo de cada campo nuevo).
+- Consecuencias: ninguna por ahora; si en el futuro se necesita validar formato, se agrega un
+  validador sin cambiar el tipo de columna.
+- Estado: vigente
+
