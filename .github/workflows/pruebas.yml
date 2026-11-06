@@ -1,0 +1,68 @@
+# Corre la suite de pruebas de InfoPonia en cada PR a main y en cada push a main.
+name: Pruebas
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Permisos mínimos: el workflow solo necesita leer el código.
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+
+    services:
+      # Base de datos de prueba: PostgreSQL 17, igual a la versión usada en local/producción.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: infoponia_ci
+          POSTGRES_PASSWORD: infoponia_ci
+          POSTGRES_DB: infoponia_ci
+        ports:
+          - 5432:5432
+        # Espera a que Postgres esté listo antes de dejar avanzar al resto del job.
+        options: >-
+          --health-cmd "pg_isready -U infoponia_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Variables falsas de prueba, solo para que el proyecto arranque en CI. No son secretos.
+      DATABASE_URL: postgres://infoponia_ci:infoponia_ci@localhost:5432/infoponia_ci
+      DJANGO_SECRET_KEY: clave-falsa-de-ci-no-usar-en-produccion
+      DJANGO_DEBUG: "0"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+
+    steps:
+      # Descarga el código del repositorio.
+      - name: Clonar repositorio
+        uses: actions/checkout@v7.0.1
+
+      # Instala Python 3.11 y cachea las dependencias de pip entre corridas.
+      - name: Instalar Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # Instala las dependencias del proyecto.
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # Chequeo general del proyecto Django (configuración, modelos, etc.).
+      - name: Chequear proyecto
+        run: python manage.py check
+
+      # Detecta modelos modificados sin su migración correspondiente.
+      - name: Verificar migraciones faltantes
+        run: python manage.py makemigrations --check --dry-run
+
+      # Corre la suite completa de pruebas.
+      - name: Correr pruebas
+        run: python manage.py test
