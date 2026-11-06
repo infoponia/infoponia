@@ -45,7 +45,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'core',
 ]
+
+# D-01 a D-03: modelo de usuario propio (email en vez de username, roles con herencia
+# multi-tabla). Ver docs/decisiones.md.
+AUTH_USER_MODEL = "core.Usuario"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
