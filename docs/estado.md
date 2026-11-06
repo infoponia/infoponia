@@ -21,6 +21,10 @@
   solo lectura; 10 pruebas en `core/tests/test_usuario.py`; migraciones `0001_initial` y
   `0002_alter_agronomo_options_alter_capataz_options_and_more`. Verificado a mano en el admin
   local. Rama `feature/usuario-base`.
+- Neon reiniciado y migrado; Administradores recreados (06/11/2026).
+- Tarea chica: renombradas las 10 pruebas de `core/tests/test_usuario.py` con la convención de
+  `CLAUDE.md` (prefijo `test_d<numero>_`), ordenadas por decisión; no se cambió lo que verifican.
+- Confirmado que los commits de la rama `feature/usuario-base` no llevan línea de coautor.
 
 ## En curso
 
@@ -28,14 +32,9 @@
 
 ## Siguiente
 
-1. Reiniciar la base de Neon **antes** de mergear la PR del usuario propio y volver a crear los
-   Administradores con `createsuperuser` (lo hace el estudiante; Claude Code no opera contra Neon).
-2. Confirmar que los commits de esta rama no llevan línea de coautor.
-3. Tarea chica: renombrar las 10 pruebas de `core/tests/test_usuario.py` con la convención de
-   `CLAUDE.md` (prefijo `test_d<numero>_`), sin cambiar lo que verifican.
-4. Escribir al menos una versión breve de los casos de uso de iniciar sesión, alta, modificación
+1. Escribir al menos una versión breve de los casos de uso de iniciar sesión, alta, modificación
    y baja de usuario, antes de empezar la Tarea 02.
-5. Tarea chica aparte: configurar GitHub Actions para correr la suite de pruebas en cada PR.
+2. Tarea chica aparte: configurar GitHub Actions para correr la suite de pruebas en cada PR.
 
 ## Registrado el 05/11/2026
 
