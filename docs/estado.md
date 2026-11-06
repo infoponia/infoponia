@@ -25,6 +25,8 @@
 - Tarea chica: renombradas las 10 pruebas de `core/tests/test_usuario.py` con la convención de
   `CLAUDE.md` (prefijo `test_d<numero>_`), ordenadas por decisión; no se cambió lo que verifican.
 - Confirmado que los commits de la rama `feature/usuario-base` no llevan línea de coautor.
+- Tarea chica: workflow de GitHub Actions (`.github/workflows/pruebas.yml`) que corre `check`,
+  `makemigrations --check --dry-run` y `test` contra PostgreSQL 17 en cada PR y push a main.
 
 ## En curso
 
@@ -32,9 +34,10 @@
 
 ## Siguiente
 
-1. Escribir al menos una versión breve de los casos de uso de iniciar sesión, alta, modificación
+1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
+   el check de `pruebas.yml` pase para poder mergear a main.
+2. Escribir al menos una versión breve de los casos de uso de iniciar sesión, alta, modificación
    y baja de usuario, antes de empezar la Tarea 02.
-2. Tarea chica aparte: configurar GitHub Actions para correr la suite de pruebas en cada PR.
 
 ## Registrado el 05/11/2026
 
