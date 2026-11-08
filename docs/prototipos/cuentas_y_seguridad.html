@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InfoPonia · Cuentas y seguridad (prototipo de pantallas)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --background:#f4f5f6;--foreground:#111418;--card:#fff;--primary:#1a6b3c;--primary-foreground:#fff;
+  --secondary:#e8ecef;--muted:#eaecee;--muted-foreground:#5d6672;--border:#d8dde3;--radius:4px;
+  --status-ok:#1a7a47;--status-warn:#9a5b00;--status-danger:#b52c2c;--status-neutral:#5a6370;
+  --header-height:52px;--footer-height:32px;--sidebar-width:220px;
+  --font-sans:'Inter',system-ui,sans-serif;--font-mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-sans);font-size:14px;background:var(--background);color:var(--foreground);line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+h1{font-size:20px;font-weight:700}
+h2{font-size:16px;font-weight:700}
+.muted{color:var(--muted-foreground)}
+.mono{font-family:var(--font-mono)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;opacity:0}
+label.btn{cursor:pointer}
+.btn.back-btn{display:none;border:none;padding:6px 8px}
+.field .btn.back-btn{display:inline-flex}
+.field .btn.back-btn ~ .brand b{display:none}
+.btn.cam{display:none}
+@media(hover:none) and (pointer:coarse){.btn.cam{display:inline-flex}}
+.photo-row{display:flex;gap:16px;align-items:center;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.avatar.photo{background-size:cover;background-position:center;background-repeat:no-repeat}
+@supports (appearance:base-select){
+  select.field-input,select.field-input::picker(select){appearance:base-select}
+  select.field-input{display:flex;align-items:center;justify-content:space-between}
+  select.field-input::picker-icon{color:var(--muted-foreground)}
+  select.field-input::picker(select){border:1px solid var(--border);border-radius:6px;background:#fff;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.14);margin-top:4px}
+  select.field-input option{padding:8px 10px;border-radius:4px;color:var(--foreground);background:transparent;font-size:13px;display:flex;align-items:center;gap:8px}
+  select.field-input option:hover,select.field-input option:focus-visible{background:var(--secondary);color:var(--foreground)}
+  select.field-input option:checked{background:#e6f4ec;color:var(--status-ok);font-weight:600}
+  select.field-input option::checkmark{color:var(--status-ok)}
+}
+
+/* ---- componentes del prototipo original ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;border:1px solid transparent;transition:background .12s,border-color .12s;min-height:34px}
+.btn-primary{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
+.btn-primary:hover{background:#155a32}
+.btn-ghost{background:transparent;color:var(--muted-foreground);border-color:var(--border)}
+.btn-ghost:hover{background:var(--secondary);color:var(--foreground)}
+.btn-danger{background:transparent;color:var(--status-danger);border-color:var(--status-danger)}
+.btn-danger:hover{background:#fdeaea}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{padding:3px 9px;font-size:12px;min-height:28px}
+.btn-block{width:100%}
+.field-input{width:100%;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;background:#fff;outline:none;transition:border-color .12s;appearance:auto}
+.field-input:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(26,107,60,.14)}
+.field-input.bad{border-color:var(--status-danger)}
+.field-input:disabled{background:var(--muted);color:var(--muted-foreground)}
+.status-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:var(--font-mono);padding:2px 7px;border-radius:3px;white-space:nowrap}
+.status-ok{background:#e6f4ec;color:var(--status-ok)}
+.status-warn{background:#fef3e2;color:var(--status-warn)}
+.status-danger{background:#fdeaea;color:var(--status-danger)}
+.status-neutral{background:#eef0f2;color:var(--status-neutral)}
+.alert{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--radius);font-size:13px;border-left:3px solid}
+.alert svg{flex-shrink:0;margin-top:2px}
+.alert-warn{background:#fef9ec;border-color:var(--status-warn);color:#6b4000}
+.alert-danger{background:#fdf4f4;border-color:var(--status-danger);color:#7a1e1e}
+.alert-ok{background:#f0f9f4;border-color:var(--status-ok);color:#144d2e}
+.alert-info{background:#f4f6f8;border-color:var(--status-neutral);color:#2d3540}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-foreground);padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tbody tr:hover td{background:var(--background)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.card + .card{margin-top:16px}
+.card-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);margin-bottom:14px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:12px;font-weight:600;margin-bottom:5px}
+.fld label.chk{display:flex;font-size:13px;font-weight:400;margin:0}
+.req{color:var(--status-danger)}
+.err{color:var(--status-danger);font-size:12px;margin-top:4px}
+.hint{color:var(--muted-foreground);font-size:12px;margin-top:4px}
+.pw{position:relative}
+.pw .field-input{padding-right:44px}
+.pw .eye{position:absolute;right:2px;top:2px;bottom:2px;width:40px;border:none;background:none;color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;border-radius:3px}
+.pw .eye:hover{color:var(--foreground);background:var(--secondary)}
+.policy{list-style:none;margin:8px 0 0;font-size:12px}
+.policy li{display:flex;gap:7px;align-items:center;padding:1px 0;color:var(--muted-foreground)}
+.policy li.ok{color:var(--status-ok)}
+.policy .dot{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0}
+.policy li.ok .dot{background:var(--status-ok);border-color:var(--status-ok)}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+.chk input{margin-top:3px;width:15px;height:15px;accent-color:var(--primary)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.proto{border:1.5px dashed #aab2bb;border-radius:var(--radius);padding:12px 14px;background:#fafbfb;font-size:12px}
+.proto-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);margin-bottom:8px}
+.proto table{width:100%;border-collapse:collapse}
+.proto td{padding:4px 6px 4px 0;vertical-align:middle}
+.proto .mono{font-size:11px}
+.link{background:none;border:none;color:var(--primary);font-size:13px;text-decoration:underline;padding:0}
+.link:hover{color:#155a32}
+
+/* ---- pantallas sin sesión ---- */
+.auth{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 16px 20px}
+.auth-brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+.logo{width:30px;height:30px;background:var(--primary);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.auth-brand b{font-size:18px;letter-spacing:-.01em}
+.auth-brand small{display:block;font-size:11px;color:var(--muted-foreground);line-height:1.2}
+.auth-card{width:100%;max-width:400px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:26px 24px}
+.auth-card h1{margin-bottom:4px}
+.auth-card .lead{color:var(--muted-foreground);font-size:13px;margin-bottom:18px}
+.auth-side{width:100%;max-width:400px;margin-top:16px}
+.auth-foot{margin-top:auto;padding-top:24px;font-size:11px;color:var(--muted-foreground);font-family:var(--font-mono)}
+
+/* ---- marco con sesión ---- */
+.shell{position:relative;height:100vh;display:grid;grid-template-rows:var(--header-height) 1fr var(--footer-height);grid-template-columns:var(--sidebar-width) 1fr;overflow:hidden}
+.shell > header{grid-column:1/-1}
+.shell > footer{grid-column:1/-1}
+.shell.field{max-width:430px;margin:0 auto;grid-template-columns:1fr;border-left:1px solid var(--border);border-right:1px solid var(--border);background:#f0f2f4}
+header.top{background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 16px;position:relative;z-index:30}
+.brand{display:flex;align-items:center;gap:8px;min-width:0}
+.brand b{font-size:15px;letter-spacing:-.01em;white-space:nowrap}
+.icon-btn{position:relative;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:6px 8px;color:var(--muted-foreground);display:flex;align-items:center;min-height:34px}
+.icon-btn:hover{background:var(--secondary)}
+.dotn{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--status-danger);border:1.5px solid #fff}
+.acct{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:4px 10px 4px 5px;min-height:36px}
+.acct:hover{background:var(--secondary)}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.03em;flex-shrink:0}
+.acct .who{line-height:1.15;text-align:left}
+.acct .who b{display:block;font-size:13px;font-weight:600}
+.acct .who span{font-size:11px;color:var(--muted-foreground)}
+.field .acct{padding:4px 8px 4px 5px}
+.field .acct .who{display:none}
+.field .brand b{font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.pop{position:absolute;right:12px;top:calc(var(--header-height) - 4px);width:330px;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 18px rgba(0,0,0,.12);z-index:60;overflow:hidden}
+.pop.notif{width:320px}
+.pop-h{padding:12px 14px;border-bottom:1px solid var(--border)}
+.pop-sec{padding:8px 14px 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground)}
+.acc-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;padding:9px 14px;min-height:44px}
+.acc-item:hover:not(:disabled){background:var(--secondary)}
+.acc-item:disabled{opacity:.55;cursor:not-allowed}
+.acc-item .t{min-width:0;flex:1}
+.acc-item .t b{font-size:13px;font-weight:600;display:block}
+.acc-item .t span{font-size:11px;color:var(--muted-foreground);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop-act{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--border);padding:11px 14px;font-size:13px;min-height:44px}
+.pop-act:hover{background:var(--secondary)}
+.field .pop{position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;border-radius:12px 12px 0 0;z-index:70;box-shadow:0 -6px 24px rgba(0,0,0,.2)}
+.field .pop.notif{top:var(--header-height);bottom:auto;width:auto;border-radius:0 0 6px 6px}
+.scrim{position:absolute;inset:0;z-index:50;background:transparent}
+.field .scrim{background:rgba(0,0,0,.35)}
+aside.side{background:#fff;border-right:1px solid var(--border);padding:12px 10px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.side-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground);padding:4px 12px 8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--radius);color:var(--muted-foreground);font-size:13px;font-weight:500;background:none;border:none;text-align:left;width:100%}
+.nav-item:hover{background:var(--secondary);color:var(--foreground)}
+.nav-item.active{background:var(--primary);color:#fff}
+main.main{overflow:auto;padding:24px}
+.field main.main{padding:16px}
+footer.bot{display:flex;align-items:center;gap:16px;padding:0 16px;font-size:11px;font-family:var(--font-mono);color:var(--muted-foreground);background:#fff;border-top:1px solid var(--border)}
+.field footer.bot{background:#f0f9f4;border-top-color:#c3e6d3;color:#2d6b47;font-size:12px}
+footer.bot button{background:none;border:none;font:inherit;color:inherit;text-decoration:underline;padding:0}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--status-ok);display:inline-block;margin-right:5px}
+.page{max-width:980px;margin:0 auto}
+.page.narrow{max-width:640px;margin:0 auto}
+.page-h{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.crumb{font-size:12px;color:var(--muted-foreground);margin-bottom:6px}
+.dl{display:grid;grid-template-columns:150px 1fr;gap:10px 16px;font-size:13px}
+.dl dt{color:var(--muted-foreground)}
+.dl dd{min-width:0;overflow-wrap:anywhere}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filters .field-input{width:auto;min-width:150px}
+.tablewrap{overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}
+.temp{background:#f6f8f7;border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin:12px 0}
+.temp code{display:block;font-family:var(--font-mono);font-size:22px;letter-spacing:.06em;font-weight:500;word-break:break-all;margin:4px 0 12px}
+.ov{position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal{background:#fff;border-radius:6px;border:1px solid var(--border);width:100%;max-width:460px;padding:22px;max-height:100%;overflow:auto}
+.field .ov{align-items:flex-end;padding:0}
+.field .modal{border-radius:12px 12px 0 0;max-width:none}
+.modal h2{margin-bottom:8px}
+.modal p{font-size:13px;margin-bottom:12px}
+.modal .acts{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.field .btn{min-height:48px}
+.field .acc-item,.field .pop-act{min-height:52px}
+.toast{position:fixed;top:16px;left:16px;transform:translateY(-10px);background:#111418;color:#fff;padding:10px 16px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:300;max-width:min(360px,calc(100vw - 24px));text-align:left;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.toast.show{opacity:1;transform:none}
+.toast.shell-t{top:62px;left:calc(var(--sidebar-width) + 16px)}
+.toast.field-t{top:62px;left:max(12px,calc(50% - 203px))}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.vlist{list-style:none}
+.vlist li{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.vlist li:last-child{border-bottom:none}
+.vlist .t{flex:1;min-width:0}
+.vlist .t b{display:block;font-size:13px}
+.vlist .t span{font-size:12px;color:var(--muted-foreground);overflow-wrap:anywhere}
+@media(max-width:760px){
+  .shell:not(.field){grid-template-columns:1fr}
+  aside.side{display:none}
+  main.main{padding:16px}
+  .grid2{grid-template-columns:1fr}
+  .dl{grid-template-columns:1fr;gap:2px}
+  .dl dd{margin-bottom:8px}
+  .auth .btn{min-height:48px}
+  .pop{right:8px;left:8px;width:auto}
+  .acct .who{display:none}
+  .btn.back-btn{display:inline-flex}
+  .btn.back-btn ~ .brand b{display:none}
+  .toast.shell-t{left:12px}
+  footer.bot .hs{display:none}
+  footer.bot{gap:10px}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================================================
+   Datos de ejemplo (todo vive en memoria)
+   ========================================================= */
+var DOM = '@jardinbotanico.com.ar';
+var PASS = 'Hidroponia26';
+var INV = ['Invernadero A','Invernadero B','Invernadero C','Invernadero D'];
+var SHORT = {Gerente:'GER',Vendedor:'VEN','Agrónomo':'AGR',Capataz:'CAP','Técnico':'TEC',Transportista:'TRP',Administrador:'ADM'};
+var FIELD = ['Capataz','Técnico','Transportista'];
+var COMMON = ['12345678','123456789','password','contrasena','contraseña','qwertyui','hidroponia','abcd1234','11111111'];
+
+function acc(id,nombre,apellido,user,rol,extra){
+  var a={id:id,nombre:nombre,apellido:apellido,email:user+DOM,tel:'',rol:rol,activo:true,pass:PASS,temp:false,tempVenc:false,inv:'',grupo:null,foto:''};
+  for(var k in extra||{}) a[k]=extra[k];
+  return a;
+}
+function seed(){
+  return {seq:20,accounts:[
+    acc('a1','Federico','Mora','fmora','Gerente',{tel:'+54 376 400-1001'}),
+    acc('a2','Valentina','Sáenz','vsaenz','Vendedor',{tel:'+54 376 400-1002'}),
+    acc('a3','Rodrigo','Ibáñez','ribanez','Agrónomo',{tel:'+54 376 400-1003',grupo:'g1'}),
+    acc('a4','Rodrigo','Ibáñez','ribanez+capataz','Capataz',{tel:'+54 376 400-1003',grupo:'g1'}),
+    acc('a5','Rodrigo','Ibáñez','ribanez+vendedor','Vendedor',{tel:'+54 376 400-1003',grupo:'g1',activo:false}),
+    acc('a6','Martín','Gómez','mgomez','Capataz',{tel:'+54 376 400-1004'}),
+    acc('a7','Lucía','Fernández','lfernandez','Capataz'),
+    acc('a8','Carlos','Ruiz','cruiz','Técnico',{tel:'+54 376 400-1006'}),
+    acc('a9','Ana','Torres','atorres','Transportista',{tel:'+54 376 400-1007',inv:'Invernadero A'}),
+    acc('a10','Joaquín','Peralta','jperalta','Vendedor'),
+    acc('a11','Sofía','Herrera','sherrera','Capataz',{activo:false}),
+    acc('a12','Camila','Ortiz','cortiz','Agrónomo',{temp:true,pass:'Tm7kQ3mXz9Pa'}),
+    acc('a13','Bruno','Sosa','bsosa','Técnico',{temp:true,tempVenc:true,pass:'Tn4nR8vWb2Hc'}),
+    acc('a14','Nadia','Correa','ncorrea','Administrador',{tel:'+54 376 400-1010'}),
+    acc('a15','Tomás','Ledesma','tledesma','Administrador')
+  ]};
+}
+
+var S, root = document.getElementById('root');
+function init(){
+  S={db:seed(),uid:null,view:'login',f:{},att:false,show:{},modal:null,menu:false,notif:false,
+     noMail:false,flash:null,readN:false,filt:{rol:'',est:'',q:''},sel:null,last:null,seen:false,
+     loginErr:false,okMsg:null,rec:'',merr:null,nav:'Panel de control'};
+  render();
+}
+function A(id){return S.db.accounts.find(function(a){return a.id===id})}
+function me(){return A(S.uid)}
+function full(a){return a.nombre+' '+a.apellido}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function isField(){return S.uid&&FIELD.indexOf(me().rol)>-1}
+function group(a){return a.grupo?S.db.accounts.filter(function(x){return x.grupo===a.grupo&&x.id!==a.id}):[]}
+function activeOf(rol){return S.db.accounts.filter(function(a){return a.rol===rol&&a.activo})}
+function genTemp(){var al='ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789',s='';for(var i=0;i<12;i++)s+=al[Math.floor(Math.random()*al.length)];return s}
+function go(v){S.view=v;S.f={};S.att=false;S.show={};S.flash=null;S.menu=false;S.notif=false;S.modal=null;S.merr=null;S.loginErr=false;S.seen=false;render();var m=document.querySelector('main.main');if(m)m.scrollTop=0;window.scrollTo(0,0)}
+function toast(t){var e=document.getElementById('toast');e.textContent=t;e.className='toast'+(S&&S.uid?(isField()?' field-t':' shell-t'):'');void e.offsetWidth;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(function(){e.classList.remove('show')},3500)}
+function av(a,style){var f=!!a.foto;return '<div class="avatar'+(f?' photo':'')+'"'+(f?' role="img" aria-label="Foto de perfil"':'')+(f||style?' style="'+(f?'background-image:url('+a.foto+');':'')+(style||'')+'"':'')+'>'+(f?'':SHORT[a.rol])+'</div>'}
+function telErr(v){v=(v||'').trim();if(!v)return '';if(!/^\+?[\d\s\-()]+$/.test(v))return 'El teléfono solo puede tener números, espacios y los símbolos + - ( ). El + va solo al comienzo.';var d=v.replace(/\D/g,'').length;if(d<8||d>15)return 'Ingresá un teléfono con entre 8 y 15 dígitos, por ejemplo +54 376 400-1001.';return ''}
+
+/* =========================================================
+   Íconos
+   ========================================================= */
+function ic(n,s){s=s||16;var p={
+  eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',
+  eyeoff:'<path d="M17.9 17.9A10.9 10.9 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.1-5.9M9.9 5.1A10.7 10.7 0 0 1 12 5c7 0 11 7 11 7a18.6 18.6 0 0 1-2.2 3.2M1 1l22 22"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  warn:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
+  x:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  chev:'<polyline points="6 9 12 15 18 9"/>',
+  back:'<polyline points="15 18 9 12 15 6"/>',
+  user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
+  leaf:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10zM2 21c0-3 1.9-5.5 6-7"/>',
+  cart:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/>',
+  brief:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  wifi:'<path d="M5 12.6a10 10 0 0 1 14 0M1.4 9a15 15 0 0 1 21.2 0M8.5 16.4a5 5 0 0 1 7 0M12 20h.01"/>',
+  book:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  bar:'<path d="M12 20V10M18 20V4M6 20v-4"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  leafmark:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
+};return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p[n]+'</svg>'}
+function alertBox(kind,html){var i=kind==='ok'?'check':kind==='warn'?'warn':'x';return '<div class="alert alert-'+kind+'" role="'+(kind==='danger'?'alert':'status')+'">'+ic(i)+'<div>'+html+'</div></div>'}
+function badgeEstado(a){return a.activo?'<span class="status-badge status-ok">Activo</span>':'<span class="status-badge status-neutral">Inactivo</span>'}
+function badgeTemp(a){return a.temp?(a.tempVenc?'<span class="status-badge status-danger">Temporal vencida</span>':'<span class="status-badge status-warn">Contraseña temporal</span>'):''}
+function logo(){return '<div class="logo">'+ic('leafmark',16).replace('currentColor','#fff')+'</div>'}
+
+/* =========================================================
+   Campos
+   ========================================================= */
+function fieldHtml(id,label,o){
+  o=o||{};var v=S.f[id]!=null?S.f[id]:(o.value||'');var e=o.err||'';
+  var inp;
+  if(o.type==='select'){
+    inp='<select class="field-input'+(e?' bad':'')+'" id="'+id+'" data-f="'+id+'"'+(o.disabled?' disabled':'')+(e?' aria-invalid="true"':'')+'><option value="">Seleccionar…</option>'+o.opts.map(function(x){return '<option'+(x===v?' selected':'')+'>'+esc(x)+'</option>'}).join('')+'</select>';
+  }else if(o.type==='password'){
+    var sh=S.show[id];
+    inp='<div class="pw"><input class="field-input'+(e?' bad':'')+'" id="'+id+'" data-f="'+id+'" type="'+(sh?'text':'password')+'" value="'+esc(v)+'" autocomplete="'+(o.ac||'current-password')+'" autocapitalize="off" spellcheck="false"'+(e?' aria-invalid="true"':'')+'>'+
+      '<button type="button" class="eye" data-act="eye" data-id="'+id+'" aria-label="'+(sh?'Ocultar contraseña':'Mostrar contraseña')+'">'+ic(sh?'eyeoff':'eye')+'</button></div>';
+  }else{
+    inp='<input class="field-input'+(e?' bad':'')+'" id="'+id+'" data-f="'+id+'" type="'+(o.type==='email'||o.type==='tel'?'text':(o.type||'text'))+'"'+(o.type==='email'?' inputmode="email"':o.type==='tel'?' inputmode="tel"':'')+' value="'+esc(v)+'"'+(o.ac?' autocomplete="'+o.ac+'"':'')+(o.disabled?' disabled':'')+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+(e?' aria-invalid="true"':'')+' autocapitalize="off">';
+  }
+  return '<div class="fld"><label for="'+id+'">'+esc(label)+(o.req?'<span class="req" aria-hidden="true"> *</span>':'')+'</label>'+inp+(e?'<div class="err">'+esc(e)+'</div>':'')+(o.hint&&!e?'<div class="hint">'+o.hint+'</div>':'')+'</div>';
+}
+function showErr(id,msg){return (S.att||(S.f[id]!=null&&S.f[id]!==''))?msg:''}
+
+/* Política de contraseñas (SEG-03) */
+function policyList(pw,prev,prevLabel){
+  pw=pw||'';
+  var items=[['Al menos 8 caracteres',pw.length>=8],['No es solo números',pw.length>0&&!/^\d+$/.test(pw)],['Es distinta de '+prevLabel,pw.length>0&&pw!==prev]];
+  return '<ul class="policy" aria-label="Requisitos de la contraseña">'+items.map(function(i){return '<li class="'+(i[1]?'ok':'')+'"><span class="dot"></span>'+i[0]+(i[1]?'<span class="sr"> (cumplido)</span>':'')+'</li>'}).join('')+'</ul>';
+}
+function newPwErrors(pw,rep,prev,a,prevLabel){
+  var e={};
+  if(!pw){e.n='Ingresá la contraseña nueva.'}
+  else if(pw.length<8){e.n='Usá al menos 8 caracteres.'}
+  else if(/^\d+$/.test(pw)){e.n='La contraseña no puede ser solo números. Sumá letras o símbolos.'}
+  else if(pw===prev){e.n='Elegí una contraseña distinta de '+prevLabel+'.'}
+  else if(COMMON.indexOf(pw.toLowerCase())>-1){e.n='Esa contraseña es de uso común. Elegí otra más difícil de adivinar.'}
+  else if(a&&(pw.toLowerCase().indexOf(a.nombre.toLowerCase())>-1||pw.toLowerCase().indexOf(a.apellido.toLowerCase())>-1||pw.toLowerCase().indexOf(a.email.split('@')[0].toLowerCase())>-1)){e.n='La contraseña se parece a los datos de tu cuenta. Elegí otra.'}
+  if(!rep){e.r='Repetí la contraseña nueva.'}
+  else if(pw&&rep!==pw){e.r='Las contraseñas no coinciden.'}
+  return e;
+}
+
+/* =========================================================
+   Pantallas sin sesión
+   ========================================================= */
+function authShell(inner,side){
+  return '<div class="auth"><div class="auth-brand">'+logo()+'<div><b>Jardín Botánico</b><small>Sistema de gestión InfoPonia</small></div></div>'+
+    '<div class="auth-card">'+inner+'</div>'+(side?'<div class="auth-side">'+side+'</div>':'')+
+    '</div>';
+}
+function vLogin(){
+  var e1=S.att&&!(S.f.email||'').trim()?'Ingresá tu email.':'';
+  var e2=S.att&&!(S.f.pass||'')?'Ingresá tu contraseña.':'';
+  var inner='<h1>Iniciar sesión</h1><p class="lead">Ingresá con el email de tu cuenta.</p>'+
+    (S.loginErr?alertBox('danger','No pudimos iniciar sesión. Revisá el email y la contraseña, y volvé a intentarlo.')+'<div style="height:14px"></div>':'')+
+    '<form data-act="login" novalidate>'+
+    fieldHtml('email','Email',{type:'email',req:true,ac:'username',err:e1})+
+    fieldHtml('pass','Contraseña',{type:'password',req:true,ac:'current-password',err:e2})+
+    '<button class="btn btn-primary btn-block" type="submit">Ingresar</button></form>'+
+    '<div style="margin-top:16px;font-size:13px">'+(S.noMail?'<span class="muted">¿Olvidaste tu contraseña? Pedile a quien gestiona tu cuenta que la restablezca.</span>':'<button class="link" data-act="to-recover">¿Olvidaste tu contraseña?</button>')+'</div>';
+  var rows=[['Gerente','fmora','Escritorio'],['Agrónomo con 2 cuentas vinculadas','ribanez','Escritorio · prueba el selector de cuentas'],['Capataz','mgomez','Celular'],['Transportista','atorres','Celular'],['Administrador','ncorrea','Sin rol operativo'],['Contraseña temporal','cortiz','Cambio obligatorio'],['Temporal vencida','bsosa','Falla genérica'],['Cuenta inactiva','sherrera','Falla genérica']];
+  var side='<div class="proto"><div class="proto-title">Solo prototipo — cuentas de prueba</div>'+
+    '<table>'+rows.map(function(r){var a=S.db.accounts.find(function(x){return x.email===r[1]+DOM});return '<tr><td><button class="btn btn-ghost btn-sm" data-act="fill" data-u="'+a.email+'" data-p="'+a.pass+'">Usar</button></td><td>'+r[0]+'<br><span class="muted">'+r[2]+'</span></td></tr>'}).join('')+'</table>'+
+    '<div class="muted" style="margin-top:8px">Contraseña de todas: <span class="mono">'+PASS+'</span> (las temporales tienen la suya, que se completa sola).</div>'+
+    '<label class="chk" style="margin-top:10px;font-size:12px"><input type="checkbox" data-f="__nomail"'+(S.noMail?' checked':'')+'><span>Simular: el correo no está configurado en el Sistema</span></label></div>';
+  return authShell(inner,side);
+}
+function vRecover(){
+  var e=S.att?(!(S.f.email||'').trim()?'Ingresá tu email.':!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(S.f.email.trim())?'Ingresá un email válido, por ejemplo nombre@dominio.com.':''):'';
+  var inner='<h1>Recuperar contraseña</h1><p class="lead">Ingresá el email de tu cuenta. Si corresponde a una cuenta, te enviamos un enlace para elegir una contraseña nueva.</p>'+
+    '<form data-act="recover" novalidate>'+fieldHtml('email','Email',{type:'email',req:true,ac:'username',err:e})+
+    '<button class="btn btn-primary btn-block" type="submit">Enviar enlace</button></form>'+
+    '<div style="margin-top:16px"><button class="link" data-act="to-login">Volver a iniciar sesión</button></div>';
+  return authShell(inner);
+}
+function vRecoverSent(){
+  var inner='<h1>Revisá tu correo</h1><p class="lead">Si <b>'+esc(S.rec)+'</b> corresponde a una cuenta, te enviamos un enlace para elegir una contraseña nueva. El enlace se puede usar una sola vez y vence en 1 hora.</p>'+
+    '<p class="hint">¿No te llegó? Revisá la carpeta de correo no deseado o pedí otro enlace.</p>'+
+    '<div class="row" style="margin-top:14px"><button class="btn btn-ghost" data-act="to-recover">Pedir otro enlace</button><button class="btn btn-primary" data-act="to-login">Volver a iniciar sesión</button></div>';
+  var side='<div class="proto"><div class="proto-title">Solo prototipo — enlace del correo</div><div class="muted" style="margin-bottom:8px">Abrí el enlace como si lo hubieras recibido:</div><div class="row">'+
+    '<button class="btn btn-ghost btn-sm" data-act="link" data-s="ok">Enlace válido</button><button class="btn btn-ghost btn-sm" data-act="link" data-s="used">Ya usado</button><button class="btn btn-ghost btn-sm" data-act="link" data-s="old">Vencido</button></div></div>';
+  return authShell(inner,side);
+}
+function vReset(){
+  var a=S.db.accounts.find(function(x){return x.email===S.rec.toLowerCase()&&x.activo});
+  var er=S.att?newPwErrors(S.f.n||'',S.f.r||'',a?a.pass:'',a,'tu contraseña actual'):{};
+  var inner='<h1>Elegí una contraseña nueva</h1><p class="lead">Al guardarla, se cierran las sesiones abiertas de tu cuenta.</p>'+
+    '<form data-act="reset" novalidate>'+
+    fieldHtml('n','Contraseña nueva',{type:'password',req:true,ac:'new-password',err:er.n})+policyList(S.f.n,a?a.pass:'','tu contraseña actual')+'<div style="height:12px"></div>'+
+    fieldHtml('r','Repetí la contraseña nueva',{type:'password',req:true,ac:'new-password',err:er.r})+
+    '<button class="btn btn-primary btn-block" type="submit">Guardar contraseña</button></form>';
+  return authShell(inner);
+}
+function vLinkBad(){
+  var inner='<h1>Enlace no válido</h1><div style="margin:12px 0">'+alertBox('danger',S.linkS==='used'?'Este enlace ya se usó. Pedí uno nuevo para elegir otra contraseña.':'Este enlace venció. Pedí uno nuevo para elegir otra contraseña.')+'</div>'+
+    '<div class="row"><button class="btn btn-primary" data-act="to-recover">Pedir un enlace nuevo</button><button class="btn btn-ghost" data-act="to-login">Volver a iniciar sesión</button></div>';
+  return authShell(inner);
+}
+function vForced(){
+  var a=me();
+  var er=S.att?newPwErrors(S.f.n||'',S.f.r||'',a.pass,a,'la contraseña temporal'):{};
+  var inner='<h1>Elegí tu contraseña</h1><p class="lead">Ingresaste con una contraseña temporal. Para seguir, elegí una contraseña que solo vos conozcas.</p>'+
+    '<form data-act="forced" novalidate>'+
+    fieldHtml('n','Contraseña nueva',{type:'password',req:true,ac:'new-password',err:er.n})+policyList(S.f.n,a.pass,'la contraseña temporal')+'<div style="height:12px"></div>'+
+    fieldHtml('r','Repetí la contraseña nueva',{type:'password',req:true,ac:'new-password',err:er.r})+
+    '<button class="btn btn-primary btn-block" type="submit">Guardar y continuar</button></form>'+
+    '<div style="margin-top:16px;font-size:13px" class="muted">Cuenta: <b style="color:var(--foreground)">'+esc(a.email)+'</b> · <button class="link" data-act="logout">Cerrar sesión</button></div>';
+  return authShell(inner);
+}
+
+/* =========================================================
+   Marco con sesión
+   ========================================================= */
+var NAV={
+  Gerente:[['Panel de control','dash'],['Producción','leaf'],['Compras e Inventario','cart'],['Comercial','brief'],['IoT y Telemetría','wifi'],['Gestión contable','book'],['Estadísticas','bar'],['Usuarios y seguridad','users'],['Configuración','gear']],
+  'Agrónomo':[['Panel de control','dash'],['Producción','leaf'],['Compras e Inventario','cart'],['IoT y Telemetría','wifi'],['Estadísticas','bar']],
+  Vendedor:[['Panel de control','dash'],['Comercial','brief'],['Estadísticas','bar']],
+  Administrador:[['Cuentas','users']]
+};
+function notifs(){
+  var a=me();
+  if(a.rol==='Gerente')return [{t:'Hay 7 pendientes esperando tu resolución',b:'Se acumularon mientras no había un Gerente activo.',d:'07/11/2026',u:!S.readN},{t:'Entrega ENT-041 no reconocida por el cliente',b:'',d:'05/11/2026',u:false}];
+  if(a.rol==='Capataz')return [{t:'Nueva orden de trabajo OT-024',b:'Invernadero A · Sector A-1',d:'06/11/2026',u:!S.readN}];
+  return [];
+}
+function accountPop(){
+  var a=me(),g=group(a);
+  var h='<div class="pop-h"><div class="row" style="gap:10px">'+av(a,'width:34px;height:34px;font-size:11px')+'<div style="min-width:0"><b style="font-size:14px">'+esc(full(a))+'</b><div class="muted" style="font-size:12px;overflow-wrap:anywhere">'+esc(a.email)+'</div></div></div><div style="margin-top:8px"><span class="status-badge status-neutral">'+(a.rol==='Administrador'?'Administrador de cuentas':'Operás como '+a.rol)+'</span></div></div>';
+  var links='';
+  if(a.rol!=='Administrador'){
+    links='<div class="pop-sec">Cambiar de cuenta</div>';
+    if(!g.length) links+='<div class="muted" style="padding:2px 14px 12px;font-size:12px">No tenés cuentas vinculadas. Podés vincularlas desde Mi perfil.</div>';
+    else links+=g.map(function(x){return '<button class="acc-item" data-act="switch" data-id="'+x.id+'"'+(x.activo?'':' disabled')+'><div class="avatar" style="background:'+(x.activo?'var(--primary)':'var(--status-neutral)')+'">'+SHORT[x.rol]+'</div><div class="t"><b>'+x.rol+'</b><span>'+esc(x.email)+'</span></div>'+(x.activo?'<span class="muted">'+ic('chev',14).replace('<svg','<svg style="transform:rotate(-90deg)"')+'</span>':'<span class="status-badge status-neutral">Inactiva</span>')+'</button>'}).join('');
+  }
+  return '<div class="scrim" data-act="close-menu"></div><div class="pop" role="dialog" aria-label="Menú de cuenta">'+h+links+
+    (a.rol!=='Administrador'?'<button class="pop-act" data-act="to-perfil">'+ic('user')+'Mi perfil</button>':'<button class="pop-act" data-act="to-perfil">'+ic('user')+'Mi perfil y contraseña</button>')+
+    '<button class="pop-act" data-act="logout">'+ic('out')+'Cerrar sesión</button></div>';
+}
+function notifPop(){
+  var n=notifs();
+  return '<div class="scrim" data-act="close-menu"></div><div class="pop notif" role="dialog" aria-label="Notificaciones"><div class="pop-h row"><b style="font-size:12px;text-transform:uppercase;letter-spacing:.05em" class="muted">Notificaciones</b><span class="spacer"></span><button class="link" style="font-size:12px" data-act="readn">Marcar leídas</button></div>'+
+    (n.length?n.map(function(x){return '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px"><span style="width:6px;height:6px;border-radius:50%;margin-top:7px;flex-shrink:0;background:'+(x.u?'var(--status-warn)':'var(--border)')+'"></span><div><div style="font-weight:'+(x.u?600:400)+'">'+x.t+'</div>'+(x.b?'<div class="muted" style="font-size:12px">'+x.b+'</div>':'')+'<div class="mono muted" style="font-size:10px;margin-top:3px">'+x.d+'</div></div></div>'}).join(''):'<div class="muted" style="padding:18px 14px">Sin notificaciones.</div>')+'</div>';
+}
+function shell(inner){
+  var a=me(),fld=isField();
+  var unread=notifs().some(function(x){return x.u});
+  var side='';
+  if(!fld){
+    side='<aside class="side"><div class="side-label">'+(a.rol==='Administrador'?'Administración':'Módulos')+'</div>'+(NAV[a.rol]||[]).map(function(n){
+      var act=(n[0]===S.nav);return '<button class="nav-item'+(act?' active':'')+'" data-act="nav" data-n="'+n[0]+'">'+ic(n[1])+'<span>'+n[0]+'</span></button>'}).join('')+'</aside>';
+  }
+  var header='<header class="top">'+(S.view==='perfil'?'<button class="btn btn-ghost back-btn" data-act="back-home" aria-label="Volver al inicio">'+ic('back',14)+'<span>Volver</span></button>':'')+'<div class="brand">'+logo()+'<b>Jardín Botánico</b></div><div class="spacer"></div>'+
+    (a.rol==='Administrador'?'':'<button class="icon-btn" data-act="toggle-notif" aria-label="Notificaciones">'+ic('bell')+(unread?'<span class="dotn"></span>':'')+'</button>')+
+    '<button class="acct" data-act="toggle-menu" aria-label="Menú de cuenta: '+esc(full(a))+', '+a.rol+'" aria-expanded="'+S.menu+'">'+av(a)+'<div class="who"><b>'+esc(full(a))+'</b><span>'+a.rol+'</span></div>'+ic('chev',12)+'</button></header>';
+  var footer=fld?'<footer class="bot"><span class="sdot"></span><b>En línea</b><span>· sincronizado</span><span class="spacer"></span><button data-act="reset-data">reiniciar datos</button></footer>'
+    :'<footer class="bot"><span><span class="sdot"></span>Sistema operativo</span><span class="spacer"></span><button data-act="reset-data">Reiniciar datos de ejemplo</button><span class="hs">07/11/2026</span></footer>';
+  return '<div class="shell'+(fld?' field':'')+'">'+header+side+'<main class="main">'+inner+'</main>'+footer+(S.menu?accountPop():'')+(S.notif?notifPop():'')+(S.modal?modalHtml():'')+'</div>';
+}
+
+/* ---- Inicio ---- */
+function vHome(){
+  var a=me();
+  return shell('<div class="page narrow"><h1 style="margin-bottom:6px">Panel de control</h1><p class="muted" style="margin-bottom:16px">Operás como <b style="color:var(--foreground)">'+a.rol+'</b> con la cuenta <span class="mono">'+esc(a.email)+'</span>.</p>'+
+    '<div class="card"><div class="card-title">Fuera de esta ronda</div><p class="muted">El contenido del panel de cada rol no forma parte de estas pantallas. Probá el menú de cuenta de arriba a la derecha para ver Mi perfil, las cuentas vinculadas y cerrar sesión.</p></div></div>');
+}
+
+/* ---- Mi perfil ---- */
+function vPerfil(){
+  var a=me(),g=group(a),isAdmin=a.rol==='Administrador';
+  var manager=isAdmin?'':(a.rol==='Gerente'?'el Administrador':(activeOf('Gerente')[0]?'el Gerente ('+esc(full(activeOf('Gerente')[0]))+')':'el Gerente'));
+  var foto='<div class="photo-row">'+av(a,'width:72px;height:72px;font-size:20px')+'<div><div class="row"><label class="btn btn-ghost btn-sm" for="f-file">'+(a.foto?'Cambiar foto':'Elegir foto')+'</label><label class="btn btn-ghost btn-sm cam" for="f-cam">Tomar foto</label>'+(a.foto?'<button class="btn btn-ghost btn-sm" data-act="rm-photo">Quitar</button>':'')+'</div><div class="hint">JPG, PNG o WebP. Se recorta en forma cuadrada y se achica sola.</div>'+(S.photoErr?'<div class="err">'+S.photoErr+'</div>':'')+'</div><input class="sr" type="file" id="f-file" accept="image/*" data-photo><input class="sr" type="file" id="f-cam" accept="image/*" capture="user" data-photo></div>';
+  var datos='<div class="card"><div class="card-title">Mis datos</div>'+foto+'<dl class="dl">'+
+    '<dt>Nombre</dt><dd>'+esc(a.nombre)+'</dd><dt>Apellido</dt><dd>'+esc(a.apellido)+'</dd><dt>Email</dt><dd class="mono" style="font-size:12px">'+esc(a.email)+'</dd>'+
+    '<dt>Teléfono</dt><dd>'+(a.tel?esc(a.tel):'<span class="muted">—</span>')+'</dd><dt>Rol</dt><dd>'+(isAdmin?'Administrador (sin rol operativo)':a.rol)+'</dd>'+
+    (a.rol==='Transportista'?'<dt>Invernadero</dt><dd>'+esc(a.inv)+'</dd>':'')+'<dt>Estado</dt><dd>'+badgeEstado(a)+'</dd></dl>'+
+    (isAdmin?'<div class="row" style="margin-top:14px"><button class="btn btn-ghost" data-act="own-data">Modificar mis datos</button></div>':'<p class="hint" style="margin-top:14px">Para corregir estos datos, pedíselo a '+manager+'.</p>')+'</div>';
+  var er=S.att?pwChangeErr(a):{};
+  var seg='<div class="card"><div class="card-title">Seguridad</div>'+(S.flash?alertBox('ok',S.flash)+'<div style="height:14px"></div>':'')+
+    '<form data-act="chgpw" novalidate><h2 style="font-size:14px;margin-bottom:12px">Cambiar contraseña</h2>'+
+    fieldHtml('c','Contraseña actual',{type:'password',req:true,ac:'current-password',err:er.c})+
+    fieldHtml('n','Contraseña nueva',{type:'password',req:true,ac:'new-password',err:er.n})+policyList(S.f.n,S.f.c,'la contraseña actual')+'<div style="height:12px"></div>'+
+    fieldHtml('r','Repetí la contraseña nueva',{type:'password',req:true,ac:'new-password',err:er.r})+
+    '<button class="btn btn-primary" type="submit">Guardar contraseña</button></form></div>';
+  var vin;
+  if(isAdmin){
+    vin='<div class="card"><div class="card-title">Cuentas vinculadas</div><p class="muted">Las cuentas de Administrador no se vinculan con otras.</p></div>';
+  }else{
+    vin='<div class="card"><div class="row" style="margin-bottom:6px"><div class="card-title" style="margin:0">Cuentas vinculadas</div><span class="spacer"></span><button class="btn btn-ghost btn-sm" data-act="open-link">'+ic('plus',14)+' Vincular cuenta</button></div>'+
+      '<p class="hint" style="margin-bottom:6px">Si tenés más de una cuenta, vinculalas para pasar de una a otra sin volver a ingresar.</p>'+
+      (g.length?'<ul class="vlist">'+g.map(function(x){return '<li><div class="avatar" style="background:'+(x.activo?'var(--primary)':'var(--status-neutral)')+'">'+SHORT[x.rol]+'</div><div class="t"><b>'+x.rol+' '+badgeEstado(x)+'</b><span class="mono">'+esc(x.email)+'</span></div>'+
+        (x.activo?'<button class="btn btn-primary btn-sm" data-act="switch" data-id="'+x.id+'">Cambiar</button>':'')+'<button class="btn btn-ghost btn-sm" data-act="ask-unlink" data-id="'+x.id+'">Desvincular</button></li>'}).join('')+'</ul>':'<p class="muted" style="padding:10px 0">Todavía no vinculaste ninguna cuenta.</p>')+'</div>';
+  }
+  return shell('<div class="page narrow"><div class="crumb">Mi cuenta</div><div class="page-h"><h1>Mi perfil</h1></div>'+datos+seg+vin+'</div>');
+}
+function pwChangeErr(a){
+  var e=newPwErrors(S.f.n||'',S.f.r||'',S.f.c||'',a,'la contraseña actual');
+  if(!(S.f.c||''))e.c='Ingresá tu contraseña actual.';
+  else if(S.f.c!==a.pass)e.c='La contraseña actual no es correcta.';
+  return e;
+}
+
+/* ---- Usuarios ---- */
+function scope(){
+  var a=me();
+  return S.db.accounts.filter(function(x){return a.rol==='Gerente'?(x.rol!=='Gerente'&&x.rol!=='Administrador'):(x.rol==='Gerente'||x.rol==='Administrador')});
+}
+function vUsuarios(){
+  var a=me(),isAdm=a.rol==='Administrador';
+  var f=S.filt,list=scope().filter(function(x){
+    var q=f.q.trim().toLowerCase();
+    return (!f.rol||x.rol===f.rol)&&(!f.est||(f.est==='Activo')===x.activo)&&(!q||(full(x)+' '+x.email).toLowerCase().indexOf(q)>-1);
+  });
+  var roles=isAdm?['Gerente','Administrador']:['Agrónomo','Capataz','Vendedor','Transportista','Técnico'];
+  var canAlta=true;
+  var rows=list.map(function(x){return '<tr><td><b style="font-weight:600">'+esc(full(x))+'</b>'+(x.id===a.id?' <span class="muted">(vos)</span>':'')+'<div class="mono muted" style="font-size:11px">'+esc(x.email)+'</div></td><td>'+x.rol+'</td><td>'+badgeEstado(x)+' '+badgeTemp(x)+'</td><td style="text-align:right"><button class="btn btn-ghost btn-sm" data-act="open-user" data-id="'+x.id+'">Ver</button></td></tr>'}).join('');
+  var h='<div class="page"><div class="page-h"><h1>'+(isAdm?'Cuentas':'Usuarios y seguridad')+'</h1><span class="spacer"></span>'+(canAlta?'<button class="btn btn-primary" data-act="to-alta">'+ic('plus',14)+' '+(isAdm?'Alta de Gerente':'Nuevo usuario')+'</button>':'')+'</div>'+
+    (isAdm?'<p class="muted" style="margin-bottom:14px">Gestionás la cuenta del Gerente y las de los Administradores. Los Administradores solo se crean en la puesta en marcha.</p>':'')+
+    (S.flash?'<div style="margin-bottom:14px">'+S.flash+'</div>':'')+
+    '<div class="filters"><select class="field-input" data-f="__frol" aria-label="Filtrar por rol"><option value="">Todos los roles</option>'+roles.map(function(r){return '<option'+(f.rol===r?' selected':'')+'>'+r+'</option>'}).join('')+'</select>'+
+    '<select class="field-input" data-f="__fest" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option'+(f.est==='Activo'?' selected':'')+'>Activo</option><option'+(f.est==='Inactivo'?' selected':'')+'>Inactivo</option></select>'+
+    '<input class="field-input" id="fq" data-f="__fq" type="search" placeholder="Buscar por nombre, apellido o email" aria-label="Buscar" style="min-width:260px" value="'+esc(f.q)+'"></div>'+
+    '<div class="tablewrap"><table class="data-table"><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>'+
+    (rows||'<tr><td colspan="4" class="muted" style="text-align:center;padding:24px">No hay usuarios que coincidan con los filtros.</td></tr>')+'</tbody></table></div></div>';
+  return shell(h);
+}
+
+function vUsuario(){
+  var x=A(S.sel),a=me(),isAdm=a.rol==='Administrador',self=x.id===a.id,g=group(x);
+  var edit=S.f.__edit;
+  var er=edit&&S.att?userErr(x):{};
+  var datos;
+  if(edit){
+    datos='<form data-act="save-user" novalidate><div class="grid2">'+
+      fieldHtml('nombre','Nombre',{req:true,value:x.nombre,err:er.nombre})+fieldHtml('apellido','Apellido',{req:true,value:x.apellido,err:er.apellido})+'</div>'+
+      fieldHtml('email','Email',{type:'email',req:true,value:x.email,err:er.email,hint:'Cambiar el email no afecta las cuentas vinculadas.'})+
+      '<div class="grid2">'+fieldHtml('tel','Teléfono (opcional)',{type:'tel',value:x.tel,err:er.tel,hint:'Por ejemplo +54 376 400-1001'})+
+      fieldHtml('rol','Rol',{type:'select',opts:[x.rol],value:x.rol,disabled:true,hint:'El rol no se modifica. Si la persona necesita otro, se le da de alta una cuenta nueva.'})+'</div>'+
+      (x.rol==='Transportista'?fieldHtml('inv','Invernadero',{type:'select',opts:INV,req:true,value:x.inv,err:er.inv}):'')+
+      '<div class="row"><button class="btn btn-primary" type="submit">Guardar cambios</button><button class="btn btn-ghost" type="button" data-act="cancel-edit">Cancelar</button></div></form>';
+  }else{
+    datos='<dl class="dl"><dt>Nombre</dt><dd>'+esc(x.nombre)+'</dd><dt>Apellido</dt><dd>'+esc(x.apellido)+'</dd><dt>Email</dt><dd class="mono" style="font-size:12px">'+esc(x.email)+'</dd><dt>Teléfono</dt><dd>'+(x.tel?esc(x.tel):'<span class="muted">—</span>')+'</dd><dt>Rol</dt><dd>'+x.rol+'</dd>'+
+      (x.rol==='Transportista'?'<dt>Invernadero</dt><dd>'+esc(x.inv)+'</dd>':'')+
+      '<dt>Estado</dt><dd>'+badgeEstado(x)+'</dd><dt>Contraseña</dt><dd>'+(x.temp?badgeTemp(x)+(x.tempVenc?' <span class="muted">Venció: hay que restablecerla.</span>':' <span class="muted">Vence a los 7 días de generada.</span>'):'<span class="muted">Elegida por la persona. Nunca se muestra.</span>')+'</dd></dl>'+
+      '<div class="row" style="margin-top:14px"><button class="btn btn-ghost" data-act="edit-user">Modificar datos</button></div>';
+  }
+  var vin=x.rol==='Administrador'?'<p class="muted">Las cuentas de Administrador no se vinculan.</p>':
+    (g.length?'<ul class="vlist">'+g.map(function(y){return '<li><div class="avatar" style="background:'+(y.activo?'var(--primary)':'var(--status-neutral)')+'">'+SHORT[y.rol]+'</div><div class="t"><b>'+y.rol+' '+badgeEstado(y)+'</b><span class="mono">'+esc(y.email)+'</span></div></li>'}).join('')+'</ul>':'<p class="muted">Sin cuentas vinculadas.</p>')+'<p class="hint" style="margin-top:8px">Solo lectura: las vincula y desvincula su dueño desde Mi perfil.</p>';
+  var acts='<div class="row">';
+  if(x.activo&&!self)acts+='<button class="btn btn-ghost" data-act="ask-reset">Restablecer contraseña</button>';
+  if(!x.activo)acts+='<button class="btn btn-primary" data-act="ask-react">Reactivar cuenta</button>';
+  if(x.activo)acts+='<button class="btn btn-danger" data-act="ask-baja">Dar de baja</button>';
+  acts+='</div>'+(self?'<p class="hint" style="margin-top:10px">Tu contraseña la cambiás desde <button class="link" style="font-size:12px" data-act="to-perfil">Mi perfil</button>.</p>':'');
+  var h='<div class="page narrow"><button class="btn btn-ghost btn-sm" data-act="to-usuarios" style="margin-bottom:14px">'+ic('back',14)+' Volver</button>'+
+    '<div class="page-h"><h1>'+esc(full(x))+(self?' <span class="muted" style="font-weight:400;font-size:14px">(vos)</span>':'')+'</h1>'+badgeEstado(x)+badgeTemp(x)+'</div>'+
+    (S.flash?'<div style="margin-bottom:14px">'+S.flash+'</div>':'')+
+    '<div class="card"><div class="card-title">Datos</div>'+datos+'</div><div class="card"><div class="card-title">Cuentas vinculadas</div>'+vin+'</div>'+
+    '<div class="card"><div class="card-title">Acciones</div>'+acts+'</div></div>';
+  return shell(h);
+}
+function emailTaken(email,exceptId){return S.db.accounts.find(function(x){return x.email===email.toLowerCase()&&x.id!==exceptId})}
+function userErr(x){
+  var e={},nom=(S.f.nombre!=null?S.f.nombre:x.nombre).trim(),ape=(S.f.apellido!=null?S.f.apellido:x.apellido).trim(),em=(S.f.email!=null?S.f.email:x.email).trim(),inv=S.f.inv!=null?S.f.inv:x.inv;
+  if(!nom)e.nombre='Ingresá el nombre.';if(!ape)e.apellido='Ingresá el apellido.';
+  if(!em)e.email='Ingresá el email.';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))e.email='Ingresá un email válido, por ejemplo nombre@dominio.com.';
+  else if(emailTaken(em,x.id))e.email='Ya existe una cuenta con ese email.';
+  var te=telErr(S.f.tel!=null?S.f.tel:x.tel);if(te)e.tel=te;
+  if(x.rol==='Transportista'&&!inv)e.inv='Elegí el invernadero del Transportista.';
+  return e;
+}
+
+/* ---- Alta ---- */
+function vAlta(){
+  var a=me(),isAdm=a.rol==='Administrador';
+  var gerActivo=activeOf('Gerente')[0];
+  var blocked=isAdm&&gerActivo;
+  var er=S.att?altaErr(isAdm):{};
+  var inactiva=null;var em=(S.f.email||'').trim().toLowerCase();
+  if(em){var t=emailTaken(em);if(t&&!t.activo)inactiva=t}
+  var h='<div class="page narrow"><button class="btn btn-ghost btn-sm" data-act="to-usuarios" style="margin-bottom:14px">'+ic('back',14)+' Volver</button>'+
+    '<div class="page-h"><h1>'+(isAdm?'Alta de Gerente':'Nuevo usuario')+'</h1></div>'+
+    (blocked?'<div style="margin-bottom:14px">'+alertBox('warn','Ya hay un Gerente activo: <b>'+esc(full(gerActivo))+'</b>. Solo puede haber uno a la vez. Para dar de alta a otro, primero dá de baja al actual desde su ficha.')+'</div>':'')+
+    '<form data-act="alta" novalidate><div class="card"><div class="card-title">Datos de la cuenta</div><div class="grid2">'+
+    fieldHtml('nombre','Nombre',{req:true,err:er.nombre,ac:'off'})+fieldHtml('apellido','Apellido',{req:true,err:er.apellido,ac:'off'})+'</div>'+
+    fieldHtml('email','Email',{type:'email',req:true,err:er.email,hint:'Es el identificador de ingreso y no se repite entre cuentas. Se puede usar un alias, por ejemplo nombre+rol@dominio.com.'})+
+    (inactiva&&!er.email?'<div style="margin:-6px 0 14px">'+alertBox('warn','Ese email pertenece a una cuenta <b>inactiva</b> ('+esc(full(inactiva))+', '+inactiva.rol+'). No se da de alta otra: <button class="link" data-act="open-user" data-id="'+inactiva.id+'">reactivala</button>. Si necesita otro rol, usá otro email o un alias.')+'</div>':'')+
+    '<div class="grid2">'+fieldHtml('tel','Teléfono (opcional)',{type:'tel',ac:'off',err:er.tel,hint:'Por ejemplo +54 376 400-1001'})+
+    (isAdm?fieldHtml('rolfix','Rol',{value:'Gerente',disabled:true}):fieldHtml('rol','Rol',{type:'select',opts:['Agrónomo','Capataz','Vendedor','Transportista','Técnico'],req:true,err:er.rol}))+'</div>'+
+    (S.f.rol==='Transportista'?fieldHtml('inv','Invernadero del Transportista',{type:'select',opts:INV,req:true,err:er.inv,hint:'Los invernaderos del Agrónomo, el Capataz, el Vendedor y el Técnico se asignan después, desde el invernadero.'}):'')+
+    '</div>'+
+    '<div class="alert alert-info" style="margin-top:16px">'+ic('info')+'<div>Al dar de alta la cuenta, el Sistema genera una <b>contraseña temporal</b> y te la muestra una sola vez. Vence a los 7 días si la persona no la cambia.</div></div>'+
+    '<div class="row" style="margin-top:16px"><button class="btn btn-primary" type="submit"'+(blocked?' disabled':'')+'>Dar de alta</button><button class="btn btn-ghost" type="button" data-act="to-usuarios">Cancelar</button></div></form></div>';
+  return shell(h);
+}
+function altaErr(isAdm){
+  var e={};
+  if(!(S.f.nombre||'').trim())e.nombre='Ingresá el nombre.';
+  if(!(S.f.apellido||'').trim())e.apellido='Ingresá el apellido.';
+  var em=(S.f.email||'').trim();
+  if(!em)e.email='Ingresá el email.';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))e.email='Ingresá un email válido, por ejemplo nombre@dominio.com.';
+  else{var t=emailTaken(em);if(t&&t.activo)e.email='Ya existe una cuenta con ese email.'}
+  var te=telErr(S.f.tel);if(te)e.tel=te;
+  if(!isAdm&&!S.f.rol)e.rol='Elegí el rol.';
+  if(S.f.rol==='Transportista'&&!S.f.inv)e.inv='Elegí el invernadero del Transportista.';
+  return e;
+}
+function tempPanel(pass){
+  return '<div class="temp"><div class="muted" style="font-size:12px">Contraseña temporal</div><code id="tmp">'+esc(pass)+'</code>'+
+    '<div class="row"><button class="btn btn-ghost btn-sm" data-act="copy" data-v="'+esc(pass)+'">Copiar</button></div></div>'+
+    alertBox('warn','Se muestra <b>una sola vez</b>. Pasásela a la persona por un medio seguro. Vence a los 7 días si no la cambia.')+
+    '<div class="acts"><button class="btn btn-primary" data-act="close-modal">Entendido</button></div>';
+}
+function vAltaOk(){
+  var x=A(S.last);
+  var h='<div class="page narrow"><div class="page-h"><h1>Cuenta creada</h1></div>'+
+    alertBox('ok','Se dio de alta la cuenta de <b>'+esc(full(x))+'</b> ('+x.rol+') — <span class="mono">'+esc(x.email)+'</span>.')+
+    '<div style="margin-top:14px">'+alertBox('warn','La contraseña temporal se mostró una sola vez. Si se perdió, restablecela desde la ficha de la cuenta.')+'</div>'+
+    (x.rol==='Gerente'?'<div style="margin-top:14px">'+alertBox('ok','Se le envió al nuevo Gerente una notificación dentro del Sistema con los 7 pendientes que esperan una resolución del Gerente.')+'</div>':'')+
+    (x.rol==='Transportista'?'<p class="hint" style="margin-top:12px">Quedó asociado a <b>'+esc(x.inv)+'</b>. Su vehículo se asigna desde el vehículo.</p>':'')+
+    '<div class="row" style="margin-top:16px"><button class="btn btn-primary" data-act="to-usuarios">Volver a la lista</button><button class="btn btn-ghost" data-act="open-user" data-id="'+x.id+'">Ver cuenta</button><button class="btn btn-ghost" data-act="to-alta">Dar de alta otra</button></div></div>';
+  return shell(h);
+}
+
+/* ---- Modales ---- */
+function modalHtml(){
+  var m=S.modal,x=m.id?A(m.id):null,h='';
+  if(m.t==='link'){
+    h='<h2>Vincular cuenta</h2><p>Ingresá el email y la contraseña de la otra cuenta para demostrar que es tuya.</p>'+(S.merr?alertBox('danger',S.merr)+'<div style="height:12px"></div>':'')+
+      '<form data-act="link-do" novalidate>'+fieldHtml('le','Email de la otra cuenta',{type:'email',req:true,ac:'off',err:S.att&&!(S.f.le||'').trim()?'Ingresá el email de la otra cuenta.':''})+
+      fieldHtml('lp','Contraseña de la otra cuenta',{type:'password',req:true,ac:'off',err:S.att&&!(S.f.lp||'')?'Ingresá la contraseña de la otra cuenta.':''})+
+      '<div class="acts"><button class="btn btn-primary" type="submit">Vincular</button><button class="btn btn-ghost" type="button" data-act="close-modal">Cancelar</button></div></form>'+
+      '<div class="proto" style="margin-top:14px"><div class="proto-title">Solo prototipo</div>Probá con <span class="mono">vsaenz'+DOM+'</span> o <span class="mono">mgomez'+DOM+'</span> (contraseña <span class="mono">'+PASS+'</span>).</div>';
+  }else if(m.t==='unlink'){
+    h='<h2>¿Desvincular esta cuenta?</h2><p><span class="mono">'+esc(x.email)+'</span> ('+x.rol+') sale de tu grupo de cuentas. Dejás de poder pasar a ella desde acá, pero la cuenta no se borra.</p><div class="acts"><button class="btn btn-primary" data-act="close-modal">Cancelar</button><button class="btn btn-danger" data-act="unlink-do" data-id="'+x.id+'">Desvincular</button></div>';
+  }else if(m.t==='reset'){
+    h='<h2>¿Restablecer la contraseña?</h2><p>Se genera una <b>contraseña temporal</b> para '+esc(full(x))+' ('+x.rol+'). Se cierran sus sesiones abiertas y la cuenta <b>sale de su grupo</b> de cuentas vinculadas.</p><div class="acts"><button class="btn btn-primary" data-act="close-modal">Cancelar</button><button class="btn btn-ghost" data-act="reset-do">Restablecer</button></div>';
+  }else if(m.t==='react'){
+    h='<h2>¿Reactivar la cuenta?</h2><p>La cuenta de '+esc(full(x))+' ('+x.rol+') vuelve a estar activa. Se genera una <b>contraseña temporal</b> y la cuenta sale de su grupo de cuentas vinculadas.</p>'+(m.err?alertBox('danger',m.err)+'<div style="height:6px"></div>':'')+'<div class="acts"><button class="btn btn-primary" data-act="close-modal">Cancelar</button><button class="btn btn-ghost" data-act="react-do">Reactivar</button></div>';
+  }else if(m.t==='baja'){
+    h='<h2>¿Dar de baja esta cuenta?</h2><p>'+esc(full(x))+' ('+x.rol+') no va a poder iniciar sesión y se cierran sus sesiones abiertas. Su historial se conserva y sus cuentas vinculadas no cambian. Podés reactivarla más adelante.</p>'+
+      (x.rol==='Gerente'?alertBox('warn','Al no quedar un Gerente activo, los pendientes de su rol esperan hasta que se dé de alta otro.')+'<div style="height:6px"></div>':'')+
+      (m.err?alertBox('danger',m.err)+'<div style="height:6px"></div>':'')+'<div class="acts"><button class="btn btn-primary" data-act="close-modal">Cancelar</button><button class="btn btn-danger" data-act="baja-do">Dar de baja</button></div>';
+  }else if(m.t==='temp'){
+    h='<h2>'+m.title+'</h2><p>'+m.text+'</p>'+tempPanel(m.pass);
+  }
+  return '<div class="ov"><div class="modal" role="dialog" aria-modal="true">'+h+'</div></div>';
+}
+
+/* =========================================================
+   Render principal
+   ========================================================= */
+function screen(){
+  switch(S.view){
+    case 'login':return vLogin();case 'recover':return vRecover();case 'recover-sent':return vRecoverSent();
+    case 'reset':return vReset();case 'linkbad':return vLinkBad();case 'forced':return vForced();
+    case 'home':return vHome();case 'perfil':return vPerfil();case 'usuarios':return vUsuarios();
+    case 'usuario':return vUsuario();case 'alta':return vAlta();case 'alta-ok':return vAltaOk();
+  }
+  return '';
+}
+function render(){
+  var ae=document.activeElement,id=ae&&ae.id,pos=ae&&ae.selectionStart,mt=document.querySelector('main.main'),st=mt?mt.scrollTop:0;
+  root.innerHTML=screen();
+  var m2=document.querySelector('main.main');if(m2)m2.scrollTop=st;
+  if(id){var n=document.getElementById(id);if(n){n.focus();try{if(pos!=null)n.setSelectionRange(pos,pos);else{var vv=n.value;n.value='';n.value=vv}}catch(e){}}}
+}
+
+/* =========================================================
+   Acciones
+   ========================================================= */
+function enter(){var a=me();S.nav=a.rol==='Administrador'?'Cuentas':'Panel de control';go(a.rol==='Administrador'?'usuarios':'home')}
+function leaveSession(msg){S.uid=null;S.nav='Panel de control';go('login');if(msg)toast(msg)}
+var ACT={
+ 'login':function(){
+   S.att=true;var e=(S.f.email||'').trim().toLowerCase(),p=S.f.pass||'';
+   if(!e||!p){render();return}
+   var a=S.db.accounts.find(function(x){return x.email===e});
+   if(!a||!a.activo||a.pass!==p||(a.temp&&a.tempVenc)){S.loginErr=true;S.okMsg=null;render();return}
+   S.uid=a.id;S.okMsg=null;if(a.temp)go('forced');else enter();
+ },
+ 'fill':function(el){S.f.email=el.dataset.u;S.f.pass=el.dataset.p;S.loginErr=false;S.att=false;render()},
+ 'to-recover':function(){S.okMsg=null;go('recover')},
+ 'to-login':function(){S.okMsg=null;S.uid=null;go('login')},
+ 'recover':function(){S.att=true;var e=(S.f.email||'').trim();if(!e||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){render();return}S.rec=e;go('recover-sent')},
+ 'link':function(el){S.linkS=el.dataset.s;if(S.linkS==='ok')go('reset');else go('linkbad')},
+ 'reset':function(){
+   S.att=true;var a=S.db.accounts.find(function(x){return x.email===S.rec.toLowerCase()&&x.activo});
+   var er=newPwErrors(S.f.n||'',S.f.r||'',a?a.pass:'',a,'tu contraseña actual');
+   if(er.n||er.r){render();return}
+   if(a){a.pass=S.f.n;a.temp=false;a.tempVenc=false}
+   S.uid=null;go('login');toast('Contraseña actualizada. Ingresá con la nueva contraseña.');
+ },
+ 'forced':function(){
+   S.att=true;var a=me(),er=newPwErrors(S.f.n||'',S.f.r||'',a.pass,a,'la contraseña temporal');
+   if(er.n||er.r){render();return}
+   a.pass=S.f.n;a.temp=false;a.tempVenc=false;enter();toast('Contraseña actualizada. Ya podés operar.');
+ },
+ 'eye':function(el){S.show[el.dataset.id]=!S.show[el.dataset.id];render()},
+ 'logout':function(){leaveSession('Cerraste la sesión.')},
+ 'toggle-menu':function(){S.menu=!S.menu;S.notif=false;render()},
+ 'toggle-notif':function(){S.notif=!S.notif;S.menu=false;render()},
+ 'close-menu':function(){S.menu=false;S.notif=false;render()},
+ 'readn':function(){S.readN=true;render()},
+ 'nav':function(el){var n=el.dataset.n;if(n==='Panel de control'){S.nav=n;go('home')}else if(n==='Usuarios y seguridad'||n==='Cuentas'){S.nav=n;go('usuarios')}else toast('Este módulo no forma parte de esta ronda.')},
+ 'to-perfil':function(){S.nav='';go('perfil')},
+ 'switch':function(el){var x=A(el.dataset.id);S.uid=x.id;S.readN=false;enter();toast('Operás como '+x.rol+' · '+full(x))},
+ 'chgpw':function(){
+   S.att=true;var a=me(),er=pwChangeErr(a);
+   if(er.c||er.n||er.r){render();return}
+   a.pass=S.f.n;S.f={};S.att=false;S.show={};S.flash='Contraseña actualizada. Se cerraron las demás sesiones abiertas con esta cuenta; esta sigue abierta.';render();
+ },
+ 'open-link':function(){S.modal={t:'link'};S.f={};S.att=false;S.merr=null;render()},
+ 'close-modal':function(){S.modal=null;S.f={};S.att=false;S.merr=null;S.seen=false;render()},
+ 'link-do':function(){
+   S.att=true;var e=(S.f.le||'').trim().toLowerCase(),p=S.f.lp||'';
+   if(!e||!p){render();return}
+   var a=me(),b=S.db.accounts.find(function(x){return x.email===e});
+   if(b&&b.id===a.id){S.merr='No podés vincular una cuenta consigo misma.';render();return}
+   if(b&&b.grupo&&b.grupo===a.grupo){S.merr='Esa cuenta ya está vinculada a la tuya.';render();return}
+   if(!b||!b.activo||b.pass!==p||b.temp||b.rol==='Administrador'){S.merr='No pudimos vincular la cuenta. Revisá el email y la contraseña, y volvé a intentarlo.';render();return}
+   if(!a.grupo&&!b.grupo){S.seq++;a.grupo=b.grupo='g'+S.seq}
+   else if(a.grupo&&!b.grupo){b.grupo=a.grupo}
+   else if(!a.grupo&&b.grupo){a.grupo=b.grupo}
+   else{var old=b.grupo,keep=a.grupo;S.db.accounts.forEach(function(x){if(x.grupo===old)x.grupo=keep})}
+   S.modal=null;S.f={};S.att=false;S.flash='Cuenta vinculada: '+b.email+' ('+b.rol+'). Ya podés pasar a ella desde el menú de cuenta.';render();
+ },
+ 'ask-unlink':function(el){S.modal={t:'unlink',id:el.dataset.id};render()},
+ 'unlink-do':function(el){
+   var x=A(el.dataset.id),old=x.grupo;x.grupo=null;
+   var rest=S.db.accounts.filter(function(y){return y.grupo===old});if(rest.length===1)rest[0].grupo=null;
+   S.modal=null;S.flash='Se desvinculó '+x.email+'.';render();
+ },
+ 'own-data':function(){S.sel=S.uid;S.nav='Cuentas';go('usuario');S.f.__edit=true;render()},
+ 'to-usuarios':function(){go('usuarios')},
+ 'open-user':function(el){S.sel=el.dataset.id;go('usuario')},
+ 'to-alta':function(){go('alta')},
+ 'edit-user':function(){S.f={__edit:true};S.att=false;render()},
+ 'cancel-edit':function(){S.f={};S.att=false;render()},
+ 'save-user':function(){
+   S.att=true;var x=A(S.sel),er=userErr(x);if(Object.keys(er).length){render();return}
+   if(S.f.nombre!=null)x.nombre=S.f.nombre.trim();if(S.f.apellido!=null)x.apellido=S.f.apellido.trim();
+   if(S.f.email!=null)x.email=S.f.email.trim().toLowerCase();if(S.f.tel!=null)x.tel=S.f.tel.trim();if(S.f.inv!=null&&x.rol==='Transportista')x.inv=S.f.inv;
+   S.f={};S.att=false;render();toast('Cambios guardados.');
+ },
+ 'alta':function(){
+   S.att=true;var isAdm=me().rol==='Administrador';
+   if(isAdm&&activeOf('Gerente').length){render();return}
+   var er=altaErr(isAdm);if(Object.keys(er).length){render();return}
+   S.seq++;var rol=isAdm?'Gerente':S.f.rol,pass=genTemp(),id='a'+S.seq;
+   S.db.accounts.push({id:id,nombre:S.f.nombre.trim(),apellido:S.f.apellido.trim(),email:S.f.email.trim().toLowerCase(),tel:(S.f.tel||'').trim(),rol:rol,activo:true,pass:pass,temp:true,tempVenc:false,inv:rol==='Transportista'?S.f.inv:'',grupo:null});
+   S.last=id;go('alta-ok');var nx=A(id);S.modal={t:'temp',title:'Cuenta creada',text:'Esta es la contraseña temporal de '+esc(full(nx))+' ('+nx.rol+'). Pasásela por un medio seguro: no se vuelve a mostrar.',pass:pass};render();
+ },
+ 'copy':function(el){try{navigator.clipboard.writeText(el.dataset.v).then(function(){toast('Contraseña copiada.')},function(){toast('No se pudo copiar: seleccionala y copiala a mano.')})}catch(e){toast('No se pudo copiar: seleccionala y copiala a mano.')}},
+ 'back-home':function(){enter()},
+ 'pick-photo':function(){document.getElementById('f-file').click()},
+ 'pick-cam':function(){document.getElementById('f-cam').click()},
+ 'rm-photo':function(){me().foto='';S.photoErr=null;render();toast('Se quitó la foto de perfil.')},
+ 'ask-reset':function(){S.modal={t:'reset',id:S.sel};render()},
+ 'reset-do':function(){var x=A(S.sel);x.pass=genTemp();x.temp=true;x.tempVenc=false;x.grupo=(function(){var old=x.grupo;x.grupo=null;if(old){var r=S.db.accounts.filter(function(y){return y.grupo===old});if(r.length===1)r[0].grupo=null}return null})();
+   S.seen=false;S.modal={t:'temp',title:'Contraseña restablecida',text:'Se cerraron las sesiones de '+esc(full(x))+' y la cuenta salió de su grupo de cuentas vinculadas. Esta es su nueva contraseña temporal:',pass:x.pass};render()},
+ 'ask-react':function(){S.modal={t:'react',id:S.sel};render()},
+ 'react-do':function(){
+   var x=A(S.sel);
+   if(x.rol==='Gerente'&&activeOf('Gerente').length){S.modal.err='No se puede reactivar: ya hay un Gerente activo. Dalo de baja primero.';render();return}
+   var old=x.grupo;x.grupo=null;if(old){var r=S.db.accounts.filter(function(y){return y.grupo===old});if(r.length===1)r[0].grupo=null}
+   x.activo=true;x.pass=genTemp();x.temp=true;x.tempVenc=false;S.seen=false;
+   S.modal={t:'temp',title:'Cuenta reactivada',text:'La cuenta de '+esc(full(x))+' volvió a estar activa y salió de su grupo de cuentas vinculadas. Esta es su nueva contraseña temporal:',pass:x.pass};render()},
+ 'ask-baja':function(){S.modal={t:'baja',id:S.sel};render()},
+ 'baja-do':function(){
+   var x=A(S.sel);
+   if(x.rol==='Administrador'&&activeOf('Administrador').length<2){S.modal.err='No se puede dar de baja: es el último Administrador activo.';render();return}
+   x.activo=false;S.modal=null;
+   if(x.id===S.uid){leaveSession('Tu cuenta se dio de baja y se cerró la sesión.');return}
+   S.flash=alertBox('ok','Se dio de baja la cuenta de '+esc(full(x))+'. Se cerraron sus sesiones abiertas.')+(x.rol==='Gerente'?'<div style="height:8px"></div>'+alertBox('warn','Quedan 7 pendientes esperando hasta que se dé de alta otro Gerente.'):'');
+   render();
+ },
+ 'reset-data':function(){var n=S.uid;init();toast('Datos de ejemplo reiniciados.')}
+};
+root.addEventListener('click',function(e){
+  var el=e.target.closest('[data-act]');if(!el||el.tagName==='FORM')return;
+  var f=ACT[el.dataset.act];if(f){e.preventDefault();f(el)}
+});
+root.addEventListener('submit',function(e){
+  e.preventDefault();var f=e.target.closest('[data-act]');if(f&&ACT[f.dataset.act])ACT[f.dataset.act](f);
+});
+function onField(e){
+  var el=e.target.closest('[data-f]');if(!el)return;var k=el.dataset.f;
+  var v=el.type==='checkbox'?el.checked:el.value;
+  if(k==='__nomail'){S.noMail=v;render();return}
+  if(k==='__frol'){S.filt.rol=v;render();return}
+  if(k==='__fest'){S.filt.est=v;render();return}
+  if(k==='__fq'){S.filt.q=v;render();return}
+  S.f[k]=v;render();
+}
+function handlePhoto(file){
+  if(!file)return;
+  if(file.size>30*1024*1024){S.photoErr='La imagen pesa más de 30 MB. Elegí una más liviana.';render();return}
+  var url=URL.createObjectURL(file),img=new Image();
+  img.onerror=function(){URL.revokeObjectURL(url);S.photoErr='No se pudo abrir esa imagen'+(file.type?' ('+file.type.replace('image/','').toUpperCase()+')':'')+'. Probá con una foto en formato JPG o PNG.';render()};
+  img.onload=function(){
+    URL.revokeObjectURL(url);
+    if(!img.width||!img.height){S.photoErr='No se pudo abrir esa imagen. Probá con otra.';render();return}
+    var c=document.createElement('canvas'),sz=Math.min(img.width,img.height),z=256;c.width=c.height=z;
+    c.getContext('2d').drawImage(img,(img.width-sz)/2,(img.height-sz)/2,sz,sz,0,0,z,z);
+    me().foto=c.toDataURL('image/jpeg',0.85);S.photoErr=null;render();toast('Foto de perfil actualizada.')};
+  img.src=url;
+}
+function onPhotoEvent(e){var t=e.target;if(t&&t.dataset&&t.dataset.photo!==undefined){var f=t.files&&t.files[0];try{t.value=''}catch(x){}if(f)handlePhoto(f);return true}return false}
+root.addEventListener('input',function(e){if(onPhotoEvent(e))return;onField(e)});
+root.addEventListener('change',function(e){if(onPhotoEvent(e))return;if(e.target.type==='checkbox'||e.target.tagName==='SELECT')onField(e)});
+init();
+</script>
+</body>
+</html>

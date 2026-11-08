@@ -25,6 +25,15 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
 4. Casos de uso originales (desactualizados; solo orientativos).
 5. Prototipo: solo guía visual.
 
+Los casos de uso y la especificación de seguridad de cada bloque que se implementa están copiados
+en `docs/casos_de_uso/` (por ejemplo, `docs/casos_de_uso/usuarios.md`). Esa copia es la que se usa
+en el repo: leé solo las secciones que indique la tarea. Los documentos de Drive no se leen.
+Los prototipos de cada bloque están en `docs/prototipos/`: buscá la pantalla por el nombre que
+indique la tarea y no leas el archivo entero.
+Los recuadros «Solo prototipo», los datos de prueba y los interruptores de simulación del prototipo
+no se implementan: la lista está en `docs/casos_de_uso/usuarios.md`, sección «Elementos del
+prototipo que no van en el sistema».
+
 Estado actual y próximos pasos: `docs/estado.md`. Leelo al empezar cada sesión.
 
 ## Stack
