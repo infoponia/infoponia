@@ -210,7 +210,7 @@ Formato:
   (`is_staff` en False). Si más adelante hay pantalla propia, no será un caso de uso aparte: la
   pantalla de gestión de usuarios (caso por especificar 23 en pendientes_CU) sirve a los dos
   actores, y el Administrador solo ve a los Gerentes.
-- Estado: vigente
+- Estado: reemplazada en parte por D-16 (alcance del Administrador, pantallas propias y admin de Django en producción); el resto sigue vigente
 
 ## D-11 — El rol de un usuario no se modifica
 
@@ -291,5 +291,209 @@ Formato:
 - Fuentes: D-02 (mapeo telefonoX → `telefono`); D-05 (registrar el tipo de cada campo nuevo).
 - Consecuencias: ninguna por ahora; si en el futuro se necesita validar formato, se agrega un
   validador sin cambiar el tipo de columna.
+- Estado: vigente; completada por D-21 (formato del teléfono)
+
+## D-16 — Alcance del Administrador y pantallas propias
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández
+- Antes: D-10 limitaba al Administrador a gestionar al Gerente, desde el admin de Django; una
+  pantalla propia quedaba para más adelante y la limitación era solo por procedimiento.
+- Decisión:
+  - El Administrador da de alta solo la cuenta del Gerente. Modifica, restablece, reactiva y da de
+    baja la cuenta del Gerente y las de los Administradores, incluida la suya, y consulta esas
+    mismas cuentas.
+  - Nadie da de alta Administradores desde el Sistema: se crean por consola con `createsuperuser`
+    al poner en marcha el Sistema y cuando se necesite otro (SEG-17).
+  - Siempre queda al menos un Administrador activo: un Administrador puede darse de baja si no es
+    el último (SEG-15).
+  - El Administrador corrige sus propios datos personales desde las pantallas de cuentas y cambia
+    su contraseña como cualquier persona (USR-CMB-CTR).
+  - Las cuentas de Administrador no se vinculan con otras (D-17).
+  - La administración de cuentas se hace con pantallas propias de InfoPonia. El admin de Django
+    queda deshabilitado en producción (SEG-18); en desarrollo puede seguir disponible.
+- Por qué: el admin de Django muestra todos los modelos y no aplica el alcance ni las reglas de las
+  cuentas (contraseña temporal, auditoría, invariantes). Con varios Administradores (D-12), tienen
+  que poder gestionarse entre sí. Dejar el admin expuesto en producción agrega superficie de ataque.
+- Fuentes: CU extendidos, «Casos de uso de alto nivel» (regla 1 de USR-ALT-USR, USR-MOD-USR,
+  USR-BAJ-USR y USR-CNS-USR; regla 2 de USR-GST-PRF) y «Especificación complementaria · Seguridad y
+  acceso» (SEG-15, SEG-17 y SEG-18); pendientes_MD, MD-58.
+- Consecuencias: reemplaza en parte a D-10. El admin de Django se deshabilita en producción recién
+  cuando existan las pantallas del Administrador (tarea 05 de `docs/estado.md`); antes, nadie podría
+  gestionar al Gerente en producción.
 - Estado: vigente
 
+## D-17 — Cuentas vinculadas en un grupo
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández
+- Antes: D-01 fija un solo rol por usuario. Una persona con dos funciones (por ejemplo, Agrónomo y
+  Vendedor) necesitaba dos cuentas y volver a identificarse para pasar de una a otra.
+- Decisión:
+  - Una persona puede tener varias cuentas, cada una con su rol y su email. Como el email es único
+    (D-03), para un segundo rol se usa otro email o un alias.
+  - Las cuentas se agrupan en un grupo de cuentas vinculadas. Cada `Usuario` pertenece a lo sumo a
+    un grupo (clave foránea opcional). El vínculo es transitivo: si al vincular cada cuenta está en
+    un grupo distinto, los grupos se unen; un grupo que queda con una sola cuenta deja de existir.
+  - Solo el dueño vincula y desvincula. Para vincular demuestra que la otra cuenta es suya con su
+    email y su contraseña. No se vinculan cuentas inactivas, con contraseña temporal ni de
+    Administrador.
+  - Restablecer la contraseña de una cuenta o reactivarla la saca de su grupo.
+  - Desde el menú de cuenta se pasa a otra cuenta activa del grupo sin volver a identificarse, con un
+    identificador de sesión nuevo. El cambio de cuenta no se audita.
+- Por qué: conserva D-01 y D-11 (un rol fijo por cuenta, con sus asociaciones y su historial) y evita
+  que la persona se identifique varias veces. Un grupo, en lugar de pares de cuentas, hace que el
+  vínculo sea transitivo por estructura.
+- Fuentes: CU extendidos, USR-VNC-CTA, USR-MOD-USR (postcondición b), SEG-09 y SEG-11;
+  pendientes_DER, DER-10; pendientes_MD, MD-58.
+- Consecuencias: una tabla nueva y un campo nuevo en `Usuario`, en una migración nueva. Modificar
+  `Usuario` requiere el permiso explícito que pide `CLAUDE.md`. El DER se actualiza después, a
+  partir del código.
+- Estado: vigente
+
+## D-18 — Contraseña temporal
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández
+- Antes: los casos preliminares CU-25 a CU-28 no decían quién elige la contraseña inicial ni cómo se
+  recupera una cuenta cuya contraseña se olvidó si no hay correo.
+- Decisión:
+  - El Sistema genera una contraseña temporal al dar de alta, restablecer o reactivar una cuenta:
+    12 caracteres aleatorios, letras y dígitos sin caracteres ambiguos (0, O, 1, l, I).
+  - Se muestra una sola vez a quien gestiona la cuenta. Nadie elige la contraseña de otra persona.
+  - Vence a los 7 días de generada. Vencida, no sirve para identificarse y quien gestiona la cuenta
+    tiene que restablecerla.
+  - Mientras la cuenta la tenga, la persona solo puede reemplazarla por una propia: el resto de las
+    pantallas está bloqueado.
+  - Se guarda la fecha y hora de generación; vacía si la contraseña no es temporal.
+- Por qué: quien gestiona la cuenta nunca conoce la contraseña definitiva. El vencimiento limita el
+  riesgo de una contraseña que se transmitió por otro medio.
+- Fuentes: CU extendidos, SEG-04 y SEG-11, USR-ALT-USR (regla 4), USR-MOD-USR (regla 4) y
+  USR-CMB-CTR; pendientes_DER, DER-10.
+- Consecuencias: campo nuevo en `Usuario` (permiso explícito, como en D-17). La temporal vencida se
+  rechaza con el mismo mensaje genérico que cualquier otra falla (D-19).
+- Estado: vigente
+
+## D-19 — Sesión e identificación
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández
+- Antes: no estaba definido cuánto dura la sesión ni qué se informa cuando falla la identificación.
+  El prototipo tenía la opción «mantener sesión iniciada».
+- Decisión:
+  - La sesión dura mientras el navegador esté abierto. No existe «mantener sesión iniciada».
+  - Ante una identificación fallida se muestra un único mensaje genérico, sea cual sea la causa.
+  - No hay límite de intentos ni bloqueo de la cuenta.
+  - El email se guarda en minúsculas y se compara sin distinguir mayúsculas.
+  - Cerrar sesión la invalida en el servidor.
+- Por qué: el Capataz, el Técnico y el Transportista trabajan en celulares que pueden ser compartidos,
+  y el ingreso con Google (trabajo futuro) hace innecesario recordar la sesión. El mensaje genérico no
+  revela qué cuentas existen.
+- Fuentes: CU extendidos, USR-INI-SES, SEG-01 y SEG-05 a SEG-08.
+- Consecuencias: hoy el email es único distinguiendo mayúsculas (`unique=True`): hay que pasarlo a
+  minúsculas al guardar y al identificarse.
+- Estado: vigente
+
+## D-20 — Foto de perfil en almacenamiento de objetos
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández
+- Antes: el modelo de dominio no tiene foto de perfil.
+- Decisión:
+  - Cada cuenta puede tener una foto de perfil, que no se comparte con sus cuentas vinculadas.
+  - Acepta JPG, PNG o WebP. El servidor verifica que sea una imagen real, la vuelve a codificar, la
+    recorta en cuadrado y la achica a 256 px.
+  - Se guarda con el almacenamiento de archivos de Django: en desarrollo, el disco local; en
+    producción, un almacenamiento de objetos con `django-storages`.
+  - La carga, el cambio y la quita no se auditan. Quien gestiona la cuenta puede quitarla, pero no
+    cambiarla.
+- Por qué: el disco del servidor de Render no es persistente (los archivos subidos se pierden en cada
+  despliegue), y un disco persistente se paga aparte e impide los despliegues sin corte. Volver a
+  codificar la imagen evita guardar contenido malicioso con apariencia de imagen.
+- Fuentes: CU extendidos, SEG-19, USR-GST-PRF (regla 5) y USR-MOD-USR (regla 8); pendientes_DER,
+  DER-10 (decisión del 08/11/2026).
+- Consecuencias: dependencias nuevas, Pillow y, para producción, `django-storages` con la librería
+  del proveedor. Falta decidir el proveedor de almacenamiento antes de la tarea de la foto. Campo
+  nuevo en `Usuario` (permiso explícito, como en D-17).
+- Estado: vigente
+
+## D-21 — Formato del teléfono
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández
+- Antes: D-15 fijó el tipo de `telefono` y dejó para más adelante validar el formato.
+- Decisión: si se indica, el teléfono contiene solo dígitos, espacios y los símbolos + - ( ), con el
+  + solo al comienzo, y tiene entre 8 y 15 dígitos. Se valida al confirmar el formulario, no mientras
+  se escribe.
+- Por qué: 15 dígitos es el máximo de un número internacional; 8 cubre un número local. Validar al
+  confirmar evita marcar como error un número que todavía se está escribiendo.
+- Fuentes: CU extendidos, USR-ALT-USR (regla 9); pendientes_DER, DER-10 (decisión del 08/11/2026);
+  D-15.
+- Consecuencias: completa a D-15. El validador del campo genera una migración que no cambia la
+  columna.
+- Estado: vigente
+
+## D-22 — Registro de auditoría
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández (aprobada el 08/11/2026, a propuesta de Claude)
+- Antes: varias postcondiciones de los casos de uso piden «un log de auditoría», y el modelo de
+  dominio lo menciona en otros procesos, pero ni el modelo ni el DER tienen una entidad que lo guarde.
+- Decisión: un modelo `RegistroAuditoria` en `core`, al que solo se agregan filas (nunca se modifican
+  ni se borran), con: la cuenta que actuó, su rol en ese momento, fecha y hora, la acción (lista
+  cerrada), el identificador de cada cuenta u objeto afectado y un detalle con los cambios. Nunca
+  guarda contraseñas. Se escribe desde el servicio del caso de uso, dentro de la misma transacción.
+- Por qué: en la misma transacción no puede quedar una operación sin su registro, ni un registro de
+  una operación que se deshizo. Guardar el rol del momento conserva el dato aunque la cuenta cambie
+  después. Un único modelo sirve a todos los módulos.
+- Fuentes: CU extendidos, SEG-14 y las postcondiciones de auditoría de USR-CMB-CTR, USR-RCP-CTR,
+  USR-ALT-USR, USR-MOD-USR, USR-BAJ-USR y USR-VNC-CTA; modelo de dominio (menciones del log de
+  auditoría).
+- Consecuencias: desvío respecto del DER, que no tiene la entidad: se agrega al actualizar el DER a
+  partir del código. Los módulos de negocio la reutilizan.
+- Estado: vigente
+
+## D-23 — Ubicación del código: cuentas en core, una app por módulo de negocio
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández (aprobada el 08/11/2026, a propuesta de Claude)
+- Antes: todo el código está en la app `core`, que hoy solo tiene `Usuario` y los seis roles. El
+  reparto de apps entre los dos integrantes era un tema abierto.
+- Decisión:
+  - Todo el bloque de cuentas y seguridad va en `core`: modelos, servicios (`core/servicios.py`),
+    formularios, vistas, plantillas y pruebas.
+  - `core` también guarda lo que comparten todos los módulos: la plantilla base, los estilos, el
+    menú, el control de acceso por rol y la auditoría (D-22).
+  - Cada módulo de negocio tendrá su propia app, que usa lo de `core`; `core` nunca depende de una
+    app de negocio. Los nombres y el reparto de esas apps se deciden al empezar el primer módulo.
+- Por qué: `Usuario` ya está en `core`, y mover un modelo de usuario con migraciones aplicadas es muy
+  costoso. Todo el bloque gira alrededor de `Usuario`: separarlo en otra app solo agregaría
+  dependencias cruzadas. Una app por módulo permite repartir el trabajo entre los dos integrantes con
+  menos choques en los mismos archivos.
+- Fuentes: `CLAUDE.md` (arquitectura); D-01.
+- Consecuencias: resuelve en parte el tema abierto del reparto de apps.
+- Estado: vigente
+
+## D-24 — Pantallas del bloque a partir del prototipo HTML
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández (aprobada el 08/11/2026, a propuesta de Claude)
+- Antes: el prototipo del ERP es un zip de React (`InfoPonia11.zip`) que no se traslada al repo. El
+  bloque de cuentas se diseñó el 07 y el 08/11/2026 en un prototipo HTML aparte.
+- Decisión:
+  - Las pantallas del bloque se hacen con plantillas de Django y HTMX, tomando como guía visual
+    `docs/prototipos/cuentas_y_seguridad.html`, que usa los colores, tipografías y clases del zip.
+  - HTMX se incluye como archivo estático dentro del repo.
+  - Los desplegables de filtros y formularios son propios y accesibles con teclado, no el `<select>`
+    nativo: en Windows, la opción resaltada del nativo se veía en blanco y no se leía.
+  - La carga de la foto desde el celular se prueba en un dispositivo real, con el sistema desplegado.
+- Fuera del sistema: el prototipo tiene elementos que existen solo para poder probarlo (los
+  recuadros «Solo prototipo», los datos de prueba y el interruptor que simula que el correo no está
+  configurado). Nada de eso se implementa. La lista completa está en `docs/casos_de_uso/usuarios.md`,
+  sección «Elementos del prototipo que no van en el sistema».
+- Por qué: los dos problemas quedaron abiertos en el prototipo y no se pudieron resolver dentro de la
+  app de Claude. Servir HTMX desde el repo evita depender de un servidor externo.
+- Fuentes: `pendientes_prototipo.md`, pendiente 46; `historial_prototipo.md`, «Cuentas y seguridad».
+- Consecuencias: el archivo de HTMX es una dependencia nueva y necesita permiso explícito en la
+  tarea 02.
+- Estado: vigente
