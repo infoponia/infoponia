@@ -497,3 +497,73 @@ Formato:
 - Consecuencias: el archivo de HTMX es una dependencia nueva y necesita permiso explícito en la
   tarea 02.
 - Estado: vigente
+
+## D-25 — Convenciones del bloque Cuentas y seguridad (tarea 02)
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández (aprobada durante la planificación de la tarea 02, a propuesta de Claude)
+- Antes: `CLAUDE.md` pide una función de servicio por caso de uso y fija el formato de nombre de las
+  pruebas para reglas, extensiones, postcondiciones, flujos y decisiones, pero no para los requisitos
+  SEG ni para un caso de uso que no modifica datos. SEG-01 pedía guardar el email en minúsculas, lo que
+  cambia `Usuario`. El prototipo muestra los módulos de todos los roles, una campana de notificaciones,
+  el nombre «Jardín Botánico» y un pie «En línea · sincronizado».
+- Decisión:
+  - Iniciar sesión no tiene función en `servicios.py`: no modifica datos y sus reglas las aplican el
+    backend `core.backends.BackendEmail` y `FormularioInicioSesion`, con el motivo escrito en un
+    comentario. Las pruebas se escriben igual antes de implementar. La clase de pruebas de un caso de
+    uso sin servicio se llama `<CodigoCu>ReglasTests`.
+  - Las pruebas de un requisito SEG se llaman `test_seg<nn>_<que_espera>`, van en el archivo del caso
+    de uso que lo cita y su docstring nombra el SEG. Un requisito transversal (SEG-13) va en el archivo
+    del primer caso de uso que lo usa.
+  - SEG-01 se divide. Tarea 02: el login compara el email sin distinguir mayúsculas, sin tocar
+    `Usuario`; si el email coincide con más de una cuenta activa (posible mientras la unicidad distinga
+    mayúsculas), no se identifica ninguna y se muestra el mensaje genérico (SEG-06). Tarea 03: guardar el
+    email en minúsculas y la unicidad sin distinguir mayúsculas, con migración de los datos existentes.
+  - Toda pantalla exige sesión por defecto (`LoginRequiredMiddleware`); las que no, se eximen con
+    `@login_not_required`. El cierre de sesión está eximido (para poder cerrar una sesión vencida) y solo
+    acepta POST.
+  - El menú lateral muestra solo lo que existe; cada tarea agrega su entrada. El Administrador no tiene
+    entradas hasta la tarea 05.
+  - Capataz, Técnico y Transportista usan un marco angosto de celular, sin menú lateral. Su pie no dice
+    «sincronizado»: el sistema no sincroniza.
+  - La campana y las notificaciones quedan para cuando existan notificaciones. El menú de cuenta ofrece
+    por ahora solo «Cerrar sesión»; «Cambiar de cuenta» y «Mi perfil» llegan en la tarea 06.
+  - El nombre de la organización es la configuración `NOMBRE_ORGANIZACION`, leída de una variable de
+    entorno, con «InfoPonia» por defecto. «Jardín Botánico» era un dato del prototipo.
+- Por qué: un servicio que solo envolviera `authenticate` y `login` no agregaría nada. Un nombre fijo
+  para las pruebas SEG mantiene la trazabilidad con el documento. Dividir SEG-01 evita cambiar el modelo
+  de usuario en una tarea que no tiene ese permiso y deja el login ya correcto. Exigir sesión por
+  defecto evita que una pantalla nueva quede abierta por olvido. Mostrar solo lo que existe no deja
+  enlaces rotos.
+- Fuentes: `docs/casos_de_uso/usuarios.md` (USR-INI-SES; SEG-01, SEG-05 a SEG-08 y SEG-13; «Pantallas» y
+  «Elementos del prototipo que no van en el sistema»); D-03, D-19 y D-24; `CLAUDE.md` (tests y
+  arquitectura).
+- Consecuencias: la tarea 03 debe agregar la normalización a minúsculas y la unicidad sin distinguir
+  mayúsculas. El ámbito por invernadero de SEG-13 queda pendiente en `core/acceso.py` hasta que exista
+  `Invernadero`. `.env.example` y el entorno de Render ganan una variable opcional.
+- Estado: vigente
+
+## D-26 — Archivos de terceros incluidos en el repo
+
+- Fecha: 08/11/2026
+- Decidió: Lautaro Fernández (HTMX por D-24; fuentes autorizadas en la tarea 02)
+- Antes: D-24 decide servir HTMX como archivo estático, pero no su versión ni dónde queda. El prototipo
+  carga las fuentes Inter y DM Mono desde Google Fonts.
+- Decisión: se incluyen en `core/static/core/`:
+  - `vendor/htmx-2.0.11.min.js`: `htmx.org@2.0.11`, licencia Zero-Clause BSD.
+  - `fuentes/`: Inter 400, 500, 600 y 700 (`@fontsource/inter@5.3.0`) y DM Mono 400 y 500
+    (`@fontsource/dm-mono@5.3.0`), en formato woff2 y subconjunto *latin* (cubre á, ñ, ü, ¿, « » y —),
+    licencia SIL Open Font License 1.1.
+  - Cada paquete se bajó del registro de npm y se verificó que su `sha512` coincidiera con el
+    `integrity` publicado antes de extraerlo. `vendor/LEEME.md` registra el origen, la versión, el
+    `integrity` y el SHA-256 de cada archivo. Las licencias van junto a los archivos.
+  - Las fuentes se sirven desde el repo, no desde Google Fonts.
+- Por qué: servirlos desde el repo evita depender de un servidor externo y de que el navegador de
+  quien usa el sistema alcance ese servidor (el mismo motivo de D-24). La OFL pide distribuir la
+  licencia con las fuentes.
+- Fuentes: D-24; `docs/prototipos/cuentas_y_seguridad.html` (carga de fuentes); registro de npm.
+- Consecuencias: no son dependencias de Python ni hay `package.json`; actualizarlos es manual (cambiar
+  la versión, repetir la verificación del `integrity` y actualizar `LEEME.md`). Los archivos minificados
+  y las fuentes no pueden llevar el comentario inicial que pide `CLAUDE.md`: su propósito queda en
+  `LEEME.md`.
+- Estado: vigente

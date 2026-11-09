@@ -1,0 +1,10 @@
+{% extends "core/base_con_sesion.html" %}
+{% comment %}Inicio de la cuenta (vHome del prototipo, USR-INI-SES postcondición a). Sin la tarjeta
+«Fuera de esta ronda», que es del prototipo.{% endcomment %}
+{% block titulo %}Panel de control · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <h1 style="margin-bottom:6px">Panel de control</h1>
+  <p class="muted">Operás como <b style="color:var(--foreground)">{{ rol_visible }}</b> con la cuenta <span class="mono">{{ user.email }}</span>.</p>
+</div>
+{% endblock %}

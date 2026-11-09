@@ -31,6 +31,14 @@
   (USR-INI-SES a USR-VNC-CTA) y la especificación de seguridad SEG-01 a SEG-19, copiados en
   `docs/casos_de_uso/usuarios.md`. Prototipo HTML del bloque en
   `docs/prototipos/cuentas_y_seguridad.html`. Decisiones D-16 a D-24, todas vigentes.
+- Tarea 02: plantilla base con los estilos del prototipo y HTMX 2.0.11 servido desde el repo (D-24);
+  inicio y cierre de sesión con email sin distinguir mayúsculas (USR-INI-SES, SEG-01 en parte, SEG-05 a
+  SEG-08); inicio de cada cuenta según el rol, con marco de celular para Capataz, Técnico y Transportista;
+  acceso según el rol con `rol_requerido` y `LoginRequiredMiddleware` (SEG-13, sin el ámbito por
+  invernadero). Fuentes Inter y DM Mono en el repo. Nombre de la organización configurable
+  (`NOMBRE_ORGANIZACION`). 24 pruebas nuevas en `core/tests/test_usr_ini_ses.py` (34 en total), sin
+  migraciones. Carpeta renombrada a `docs/casos_de_uso`. Verificada a mano. Rama
+  `feature/plantilla-front`. Decisiones D-25 y D-26.
 
 ## En curso
 
@@ -45,11 +53,10 @@
 
    | Tarea | Contenido | Necesita |
    |---|---|---|
-   | 02 | Plantilla base con los estilos del prototipo, HTMX, inicio y cierre de sesión (USR-INI-SES, SEG-01 y SEG-05 a SEG-08), inicio de cada cuenta según el rol, acceso según el rol (SEG-13) | Permiso para agregar HTMX (D-24) |
-   | 03 | Registro de auditoría (D-22), contraseña temporal y cambio de contraseña (USR-CMB-CTR, SEG-03, SEG-04 y SEG-10) | Permiso para modificar `Usuario` (D-18) |
+   | 03 | Registro de auditoría (D-22), contraseña temporal y cambio de contraseña (USR-CMB-CTR, SEG-03, SEG-04 y SEG-10). Email en minúsculas al guardar y restricción de unicidad sin distinguir mayúsculas (D-19, SEG-01), con migración de los datos existentes | Permiso para modificar `Usuario` (D-18) |
    | 04 | Usuarios del Gerente: consulta, alta, modificación, restablecer, reactivar y baja (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR, SEG-11 y SEG-15), y validación del teléfono (D-21) | — |
-   | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16); admin de Django deshabilitado en producción (SEG-18) | — |
-   | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09) | Permiso para modificar `Usuario` y crear el grupo (D-17) |
+   | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
+   | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta | Permiso para modificar `Usuario` y crear el grupo (D-17) |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
    | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno | — |
@@ -83,3 +90,8 @@
 - Hacer configurables por `.env` el host, el puerto, el nombre y el usuario de la base local.
 - `requirements.txt` está guardado en UTF-16 (probablemente generado con `pip freeze >` desde
   PowerShell): pip lo lee, pero Git lo muestra como texto ilegible. Convertirlo a UTF-8.
+- Logo de la organización: hoy es un ícono fijo; será una imagen configurable junto con el nombre, en la
+  configuración de la organización.
+- Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
+  de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
+- Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.

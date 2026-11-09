@@ -1,0 +1,13 @@
+{% extends "core/base.html" %}{% load iconos %}
+{% comment %}Marco de las pantallas sin sesión (equivale a authShell del prototipo): fuera del marco del ERP.{% endcomment %}
+{% block cuerpo %}
+<div class="auth">
+  <div class="auth-brand">
+    <div class="logo">{% icono "leafmark" 16 %}</div>
+    <div><b>{{ nombre_organizacion }}</b><small>Sistema de gestión InfoPonia</small></div>
+  </div>
+  <div class="auth-card">
+    {% block contenido %}{% endblock %}
+  </div>
+</div>
+{% endblock %}
