@@ -1,0 +1,47 @@
+{% extends "core/base_sin_sesion.html" %}{% load iconos %}
+{% comment %}Inicio de sesión (USR-INI-SES, vLogin del prototipo). Solo el formulario de email y contraseña:
+nada de los elementos «Solo prototipo» (D-24). Una sola alerta genérica, sin decir qué dato falló (SEG-06).{% endcomment %}
+{% block titulo %}Iniciar sesión · InfoPonia{% endblock %}
+{% block contenido %}
+<h1>Iniciar sesión</h1>
+<p class="lead">Ingresá con el email de tu cuenta.</p>
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+<div style="height:14px"></div>
+{% endif %}
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+  <div class="fld">
+    <label for="id_username">Email<span class="req" aria-hidden="true"> *</span></label>
+    <input class="field-input{% if form.username.errors %} bad{% endif %}" id="id_username" name="username"
+           type="text" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false"
+           value="{{ form.username.value|default_if_none:'' }}"
+           {% if form.username.errors %}aria-invalid="true" aria-describedby="error-username"{% endif %}>
+    {% for error in form.username.errors %}<div class="err" id="error-username">{{ error }}</div>{% endfor %}
+  </div>
+
+  <div class="fld">
+    <label for="id_password">Contraseña<span class="req" aria-hidden="true"> *</span></label>
+    <div class="pw">
+      <input class="field-input{% if form.password.errors %} bad{% endif %}" id="id_password" name="password"
+             type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false"
+             {% if form.password.errors %}aria-invalid="true" aria-describedby="error-password"{% endif %}>
+      <button type="button" class="eye" data-ver-contrasena="id_password" aria-label="Mostrar contraseña">
+        <span data-icono-ver>{% icono "eye" 16 %}</span><span data-icono-ocultar hidden>{% icono "eyeoff" 16 %}</span>
+      </button>
+    </div>
+    {% for error in form.password.errors %}<div class="err" id="error-password">{{ error }}</div>{% endfor %}
+  </div>
+
+  <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
+</form>
+
+{# SEG-12: el correo no está configurado todavía (recuperación en la tarea 08); se muestra el aviso. #}
+<div class="aviso-recuperar">
+  <span class="muted">¿Olvidaste tu contraseña? Pedile a quien gestiona tu cuenta que la restablezca.</span>
+</div>
+{% endblock %}

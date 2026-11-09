@@ -1,0 +1,61 @@
+{% extends "core/base.html" %}{% load iconos %}
+{% comment %}Marco con sesión (equivale a shell del prototipo): cabecera, menú lateral, contenido, pie y
+menú de cuenta con «Cerrar sesión» (SEG-08). Sin campana: todavía no hay notificaciones.{% endcomment %}
+{% block cuerpo %}
+<div class="shell{% if modo_campo %} field{% elif not mostrar_menu_lateral %} sin-lateral{% endif %}">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">{% icono "leafmark" 16 %}</div>
+      <b>{{ nombre_organizacion }}</b>
+    </div>
+    <div class="spacer"></div>
+    <button class="acct" type="button" data-menu-cuenta aria-haspopup="dialog"
+            aria-controls="menu-cuenta" aria-expanded="false"
+            aria-label="Menú de cuenta: {{ user.get_full_name }}, {{ rol_visible }}">
+      <div class="avatar">{{ sigla }}</div>
+      <div class="who"><b>{{ user.get_full_name }}</b><span>{{ rol_visible }}</span></div>
+      {% icono "chev" 12 %}
+    </button>
+  </header>
+
+  {% if mostrar_menu_lateral %}
+  <aside class="side">
+    <div class="side-label">{% if es_administrador %}Administración{% else %}Módulos{% endif %}</div>
+    {% for entrada in menu %}
+    <a class="nav-item{% if entrada.activo %} active{% endif %}" href="{{ entrada.url }}"{% if entrada.activo %} aria-current="page"{% endif %}>
+      {% icono entrada.icono 16 %}<span>{{ entrada.texto }}</span>
+    </a>
+    {% endfor %}
+  </aside>
+  {% endif %}
+
+  <main class="main">
+    {% block contenido %}{% endblock %}
+  </main>
+
+  <footer class="bot">
+    {% if modo_campo %}
+    <span class="sdot"></span><b>En línea</b>
+    {% else %}
+    <span><span class="sdot"></span>Sistema operativo</span>
+    <span class="spacer"></span>
+    <span class="hs">{% now "d/m/Y" %}</span>
+    {% endif %}
+  </footer>
+
+  <div class="scrim" data-cerrar-menu hidden></div>
+  <div class="pop" id="menu-cuenta" role="dialog" aria-label="Menú de cuenta" hidden>
+    <div class="pop-h">
+      <b style="font-size:14px">{{ user.get_full_name }}</b>
+      <div class="muted" style="font-size:12px;overflow-wrap:anywhere">{{ user.email }}</div>
+      <div style="margin-top:8px">
+        <span class="status-badge status-neutral">{% if es_administrador %}Administrador de cuentas{% else %}Operás como {{ rol_visible }}{% endif %}</span>
+      </div>
+    </div>
+    <form class="pop-form" method="post" action="{% url 'core:cerrar_sesion' %}">
+      {% csrf_token %}
+      <button class="pop-act" type="submit">{% icono "out" 16 %}Cerrar sesión</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

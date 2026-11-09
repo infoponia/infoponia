@@ -52,6 +52,20 @@ INSTALLED_APPS = [
 # multi-tabla). Ver docs/decisiones.md.
 AUTH_USER_MODEL = "core.Usuario"
 
+# Nombre de la organización que se muestra en el marco (cabecera y pantallas sin sesión).
+# Es un dato de cada instalación, no del código: «Jardín Botánico» era solo del prototipo (D-24).
+NOMBRE_ORGANIZACION = os.environ.get("NOMBRE_ORGANIZACION", "InfoPonia")
+
+# Tarea 02 — USR-INI-SES, SEG-01, SEG-05 a SEG-08 (docs/casos_de_uso/usuarios.md).
+# El backend compara el email sin distinguir mayúsculas (SEG-01). No se agrega ningún límite de
+# intentos ni bloqueo (SEG-05).
+AUTHENTICATION_BACKENDS = ["core.backends.BackendEmail"]
+LOGIN_URL = "core:iniciar_sesion"
+LOGIN_REDIRECT_URL = "core:inicio"
+LOGOUT_REDIRECT_URL = "core:iniciar_sesion"
+# SEG-07 y D-19: la sesión dura mientras el navegador esté abierto.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -59,6 +73,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # SEG-13: toda pantalla exige sesión por defecto (se exime con @login_not_required).
+    # Va después de WhiteNoise, que responde los estáticos antes de llegar acá.
+    'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -75,6 +92,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.marco',
             ],
         },
     },

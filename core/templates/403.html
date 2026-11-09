@@ -1,0 +1,10 @@
+{% extends request.user.is_authenticated|yesno:"core/base_con_sesion.html,core/base_sin_sesion.html" %}{% load iconos %}
+{% comment %}Error 403 (SEG-13): explica por qué no se puede acceder. Django pasa el mensaje de
+PermissionDenied en «exception».{% endcomment %}
+{% block titulo %}Sin acceso · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <h1 style="margin-bottom:12px">Sin acceso</h1>
+  <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{{ exception|default:"No tenés acceso a esta pantalla." }}</div></div>
+</div>
+{% endblock %}
