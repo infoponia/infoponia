@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 08/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 09/11/2026. Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -39,6 +39,10 @@
   (`NOMBRE_ORGANIZACION`). 24 pruebas nuevas en `core/tests/test_usr_ini_ses.py` (34 en total), sin
   migraciones. Carpeta renombrada a `docs/casos_de_uso`. Verificada a mano. Rama
   `feature/plantilla-front`. Decisiones D-25 y D-26.
+- Tarea 03: Registro de auditoría `RegistroAuditoria` (D-22), contraseña temporal (D-18, SEG-04) y
+  cambio de contraseña (USR-CMB-CTR, SEG-03, SEG-10) con la pantalla «Elegí tu contraseña». Email en
+  minúsculas y único sin distinguir mayúsculas (SEG-01), con migración que falla si hay duplicados. 72
+  pruebas en total. Migraciones `0003` y `0004`. Rama `feature/password-temporal`. Decisión D-27.
 
 ## En curso
 
@@ -53,10 +57,9 @@
 
    | Tarea | Contenido | Necesita |
    |---|---|---|
-   | 03 | Registro de auditoría (D-22), contraseña temporal y cambio de contraseña (USR-CMB-CTR, SEG-03, SEG-04 y SEG-10). Email en minúsculas al guardar y restricción de unicidad sin distinguir mayúsculas (D-19, SEG-01), con migración de los datos existentes | Permiso para modificar `Usuario` (D-18) |
    | 04 | Usuarios del Gerente: consulta, alta, modificación, restablecer, reactivar y baja (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR, SEG-11 y SEG-15), y validación del teléfono (D-21) | — |
    | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
-   | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta | Permiso para modificar `Usuario` y crear el grupo (D-17) |
+   | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta; pantalla de cambio voluntario de contraseña (USR-CMB-CTR, con contraseña actual), usando el servicio de la tarea 03 | Permiso para modificar `Usuario` y crear el grupo (D-17) |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
    | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno | — |

@@ -1,5 +1,6 @@
-# Formularios de core. Por ahora, solo el de inicio de sesión (USR-INI-SES).
+# Formularios de core: inicio de sesión (USR-INI-SES) y elegir contraseña nueva (USR-CMB-CTR).
 
+from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
 # SEG-06: el mismo mensaje sea cual sea la causa (email inexistente, contraseña incorrecta,
@@ -28,3 +29,34 @@ class FormularioInicioSesion(AuthenticationForm):
         self.fields["username"].label = "Email"
         self.fields["username"].error_messages["required"] = "Ingresá tu email."
         self.fields["password"].error_messages["required"] = "Ingresá tu contraseña."
+
+
+class FormularioContrasenaNueva(forms.Form):
+    """Contraseña nueva y su repetición, para el cambio forzado por contraseña temporal (vForced).
+
+    Solo controla que las dos coincidan. La política de contraseñas (SEG-03) y las demás reglas de
+    USR-CMB-CTR las aplica el servicio ``core.servicios.cambiar_contrasena``, y la vista pasa sus
+    errores a este formulario.
+    """
+
+    contrasena_nueva = forms.CharField(
+        label="Contraseña nueva",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+        error_messages={"required": "Ingresá la contraseña nueva."},
+    )
+    contrasena_repetida = forms.CharField(
+        label="Repetí la contraseña nueva",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+        error_messages={"required": "Repetí la contraseña nueva."},
+    )
+
+    def clean(self):
+        """Las dos contraseñas escritas tienen que ser iguales."""
+        datos = super().clean()
+        nueva = datos.get("contrasena_nueva")
+        repetida = datos.get("contrasena_repetida")
+        if nueva and repetida and nueva != repetida:
+            self.add_error("contrasena_repetida", "Las contraseñas no coinciden.")
+        return datos

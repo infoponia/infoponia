@@ -89,7 +89,7 @@ label.btn{cursor:pointer}
 .pw .field-input{padding-right:44px}
 .pw .eye{position:absolute;right:2px;top:2px;bottom:2px;width:40px;border:none;background:none;color:var(--muted-foreground);display:flex;align-items:center;justify-content:center;border-radius:3px}
 .pw .eye:hover{color:var(--foreground);background:var(--secondary)}
-.policy{list-style:none;margin:8px 0 0;font-size:12px}
+.policy{list-style:none;margin:8px 0 14px;font-size:12px}
 .policy li{display:flex;gap:7px;align-items:center;padding:1px 0;color:var(--muted-foreground)}
 .policy li.ok{color:var(--status-ok)}
 .policy .dot{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0}

@@ -567,3 +567,40 @@ Formato:
   y las fuentes no pueden llevar el comentario inicial que pide `CLAUDE.md`: su propósito queda en
   `LEEME.md`.
 - Estado: vigente
+
+## D-27 — Contraseña temporal, auditoría y email: cómo se implementan (tarea 03)
+
+- Fecha: 09/11/2026
+- Decidió: Lautaro Fernández (aprobada durante la planificación de la tarea 03, a propuesta de Claude)
+- Antes: D-18, D-19 y D-22 fijan qué se hace con la contraseña temporal, el email y el registro de
+  auditoría, pero no cómo se implementan. D-25 dejó para esta tarea guardar el email en minúsculas y la
+  unicidad sin distinguir mayúsculas.
+- Decisión:
+  - `RegistroAuditoria` (D-22) es de solo agregar: una fila guardada no se modifica ni se borra. Las
+    cuentas u objetos afectados se guardan como una lista JSON. Un detalle con una clave que nombre una
+    contraseña se rechaza. Una acción que hace el propio sistema, sin una persona detrás, se guarda sin
+    usuario y con el rol «infoponia». `rol_de` y `ADMINISTRADOR` se mudan a `core/models.py` para que los
+    modelos no importen `acceso.py`.
+  - El cambio de contraseña y su registro de auditoría se guardan en una sola transacción: si falla uno,
+    no se guarda ninguno.
+  - Con contraseña temporal, solo se puede elegir una propia o cerrar sesión: un middleware bloquea toda
+    vista que no tenga la marca `@permitido_con_contrasena_temporal`. A un pedido de HTMX se le responde
+    con `HX-Redirect`.
+  - La contraseña temporal vence a los 7 días exactos de generada. Una temporal que vence con la sesión
+    ya abierta se puede reemplazar igual.
+  - El email conserva `unique=True` en el campo, además de la unicidad sin distinguir mayúsculas.
+  - El inicio de sesión ya no trata el email ambiguo previsto en D-25: con la unicidad sin distinguir
+    mayúsculas no puede haber dos cuentas con el mismo email.
+  - La lista de requisitos en vivo muestra solo lo que el navegador puede comprobar (longitud y que no
+    sea solo números). Que la contraseña nueva sea distinta de la temporal se valida únicamente en el
+    servidor, y el error aparece al guardar.
+- Por qué: en la misma transacción que la operación, el registro no queda sin operación ni al revés
+  (D-22). Un middleware con marca bloquea por defecto: una pantalla nueva queda bloqueada para estas
+  cuentas sin que haya que acordarse (mismo patrón que `LoginRequiredMiddleware`). Django exige un campo
+  único para el identificador de la cuenta y no cuenta una restricción con expresión, por eso se
+  conservan las dos. El navegador no conoce la contraseña temporal.
+- Fuentes: `docs/casos_de_uso/usuarios.md` (USR-INI-SES regla 4, USR-CMB-CTR, SEG-01 a SEG-04, SEG-10 y
+  SEG-14); D-18, D-19, D-22 y D-25.
+- Consecuencias: migraciones `0003` y `0004`. La `0004` falla, sin cambiar datos, si hay emails repetidos
+  sin distinguir mayúsculas: hay que resolverlos a mano antes de migrar (también en Neon).
+- Estado: vigente
