@@ -10,4 +10,5 @@ urlpatterns = [
     path("", views.inicio, name="inicio"),
     path("iniciar-sesion/", views.IniciarSesionView.as_view(), name="iniciar_sesion"),
     path("cerrar-sesion/", views.cerrar_sesion, name="cerrar_sesion"),
+    path("elegir-contrasena/", views.elegir_contrasena, name="elegir_contrasena"),
 ]

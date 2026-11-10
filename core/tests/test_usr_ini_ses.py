@@ -1,14 +1,22 @@
-# Pruebas de USR-INI-SES (Iniciar Sesión) y de los requisitos de seguridad que cita la tarea 02:
-# SEG-01, SEG-05 a SEG-08 y SEG-13 (docs/casos_de_uso/usuarios.md), más D-24 (sin elementos del
-# prototipo). No hay función de servicio para el login: las reglas las aplican el backend de
-# autenticación y el formulario, por eso la clase se llama ...ReglasTests. Cada prueba arma sus propios
-# datos y usa el cliente contra las URL, para que cada una falle o pase por separado.
+# Pruebas de USR-INI-SES (Iniciar Sesión) y de los requisitos de seguridad que cita: SEG-01, SEG-04
+# (tareas 02 y 03), SEG-05 a SEG-08 y SEG-13 (docs/casos_de_uso/usuarios.md), más D-24 (sin elementos
+# del prototipo). No hay función de servicio para el login: las reglas las aplican el backend de
+# autenticación, el formulario y el middleware de la contraseña temporal, por eso la clase se llama
+# ...ReglasTests. Cada prueba arma sus propios datos y usa el cliente contra las URL, para que cada una
+# falle o pase por separado. La migración del email (SEG-01, tarea 03) se prueba en MigracionEmailTests.
+
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
-from django.test import TestCase, override_settings
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from core.contrasenas import generar_contrasena_temporal
 from core.models import Capataz, Gerente, Usuario
 
 CLAVE = "clave-segura-123"
@@ -38,6 +46,18 @@ def crear_administrador(email="admin@infoponia.com"):
     return Usuario.objects.create_superuser(
         email=email, password=CLAVE, first_name="Nora", last_name="Correa"
     )
+
+
+def dar_contrasena_temporal(usuario, generada_hace=None):
+    """Le asigna a la cuenta una contraseña temporal (SEG-04) y devuelve su texto plano.
+
+    Con ``generada_hace`` se corre la fecha de generación hacia atrás, para probar el vencimiento.
+    """
+    temporal = usuario.asignar_contrasena_temporal()
+    if generada_hace is not None:
+        usuario.fecha_contrasena_temporal = timezone.now() - generada_hace
+    usuario.save()
+    return temporal
 
 
 class UsrIniSesReglasTests(TestCase):
@@ -75,30 +95,13 @@ class UsrIniSesReglasTests(TestCase):
         self.assertEqual(self.id_en_sesion(), str(capataz.pk))
 
     def test_regla_1_email_guardado_con_mayusculas_se_identifica(self):
-        """USR-INI-SES regla 1 y SEG-01: una cuenta guardada con mayúsculas (antes de la tarea 03,
-        que normaliza al guardar) se identifica escribiendo el email en minúsculas."""
+        """USR-INI-SES regla 1 y SEG-01: una cuenta dada de alta escribiendo el email con mayúsculas
+        (que desde la tarea 03 se guarda en minúsculas) se identifica escribiéndolo en minúsculas."""
         capataz = crear_capataz(email="Ana.Perez@infoponia.com")
 
         self.iniciar_sesion("ana.perez@infoponia.com")
 
         self.assertEqual(self.id_en_sesion(), str(capataz.pk))
-
-    def test_regla_1_dos_cuentas_que_difieren_en_mayusculas_no_se_identifican(self):
-        """USR-INI-SES regla 1, SEG-01 y SEG-06: si dos cuentas activas solo difieren en las
-        mayúsculas del email (posible hasta que la tarea 03 agregue la unicidad sin distinguir
-        mayúsculas), el email es ambiguo: no se identifica ninguna y se muestra el mensaje genérico."""
-        crear_capataz(email="Ana@infoponia.com")
-        crear_capataz(email="ana@infoponia.com")
-
-        for email in ("Ana@infoponia.com", "ana@infoponia.com"):
-            with self.subTest(email=email):
-                respuesta = self.iniciar_sesion(email)
-
-                self.assertEqual(respuesta.status_code, 200)
-                self.assertIsNone(self.id_en_sesion())
-                self.assertEqual(
-                    list(respuesta.context["form"].non_field_errors()), [MENSAJE_GENERICO]
-                )
 
     def test_regla_2_cuenta_inactiva_no_se_identifica(self):
         """USR-INI-SES regla 2: solo se identifican las cuentas activas."""
@@ -131,7 +134,155 @@ class UsrIniSesReglasTests(TestCase):
                 self.assertContains(respuesta, MENSAJE_GENERICO, count=1)
                 self.assertNotContains(respuesta, "inactiv")
 
+    def test_regla_4_con_temporal_solo_accede_a_elegir_contrasena(self):
+        """USR-INI-SES regla 4, SEG-04 y D-18: con contraseña temporal, la persona se identifica pero
+        cualquier otra pantalla (el inicio, el admin de Django) la lleva a elegir su contraseña."""
+        capataz = crear_capataz()
+        temporal = dar_contrasena_temporal(capataz)
+        elegir = reverse("core:elegir_contrasena")
+
+        respuesta = self.client.post(
+            reverse("core:iniciar_sesion"),
+            {"username": "capataz@infoponia.com", "password": temporal},
+            follow=True,
+        )
+
+        self.assertEqual(self.id_en_sesion(), str(capataz.pk))
+        self.assertRedirects(respuesta, elegir)
+        for url in (reverse("core:inicio"), reverse("admin:index")):
+            with self.subTest(url=url):
+                self.assertRedirects(
+                    self.client.get(url), elegir, fetch_redirect_response=False
+                )
+        self.assertEqual(self.client.get(elegir).status_code, 200)
+
+    def test_regla_4_con_temporal_puede_cerrar_sesion(self):
+        """USR-INI-SES regla 4 y SEG-08: con contraseña temporal, cerrar sesión no está bloqueado."""
+        capataz = crear_capataz()
+        dar_contrasena_temporal(capataz)
+        self.client.force_login(capataz)
+
+        respuesta = self.client.post(reverse("core:cerrar_sesion"))
+
+        self.assertRedirects(
+            respuesta, reverse("core:iniciar_sesion"), fetch_redirect_response=False
+        )
+        self.assertIsNone(self.id_en_sesion())
+
+    def test_regla_4_con_temporal_htmx_recibe_hx_redirect(self):
+        """USR-INI-SES regla 4 y SEG-04: un pedido de HTMX con temporal recibe la cabecera
+        HX-Redirect (y no un 302, que el navegador seguiría solo y HTMX metería la pantalla de elegir
+        contraseña dentro del fragmento)."""
+        capataz = crear_capataz()
+        dar_contrasena_temporal(capataz)
+        self.client.force_login(capataz)
+
+        respuesta = self.client.get(reverse("core:inicio"), HTTP_HX_REQUEST="true")
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta["HX-Redirect"], reverse("core:elegir_contrasena"))
+
+    def test_regla_4_temporal_vencida_no_identifica_y_muestra_mensaje_generico(self):
+        """USR-INI-SES regla 4, SEG-04, SEG-06 y D-18: a los 7 días de generada, la contraseña
+        temporal ya no sirve para identificarse, y la falla muestra el mensaje genérico."""
+        for dias in (7, 30):
+            with self.subTest(dias=dias):
+                email = f"capataz{dias}@infoponia.com"
+                capataz = crear_capataz(email=email)
+                temporal = dar_contrasena_temporal(capataz, generada_hace=timedelta(days=dias))
+
+                respuesta = self.iniciar_sesion(email, temporal)
+
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertIsNone(self.id_en_sesion())
+                self.assertEqual(
+                    list(respuesta.context["form"].non_field_errors()), [MENSAJE_GENERICO]
+                )
+
     # ---- Requisitos de seguridad ----
+
+    def test_seg01_guarda_email_en_minusculas(self):
+        """SEG-01 y D-19: el email se guarda en minúsculas y sin espacios, al crear la cuenta y al
+        cambiarlo después."""
+        capataz = crear_capataz(email="  Ana.Perez@InfoPonia.COM ")
+        capataz.refresh_from_db()
+        self.assertEqual(capataz.email, "ana.perez@infoponia.com")
+
+        capataz.email = "Juan.Perez@InfoPonia.com"
+        capataz.save()
+        capataz.refresh_from_db()
+        self.assertEqual(capataz.email, "juan.perez@infoponia.com")
+
+    def test_seg01_rechaza_email_repetido_con_otras_mayusculas(self):
+        """SEG-01 y D-19: el email es único sin distinguir mayúsculas. La base lo rechaza aunque se
+        esquive la normalización del modelo (por ejemplo, con ``update()``)."""
+        crear_capataz(email="ana@infoponia.com")
+        otra = crear_capataz(email="otra@infoponia.com")
+
+        with self.subTest("alta con el mismo email en mayúsculas"):
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                crear_capataz(email="ANA@infoponia.com")
+
+        with self.subTest("update() que esquiva save()"):
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                Usuario.objects.filter(pk=otra.pk).update(email="Ana@infoponia.com")
+
+    def test_seg01_validacion_informa_email_repetido_con_otras_mayusculas(self):
+        """SEG-01: la validación del modelo (la que usan los formularios) informa el email repetido
+        con otras mayúsculas como error del campo ``email`` (código ``unique``) con un mensaje
+        propio, en vez de dejarlo llegar a la base, y no informa ningún otro error. Se verifica por
+        la clave del error, que es el email: ``clean()`` normaliza a minúsculas antes de comprobar
+        la unicidad, así que es la unicidad del campo, y no la restricción
+        ``email_unico_sin_mayusculas``, la que lo detecta (la restricción garantiza lo mismo en la
+        base: ver ``test_seg01_rechaza_email_repetido_con_otras_mayusculas``)."""
+        crear_capataz(email="ana@infoponia.com")
+        nueva = Capataz(email="ANA@infoponia.com", first_name="Ana", last_name="Gómez")
+        nueva.set_password(CLAVE)
+
+        with self.assertRaises(ValidationError) as contexto:
+            nueva.full_clean()
+
+        errores = contexto.exception.error_dict
+        self.assertEqual(list(errores), ["email"])
+        self.assertEqual([e.code for e in errores["email"]], ["unique"])
+        self.assertEqual(errores["email"][0].message, "Ya existe una cuenta con ese email.")
+
+    def test_seg04_temporal_sirve_antes_de_los_7_dias(self):
+        """SEG-04 y D-18: antes de cumplir 7 días, la contraseña temporal sirve para identificarse."""
+        capataz = crear_capataz()
+        temporal = dar_contrasena_temporal(
+            capataz, generada_hace=timedelta(days=7) - timedelta(hours=1)
+        )
+
+        self.iniciar_sesion("capataz@infoponia.com", temporal)
+
+        self.assertEqual(self.id_en_sesion(), str(capataz.pk))
+
+    def test_seg04_genera_12_caracteres_sin_ambiguos(self):
+        """SEG-04 y D-18: la temporal tiene 12 caracteres aleatorios, letras y dígitos, sin los
+        ambiguos 0, O, 1, l, I."""
+        generadas = [generar_contrasena_temporal() for _ in range(300)]
+
+        for temporal in generadas:
+            self.assertEqual(len(temporal), 12)
+            self.assertTrue(temporal.isascii() and temporal.isalnum(), temporal)
+            self.assertFalse(set(temporal) & set("0O1lI"), temporal)
+        # Aleatorias: 300 generadas no se repiten.
+        self.assertEqual(len(set(generadas)), len(generadas))
+
+    def test_seg04_asignar_temporal_guarda_la_fecha_de_generacion(self):
+        """SEG-04 y D-18: asignar una temporal la deja como contraseña de la cuenta y guarda la
+        fecha y hora de generación; sin temporal, la fecha queda vacía."""
+        capataz = crear_capataz()
+        self.assertIsNone(capataz.fecha_contrasena_temporal)
+        antes = timezone.now()
+
+        temporal = capataz.asignar_contrasena_temporal()
+        capataz.save()
+
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(temporal))
+        self.assertTrue(antes <= capataz.fecha_contrasena_temporal <= timezone.now())
 
     def test_seg05_no_bloquea_la_cuenta_tras_intentos_fallidos(self):
         """SEG-05: no hay límite de intentos ni bloqueo; tras 10 fallas, la clave correcta entra."""
@@ -341,3 +492,85 @@ class UsrIniSesVistaTests(TestCase):
         for respuesta in (sin_sesion, con_sesion):
             self.assertContains(respuesta, "Vivero Los Álamos")
             self.assertNotContains(respuesta, "Jardín Botánico")
+
+
+class MigracionEmailTests(TransactionTestCase):
+    """SEG-01, D-19 y D-25: la migración que pasa los emails existentes a minúsculas.
+
+    Es ``TransactionTestCase`` porque mueve el esquema de la base de prueba: vuelve a la migración
+    anterior, carga cuentas con el modelo de ese momento (que todavía acepta emails que solo difieren
+    en mayúsculas) y aplica la migración del email. ``tearDown`` deja la base en la última migración
+    para las pruebas que siguen.
+    """
+
+    ANTERIOR = [("core", "0003_contrasena_temporal_y_auditoria")]
+    MIGRACION_EMAIL = [("core", "0004_email_en_minusculas")]
+    RESTRICCION = "email_unico_sin_mayusculas"
+
+    def setUp(self):
+        """Lleva la base a la migración anterior a la del email."""
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.ANTERIOR)
+        self.Usuario = executor.loader.project_state(self.ANTERIOR).apps.get_model(
+            "core", "Usuario"
+        )
+
+    def tearDown(self):
+        """Borra las cuentas cargadas (con duplicados la migración no avanzaría) y vuelve a la última
+        migración."""
+        self.Usuario.objects.all().delete()
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def crear(self, email):
+        """Crea una cuenta de Capataz con el modelo histórico y devuelve su id."""
+        return self.Usuario.objects.create(
+            email=email, password="x", first_name="Ana", last_name="Gómez", rol="capataz"
+        ).pk
+
+    def migrar_email(self):
+        """Aplica la migración del email con un ejecutor nuevo (lee el estado actual de la base)."""
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.MIGRACION_EMAIL)
+
+    def restricciones(self):
+        """Nombres de las restricciones e índices de la tabla de usuarios."""
+        with connection.cursor() as cursor:
+            return connection.introspection.get_constraints(cursor, "core_usuario").keys()
+
+    def emails(self):
+        """Emails guardados, ordenados por id."""
+        return list(self.Usuario.objects.order_by("pk").values_list("email", flat=True))
+
+    def test_seg01_migracion_falla_con_emails_duplicados_sin_cambiar_datos(self):
+        """SEG-01 y D-25: si hay emails que solo difieren en mayúsculas, la migración falla con un
+        mensaje que nombra el email y los id de las cuentas, sin borrar ni cambiar ningún dato."""
+        id_1 = self.crear("Ana@infoponia.com")
+        id_2 = self.crear("ana@InfoPonia.com ")
+        self.crear("Pedro@infoponia.com")
+        antes = self.emails()
+
+        with self.assertRaises(RuntimeError) as contexto:
+            self.migrar_email()
+
+        mensaje = str(contexto.exception)
+        self.assertIn("ana@infoponia.com", mensaje)
+        self.assertIn(str(id_1), mensaje)
+        self.assertIn(str(id_2), mensaje)
+        self.assertEqual(self.emails(), antes)
+        self.assertNotIn(self.RESTRICCION, self.restricciones())
+
+    def test_seg01_migracion_pasa_los_emails_a_minusculas(self):
+        """SEG-01 y D-19: sin duplicados, la migración pasa los emails existentes a minúsculas y sin
+        espacios, y agrega la unicidad sin distinguir mayúsculas."""
+        self.crear("Ana@InfoPonia.COM")
+        self.crear(" pedro@infoponia.com ")
+        self.crear("luis@infoponia.com")
+
+        self.migrar_email()
+
+        self.assertEqual(
+            self.emails(),
+            ["ana@infoponia.com", "pedro@infoponia.com", "luis@infoponia.com"],
+        )
+        self.assertIn(self.RESTRICCION, self.restricciones())

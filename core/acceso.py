@@ -5,16 +5,11 @@ from functools import wraps
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
-# D-10: el Administrador es un superusuario sin ``rol``; para el control de acceso se lo trata
-# como un rol más, que ninguna pantalla de negocio incluye.
-ADMINISTRADOR = "administrador"
-
-
-def rol_de(usuario):
-    """Rol con el que opera la cuenta: el ``rol`` del dominio o ``ADMINISTRADOR`` (D-10)."""
-    if usuario.is_superuser:
-        return ADMINISTRADOR
-    return usuario.rol
+# ``ADMINISTRADOR`` y ``rol_de`` viven en core/models.py (los usa también la auditoría, D-22) y se
+# vuelven a exportar acá: el resto del código los sigue importando de core.acceso. D-10: el
+# Administrador es un superusuario sin ``rol`` que, para el control de acceso, se trata como un rol
+# más, que ninguna pantalla de negocio incluye.
+from core.models import ADMINISTRADOR, rol_de  # noqa: F401
 
 
 def nombre_visible_del_rol(usuario):

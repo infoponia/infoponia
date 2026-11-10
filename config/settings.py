@@ -76,6 +76,8 @@ MIDDLEWARE = [
     # SEG-13: toda pantalla exige sesión por defecto (se exime con @login_not_required).
     # Va después de WhiteNoise, que responde los estáticos antes de llegar acá.
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
+    # SEG-04: con contraseña temporal solo se puede elegir una propia (o cerrar sesión).
+    'core.middleware.ContrasenaTemporalMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -136,6 +138,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+    # SEG-03: la contraseña nueva es distinta de la actual (y de la temporal).
+    {
+        'NAME': 'core.contrasenas.DistintaDeLaActualValidator',
     },
 ]
 
