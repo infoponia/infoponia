@@ -1,0 +1,9 @@
+{% comment %}Un campo de formulario con su etiqueta, error y ayuda (fieldHtml del prototipo).
+Recibe «campo», «requerido» y «ayuda» (opcionales los dos últimos). El borde rojo del campo con
+error lo pone el CSS (.fld:has(.err)).{% endcomment %}
+<div class="fld">
+  <label for="{{ campo.id_for_label }}">{{ campo.label }}{% if requerido %}<span class="req" aria-hidden="true"> *</span>{% endif %}</label>
+  {{ campo }}
+  {% for error in campo.errors %}<div class="err">{{ error }}</div>{% endfor %}
+  {% if ayuda and not campo.errors %}<div class="hint">{{ ayuda }}</div>{% endif %}
+</div>

@@ -291,7 +291,7 @@ Formato:
 - Fuentes: D-02 (mapeo telefonoX → `telefono`); D-05 (registrar el tipo de cada campo nuevo).
 - Consecuencias: ninguna por ahora; si en el futuro se necesita validar formato, se agrega un
   validador sin cambiar el tipo de columna.
-- Estado: vigente; completada por D-21 (formato del teléfono)
+- Estado: vigente; completada por D-21 (formato del teléfono); su largo de 20 caracteres fue reemplazado por D-28 (25)
 
 ## D-16 — Alcance del Administrador y pantallas propias
 
@@ -604,3 +604,46 @@ Formato:
 - Consecuencias: migraciones `0003` y `0004`. La `0004` falla, sin cambiar datos, si hay emails repetidos
   sin distinguir mayúsculas: hay que resolverlos a mano antes de migrar (también en Neon).
 - Estado: vigente
+
+## D-28 — Usuarios del Gerente: alcance, teléfono y pantallas (tarea 04)
+
+- Fecha: 10/11/2026
+- Decidió: Lautaro Fernández (aprobada durante la planificación de la tarea 04, a propuesta de Claude)
+- Antes: `estado.md` incluía SEG-15 en la tarea 04. D-15 fijaba `telefono` en 20 caracteres como máximo y
+  D-21 admite hasta 15 dígitos con espacios, guiones y paréntesis. `CLAUDE.md` pide un único queryset de
+  alcance por modelo, pero no existía. No estaba definido qué ve el Gerente al chocar con una cuenta fuera
+  de su alcance, cómo se buscan varias palabras, ni el formato de nombre de las pruebas de precondiciones.
+- Decisión:
+  - SEG-15 pasa a la tarea 05. Con solo el Gerente en juego, el Administrador activo y el Gerente único
+    no se pueden romper desde estas pantallas.
+  - `telefono` pasa a 25 caracteres como máximo (reemplaza el `max_length=20` de D-15). El validador de
+    D-21 también rechaza más de 25 caracteres, con un único mensaje que nombra el límite. Migración `0005`.
+  - El alcance por usuario vive en un solo lugar: `UsuarioQuerySet.en_alcance_de(actor)`. El Gerente
+    gestiona las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico, y no la suya, ni otros
+    Gerentes, ni Administradores. La rama del Administrador (D-16) se agrega en la tarea 05.
+  - La ficha de una cuenta fuera del alcance da error 403 con mensaje (SEG-13); un id que no existe da 404.
+  - En el alta, el email de una cuenta fuera del alcance da el mensaje genérico «Ya existe una cuenta con
+    ese email.». Solo si la cuenta inactiva está dentro del alcance se ofrece reactivarla (regla 8).
+  - La búsqueda de la lista exige que la cuenta coincida con todas las palabras, cada una en el nombre,
+    el apellido o el email, sin distinguir mayúsculas.
+  - Una modificación sin cambios no guarda ni audita; restablecer la contraseña solo vale para cuentas
+    activas y reactivar solo para cuentas inactivas. Esto se implementa en la tarea 04b.
+  - Las pruebas de precondiciones se llaman `test_pre_<letra>_<que_espera>`, con la fuente en el
+    docstring (como las de reglas, extensiones y postcondiciones de `CLAUDE.md`).
+- Por qué: un único queryset evita repetir el alcance en cada servicio y que una pantalla nueva lo olvide.
+  Alinear la columna con el validador evita que un número válido según D-21 (por ejemplo,
+  «+123 (45) 678-901-2345») falle por el largo del campo. La cuenta fuera del alcance da 403 y no 404
+  porque lo pide SEG-13, y quien prueba URLs ya está dentro del sistema: saber que un id existe no le da
+  acceso a nada. En el alta, el email de una cuenta fuera del alcance da el mensaje genérico para no
+  revelar nada de una cuenta que el Gerente no gestiona. La búsqueda exige todas las palabras para que
+  agregar palabras acote el resultado en vez de ampliarlo. Una modificación sin cambios no deja un
+  registro de auditoría que no registra nada, y restablecer o reactivar solo donde corresponde evita
+  generar una contraseña temporal para una cuenta en el estado equivocado.
+- Fuentes: `docs/casos_de_uso/usuarios.md` (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR, USR-BAJ-USR, SEG-13 y
+  SEG-15); `CLAUDE.md` (arquitectura y tests); D-15, D-16, D-21, D-22 y D-25.
+- Consecuencias: migración `0005`, que solo cambia el campo `telefono` (sin cambio de datos). La tarea 05
+  agrega la rama del Administrador en `en_alcance_de` y SEG-15. Límite conocido: recargar «Cuenta
+  creada» reenvía el formulario y da «Ya existe una cuenta con ese email.». Se acepta porque la
+  contraseña temporal no se guarda en ningún lado (ni en la sesión ni en la base), y mostrarla de nuevo
+  después de una redirección exigiría guardarla.
+- Estado: vigente (reemplaza en parte a D-15)

@@ -9,8 +9,10 @@ Rol = Usuario.Rol
 # Entrada: (texto, nombre de la URL, ícono de core/templatetags/iconos.py).
 _PANEL = ("Panel de control", "core:inicio", "dash")
 
+_USUARIOS = ("Usuarios y seguridad", "core:usuarios", "users")
+
 MENU_POR_ROL = {
-    Rol.GERENTE: [_PANEL],
+    Rol.GERENTE: [_PANEL, _USUARIOS],
     Rol.AGRONOMO: [_PANEL],
     Rol.VENDEDOR: [_PANEL],
     # Roles de campo (celular): sin menú lateral.

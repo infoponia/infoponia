@@ -43,6 +43,12 @@ menú de cuenta con «Cerrar sesión» (SEG-08). Sin campana: todavía no hay no
     {% endif %}
   </footer>
 
+  {# Ventanas que bloquean el fondo (equivale a modalHtml del prototipo): las define cada pantalla. #}
+  {% block ventanas %}{% endblock %}
+
+  {# Aviso breve (toast): lo muestra infoponia.js, por ejemplo al copiar la contraseña temporal. #}
+  <div class="toast" id="aviso" role="status" aria-live="polite"></div>
+
   <div class="scrim" data-cerrar-menu hidden></div>
   <div class="pop" id="menu-cuenta" role="dialog" aria-label="Menú de cuenta" hidden>
     <div class="pop-h">
