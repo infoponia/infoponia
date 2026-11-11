@@ -217,3 +217,19 @@ a.nav-item{text-decoration:none}
 .shell form.pop-form .pop-act{border-top:1px solid var(--border)}
 .aviso-recuperar{margin-top:16px;font-size:13px}
 .pw .eye svg{pointer-events:none}
+
+/* ---- desplegable propio (D-24): solo se usa si funciona JavaScript; si no, queda el select nativo ---- */
+.dd{position:relative}
+.filters .dd{min-width:170px}
+.dd-oculto{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);opacity:0;pointer-events:none}
+.dd-boton{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;cursor:pointer;color:var(--foreground)}
+.dd-boton.dd-vacio .dd-texto{color:var(--muted-foreground)}
+.dd-boton svg{color:var(--muted-foreground);flex-shrink:0}
+.dd-boton[aria-expanded="true"]{border-color:var(--primary)}
+.dd-lista{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:40;max-height:260px;overflow:auto;list-style:none;margin:0;padding:4px;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.14)}
+.dd-lista[hidden]{display:none}
+.dd-opcion{padding:8px 10px;border-radius:4px;font-size:13px;color:var(--foreground);cursor:pointer}
+.dd-opcion:hover,.dd-opcion.dd-activa{background:var(--secondary)}
+.dd-opcion[aria-selected="true"]{background:#e6f4ec;color:var(--status-ok);font-weight:600}
+/* campo con error de formulario (el servidor lo informa en un .err debajo del campo) */
+.fld:has(.err) .field-input{border-color:var(--status-danger)}

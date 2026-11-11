@@ -1,10 +1,12 @@
 {% extends request.user.is_authenticated|yesno:"core/base_con_sesion.html,core/base_sin_sesion.html" %}{% load iconos %}
-{% comment %}Error 403 (SEG-13): explica por qué no se puede acceder. Django pasa el mensaje de
-PermissionDenied en «exception».{% endcomment %}
+{% comment %}Error 403 (SEG-13): explica por qué no se puede acceder y ofrece volver al inicio. Django pasa
+el mensaje de PermissionDenied en «exception».{% endcomment %}
 {% block titulo %}Sin acceso · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
   <h1 style="margin-bottom:12px">Sin acceso</h1>
   <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{{ exception|default:"No tenés acceso a esta pantalla." }}</div></div>
+  {# core:inicio muestra el inicio de la cuenta según su rol (el mismo al que se llega al iniciar sesión). #}
+  <div class="row" style="margin-top:16px"><a class="btn btn-ghost" href="{% url 'core:inicio' %}">Volver al inicio</a></div>
 </div>
 {% endblock %}

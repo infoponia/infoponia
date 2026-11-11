@@ -22,7 +22,10 @@ def marco(request):
             "texto": texto,
             "url": reverse(nombre_url),
             "icono": icono,
-            "activo": request.path == reverse(nombre_url),
+            # Una entrada también está activa en sus pantallas internas (por ejemplo, la ficha
+            # de un usuario). El inicio es «/», que sería prefijo de todo: solo coincide exacto.
+            "activo": request.path == reverse(nombre_url)
+            or (reverse(nombre_url) != "/" and request.path.startswith(reverse(nombre_url))),
         }
         for texto, nombre_url, icono in MENU_POR_ROL.get(rol, [])
     ]

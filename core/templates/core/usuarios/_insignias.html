@@ -1,0 +1,2 @@
+{% comment %}Insignias de estado y de contraseña temporal de una cuenta (badgeEstado y badgeTemp del
+prototipo). Recibe «cuenta». La vencida usa el color de peligro.{% endcomment %}{% if cuenta.is_active %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}{% if cuenta.tiene_contrasena_temporal %} {% if cuenta.contrasena_temporal_vencida %}<span class="status-badge status-danger">Temporal vencida</span>{% else %}<span class="status-badge status-warn">Contraseña temporal</span>{% endif %}{% endif %}

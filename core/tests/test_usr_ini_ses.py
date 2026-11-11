@@ -351,6 +351,23 @@ class UsrIniSesReglasTests(TestCase):
         )
 
     @override_settings(ROOT_URLCONF="core.tests.urls_prueba_acceso")
+    def test_seg13_pagina_403_enlaza_al_inicio_de_la_cuenta(self):
+        """SEG-13: la página 403 trae un enlace «Volver al inicio» a la pantalla de inicio de la cuenta
+        (la misma a la que se llega al iniciar sesión, que muestra el inicio según el rol)."""
+        for cuenta in (crear_capataz(), crear_administrador()):
+            with self.subTest(rol=cuenta.rol or "administrador"):
+                self.client.force_login(cuenta)
+
+                respuesta = self.client.get(reverse("prueba_solo_gerente"))
+
+                self.assertContains(
+                    respuesta,
+                    f'<a class="btn btn-ghost" href="{reverse("core:inicio")}">Volver al inicio</a>',
+                    status_code=403,
+                    html=True,
+                )
+
+    @override_settings(ROOT_URLCONF="core.tests.urls_prueba_acceso")
     def test_seg13_rol_autorizado_accede(self):
         """SEG-13: el rol al que corresponde la pantalla accede."""
         self.client.force_login(crear_gerente())

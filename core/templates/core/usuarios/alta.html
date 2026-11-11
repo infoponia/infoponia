@@ -1,0 +1,40 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}Nuevo usuario (USR-ALT-USR, vAlta del prototipo). El formulario va con «novalidate»: el
+teléfono se valida al confirmar, no mientras se escribe. Sin el campo de invernadero del Transportista
+(para más adelante).{% endcomment %}
+{% block titulo %}Nuevo usuario · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuarios' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>Nuevo usuario</h1></div>
+
+  {% if form.non_field_errors %}
+  <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="card">
+      <div class="card-title">Datos de la cuenta</div>
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+        {% include "core/usuarios/_campo.html" with campo=form.apellido requerido=True %}
+      </div>
+      {% include "core/usuarios/_campo.html" with campo=form.email requerido=True ayuda="Es el identificador de ingreso y no se repite entre cuentas. Se puede usar un alias, por ejemplo nombre+rol@dominio.com." %}
+      {% if cuenta_inactiva %}
+      <div class="alert alert-warn" role="status" style="margin:-6px 0 14px">{% icono "warn" 16 %}<div>Ese email pertenece a una cuenta <b>inactiva</b> ({{ cuenta_inactiva.get_full_name }}, {{ cuenta_inactiva.get_rol_display }}). No se da de alta otra: <a class="link" href="{% url 'core:usuario' cuenta_inactiva.pk %}">reactivala</a>. Si necesita otro rol, usá otro email o un alias.</div></div>
+      {% endif %}
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.telefono ayuda="Por ejemplo +54 376 400-1001" %}
+        {% include "core/usuarios/_campo.html" with campo=form.rol requerido=True %}
+      </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:16px">{% icono "info" 16 %}<div>Al dar de alta la cuenta, el Sistema genera una <b>contraseña temporal</b> y te la muestra una sola vez. Vence a los 7 días si la persona no la cambia.</div></div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn btn-primary" type="submit">Dar de alta</button>
+      <a class="btn btn-ghost" href="{% url 'core:usuarios' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

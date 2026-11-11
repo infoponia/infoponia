@@ -13,6 +13,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from core.contrasenas import generar_contrasena_temporal
+from core.validadores import validar_telefono
 
 # D-10: el Administrador es un superusuario sin ``rol``; para el control de acceso y la auditoría se
 # lo trata como un rol más. Viven acá y no en core/acceso.py para que los modelos no importen
@@ -32,7 +33,30 @@ def rol_de(usuario):
     return usuario.rol
 
 
-class UsuarioManager(BaseUserManager):
+class UsuarioQuerySet(models.QuerySet):
+    """QuerySet de cuentas con el alcance por usuario en un único lugar (CLAUDE.md, arquitectura)."""
+
+    def en_alcance_de(self, actor):
+        """Cuentas que ``actor`` puede consultar y gestionar (regla 1 de USR-CNS-USR, USR-ALT-USR,
+        USR-MOD-USR y USR-BAJ-USR).
+
+        El Gerente gestiona las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico; no
+        la suya, ni otros Gerentes, ni Administradores. Cualquier otro actor (también uno inactivo)
+        no gestiona ninguna.
+
+        Pendiente, tarea 05 (D-16): el Administrador gestiona la cuenta del Gerente y las de los
+        Administradores, incluida la suya; esa rama se agrega acá.
+        """
+        if (
+            actor is None
+            or not getattr(actor, "is_active", False)
+            or rol_de(actor) != Usuario.Rol.GERENTE
+        ):
+            return self.none()
+        return self.exclude(is_superuser=True).exclude(rol=Usuario.Rol.GERENTE)
+
+
+class UsuarioManager(BaseUserManager.from_queryset(UsuarioQuerySet)):
     """Crea usuarios usando el email en vez de un nombre de usuario (D-03).
 
     Se usa tanto desde ``Usuario.objects`` como desde el manager de cada rol
@@ -106,7 +130,11 @@ class Usuario(AbstractUser):
 
     username = None
     email = models.EmailField("email", unique=True)
-    telefono = models.CharField("teléfono", max_length=20, blank=True)
+    # D-15 (tipo), D-21 (formato) y D-28 (largo de 25, reemplaza el 20 de D-15). El validador
+    # controla también el largo, con un mensaje que nombra el límite.
+    telefono = models.CharField(
+        "teléfono", max_length=25, blank=True, validators=[validar_telefono]
+    )
     rol = models.CharField(
         "rol",
         max_length=20,

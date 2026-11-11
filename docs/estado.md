@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 09/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 11/11/2026. Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -43,6 +43,14 @@
   cambio de contraseña (USR-CMB-CTR, SEG-03, SEG-10) con la pantalla «Elegí tu contraseña». Email en
   minúsculas y único sin distinguir mayúsculas (SEG-01), con migración que falla si hay duplicados. 72
   pruebas en total. Migraciones `0003` y `0004`. Rama `feature/password-temporal`. Decisión D-27.
+- Tarea 04a: consultar y alta de usuarios del Gerente (USR-CNS-USR, USR-ALT-USR). Servicios
+  `consultar_usuarios`, `obtener_cuenta` y `alta_usuario` en `core/servicios.py`, con auditoría en la misma
+  transacción; alcance del Gerente en un único queryset (`UsuarioQuerySet.en_alcance_de`); teléfono de hasta
+  25 caracteres con validador (D-21, D-28), migración `0005`. Pantallas de lista (filtros y búsqueda con
+  HTMX), ficha y alta con la contraseña temporal mostrada una sola vez; entrada «Usuarios y seguridad» en el
+  menú del Gerente. Componentes de D-24: desplegable propio accesible con teclado (el `<select>` nativo si no
+  hay JavaScript), ventana, botón «Copiar» y avisos breves. La página 403 ofrece «Volver al inicio». 119
+  pruebas en total. Verificada a mano. Rama `feature/CRUD-Usuarios`. Decisión D-28.
 
 ## En curso
 
@@ -57,8 +65,8 @@
 
    | Tarea | Contenido | Necesita |
    |---|---|---|
-   | 04 | Usuarios del Gerente: consulta, alta, modificación, restablecer, reactivar y baja (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR, SEG-11 y SEG-15), y validación del teléfono (D-21) | — |
-   | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
+   | 04b | Usuarios del Gerente: modificación, restablecer, reactivar y baja (USR-MOD-USR y USR-BAJ-USR, SEG-11), sobre la base de la 04a | — |
+   | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
    | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta; pantalla de cambio voluntario de contraseña (USR-CMB-CTR, con contraseña actual), usando el servicio de la tarea 03 | Permiso para modificar `Usuario` y crear el grupo (D-17) |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
@@ -98,3 +106,5 @@
 - Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
   de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.
+- Hasta la 04b, el aviso de la regla 8 del alta («reactivala») lleva a la ficha de la cuenta inactiva, que
+  todavía no tiene el botón «Reactivar cuenta».

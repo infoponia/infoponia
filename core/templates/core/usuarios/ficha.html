@@ -1,0 +1,39 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}Ficha de una cuenta (USR-CNS-USR regla 3, vUsuario del prototipo). Nunca muestra la
+contraseña, ni su resumen. Pendiente, tarea 04b: las acciones (modificar, restablecer, reactivar y baja).
+Pendiente, tarea 06: las cuentas vinculadas en solo lectura. Pendiente: foto (07) e invernadero del
+Transportista. Solo se muestra lo que existe (D-25).{% endcomment %}
+{% block titulo %}{{ cuenta.get_full_name }} · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuarios' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <div class="page-h">
+    <h1>{{ cuenta.get_full_name }}</h1>
+    {% include "core/usuarios/_insignias.html" %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Datos</div>
+    <dl class="dl">
+      <dt>Nombre</dt><dd>{{ cuenta.first_name }}</dd>
+      <dt>Apellido</dt><dd>{{ cuenta.last_name }}</dd>
+      <dt>Email</dt><dd class="mono" style="font-size:12px">{{ cuenta.email }}</dd>
+      <dt>Teléfono</dt><dd>{% if cuenta.telefono %}{{ cuenta.telefono }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      <dt>Rol</dt><dd>{{ cuenta.get_rol_display }}</dd>
+      <dt>Estado</dt><dd>{% if cuenta.is_active %}Activo{% else %}Inactivo{% endif %}</dd>
+      <dt>Contraseña</dt>
+      <dd>
+        {% if cuenta.tiene_contrasena_temporal %}
+          {% if cuenta.contrasena_temporal_vencida %}
+            Temporal vencida <span class="muted">Venció: hay que restablecerla.</span>
+          {% else %}
+            Contraseña temporal <span class="muted">Vence a los 7 días de generada.</span>
+          {% endif %}
+        {% else %}
+          <span class="muted">Elegida por la persona. Nunca se muestra.</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+{% endblock %}
