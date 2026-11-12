@@ -51,6 +51,21 @@
   menú del Gerente. Componentes de D-24: desplegable propio accesible con teclado (el `<select>` nativo si no
   hay JavaScript), ventana, botón «Copiar» y avisos breves. La página 403 ofrece «Volver al inicio». 119
   pruebas en total. Verificada a mano. Rama `feature/CRUD-Usuarios`. Decisión D-28.
+- Tarea 04b: modificar, restablecer, reactivar y baja de usuarios del Gerente (USR-MOD-USR, USR-BAJ-USR).
+  Servicios `modificar_usuario`, `restablecer_contrasena`, `reactivar_usuario` y `baja_usuario` con bloqueo
+  de la cuenta y auditoría en la misma transacción; el alta y la modificación comparten la validación de
+  los datos personales (`_limpiar_datos_personales`). Se pueden modificar los datos de una cuenta inactiva
+  (D-28). Pantallas de modificar y de confirmación (ventana HTMX, o página sin JavaScript); la contraseña
+  temporal de un restablecimiento o una reactivación se muestra una sola vez; el aviso de la regla 8 del
+  alta ofrece «Reactivar cuenta». Ajustes de diseño de la revisión a mano (D-29): los avisos breves pasan
+  a ser tarjetas arriba a la derecha, con franja, ícono y barra de tiempo del color de su tipo; duran 10
+  segundos (éxito y error), tienen una cruz, se anuncian a los lectores de pantalla (`role="status"`) y,
+  sin JavaScript, queda el aviso fijo como respaldo. El botón secundario pasa a borde y texto en el verde
+  primario sobre blanco (contraste 6,5:1, WCAG AA) en todo el sistema, los botones que son enlaces ya no
+  se subrayan y todos los botones muestran el foco con Tab. Los archivos estáticos propios se piden con
+  la fecha del archivo en la URL (`static_v`): `runserver` los sirve sin `Cache-Control` y el navegador
+  guardaba el JavaScript viejo, por eso los avisos de la 04b parecían no desaparecer. 181 pruebas en
+  total, sin migraciones. Verificada a mano. Rama `feature/CRUD-Usuarios-4b`. Decisiones D-28 y D-29.
 
 ## En curso
 
@@ -65,12 +80,11 @@
 
    | Tarea | Contenido | Necesita |
    |---|---|---|
-   | 04b | Usuarios del Gerente: modificación, restablecer, reactivar y baja (USR-MOD-USR y USR-BAJ-USR, SEG-11), sobre la base de la 04a | — |
    | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
    | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta; pantalla de cambio voluntario de contraseña (USR-CMB-CTR, con contraseña actual), usando el servicio de la tarea 03 | Permiso para modificar `Usuario` y crear el grupo (D-17) |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
-   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno | — |
+   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29) | — |
 
 ## Registrado el 05/11/2026
 
@@ -106,5 +120,3 @@
 - Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
   de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.
-- Hasta la 04b, el aviso de la regla 8 del alta («reactivala») lleva a la ficha de la cuenta inactiva, que
-  todavía no tiene el botón «Reactivar cuenta».

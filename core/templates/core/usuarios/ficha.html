@@ -1,8 +1,9 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos %}
-{% comment %}Ficha de una cuenta (USR-CNS-USR regla 3, vUsuario del prototipo). Nunca muestra la
-contraseña, ni su resumen. Pendiente, tarea 04b: las acciones (modificar, restablecer, reactivar y baja).
-Pendiente, tarea 06: las cuentas vinculadas en solo lectura. Pendiente: foto (07) e invernadero del
-Transportista. Solo se muestra lo que existe (D-25).{% endcomment %}
+{% comment %}Ficha de una cuenta (USR-CNS-USR regla 3, vUsuario del prototipo) con las acciones de USR-MOD-USR
+y USR-BAJ-USR. Nunca muestra la contraseña, ni su resumen. Restablecer, reactivar y dar de baja piden
+confirmación: con HTMX, la ventana se inserta sobre la ficha; sin JavaScript, el enlace lleva a la misma ficha
+con la ventana abierta. Pendiente, tarea 06: las cuentas vinculadas en solo lectura. Pendiente: foto (07) e
+invernadero del Transportista. Solo se muestra lo que existe (D-25).{% endcomment %}
 {% block titulo %}{{ cuenta.get_full_name }} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
@@ -34,6 +35,34 @@ Transportista. Solo se muestra lo que existe (D-25).{% endcomment %}
         {% endif %}
       </dd>
     </dl>
+    {# D-28: los datos de una cuenta inactiva también se pueden corregir (por ejemplo, antes de reactivarla). #}
+    <div class="row" style="margin-top:14px"><a class="btn btn-ghost" href="{% url 'core:usuario_modificar' cuenta.pk %}">Modificar datos</a></div>
   </div>
+
+  <div class="card">
+    <div class="card-title">Acciones</div>
+    <div class="row">
+      {% if cuenta.is_active %}
+      <a class="btn btn-ghost" href="{% url 'core:usuario_restablecer' cuenta.pk %}"
+         hx-get="{% url 'core:usuario_restablecer' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Restablecer contraseña</a>
+      <a class="btn btn-danger" href="{% url 'core:usuario_baja' cuenta.pk %}"
+         hx-get="{% url 'core:usuario_baja' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Dar de baja</a>
+      {% else %}
+      <a class="btn btn-primary" href="{% url 'core:usuario_reactivar' cuenta.pk %}"
+         hx-get="{% url 'core:usuario_reactivar' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Reactivar cuenta</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if contrasena_temporal %}
+    {% url 'core:usuario' cuenta.pk as destino_ficha %}
+    {% include "core/usuarios/_ventana_temporal.html" with modo=accion destino=destino_ficha %}
+  {% elif accion %}
+    {% include "core/usuarios/_ventana_confirmar.html" %}
+  {% endif %}
 </div>
 {% endblock %}

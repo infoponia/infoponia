@@ -1,4 +1,4 @@
-# Rutas de core: inicio, inicio de sesión, cierre de sesión, elegir contraseña y usuarios del Gerente.
+# Rutas de core: inicio, inicio de sesión, cierre de sesión, elegir contraseña y usuarios del Gerente (consultar, alta, modificar y baja).
 
 from django.urls import path
 
@@ -15,4 +15,9 @@ urlpatterns = [
     path("usuarios/", views.usuarios, name="usuarios"),
     path("usuarios/nuevo/", views.usuario_nuevo, name="usuario_nuevo"),
     path("usuarios/<int:cuenta_id>/", views.usuario_ficha, name="usuario"),
+    # Modificar, restablecer, reactivar y dar de baja (USR-MOD-USR y USR-BAJ-USR; tarea 04b).
+    path("usuarios/<int:cuenta_id>/modificar/", views.usuario_modificar, name="usuario_modificar"),
+    path("usuarios/<int:cuenta_id>/restablecer/", views.usuario_restablecer, name="usuario_restablecer"),
+    path("usuarios/<int:cuenta_id>/reactivar/", views.usuario_reactivar, name="usuario_reactivar"),
+    path("usuarios/<int:cuenta_id>/baja/", views.usuario_baja, name="usuario_baja"),
 ]

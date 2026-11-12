@@ -1,0 +1,40 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}Modificar datos de una cuenta (USR-MOD-USR, la parte de edición de vUsuario del prototipo). El rol se
+ve bloqueado: no se modifica (regla 2, D-11). El formulario va con «novalidate»: el teléfono se valida al
+confirmar. Sin el campo de invernadero del Transportista (para más adelante) ni el aviso sobre las cuentas
+vinculadas (tarea 06).{% endcomment %}
+{% block titulo %}Modificar {{ cuenta.get_full_name }} · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuario' cuenta.pk %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>Modificar datos</h1>{% include "core/usuarios/_insignias.html" %}</div>
+
+  {% if form.non_field_errors %}
+  <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="card">
+      <div class="card-title">Datos de la cuenta</div>
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+        {% include "core/usuarios/_campo.html" with campo=form.apellido requerido=True %}
+      </div>
+      {% include "core/usuarios/_campo.html" with campo=form.email requerido=True %}
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.telefono ayuda="Por ejemplo +54 376 400-1001" %}
+        <div class="fld">
+          <label for="rol-bloqueado">Rol</label>
+          <input class="field-input" id="rol-bloqueado" type="text" value="{{ cuenta.get_rol_display }}" disabled>
+          <div class="hint">El rol no se modifica. Si la persona necesita otro, se le da de alta una cuenta nueva.</div>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      <a class="btn btn-ghost" href="{% url 'core:usuario' cuenta.pk %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

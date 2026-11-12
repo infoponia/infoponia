@@ -434,7 +434,8 @@ class UsrAltUsrVistaTests(TestCase):
 
     def test_regla_8_ofrece_reactivar_la_cuenta_inactiva(self):
         """USR-ALT-USR regla 8: si el email es de una cuenta inactiva, no se da de alta otra y la
-        pantalla ofrece ir a reactivar esa cuenta."""
+        pantalla ofrece «Reactivar cuenta» (que lleva a la confirmación de USR-MOD-USR) y ver esa cuenta.
+        Desde la tarea 04b la oferta es el botón de reactivar; antes era un enlace a la ficha."""
         self.entrar_como_gerente()
         inactiva = crear_cuenta(Capataz, "laura@infoponia.com", activo=False)
 
@@ -442,8 +443,33 @@ class UsrAltUsrVistaTests(TestCase):
 
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, "inactiva")
+        self.assertContains(
+            respuesta,
+            f'<a class="btn btn-primary btn-sm" href="{reverse("core:usuario_reactivar", args=[inactiva.pk])}">'
+            "Reactivar cuenta</a>",
+            html=True,
+        )
         self.assertContains(respuesta, f'href="{reverse("core:usuario", args=[inactiva.pk])}"')
-        self.assertContains(respuesta, "reactivala")
+        self.assertEqual(Usuario.objects.filter(email="laura@infoponia.com").count(), 1)
+
+    def test_regla_8_reactivar_desde_el_aviso_reactiva_la_cuenta(self):
+        """USR-ALT-USR regla 8 y USR-MOD-USR regla 6: el botón del aviso lleva a la confirmación y, al
+        confirmarla, la cuenta inactiva queda activa y con una contraseña temporal; no se crea otra."""
+        self.entrar_como_gerente()
+        inactiva = crear_cuenta(Capataz, "laura@infoponia.com", activo=False)
+        aviso = self.enviar_alta(rol=Usuario.Rol.TECNICO)
+        self.assertEqual(aviso.status_code, 200)
+        url = reverse("core:usuario_reactivar", args=[inactiva.pk])
+
+        confirmacion = self.client.get(url)
+        self.assertContains(confirmacion, "¿Reactivar la cuenta?")
+        self.assertFalse(Usuario.objects.get(pk=inactiva.pk).is_active)  # abrir la ventana no cambia nada
+        resultado = self.client.post(url)
+
+        self.assertContains(resultado, "Cuenta reactivada")
+        inactiva.refresh_from_db()
+        self.assertTrue(inactiva.is_active)
+        self.assertTrue(inactiva.check_password(resultado.context["contrasena_temporal"]))
         self.assertEqual(Usuario.objects.filter(email="laura@infoponia.com").count(), 1)
 
     def test_regla_9_muestra_el_error_del_telefono_al_confirmar(self):

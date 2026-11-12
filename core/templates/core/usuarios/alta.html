@@ -22,7 +22,13 @@ teléfono se valida al confirmar, no mientras se escribe. Sin el campo de invern
       </div>
       {% include "core/usuarios/_campo.html" with campo=form.email requerido=True ayuda="Es el identificador de ingreso y no se repite entre cuentas. Se puede usar un alias, por ejemplo nombre+rol@dominio.com." %}
       {% if cuenta_inactiva %}
-      <div class="alert alert-warn" role="status" style="margin:-6px 0 14px">{% icono "warn" 16 %}<div>Ese email pertenece a una cuenta <b>inactiva</b> ({{ cuenta_inactiva.get_full_name }}, {{ cuenta_inactiva.get_rol_display }}). No se da de alta otra: <a class="link" href="{% url 'core:usuario' cuenta_inactiva.pk %}">reactivala</a>. Si necesita otro rol, usá otro email o un alias.</div></div>
+      <div class="alert alert-warn" role="status" style="margin:-6px 0 14px">{% icono "warn" 16 %}<div>Ese email pertenece a una cuenta <b>inactiva</b> ({{ cuenta_inactiva.get_full_name }}, {{ cuenta_inactiva.get_rol_display }}). No se da de alta otra: se reactiva esa. Si necesita otro rol, usá otro email o un alias.
+        <div class="row" style="margin-top:8px">
+          {# USR-ALT-USR regla 8: ofrece reactivar la cuenta (USR-MOD-USR). Sin JavaScript lleva a su ficha con la confirmación abierta. #}
+          <a class="btn btn-primary btn-sm" href="{% url 'core:usuario_reactivar' cuenta_inactiva.pk %}">Reactivar cuenta</a>
+          <a class="btn btn-ghost btn-sm" href="{% url 'core:usuario' cuenta_inactiva.pk %}">Ver cuenta</a>
+        </div>
+      </div></div>
       {% endif %}
       <div class="grid2">
         {% include "core/usuarios/_campo.html" with campo=form.telefono ayuda="Por ejemplo +54 376 400-1001" %}
