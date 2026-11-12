@@ -1,6 +1,6 @@
 # Vistas de core: inicio de sesión, cierre de sesión, elegir contraseña (cambio forzado por contraseña
-# temporal), inicio de cada cuenta y usuarios del Gerente. Solo orquestan: validan la entrada, llaman al
-# servicio y renderizan.
+# temporal), inicio de cada cuenta y cuentas del Gerente y del Administrador. Solo orquestan: validan la
+# entrada, llaman al servicio y renderizan.
 
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
@@ -11,7 +11,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_headers
 
-from core.acceso import rol_requerido
+from core.acceso import ADMINISTRADOR, rol_de, rol_requerido
 from core.forms import (
     FormularioAltaUsuario,
     FormularioContrasenaNueva,
@@ -22,10 +22,12 @@ from core.forms import (
 from core.middleware import permitido_con_contrasena_temporal
 from core.models import Usuario
 from core.servicios import (
+    acciones_permitidas,
     alta_usuario,
     baja_usuario,
     cambiar_contrasena,
     consultar_usuarios,
+    gerente_activo_que_impide_el_alta,
     modificar_usuario,
     obtener_cuenta,
     reactivar_usuario,
@@ -83,25 +85,29 @@ def elegir_contrasena(request):
 def inicio(request):
     """Inicio de la cuenta: indica con qué rol opera (USR-INI-SES postcondición a, vHome).
 
-    El contenido del panel de cada rol llega con los módulos de negocio.
+    El contenido del panel de cada rol llega con los módulos de negocio. El Administrador no tiene panel:
+    va directo a «Cuentas», como en el prototipo (``enter()``; D-16 y D-30).
     """
+    if rol_de(request.user) == ADMINISTRADOR:
+        return redirect("core:usuarios")
     return render(request, "core/inicio.html")
 
 
-# ---- Usuarios del Gerente (USR-CNS-USR y USR-ALT-USR, tarea 04a) ----
-# Pendiente, tarea 05: el Administrador usa estas mismas pantallas con su propio alcance (D-16); se
-# suma ``ADMINISTRADOR`` a ``rol_requerido`` cuando ``en_alcance_de`` tenga su rama.
+# ---- Cuentas: consultar y alta (USR-CNS-USR y USR-ALT-USR, tareas 04a y 05a) ----
+# El Gerente y el Administrador usan las mismas pantallas, cada uno con su alcance (D-16, D-28): lo
+# aplican los servicios. Las plantillas cambian títulos y textos con ``es_administrador``.
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 @vary_on_headers("HX-Request")
 def usuarios(request):
-    """Lista de usuarios con filtros y búsqueda (USR-CNS-USR, vUsuarios).
+    """Lista de cuentas con filtros y búsqueda (USR-CNS-USR, vUsuarios): «Usuarios y seguridad» para el
+    Gerente, «Cuentas» para el Administrador.
 
     Un pedido de HTMX (los filtros) recibe solo la tabla; los demás, la pantalla entera. Un pedido
     de restauración del historial de HTMX necesita la pantalla entera.
     """
-    form = FormularioFiltroUsuarios(request.GET)
+    form = FormularioFiltroUsuarios(request.GET, actor=request.user)
     form.is_valid()  # todos los campos son opcionales: siempre hay cleaned_data
     cuentas = consultar_usuarios(
         request.user,
@@ -117,25 +123,35 @@ def usuarios(request):
     return render(request, plantilla, {"form": form, "cuentas": cuentas})
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 def usuario_ficha(request, cuenta_id):
-    """Ficha de una cuenta (USR-CNS-USR, vUsuario). Fuera del alcance da 403; un id inexistente, 404."""
+    """Ficha de una cuenta (USR-CNS-USR, vUsuario). Fuera del alcance da 403; un id inexistente, 404.
+
+    Muestra solo los botones de ``acciones_permitidas`` (D-30): nadie llega por un botón a un 403.
+    """
     cuenta = obtener_cuenta(request.user, cuenta_id)
-    return render(request, "core/usuarios/ficha.html", {"cuenta": cuenta})
+    return render(
+        request,
+        "core/usuarios/ficha.html",
+        {"cuenta": cuenta, "acciones": acciones_permitidas(request.user, cuenta)},
+    )
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 @never_cache
 def usuario_nuevo(request):
-    """Alta de una cuenta (USR-ALT-USR, vAlta y vAltaOk).
+    """Alta de una cuenta (USR-ALT-USR, vAlta y vAltaOk): «Nuevo usuario» para el Gerente, «Alta de
+    Gerente» para el Administrador (regla 1, D-16).
 
     La contraseña temporal solo viaja en la respuesta del POST: no se guarda en la sesión ni en la
     base, y ``never_cache`` evita que el navegador la conserve para el botón «Atrás». Límite
     conocido (D-28): recargar «Cuenta creada» reenvía el formulario y da el error de email repetido.
+    Regla 2: si ya hay un Gerente activo, el Administrador lo ve antes de completar el formulario y
+    «Dar de alta» queda deshabilitado (prototipo vAlta); el servicio lo vuelve a controlar.
     """
     cuenta_inactiva = None
     if request.method == "POST":
-        form = FormularioAltaUsuario(request.POST)
+        form = FormularioAltaUsuario(request.POST, actor=request.user)
         form.is_valid()  # todos los campos son opcionales; las reglas son del servicio
         try:
             cuenta, contrasena_temporal = alta_usuario(request.user, **form.cleaned_data)
@@ -154,14 +170,24 @@ def usuario_nuevo(request):
                 {"cuenta": cuenta, "contrasena_temporal": contrasena_temporal},
             )
     else:
-        form = FormularioAltaUsuario()
+        form = FormularioAltaUsuario(actor=request.user)
     return render(
-        request, "core/usuarios/alta.html", {"form": form, "cuenta_inactiva": cuenta_inactiva}
+        request,
+        "core/usuarios/alta.html",
+        {
+            "form": form,
+            "cuenta_inactiva": cuenta_inactiva,
+            # Regla 8 y D-30: «Reactivar cuenta» solo si quien da de alta puede reactivarla hoy.
+            "puede_reactivar": cuenta_inactiva is not None
+            and "reactivar" in acciones_permitidas(request.user, cuenta_inactiva),
+            "gerente_activo": gerente_activo_que_impide_el_alta(request.user),
+        },
     )
 
 
 # ---- Modificar, restablecer, reactivar y dar de baja (USR-MOD-USR y USR-BAJ-USR, tarea 04b) ----
-# Pendiente, tarea 05: el Administrador usa estas mismas pantallas con su propio alcance (D-16).
+# Pendiente, tarea 05b: el Administrador usa estas mismas pantallas (D-16); hasta entonces su ficha no le
+# ofrece estas acciones (``acciones_permitidas``, D-30).
 
 
 @rol_requerido(Usuario.Rol.GERENTE)
@@ -218,7 +244,7 @@ def _gestionar_cuenta(request, cuenta_id, accion):
       confirmación vuelve a mostrarse con el motivo.
     """
     cuenta = obtener_cuenta(request.user, cuenta_id)
-    contexto = {"cuenta": cuenta, "accion": accion}
+    contexto = {"cuenta": cuenta, "accion": accion, "acciones": acciones_permitidas(request.user, cuenta)}
     if request.method == "POST":
         try:
             resultado = _SERVICIO_DE_ACCION[accion](request.user, cuenta.pk)
@@ -233,6 +259,7 @@ def _gestionar_cuenta(request, cuenta_id, accion):
                 )
                 return redirect("core:usuario", cuenta.pk)
             cuenta.refresh_from_db()
+            contexto["acciones"] = acciones_permitidas(request.user, cuenta)
             contexto["contrasena_temporal"] = resultado
     elif request.headers.get("HX-Request") == "true":
         return render(request, "core/usuarios/_ventana_confirmar.html", contexto)

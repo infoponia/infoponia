@@ -1,11 +1,10 @@
 # Formularios de core: inicio de sesión (USR-INI-SES), elegir contraseña nueva (USR-CMB-CTR) y los de
-# usuarios del Gerente (USR-CNS-USR, USR-ALT-USR).
+# cuentas del Gerente y del Administrador (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR).
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from core.models import Usuario
-from core.servicios import CLASES_DE_ROL_QUE_DA_DE_ALTA_EL_GERENTE
+from core.servicios import clases_de_rol_que_da_de_alta, roles_que_gestiona
 
 # SEG-06: el mismo mensaje sea cual sea la causa (email inexistente, contraseña incorrecta,
 # cuenta inactiva). Texto del prototipo (vLogin).
@@ -66,15 +65,7 @@ class FormularioContrasenaNueva(forms.Form):
         return datos
 
 
-# ---- Usuarios del Gerente (USR-CNS-USR y USR-ALT-USR) ----
-
-def _roles_del_gerente():
-    """Los cinco roles que el Gerente consulta y da de alta (regla 1), como pares (valor, nombre)."""
-    return [
-        (rol.value, rol.label)
-        for rol in Usuario.Rol
-        if rol in CLASES_DE_ROL_QUE_DA_DE_ALTA_EL_GERENTE
-    ]
+# ---- Cuentas del Gerente y del Administrador (USR-CNS-USR y USR-ALT-USR) ----
 
 
 class BuscadorInput(forms.TextInput):
@@ -89,12 +80,13 @@ class FormularioFiltroUsuarios(forms.Form):
     Todo es opcional y no valida nada: el filtrado y la búsqueda los hace
     ``core.servicios.consultar_usuarios``. Los dos desplegables llevan ``data-desplegable``: con
     JavaScript los reemplaza el desplegable propio (D-24); sin JavaScript queda el ``<select>`` nativo.
+    Las opciones de rol son las de las cuentas que ``actor`` consulta (regla 1): los cinco roles para el
+    Gerente; «Gerente» y «Administrador» para el Administrador (D-16).
     """
 
     rol = forms.CharField(
         required=False,
         widget=forms.Select(
-            choices=[("", "Todos los roles")] + _roles_del_gerente(),
             attrs={"class": "field-input", "data-desplegable": "", "aria-label": "Filtrar por rol"},
         ),
     )
@@ -117,6 +109,10 @@ class FormularioFiltroUsuarios(forms.Form):
             }
         ),
     )
+
+    def __init__(self, *args, actor, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["rol"].widget.choices = [("", "Todos los roles")] + roles_que_gestiona(actor)
 
 
 class FormularioDatosPersonales(forms.Form):
@@ -161,16 +157,32 @@ class FormularioDatosPersonales(forms.Form):
 
 
 class FormularioAltaUsuario(FormularioDatosPersonales):
-    """Alta de una cuenta (USR-ALT-USR): los datos personales y el rol."""
+    """Alta de una cuenta (USR-ALT-USR): los datos personales y el rol.
+
+    Regla 1: las opciones de rol son las que ``actor`` da de alta. El Administrador da de alta solo al
+    Gerente (D-16): el campo se muestra con «Gerente», deshabilitado, como el prototipo (vAlta). Un campo
+    deshabilitado no toma lo que llega en el pedido, sino su valor inicial, así que un rol enviado a mano
+    se ignora. La regla la vuelve a controlar ``alta_usuario``.
+    """
 
     rol = forms.CharField(
         label="Rol",
         required=False,
-        widget=forms.Select(
-            choices=[("", "Seleccionar…")] + _roles_del_gerente(),
-            attrs={"class": "field-input", "data-desplegable": ""},
-        ),
+        widget=forms.Select(attrs={"class": "field-input", "data-desplegable": ""}),
     )
+
+    def __init__(self, *args, actor, **kwargs):
+        super().__init__(*args, **kwargs)
+        roles = [(rol.value, rol.label) for rol in clases_de_rol_que_da_de_alta(actor)]
+        campo = self.fields["rol"]
+        if len(roles) == 1:
+            campo.widget.choices = roles
+            campo.initial = roles[0][0]
+            campo.disabled = True
+            # El desplegable propio (desplegable.js) no contempla «disabled»: queda el <select> nativo.
+            campo.widget.attrs.pop("data-desplegable", None)
+        else:
+            campo.widget.choices = [("", "Seleccionar…")] + roles
 
 
 class FormularioModificarUsuario(FormularioDatosPersonales):

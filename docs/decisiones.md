@@ -714,3 +714,83 @@ Formato:
   `ManifestStaticFilesStorage` de WhiteNoise (`whitenoise.storage`) en producción, que pone un hash en el
   nombre de cada archivo.
 - Estado: vigente
+
+## D-30 — Cuentas del Administrador: SEG-15, pantallas y admin de Django (tarea 05)
+
+- Fecha: 12/11/2026
+- Decidió: Lautaro Fernández (durante la planificación de la tarea 05 y la revisión a mano de la 05a, a propuesta de Claude)
+- Antes: D-16 dio al Administrador las cuentas del Gerente y las de los Administradores, y pidió apagar el admin de
+  Django en producción cuando existieran sus pantallas; D-28 pasó SEG-15 a la tarea 05. Faltaba definir cómo se
+  garantizan los invariantes con dos operaciones simultáneas, qué botones ve el Administrador mientras la tarea 05
+  no está completa, adónde llega al iniciar sesión, qué se muestra al dar de alta un Gerente cuando ya hay uno
+  activo (el prototipo muestra el aviso y el formulario con el botón deshabilitado) y cómo se decide que el admin
+  de Django esté apagado.
+- Decisión:
+  - SEG-15, Gerente (tarea 05a): `alta_usuario` bloquea con `select_for_update()` todas las filas de Gerente, sin
+    filtrar por estado y en orden de id, y después, en una consulta aparte, busca si hay un Gerente activo.
+  - La restricción `un_solo_gerente_activo` de la base queda como respaldo. Si rechaza un alta, el
+    `IntegrityError` se traduce con `raise ... from error`: con ese nombre de restricción da «gerente_activo»; con
+    cualquier otro, o si el nombre no se puede leer, da «email repetido». Nunca llega un error 500 a la pantalla.
+  - SEG-15, Administrador (tarea 05b): la baja de un Administrador bloquea, en orden de id y antes que la cuenta,
+    a todos los Administradores activos, y se rechaza si no queda otro (precondición c de USR-BAJ-USR).
+  - El rechazo por un Gerente activo es un error general (`NON_FIELD_ERRORS`, código `gerente_activo`), no un
+    error de un campo.
+  - Las pantallas muestran solo las acciones de `acciones_permitidas(actor, cuenta)`: ningún botón lleva a un
+    403. En la 05a, el Administrador todavía no tiene ninguna; en la 05b cambia solo esa función.
+  - Con un Gerente activo, «Alta de Gerente» no muestra el formulario: solo el aviso, con el nombre del Gerente
+    activo y qué hay que hacer, y dos botones: «Ver a <nombre>», que lleva a su ficha, y «Volver a Cuentas». Un
+    envío manual lo rechaza igual el servicio con «gerente_activo». Esto reemplaza al prototipo en este punto.
+  - El Administrador entra directo a «Cuentas» al iniciar sesión, y su menú lateral tiene esa única entrada.
+  - El filtro de rol de la lista usa el valor `ADMINISTRADOR` (`core/models.py`) para los superusuarios, que no
+    tienen `rol` (D-10); es la misma constante que guarda la auditoría.
+  - El admin de Django se enciende solo si `DEBUG` está encendido: `ADMIN_DJANGO_HABILITADO = DEBUG`, sin variable
+    propia (tarea 05b).
+  - Las pruebas de operaciones simultáneas van en clases `<CodigoCu>ConcurrenciaTests` (`TransactionTestCase`),
+    con el auxiliar `core/tests/concurrencia.py`; las de las decisiones, con el prefijo `test_d30_`; las de
+    SEG-15, con `test_seg15_`.
+  - Hasta la tarea 06, el Administrador cambia su propia contraseña solo por consola.
+- Por qué:
+  - Se bloquean todas las filas de Gerente, sin filtrar por estado, porque si se filtrara por activos y no
+    hubiera ninguno, no se bloquearía nada y dos altas simultáneas pasarían las dos. Sin filtro, la segunda alta
+    espera a que la primera confirme y, cuando sigue, su consulta posterior ya ve al Gerente nuevo. Esa consulta
+    es una sentencia aparte, y PostgreSQL, en su modo por defecto, hace que cada sentencia vea lo último que se
+    confirmó.
+  - El orden por id evita los bloqueos cruzados: si una operación bloqueara primero su cuenta y después las
+    demás, y otra lo hiciera al revés, cada una esperaría a la otra y la base abortaría una, que la persona vería
+    como un error 500. Con un orden fijo, la segunda simplemente espera.
+  - La restricción de la base queda como respaldo porque el bloqueo de filas no cubre el primer Gerente de todos:
+    sin ninguna fila de Gerente no hay nada que bloquear, y dos altas simultáneas avanzan juntas. Ahí frena la
+    segunda la restricción, y se traduce para que la persona vea el mismo mensaje claro y no un error 500; si el
+    nombre de la restricción no se puede leer, se informa un error conocido antes que un error del servidor. Para
+    «al menos un Administrador activo» no hay restricción posible: compara varias filas y una restricción mira una
+    sola. Haría falta un disparador de la base, que por ahora no se agrega; por eso ahí vale solo el bloqueo.
+  - El rechazo es un error general porque no es un problema de un campo: la pantalla lo muestra arriba, como el
+    aviso del prototipo, y no debajo de «Rol», que además está fijo para el Administrador.
+  - `acciones_permitidas` existe para que ningún botón lleve a un 403: quien está en la pantalla no tendría forma
+    de saber que una acción no le corresponde, y repetir esa condición en cada plantilla haría que una pantalla
+    nueva la olvidara. Es una sola función, y lo que cambia en la 05b es su resultado.
+  - El Administrador entra directo a «Cuentas» porque es su única tarea: no tiene rol de negocio ni módulos, y un
+    panel vacío no le sirve.
+  - Con un Gerente activo no se muestra el formulario porque la persona completaría datos que no se pueden
+    guardar y se enteraría recién al enviarlos. Se le dice desde el principio qué pasa y qué hacer, y se le dan
+    los dos caminos útiles: ir a la ficha del Gerente o volver a la lista.
+  - El admin de Django queda atado a `DEBUG` porque una variable propia podría quedar encendida en producción por
+    error, y entonces SEG-18 dependería de que nadie la configure mal. Con `DEBUG`, que en producción tiene que
+    estar apagado de todos modos (tarea 09 de `docs/estado.md`), no hay una segunda llave que cuidar.
+  - Las operaciones simultáneas se prueban con dos hilos y dos conexiones porque `TestCase` envuelve todo en una
+    sola transacción y no puede reproducir dos pedidos a la vez; el bloqueo solo se prueba de verdad así.
+- Fuentes: SEG-15 y SEG-18 (`docs/casos_de_uso/usuarios.md`); reglas 1 y 2 de USR-ALT-USR, regla 4 y regla 5 de
+  USR-MOD-USR, precondición c y regla 1 de USR-BAJ-USR; D-09, D-10, D-16, D-22 y D-28; prototipo
+  `docs/prototipos/cuentas_y_seguridad.html` (`enter()`, `NAV`, `vAlta`, `baja-do`).
+- Consecuencias:
+  - Cambia `UsuarioQuerySet.en_alcance_de` (rama del Administrador), sin migración.
+  - Hasta la 05b, el admin de Django sigue encendido también en producción y el Administrador no modifica,
+    restablece, reactiva ni da de baja. El aviso de la pantalla de alta dice «dá de baja al actual desde su
+    ficha»: hasta la 05b, ese paso se hace desde el admin de Django. Al terminar la 05b, el admin queda apagado
+    en producción y la consola de Render (plan Starter) es la vía de emergencia.
+  - Antes de unir la 05b a main, hay que entrar a producción con un Administrador y confirmar que llega a
+    «Cuentas», porque después el admin de Django ya no estará disponible en Render.
+  - En un entorno de desarrollo con `DEBUG` encendido el admin sigue disponible; en el CI, con `DJANGO_DEBUG=0`, no
+    existe, por eso las pruebas no lo usan.
+  - La contraseña propia del Administrador solo se cambia por consola hasta la tarea 06.
+- Estado: vigente

@@ -10,6 +10,8 @@ Rol = Usuario.Rol
 _PANEL = ("Panel de control", "core:inicio", "dash")
 
 _USUARIOS = ("Usuarios y seguridad", "core:usuarios", "users")
+# D-16: la misma pantalla de cuentas, con el alcance del Administrador y el nombre del prototipo (NAV).
+_CUENTAS = ("Cuentas", "core:usuarios", "users")
 
 MENU_POR_ROL = {
     Rol.GERENTE: [_PANEL, _USUARIOS],
@@ -19,8 +21,8 @@ MENU_POR_ROL = {
     Rol.CAPATAZ: [],
     Rol.TECNICO: [],
     Rol.TRANSPORTISTA: [],
-    # El Administrador sumará «Cuentas» en la tarea 05.
-    ADMINISTRADOR: [],
+    # Tarea 05a: sin «Panel de control»; su inicio es «Cuentas» (prototipo, enter()).
+    ADMINISTRADOR: [_CUENTAS],
 }
 
 # FIELD del prototipo: usan el marco angosto de celular, sin menú lateral.

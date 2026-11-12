@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 11/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 12/11/2026. Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -22,6 +22,8 @@
   `0002_alter_agronomo_options_alter_capataz_options_and_more`. Verificado a mano en el admin
   local. Rama `feature/usuario-base`.
 - Neon reiniciado y migrado; Administradores recreados (06/11/2026).
+- Despliegue: el servicio de Render está en el plan Starter desde el 11/11/2026, por el acceso a la consola para
+  emergencias (el admin de Django se apaga en la 05b) y porque el servicio queda siempre encendido.
 - Tarea chica: renombradas las 10 pruebas de `core/tests/test_usuario.py` con la convención de
   `CLAUDE.md` (prefijo `test_d<numero>_`), ordenadas por decisión; no se cambió lo que verifican.
 - Confirmado que los commits de la rama `feature/usuario-base` no llevan línea de coautor.
@@ -66,10 +68,23 @@
   la fecha del archivo en la URL (`static_v`): `runserver` los sirve sin `Cache-Control` y el navegador
   guardaba el JavaScript viejo, por eso los avisos de la 04b parecían no desaparecer. 181 pruebas en
   total, sin migraciones. Verificada a mano. Rama `feature/CRUD-Usuarios-4b`. Decisiones D-28 y D-29.
+- Tarea 05a: consultar y alta de Gerente del Administrador (USR-CNS-USR, USR-ALT-USR, D-16). Rama del
+  Administrador en `UsuarioQuerySet.en_alcance_de` (Gerentes y Administradores, incluida la suya).
+  `acciones_permitidas(actor, cuenta)` decide los botones de la ficha y del aviso de la regla 8: hasta la 05b, el
+  Administrador no ve acciones que lo lleven a un 403. Alta solo de Gerente con la regla 2 y SEG-15: se bloquean
+  todas las filas de Gerente en orden de id, el Gerente activo se busca en una consulta aparte y la restricción
+  `un_solo_gerente_activo` queda de respaldo, traducida sin dar un 500. Pantallas «Cuentas» (con «(vos)» y filtro
+  de rol «Gerente» y «Administrador») y «Alta de Gerente», que con un Gerente activo no muestra el formulario:
+  solo el aviso con «Ver a <nombre>» y «Volver a Cuentas». Menú «Administración» → «Cuentas»; el Administrador
+  entra directo a «Cuentas». Pruebas de operaciones simultáneas con dos hilos (`core/tests/concurrencia.py`).
+  204 pruebas en total, sin migraciones. Verificada a mano. Rama `feature/CRUD-Admin`. Decisión D-30.
 
 ## En curso
 
-- Nada por ahora.
+- Tarea 05b: modificar, restablecer, reactivar y baja de cuentas del Administrador, SEG-15 de los
+  Administradores (último Administrador activo) y admin de Django apagado en producción (SEG-18). Se empieza por
+  las pruebas de servicio, que el estudiante revisa antes de implementar. Antes de unirla a main: iniciar sesión
+  en producción con el Administrador y confirmar que llega a «Cuentas».
 
 ## Siguiente
 
@@ -80,7 +95,7 @@
 
    | Tarea | Contenido | Necesita |
    |---|---|---|
-   | 05 | Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
+   | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b en curso** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
    | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta; pantalla de cambio voluntario de contraseña (USR-CMB-CTR, con contraseña actual), usando el servicio de la tarea 03 | Permiso para modificar `Usuario` y crear el grupo (D-17) |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
@@ -114,9 +129,19 @@
 - Ingreso con Google: trabajo futuro, fuera de este bloque.
 - Hacer configurables por `.env` el host, el puerto, el nombre y el usuario de la base local.
 - `requirements.txt` está guardado en UTF-16 (probablemente generado con `pip freeze >` desde
-  PowerShell): pip lo lee, pero Git lo muestra como texto ilegible. Convertirlo a UTF-8.
-- Logo de la organización: hoy es un ícono fijo; será una imagen configurable junto con el nombre, en la
-  configuración de la organización.
+  PowerShell): pip lo lee, pero Git lo muestra como texto ilegible. Convertirlo a UTF-8. Cuándo: antes de la
+  tarea 07, que agrega dependencias.
+- Logo y nombre de la organización configurables: hoy el logo es un ícono fijo y el nombre sale de
+  `NOMBRE_ORGANIZACION`; serán una imagen y un nombre configurables, en la configuración de la organización.
+  Cuándo: sin fecha todavía.
+- Integrar el logo de InfoPonia: favicon y marca en el inicio de sesión. Cuándo: cuando esté el logo definitivo.
 - Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
   de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
+- Unificar las fábricas de pruebas (`crear_gerente`, `crear_administrador`, `crear_cuenta`) en
+  `core/tests/fabricas.py`, con una sola firma (`crear_cuenta` con nombre y apellido opcionales). Cuándo: tarea
+  de limpieza después de la 05.
+- Mudar las pruebas `test_d29_...` de `core/tests/test_usr_ini_ses.py` a `core/tests/test_interfaz.py`. Cuándo:
+  en la misma tarea de limpieza.
+- Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
+  fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.

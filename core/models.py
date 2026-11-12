@@ -40,20 +40,20 @@ class UsuarioQuerySet(models.QuerySet):
         """Cuentas que ``actor`` puede consultar y gestionar (regla 1 de USR-CNS-USR, USR-ALT-USR,
         USR-MOD-USR y USR-BAJ-USR).
 
-        El Gerente gestiona las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico; no
-        la suya, ni otros Gerentes, ni Administradores. Cualquier otro actor (también uno inactivo)
-        no gestiona ninguna.
-
-        Pendiente, tarea 05 (D-16): el Administrador gestiona la cuenta del Gerente y las de los
-        Administradores, incluida la suya; esa rama se agrega acá.
+        - El Gerente gestiona las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico; no
+          la suya, ni otros Gerentes, ni Administradores (D-28).
+        - El Administrador gestiona las cuentas de Gerente (la activa y las anteriores) y las de los
+          Administradores, incluida la suya (D-16, tarea 05).
+        - Cualquier otro actor (también uno inactivo) no gestiona ninguna.
         """
-        if (
-            actor is None
-            or not getattr(actor, "is_active", False)
-            or rol_de(actor) != Usuario.Rol.GERENTE
-        ):
+        if actor is None or not getattr(actor, "is_active", False):
             return self.none()
-        return self.exclude(is_superuser=True).exclude(rol=Usuario.Rol.GERENTE)
+        rol = rol_de(actor)
+        if rol == Usuario.Rol.GERENTE:
+            return self.exclude(is_superuser=True).exclude(rol=Usuario.Rol.GERENTE)
+        if rol == ADMINISTRADOR:
+            return self.filter(Q(is_superuser=True) | Q(rol=Usuario.Rol.GERENTE))
+        return self.none()
 
 
 class UsuarioManager(BaseUserManager.from_queryset(UsuarioQuerySet)):

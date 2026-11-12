@@ -1,13 +1,23 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos %}
-{% comment %}Nuevo usuario (USR-ALT-USR, vAlta del prototipo). El formulario va con «novalidate»: el
-teléfono se valida al confirmar, no mientras se escribe. Sin el campo de invernadero del Transportista
-(para más adelante).{% endcomment %}
-{% block titulo %}Nuevo usuario · InfoPonia{% endblock %}
+{% extends "core/base_con_sesion.html" %}{% load iconos cuentas %}
+{% comment %}Nuevo usuario del Gerente o Alta de Gerente del Administrador (USR-ALT-USR, vAlta del
+prototipo; D-16). El formulario va con «novalidate»: el teléfono se valida al confirmar, no mientras se
+escribe. Con «gerente_activo» (regla 2, D-30) no se muestra el formulario: solo el aviso, con «Ver a
+<nombre>» y «Volver a Cuentas», para no completar datos que no se pueden guardar. Sin el campo de
+invernadero del Transportista (para más adelante).{% endcomment %}
+{% block titulo %}{% if es_administrador %}Alta de Gerente{% else %}Nuevo usuario{% endif %} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuarios' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
-  <div class="page-h"><h1>Nuevo usuario</h1></div>
+  <div class="page-h"><h1>{% if es_administrador %}Alta de Gerente{% else %}Nuevo usuario{% endif %}</h1></div>
 
+  {% if gerente_activo %}
+  {# Regla 2 de USR-ALT-USR y D-09: texto del prototipo (vAlta). Sin formulario (D-30). Un POST manual lo rechaza el servicio con «gerente_activo» y vuelve a esta misma pantalla. #}
+  <div class="alert alert-warn" role="status" style="margin-bottom:14px">{% icono "warn" 16 %}<div>Ya hay un Gerente activo: <b>{{ gerente_activo.get_full_name }}</b>. Solo puede haber uno a la vez. Para dar de alta a otro, primero dá de baja al actual desde su ficha.</div></div>
+  <div class="row">
+    <a class="btn btn-primary" href="{% url 'core:usuario' gerente_activo.pk %}">Ver a {{ gerente_activo.get_full_name }}</a>
+    <a class="btn btn-ghost" href="{% url 'core:usuarios' %}">Volver a Cuentas</a>
+  </div>
+  {% else %}
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuarios' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
   {% if form.non_field_errors %}
   <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
   {% endif %}
@@ -22,10 +32,10 @@ teléfono se valida al confirmar, no mientras se escribe. Sin el campo de invern
       </div>
       {% include "core/usuarios/_campo.html" with campo=form.email requerido=True ayuda="Es el identificador de ingreso y no se repite entre cuentas. Se puede usar un alias, por ejemplo nombre+rol@dominio.com." %}
       {% if cuenta_inactiva %}
-      <div class="alert alert-warn" role="status" style="margin:-6px 0 14px">{% icono "warn" 16 %}<div>Ese email pertenece a una cuenta <b>inactiva</b> ({{ cuenta_inactiva.get_full_name }}, {{ cuenta_inactiva.get_rol_display }}). No se da de alta otra: se reactiva esa. Si necesita otro rol, usá otro email o un alias.
+      <div class="alert alert-warn" role="status" style="margin:-6px 0 14px">{% icono "warn" 16 %}<div>Ese email pertenece a una cuenta <b>inactiva</b> ({{ cuenta_inactiva.get_full_name }}, {{ cuenta_inactiva|rol_visible }}). No se da de alta otra: se reactiva esa. Si necesita otro rol, usá otro email o un alias.
         <div class="row" style="margin-top:8px">
-          {# USR-ALT-USR regla 8: ofrece reactivar la cuenta (USR-MOD-USR). Sin JavaScript lleva a su ficha con la confirmación abierta. #}
-          <a class="btn btn-primary btn-sm" href="{% url 'core:usuario_reactivar' cuenta_inactiva.pk %}">Reactivar cuenta</a>
+          {# USR-ALT-USR regla 8: ofrece reactivar la cuenta (USR-MOD-USR) si quien da de alta puede hacerlo hoy (D-30). Sin JavaScript lleva a su ficha con la confirmación abierta. #}
+          {% if puede_reactivar %}<a class="btn btn-primary btn-sm" href="{% url 'core:usuario_reactivar' cuenta_inactiva.pk %}">Reactivar cuenta</a>{% endif %}
           <a class="btn btn-ghost btn-sm" href="{% url 'core:usuario' cuenta_inactiva.pk %}">Ver cuenta</a>
         </div>
       </div></div>
@@ -42,5 +52,6 @@ teléfono se valida al confirmar, no mientras se escribe. Sin el campo de invern
       <a class="btn btn-ghost" href="{% url 'core:usuarios' %}">Cancelar</a>
     </div>
   </form>
+  {% endif %}
 </div>
 {% endblock %}
