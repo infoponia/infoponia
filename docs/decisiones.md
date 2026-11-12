@@ -627,7 +627,17 @@ Formato:
   - La búsqueda de la lista exige que la cuenta coincida con todas las palabras, cada una en el nombre,
     el apellido o el email, sin distinguir mayúsculas.
   - Una modificación sin cambios no guarda ni audita; restablecer la contraseña solo vale para cuentas
-    activas y reactivar solo para cuentas inactivas. Esto se implementa en la tarea 04b.
+    activas y reactivar solo para cuentas inactivas. Esto se implementó en la tarea 04b.
+  - Se pueden modificar los datos de una cuenta inactiva: la cuenta sigue inactiva y la modificación se
+    audita como cualquier otra. USR-MOD-USR no define esta regla (solo exige que la cuenta esté dentro del
+    alcance, a diferencia de USR-BAJ-USR, que exige la cuenta activa): se apoya en el prototipo, donde
+    `vUsuario` muestra «Modificar datos» siempre y `save-user` no controla el estado.
+  - Restablecer, reactivar y dar de baja piden confirmación: abrir la ventana (GET) no cambia nada y el
+    cambio se hace con un POST. La contraseña temporal de un restablecimiento o de una reactivación se
+    muestra una sola vez, en la respuesta del POST, y no se guarda en ningún lado.
+  - Detalle de la auditoría: la modificación guarda solo los campos que cambiaron, como
+    `{campo: [antes, después]}`; la reactivación y la baja guardan `{"estado": [antes, después]}`; el
+    restablecimiento no lleva ningún dato de contraseña.
   - Las pruebas de precondiciones se llaman `test_pre_<letra>_<que_espera>`, con la fuente en el
     docstring (como las de reglas, extensiones y postcondiciones de `CLAUDE.md`).
 - Por qué: un único queryset evita repetir el alcance en cada servicio y que una pantalla nueva lo olvide.
@@ -638,12 +648,69 @@ Formato:
   revelar nada de una cuenta que el Gerente no gestiona. La búsqueda exige todas las palabras para que
   agregar palabras acote el resultado en vez de ampliarlo. Una modificación sin cambios no deja un
   registro de auditoría que no registra nada, y restablecer o reactivar solo donde corresponde evita
-  generar una contraseña temporal para una cuenta en el estado equivocado.
+  generar una contraseña temporal para una cuenta en el estado equivocado. Permitir modificar los datos de
+  una cuenta inactiva deja corregirlos antes de reactivarla (por ejemplo, un email mal escrito); el
+  prototipo lo permite y queda auditado igual. Pedir confirmación evita restablecer una contraseña o dar de
+  baja por un clic accidental, y que abrir la ventana no cambie nada permite abrirla con un simple enlace.
 - Fuentes: `docs/casos_de_uso/usuarios.md` (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR, USR-BAJ-USR, SEG-13 y
   SEG-15); `CLAUDE.md` (arquitectura y tests); D-15, D-16, D-21, D-22 y D-25.
 - Consecuencias: migración `0005`, que solo cambia el campo `telefono` (sin cambio de datos). La tarea 05
   agrega la rama del Administrador en `en_alcance_de` y SEG-15. Límite conocido: recargar «Cuenta
   creada» reenvía el formulario y da «Ya existe una cuenta con ese email.». Se acepta porque la
   contraseña temporal no se guarda en ningún lado (ni en la sesión ni en la base), y mostrarla de nuevo
-  después de una redirección exigiría guardarla.
+  después de una redirección exigiría guardarla. El mismo límite alcanza a la respuesta de un
+  restablecimiento o de una reactivación: recargarla reenvía el formulario. Restablecer generaría otra
+  temporal y la mostrada antes dejaría de servir; reactivar daría “La cuenta ya está activa”.
 - Estado: vigente (reemplaza en parte a D-15)
+
+## D-29 — Convenciones de interfaz del sistema
+
+- Fecha: 11/11/2026
+- Decidió: Lautaro Fernández (durante la revisión a mano de la tarea 04b)
+- Antes: D-24 fijó que las pantallas siguen el prototipo, pero no cómo se muestran los mensajes que
+  vienen de `django.contrib.messages`, ni el aspecto y el foco de los botones, ni cómo llegan al
+  navegador los cambios en la hoja de estilos y el JavaScript. En la revisión de la 04b, el botón
+  secundario (borde y texto gris claro sobre blanco) casi no se veía; los mensajes se mostraban como un
+  bloque fijo en la página, que no desaparecía; y el navegador seguía usando un `infoponia.js` viejo
+  después de cambiarlo.
+- Decisión:
+  - Los avisos (`django.contrib.messages`, y los que genera la propia pantalla, como «Contraseña
+    copiada.») se muestran como avisos breves. Cada aviso es una tarjeta (fondo `--card`, borde
+    `--border`, radio de 6px, sombra suave) con una franja de 4px a la izquierda del color de su tipo
+    (`--status-ok` para éxito, `--status-danger` para error), un ícono del mismo color (check o warn),
+    el texto en `--foreground` y una cruz en `--muted-foreground`. Una barra de 3px en la base, del color
+    del tipo, se achica durante los 10 segundos.
+  - Duran 10 segundos, los de éxito y los de error, y se pueden cerrar antes con la cruz. Van en una
+    región con `role="status"`, que está vacía en toda pantalla con sesión, para que los lectores de
+    pantalla anuncien cada aviso nuevo.
+  - Se ubican arriba a la derecha, debajo del encabezado, con un ancho máximo de 380px, y varios se apilan
+    hacia abajo. En pantallas de menos de 760px ocupan el ancho con 12px de margen.
+  - Al aparecer se deslizan desde la derecha con fundido (250ms, ease-out); al irse, por tiempo o por la
+    cruz, se desvanecen hacia la derecha (200ms) y recién después se quitan de la página. Con
+    `prefers-reduced-motion` no hay desplazamiento ni barra animada: solo aparecen y desaparecen.
+  - Sin JavaScript queda el aviso fijo en la página, como respaldo. Los errores que se muestran debajo de
+    los campos de un formulario no son avisos y no cambian.
+  - El botón secundario (`.btn-ghost`) usa borde y texto en el verde primario sobre fondo blanco: 6,54:1
+    (el borde gris anterior tenía 1,37:1); en el hover, verde oscuro sobre verde claro (7,29:1). Los
+    botones que son enlaces no se subrayan. Todos los botones muestran el foco al navegar con Tab: un
+    borde de 2px en el verde primario (`:focus-visible`), separado 2px del botón.
+  - Los archivos estáticos propios (hoja de estilos y scripts) se piden con `{% static_v %}`, que agrega la
+    fecha del archivo a la URL, porque `runserver` los sirve sin `Cache-Control`.
+- Por qué: el botón secundario tiene que verse en una tarjeta blanca y cumplir el contraste mínimo de texto
+  (4,5:1) y de componentes (3:1). Un aviso que se integra con el sistema (tarjeta, colores de estado)
+  no parece un cuerpo extraño y no empuja ni tapa el contenido; 10 segundos dan tiempo de leerlo y la
+  cruz deja cerrarlo antes. El `role="status"` hace que se anuncie sin quitarle el foco a nadie, y el
+  respaldo fijo evita perder el mensaje si el JavaScript no corre. Los colores de texto, cruz e ícono
+  sobre el blanco de la tarjeta miden 18,47:1 (texto), 5,82:1 (cruz), 5,36:1 (ícono de éxito) y 6,25:1
+  (ícono de error). Sin foco visible, quien navega con teclado no sabe dónde está. Sin `Cache-Control`, el
+  navegador guarda por su cuenta los archivos que solo traen `Last-Modified` y no vuelve a pedirlos: un
+  cambio de JavaScript no llegaba y los avisos de la 04b parecían no desaparecer; con la fecha del archivo
+  en la URL, cada cambio es una URL nueva.
+- Fuentes: D-24 y D-25; WCAG 2.x: criterios 1.4.3 (contraste mínimo), 1.4.11 (contraste de componentes),
+  2.4.7 (foco visible) y 4.1.3 (mensajes de estado); revisión a mano de la tarea 04b.
+- Consecuencias: toda pantalla nueva usa estas convenciones. Las verifican las pruebas
+  `test_d29_...` de `core/tests/test_usr_ini_ses.py`; el temporizador, la cruz y las animaciones son
+  JavaScript y se prueban a mano. En la tarea 09 se evalúa reemplazar `static_v` por
+  `ManifestStaticFilesStorage` de WhiteNoise (`whitenoise.storage`) en producción, que pone un hash en el
+  nombre de cada archivo.
+- Estado: vigente

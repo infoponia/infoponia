@@ -1,14 +1,15 @@
 {% comment %}Plantilla raíz de InfoPonia: CSS propio, HTMX servido desde el repo (D-24) y el token CSRF
-para las peticiones HTMX de las pantallas siguientes.{% endcomment %}{% load static %}<!DOCTYPE html>
+para las peticiones HTMX de las pantallas siguientes.{% endcomment %}{% load static estaticos %}<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}InfoPonia{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'core/css/infoponia.css' %}">
+  {# static_v agrega la fecha del archivo a la URL: un cambio en estos archivos llega al navegador sin forzar la recarga. #}
+  <link rel="stylesheet" href="{% static_v 'core/css/infoponia.css' %}">
   <script src="{% static 'core/vendor/htmx-2.0.11.min.js' %}" defer></script>
-  <script src="{% static 'core/js/infoponia.js' %}" defer></script>
-  <script src="{% static 'core/js/desplegable.js' %}" defer></script>
+  <script src="{% static_v 'core/js/infoponia.js' %}" defer></script>
+  <script src="{% static_v 'core/js/desplegable.js' %}" defer></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 {% block cuerpo %}{% endblock %}

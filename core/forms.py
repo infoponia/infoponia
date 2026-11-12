@@ -119,13 +119,14 @@ class FormularioFiltroUsuarios(forms.Form):
     )
 
 
-class FormularioAltaUsuario(forms.Form):
-    """Datos del alta de una cuenta (USR-ALT-USR). Solo recoge la entrada y la devuelve limpia.
+class FormularioDatosPersonales(forms.Form):
+    """Datos personales de una cuenta, comunes al alta y a la modificación. Solo recoge la entrada.
 
     Ningún campo es obligatorio acá a propósito: las reglas (regla 7 de obligatorios, regla 9 del
-    teléfono, email único, rol permitido) las aplica ``core.servicios.alta_usuario``, que es la
-    única fuente, y la vista pasa sus errores a este formulario. El formulario se muestra con
-    ``novalidate``: el teléfono se valida al confirmar, no mientras se escribe.
+    teléfono, email único, rol permitido) las aplican ``core.servicios.alta_usuario`` y
+    ``modificar_usuario``, que son la única fuente, y la vista pasa sus errores a este formulario.
+    Los formularios se muestran con ``novalidate``: el teléfono se valida al confirmar, no mientras
+    se escribe.
     """
 
     nombre = forms.CharField(
@@ -157,6 +158,11 @@ class FormularioAltaUsuario(forms.Form):
             attrs={"class": "field-input", "inputmode": "tel", "autocomplete": "off"}
         ),
     )
+
+
+class FormularioAltaUsuario(FormularioDatosPersonales):
+    """Alta de una cuenta (USR-ALT-USR): los datos personales y el rol."""
+
     rol = forms.CharField(
         label="Rol",
         required=False,
@@ -165,3 +171,8 @@ class FormularioAltaUsuario(forms.Form):
             attrs={"class": "field-input", "data-desplegable": ""},
         ),
     )
+
+
+class FormularioModificarUsuario(FormularioDatosPersonales):
+    """Modificación de una cuenta (USR-MOD-USR). No tiene campo de rol: el rol no se modifica
+    (regla 2, D-11), así que un ``rol`` enviado a mano en el pedido se ignora."""

@@ -1,14 +1,14 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos %}
-{% comment %}Cuenta creada (USR-ALT-USR postcondición c; vAltaOk y tempPanel del prototipo). La contraseña
-temporal solo existe en esta respuesta (la vista usa never_cache y no la guarda). La ventana bloquea el
-fondo hasta «Entendido» (o Esc); sin JavaScript queda abierta y «Entendido» lleva a la lista.
+{% comment %}Cuenta creada (USR-ALT-USR postcondición c; vAltaOk del prototipo). La contraseña temporal solo existe en
+esta respuesta (la vista usa never_cache y no la guarda): la muestra la ventana compartida
+_ventana_temporal.html.
 Pendiente: aviso al nuevo Gerente con los pendientes (postcondición d) e invernadero del Transportista.{% endcomment %}
 {% block titulo %}Cuenta creada · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
   <div class="page-h"><h1>Cuenta creada</h1></div>
   <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Se dio de alta la cuenta de <b>{{ cuenta.get_full_name }}</b> ({{ cuenta.get_rol_display }}) — <span class="mono">{{ cuenta.email }}</span>.</div></div>
-  <div style="margin-top:14px"><div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>La contraseña temporal se mostró una sola vez.</div></div></div>
+  <div style="margin-top:14px"><div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>La contraseña temporal se mostró una sola vez. Si se perdió, restablecela desde la ficha de la cuenta.</div></div></div>
   <div class="row" style="margin-top:16px">
     <a class="btn btn-primary" href="{% url 'core:usuarios' %}" data-foco-al-cerrar>Volver a la lista</a>
     <a class="btn btn-ghost" href="{% url 'core:usuario' cuenta.pk %}">Ver cuenta</a>
@@ -18,17 +18,6 @@ Pendiente: aviso al nuevo Gerente con los pendientes (postcondición d) e invern
 {% endblock %}
 
 {% block ventanas %}
-<div class="ov" data-ventana>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
-    <h2 id="ventana-titulo">Cuenta creada</h2>
-    <p>Esta es la contraseña temporal de {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}). Pasásela por un medio seguro: no se vuelve a mostrar.</p>
-    <div class="temp">
-      <div class="muted" style="font-size:12px">Contraseña temporal</div>
-      <code id="contrasena-temporal">{{ contrasena_temporal }}</code>
-      <div class="row"><button class="btn btn-ghost btn-sm" type="button" data-copiar="contrasena-temporal" hidden>Copiar</button></div>
-    </div>
-    <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Se muestra <b>una sola vez</b>. Pasásela a la persona por un medio seguro. Vence a los 7 días si no la cambia.</div></div>
-    <div class="acts"><a class="btn btn-primary" href="{% url 'core:usuarios' %}" data-cerrar-ventana>Entendido</a></div>
-  </div>
-</div>
+{% url 'core:usuarios' as destino_lista %}
+{% include "core/usuarios/_ventana_temporal.html" with modo="alta" destino=destino_lista %}
 {% endblock %}

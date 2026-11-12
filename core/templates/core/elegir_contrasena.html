@@ -1,4 +1,4 @@
-{% extends "core/base_sin_sesion.html" %}{% load iconos static %}
+{% extends "core/base_sin_sesion.html" %}{% load iconos estaticos %}
 {% comment %}Elegí tu contraseña (USR-CMB-CTR cuando extiende a USR-INI-SES; vForced del prototipo). Solo se llega con
 contraseña temporal (SEG-04). La lista de requisitos (policyList) se marca al escribir con politica_contrasena.js;
 sin JavaScript se ve igual, y la validación siempre es del servidor (SEG-03). «Distinta de la contraseña
@@ -65,5 +65,5 @@ informa como error del campo.{% endcomment %}
   Cuenta: <b style="color:var(--foreground)">{{ user.email }}</b> · <button class="link" type="submit">Cerrar sesión</button>
 </form>
 
-<script src="{% static 'core/js/politica_contrasena.js' %}" defer></script>
+<script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>
 {% endblock %}

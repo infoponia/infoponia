@@ -30,6 +30,12 @@ menú de cuenta con «Cerrar sesión» (SEG-08). Sin campana: todavía no hay no
   {% endif %}
 
   <main class="main">
+    {% if messages %}
+    <div class="page narrow" data-avisos style="margin-bottom:14px">
+      {# Respaldo sin JavaScript: el mensaje queda fijo en la página. Con JavaScript, infoponia.js lo reemplaza por un aviso breve. #}
+      {% for mensaje in messages %}{% if mensaje.level >= 40 %}<div class="alert alert-danger" role="status" data-aviso data-tipo="error">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% else %}<div class="alert alert-ok" role="status" data-aviso data-tipo="ok">{% icono "check" 16 %}<div>{{ mensaje }}</div></div>{% endif %}{% endfor %}
+    </div>
+    {% endif %}
     {% block contenido %}{% endblock %}
   </main>
 
@@ -46,8 +52,9 @@ menú de cuenta con «Cerrar sesión» (SEG-08). Sin campana: todavía no hay no
   {# Ventanas que bloquean el fondo (equivale a modalHtml del prototipo): las define cada pantalla. #}
   {% block ventanas %}{% endblock %}
 
-  {# Aviso breve (toast): lo muestra infoponia.js, por ejemplo al copiar la contraseña temporal. #}
-  <div class="toast" id="aviso" role="status" aria-live="polite"></div>
+  {# Región de avisos breves: vacía al cargar; infoponia.js le agrega un aviso por mensaje (10 s, con cruz). #}
+  {# Al ser role="status", los lectores de pantalla anuncian cada aviso que se le agrega. #}
+  <div class="avisos" id="avisos" role="status" aria-live="polite"></div>
 
   <div class="scrim" data-cerrar-menu hidden></div>
   <div class="pop" id="menu-cuenta" role="dialog" aria-label="Menú de cuenta" hidden>

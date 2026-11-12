@@ -46,11 +46,13 @@ label.btn{cursor:pointer}
 }
 
 /* ---- componentes del prototipo original ---- */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;border:1px solid transparent;transition:background .12s,border-color .12s;min-height:34px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;border:1px solid transparent;transition:background .12s,border-color .12s;min-height:34px}
 .btn-primary{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
 .btn-primary:hover{background:#155a32}
-.btn-ghost{background:transparent;color:var(--muted-foreground);border-color:var(--border)}
-.btn-ghost:hover{background:var(--secondary);color:var(--foreground)}
+/* Botón secundario: borde y texto en el verde primario sobre fondo blanco (6,5:1, WCAG AA). El hover pasa
+   al verde oscuro del hover del primario sobre el verde claro de los estados «ok» (7,3:1). */
+.btn-ghost{background:#fff;color:var(--primary);border-color:var(--primary)}
+.btn-ghost:hover{background:#e6f4ec;color:#155a32;border-color:#155a32}
 .btn-danger{background:transparent;color:var(--status-danger);border-color:var(--status-danger)}
 .btn-danger:hover{background:#fdeaea}
 .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -181,10 +183,27 @@ footer.bot button{background:none;border:none;font:inherit;color:inherit;text-de
 .modal .acts{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
 .field .btn{min-height:48px}
 .field .acc-item,.field .pop-act{min-height:52px}
-.toast{position:fixed;top:16px;left:16px;transform:translateY(-10px);background:#111418;color:#fff;padding:10px 16px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:300;max-width:min(360px,calc(100vw - 24px));text-align:left;box-shadow:0 4px 16px rgba(0,0,0,.2)}
-.toast.show{opacity:1;transform:none}
-.toast.shell-t{top:62px;left:calc(var(--sidebar-width) + 16px)}
-.toast.field-t{top:62px;left:max(12px,calc(50% - 203px))}
+/* Avisos breves: un contenedor fijo (región «status» para los lectores de pantalla) arriba a la derecha,
+   debajo del encabezado, y un .toast por aviso, apilados hacia abajo. El JavaScript los crea y los quita a
+   los 10 s o al cerrarlos con la cruz. Cada uno es una tarjeta con una franja a la izquierda, el ícono y la
+   barra de tiempo del color de su tipo (--color-aviso: éxito o error). Texto, cruz e ícono tienen contraste
+   AA sobre el blanco de la tarjeta (18,5:1, 5,8:1, 5,4:1 y 6,3:1). */
+.avisos{position:fixed;top:calc(var(--header-height) + 10px);right:16px;z-index:300;display:flex;flex-direction:column;gap:8px;width:380px;max-width:calc(100vw - 24px);pointer-events:none}
+.shell.field .avisos{right:max(12px,calc(50% - 203px))}
+.toast{--color-aviso:var(--status-ok);position:relative;overflow:hidden;display:flex;align-items:flex-start;gap:10px;background:var(--card);color:var(--foreground);border:1px solid var(--border);border-left:4px solid var(--color-aviso);border-radius:6px;padding:11px 8px 14px 12px;font-size:13px;text-align:left;box-shadow:0 4px 16px rgba(0,0,0,.1);pointer-events:auto;animation:avisoEntra .25s ease-out}
+.toast-error{--color-aviso:var(--status-danger)}
+.toast-saliendo{animation:avisoSale .2s ease-in forwards}
+.toast-icono{flex-shrink:0;display:flex;margin-top:2px;color:var(--color-aviso)}
+.toast-texto{flex:1;min-width:0;overflow-wrap:anywhere;padding-top:3px;line-height:1.4}
+.toast-cerrar{flex-shrink:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:4px;color:var(--muted-foreground)}
+.toast-cerrar:hover{background:var(--secondary);color:var(--foreground)}
+.toast-cerrar:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.toast-barra{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--color-aviso);transform-origin:left center;animation:avisoBarra var(--duracion-aviso,10s) linear forwards}
+@keyframes avisoEntra{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
+@keyframes avisoSale{from{opacity:1;transform:none}to{opacity:0;transform:translateX(32px)}}
+@keyframes avisoBarra{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+/* Con «reducir movimiento»: sin desplazamiento ni barra animada; el aviso solo aparece y desaparece. */
+@media(prefers-reduced-motion:reduce){.toast,.toast-saliendo{animation:none}.toast-barra{display:none}}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
 .vlist{list-style:none}
 .vlist li{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
@@ -233,3 +252,6 @@ a.nav-item{text-decoration:none}
 .dd-opcion[aria-selected="true"]{background:#e6f4ec;color:var(--status-ok);font-weight:600}
 /* campo con error de formulario (el servidor lo informa en un .err debajo del campo) */
 .fld:has(.err) .field-input{border-color:var(--status-danger)}
+@media(max-width:760px){.avisos,.shell.field .avisos{left:12px;right:12px;width:auto;max-width:none}}
+/* Foco visible de los botones al navegar con Tab: borde en el verde primario, separado del botón. */
+.btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}

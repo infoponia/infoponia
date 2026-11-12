@@ -1,0 +1,33 @@
+{% load iconos %}{% comment %}Ventana de confirmación de restablecer, reactivar y dar de baja (modalHtml 'reset', 'react' y
+'baja' del prototipo). Recibe «cuenta», «accion» ("restablecer", "reactivar" o "baja") y, si el servicio
+rechazó la operación, «error». La operación se hace con un POST a la misma URL; abrir la ventana (GET) no
+cambia nada. Los textos del prototipo que hablan de las cuentas vinculadas se omiten hasta la tarea 06.
+Pendiente: lo que la baja deja asignado (invernaderos, pedidos, entregas y pendientes del Gerente).{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if accion == "restablecer" %}
+    <h2 id="ventana-titulo">¿Restablecer la contraseña?</h2>
+    <p>Se genera una <b>contraseña temporal</b> para {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}). Se cierran sus sesiones abiertas.</p>
+    {% elif accion == "reactivar" %}
+    <h2 id="ventana-titulo">¿Reactivar la cuenta?</h2>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}) vuelve a estar activa. Se genera una <b>contraseña temporal</b>.</p>
+    {% else %}
+    <h2 id="ventana-titulo">¿Dar de baja esta cuenta?</h2>
+    <p>{{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}) no va a poder iniciar sesión y se cierran sus sesiones abiertas. Su historial se conserva. Podés reactivarla más adelante.</p>
+    {% endif %}
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% if accion == 'restablecer' %}{% url 'core:usuario_restablecer' cuenta.pk %}{% elif accion == 'reactivar' %}{% url 'core:usuario_reactivar' cuenta.pk %}{% else %}{% url 'core:usuario_baja' cuenta.pk %}{% endif %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'core:usuario' cuenta.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        {% if accion == "baja" %}
+        <button class="btn btn-danger" type="submit">Dar de baja</button>
+        {% elif accion == "reactivar" %}
+        <button class="btn btn-ghost" type="submit">Reactivar</button>
+        {% else %}
+        <button class="btn btn-ghost" type="submit">Restablecer</button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
