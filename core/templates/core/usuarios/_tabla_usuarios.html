@@ -1,4 +1,4 @@
-{% comment %}Tabla de la lista de usuarios (USR-CNS-USR). Es el fragmento que devuelve la vista a los
+{% load cuentas %}{% comment %}Tabla de la lista de cuentas (USR-CNS-USR). Es el fragmento que devuelve la vista a los
 pedidos de HTMX de los filtros. Recibe «cuentas».{% endcomment %}
 <div class="tablewrap">
   <table class="data-table">
@@ -6,8 +6,8 @@ pedidos de HTMX de los filtros. Recibe «cuentas».{% endcomment %}
     <tbody>
     {% for cuenta in cuentas %}
       <tr>
-        <td><b style="font-weight:600">{{ cuenta.get_full_name }}</b><div class="mono muted" style="font-size:11px">{{ cuenta.email }}</div></td>
-        <td>{{ cuenta.get_rol_display }}</td>
+        <td><b style="font-weight:600">{{ cuenta.get_full_name }}</b>{% if cuenta.pk == user.pk %} <span class="muted">(vos)</span>{% endif %}<div class="mono muted" style="font-size:11px">{{ cuenta.email }}</div></td>
+        <td>{{ cuenta|rol_visible }}</td>
         <td>{% include "core/usuarios/_insignias.html" %}</td>
         <td style="text-align:right"><a class="btn btn-ghost btn-sm" href="{% url 'core:usuario' cuenta.pk %}">Ver<span class="sr"> la cuenta de {{ cuenta.get_full_name }}</span></a></td>
       </tr>

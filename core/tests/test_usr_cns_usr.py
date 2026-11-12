@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from core import servicios
 from core.models import (
+    ADMINISTRADOR,
     Agronomo,
     Capataz,
     Gerente,
@@ -60,8 +61,8 @@ class UsrCnsUsrServicioTests(TestCase):
     # ---- Precondición ----
 
     def test_pre_a_rechaza_actor_sin_cuenta_activa_de_gerente(self):
-        """USR-CNS-USR precondición a: solo consulta una cuenta activa de Gerente (el Administrador
-        llega en la tarea 05). Un Capataz o un Gerente dado de baja no consultan."""
+        """USR-CNS-USR precondición a: consulta una cuenta activa de Gerente o de Administrador (las del
+        Administrador están más abajo). Un Capataz o un Gerente dado de baja no consultan."""
         capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
         gerente_inactivo = crear_gerente(activo=False)
 
@@ -176,6 +177,93 @@ class UsrCnsUsrServicioTests(TestCase):
         servicios.obtener_cuenta(gerente, capataz.pk)
 
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_d30_acciones_permitidas_segun_actor_y_estado(self):
+        """D-30, USR-MOD-USR y USR-BAJ-USR (regla 1) y D-28: el Gerente modifica, restablece y da de baja
+        una cuenta activa de su alcance, y modifica y reactiva una inactiva; sobre una cuenta fuera de su
+        alcance no tiene acciones. Tarea 05a: el Administrador todavía no tiene ninguna (llegan en la 05b)."""
+        gerente = crear_gerente()
+        activa = crear_cuenta(Capataz, "activa@infoponia.com")
+        inactiva = crear_cuenta(Capataz, "inactiva@infoponia.com", activo=False)
+        administrador = crear_administrador()
+
+        self.assertEqual(
+            servicios.acciones_permitidas(gerente, activa), {"modificar", "restablecer", "baja"}
+        )
+        self.assertEqual(servicios.acciones_permitidas(gerente, inactiva), {"modificar", "reactivar"})
+        self.assertEqual(servicios.acciones_permitidas(gerente, administrador), set())
+        for cuenta in (gerente, administrador):
+            with self.subTest(cuenta=cuenta.email):
+                self.assertEqual(servicios.acciones_permitidas(administrador, cuenta), set())
+
+    # ---- El Administrador (tarea 05a, D-16) ----
+
+    def test_pre_a_rechaza_administrador_inactivo(self):
+        """USR-CNS-USR precondición a: el Administrador consulta solo con una cuenta activa; uno dado
+        de baja no consulta."""
+        crear_administrador()
+        inactivo = crear_administrador(email="admin.anterior@infoponia.com")
+        inactivo.is_active = False
+        inactivo.save()
+
+        with self.assertRaises(PermissionDenied):
+            list(servicios.consultar_usuarios(inactivo))
+
+    def test_regla_1_administrador_ve_gerentes_y_administradores_incluida_la_suya(self):
+        """USR-CNS-USR regla 1 y D-16: el Administrador consulta la cuenta del Gerente (también las de
+        Gerentes anteriores, inactivos) y las de los Administradores, incluida la suya."""
+        administrador = crear_administrador()
+        otro_administrador = crear_administrador(email="admin2@infoponia.com")
+        gerente = crear_gerente()
+        gerente_anterior = crear_gerente(email="gerente.anterior@infoponia.com", activo=False)
+        crear_cuenta(Capataz, "capataz@infoponia.com")
+
+        resultado = servicios.consultar_usuarios(administrador)
+
+        self.assertEqual(
+            ids(resultado),
+            {administrador.pk, otro_administrador.pk, gerente.pk, gerente_anterior.pk},
+        )
+
+    def test_regla_1_administrador_no_ve_cuentas_de_los_otros_roles(self):
+        """USR-CNS-USR regla 1 y D-16: el Administrador no consulta las cuentas de Agrónomo, Capataz,
+        Vendedor, Transportista ni Técnico (las gestiona el Gerente)."""
+        administrador = crear_administrador()
+        for clase in (Agronomo, Capataz, Vendedor, Transportista, Tecnico):
+            crear_cuenta(clase, f"{clase.ROL.value}@infoponia.com")
+
+        resultado = servicios.consultar_usuarios(administrador)
+
+        self.assertEqual(ids(resultado), {administrador.pk})
+
+    def test_regla_2_administrador_filtra_por_rol_administrador(self):
+        """USR-CNS-USR regla 2 y D-10: el Administrador filtra por «Administrador» (que no es un valor de
+        ``rol``: es un superusuario sin rol) y por «Gerente»."""
+        administrador = crear_administrador()
+        otro_administrador = crear_administrador(email="admin2@infoponia.com")
+        gerente = crear_gerente()
+
+        self.assertEqual(
+            ids(servicios.consultar_usuarios(administrador, rol=ADMINISTRADOR)),
+            {administrador.pk, otro_administrador.pk},
+        )
+        self.assertEqual(
+            ids(servicios.consultar_usuarios(administrador, rol=Usuario.Rol.GERENTE)), {gerente.pk}
+        )
+
+    def test_regla_1_administrador_obtiene_ficha_de_gerente_y_no_de_capataz(self):
+        """USR-CNS-USR regla 1, SEG-13 y D-28: el Administrador obtiene la ficha del Gerente, de otro
+        Administrador y la suya; la de un Capataz existe pero está fuera de su alcance."""
+        administrador = crear_administrador()
+        otro_administrador = crear_administrador(email="admin2@infoponia.com")
+        gerente = crear_gerente()
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+
+        for cuenta in (gerente, otro_administrador, administrador):
+            with self.subTest(cuenta=cuenta.email):
+                self.assertEqual(servicios.obtener_cuenta(administrador, cuenta.pk).pk, cuenta.pk)
+        with self.assertRaises(PermissionDenied):
+            servicios.obtener_cuenta(administrador, capataz.pk)
 
 
 def dar_temporal_vencida(cuenta):
@@ -320,3 +408,68 @@ class UsrCnsUsrVistaTests(TestCase):
         self.client.logout()
         self.client.force_login(crear_cuenta(Capataz, "capataz@infoponia.com"))
         self.assertNotContains(self.client.get(reverse("core:inicio")), "Usuarios y seguridad")
+
+    # ---- El Administrador (tarea 05a, D-16) ----
+
+    def test_flujo_principal_administrador_ve_la_lista_de_cuentas(self):
+        """USR-CNS-USR flujo principal, reglas 1 y 2, D-16 y prototipo (vUsuarios): el Administrador ve
+        «Cuentas» con «Alta de Gerente», el texto de su alcance, el Gerente y los Administradores (la suya
+        marcada «(vos)», con el rol «Administrador») y el filtro de rol con «Gerente» y «Administrador»;
+        no ve las cuentas de los otros roles."""
+        administrador = crear_administrador()
+        crear_administrador(email="admin2@infoponia.com")
+        crear_gerente()
+        crear_cuenta(Capataz, "capataz@infoponia.com")
+        self.client.force_login(administrador)
+
+        respuesta = self.client.get(reverse("core:usuarios"))
+
+        self.assertContains(respuesta, "<h1>Cuentas</h1>", html=True)
+        self.assertContains(respuesta, "Alta de Gerente")
+        self.assertContains(respuesta, "Gestionás la cuenta del Gerente y las de los Administradores.")
+        self.assertNotContains(respuesta, "Nuevo usuario")
+        self.assertContains(respuesta, "gerente@infoponia.com")
+        self.assertContains(respuesta, "admin2@infoponia.com")
+        self.assertContains(respuesta, "(vos)", count=1)
+        self.assertContains(respuesta, "<td>Administrador</td>", count=2, html=True)
+        self.assertNotContains(respuesta, "capataz@infoponia.com")
+        self.assertContains(respuesta, '<option value="gerente">Gerente</option>', html=True)
+        self.assertContains(respuesta, '<option value="administrador">Administrador</option>', html=True)
+        self.assertNotContains(respuesta, 'value="capataz"')
+
+    def test_seg13_administrador_recibe_403_en_ficha_de_capataz(self):
+        """SEG-13, USR-CNS-USR regla 1 y D-28: la ficha de un Capataz existe pero está fuera del alcance
+        del Administrador: 403 con el mensaje."""
+        self.client.force_login(crear_administrador())
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+
+        respuesta = self.client.get(reverse("core:usuario", args=[capataz.pk]))
+
+        self.assertContains(
+            respuesta, "Esa cuenta no está dentro de las que gestionás.", status_code=403
+        )
+
+    def test_d30_ficha_del_administrador_no_ofrece_acciones_de_la_05b(self):
+        """D-30 (tarea 05a): mientras modificar, restablecer, reactivar y dar de baja sean solo del
+        Gerente, la ficha no le muestra al Administrador botones que lo lleven a un 403. Vale para el
+        Gerente activo, uno inactivo, otro Administrador y la propia cuenta («(vos)»)."""
+        administrador = crear_administrador()
+        cuentas = [
+            crear_gerente(),
+            crear_gerente(email="gerente.anterior@infoponia.com", activo=False),
+            crear_administrador(email="admin2@infoponia.com"),
+            administrador,
+        ]
+        self.client.force_login(administrador)
+
+        for cuenta in cuentas:
+            with self.subTest(cuenta=cuenta.email):
+                respuesta = self.client.get(reverse("core:usuario", args=[cuenta.pk]))
+                self.assertEqual(respuesta.status_code, 200)
+                for texto in ("Modificar datos", "Restablecer contraseña", "Reactivar cuenta", "Dar de baja"):
+                    self.assertNotContains(respuesta, texto)
+                for nombre in ("usuario_modificar", "usuario_restablecer", "usuario_reactivar", "usuario_baja"):
+                    self.assertNotContains(respuesta, reverse(f"core:{nombre}", args=[cuenta.pk]))
+        propia = self.client.get(reverse("core:usuario", args=[administrador.pk]))
+        self.assertContains(propia, "(vos)")
+        self.assertContains(propia, "<dd>Administrador</dd>", html=True)

@@ -1,15 +1,18 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos %}
-{% comment %}Usuarios y seguridad (USR-CNS-USR, vUsuarios del prototipo). Los filtros funcionan con HTMX
+{% comment %}Usuarios y seguridad del Gerente o Cuentas del Administrador (USR-CNS-USR, vUsuarios del prototipo; D-16). Los filtros funcionan con HTMX
 (reemplazan solo la tabla y actualizan la URL); sin JavaScript, el botón «Filtrar» envía el formulario
 y la página se recarga con los mismos filtros.{% endcomment %}
-{% block titulo %}Usuarios y seguridad · InfoPonia{% endblock %}
+{% block titulo %}{% if es_administrador %}Cuentas{% else %}Usuarios y seguridad{% endif %} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page">
   <div class="page-h">
-    <h1>Usuarios y seguridad</h1>
+    <h1>{% if es_administrador %}Cuentas{% else %}Usuarios y seguridad{% endif %}</h1>
     <span class="spacer"></span>
-    <a class="btn btn-primary" href="{% url 'core:usuario_nuevo' %}">{% icono "plus" 14 %} Nuevo usuario</a>
+    <a class="btn btn-primary" href="{% url 'core:usuario_nuevo' %}">{% icono "plus" 14 %} {% if es_administrador %}Alta de Gerente{% else %}Nuevo usuario{% endif %}</a>
   </div>
+  {% if es_administrador %}
+  <p class="muted" style="margin-bottom:14px">Gestionás la cuenta del Gerente y las de los Administradores. Los Administradores solo se crean en la puesta en marcha.</p>
+  {% endif %}
 
   <form class="filters" method="get" action="{% url 'core:usuarios' %}"
         hx-get="{% url 'core:usuarios' %}" hx-target="#tabla-usuarios" hx-push-url="true"

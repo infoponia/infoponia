@@ -151,7 +151,9 @@ class UsrIniSesReglasTests(TestCase):
 
         self.assertEqual(self.id_en_sesion(), str(capataz.pk))
         self.assertRedirects(respuesta, elegir)
-        for url in (reverse("core:inicio"), reverse("admin:index")):
+        # Otra pantalla cualquiera, que existe en todo entorno (el admin de Django no existe con DEBUG
+        # apagado, como en el CI y en producción: SEG-18).
+        for url in (reverse("core:inicio"), reverse("core:usuarios")):
             with self.subTest(url=url):
                 self.assertRedirects(
                     self.client.get(url), elegir, fetch_redirect_response=False
@@ -474,14 +476,26 @@ class UsrIniSesVistaTests(TestCase):
         self.assertNotContains(respuesta, '<aside class="side">')
         self.assertNotContains(respuesta, "sincronizado")
 
-    def test_post_a_administrador_opera_sin_rol_operativo(self):
-        """USR-INI-SES objetivo y D-16: el Administrador opera con la administración de cuentas,
-        sin rol operativo ni menú de módulos."""
-        respuesta = self.entrar(crear_administrador())
+    def test_post_a_administrador_entra_a_cuentas(self):
+        """USR-INI-SES postcondición a, D-16 y D-30 (prototipo, enter()): al identificarse, el
+        Administrador llega a «Cuentas», con el menú lateral «Administración» y su única entrada
+        «Cuentas»; sin rol operativo, sin «Panel de control» ni «Módulos». El menú de cuenta dice
+        «Administrador de cuentas»."""
+        administrador = crear_administrador()
 
+        respuesta = self.client.post(
+            reverse("core:iniciar_sesion"),
+            {"username": administrador.email, "password": CLAVE},
+            follow=True,
+        )
+
+        self.assertRedirects(respuesta, reverse("core:usuarios"))
+        self.assertContains(respuesta, '<aside class="side">')
+        self.assertContains(respuesta, '<div class="side-label">Administración</div>')
+        self.assertContains(respuesta, "<span>Cuentas</span>")
+        self.assertNotContains(respuesta, "Panel de control")
+        self.assertNotContains(respuesta, "Módulos")
         self.assertContains(respuesta, "Administrador de cuentas")
-        self.assertNotContains(respuesta, '<aside class="side">')
-        self.assertContains(respuesta, "Operás como")
 
     def test_seg08_el_menu_de_cuenta_ofrece_cerrar_sesion_por_post(self):
         """SEG-08: el menú de cuenta tiene «Cerrar sesión» como formulario POST con CSRF."""
