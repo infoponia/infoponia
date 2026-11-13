@@ -104,6 +104,14 @@
   perfil» entra al menú de cuenta de todas las cuentas, con el mismo nombre para el Administrador (D-31). El lugar
   de la foto queda preparado para la 07. 259 pruebas en total, sin migraciones. Verificada a mano. Rama
   `feature/mi-perfil`. Decisión D-31.
+- Tarea 06b: cuentas vinculadas (USR-VNC-CTA, SEG-09 y SEG-11). Modelo `GrupoCuentas`, `Usuario.grupo` y la
+  restricción `administrador_sin_grupo` (migración `0006`). Servicios `vincular_cuenta`, `desvincular_cuenta` y
+  `cuenta_para_cambiar`, y las consultas `cuentas_vinculadas` y `obtener_cuenta_del_grupo`; restablecer y reactivar
+  sacan la cuenta de su grupo. Bloqueos en el orden de D-30 ampliado (grupo, invariantes, cuenta) y
+  «cambio_simultaneo» cuando el grupo cambió mientras se esperaba. Mi perfil con la tarjeta «Cuentas vinculadas»
+  (vincular, desvincular, «Salir del grupo» y «Cambiar»), «Cambiar de cuenta» en el menú de cuenta y los vínculos en
+  solo lectura en la ficha. Pruebas de concurrencia con dos hilos, verificadas contra bloqueos desactivados. 337
+  pruebas en total. Verificada a mano. Rama `feature/vinculo-cuentas`. Decisión D-32.
 
 ## En curso
 
@@ -119,10 +127,10 @@
    | Tarea | Contenido | Necesita |
    |---|---|---|
    | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b hecha** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
-   | 06 | **06a hecha** (Mi perfil, «Mi perfil» en el menú de cuenta y cambio voluntario de contraseña, con el servicio de la tarea 03). **06b pendiente**: cuentas vinculadas (USR-VNC-CTA, SEG-09 y SEG-11 en restablecer y reactivar), «Cambiar de cuenta» en el menú de cuenta, la tarjeta «Cuentas vinculadas» en Mi perfil y en la ficha, y «Salir del grupo» (regla 8) | 06b: permiso dado el 13/11/2026 para `GrupoCuentas`, `Usuario.grupo` y la restricción `administrador_sin_grupo` (D-17), en la migración `0006` |
+   | 06 | **06a y 06b hechas** (Mi perfil, «Mi perfil» y «Cambiar de cuenta» en el menú de cuenta, cambio voluntario de contraseña con el servicio de la tarea 03, y cuentas vinculadas: USR-VNC-CTA, SEG-09 y SEG-11) | — |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
-   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29) | — |
+   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29); tope de intentos de identificación para el inicio de sesión y `vincular_cuenta` juntos, que reemplazaría a SEG-05 y D-19 (ver «Temas abiertos» y D-32) | — |
 
 ## Registrado el 05/11/2026
 
@@ -158,8 +166,24 @@
 - Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
   de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
 - Fábricas de pruebas que quedaron sin unificar: `dar_contrasena_temporal` (en `test_usr_ini_ses.py` y
-  `test_usr_cmb_ctr.py`, con firmas distintas) y `datos_validos` (en `test_usr_alt_usr.py` y `test_usr_mod_usr.py`,
-  que son funciones distintas). Cuándo: si molestan al escribir las pruebas de la tarea 06.
+  `test_usr_cmb_ctr.py`, con firmas distintas), `datos_validos` (en `test_usr_alt_usr.py` y `test_usr_mod_usr.py`,
+  que son funciones distintas), `poner_temporal` (en `test_usr_vnc_cta.py`: marca la temporal sin cambiar la
+  contraseña, una tercera variante de la temporal) y `contenido_de_auditoria` (duplicada en `test_usr_mod_usr.py` y
+  `test_usr_vnc_cta.py`). Cuándo: en una tarea chica de limpieza, como la de las fábricas (ya terminó la 06).
+- Tope de intentos de identificación: SEG-05 y D-19 no lo tienen. El inicio de sesión y `vincular_cuenta` son el
+  mismo oráculo de contraseñas, así que se evalúan juntos, por ejemplo con una espera creciente y no con el bloqueo
+  de la cuenta (bloquearla dejaría sin acceso a quien tenga un email conocido). Necesita una decisión nueva que
+  reemplace a D-19 y SEG-05, y un modelo o una caché para contar. Cuándo: tarea 09.
+- Bloqueos de la 05 a `no_key=True` (límite conocido de D-32): `_bloquear_gerentes` y
+  `_bloquear_administradores_activos` (05), `_bloquear_cuenta_en_alcance` (04b y 05b) y, por coherencia,
+  `cambiar_contrasena` (03) usan `select_for_update()` (`FOR UPDATE`). Si el Administrador restablece al Gerente justo
+  cuando este corrige la cuenta de otro rol vinculada a la suya, PostgreSQL puede abortar una de las dos operaciones
+  (error 500). Pasarlos a `select_for_update(no_key=True)` lo evita y toca código ya mergeado: hay que revisar de
+  nuevo las pruebas de concurrencia de la 05 y la 06b. Cuándo: tarea chica de limpieza o tarea 09.
+- Diseño de los avisos breves (D-29), para una tarea chica de diseño: en pantallas angostas (menos de 760px) tapan el
+  título y el texto del comienzo de la página; evaluar mostrarlos abajo en celular.
+- Aviso «Operás como …» al cambiar de cuenta (SEG-09): repite lo que ya muestra el inicio (el rol y la cuenta con la
+  que se opera); evaluar si hace falta. Cuándo: la misma tarea chica de diseño.
 - Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
   fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.

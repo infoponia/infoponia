@@ -15,7 +15,7 @@
     if (telon) telon.hidden = !abrir;
     boton.setAttribute("aria-expanded", abrir ? "true" : "false");
     if (abrir) {
-      var primero = menu.querySelector("button, a");
+      var primero = menu.querySelector("button:not(:disabled), a[href]");
       if (primero) primero.focus();
     }
   }
@@ -33,17 +33,18 @@
     });
   }
 
-  // ---- Botón del ojo en los campos de contraseña.
-  document.querySelectorAll("[data-ver-contrasena]").forEach(function (ojo) {
-    ojo.addEventListener("click", function () {
-      var campo = document.getElementById(ojo.getAttribute("data-ver-contrasena"));
-      if (!campo) return;
-      var mostrar = campo.type === "password";
-      campo.type = mostrar ? "text" : "password";
-      ojo.setAttribute("aria-label", mostrar ? "Ocultar contraseña" : "Mostrar contraseña");
-      ojo.querySelector("[data-icono-ver]").hidden = mostrar;
-      ojo.querySelector("[data-icono-ocultar]").hidden = !mostrar;
-    });
+  // ---- Botón del ojo en los campos de contraseña. Se engancha en el documento (no en cada botón) para que
+  // también funcione en una ventana que inserta HTMX después de cargar la página (vincular cuenta).
+  document.addEventListener("click", function (e) {
+    var ojo = e.target.closest("[data-ver-contrasena]");
+    if (!ojo) return;
+    var campo = document.getElementById(ojo.getAttribute("data-ver-contrasena"));
+    if (!campo) return;
+    var mostrar = campo.type === "password";
+    campo.type = mostrar ? "text" : "password";
+    ojo.setAttribute("aria-label", mostrar ? "Ocultar contraseña" : "Mostrar contraseña");
+    ojo.querySelector("[data-icono-ver]").hidden = mostrar;
+    ojo.querySelector("[data-icono-ocultar]").hidden = !mostrar;
   });
 })();
 

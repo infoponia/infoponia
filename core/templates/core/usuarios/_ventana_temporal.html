@@ -1,6 +1,7 @@
 {% load iconos cuentas %}{% comment %}Ventana de la contraseña temporal (equivale a tempPanel y modalHtml 'temp' del prototipo). Se usa en el
 alta, el restablecimiento y la reactivación. Recibe «cuenta», «contrasena_temporal», «modo» ("alta",
-"restablecer" o "reactivar") y «destino» (a dónde lleva «Entendido» si no hay JavaScript). La temporal solo
+"restablecer" o "reactivar"), «destino» (a dónde lleva «Entendido» si no hay JavaScript) y, para restablecer y
+reactivar, «tenia_grupo» (la cuenta estaba en un grupo de cuentas vinculadas y salió de él, SEG-11). La temporal solo
 existe en la respuesta que incluye esta ventana: no se guarda en ningún lado. Bloquea el fondo hasta
 «Entendido» (o Esc); sin JavaScript queda abierta y «Entendido» es un enlace.{% endcomment %}
 <div class="ov" data-ventana>
@@ -10,10 +11,10 @@ existe en la respuesta que incluye esta ventana: no se guarda en ningún lado. B
     <p>Esta es la contraseña temporal de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}). Pasásela por un medio seguro: no se vuelve a mostrar.</p>
     {% elif modo == "restablecer" %}
     <h2 id="ventana-titulo">Contraseña restablecida</h2>
-    <p>Se cerraron las sesiones abiertas de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}). Esta es su nueva contraseña temporal:</p>
+    <p>Se cerraron las sesiones abiertas de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}){% if tenia_grupo %} y la cuenta salió de su grupo de cuentas vinculadas{% endif %}. Esta es su nueva contraseña temporal:</p>
     {% else %}
     <h2 id="ventana-titulo">Cuenta reactivada</h2>
-    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) volvió a estar activa. Esta es su nueva contraseña temporal:</p>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) volvió a estar activa{% if tenia_grupo %} y salió de su grupo de cuentas vinculadas{% endif %}. Esta es su nueva contraseña temporal:</p>
     {% endif %}
     <div class="temp">
       <div class="muted" style="font-size:12px">Contraseña temporal</div>

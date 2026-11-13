@@ -1,10 +1,12 @@
-# Datos del marco con sesión (cabecera, menú lateral, menú de cuenta) disponibles en toda plantilla.
+# Datos del marco con sesión (cabecera, menú lateral, menú de cuenta con las cuentas vinculadas) disponibles en
+# toda plantilla.
 
 from django.conf import settings
 from django.urls import reverse
 
 from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, rol_de
 from core.menu import MENU_POR_ROL, ROLES_DE_CAMPO, SIGLAS
+from core.servicios import cuentas_vinculadas
 
 
 def marco(request):
@@ -36,4 +38,7 @@ def marco(request):
         "menu": menu,
         "modo_campo": modo_campo,
         "mostrar_menu_lateral": bool(menu) and not modo_campo,
+        # SEG-09: las otras cuentas del grupo, para «Cambiar de cuenta» del menú de cuenta. Sin grupo (y para
+        # el Administrador, que no tiene vínculos) es [] y no consulta la base.
+        "cuentas_vinculadas": cuentas_vinculadas(usuario),
     }

@@ -15,6 +15,9 @@
 # contraseña lanza ValidationError con el código «propia_cuenta» (regla 4); reactivar un Gerente con otro
 # activo, «gerente_activo» (regla 5); si la base rechaza la reactivación por una restricción que no se
 # puede identificar, ValidationError con el código «no_se_pudo_reactivar» (nunca un error 500).
+# Tarea 06b (D-17, SEG-11): restablecer y reactivar sacan la cuenta de su grupo de cuentas vinculadas, y el
+# registro de auditoría agrega ``sale_del_grupo`` (id del grupo) solo si la cuenta estaba en uno; si el
+# grupo se disolvió, la cuenta que quedaba sola figura también entre las afectadas.
 
 import json
 from unittest import mock
@@ -28,10 +31,19 @@ from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
 
 from core import servicios
-from core.models import ADMINISTRADOR, Capataz, Gerente, RegistroAuditoria, Usuario, Vendedor
+from core.models import (
+    ADMINISTRADOR,
+    Capataz,
+    Gerente,
+    GrupoCuentas,
+    RegistroAuditoria,
+    Usuario,
+    Vendedor,
+)
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
     CLAVE,
+    agrupar,
     crear_administrador,
     crear_cuenta,
     crear_gerente,
@@ -383,6 +395,98 @@ class UsrModUsrServicioTests(TestCase):
         contenido = contenido_de_auditoria(registro)
         self.assertNotIn(temporal, contenido)
         self.assertNotIn(cuenta.password, contenido)
+
+    # ---- Cuentas vinculadas (tarea 06b): SEG-11, postcondición b y regla 3 ----
+
+    def test_seg11_restablecer_saca_la_cuenta_de_su_grupo(self):
+        """USR-MOD-USR postcondición b y SEG-11: al restablecer la contraseña, la cuenta sale de su grupo de
+        cuentas vinculadas (la persona perdió el control: su dueño la recupera con la temporal). Las demás
+        cuentas del grupo siguen juntas."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        tercera = crear_cuenta(Vendedor, "tercera@infoponia.com", **LAURA)
+        grupo = agrupar(cuenta, otra, tercera)
+
+        servicios.restablecer_contrasena(gerente, cuenta.pk)
+
+        self.assertIsNone(Usuario.objects.get(pk=cuenta.pk).grupo_id)
+        self.assertEqual(Usuario.objects.get(pk=otra.pk).grupo_id, grupo.pk)
+        self.assertEqual(Usuario.objects.get(pk=tercera.pk).grupo_id, grupo.pk)
+
+    def test_seg11_reactivar_saca_la_cuenta_de_su_grupo(self):
+        """USR-MOD-USR postcondición c y SEG-11: la reactivación restablece la contraseña como en la
+        postcondición b, así que la cuenta también sale de su grupo (la baja no la había sacado: regla 2 de
+        USR-BAJ-USR). Las demás siguen juntas."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        tercera = crear_cuenta(Vendedor, "tercera@infoponia.com", **LAURA)
+        grupo = agrupar(cuenta, otra, tercera)
+
+        servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        self.assertIsNone(Usuario.objects.get(pk=cuenta.pk).grupo_id)
+        self.assertEqual(Usuario.objects.get(pk=otra.pk).grupo_id, grupo.pk)
+        self.assertEqual(Usuario.objects.get(pk=tercera.pk).grupo_id, grupo.pk)
+
+    def test_seg11_restablecer_disuelve_un_grupo_de_dos(self):
+        """USR-MOD-USR postcondición b, SEG-11 y postcondición b de USR-VNC-CTA: si el grupo queda con una
+        sola cuenta, el grupo deja de existir y esa cuenta queda sin grupo."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        agrupar(cuenta, otra)
+
+        servicios.restablecer_contrasena(gerente, cuenta.pk)
+
+        self.assertIsNone(Usuario.objects.get(pk=cuenta.pk).grupo_id)
+        self.assertIsNone(Usuario.objects.get(pk=otra.pk).grupo_id)
+        self.assertFalse(GrupoCuentas.objects.exists())
+
+    def test_post_d_la_auditoria_registra_la_salida_del_grupo(self):
+        """USR-MOD-USR postcondición d y SEG-14: si la cuenta estaba en un grupo, el registro lo indica
+        (``sale_del_grupo``) para el restablecimiento y para la reactivación. Si el grupo se disolvió, la
+        cuenta que quedaba sola figura también entre las afectadas. Sin grupo, el registro no cambia."""
+        gerente = crear_gerente()
+        restablecida = crear_cuenta(Capataz, "restablecida@infoponia.com", **LAURA)
+        companera_1 = crear_cuenta(Vendedor, "c1@infoponia.com", **LAURA)
+        companera_2 = crear_cuenta(Vendedor, "c2@infoponia.com", **LAURA)
+        reactivada = crear_cuenta(Capataz, "reactivada@infoponia.com", activo=False, **LAURA)
+        sola = crear_cuenta(Vendedor, "sola@infoponia.com", **LAURA)
+        grupo_de_tres = agrupar(restablecida, companera_1, companera_2)
+        grupo_de_dos = agrupar(reactivada, sola)
+
+        servicios.restablecer_contrasena(gerente, restablecida.pk)
+        servicios.reactivar_usuario(gerente, reactivada.pk)
+
+        restablecimiento = RegistroAuditoria.objects.get(
+            accion=RegistroAuditoria.Accion.RESTABLECIMIENTO
+        )
+        self.assertEqual(restablecimiento.afectados, [{"modelo": "core.usuario", "id": restablecida.pk}])
+        self.assertEqual(restablecimiento.detalle, {"sale_del_grupo": grupo_de_tres.pk})
+        reactivacion = RegistroAuditoria.objects.get(accion=RegistroAuditoria.Accion.REACTIVACION)
+        self.assertEqual(
+            {a["id"] for a in reactivacion.afectados}, {reactivada.pk, sola.pk}
+        )
+        self.assertEqual(
+            reactivacion.detalle,
+            {"estado": ["inactivo", "activo"], "sale_del_grupo": grupo_de_dos.pk},
+        )
+
+    def test_regla_3_cambiar_el_email_no_afecta_las_cuentas_vinculadas(self):
+        """USR-MOD-USR regla 3: cambiar el email no afecta las cuentas vinculadas; la cuenta sigue en su
+        grupo, con las mismas compañeras."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        grupo = agrupar(cuenta, otra)
+
+        self.modificar(gerente, cuenta, email="nuevo@infoponia.com")
+
+        self.assertEqual(Usuario.objects.get(pk=cuenta.pk).email, "nuevo@infoponia.com")
+        self.assertEqual(Usuario.objects.get(pk=cuenta.pk).grupo_id, grupo.pk)
+        self.assertEqual(Usuario.objects.get(pk=otra.pk).grupo_id, grupo.pk)
 
     # ---- Decisiones D-22 y D-28 ----
 

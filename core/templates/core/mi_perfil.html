@@ -6,7 +6,9 @@ pide la contraseña actual). Tarea 06a.
   ven a quién pedírselo («quien_gestiona»).
 - Foto de perfil: tarea 07 (SEG-19). Por ahora va el avatar con la sigla, sin botones; los botones «Elegir foto»,
   «Tomar foto» y «Quitar» del prototipo van en la fila .photo-row.
-- Cuentas vinculadas: tarea 06b (USR-VNC-CTA). Solo se muestra lo que existe (D-25).
+- Cuentas vinculadas (tarea 06b, USR-VNC-CTA): la lista del grupo con «Cambiar» (solo donde el servicio lo
+  aceptaría), «Desvincular», «Salir del grupo» (regla 8, D-32) y «Vincular cuenta». Las ventanas se abren sobre
+  esta pantalla (HTMX) o llegan abiertas (sin JavaScript). El Administrador no tiene vínculos (regla 5).
 - La lista de requisitos se marca al escribir con politica_contrasena.js, incluido «distinta de la contraseña
   actual», que el navegador puede comprobar porque la persona la escribe (D-27). El servidor valida siempre.{% endcomment %}
 {% block titulo %}Mi perfil · InfoPonia{% endblock %}
@@ -64,6 +66,61 @@ pide la contraseña actual). Tarea 06a.
       <button class="btn btn-primary" type="submit">Guardar contraseña</button>
     </form>
   </div>
+
+  {# USR-VNC-CTA (tarea 06b): las cuentas del grupo, para pasar a ellas, desvincularlas o salir del grupo. #}
+  {% if es_administrador %}
+  <div class="card">
+    <div class="card-title">Cuentas vinculadas</div>
+    <p class="muted">Las cuentas de Administrador no se vinculan con otras.</p>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="row" style="margin-bottom:6px">
+      <div class="card-title" style="margin:0">Cuentas vinculadas</div>
+      <span class="spacer"></span>
+      <a class="btn btn-ghost btn-sm" href="{% url 'core:vincular_cuenta' %}"
+         hx-get="{% url 'core:vincular_cuenta' %}" hx-target="#ventana-perfil" hx-swap="innerHTML">{% icono "plus" 14 %} Vincular cuenta</a>
+    </div>
+    <p class="hint" style="margin-bottom:6px">Si tenés más de una cuenta, vinculalas para pasar de una a otra sin volver a ingresar.</p>
+    {% if vinculadas %}
+    <ul class="vlist">
+      {% for otra in vinculadas %}
+      <li>
+        <div class="avatar" style="background:{% if otra.se_puede_pasar %}var(--primary){% else %}var(--status-neutral){% endif %}">{{ otra|sigla }}</div>
+        <div class="t"><b>{{ otra|rol_visible }} {% include "core/usuarios/_insignias.html" with cuenta=otra %}</b><span class="mono">{{ otra.email }}</span></div>
+        {% if otra.se_puede_pasar %}
+        <form method="post" action="{% url 'core:cambiar_de_cuenta' %}">
+          {% csrf_token %}
+          <input type="hidden" name="cuenta_id" value="{{ otra.pk }}">
+          <button class="btn btn-primary btn-sm" type="submit">Cambiar</button>
+        </form>
+        {% endif %}
+        <a class="btn btn-ghost btn-sm" href="{% url 'core:desvincular_cuenta' otra.pk %}"
+           hx-get="{% url 'core:desvincular_cuenta' otra.pk %}" hx-target="#ventana-perfil" hx-swap="innerHTML">Desvincular</a>
+      </li>
+      {% endfor %}
+    </ul>
+    {# Regla 8 y D-32: también se puede sacar del grupo la cuenta con la que se opera. El prototipo no lo ofrece. #}
+    <div class="row" style="margin-top:12px">
+      <a class="btn btn-ghost btn-sm" href="{% url 'core:desvincular_cuenta' user.pk %}"
+         hx-get="{% url 'core:desvincular_cuenta' user.pk %}" hx-target="#ventana-perfil" hx-swap="innerHTML">Salir del grupo</a>
+    </div>
+    {% else %}
+    <p class="muted" style="padding:10px 0">Todavía no vinculaste ninguna cuenta.</p>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 <script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>
+{% endblock %}
+
+{% block ventanas %}
+{# Ventana de vincular o de desvincular: con HTMX la inserta en este contenedor; sin JavaScript, llega abierta. #}
+<div id="ventana-perfil">
+  {% if ventana == "vincular" %}
+    {% include "core/_ventana_vincular.html" with form=form_vincular %}
+  {% elif ventana == "desvincular" %}
+    {% include "core/_ventana_desvincular.html" with cuenta=cuenta_ventana %}
+  {% endif %}
+</div>
 {% endblock %}

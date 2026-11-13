@@ -15,6 +15,10 @@ urlpatterns = [
     # Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR; tarea 06a).
     path("mi-perfil/", views.mi_perfil, name="mi_perfil"),
     path("mi-perfil/contrasena/", views.cambiar_mi_contrasena, name="cambiar_mi_contrasena"),
+    # Cuentas vinculadas (USR-VNC-CTA y SEG-09; tarea 06b).
+    path("mi-perfil/vincular/", views.vincular, name="vincular_cuenta"),
+    path("mi-perfil/desvincular/<int:cuenta_id>/", views.desvincular, name="desvincular_cuenta"),
+    path("cambiar-de-cuenta/", views.cambiar_de_cuenta, name="cambiar_de_cuenta"),
     # Usuarios del Gerente (USR-CNS-USR y USR-ALT-USR; tarea 04a).
     path("usuarios/", views.usuarios, name="usuarios"),
     path("usuarios/nuevo/", views.usuario_nuevo, name="usuario_nuevo"),
