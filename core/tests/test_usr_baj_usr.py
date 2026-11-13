@@ -11,7 +11,7 @@
 #
 # Fuera de estas pruebas, por no existir todavía lo que las motiva (ver «Lo que queda para más adelante»
 # de docs/casos_de_uso/usuarios.md): postcondiciones c, e, f y g y regla 4 (pendientes, invernaderos,
-# pedidos y entregas); regla 2 (cuentas vinculadas, tarea 06).
+# pedidos y entregas). La regla 2 (cuentas vinculadas) se prueba desde la tarea 06b.
 
 import json
 from unittest import mock
@@ -24,7 +24,7 @@ from django.urls import reverse
 from core import servicios
 from core.models import ADMINISTRADOR, Capataz, Gerente, RegistroAuditoria, Usuario, Vendedor
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
-from core.tests.fabricas import CLAVE, crear_administrador, crear_cuenta, crear_gerente
+from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_cuenta, crear_gerente
 
 # Estas pruebas verifican «Laura Benítez» como nombre de la cuenta: se pasa explícito a crear_cuenta.
 LAURA = {"nombre": "Laura", "apellido": "Benítez"}
@@ -115,6 +115,21 @@ class UsrBajUsrServicioTests(TestCase):
         # USR-INI-SES). Cortar una sesión que ya estaba abierta (postcondición b) lo hace ``get_user``, y
         # eso lo cubre la prueba de vista con dos clientes.
         self.assertFalse(self.client.login(email="laura@infoponia.com", password=CLAVE))
+
+    def test_regla_2_la_baja_deja_la_cuenta_en_su_grupo(self):
+        """USR-BAJ-USR regla 2 (tarea 06b, D-17): la baja no afecta a las cuentas vinculadas; la cuenta sigue
+        en su grupo, aunque nadie pueda pasar a ella mientras esté inactiva (SEG-09)."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        grupo = agrupar(cuenta, otra)
+
+        servicios.baja_usuario(gerente, cuenta.pk)
+
+        guardada = Usuario.objects.get(pk=cuenta.pk)
+        self.assertFalse(guardada.is_active)
+        self.assertEqual(guardada.grupo_id, grupo.pk)
+        self.assertEqual(Usuario.objects.get(pk=otra.pk).grupo_id, grupo.pk)
 
     def test_post_d_audita_el_cambio_de_estado(self):
         """USR-BAJ-USR postcondición d, SEG-14 y D-22: queda un registro de auditoría con quién actuó,

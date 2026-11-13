@@ -1,0 +1,23 @@
+{% load iconos %}{% comment %}Ventana de «Vincular cuenta» (modalHtml 'link' del prototipo; USR-VNC-CTA regla 1). Recibe «form»
+(FormularioVincularCuenta). Con HTMX se inserta sobre Mi perfil; sin JavaScript, Mi perfil llega con la ventana
+abierta. El envío es un POST común. El recuadro «Solo prototipo» no va (no es parte del sistema). La contraseña
+nunca vuelve escrita en el campo. El error general («no pudimos vincular la cuenta…») es el mensaje genérico de
+SEG-06: no dice qué dato falló.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Vincular cuenta</h2>
+    <p>Ingresá el email y la contraseña de la otra cuenta para demostrar que es tuya.</p>
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+    {% endif %}
+    <form method="post" action="{% url 'core:vincular_cuenta' %}" novalidate>
+      {% csrf_token %}
+      {% include "core/usuarios/_campo.html" with campo=form.email requerido=True %}
+      {% include "core/_campo_contrasena.html" with campo=form.contrasena autocompletar="off" %}
+      <div class="acts">
+        <button class="btn btn-primary" type="submit">Vincular</button>
+        <a class="btn btn-ghost" href="{% url 'core:mi_perfil' %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

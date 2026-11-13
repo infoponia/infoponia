@@ -85,6 +85,35 @@ class FormularioCambioContrasena(FormularioContrasenaNueva):
     field_order = ["contrasena_actual", "contrasena_nueva", "contrasena_repetida"]
 
 
+class FormularioVincularCuenta(forms.Form):
+    """Email y contraseña de la otra cuenta, para vincularla (USR-VNC-CTA regla 1, modalHtml 'link').
+
+    Ningún campo es obligatorio acá a propósito: las reglas (los dos datos presentes, la contraseña correcta,
+    que la cuenta sea vinculable) las aplica ``core.servicios.vincular_cuenta``, que es la única fuente, y la
+    vista pasa sus errores a este formulario. La contraseña nunca vuelve escrita en el campo.
+    """
+
+    email = forms.CharField(
+        label="Email de la otra cuenta",
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "field-input",
+                "inputmode": "email",
+                "autocomplete": "off",
+                "autocapitalize": "off",
+                "data-foco-inicial": "",
+            }
+        ),
+    )
+    contrasena = forms.CharField(
+        label="Contraseña de la otra cuenta",
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "off"}),
+    )
+
+
 # ---- Cuentas del Gerente y del Administrador (USR-CNS-USR y USR-ALT-USR) ----
 
 

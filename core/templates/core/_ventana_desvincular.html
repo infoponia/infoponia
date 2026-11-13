@@ -1,0 +1,23 @@
+{% load iconos cuentas %}{% comment %}Ventana de confirmación de «Desvincular» y «Salir del grupo» (modalHtml 'unlink' del prototipo;
+USR-VNC-CTA reglas 6 y 8, D-32). Recibe «cuenta» (la que sale del grupo), «propia» (True si es la cuenta con la que se
+opera: «Salir del grupo») y, si el servicio rechazó la operación, «error». La operación es un POST a la misma
+dirección; abrir la ventana (GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if propia %}
+    <h2 id="ventana-titulo">¿Salir del grupo de cuentas vinculadas?</h2>
+    <p>Tu cuenta <span class="mono">{{ cuenta.email }}</span> ({{ cuenta|rol_visible }}) sale del grupo: dejás de poder pasar a las demás desde acá, y ellas a esta. Ninguna cuenta se borra.</p>
+    {% else %}
+    <h2 id="ventana-titulo">¿Desvincular esta cuenta?</h2>
+    <p><span class="mono">{{ cuenta.email }}</span> ({{ cuenta|rol_visible }}) sale de tu grupo de cuentas. Dejás de poder pasar a ella desde acá, pero la cuenta no se borra.</p>
+    {% endif %}
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'core:desvincular_cuenta' cuenta.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'core:mi_perfil' %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit">{% if propia %}Salir del grupo{% else %}Desvincular{% endif %}</button>
+      </div>
+    </form>
+  </div>
+</div>

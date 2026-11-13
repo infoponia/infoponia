@@ -1,8 +1,8 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos cuentas %}
 {% comment %}Modificar datos de una cuenta (USR-MOD-USR, la parte de edición de vUsuario del prototipo). El rol se
 ve bloqueado: no se modifica (regla 2, D-11). El formulario va con «novalidate»: el teléfono se valida al
-confirmar. Sin el campo de invernadero del Transportista (para más adelante) ni el aviso sobre las cuentas
-vinculadas (tarea 06).{% endcomment %}
+confirmar. Sin el campo de invernadero del Transportista (para más adelante). El email lleva el aviso de la regla 3
+de USR-MOD-USR: cambiarlo no afecta las cuentas vinculadas.{% endcomment %}
 {% block titulo %}Modificar {{ cuenta.get_full_name }} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
@@ -21,7 +21,7 @@ vinculadas (tarea 06).{% endcomment %}
         {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
         {% include "core/usuarios/_campo.html" with campo=form.apellido requerido=True %}
       </div>
-      {% include "core/usuarios/_campo.html" with campo=form.email requerido=True %}
+      {% include "core/usuarios/_campo.html" with campo=form.email requerido=True ayuda="Cambiar el email no afecta las cuentas vinculadas." %}
       <div class="grid2">
         {% include "core/usuarios/_campo.html" with campo=form.telefono ayuda="Por ejemplo +54 376 400-1001" %}
         <div class="fld">

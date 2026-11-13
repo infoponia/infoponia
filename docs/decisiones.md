@@ -933,3 +933,123 @@ Formato:
   - Pruebas: `core/tests/test_usr_gst_prf.py` (12, incluida `test_d31_`) y 10 nuevas en `UsrCmbCtrVistaTests`
     (`core/tests/test_usr_cmb_ctr.py`). Sin migraciones.
 - Estado: vigente
+
+## D-32 — Cuentas vinculadas: grupo, orden de verificaciones y bloqueos (tarea 06b)
+
+- Fecha: 13/11/2026
+- Decidió: Lautaro Fernández (durante la planificación de la tarea 06 y la revisión de la 06b, a propuesta de Claude)
+- Antes: D-17 fijó el grupo de cuentas vinculadas, quién lo arma, cómo se pasa de una cuenta a otra y SEG-11, pero
+  no cómo se implementa: qué tabla, cómo se unen y se disuelven los grupos, en qué orden se verifica y se bloquea,
+  ni qué ve quien gestiona una cuenta con vínculos. La regla 8 de USR-VNC-CTA dice que la persona puede desvincular
+  «no solo la cuenta con la que está operando», pero el prototipo (`vPerfil`) lista solo las otras. La regla 3 de
+  USR-CNS-USR y la regla 7 de USR-MOD-USR piden mostrar los vínculos en solo lectura, y esas cuentas pueden estar
+  fuera del alcance de quien mira (D-28). SEG-05 y D-19 no ponen límite a los intentos de identificación.
+- Decisión:
+  - Modelo (migración `0006`, con el permiso explícito del 13/11/2026 que piden D-17 y `CLAUDE.md`):
+    `GrupoCuentas`, solo con `id`; `Usuario.grupo`, clave foránea opcional con `PROTECT`; y la restricción
+    `administrador_sin_grupo` (regla 5), que respalda al servicio. Un grupo con una sola cuenta no existe: lo
+    borra el servicio.
+  - Servicios en `core/servicios.py`: `vincular_cuenta`, `desvincular_cuenta` y `cuenta_para_cambiar` (SEG-09), y
+    las consultas de solo lectura `cuentas_vinculadas` y `obtener_cuenta_del_grupo`. `restablecer_contrasena` y
+    `reactivar_usuario` sacan la cuenta de su grupo (SEG-11) con `_sacar_del_grupo`, que comparten con desvincular.
+  - Al vincular, sin grupos se crea uno; si solo una cuenta tiene grupo, la otra se suma; si cada una tiene el
+    suyo, queda el de menor id y el otro se borra.
+  - Auditoría. Vinculación: afectadas, las dos cuentas y las que cambiaron de grupo; detalle `{"grupo",
+    "grupo_unido"}`. Desvinculación: la cuenta que sale y, si el grupo se disolvió, la que quedaba; detalle
+    `{"grupo", "disuelto"}`. Restablecimiento y reactivación suman `sale_del_grupo` (id del grupo) solo si la
+    cuenta estaba en uno, y la que quedaba sola figura entre las afectadas. El cambio de cuenta no se audita (SEG-14).
+  - `PermissionDenied`, con la misma respuesta, para una cuenta de otro grupo, una sin grupo y un id que no existe,
+    tanto al desvincular (también al abrir su ventana) como al cambiar de cuenta. Pasar a la propia cuenta también
+    da `PermissionDenied`. Esto reemplaza al 403 y 404 distintos de D-28 en este caso.
+  - Orden de las verificaciones de `vincular_cuenta`. Antes de bloquear: que quien opera pueda vincular, email y
+    contraseña presentes, «misma_cuenta» y «ya_vinculada» (solo para la cuenta propia y las de su grupo) y la
+    contraseña de la otra cuenta junto con que sea vinculable; se guarda el resumen de contraseña leído en ese
+    momento. Después de bloquear, con todo releído: (a) la otra cuenta sigue siendo vinculable (activa, sin
+    temporal, no Administrador) y su resumen de contraseña es el mismo → si no, «no_se_pudo_vincular»; (b) recién
+    entonces, si cambió el grupo de alguna de las dos cuentas → «cambio_simultaneo».
+  - `cambio_simultaneo` es un rechazo con mensaje y no un reintento. Un `IntegrityError` al unir los grupos se
+    informa también como «cambio_simultaneo» (con `raise ... from error`); nunca llega un 500.
+  - Orden de los bloqueos de toda operación que cambia quién está en un grupo (amplía D-30): 1) las filas de
+    `GrupoCuentas`, en orden de id; 2) los invariantes, si corresponde; 3) que quien actúa siga activo; 4) las
+    cuentas, en orden de id. Los bloqueos nuevos son `FOR NO KEY UPDATE` (`select_for_update(no_key=True)`).
+    Restablecer y reactivar relevan el grupo de la cuenta después de bloquearla (`cuida_grupo`) y, si cambió, dan
+    «cambio_simultaneo».
+  - El cambio de cuenta no bloquea nada: `login()` guarda el resumen de contraseña de la cuenta a la que se pasa,
+    así que si después se la restablece, Django cierra esa sesión; si se la da de baja, deja de cargarla.
+  - «Salir del grupo» (regla 8): Mi perfil ofrece sacar del grupo también la cuenta con la que se opera. Esto se
+    aparta del prototipo, que solo lista las otras cuentas.
+  - La ficha de quien gestiona una cuenta muestra sus vínculos con rol, email y estado, en solo lectura; la
+    cuenta vinculada lleva un enlace a su ficha solo si está dentro del alcance de quien mira.
+  - Los textos del prototipo sobre el grupo en las ventanas de restablecer, reactivar y baja («sale de su grupo»,
+    «sus cuentas vinculadas no cambian») se muestran solo si la cuenta tiene un grupo. El prototipo los muestra
+    siempre.
+  - Riesgos aceptados: (1) no hay tope de intentos de identificación (SEG-05, D-19), y `vincular_cuenta` responde
+    sí o no a un par de email y contraseña igual que el inicio de sesión; no abre una vía nueva, porque el inicio
+    de sesión ya la ofrece sin necesitar sesión. Un tope solo en el vínculo no protegería nada: se evalúa para los
+    dos juntos en la tarea 09. (2) Si alguien adivina la contraseña de una cuenta y la vincula a la suya, el
+    vínculo sobrevive a que su dueño cambie la contraseña voluntariamente (regla 4 de USR-CMB-CTR: las cuentas
+    vinculadas se mantienen). Salidas: restablecer o reactivar la cuenta la saca del grupo (SEG-11); su dueño ve
+    el vínculo en su Mi perfil y puede usar «Salir del grupo» (regla 8); la vinculación queda en la auditoría.
+- Por qué:
+  - Un modelo propio y una clave foránea, y no pares de cuentas, hacen que el vínculo sea transitivo por
+    estructura (D-17); la restricción de la base respalda la regla 5 aunque un servicio nuevo la olvidara.
+  - Queda el grupo de menor id al unir para que el resultado no dependa del orden en que se vinculó. La auditoría
+    incluye a las cuentas que cambiaron de grupo para poder encontrar cualquier cuenta por su id, como en
+    restablecer y reactivar.
+  - El mismo `PermissionDenied` para todos los casos, porque desde Mi perfil cualquier cuenta podría probar ids
+    para averiguar cuáles existen: con respuestas distintas, un id inexistente se distinguiría de uno de otro grupo.
+    Pasar a la propia cuenta no tiene sentido: sería volver a iniciar sesión con la misma.
+  - La contraseña se verifica antes de bloquear porque calcular el resumen es lento y no se deben mantener
+    bloqueos tomados durante ese cálculo. Se guarda el resumen leído y se vuelve a comparar después de bloquear:
+    si su dueño la cambió en el intervalo, la contraseña que la persona indicó ya no es la de la cuenta.
+    (a) va antes que (b) porque un restablecimiento que disuelve el grupo de la otra cuenta también le cambia el
+    grupo, y entonces corresponde el mensaje genérico (la cuenta ya no se puede vincular), no «las cuentas
+    cambiaron». Cambiar el grupo de una cuenta que sigue siendo vinculable sí es «cambio_simultaneo».
+  - Se rechaza y no se reintenta porque reintentar tomaría bloqueos fuera de orden y podría provocar un
+    deadlock, que la persona vería como un error 500.
+  - Se bloquea el grupo antes que las cuentas por el mismo motivo que en D-30: si cada operación bloqueara primero
+    su cuenta y después el grupo, dos operaciones se esperarían mutuamente. Evidencia (13/11/2026): se
+    desactivó en memoria el bloqueo del grupo de `restablecer_contrasena` y la prueba
+    `test_seg11_restablecer_y_vincular_a_la_vez_no_dejan_la_temporal_en_el_grupo` falló con
+    `OperationalError: deadlock detected`; sin ningún bloqueo en `vincular_cuenta`, las dos vinculaciones
+    simultáneas tuvieron éxito y se pisaron (`2 != 1`) y una restablecer con vincular terminó con un
+    `IntegrityError` sin traducir; sin ningún bloqueo en `desvincular_cuenta`, el grupo quedó con una sola
+    cuenta. Con todo restituido, las tres pasan.
+  - `FOR NO KEY UPDATE` y no `FOR UPDATE`, por cómo se guarda la auditoría: al insertar el registro de auditoría,
+    la clave foránea hacia quien actúa (`RegistroAuditoria.usuario`) toma un bloqueo `FOR KEY SHARE` sobre la fila de
+    esa cuenta. `FOR UPDATE` choca con ese bloqueo (es el único modo con el que choca `FOR KEY SHARE`);
+    `FOR NO KEY UPDATE` no choca, porque no modifica la clave. Entre nuestras operaciones sigue habiendo exclusión
+    mutua, porque `FOR NO KEY UPDATE` sí choca consigo mismo. Comprobado el 13/11/2026 contra la base de pruebas, con
+    dos transacciones: con `FOR UPDATE` tomado sobre la cuenta, la inserción de la auditoría que la referencia
+    esperó y venció su `lock_timeout` de 1,5 s; con `FOR NO KEY UPDATE`, se insertó sin esperar. La tabla de
+    conflictos entre bloqueos de fila está en la documentación de PostgreSQL 17 (Explicit Locking, Tabla 13.3).
+  - El cambio de cuenta no necesita bloquear porque el resumen de contraseña guardado en la sesión ya cubre los dos
+    casos peligrosos (restablecimiento y baja), sin tomar ningún bloqueo en cada cambio.
+  - «Salir del grupo» porque la regla 8 dice que la persona puede desvincular también la cuenta con la que opera,
+    y sin ese botón tendría que entrar a otra cuenta del grupo para sacar la que está usando.
+  - Enlace a la ficha solo si está en el alcance para que ningún enlace lleve a un 403 (como `acciones_permitidas`,
+    D-30); quien mira ve el vínculo igual, que es lo que piden las reglas.
+  - Los textos sobre el grupo solo si la cuenta tiene uno porque decir «sale de su grupo» de una cuenta sin grupo
+    sería falso; después de restablecer, la ventana de la contraseña temporal usa lo que la cuenta tenía antes.
+  - Sin tope de intentos porque lo dicen SEG-05 y D-19 y no cambia con este vínculo; el riesgo del vínculo que
+    sobrevive se acepta porque las tres salidas lo acotan y cambiarlo contradiría la regla 4 de USR-CMB-CTR.
+- Fuentes: `docs/casos_de_uso/usuarios.md` (USR-VNC-CTA reglas 1 a 8; USR-GST-PRF reglas 1 y 3; USR-CNS-USR regla
+  3; USR-MOD-USR postcondiciones b y c, reglas 3 y 7; USR-BAJ-USR regla 2; USR-CMB-CTR regla 4; SEG-04, SEG-05,
+  SEG-06, SEG-09, SEG-11, SEG-14 y SEG-15); prototipo `docs/prototipos/cuentas_y_seguridad.html` (`vPerfil`,
+  `accountPop`, `modalHtml` 'link', 'unlink', 'reset', 'react' y 'baja', `link-do`); D-17, D-19, D-22, D-28, D-29,
+  D-30 y D-31; `CLAUDE.md` (tests y bloqueos); documentación de PostgreSQL 17 (bloqueos de fila).
+- Consecuencias:
+  - Migración `0006`, sin cambio de datos: no hay grupos todavía. Render la aplica en el despliegue.
+  - Límite conocido: restablecer y reactivar bloquean la cuenta con `FOR UPDATE`, como desde la 05. Si el
+    Administrador restablece al Gerente justo cuando el Gerente corrige, desde su cuenta, la cuenta de otro rol
+    vinculada a la suya, PostgreSQL puede abortar una de las dos operaciones, que la persona vería como un error
+    500. Pasar los bloqueos existentes a `no_key=True` lo evitaría; no se incluye en esta tarea (queda en «Temas
+    abiertos» de `docs/estado.md`).
+  - Las pruebas que simulan un cambio entre la verificación y el bloqueo lo hacen dentro de la transacción del
+    servicio y se deshace con el rechazo; solo verifican qué responde el servicio. Que dos operaciones reales se
+    esperen entre sí lo prueban las de concurrencia, con una ventana de 1,5 s (`core/tests/concurrencia.py`).
+  - Quien tiene un grupo suma una consulta por pantalla (el menú de cuenta); sin grupo no consulta la base.
+  - El tope de intentos de identificación, para el inicio de sesión y el vínculo juntos, queda para la tarea 09:
+    necesita una decisión nueva que reemplace a SEG-05 y D-19, y un modelo o una caché para contar.
+  - El DER se actualiza después, a partir del código.
+- Estado: vigente

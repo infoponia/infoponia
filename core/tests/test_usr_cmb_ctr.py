@@ -13,9 +13,9 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Capataz, RegistroAuditoria
+from core.models import Capataz, GrupoCuentas, RegistroAuditoria, Usuario, Vendedor
 from core.servicios import cambiar_contrasena
-from core.tests.fabricas import CLAVE, crear_administrador, crear_capataz
+from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_capataz, crear_cuenta
 
 # Nombre y apellido largos, para poder probar el parecido con los datos de la cuenta (SEG-03).
 MAXIMILIANO = {"first_name": "Maximiliano", "last_name": "Fernández"}
@@ -136,6 +136,19 @@ class UsrCmbCtrServicioTests(TestCase):
             with self.subTest(dato=dato):
                 self.assertRechazaPorPolitica(nueva, "password_too_similar")
                 Capataz.objects.all().delete()
+
+    def test_regla_4_las_cuentas_vinculadas_se_mantienen(self):
+        """USR-CMB-CTR regla 4 (tarea 06b, D-17): cambiar la propia contraseña no saca a la cuenta de su
+        grupo de cuentas vinculadas ni toca a las demás. (Restablecerla, en cambio, sí la saca: SEG-11.)"""
+        capataz = crear_capataz(**MAXIMILIANO)
+        otra = crear_cuenta(Vendedor, email="vendedor@infoponia.com")
+        grupo = agrupar(capataz, otra)
+
+        cambiar_contrasena(capataz, NUEVA, contrasena_actual=CLAVE)
+
+        self.assertEqual(Usuario.objects.get(pk=capataz.pk).grupo_id, grupo.pk)
+        self.assertEqual(Usuario.objects.get(pk=otra.pk).grupo_id, grupo.pk)
+        self.assertEqual(GrupoCuentas.objects.count(), 1)
 
     # ---- Postcondiciones ----
 

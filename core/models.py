@@ -1,6 +1,6 @@
-# Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, y el
-# registro de auditoría. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-18, D-19 y D-22 en
-# docs/decisiones.md.
+# Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, el grupo de
+# cuentas vinculadas y el registro de auditoría. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17, D-18, D-19
+# y D-22 en docs/decisiones.md.
 
 from datetime import timedelta
 
@@ -101,6 +101,22 @@ class UsuarioManager(BaseUserManager.from_queryset(UsuarioQuerySet)):
         return self.create_user(email, password, **extra_fields)
 
 
+class GrupoCuentas(models.Model):
+    """Grupo de cuentas vinculadas de una misma persona (D-17, USR-VNC-CTA).
+
+    No tiene datos propios: es el conjunto de las cuentas que apuntan a él con ``Usuario.grupo``. Un grupo
+    con una sola cuenta no existe: el servicio lo borra cuando una desvinculación lo deja así (postcondición b
+    de USR-VNC-CTA). Los grupos los crean, unen y borran los servicios de ``core/servicios.py``, nunca a mano.
+    """
+
+    class Meta:
+        verbose_name = "Grupo de cuentas vinculadas"
+        verbose_name_plural = "Grupos de cuentas vinculadas"
+
+    def __str__(self):
+        return f"Grupo {self.pk}"
+
+
 class Usuario(AbstractUser):
     """Usuario de InfoPonia: sin username, con email único y un rol fijo (D-01 a D-03).
 
@@ -118,6 +134,9 @@ class Usuario(AbstractUser):
     El email se guarda en minúsculas (``save()`` y ``clean()``) y es único sin distinguir
     mayúsculas (SEG-01, D-19). ``fecha_contrasena_temporal`` guarda cuándo se generó la
     contraseña temporal de la cuenta, y está vacía si la contraseña no es temporal (D-18).
+
+    ``grupo`` agrupa las cuentas vinculadas de una misma persona (D-17): es opcional y, mientras tenga cuentas,
+    el grupo no se borra (``PROTECT``). Las cuentas de Administrador no tienen grupo (regla 5 de USR-VNC-CTA).
     """
 
     class Rol(models.TextChoices):
@@ -153,6 +172,17 @@ class Usuario(AbstractUser):
         editable=False,
     )
 
+    # D-17: grupo de cuentas vinculadas; opcional. PROTECT: un grupo no se borra mientras tenga cuentas (el
+    # servicio las saca antes de borrarlo).
+    grupo = models.ForeignKey(
+        GrupoCuentas,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="cuentas",
+        verbose_name="grupo de cuentas vinculadas",
+    )
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
 
@@ -174,6 +204,12 @@ class Usuario(AbstractUser):
                 fields=["rol"],
                 condition=Q(rol="gerente", is_active=True),
                 name="un_solo_gerente_activo",
+            ),
+            # Regla 5 de USR-VNC-CTA y D-17: las cuentas de Administrador no se vinculan. Respaldo de la
+            # base: la regla la controla ``vincular_cuenta``.
+            models.CheckConstraint(
+                condition=Q(grupo__isnull=True) | Q(is_superuser=False),
+                name="administrador_sin_grupo",
             ),
             # SEG-01, D-19: el email es único sin distinguir mayúsculas. Se mantiene también
             # ``unique=True`` en el campo: Django exige un campo único para USERNAME_FIELD y no

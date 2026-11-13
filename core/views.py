@@ -1,17 +1,19 @@
 # Vistas de core: inicio de sesión, cierre de sesión, elegir contraseña (cambio forzado por contraseña
-# temporal), Mi perfil con el cambio voluntario de contraseña, inicio de cada cuenta y cuentas del Gerente y
-# del Administrador. Solo orquestan: validan la entrada, llaman al servicio y renderizan.
+# temporal), Mi perfil con el cambio voluntario de contraseña y las cuentas vinculadas, inicio de cada cuenta
+# y cuentas del Gerente y del Administrador. Solo orquestan: validan la entrada, llaman al servicio y
+# renderizan.
 
 from django.contrib import messages
-from django.contrib.auth import logout, update_session_auth_hash
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST
 from django.views.decorators.vary import vary_on_headers
 
-from core.acceso import ADMINISTRADOR, rol_de, rol_requerido
+from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, rol_de, rol_requerido
 from core.forms import (
     FormularioAltaUsuario,
     FormularioCambioContrasena,
@@ -19,22 +21,29 @@ from core.forms import (
     FormularioFiltroUsuarios,
     FormularioInicioSesion,
     FormularioModificarUsuario,
+    FormularioVincularCuenta,
 )
 from core.middleware import permitido_con_contrasena_temporal
 from core.models import Usuario
 from core.servicios import (
+    MENSAJE_FUERA_DEL_GRUPO,
     acciones_permitidas,
     alta_usuario,
     baja_usuario,
     cambiar_contrasena,
     consultar_usuarios,
+    cuenta_para_cambiar,
+    cuentas_vinculadas,
+    desvincular_cuenta,
     gerente_activo_que_impide_el_alta,
     gerente_activo_que_impide_reactivar,
     modificar_usuario,
     obtener_cuenta,
+    obtener_cuenta_del_grupo,
     quien_gestiona,
     reactivar_usuario,
     restablecer_contrasena,
+    vincular_cuenta,
 )
 
 
@@ -87,20 +96,28 @@ def elegir_contrasena(request):
 
 # ---- Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR, tarea 06a) ----
 # Mi perfil no tiene servicio: solo muestra la cuenta con la que se opera y no modifica nada, igual que
-# iniciar sesión (D-25). La foto de perfil (SEG-19) llega en la tarea 07 y las cuentas vinculadas en la 06b.
+# iniciar sesión (D-25). La foto de perfil (SEG-19) llega en la tarea 07. Las cuentas vinculadas (06b) se
+# ven y se gestionan desde acá: ver más abajo.
 
 MENSAJE_CONTRASENA_ACTUALIZADA = (
     "Contraseña actualizada. Se cerraron las demás sesiones abiertas con esta cuenta; esta sigue abierta."
 )
 
 
-def _render_mi_perfil(request, form):
-    """Mi perfil con el formulario de cambio de contraseña ``form`` (vacío o con los errores del envío)."""
-    return render(
-        request,
-        "core/mi_perfil.html",
-        {"form": form, "quien_gestiona": quien_gestiona(request.user)},
-    )
+def _render_mi_perfil(request, form, ventana=None, **extra):
+    """Mi perfil con el formulario de cambio de contraseña ``form`` (vacío o con los errores del envío).
+
+    ``ventana`` ("vincular" o "desvincular") abre esa ventana sobre la pantalla; ``extra`` trae lo que la
+    ventana necesita. Sin JavaScript, la ventana se pide con un GET y llega así; con HTMX se inserta sola.
+    """
+    contexto = {
+        "form": form,
+        "quien_gestiona": quien_gestiona(request.user),
+        "vinculadas": cuentas_vinculadas(request.user),  # [] sin grupo, sin consultar la base
+        "ventana": ventana,
+    }
+    contexto.update(extra)
+    return render(request, "core/mi_perfil.html", contexto)
 
 
 def mi_perfil(request):
@@ -144,6 +161,134 @@ def cambiar_mi_contrasena(request):
             messages.success(request, MENSAJE_CONTRASENA_ACTUALIZADA)
             return redirect("core:mi_perfil")
     return _render_mi_perfil(request, form)
+
+
+# ---- Cuentas vinculadas (USR-VNC-CTA y SEG-09, tarea 06b) ----
+# Solo las cuentas de un rol del dominio: el Administrador no tiene vínculos (regla 5, SEG-13), así que recibe un
+# 403 con el mensaje de ``rol_requerido``. Las ventanas siguen el patrón de las confirmaciones de cuentas
+# (D-28): abrirlas (GET) no cambia nada; con HTMX se inserta solo la ventana, sin JavaScript llega Mi perfil
+# con la ventana abierta; la operación es un POST de un formulario común, que al salir bien redirige a Mi perfil
+# con un aviso breve (D-29).
+
+ROLES_CON_VINCULOS = tuple(Usuario.Rol)
+
+
+def _es_pedido_htmx(request):
+    """True si el pedido lo hizo HTMX (inserta la ventana) y no es una restauración del historial."""
+    return (
+        request.headers.get("HX-Request") == "true"
+        and request.headers.get("HX-History-Restore-Request") != "true"
+    )
+
+
+@rol_requerido(*ROLES_CON_VINCULOS)
+@never_cache
+@vary_on_headers("HX-Request")
+def vincular(request):
+    """Vincular otra cuenta (USR-VNC-CTA, ventana ``link`` del prototipo): pide el email y la contraseña de la otra
+    cuenta (reglas 1 y 7).
+
+    GET: la ventana, sin cambiar nada. POST: ``vincular_cuenta``; si sale bien, vuelve a Mi perfil con un aviso;
+    si se rechaza, la ventana vuelve con el motivo (el mensaje genérico de SEG-06 no dice qué dato falló) y sin
+    la contraseña escrita. Un error de otra clase (PermissionDenied) da el 403 del servicio.
+    """
+    if request.method == "POST":
+        form = FormularioVincularCuenta(request.POST)
+        form.is_valid()  # todos los campos son opcionales; las reglas son del servicio
+        try:
+            otra = vincular_cuenta(
+                request.user, form.cleaned_data["email"], form.cleaned_data["contrasena"]
+            )
+        except ValidationError as error:
+            for campo, errores in error.error_dict.items():
+                for e in errores:
+                    form.add_error(campo if campo in form.fields else None, e)
+        else:
+            messages.success(
+                request,
+                f"Cuenta vinculada: {otra.email} ({nombre_visible_del_rol(otra)}). "
+                "Ya podés pasar a ella desde el menú de cuenta.",
+            )
+            return redirect("core:mi_perfil")
+    else:
+        form = FormularioVincularCuenta()
+        if _es_pedido_htmx(request):
+            return render(request, "core/_ventana_vincular.html", {"form": form})
+    return _render_mi_perfil(
+        request, FormularioCambioContrasena(), ventana="vincular", form_vincular=form
+    )
+
+
+@rol_requerido(*ROLES_CON_VINCULOS)
+@never_cache
+@vary_on_headers("HX-Request")
+def desvincular(request, cuenta_id):
+    """Desvincular una cuenta del grupo, o salir del grupo con la propia (USR-VNC-CTA reglas 6 y 8; ventana
+    ``unlink`` del prototipo, y «Salir del grupo», D-32).
+
+    La ventana pide confirmar: abrirla (GET) no cambia nada y solo existe para la propia cuenta o una de su
+    grupo; cualquier otra, un id inexistente o una cuenta sin grupo dan el mismo 403 (``obtener_cuenta_del_grupo``,
+    D-32). El cambio es un POST. Si el servicio lo rechaza (por ejemplo, el grupo cambió mientras tanto), la
+    ventana vuelve con el motivo.
+    """
+    cuenta = obtener_cuenta_del_grupo(request.user, cuenta_id)
+    propia = cuenta.pk == request.user.pk
+    error = None
+    if request.method == "POST":
+        try:
+            desvincular_cuenta(request.user, cuenta.pk)
+        except ValidationError as e:
+            error = e.messages[0]
+        else:
+            messages.success(
+                request,
+                "Saliste del grupo de cuentas vinculadas."
+                if propia
+                else f"Se desvinculó {cuenta.email}.",
+            )
+            return redirect("core:mi_perfil")
+    elif _es_pedido_htmx(request):
+        return render(
+            request,
+            "core/_ventana_desvincular.html",
+            {"cuenta": cuenta, "propia": propia, "error": error},
+        )
+    return _render_mi_perfil(
+        request,
+        FormularioCambioContrasena(),
+        ventana="desvincular",
+        cuenta_ventana=cuenta,
+        propia=propia,
+        error=error,
+    )
+
+
+@rol_requerido(*ROLES_CON_VINCULOS)
+@require_POST
+def cambiar_de_cuenta(request):
+    """Pasar a otra cuenta vinculada sin volver a identificarse (SEG-09). Solo POST.
+
+    ``cuenta_para_cambiar`` verifica que la cuenta esté en el grupo, activa y sin contraseña temporal. Después,
+    ``login()`` con la otra cuenta: Django vacía la sesión anterior y crea una con un identificador nuevo. Hay un
+    solo backend de autenticación configurado, así que no hace falta indicarlo. El aviso se agrega DESPUÉS del
+    ``login()`` para que quede en la sesión nueva. El cambio no se audita (SEG-14). La persona llega al inicio de
+    la otra cuenta, que dice con qué rol opera. Si la cuenta ya no está disponible, aviso de error y vuelta al
+    inicio; una cuenta fuera del grupo o un dato mal formado dan el 403.
+    """
+    try:
+        cuenta_id = int(request.POST.get("cuenta_id", ""))
+    except ValueError:
+        raise PermissionDenied(MENSAJE_FUERA_DEL_GRUPO)
+    try:
+        cuenta = cuenta_para_cambiar(request.user, cuenta_id)
+    except ValidationError as error:
+        messages.error(request, error.messages[0])
+        return redirect("core:inicio")
+    login(request, cuenta)
+    messages.success(
+        request, f"Operás como {nombre_visible_del_rol(cuenta)} · {cuenta.get_full_name()}"
+    )
+    return redirect("core:inicio")
 
 
 def inicio(request):
@@ -197,7 +342,12 @@ def usuario_ficha(request, cuenta_id):
     return render(
         request,
         "core/usuarios/ficha.html",
-        {"cuenta": cuenta, "acciones": acciones_permitidas(request.user, cuenta)},
+        {
+            "cuenta": cuenta,
+            "acciones": acciones_permitidas(request.user, cuenta),
+            # Regla 3 de USR-CNS-USR y regla 7 de USR-MOD-USR: los vínculos, en solo lectura.
+            "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
+        },
     )
 
 
@@ -313,7 +463,15 @@ def _gestionar_cuenta(request, cuenta_id, accion):
     """
     cuenta = obtener_cuenta(request.user, cuenta_id)
     actor_id = request.user.pk
-    contexto = {"cuenta": cuenta, "accion": accion, "acciones": acciones_permitidas(request.user, cuenta)}
+    contexto = {
+        "cuenta": cuenta,
+        "accion": accion,
+        "acciones": acciones_permitidas(request.user, cuenta),
+        # SEG-11: restablecer y reactivar sacan la cuenta de su grupo. Se anota ANTES del POST si lo tenía, para
+        # que la ventana de la contraseña temporal pueda decir que salió.
+        "tenia_grupo": cuenta.grupo_id is not None,
+        "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
+    }
     if accion == "reactivar":
         contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
     if request.method == "POST":
@@ -340,6 +498,8 @@ def _gestionar_cuenta(request, cuenta_id, accion):
                 return redirect("core:usuario", cuenta.pk)
             cuenta.refresh_from_db()
             contexto["acciones"] = acciones_permitidas(request.user, cuenta)
+            # La ficha que queda detrás de la ventana muestra los vínculos de ahora (la cuenta salió de su grupo).
+            contexto["vinculadas"] = cuentas_vinculadas(cuenta, actor=request.user)
             contexto["contrasena_temporal"] = resultado
     elif request.headers.get("HX-Request") == "true":
         return render(request, "core/usuarios/_ventana_confirmar.html", contexto)

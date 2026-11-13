@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from core.contrasenas import generar_contrasena_temporal
 from core.models import Capataz, Usuario
-from core.tests.fabricas import CLAVE, crear_administrador, crear_capataz, crear_gerente
+from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_capataz, crear_gerente
 
 
 # Texto exacto del prototipo (vLogin) para cualquier falla de identificación (SEG-06).
@@ -57,6 +57,20 @@ class UsrIniSesReglasTests(TestCase):
     def test_regla_1_identifica_con_email_y_contrasena(self):
         """USR-INI-SES regla 1 y SEG-01: la persona se identifica con el email y la contraseña."""
         capataz = crear_capataz()
+
+        respuesta = self.iniciar_sesion("capataz@infoponia.com")
+
+        self.assertRedirects(
+            respuesta, reverse("core:inicio"), fetch_redirect_response=False
+        )
+        self.assertEqual(self.id_en_sesion(), str(capataz.pk))
+
+    def test_regla_5_opera_con_la_cuenta_indicada_aunque_tenga_vinculadas(self):
+        """USR-INI-SES regla 5 (tarea 06b, D-17): se opera con la cuenta indicada al identificarse, aunque
+        tenga cuentas vinculadas; el vínculo no cambia con cuál cuenta se entra."""
+        capataz = crear_capataz()
+        gerente = crear_gerente()
+        agrupar(capataz, gerente)
 
         respuesta = self.iniciar_sesion("capataz@infoponia.com")
 

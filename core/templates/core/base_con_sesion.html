@@ -1,6 +1,7 @@
-{% extends "core/base.html" %}{% load iconos %}
+{% extends "core/base.html" %}{% load iconos cuentas %}
 {% comment %}Marco con sesión (equivale a shell del prototipo): cabecera, menú lateral, contenido, pie y
-menú de cuenta con «Mi perfil» (USR-GST-PRF, tarea 06a) y «Cerrar sesión» (SEG-08). Sin campana: todavía no
+menú de cuenta con «Cambiar de cuenta» (SEG-09, tarea 06b), «Mi perfil» (USR-GST-PRF, tarea 06a) y «Cerrar
+sesión» (SEG-08). Sin campana: todavía no
 hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecera muestra «Volver»
 (back-btn del prototipo; el CSS lo oculta en escritorio).{% endcomment %}
 {% block cuerpo %}
@@ -68,6 +69,29 @@ hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular l
         <span class="status-badge status-neutral">{% if es_administrador %}Administrador de cuentas{% else %}Operás como {{ rol_visible }}{% endif %}</span>
       </div>
     </div>
+    {# SEG-09 (accountPop del prototipo): pasar a otra cuenta vinculada sin volver a identificarse. Un formulario #}
+    {# POST por cuenta; las que no se pueden usar (inactiva, o con contraseña temporal) van deshabilitadas. El #}
+    {# Administrador no tiene vínculos (regla 5 de USR-VNC-CTA): no ve esta sección. #}
+    {% if not es_administrador %}
+    <div class="pop-sec">Cambiar de cuenta</div>
+    {% for otra in cuentas_vinculadas %}
+    <form class="pop-form" method="post" action="{% url 'core:cambiar_de_cuenta' %}">
+      {% csrf_token %}
+      <input type="hidden" name="cuenta_id" value="{{ otra.pk }}">
+      <button class="acc-item" type="submit"{% if not otra.se_puede_pasar %} disabled{% endif %}>
+        <div class="avatar" style="background:{% if otra.se_puede_pasar %}var(--primary){% else %}var(--status-neutral){% endif %}">{{ otra|sigla }}</div>
+        <div class="t"><b>{{ otra|rol_visible }}</b><span>{{ otra.email }}</span></div>
+        {% if otra.se_puede_pasar %}
+        <span class="muted" style="display:inline-flex;transform:rotate(-90deg)">{% icono "chev" 14 %}</span>
+        {% else %}
+        <span class="status-badge status-neutral">{% if otra.is_active %}No disponible{% else %}Inactiva{% endif %}</span>
+        {% endif %}
+      </button>
+    </form>
+    {% empty %}
+    <div class="muted" style="padding:2px 14px 12px;font-size:12px">No tenés cuentas vinculadas. Podés vincularlas desde Mi perfil.</div>
+    {% endfor %}
+    {% endif %}
     {# D-31: «Mi perfil» para todas las cuentas. El prototipo (accountPop) dice «Mi perfil y contraseña» para el #}
     {# Administrador, pero la contraseña está dentro de Mi perfil para todas, así que el nombre es el mismo. #}
     <a class="pop-act" href="{% url 'core:mi_perfil' %}">{% icono "user" 16 %}Mi perfil</a>

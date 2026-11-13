@@ -2,7 +2,7 @@
 {% comment %}Ficha de una cuenta (USR-CNS-USR regla 3, vUsuario del prototipo) con las acciones de USR-MOD-USR
 y USR-BAJ-USR. Nunca muestra la contraseña, ni su resumen. Restablecer, reactivar y dar de baja piden
 confirmación: con HTMX, la ventana se inserta sobre la ficha; sin JavaScript, el enlace lleva a la misma ficha
-con la ventana abierta. Pendiente, tarea 06: las cuentas vinculadas en solo lectura. Pendiente: foto (07) e
+con la ventana abierta. Las cuentas vinculadas van en solo lectura (tarea 06b). Pendiente: foto (07) e
 invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones de acciones son los de
 «acciones» (core.servicios.acciones_permitidas): nadie llega por un botón a un 403 (D-30).{% endcomment %}
 {% block titulo %}{{ cuenta.get_full_name }} · InfoPonia{% endblock %}
@@ -43,6 +43,28 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
     {# Regla 4 de USR-MOD-USR: el Administrador no restablece su propia contraseña; la cambia desde Mi perfil (vUsuario, self). #}
     {% if cuenta.pk == user.pk %}
     <p class="hint" style="margin-top:10px">Tu contraseña la cambiás desde <a href="{% url 'core:mi_perfil' %}">Mi perfil</a>.</p>
+    {% endif %}
+  </div>
+
+  {# Regla 3 de USR-CNS-USR y regla 7 de USR-MOD-USR (vUsuario): los vínculos, en solo lectura. La cuenta vinculada #}
+  {# se enlaza a su ficha solo si está dentro del alcance de quien mira (D-28): si no, el enlace llevaría a un 403. #}
+  <div class="card">
+    <div class="card-title">Cuentas vinculadas</div>
+    {% if cuenta.is_superuser %}
+    <p class="muted">Las cuentas de Administrador no se vinculan.</p>
+    {% elif vinculadas %}
+    <ul class="vlist">
+      {% for otra in vinculadas %}
+      <li>
+        <div class="avatar" style="background:{% if otra.is_active %}var(--primary){% else %}var(--status-neutral){% endif %}">{{ otra|sigla }}</div>
+        <div class="t"><b>{{ otra|rol_visible }} {% include "core/usuarios/_insignias.html" with cuenta=otra %}</b><span class="mono">{{ otra.email }}</span></div>
+        {% if otra.en_alcance %}<a class="btn btn-ghost btn-sm" href="{% url 'core:usuario' otra.pk %}">Ver ficha</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="hint" style="margin-top:8px">Solo lectura: las vincula y desvincula su dueño desde Mi perfil.</p>
+    {% else %}
+    <p class="muted">Sin cuentas vinculadas.</p>
     {% endif %}
   </div>
 
