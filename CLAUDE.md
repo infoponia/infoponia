@@ -79,6 +79,13 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: cada tarea corre todas 
 - Cada prueba arma sus propios datos y no depende de otra.
 - Mientras trabajás, corré solo las pruebas del tema (`python manage.py test core.tests.test_usuario`).
   La suite completa se corre una vez, al terminar la tarea.
+- Para correr la suite como el CI (producción, con `DEBUG` apagado), en local: poné `DJANGO_DEBUG=0` y una
+  `DJANGO_SECRET_KEY` inventada en la misma línea. Sin la clave, con `DEBUG` apagado la configuración queda sin
+  `SECRET_KEY` y fallan casi todas las pruebas. No leas `.env` ni uses la clave real.
+  En PowerShell: `$env:DJANGO_DEBUG="0"; $env:DJANGO_SECRET_KEY="clave-falsa-solo-para-pruebas"; python manage.py test`
+  (después, `Remove-Item Env:DJANGO_DEBUG, Env:DJANGO_SECRET_KEY` para volver al modo normal).
+  Con la herramienta Bash: `DJANGO_DEBUG=0 DJANGO_SECRET_KEY=clave-falsa-solo-para-pruebas .venv/Scripts/python.exe manage.py test`.
+  Si la base `test_infoponia` quedó de una corrida interrumpida, agregá `--noinput` para recrearla.
 
 ### Nombres
 

@@ -17,6 +17,7 @@ from django.urls import reverse
 
 from core import servicios
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
+from core.tests.fabricas import crear_administrador, crear_cuenta, crear_gerente
 from core.models import (
     ADMINISTRADOR,
     Agronomo,
@@ -29,29 +30,7 @@ from core.models import (
     Vendedor,
 )
 
-CLAVE = "clave-segura-123"
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
-
-
-def crear_gerente(email="gerente@infoponia.com", activo=True):
-    """Crea un Gerente con la contraseña de prueba. Solo puede haber uno activo (D-09)."""
-    return Gerente.objects.create_user(
-        email=email, password=CLAVE, first_name="Gabriela", last_name="Sosa", is_active=activo
-    )
-
-
-def crear_administrador(email="admin@infoponia.com"):
-    """Crea un Administrador técnico: superusuario sin rol (D-10)."""
-    return Usuario.objects.create_superuser(
-        email=email, password=CLAVE, first_name="Adrián", last_name="Mena"
-    )
-
-
-def crear_cuenta(clase, email, activo=True):
-    """Crea una cuenta del rol de ``clase`` con la contraseña de prueba."""
-    return clase.objects.create_user(
-        email=email, password=CLAVE, first_name="Nombre", last_name="Apellido", is_active=activo
-    )
 
 
 def datos_validos(**cambios):

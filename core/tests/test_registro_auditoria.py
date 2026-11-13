@@ -5,27 +5,11 @@
 from django.test import TestCase
 
 from core.models import (
-    Capataz,
     RegistroAuditoria,
     RegistroAuditoriaInmutableError,
     Usuario,
 )
-
-CLAVE = "clave-segura-123"
-
-
-def crear_capataz(email="capataz@infoponia.com"):
-    """Crea un Capataz activo con la contraseña de prueba."""
-    return Capataz.objects.create_user(
-        email=email, password=CLAVE, first_name="Juan", last_name="Pérez"
-    )
-
-
-def crear_administrador(email="admin@infoponia.com"):
-    """Crea un Administrador (superusuario sin rol, D-10)."""
-    return Usuario.objects.create_superuser(
-        email=email, password=CLAVE, first_name="Nora", last_name="Correa"
-    )
+from core.tests.fabricas import crear_administrador, crear_capataz
 
 
 def registrar(usuario, afectados, detalle=None):

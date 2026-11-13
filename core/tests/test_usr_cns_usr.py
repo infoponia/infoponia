@@ -5,57 +5,29 @@
 # datos. Los servicios se llaman a través del módulo (servicios.x) para que, mientras no existan, cada
 # prueba falle por separado en vez de romper la importación del archivo.
 
-from datetime import timedelta
-
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from core import servicios
 from core.models import (
     ADMINISTRADOR,
     Agronomo,
     Capataz,
-    Gerente,
     RegistroAuditoria,
     Tecnico,
     Transportista,
     Usuario,
     Vendedor,
 )
-
-CLAVE = "clave-segura-123"
-
-
-def crear_gerente(email="gerente@infoponia.com", activo=True):
-    """Crea un Gerente con la contraseña de prueba. Solo puede haber uno activo (D-09)."""
-    return Gerente.objects.create_user(
-        email=email, password=CLAVE, first_name="Gabriela", last_name="Sosa", is_active=activo
-    )
-
-
-def crear_administrador(email="admin@infoponia.com"):
-    """Crea un Administrador técnico: superusuario sin rol (D-10)."""
-    return Usuario.objects.create_superuser(
-        email=email, password=CLAVE, first_name="Adrián", last_name="Mena"
-    )
-
-
-def crear_cuenta(clase, email, nombre="Nombre", apellido="Apellido", activo=True):
-    """Crea una cuenta del rol de ``clase`` con la contraseña de prueba."""
-    return clase.objects.create_user(
-        email=email, password=CLAVE, first_name=nombre, last_name=apellido, is_active=activo
-    )
-
-
-def administrador_inactivo(email="admin.anterior@infoponia.com"):
-    """Crea un Administrador dado de baja."""
-    cuenta = crear_administrador(email=email)
-    cuenta.is_active = False
-    cuenta.save()
-    return cuenta
+from core.tests.fabricas import (
+    administrador_inactivo,
+    crear_administrador,
+    crear_cuenta,
+    crear_gerente,
+    dar_temporal_vencida,
+)
 
 
 def ids(cuentas):
@@ -310,13 +282,6 @@ class UsrCnsUsrServicioTests(TestCase):
                 self.assertEqual(servicios.obtener_cuenta(administrador, cuenta.pk).pk, cuenta.pk)
         with self.assertRaises(PermissionDenied):
             servicios.obtener_cuenta(administrador, capataz.pk)
-
-
-def dar_temporal_vencida(cuenta):
-    """Le da a la cuenta una contraseña temporal generada hace 8 días (ya venció, SEG-04)."""
-    cuenta.asignar_contrasena_temporal()
-    cuenta.fecha_contrasena_temporal = timezone.now() - timedelta(days=8)
-    cuenta.save()
 
 
 class UsrCnsUsrVistaTests(TestCase):

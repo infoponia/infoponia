@@ -17,7 +17,6 @@
 # puede identificar, ValidationError con el código «no_se_pudo_reactivar» (nunca un error 500).
 
 import json
-from datetime import timedelta
 from unittest import mock
 
 from types import SimpleNamespace
@@ -27,47 +26,21 @@ from django.db import IntegrityError
 from django.http import Http404
 from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from core import servicios
 from core.models import ADMINISTRADOR, Capataz, Gerente, RegistroAuditoria, Usuario, Vendedor
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
+from core.tests.fabricas import (
+    CLAVE,
+    crear_administrador,
+    crear_cuenta,
+    crear_gerente,
+    dar_temporal_vencida,
+)
 
-CLAVE = "clave-segura-123"
+# Estas pruebas verifican «Laura Benítez» como nombre de la cuenta: se pasa explícito a crear_cuenta.
+LAURA = {"nombre": "Laura", "apellido": "Benítez"}
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
-
-
-def crear_gerente(email="gerente@infoponia.com", activo=True):
-    """Crea un Gerente con la contraseña de prueba. Solo puede haber uno activo (D-09)."""
-    return Gerente.objects.create_user(
-        email=email, password=CLAVE, first_name="Gabriela", last_name="Sosa", is_active=activo
-    )
-
-
-def crear_administrador(email="admin@infoponia.com"):
-    """Crea un Administrador técnico: superusuario sin rol (D-10)."""
-    return Usuario.objects.create_superuser(
-        email=email, password=CLAVE, first_name="Adrián", last_name="Mena"
-    )
-
-
-def crear_cuenta(clase, email="laura@infoponia.com", activo=True, telefono=""):
-    """Crea una cuenta del rol de ``clase`` con la contraseña de prueba."""
-    return clase.objects.create_user(
-        email=email,
-        password=CLAVE,
-        first_name="Laura",
-        last_name="Benítez",
-        telefono=telefono,
-        is_active=activo,
-    )
-
-
-def dar_temporal_vencida(cuenta):
-    """Le da a la cuenta una contraseña temporal generada hace 8 días (ya venció, SEG-04)."""
-    cuenta.asignar_contrasena_temporal()
-    cuenta.fecha_contrasena_temporal = timezone.now() - timedelta(days=8)
-    cuenta.save()
 
 
 def datos_validos(cuenta, **cambios):
@@ -100,10 +73,10 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR precondición a: modifica una cuenta activa de Gerente o de Administrador (las del
         Administrador están más abajo). Un Capataz o un Gerente dado de baja no pueden, en ninguna de las
         tres operaciones."""
-        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA)
         gerente_inactivo = crear_gerente(activo=False)
-        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com")
-        inactiva = crear_cuenta(Vendedor, "inactiva@infoponia.com", activo=False)
+        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com", **LAURA)
+        inactiva = crear_cuenta(Vendedor, "inactiva@infoponia.com", activo=False, **LAURA)
 
         for actor in (capataz, gerente_inactivo):
             with self.subTest(actor=actor.email):
@@ -134,7 +107,7 @@ class UsrModUsrServicioTests(TestCase):
         sí lo pide). El caso de uso no menciona el estado; el prototipo muestra «Modificar datos» siempre y
         no controla el estado al guardar. Modificar no reactiva la cuenta ni toca su contraseña."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
         resumen = cuenta.password
 
         self.modificar(gerente, cuenta, apellido="Gómez", telefono="+54 376 400-1001")
@@ -182,7 +155,7 @@ class UsrModUsrServicioTests(TestCase):
     def test_regla_2_modificar_no_recibe_rol(self):
         """USR-MOD-USR regla 2 y D-11: el rol no se modifica; el servicio no tiene ese parámetro."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         with self.assertRaises(TypeError):
             servicios.modificar_usuario(
@@ -195,7 +168,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 3 y precondición c: el email se puede cambiar si queda único; se guarda
         en minúsculas y sin espacios (SEG-01)."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         self.modificar(gerente, cuenta, email="  Laura.Nueva@Infoponia.com ")
 
@@ -206,9 +179,9 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 3 y precondición c: el email nuevo no puede ser el de otra cuenta
         (también con otras mayúsculas, SEG-01), activa o inactiva."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
-        crear_cuenta(Vendedor, "otra@infoponia.com")
-        crear_cuenta(Vendedor, "inactiva@infoponia.com", activo=False)
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        crear_cuenta(Vendedor, "inactiva@infoponia.com", activo=False, **LAURA)
 
         for email in ("otra@infoponia.com", "OTRA@Infoponia.com", "inactiva@infoponia.com"):
             with self.subTest(email=email):
@@ -222,7 +195,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 3: el email de la propia cuenta no cuenta como repetido (se puede guardar
         el formulario cambiando solo el nombre, o el email con otras mayúsculas)."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         self.modificar(gerente, cuenta, nombre="Lucía", email="LAURA@infoponia.com")
 
@@ -234,7 +207,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 4, postcondición b y SEG-04: restablecer genera una contraseña temporal
         (la elige el Sistema, no quien restablece); la contraseña anterior deja de servir."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         resumen_anterior = cuenta.password
 
         temporal = servicios.restablecer_contrasena(gerente, cuenta.pk)
@@ -251,7 +224,7 @@ class UsrModUsrServicioTests(TestCase):
     def test_regla_4_restablecer_no_recibe_contrasena(self):
         """USR-MOD-USR regla 4: nadie elige la contraseña de otra persona; el servicio solo restablece."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         with self.assertRaises(TypeError):
             servicios.restablecer_contrasena(gerente, cuenta.pk, contrasena="mi-clave-elegida-1")
@@ -262,7 +235,7 @@ class UsrModUsrServicioTests(TestCase):
         """SEG-04: una temporal vencida no sirve para identificarse y quien gestiona la cuenta tiene que
         restablecerla: restablecer una cuenta con temporal vencida le da una vigente."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         dar_temporal_vencida(cuenta)
         self.assertTrue(Usuario.objects.get(pk=cuenta.pk).contrasena_temporal_vencida())
 
@@ -276,7 +249,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 6 y SEG-11: toda reactivación genera una contraseña temporal nueva; la
         anterior deja de servir."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         temporal = servicios.reactivar_usuario(gerente, cuenta.pk)
 
@@ -291,7 +264,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 9 (la de USR-ALT-USR, D-21 y D-28): letras, un + que no está al comienzo,
         menos de 8 o más de 15 dígitos, o más de 25 caracteres se rechazan; vacío y válidos se aceptan."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         for telefono in ("abc12345678", "376+4001001", "1234567", "1234567890123456", "1 2 3 4 5 6 7 8 9 0 1 2 3 4"):
             with self.subTest(telefono=telefono):
@@ -308,7 +281,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR postcondición a (datos personales indicados) y prototipo (userErr): nombre,
         apellido y email no pueden quedar vacíos; un valor con solo espacios cuenta como vacío."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         for campo in ("nombre", "apellido", "email"):
             for vacio in ("", "   "):
@@ -326,7 +299,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR postcondición a: se actualizaron nombre, apellido, email y teléfono; el rol, el
         estado y la contraseña no cambian."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         resumen = cuenta.password
 
         devuelta = self.modificar(
@@ -351,7 +324,7 @@ class UsrModUsrServicioTests(TestCase):
     def test_post_c_reactivar_deja_la_cuenta_activa(self):
         """USR-MOD-USR postcondición c: reactivar deja la cuenta en estado «activo»."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         servicios.reactivar_usuario(gerente, cuenta.pk)
 
@@ -361,7 +334,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR postcondición d, SEG-14 y D-22: queda un registro de auditoría con quién actuó,
         su rol, la acción, la cuenta y solo los campos que cambiaron, con su valor antes y después."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, telefono="")
+        cuenta = crear_cuenta(Capataz, telefono="", **LAURA)
 
         self.modificar(gerente, cuenta, apellido="Gómez", telefono="+54 376 400-1001")
 
@@ -379,7 +352,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR postcondición d, SEG-14 y D-22: el restablecimiento se audita y el registro no
         contiene ninguna contraseña (ni la temporal ni el resumen)."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         temporal = servicios.restablecer_contrasena(gerente, cuenta.pk)
 
@@ -397,7 +370,7 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR postcondición d, SEG-14 y D-22: la reactivación se audita con el cambio de
         estado y sin ninguna contraseña."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         temporal = servicios.reactivar_usuario(gerente, cuenta.pk)
 
@@ -417,7 +390,7 @@ class UsrModUsrServicioTests(TestCase):
         """D-28: si el formulario se envía sin cambios (también si solo difieren espacios o mayúsculas
         del email), no se guarda nada y no queda un registro de auditoría vacío."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, telefono="+54 376 400-1001")
+        cuenta = crear_cuenta(Capataz, telefono="+54 376 400-1001", **LAURA)
 
         self.modificar(gerente, cuenta)
         self.modificar(gerente, cuenta, nombre=" Laura ", email=" LAURA@infoponia.com ")
@@ -428,7 +401,7 @@ class UsrModUsrServicioTests(TestCase):
     def test_d28_restablecer_rechaza_cuenta_inactiva(self):
         """D-28: restablecer solo vale para cuentas activas (una inactiva se reactiva); no cambia nada."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         with self.assertRaises(ValidationError) as contexto:
             servicios.restablecer_contrasena(gerente, cuenta.pk)
@@ -442,7 +415,7 @@ class UsrModUsrServicioTests(TestCase):
     def test_d28_reactivar_rechaza_cuenta_activa(self):
         """D-28: reactivar solo vale para cuentas inactivas; no restablece la contraseña de una activa."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         with self.assertRaises(ValidationError) as contexto:
             servicios.reactivar_usuario(gerente, cuenta.pk)
@@ -456,8 +429,8 @@ class UsrModUsrServicioTests(TestCase):
         """D-22: la operación y su registro de auditoría se guardan en la misma transacción; si falla
         el registro, no queda ni la modificación, ni la nueva contraseña, ni la reactivación."""
         gerente = crear_gerente()
-        activa = crear_cuenta(Capataz)
-        inactiva = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False)
+        activa = crear_cuenta(Capataz, **LAURA)
+        inactiva = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False, **LAURA)
 
         with mock.patch.object(
             RegistroAuditoria.objects, "registrar", side_effect=RuntimeError("falla simulada")
@@ -523,8 +496,8 @@ class UsrModUsrServicioTests(TestCase):
         """USR-MOD-USR regla 1 y D-16: las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico
         las gestiona el Gerente; para el Administrador están fuera del alcance en las tres operaciones."""
         administrador = crear_administrador()
-        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
-        vendedor_inactivo = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False)
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA)
+        vendedor_inactivo = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False, **LAURA)
 
         with self.assertRaises(PermissionDenied):
             self.modificar(administrador, capataz, nombre="Otro")
@@ -691,7 +664,7 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR flujo principal y postcondición a: el formulario viene con los datos actuales y el
         rol bloqueado; al guardar, vuelve a la ficha con el aviso «Cambios guardados.» y los datos nuevos."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         url = reverse("core:usuario_modificar", args=[cuenta.pk])
 
         formulario = self.client.get(url)
@@ -714,8 +687,8 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR y USR-BAJ-USR (vUsuario): una cuenta activa ofrece restablecer y dar de baja; una
         inactiva, reactivar. En las dos se pueden modificar los datos (D-28)."""
         self.entrar_como_gerente()
-        activa = crear_cuenta(Capataz)
-        inactiva = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False)
+        activa = crear_cuenta(Capataz, **LAURA)
+        inactiva = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False, **LAURA)
 
         ficha_activa = self.client.get(reverse("core:usuario", args=[activa.pk]))
         ficha_inactiva = self.client.get(reverse("core:usuario", args=[inactiva.pk]))
@@ -732,8 +705,8 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR flujo principal: restablecer y reactivar piden confirmación; abrir la ventana (GET)
         no cambia la contraseña ni el estado ni deja registro de auditoría."""
         self.entrar_como_gerente()
-        activa = crear_cuenta(Capataz)
-        inactiva = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False)
+        activa = crear_cuenta(Capataz, **LAURA)
+        inactiva = crear_cuenta(Vendedor, "vendedor@infoponia.com", activo=False, **LAURA)
 
         restablecer = self.client.get(reverse("core:usuario_restablecer", args=[activa.pk]))
         reactivar = self.client.get(reverse("core:usuario_reactivar", args=[inactiva.pk]))
@@ -750,7 +723,7 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR flujo principal: con HTMX la confirmación llega como una ventana (sin la pantalla
         entera) que envía un POST a la misma URL; sin HTMX llega la ficha con la ventana abierta."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         url = reverse("core:usuario_restablecer", args=[cuenta.pk])
 
         parcial = self.client.get(url, headers={"HX-Request": "true"})
@@ -768,7 +741,7 @@ class UsrModUsrVistaTests(TestCase):
         temporal nueva, que se le muestra una sola vez a quien la restableció; la ficha posterior no la
         tiene y la respuesta no se guarda en el navegador."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         url = reverse("core:usuario_restablecer", args=[cuenta.pk])
 
         respuesta = self.client.post(url)
@@ -787,7 +760,7 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR flujo principal, regla 6 y postcondición c: al confirmar, la cuenta queda activa con
         una temporal nueva que se muestra una sola vez; la ficha pasa a ofrecer las acciones de una activa."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         respuesta = self.client.post(reverse("core:usuario_reactivar", args=[cuenta.pk]))
 
@@ -806,7 +779,7 @@ class UsrModUsrVistaTests(TestCase):
         abiertas con esa cuenta. Dos clientes: uno con la sesión de la cuenta y otro con la del Gerente.
         La cuenta queda con una temporal, así que si su sesión siguiera abierta iría a «Elegí tu
         contraseña»: la prueba exige que vaya al inicio de sesión."""
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         navegador_de_la_cuenta = Client()
         self.assertTrue(navegador_de_la_cuenta.login(email=cuenta.email, password=CLAVE))
         self.assertEqual(navegador_de_la_cuenta.get(reverse("core:inicio")).status_code, 200)
@@ -821,7 +794,7 @@ class UsrModUsrVistaTests(TestCase):
     def test_post_b_reactivar_deja_la_cuenta_sin_la_sesion_anterior(self):
         """USR-MOD-USR postcondición b y c, SEG-11: la reactivación cambia la contraseña; una sesión que
         quedara abierta de antes de la baja no vuelve a servir. Dos clientes."""
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         navegador_de_la_cuenta = Client()
         navegador_de_la_cuenta.login(email=cuenta.email, password=CLAVE)
         gerente = self.entrar_como_gerente()
@@ -837,7 +810,7 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR regla 2 y D-11: aunque el pedido traiga un ``rol``, el rol no cambia (el formulario
         no tiene ese campo)."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         self.client.post(
             reverse("core:usuario_modificar", args=[cuenta.pk]),
@@ -853,8 +826,8 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR regla 3: el email de otra cuenta se rechaza con el error junto al campo, el
         formulario conserva lo escrito y no se guarda nada."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
-        crear_cuenta(Vendedor, "otra@infoponia.com")
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
 
         respuesta = self.client.post(
             reverse("core:usuario_modificar", args=[cuenta.pk]),
@@ -870,7 +843,7 @@ class UsrModUsrVistaTests(TestCase):
         """USR-MOD-USR regla 9 y D-21: el error del teléfono aparece al confirmar, junto al campo; el
         formulario inicial no muestra errores."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         url = reverse("core:usuario_modificar", args=[cuenta.pk])
 
         inicial = self.client.get(url)
@@ -886,7 +859,7 @@ class UsrModUsrVistaTests(TestCase):
         """D-28: desde la pantalla se corrigen los datos de una cuenta inactiva y la cuenta sigue inactiva
         (no se reactiva sola)."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         self.client.post(
             reverse("core:usuario_modificar", args=[cuenta.pk]),
@@ -917,8 +890,8 @@ class UsrModUsrVistaTests(TestCase):
         self.assertTrue(administrador.check_password(CLAVE))
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
-        self.client.force_login(crear_cuenta(Capataz, "capataz@infoponia.com"))
-        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com")
+        self.client.force_login(crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA))
+        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com", **LAURA)
         for nombre_url in ("usuario_modificar", "usuario_restablecer", "usuario_reactivar"):
             with self.subTest(rol="capataz", url=nombre_url):
                 respuesta = self.client.post(reverse(f"core:{nombre_url}", args=[objetivo.pk]))
@@ -1050,7 +1023,7 @@ class UsrModUsrVistaTests(TestCase):
         """SEG-13, USR-MOD-USR regla 1 y D-16: modificar, restablecer, reactivar o dar de baja la cuenta de
         un Capataz está fuera del alcance del Administrador: 403 con el mensaje, y nada cambia."""
         self.entrar_como_administrador()
-        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA)
 
         for nombre in ("usuario_modificar", "usuario_restablecer", "usuario_reactivar", "usuario_baja"):
             for metodo in (self.client.get, self.client.post):

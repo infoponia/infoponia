@@ -14,18 +14,12 @@ from django.utils import timezone
 
 from core.models import Capataz, RegistroAuditoria
 from core.servicios import cambiar_contrasena
+from core.tests.fabricas import CLAVE, crear_capataz
 
-CLAVE = "clave-segura-123"
+# Nombre y apellido largos, para poder probar el parecido con los datos de la cuenta (SEG-03).
+MAXIMILIANO = {"first_name": "Maximiliano", "last_name": "Fernández"}
 # Cumple SEG-03 y no se parece a los datos de la cuenta de prueba.
 NUEVA = "huerta-hidro-2026"
-
-
-def crear_capataz(email="capataz@infoponia.com"):
-    """Crea un Capataz activo con la contraseña de prueba. Nombre y apellido largos, para poder
-    probar el parecido con los datos de la cuenta (SEG-03)."""
-    return Capataz.objects.create_user(
-        email=email, password=CLAVE, first_name="Maximiliano", last_name="Fernández"
-    )
 
 
 def dar_contrasena_temporal(usuario):
@@ -52,7 +46,7 @@ class UsrCmbCtrServicioTests(TestCase):
 
     def test_regla_1_sin_temporal_pide_contrasena_actual(self):
         """USR-CMB-CTR regla 1: si la cuenta no tiene temporal, el cambio pide la contraseña actual."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         with self.assertRaises(ValidationError) as contexto:
             cambiar_contrasena(capataz, NUEVA)
@@ -62,7 +56,7 @@ class UsrCmbCtrServicioTests(TestCase):
 
     def test_regla_1_rechaza_contrasena_actual_incorrecta(self):
         """USR-CMB-CTR regla 1: la contraseña actual tiene que ser la correcta."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         with self.assertRaises(ValidationError) as contexto:
             cambiar_contrasena(capataz, NUEVA, contrasena_actual="otra-clave-999")
@@ -73,7 +67,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_regla_1_con_temporal_no_pide_contrasena_actual(self):
         """USR-CMB-CTR regla 1 y relación con USR-INI-SES: cuando el caso extiende al inicio de
         sesión (la cuenta tiene temporal), no se pide la contraseña actual."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
         dar_contrasena_temporal(capataz)
 
         cambiar_contrasena(capataz, NUEVA)
@@ -82,7 +76,7 @@ class UsrCmbCtrServicioTests(TestCase):
 
     def test_regla_2_rechaza_contrasena_igual_a_la_actual(self):
         """USR-CMB-CTR regla 2 y SEG-03: la contraseña nueva es distinta de la actual."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         with self.assertRaises(ValidationError) as contexto:
             cambiar_contrasena(capataz, CLAVE, contrasena_actual=CLAVE)
@@ -94,7 +88,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_regla_2_rechaza_contrasena_igual_a_la_temporal(self):
         """USR-CMB-CTR regla 2, SEG-03 y SEG-04: la contraseña nueva es distinta de la temporal, y
         mientras no se reemplace la cuenta sigue con temporal."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
         temporal = dar_contrasena_temporal(capataz)
 
         with self.assertRaises(ValidationError) as contexto:
@@ -111,7 +105,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def assertRechazaPorPolitica(self, nueva, codigo):
         """El cambio a ``nueva`` falla en el campo de la contraseña nueva con el código de Django
         indicado, y la contraseña no cambia."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         with self.assertRaises(ValidationError) as contexto:
             cambiar_contrasena(capataz, nueva, contrasena_actual=CLAVE)
@@ -146,7 +140,7 @@ class UsrCmbCtrServicioTests(TestCase):
 
     def test_post_a_reemplaza_la_contrasena(self):
         """USR-CMB-CTR postcondición a: la contraseña se reemplazó por la nueva."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         cambiar_contrasena(capataz, NUEVA, contrasena_actual=CLAVE)
 
@@ -157,7 +151,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_post_b_la_temporal_deja_de_serlo(self):
         """USR-CMB-CTR postcondición b y D-18: si la contraseña era temporal, deja de serlo (la fecha
         de generación queda vacía)."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
         dar_contrasena_temporal(capataz)
 
         cambiar_contrasena(capataz, NUEVA)
@@ -168,7 +162,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_post_d_crea_registro_de_auditoria(self):
         """USR-CMB-CTR postcondición d, SEG-14 y D-22: queda un registro con la cuenta, su rol, la
         fecha y hora, la cuenta afectada y la acción de cambio de contraseña."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
         antes = timezone.now()
 
         cambiar_contrasena(capataz, NUEVA, contrasena_actual=CLAVE)
@@ -184,7 +178,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_post_d_la_auditoria_no_guarda_ninguna_contrasena(self):
         """USR-CMB-CTR postcondición d, SEG-02 y SEG-14: el registro no guarda ninguna contraseña,
         ni la temporal, ni la nueva, ni sus resúmenes."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
         temporal = dar_contrasena_temporal(capataz)
         resumen_temporal = capataz.password
 
@@ -202,7 +196,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_seg02_guarda_la_contrasena_como_resumen(self):
         """SEG-02: la contraseña nueva se guarda solo como resumen con sal, con el algoritmo por
         defecto de Django."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         cambiar_contrasena(capataz, NUEVA, contrasena_actual=CLAVE)
 
@@ -215,7 +209,7 @@ class UsrCmbCtrServicioTests(TestCase):
     def test_d22_cambio_fallido_no_deja_registro(self):
         """D-22: el registro se escribe en la misma transacción que el cambio; un cambio rechazado
         no deja registro."""
-        capataz = crear_capataz()
+        capataz = crear_capataz(**MAXIMILIANO)
 
         with self.assertRaises(ValidationError):
             cambiar_contrasena(capataz, NUEVA, contrasena_actual="otra-clave-999")
@@ -229,7 +223,7 @@ class UsrCmbCtrVistaTests(TestCase):
     def entrar_con_temporal(self, email="capataz@infoponia.com", cliente=None):
         """Crea una cuenta con contraseña temporal, se identifica con ella y devuelve (cuenta, temporal)."""
         cliente = cliente or self.client
-        capataz = crear_capataz(email=email)
+        capataz = crear_capataz(email=email, **MAXIMILIANO)
         temporal = dar_contrasena_temporal(capataz)
         cliente.post(reverse("core:iniciar_sesion"), {"username": email, "password": temporal})
         return capataz, temporal
@@ -327,7 +321,7 @@ class UsrCmbCtrVistaTests(TestCase):
         """USR-CMB-CTR regla 3: cada persona cambia solo la contraseña de su propia cuenta. Aunque el
         pedido traiga el email o el id de otra cuenta, se cambia la de la sesión."""
         propia, _ = self.entrar_con_temporal(email="propia@infoponia.com")
-        ajena = crear_capataz(email="ajena@infoponia.com")
+        ajena = crear_capataz(email="ajena@infoponia.com", **MAXIMILIANO)
         temporal_ajena = dar_contrasena_temporal(ajena)
 
         self.elegir(NUEVA, email=ajena.email, id=ajena.pk, usuario=ajena.pk)
@@ -341,7 +335,7 @@ class UsrCmbCtrVistaTests(TestCase):
     def test_flujo_principal_sin_temporal_redirige_al_inicio(self):
         """USR-CMB-CTR relación con USR-INI-SES: la pantalla es solo para cuentas con contraseña
         temporal; una cuenta común que la abre va al inicio (el cambio voluntario es otra pantalla)."""
-        crear_capataz()
+        crear_capataz(**MAXIMILIANO)
         self.client.post(
             reverse("core:iniciar_sesion"),
             {"username": "capataz@infoponia.com", "password": CLAVE},
