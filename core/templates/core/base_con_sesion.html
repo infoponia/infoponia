@@ -1,9 +1,12 @@
 {% extends "core/base.html" %}{% load iconos %}
 {% comment %}Marco con sesión (equivale a shell del prototipo): cabecera, menú lateral, contenido, pie y
-menú de cuenta con «Cerrar sesión» (SEG-08). Sin campana: todavía no hay notificaciones.{% endcomment %}
+menú de cuenta con «Mi perfil» (USR-GST-PRF, tarea 06a) y «Cerrar sesión» (SEG-08). Sin campana: todavía no
+hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecera muestra «Volver»
+(back-btn del prototipo; el CSS lo oculta en escritorio).{% endcomment %}
 {% block cuerpo %}
 <div class="shell{% if modo_campo %} field{% elif not mostrar_menu_lateral %} sin-lateral{% endif %}">
   <header class="top">
+    {% block boton_volver %}{% endblock %}
     <div class="brand">
       <div class="logo">{% icono "leafmark" 16 %}</div>
       <b>{{ nombre_organizacion }}</b>
@@ -65,6 +68,9 @@ menú de cuenta con «Cerrar sesión» (SEG-08). Sin campana: todavía no hay no
         <span class="status-badge status-neutral">{% if es_administrador %}Administrador de cuentas{% else %}Operás como {{ rol_visible }}{% endif %}</span>
       </div>
     </div>
+    {# D-31: «Mi perfil» para todas las cuentas. El prototipo (accountPop) dice «Mi perfil y contraseña» para el #}
+    {# Administrador, pero la contraseña está dentro de Mi perfil para todas, así que el nombre es el mismo. #}
+    <a class="pop-act" href="{% url 'core:mi_perfil' %}">{% icono "user" 16 %}Mi perfil</a>
     <form class="pop-form" method="post" action="{% url 'core:cerrar_sesion' %}">
       {% csrf_token %}
       <button class="pop-act" type="submit">{% icono "out" 16 %}Cerrar sesión</button>

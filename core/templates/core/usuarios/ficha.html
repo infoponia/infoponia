@@ -40,6 +40,10 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
     {% if "modificar" in acciones %}
     <div class="row" style="margin-top:14px"><a class="btn btn-ghost" href="{% url 'core:usuario_modificar' cuenta.pk %}">Modificar datos</a></div>
     {% endif %}
+    {# Regla 4 de USR-MOD-USR: el Administrador no restablece su propia contraseña; la cambia desde Mi perfil (vUsuario, self). #}
+    {% if cuenta.pk == user.pk %}
+    <p class="hint" style="margin-top:10px">Tu contraseña la cambiás desde <a href="{% url 'core:mi_perfil' %}">Mi perfil</a>.</p>
+    {% endif %}
   </div>
 
   {% if "restablecer" in acciones or "baja" in acciones or "reactivar" in acciones %}

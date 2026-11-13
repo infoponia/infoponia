@@ -1,4 +1,5 @@
-# Formularios de core: inicio de sesión (USR-INI-SES), elegir contraseña nueva (USR-CMB-CTR) y los de
+# Formularios de core: inicio de sesión (USR-INI-SES), elegir contraseña nueva y cambio voluntario desde
+# Mi perfil (USR-CMB-CTR) y los de
 # cuentas del Gerente y del Administrador (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR).
 
 from django import forms
@@ -63,6 +64,25 @@ class FormularioContrasenaNueva(forms.Form):
         if nueva and repetida and nueva != repetida:
             self.add_error("contrasena_repetida", "Las contraseñas no coinciden.")
         return datos
+
+
+class FormularioCambioContrasena(FormularioContrasenaNueva):
+    """Cambio voluntario de contraseña desde Mi perfil (USR-CMB-CTR por sí mismo, USR-GST-PRF regla 3).
+
+    Agrega la contraseña actual (regla 1 de USR-CMB-CTR). Es obligatoria acá, con el mismo mensaje que el
+    servicio, para que un envío vacío muestre todos los errores juntos (como pwChangeErr del prototipo),
+    igual que la contraseña nueva de ``FormularioContrasenaNueva``. Si es correcta lo decide el servicio
+    ``cambiar_contrasena``, que vuelve a pedirla; la vista pasa sus errores a este formulario.
+    """
+
+    contrasena_actual = forms.CharField(
+        label="Contraseña actual",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+        error_messages={"required": "Ingresá tu contraseña actual."},
+    )
+
+    field_order = ["contrasena_actual", "contrasena_nueva", "contrasena_repetida"]
 
 
 # ---- Cuentas del Gerente y del Administrador (USR-CNS-USR y USR-ALT-USR) ----

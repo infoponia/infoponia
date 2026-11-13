@@ -1,0 +1,17 @@
+{% load iconos %}{% comment %}Campo de contraseña con su etiqueta, el botón del ojo y sus errores (fieldHtml del prototipo con
+type="password"). Recibe «campo» (el campo del formulario), «autocompletar» (current-password o new-password) y,
+opcional, «marca» (un atributo data- para politica_contrasena.js). Nunca vuelve a escribir la contraseña en el
+campo: PasswordInput no la devuelve al mostrar un error.{% endcomment %}
+<div class="fld">
+  <label for="{{ campo.id_for_label }}">{{ campo.label }}<span class="req" aria-hidden="true"> *</span></label>
+  <div class="pw">
+    <input class="field-input{% if campo.errors %} bad{% endif %}" id="{{ campo.id_for_label }}"
+           name="{{ campo.html_name }}" type="password" autocomplete="{{ autocompletar }}" autocapitalize="off"
+           spellcheck="false"{% if marca %} {{ marca }}{% endif %}
+           {% if campo.errors %}aria-invalid="true" aria-describedby="error-{{ campo.html_name }}"{% endif %}>
+    <button type="button" class="eye" data-ver-contrasena="{{ campo.id_for_label }}" aria-label="Mostrar contraseña">
+      <span data-icono-ver>{% icono "eye" 16 %}</span><span data-icono-ocultar hidden>{% icono "eyeoff" 16 %}</span>
+    </button>
+  </div>
+  {% for error in campo.errors %}<div class="err" id="error-{{ campo.html_name }}">{{ error }}</div>{% endfor %}
+</div>

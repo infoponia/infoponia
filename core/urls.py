@@ -1,4 +1,5 @@
-# Rutas de core: inicio, inicio de sesión, cierre de sesión, elegir contraseña y usuarios del Gerente (consultar, alta, modificar y baja).
+# Rutas de core: inicio, inicio de sesión, cierre de sesión, elegir contraseña, Mi perfil y cuentas del Gerente y del
+# Administrador (consultar, alta, modificar y baja).
 
 from django.urls import path
 
@@ -11,6 +12,9 @@ urlpatterns = [
     path("iniciar-sesion/", views.IniciarSesionView.as_view(), name="iniciar_sesion"),
     path("cerrar-sesion/", views.cerrar_sesion, name="cerrar_sesion"),
     path("elegir-contrasena/", views.elegir_contrasena, name="elegir_contrasena"),
+    # Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR; tarea 06a).
+    path("mi-perfil/", views.mi_perfil, name="mi_perfil"),
+    path("mi-perfil/contrasena/", views.cambiar_mi_contrasena, name="cambiar_mi_contrasena"),
     # Usuarios del Gerente (USR-CNS-USR y USR-ALT-USR; tarea 04a).
     path("usuarios/", views.usuarios, name="usuarios"),
     path("usuarios/nuevo/", views.usuario_nuevo, name="usuario_nuevo"),

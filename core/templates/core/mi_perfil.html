@@ -1,0 +1,69 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos cuentas estaticos %}
+{% comment %}Mi perfil (USR-GST-PRF; vPerfil del prototipo) con el cambio voluntario de contraseña (USR-CMB-CTR, regla 1:
+pide la contraseña actual). Tarea 06a.
+- Regla 1: los datos de la cuenta con la que se opera; nunca la contraseña.
+- Regla 2: solo el Administrador ve «Modificar mis datos» (lleva a su propia cuenta en «Cuentas», D-16); los demás
+  ven a quién pedírselo («quien_gestiona»).
+- Foto de perfil: tarea 07 (SEG-19). Por ahora va el avatar con la sigla, sin botones; los botones «Elegir foto»,
+  «Tomar foto» y «Quitar» del prototipo van en la fila .photo-row.
+- Cuentas vinculadas: tarea 06b (USR-VNC-CTA). Solo se muestra lo que existe (D-25).
+- La lista de requisitos se marca al escribir con politica_contrasena.js, incluido «distinta de la contraseña
+  actual», que el navegador puede comprobar porque la persona la escribe (D-27). El servidor valida siempre.{% endcomment %}
+{% block titulo %}Mi perfil · InfoPonia{% endblock %}
+{% block boton_volver %}<a class="btn btn-ghost back-btn" href="{% url 'core:inicio' %}" aria-label="Volver al inicio">{% icono "back" 14 %}<span>Volver</span></a>{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <div class="crumb">Mi cuenta</div>
+  <div class="page-h"><h1>Mi perfil</h1></div>
+
+  <div class="card">
+    <div class="card-title">Mis datos</div>
+    {# Tarea 07 (SEG-19): acá van la foto y sus botones. #}
+    <div class="photo-row">
+      <div class="avatar" style="width:72px;height:72px;font-size:20px">{{ sigla }}</div>
+    </div>
+    <dl class="dl">
+      <dt>Nombre</dt><dd>{{ user.first_name }}</dd>
+      <dt>Apellido</dt><dd>{{ user.last_name }}</dd>
+      <dt>Email</dt><dd class="mono" style="font-size:12px">{{ user.email }}</dd>
+      <dt>Teléfono</dt><dd>{% if user.telefono %}{{ user.telefono }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      <dt>Rol</dt><dd>{% if es_administrador %}Administrador (sin rol operativo){% else %}{{ user|rol_visible }}{% endif %}</dd>
+      <dt>Estado</dt><dd>{% if user.is_active %}Activo{% else %}Inactivo{% endif %}</dd>
+    </dl>
+    {% if es_administrador %}
+    <div class="row" style="margin-top:14px"><a class="btn btn-ghost" href="{% url 'core:usuario_modificar' user.pk %}">Modificar mis datos</a></div>
+    {% else %}
+    <p class="hint" style="margin-top:14px">Para corregir estos datos, pedíselo {{ quien_gestiona }}.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Seguridad</div>
+    <form method="post" action="{% url 'core:cambiar_mi_contrasena' %}" novalidate data-politica-contrasena>
+      {% csrf_token %}
+      <h2 style="font-size:14px;margin-bottom:12px">Cambiar contraseña</h2>
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+      {% endif %}
+
+      {# Para que el administrador de contraseñas asocie la contraseña nueva a esta cuenta (ver elegir_contrasena.html). #}
+      {# El servidor no lo usa (regla 3 de USR-CMB-CTR). #}
+      <input class="sr" type="text" name="username" value="{{ user.email }}" autocomplete="username"
+             readonly tabindex="-1" aria-hidden="true">
+
+      {% include "core/_campo_contrasena.html" with campo=form.contrasena_actual autocompletar="current-password" marca="data-contrasena-actual" %}
+      {% include "core/_campo_contrasena.html" with campo=form.contrasena_nueva autocompletar="new-password" marca="data-contrasena-nueva" %}
+      <ul class="policy" aria-label="Requisitos de la contraseña">
+        <li data-requisito="largo"><span class="dot"></span>Al menos 8 caracteres</li>
+        <li data-requisito="no-numerica"><span class="dot"></span>No es solo números</li>
+        <li data-requisito="distinta"><span class="dot"></span>Es distinta de la contraseña actual</li>
+      </ul>
+      {% include "core/_campo_contrasena.html" with campo=form.contrasena_repetida autocompletar="new-password" %}
+
+      <button class="btn btn-primary" type="submit">Guardar contraseña</button>
+    </form>
+  </div>
+</div>
+<script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>
+{% endblock %}

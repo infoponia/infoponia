@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 12/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 13/11/2026. Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -96,6 +96,14 @@
   (`MarcoVistaTests` y `AvisosYFocoEstilosTests`) se mudaron a `core/tests/test_interfaz.py`. `requirements.txt` ya
   estaba en ASCII (UTF-8 válido, sin BOM), no en UTF-16: no hizo falta convertirlo. 237 pruebas antes y después,
   sin migraciones.
+- Tarea 06a: Mi perfil (USR-GST-PRF) y cambio voluntario de contraseña (USR-CMB-CTR con la contraseña actual). Mi
+  perfil muestra los datos de la cuenta con la que se opera; el Administrador modifica los suyos desde «Cuentas» y
+  los demás ven a quién pedir la corrección (`quien_gestiona`). El cambio de contraseña está dentro de Mi perfil,
+  reutiliza `cambiar_contrasena` y se envía a `mi-perfil/contrasena/`, solo por POST; el Administrador ya no la
+  cambia solo por consola. La lista de requisitos suma «distinta de la contraseña actual» solo en Mi perfil. «Mi
+  perfil» entra al menú de cuenta de todas las cuentas, con el mismo nombre para el Administrador (D-31). El lugar
+  de la foto queda preparado para la 07. 259 pruebas en total, sin migraciones. Verificada a mano. Rama
+  `feature/mi-perfil`. Decisión D-31.
 
 ## En curso
 
@@ -111,7 +119,7 @@
    | Tarea | Contenido | Necesita |
    |---|---|---|
    | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b hecha** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
-   | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta; pantalla de cambio voluntario de contraseña (USR-CMB-CTR, con contraseña actual), usando el servicio de la tarea 03 | Permiso para modificar `Usuario` y crear el grupo (D-17) |
+   | 06 | **06a hecha** (Mi perfil, «Mi perfil» en el menú de cuenta y cambio voluntario de contraseña, con el servicio de la tarea 03). **06b pendiente**: cuentas vinculadas (USR-VNC-CTA, SEG-09 y SEG-11 en restablecer y reactivar), «Cambiar de cuenta» en el menú de cuenta, la tarjeta «Cuentas vinculadas» en Mi perfil y en la ficha, y «Salir del grupo» (regla 8) | 06b: permiso dado el 13/11/2026 para `GrupoCuentas`, `Usuario.grupo` y la restricción `administrador_sin_grupo` (D-17), en la migración `0006` |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
    | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29) | — |
