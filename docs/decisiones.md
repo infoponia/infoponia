@@ -723,20 +723,43 @@ Formato:
   Django en producción cuando existieran sus pantallas; D-28 pasó SEG-15 a la tarea 05. Faltaba definir cómo se
   garantizan los invariantes con dos operaciones simultáneas, qué botones ve el Administrador mientras la tarea 05
   no está completa, adónde llega al iniciar sesión, qué se muestra al dar de alta un Gerente cuando ya hay uno
-  activo (el prototipo muestra el aviso y el formulario con el botón deshabilitado) y cómo se decide que el admin
-  de Django esté apagado.
+  activo (el prototipo muestra el aviso y el formulario con el botón deshabilitado), qué ofrece la ventana de
+  reactivar a un Gerente cuando ya hay otro activo (el prototipo deja confirmar y recién después rechaza), en qué
+  orden se bloquean las filas cuando hay que cuidar un invariante y cómo se decide que el admin de Django esté
+  apagado.
 - Decisión:
   - SEG-15, Gerente (tarea 05a): `alta_usuario` bloquea con `select_for_update()` todas las filas de Gerente, sin
     filtrar por estado y en orden de id, y después, en una consulta aparte, busca si hay un Gerente activo.
   - La restricción `un_solo_gerente_activo` de la base queda como respaldo. Si rechaza un alta, el
     `IntegrityError` se traduce con `raise ... from error`: con ese nombre de restricción da «gerente_activo»; con
     cualquier otro, o si el nombre no se puede leer, da «email repetido». Nunca llega un error 500 a la pantalla.
-  - SEG-15, Administrador (tarea 05b): la baja de un Administrador bloquea, en orden de id y antes que la cuenta,
-    a todos los Administradores activos, y se rechaza si no queda otro (precondición c de USR-BAJ-USR).
+  - SEG-15, Administrador (tarea 05b): la baja de un Administrador bloquea a todos los Administradores activos y
+    se rechaza, con el código «ultimo_administrador», si no queda otro (precondición c de USR-BAJ-USR). No hay
+    restricción de la base que lo respalde: el bloqueo es lo único que lo garantiza.
+  - Reactivar un Gerente (regla 5 de USR-MOD-USR) sigue el mismo camino que el alta: se bloquean todas las filas de
+    Gerente, sin filtrar por estado, y después se busca al Gerente activo en una consulta aparte; el rechazo lleva
+    el código «gerente_activo». La restricción `un_solo_gerente_activo` queda de respaldo, traducida como en el
+    alta; si no se puede identificar la restricción, el error es «no_se_pudo_reactivar».
+  - Orden de los bloqueos en modificar, restablecer, reactivar y dar de baja: primero el grupo de filas que cuida
+    un invariante (todos los Gerentes, o todos los Administradores activos), en orden de id; después se vuelve a
+    verificar que quien actúa siga activo; por último se bloquea y se vuelve a leer la cuenta. Para saber a qué
+    grupo pertenece la cuenta, se la lee antes sin bloquear (el rol no cambia, D-11).
+  - Restablecer la propia contraseña se rechaza con el código «propia_cuenta» (regla 4 de USR-MOD-USR): el
+    Administrador la cambia con USR-CMB-CTR.
   - El rechazo por un Gerente activo es un error general (`NON_FIELD_ERRORS`, código `gerente_activo`), no un
     error de un campo.
   - Las pantallas muestran solo las acciones de `acciones_permitidas(actor, cuenta)`: ningún botón lleva a un
-    403. En la 05a, el Administrador todavía no tiene ninguna; en la 05b cambia solo esa función.
+    403. En la 05a, el Administrador no tenía ninguna; en la 05b cambió solo esa función: el Administrador
+    modifica, restablece y da de baja las cuentas activas de su alcance, y modifica y reactiva las inactivas; en
+    su propia cuenta no restablece la contraseña (regla 4) y solo se da de baja si queda otro Administrador
+    activo (precondición c).
+  - La ventana de «Reactivar cuenta» de un Gerente, cuando ya hay otro Gerente activo, no ofrece confirmar:
+    muestra directamente el motivo, con «Ver a <nombre>» (la ficha del Gerente activo) y «Cerrar», igual que la
+    pantalla de alta. El botón sí se muestra en la ficha. Un envío manual lo rechaza igual el servicio con
+    «gerente_activo».
+  - Si el Administrador se da de baja a sí mismo (hay otro activo), la ventana de confirmación lo avisa («Es tu
+    propia cuenta»); al confirmar, se cierra su sesión y vuelve al inicio de sesión con el aviso «Tu cuenta se dio
+    de baja y se cerró la sesión.».
   - Con un Gerente activo, «Alta de Gerente» no muestra el formulario: solo el aviso, con el nombre del Gerente
     activo y qué hay que hacer, y dos botones: «Ver a <nombre>», que lleva a su ficha, y «Volver a Cuentas». Un
     envío manual lo rechaza igual el servicio con «gerente_activo». Esto reemplaza al prototipo en este punto.
@@ -744,7 +767,8 @@ Formato:
   - El filtro de rol de la lista usa el valor `ADMINISTRADOR` (`core/models.py`) para los superusuarios, que no
     tienen `rol` (D-10); es la misma constante que guarda la auditoría.
   - El admin de Django se enciende solo si `DEBUG` está encendido: `ADMIN_DJANGO_HABILITADO = DEBUG`, sin variable
-    propia (tarea 05b).
+    propia. Con `DJANGO_DEBUG=0` no se registra ninguna ruta de `/admin/` y responde 404, también a un
+    Administrador con la sesión abierta. Se calcula al arrancar (tarea 05b).
   - Las pruebas de operaciones simultáneas van en clases `<CodigoCu>ConcurrenciaTests` (`TransactionTestCase`),
     con el auxiliar `core/tests/concurrencia.py`; las de las decisiones, con el prefijo `test_d30_`; las de
     SEG-15, con `test_seg15_`.
@@ -766,6 +790,22 @@ Formato:
     sola. Haría falta un disparador de la base, que por ahora no se agrega; por eso ahí vale solo el bloqueo.
   - El rechazo es un error general porque no es un problema de un campo: la pantalla lo muestra arriba, como el
     aviso del prototipo, y no debajo de «Rol», que además está fijo para el Administrador.
+  - El grupo se bloquea antes que la cuenta porque, si cada operación bloqueara primero la suya y después el
+    grupo, dos operaciones sobre cuentas distintas (por ejemplo, dos Administradores que se dan de baja entre sí)
+    se esperarían mutuamente y la base abortaría una, que la persona vería como un error 500. Además, la
+    auditoría referencia a quien actúa y toma un bloqueo sobre su fila, lo que cruza todavía más las esperas.
+    Con el grupo primero y en orden de id, la segunda operación simplemente espera. Quien actúa se vuelve a
+    verificar después de bloquear porque su fila es una de las bloqueadas y pudo quedar inactiva mientras esperaba
+    (con tres Administradores, A da de baja a B mientras B da de baja a C): sin esa verificación, una cuenta que
+    ya cayó seguiría actuando. La cuenta se bloquea y se vuelve a leer al final para trabajar con su estado real,
+    no con el que tenía cuando se la leyó para saber su grupo.
+  - La ventana de reactivar un Gerente con otro activo no ofrece confirmar por la misma razón que la pantalla de
+    alta: la persona confirmaría algo que ya se sabe que se va a rechazar. El botón se muestra igual en la ficha,
+    porque no lleva a un 403 y explica qué hay que hacer; el prototipo, en cambio, deja confirmar y recién
+    después rechaza.
+  - Dar de baja la propia cuenta cierra la sesión porque la cuenta inactiva ya no puede usar el Sistema, y el
+    aviso viaja en una cookie porque la sesión se vacía; así la persona no ve un error al pedir la pantalla
+    siguiente.
   - `acciones_permitidas` existe para que ningún botón lleve a un 403: quien está en la pantalla no tendría forma
     de saber que una acción no le corresponde, y repetir esa condición en cada plantilla haría que una pantalla
     nueva la olvidara. Es una sola función, y lo que cambia en la 05b es su resultado.
@@ -784,12 +824,18 @@ Formato:
   `docs/prototipos/cuentas_y_seguridad.html` (`enter()`, `NAV`, `vAlta`, `baja-do`).
 - Consecuencias:
   - Cambia `UsuarioQuerySet.en_alcance_de` (rama del Administrador), sin migración.
-  - Hasta la 05b, el admin de Django sigue encendido también en producción y el Administrador no modifica,
-    restablece, reactiva ni da de baja. El aviso de la pantalla de alta dice «dá de baja al actual desde su
-    ficha»: hasta la 05b, ese paso se hace desde el admin de Django. Al terminar la 05b, el admin queda apagado
-    en producción y la consola de Render (plan Starter) es la vía de emergencia.
+  - Con la 05b, el Administrador gestiona la cuenta del Gerente y las de los Administradores con las pantallas
+    propias, y el aviso de la pantalla de alta («dá de baja al actual desde su ficha») ya se cumple. El admin de
+    Django queda apagado en producción; la vía de emergencia es la consola de Render (plan Starter).
+  - El valor por defecto de `DJANGO_DEBUG` es «1»: si en Render faltara la variable, `DEBUG` quedaría encendido y,
+    con él, el admin. Hay que confirmar que Render tiene `DJANGO_DEBUG=0`; en la tarea 09 `DEBUG` pasa a quedar
+    apagado por defecto.
   - Antes de unir la 05b a main, hay que entrar a producción con un Administrador y confirmar que llega a
     «Cuentas», porque después el admin de Django ya no estará disponible en Render.
+  - Límite conocido: el alta no vuelve a verificar que quien actúa siga activo. El grupo que bloquea (las filas
+    de Gerente) no incluye a quien actúa, y bloquear también a los Administradores en cada alta no se justifica por
+    un caso tan improbable: que quien da de alta quede inactivo justo mientras su alta espera el bloqueo. Modificar,
+    restablecer, reactivar y dar de baja sí lo verifican.
   - En un entorno de desarrollo con `DEBUG` encendido el admin sigue disponible; en el CI, con `DJANGO_DEBUG=0`, no
     existe, por eso las pruebas no lo usan.
   - La contraseña propia del Administrador solo se cambia por consola hasta la tarea 06.

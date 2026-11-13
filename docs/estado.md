@@ -23,7 +23,8 @@
   local. Rama `feature/usuario-base`.
 - Neon reiniciado y migrado; Administradores recreados (06/11/2026).
 - Despliegue: el servicio de Render está en el plan Starter desde el 11/11/2026, por el acceso a la consola para
-  emergencias (el admin de Django se apaga en la 05b) y porque el servicio queda siempre encendido.
+  emergencias (el admin de Django quedó apagado en producción con la 05b) y porque el servicio queda siempre
+  encendido.
 - Tarea chica: renombradas las 10 pruebas de `core/tests/test_usuario.py` con la convención de
   `CLAUDE.md` (prefijo `test_d<numero>_`), ordenadas por decisión; no se cambió lo que verifican.
 - Confirmado que los commits de la rama `feature/usuario-base` no llevan línea de coautor.
@@ -78,13 +79,20 @@
   solo el aviso con «Ver a <nombre>» y «Volver a Cuentas». Menú «Administración» → «Cuentas»; el Administrador
   entra directo a «Cuentas». Pruebas de operaciones simultáneas con dos hilos (`core/tests/concurrencia.py`).
   204 pruebas en total, sin migraciones. Verificada a mano. Rama `feature/CRUD-Admin`. Decisión D-30.
+- Tarea 05b: modificar, restablecer, reactivar y baja del Administrador (USR-MOD-USR, USR-BAJ-USR, D-16) y admin
+  de Django apagado en producción (SEG-18). Los servicios aceptan al Administrador con su alcance; regla 4 (no
+  restablece su propia contraseña), regla 5 (un solo Gerente activo al reactivar) y precondición c (siempre queda
+  un Administrador activo), con SEG-15: se bloquea primero el grupo (todos los Gerentes, o todos los
+  Administradores activos, en orden de id), después se verifica que quien actúa siga activo y por último se
+  bloquea la cuenta. `acciones_permitidas` ofrece al Administrador sus botones. La ventana de reactivar un Gerente
+  con otro activo no pide confirmar: muestra el motivo con «Ver a <nombre>» y «Cerrar». Al darse de baja a sí
+  mismo, el Administrador sale del Sistema con un aviso. `ADMIN_DJANGO_HABILITADO = DEBUG`: con `DJANGO_DEBUG=0`,
+  `/admin/` responde 404. 237 pruebas en total, sin migraciones. Verificada a mano. Rama
+  `feature/CRUD-Admin-5b`. Decisión D-30.
 
 ## En curso
 
-- Tarea 05b: modificar, restablecer, reactivar y baja de cuentas del Administrador, SEG-15 de los
-  Administradores (último Administrador activo) y admin de Django apagado en producción (SEG-18). Se empieza por
-  las pruebas de servicio, que el estudiante revisa antes de implementar. Antes de unirla a main: iniciar sesión
-  en producción con el Administrador y confirmar que llega a «Cuentas».
+- Nada por ahora.
 
 ## Siguiente
 
@@ -95,7 +103,7 @@
 
    | Tarea | Contenido | Necesita |
    |---|---|---|
-   | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b en curso** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
+   | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b hecha** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
    | 06 | Mi perfil y cuentas vinculadas (USR-GST-PRF, USR-VNC-CTA y SEG-09); «Cambiar de cuenta» y «Mi perfil» en el menú de cuenta; pantalla de cambio voluntario de contraseña (USR-CMB-CTR, con contraseña actual), usando el servicio de la tarea 03 | Permiso para modificar `Usuario` y crear el grupo (D-17) |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
@@ -145,3 +153,5 @@
 - Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
   fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.
+- Render tiene `DJANGO_DEBUG=0` (verificado el 12/11/2026); en la tarea 09, `DEBUG` queda apagado por defecto en
+  el código.

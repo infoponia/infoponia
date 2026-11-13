@@ -58,14 +58,16 @@ def _exigir_gestor_activo(actor):
     _exigir_actor_activo(actor, (Usuario.Rol.GERENTE, ADMINISTRADOR))
 
 
-def _exigir_gerente_activo(actor):
-    """Precondición a de USR-MOD-USR y USR-BAJ-USR mientras el Administrador no los use.
+def _exigir_actor_sigue_activo(actor):
+    """SEG-15 y precondición a: ``actor`` sigue activo ahora, después de esperar los bloqueos.
 
-    Pendiente, tarea 05b: modificar, restablecer, reactivar y baja pasan a ``_exigir_gestor_activo``
-    junto con la regla 4 y la regla 5 de USR-MOD-USR y la precondición c de USR-BAJ-USR (SEG-15). Hasta
-    entonces, el Administrador no los usa: le faltan esas reglas.
+    ``actor`` es la cuenta que cargó el pedido: pudo quedar inactiva mientras esta operación esperaba el
+    bloqueo de otra (por ejemplo, con tres Administradores, A da de baja a B mientras B da de baja a C).
+    Es una consulta nueva, posterior al bloqueo, así que ve lo que la otra operación confirmó. Si ya no
+    está activo, ``PermissionDenied`` y no cambia nada (SEG-13).
     """
-    _exigir_actor_activo(actor, (Usuario.Rol.GERENTE,))
+    if not Usuario.objects.filter(pk=actor.pk, is_active=True).exists():
+        raise PermissionDenied(MENSAJE_SIN_ACCESO)
 
 
 def clases_de_rol_que_da_de_alta(actor):
@@ -99,6 +101,36 @@ def _bloquear_gerentes():
     list(Usuario.objects.select_for_update().filter(rol=Usuario.Rol.GERENTE).order_by("pk"))
 
 
+def _bloquear_administradores_activos():
+    """SEG-15 y precondición c de USR-BAJ-USR: bloquea todas las filas de Administradores activos, en orden
+    de id.
+
+    Lo usa la baja de un Administrador. Una segunda baja simultánea espera acá hasta que la primera
+    confirme; cuando sigue, PostgreSQL vuelve a evaluar el filtro sobre las filas bloqueadas, así que la
+    cuenta que la primera dio de baja ya no figura, y la cuenta de los que quedan es la real. A diferencia
+    del Gerente, no hay una restricción de la base que respalde esta regla (compara varias filas): el
+    bloqueo es lo único que la garantiza. El orden fijo evita que dos operaciones se esperen mutuamente.
+    """
+    list(
+        Usuario.objects.select_for_update()
+        .filter(is_superuser=True, is_active=True)
+        .order_by("pk")
+    )
+
+
+def _bloquear_grupo_de_baja(cuenta):
+    """Bloqueo previo de la baja: si la cuenta es de un Administrador, bloquea a todos los activos (SEG-15)."""
+    if cuenta.is_superuser:
+        _bloquear_administradores_activos()
+
+
+def _bloquear_grupo_de_reactivacion(cuenta):
+    """Bloqueo previo de la reactivación: si la cuenta es de un Gerente, bloquea todas las filas de Gerente
+    (regla 5, D-09, SEG-15). Reactivar un Administrador no puede romper ningún invariante."""
+    if cuenta.rol == Usuario.Rol.GERENTE:
+        _bloquear_gerentes()
+
+
 def _nombre_de_restriccion(error):
     """Nombre de la restricción de la base que violó un ``IntegrityError``, o ``None`` si no se puede leer.
 
@@ -116,14 +148,20 @@ def _gerente_activo():
     return Usuario.objects.filter(rol=Usuario.Rol.GERENTE, is_active=True).first()
 
 
-def _error_gerente_activo(activo=None):
-    """Error de la regla 2 de USR-ALT-USR (y regla 5 de USR-MOD-USR): ya hay un Gerente activo (D-09).
+def _error_gerente_activo(activo=None, reactivando=False):
+    """Error de la regla 2 de USR-ALT-USR (alta) o de la regla 5 de USR-MOD-USR (``reactivando``): ya hay
+    un Gerente activo (D-09).
 
-    Nombra al Gerente activo, como el prototipo (vAlta). Sin ``activo`` (cuando el rechazo vino de la
-    restricción de la base) lo busca: la otra operación ya confirmó, así que lo encuentra.
+    Nombra al Gerente activo, como el prototipo (vAlta y react-do). Sin ``activo`` (cuando el rechazo vino
+    de la restricción de la base) lo busca: la otra operación ya confirmó, así que lo encuentra.
     """
     activo = activo or _gerente_activo()
     quien = f": {activo.get_full_name()}" if activo else ""
+    if reactivando:
+        return ValidationError(
+            f"No se puede reactivar: ya hay un Gerente activo{quien}. Dalo de baja primero.",
+            code="gerente_activo",
+        )
     return ValidationError(
         f"Ya hay un Gerente activo{quien}. Solo puede haber uno a la vez: para dar de alta a otro, "
         "primero dá de baja al actual desde su ficha.",
@@ -251,21 +289,47 @@ def acciones_permitidas(actor, cuenta):
     "restablecer", "reactivar", "baja"}``. La ficha y el aviso de la regla 8 del alta muestran solo estos
     botones, para que nadie llegue por un botón a un error 403 (D-30).
 
-    - USR-MOD-USR y USR-BAJ-USR: sobre una cuenta de su alcance (regla 1), el Gerente modifica los datos
-      (también de una inactiva, D-28); restablece y da de baja una activa; reactiva una inactiva (D-28).
-    - Tarea 05a: el Administrador todavía no modifica, restablece, reactiva ni da de baja (llega en la
-      05b, con la regla 4 y la regla 5 de USR-MOD-USR y la precondición c de USR-BAJ-USR); para él el
-      conjunto está vacío. En la 05b cambia solo esta función.
+    - USR-MOD-USR y USR-BAJ-USR: sobre una cuenta de su alcance (regla 1), el Gerente y el Administrador
+      modifican los datos (también de una inactiva, D-28); restablecen y dan de baja una activa; reactivan
+      una inactiva (D-28).
+    - Regla 4 de USR-MOD-USR: nadie restablece su propia contraseña (el Administrador es el único que
+      tiene su propia cuenta en su alcance).
+    - Precondición c de USR-BAJ-USR y SEG-15: no se ofrece la baja de un Administrador si no queda otro
+      Administrador activo (el caso real es la propia cuenta del único Administrador activo).
+    - Regla 5 de USR-MOD-USR: «reactivar» se ofrece para cualquier cuenta inactiva; si es un Gerente y ya
+      hay otro activo, el rechazo se explica al confirmar (D-30), no es un 403.
 
-    No consulta ni cambia nada más que el alcance.
+    No consulta ni cambia nada más que el alcance y los Administradores activos.
     """
-    if actor is None or not actor.is_active or rol_de(actor) != Usuario.Rol.GERENTE:
+    if actor is None or not actor.is_active:
+        return frozenset()
+    if rol_de(actor) not in (Usuario.Rol.GERENTE, ADMINISTRADOR):
         return frozenset()
     if not Usuario.objects.en_alcance_de(actor).filter(pk=cuenta.pk).exists():
         return frozenset()
-    if cuenta.is_active:
-        return frozenset({"modificar", "restablecer", "baja"})
-    return frozenset({"modificar", "reactivar"})
+    if not cuenta.is_active:
+        return frozenset({"modificar", "reactivar"})
+    acciones = {"modificar", "restablecer", "baja"}
+    if cuenta.pk == actor.pk:
+        acciones.discard("restablecer")  # regla 4
+    if cuenta.is_superuser and not _hay_otro_administrador_activo(cuenta):
+        acciones.discard("baja")  # precondición c
+    return frozenset(acciones)
+
+
+def _hay_otro_administrador_activo(cuenta):
+    """True si hay un Administrador activo distinto de ``cuenta`` (precondición c de USR-BAJ-USR)."""
+    return Usuario.objects.filter(is_superuser=True, is_active=True).exclude(pk=cuenta.pk).exists()
+
+
+def gerente_activo_que_impide_reactivar(cuenta):
+    """El Gerente activo si ``cuenta`` es un Gerente inactivo y ya hay otro activo (regla 5 de USR-MOD-USR,
+    D-09); si no, ``None``. La ventana de «Reactivar cuenta» lo usa para mostrar el motivo sin pedir
+    confirmación (D-30). No bloquea nada: la regla la vuelve a controlar ``reactivar_usuario`` con el
+    bloqueo de SEG-15."""
+    if cuenta.is_active or cuenta.rol != Usuario.Rol.GERENTE:
+        return None
+    return _gerente_activo()
 
 
 def gerente_activo_que_impide_el_alta(actor):
@@ -414,22 +478,32 @@ def alta_usuario(actor, rol, nombre, apellido, email, telefono=""):
     return cuenta, contrasena_temporal
 
 
-def _bloquear_cuenta_en_alcance(actor, cuenta_id):
+def _bloquear_cuenta_en_alcance(actor, cuenta_id, bloqueo_previo=None):
     """Cuenta ``cuenta_id`` bloqueada para modificarla, si está dentro del alcance de ``actor``.
 
-    Precondición a (``actor`` es un Gerente activo; el Administrador llega en la tarea 05b) y regla 1
-    de USR-MOD-USR y USR-BAJ-USR. Un id
-    inexistente da ``Http404`` y una cuenta fuera del alcance, ``PermissionDenied`` (D-28), igual que
-    ``obtener_cuenta``. ``select_for_update()`` (CLAUDE.md) evita que dos operaciones simultáneas sobre
-    la misma cuenta se pisen; hay que llamarla dentro de ``transaction.atomic()``.
+    Precondición a (``actor`` es un Gerente o un Administrador activos, D-16) y regla 1 de USR-MOD-USR y
+    USR-BAJ-USR. Un id inexistente da ``Http404`` y una cuenta fuera del alcance, ``PermissionDenied``
+    (D-28), igual que ``obtener_cuenta``. ``select_for_update()`` (CLAUDE.md) evita que dos operaciones
+    simultáneas sobre la misma cuenta se pisen; hay que llamarla dentro de ``transaction.atomic()``.
+
+    Orden de los bloqueos (SEG-15, D-30): primero el grupo de filas que cuida un invariante
+    (``bloqueo_previo(cuenta)``: todos los Gerentes, o todos los Administradores activos, en orden de id) y
+    recién después la cuenta. Si cada operación bloqueara primero su cuenta y después el grupo, dos
+    operaciones sobre cuentas distintas podrían esperarse mutuamente (deadlock). Para saber a qué grupo
+    pertenece la cuenta se la lee antes sin bloquear: el rol no cambia (D-11) y el alcance depende solo de
+    él. Después de bloquear, se verifica de nuevo que ``actor`` siga activo y se vuelve a leer la cuenta,
+    ya bloqueada, con su estado real.
     """
-    _exigir_gerente_activo(actor)
-    cuenta = Usuario.objects.select_for_update().filter(pk=cuenta_id).first()
+    _exigir_gestor_activo(actor)
+    cuenta = Usuario.objects.filter(pk=cuenta_id).first()
     if cuenta is None:
         raise Http404("No existe esa cuenta.")
     if not Usuario.objects.en_alcance_de(actor).filter(pk=cuenta.pk).exists():
         raise PermissionDenied(MENSAJE_FUERA_DE_ALCANCE)
-    return cuenta
+    if bloqueo_previo is not None:
+        bloqueo_previo(cuenta)
+    _exigir_actor_sigue_activo(actor)
+    return Usuario.objects.select_for_update().get(pk=cuenta.pk)
 
 
 def modificar_usuario(actor, cuenta_id, nombre, apellido, email, telefono=""):
@@ -502,7 +576,9 @@ def restablecer_contrasena(actor, cuenta_id):
       persona), vence a los 7 días y se muestra una sola vez a quien la restablece.
     - Postcondición b y SEG-11: al cambiar el resumen de la contraseña, las sesiones abiertas con la
       cuenta dejan de ser válidas (Django compara ese resumen en cada pedido).
-    - Regla 1: el Gerente no restablece su propia contraseña (la cambia con USR-CMB-CTR).
+    - Regla 1: el Gerente no restablece su propia contraseña (no está en su alcance).
+    - Regla 4: tampoco el Administrador, que sí tiene su cuenta en su alcance: la cambia con USR-CMB-CTR.
+      Se rechaza con el código «propia_cuenta».
     - D-28: solo para cuentas activas; una inactiva se reactiva.
     - Postcondición d, SEG-14 y D-22: auditoría sin contraseñas, en la misma transacción.
 
@@ -510,6 +586,11 @@ def restablecer_contrasena(actor, cuenta_id):
     """
     with transaction.atomic():
         cuenta = _bloquear_cuenta_en_alcance(actor, cuenta_id)
+        if cuenta.pk == actor.pk:
+            raise ValidationError(
+                "No se restablece tu propia contraseña: la cambiás vos con «Cambiar contraseña».",
+                code="propia_cuenta",
+            )
         if not cuenta.is_active:
             raise ValidationError(
                 "La cuenta está inactiva: reactivala para generarle una contraseña temporal.",
@@ -532,18 +613,38 @@ def reactivar_usuario(actor, cuenta_id):
     - Postcondición c y regla 6: la cuenta queda activa y su contraseña se restablece como en
       ``restablecer_contrasena`` (SEG-04, SEG-11).
     - D-28: solo para cuentas inactivas.
+    - Regla 5, D-09 y SEG-15: solo se reactiva un Gerente si no hay otro activo. Se bloquean todas las
+      filas de Gerente (antes que la cuenta) y después se busca al Gerente activo en una consulta aparte;
+      el rechazo lleva el código «gerente_activo». La restricción ``un_solo_gerente_activo`` queda de
+      respaldo: su ``IntegrityError`` se traduce igual, y uno que no se pueda identificar da el código
+      «no_se_pudo_reactivar». Nunca un error 500.
     - Postcondición d, SEG-14 y D-22: auditoría con el cambio de estado, sin contraseñas.
 
-    Pendiente, tarea 05: la regla 5 (solo se reactiva un Gerente si no hay otro activo) no aplica al
-    Gerente, que no gestiona cuentas de Gerente. Pendiente, tarea 06: sacar la cuenta de su grupo.
+    Pendiente, tarea 06: sacar la cuenta de su grupo de cuentas vinculadas.
     """
     with transaction.atomic():
-        cuenta = _bloquear_cuenta_en_alcance(actor, cuenta_id)
+        cuenta = _bloquear_cuenta_en_alcance(
+            actor, cuenta_id, bloqueo_previo=_bloquear_grupo_de_reactivacion
+        )
         if cuenta.is_active:
             raise ValidationError("La cuenta ya está activa.", code="cuenta_activa")
+        if cuenta.rol == Usuario.Rol.GERENTE:
+            activo = _gerente_activo()
+            if activo is not None:
+                raise _error_gerente_activo(activo, reactivando=True)
         cuenta.is_active = True
         temporal = cuenta.asignar_contrasena_temporal()
-        cuenta.save(update_fields=["is_active", "password", "fecha_contrasena_temporal"])
+        try:
+            # Savepoint: si una operación simultánea ganó de mano, la base rechaza esta reactivación y
+            # se informa el motivo en vez de un error 500.
+            with transaction.atomic():
+                cuenta.save(update_fields=["is_active", "password", "fecha_contrasena_temporal"])
+        except IntegrityError as error:
+            if _nombre_de_restriccion(error) == RESTRICCION_UN_SOLO_GERENTE_ACTIVO:
+                raise _error_gerente_activo(reactivando=True) from error
+            raise ValidationError(
+                "No se pudo reactivar la cuenta. Volvé a intentarlo.", code="no_se_pudo_reactivar"
+            ) from error
         # Tarea 06: acá la cuenta sale de su grupo de cuentas vinculadas (SEG-11).
         RegistroAuditoria.objects.registrar(
             usuario=actor,
@@ -562,16 +663,27 @@ def baja_usuario(actor, cuenta_id):
     - Postcondición a: la cuenta queda inactiva. Postcondición b: con ``is_active`` en False,
       ``get_user`` de Django deja de devolver la cuenta, así que sus sesiones abiertas se pierden
       en el pedido siguiente.
+    - Regla 1, D-16: el Administrador da de baja la cuenta del Gerente y las de los Administradores,
+      incluida la suya.
+    - Precondición c y SEG-15: si la cuenta es de un Administrador, tiene que quedar al menos otro activo.
+      Se bloquean todos los Administradores activos (antes que la cuenta), se verifica que ``actor``
+      siga activo y se cuentan los que quedan en una consulta aparte; si no queda ninguno, el rechazo
+      lleva el código «ultimo_administrador». No hay restricción de la base que lo respalde: el bloqueo es
+      lo único que lo garantiza.
     - Postcondición d, SEG-14 y D-22: auditoría con el cambio de estado, en la misma transacción.
 
     Pendiente: postcondiciones c, e, f y g y regla 4 (pendientes, invernaderos, pedidos y entregas);
-    tarea 05: precondición c (queda al menos otro Administrador activo) y SEG-15; tarea 06: regla 2
-    (la baja no afecta a las cuentas vinculadas; hoy no hay grupos que afectar).
+    tarea 06: regla 2 (la baja no afecta a las cuentas vinculadas; hoy no hay grupos que afectar).
     """
     with transaction.atomic():
-        cuenta = _bloquear_cuenta_en_alcance(actor, cuenta_id)
+        cuenta = _bloquear_cuenta_en_alcance(actor, cuenta_id, bloqueo_previo=_bloquear_grupo_de_baja)
         if not cuenta.is_active:
             raise ValidationError("La cuenta ya está inactiva.", code="cuenta_inactiva")
+        if cuenta.is_superuser and not _hay_otro_administrador_activo(cuenta):
+            raise ValidationError(
+                "No se puede dar de baja: es el último Administrador activo.",
+                code="ultimo_administrador",
+            )
         cuenta.is_active = False
         cuenta.save(update_fields=["is_active"])
         RegistroAuditoria.objects.registrar(

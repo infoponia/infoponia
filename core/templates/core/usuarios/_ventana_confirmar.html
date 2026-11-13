@@ -1,19 +1,32 @@
-{% load iconos %}{% comment %}Ventana de confirmación de restablecer, reactivar y dar de baja (modalHtml 'reset', 'react' y
+{% load iconos cuentas %}{% comment %}Ventana de confirmación de restablecer, reactivar y dar de baja (modalHtml 'reset', 'react' y
 'baja' del prototipo). Recibe «cuenta», «accion» ("restablecer", "reactivar" o "baja") y, si el servicio
 rechazó la operación, «error». La operación se hace con un POST a la misma URL; abrir la ventana (GET) no
 cambia nada. Los textos del prototipo que hablan de las cuentas vinculadas se omiten hasta la tarea 06.
-Pendiente: lo que la baja deja asignado (invernaderos, pedidos, entregas y pendientes del Gerente).{% endcomment %}
+Pendiente: lo que la baja deja asignado (invernaderos, pedidos, entregas y pendientes del Gerente).
+Con «gerente_activo» (reactivar un Gerente con otro activo, regla 5 y D-30) la ventana no ofrece confirmar: muestra
+el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
 <div class="ov" data-ventana>
+  {% if accion == "reactivar" and gerente_activo %}
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">No se puede reactivar la cuenta</h2>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) no se puede reactivar: ya hay un Gerente activo, <b>{{ gerente_activo.get_full_name }}</b>. Solo puede haber uno a la vez. Para reactivar esta cuenta, primero dá de baja al actual desde su ficha.</p>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'core:usuario' gerente_activo.pk %}">Ver a {{ gerente_activo.get_full_name }}</a>
+      <a class="btn btn-ghost" href="{% url 'core:usuario' cuenta.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
+    </div>
+  </div>
+  {% else %}
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
     {% if accion == "restablecer" %}
     <h2 id="ventana-titulo">¿Restablecer la contraseña?</h2>
-    <p>Se genera una <b>contraseña temporal</b> para {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}). Se cierran sus sesiones abiertas.</p>
+    <p>Se genera una <b>contraseña temporal</b> para {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}). Se cierran sus sesiones abiertas.</p>
     {% elif accion == "reactivar" %}
     <h2 id="ventana-titulo">¿Reactivar la cuenta?</h2>
-    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}) vuelve a estar activa. Se genera una <b>contraseña temporal</b>.</p>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) vuelve a estar activa. Se genera una <b>contraseña temporal</b>.</p>
     {% else %}
     <h2 id="ventana-titulo">¿Dar de baja esta cuenta?</h2>
-    <p>{{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}) no va a poder iniciar sesión y se cierran sus sesiones abiertas. Su historial se conserva. Podés reactivarla más adelante.</p>
+    <p>{{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) no va a poder iniciar sesión y se cierran sus sesiones abiertas. Su historial se conserva. Podés reactivarla más adelante.</p>
+    {% if cuenta.pk == user.pk %}<p><b>Es tu propia cuenta:</b> se cierra tu sesión y salís del Sistema.</p>{% endif %}
     {% endif %}
     {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
     <form method="post" action="{% if accion == 'restablecer' %}{% url 'core:usuario_restablecer' cuenta.pk %}{% elif accion == 'reactivar' %}{% url 'core:usuario_reactivar' cuenta.pk %}{% else %}{% url 'core:usuario_baja' cuenta.pk %}{% endif %}">
@@ -30,4 +43,5 @@ Pendiente: lo que la baja deja asignado (invernaderos, pedidos, entregas y pendi
       </div>
     </form>
   </div>
+  {% endif %}
 </div>

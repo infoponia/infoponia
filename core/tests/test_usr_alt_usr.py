@@ -703,10 +703,10 @@ class UsrAltUsrVistaTests(TestCase):
         self.assertFalse(Usuario.objects.filter(email="laura@infoponia.com").exists())
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
-    def test_regla_8_administrador_ve_solo_ver_cuenta_en_el_aviso(self):
-        """USR-ALT-USR regla 8 y D-30 (tarea 05a): si el email es de un Gerente dado de baja, el aviso
-        se muestra, pero solo con «Ver cuenta»: el Administrador todavía no reactiva (llega en la 05b) y
-        no tiene que ver un botón que lo lleve a un 403."""
+    def test_regla_8_administrador_ve_reactivar_y_ver_cuenta_en_el_aviso(self):
+        """USR-ALT-USR regla 8 y D-30 (tarea 05b): si el email es de un Gerente dado de baja (y no hay otro
+        activo, así que se ve el formulario), el aviso ofrece al Administrador «Reactivar cuenta», porque
+        ahora puede hacerlo, y «Ver cuenta»."""
         self.entrar_como_administrador()
         inactivo = crear_gerente(email="laura@infoponia.com", activo=False)
 
@@ -714,10 +714,10 @@ class UsrAltUsrVistaTests(TestCase):
 
         self.assertContains(respuesta, "Ese email pertenece a una cuenta <b>inactiva</b>")
         self.assertContains(respuesta, "Gabriela Sosa, Gerente")
-        self.assertContains(respuesta, reverse("core:usuario", args=[inactivo.pk]))
+        self.assertContains(respuesta, "Reactivar cuenta")
+        self.assertContains(respuesta, reverse("core:usuario_reactivar", args=[inactivo.pk]))
         self.assertContains(respuesta, "Ver cuenta")
-        self.assertNotContains(respuesta, "Reactivar cuenta")
-        self.assertNotContains(respuesta, reverse("core:usuario_reactivar", args=[inactivo.pk]))
+        self.assertContains(respuesta, reverse("core:usuario", args=[inactivo.pk]))
 
 
 class UsrAltUsrConcurrenciaTests(TransactionTestCase):

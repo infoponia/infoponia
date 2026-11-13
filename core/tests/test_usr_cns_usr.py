@@ -50,9 +50,31 @@ def crear_cuenta(clase, email, nombre="Nombre", apellido="Apellido", activo=True
     )
 
 
+def administrador_inactivo(email="admin.anterior@infoponia.com"):
+    """Crea un Administrador dado de baja."""
+    cuenta = crear_administrador(email=email)
+    cuenta.is_active = False
+    cuenta.save()
+    return cuenta
+
+
 def ids(cuentas):
     """Conjunto de ids de un QuerySet o lista de cuentas."""
     return {cuenta.pk for cuenta in cuentas}
+
+
+def acciones_ofrecidas(respuesta, cuenta):
+    """Acciones sobre ``cuenta`` que ofrece la página: las que tienen un enlace a su URL (D-30)."""
+    pagina = respuesta.content.decode()
+    urls = {
+        "modificar": "usuario_modificar",
+        "restablecer": "usuario_restablecer",
+        "reactivar": "usuario_reactivar",
+        "baja": "usuario_baja",
+    }
+    return {
+        accion for accion, nombre in urls.items() if reverse(f"core:{nombre}", args=[cuenta.pk]) in pagina
+    }
 
 
 class UsrCnsUsrServicioTests(TestCase):
@@ -181,7 +203,7 @@ class UsrCnsUsrServicioTests(TestCase):
     def test_d30_acciones_permitidas_segun_actor_y_estado(self):
         """D-30, USR-MOD-USR y USR-BAJ-USR (regla 1) y D-28: el Gerente modifica, restablece y da de baja
         una cuenta activa de su alcance, y modifica y reactiva una inactiva; sobre una cuenta fuera de su
-        alcance no tiene acciones. Tarea 05a: el Administrador todavía no tiene ninguna (llegan en la 05b)."""
+        alcance no tiene acciones. Las del Administrador, en la prueba siguiente."""
         gerente = crear_gerente()
         activa = crear_cuenta(Capataz, "activa@infoponia.com")
         inactiva = crear_cuenta(Capataz, "inactiva@infoponia.com", activo=False)
@@ -192,9 +214,33 @@ class UsrCnsUsrServicioTests(TestCase):
         )
         self.assertEqual(servicios.acciones_permitidas(gerente, inactiva), {"modificar", "reactivar"})
         self.assertEqual(servicios.acciones_permitidas(gerente, administrador), set())
-        for cuenta in (gerente, administrador):
-            with self.subTest(cuenta=cuenta.email):
-                self.assertEqual(servicios.acciones_permitidas(administrador, cuenta), set())
+        self.assertEqual(servicios.acciones_permitidas(administrador_inactivo(), activa), set())
+
+    def test_d30_acciones_permitidas_del_administrador(self):
+        """D-30 (tarea 05b), USR-MOD-USR regla 1 y regla 4, USR-BAJ-USR regla 1 y precondición c: el
+        Administrador modifica, restablece y da de baja una cuenta activa de Gerente o de Administrador, y
+        modifica y reactiva una inactiva. En su propia cuenta no restablece la contraseña (regla 4) y solo
+        se da de baja si queda otro Administrador activo (precondición c). Las cuentas de los otros roles
+        están fuera de su alcance: ninguna acción."""
+        administrador = crear_administrador()
+        otro_administrador = crear_administrador(email="admin2@infoponia.com")
+        gerente = crear_gerente()
+        gerente_anterior = crear_gerente(email="gerente.anterior@infoponia.com", activo=False)
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+        acciones = lambda cuenta: servicios.acciones_permitidas(administrador, cuenta)
+
+        # Con otro Administrador activo.
+        self.assertEqual(acciones(gerente), {"modificar", "restablecer", "baja"})
+        self.assertEqual(acciones(gerente_anterior), {"modificar", "reactivar"})
+        self.assertEqual(acciones(otro_administrador), {"modificar", "restablecer", "baja"})
+        self.assertEqual(acciones(administrador), {"modificar", "baja"})
+        self.assertEqual(acciones(capataz), set())
+
+        # Sin otro Administrador activo: la propia cuenta no se da de baja; la del otro se reactiva.
+        otro_administrador.is_active = False
+        otro_administrador.save()
+        self.assertEqual(acciones(administrador), {"modificar"})
+        self.assertEqual(acciones(otro_administrador), {"modificar", "reactivar"})
 
     # ---- El Administrador (tarea 05a, D-16) ----
 
@@ -449,27 +495,36 @@ class UsrCnsUsrVistaTests(TestCase):
             respuesta, "Esa cuenta no está dentro de las que gestionás.", status_code=403
         )
 
-    def test_d30_ficha_del_administrador_no_ofrece_acciones_de_la_05b(self):
-        """D-30 (tarea 05a): mientras modificar, restablecer, reactivar y dar de baja sean solo del
-        Gerente, la ficha no le muestra al Administrador botones que lo lleven a un 403. Vale para el
-        Gerente activo, uno inactivo, otro Administrador y la propia cuenta («(vos)»)."""
+    def test_d30_ficha_del_administrador_ofrece_las_acciones_de_la_05b(self):
+        """D-30 (tarea 05b), USR-MOD-USR (regla 1 y regla 4) y USR-BAJ-USR (precondición c): la ficha le
+        ofrece al Administrador exactamente las acciones de ``acciones_permitidas``: sobre el Gerente activo
+        y sobre otro Administrador, modificar, restablecer y dar de baja; sobre un Gerente inactivo,
+        modificar y reactivar; sobre su propia cuenta, modificar y dar de baja, pero no restablecer su
+        contraseña (regla 4); y si es el único Administrador activo, ni siquiera la baja."""
         administrador = crear_administrador()
-        cuentas = [
-            crear_gerente(),
-            crear_gerente(email="gerente.anterior@infoponia.com", activo=False),
-            crear_administrador(email="admin2@infoponia.com"),
-            administrador,
-        ]
+        otro_administrador = crear_administrador(email="admin2@infoponia.com")
+        gerente = crear_gerente()
+        gerente_anterior = crear_gerente(email="gerente.anterior@infoponia.com", activo=False)
         self.client.force_login(administrador)
 
-        for cuenta in cuentas:
+        esperado = [
+            (gerente, {"modificar", "restablecer", "baja"}),
+            (gerente_anterior, {"modificar", "reactivar"}),
+            (otro_administrador, {"modificar", "restablecer", "baja"}),
+            (administrador, {"modificar", "baja"}),
+        ]
+        for cuenta, acciones in esperado:
             with self.subTest(cuenta=cuenta.email):
                 respuesta = self.client.get(reverse("core:usuario", args=[cuenta.pk]))
                 self.assertEqual(respuesta.status_code, 200)
-                for texto in ("Modificar datos", "Restablecer contraseña", "Reactivar cuenta", "Dar de baja"):
-                    self.assertNotContains(respuesta, texto)
-                for nombre in ("usuario_modificar", "usuario_restablecer", "usuario_reactivar", "usuario_baja"):
-                    self.assertNotContains(respuesta, reverse(f"core:{nombre}", args=[cuenta.pk]))
+                self.assertEqual(acciones_ofrecidas(respuesta, cuenta), acciones)
         propia = self.client.get(reverse("core:usuario", args=[administrador.pk]))
         self.assertContains(propia, "(vos)")
         self.assertContains(propia, "<dd>Administrador</dd>", html=True)
+        self.assertNotContains(propia, "Restablecer contraseña")
+
+        otro_administrador.is_active = False
+        otro_administrador.save()
+        con_uno_solo = self.client.get(reverse("core:usuario", args=[administrador.pk]))
+        self.assertEqual(acciones_ofrecidas(con_uno_solo, administrador), {"modificar"})
+        self.assertNotContains(con_uno_solo, "Dar de baja")

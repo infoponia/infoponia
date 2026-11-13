@@ -31,6 +31,13 @@ load_dotenv(BASE_DIR / ".env")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
+# SEG-18, D-16 y D-30: el panel de administración de Django solo existe con DEBUG encendido (desarrollo). En
+# producción (DJANGO_DEBUG=0) la ruta /admin/ no existe y responde 404: las cuentas se administran con las
+# pantallas propias de InfoPonia. Va atado a DEBUG y no a una variable propia para que no pueda quedar
+# encendido en producción por un descuido. Se calcula al arrancar. ``django.contrib.admin`` sigue instalado:
+# no cambian las migraciones.
+ADMIN_DJANGO_HABILITADO = DEBUG
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "clave-solo-para-desarrollo" if DEBUG else "")
 

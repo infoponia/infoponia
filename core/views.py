@@ -3,7 +3,7 @@
 # entrada, llaman al servicio y renderizan.
 
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ValidationError
@@ -28,6 +28,7 @@ from core.servicios import (
     cambiar_contrasena,
     consultar_usuarios,
     gerente_activo_que_impide_el_alta,
+    gerente_activo_que_impide_reactivar,
     modificar_usuario,
     obtener_cuenta,
     reactivar_usuario,
@@ -185,12 +186,12 @@ def usuario_nuevo(request):
     )
 
 
-# ---- Modificar, restablecer, reactivar y dar de baja (USR-MOD-USR y USR-BAJ-USR, tarea 04b) ----
-# Pendiente, tarea 05b: el Administrador usa estas mismas pantallas (D-16); hasta entonces su ficha no le
-# ofrece estas acciones (``acciones_permitidas``, D-30).
+# ---- Modificar, restablecer, reactivar y dar de baja (USR-MOD-USR y USR-BAJ-USR, tareas 04b y 05b) ----
+# El Gerente y el Administrador usan las mismas pantallas, cada uno con su alcance (D-16, D-28). La ficha
+# solo ofrece los botones de ``acciones_permitidas`` (D-30).
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 def usuario_modificar(request, cuenta_id):
     """Modificar los datos de una cuenta (USR-MOD-USR, la parte de edición de vUsuario).
 
@@ -242,15 +243,31 @@ def _gestionar_cuenta(request, cuenta_id, accion):
       Límite conocido (como en el alta, D-28): recargar la respuesta reenvía el formulario.
     - Si el servicio rechaza la operación (por ejemplo, la cuenta ya cambió de estado), la ventana de
       confirmación vuelve a mostrarse con el motivo.
+    - Reactivar un Gerente con otro Gerente activo (regla 5, D-30): la ventana no ofrece confirmar; muestra
+      el motivo, con «Ver a <nombre>» y «Cerrar». Un POST manual lo rechaza el servicio igual.
+    - Dar de baja la propia cuenta (solo el Administrador, regla 1 de USR-BAJ-USR): se cierra la sesión y se
+      vuelve al inicio de sesión con el aviso.
     """
     cuenta = obtener_cuenta(request.user, cuenta_id)
+    actor_id = request.user.pk
     contexto = {"cuenta": cuenta, "accion": accion, "acciones": acciones_permitidas(request.user, cuenta)}
+    if accion == "reactivar":
+        contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
     if request.method == "POST":
         try:
             resultado = _SERVICIO_DE_ACCION[accion](request.user, cuenta.pk)
         except ValidationError as error:
             contexto["error"] = error.messages[0]
+            if accion == "reactivar":
+                # Otra operación pudo activar a un Gerente mientras la ventana estaba abierta.
+                contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
         else:
+            if accion == "baja" and cuenta.pk == actor_id:
+                # La baja ya cerró la sesión de esta cuenta (``is_active`` en False); se vacía la sesión
+                # en el servidor (SEG-08) y el aviso viaja en una cookie, porque la sesión ya no existe.
+                logout(request)
+                messages.success(request, "Tu cuenta se dio de baja y se cerró la sesión.")
+                return redirect("core:iniciar_sesion")
             if accion == "baja":
                 messages.success(
                     request,
@@ -266,7 +283,7 @@ def _gestionar_cuenta(request, cuenta_id, accion):
     return render(request, "core/usuarios/ficha.html", contexto)
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 @never_cache
 @vary_on_headers("HX-Request")
 def usuario_restablecer(request, cuenta_id):
@@ -274,7 +291,7 @@ def usuario_restablecer(request, cuenta_id):
     return _gestionar_cuenta(request, cuenta_id, "restablecer")
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 @never_cache
 @vary_on_headers("HX-Request")
 def usuario_reactivar(request, cuenta_id):
@@ -282,7 +299,7 @@ def usuario_reactivar(request, cuenta_id):
     return _gestionar_cuenta(request, cuenta_id, "reactivar")
 
 
-@rol_requerido(Usuario.Rol.GERENTE)
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 @never_cache
 @vary_on_headers("HX-Request")
 def usuario_baja(request, cuenta_id):
