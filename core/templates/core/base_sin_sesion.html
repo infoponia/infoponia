@@ -1,13 +1,22 @@
 {% extends "core/base.html" %}{% load iconos %}
-{% comment %}Marco de las pantallas sin sesión (equivale a authShell del prototipo): fuera del marco del ERP.{% endcomment %}
+{% comment %}Marco de las pantallas sin sesión (equivale a authShell del prototipo): fuera del marco del ERP. Muestra los
+mensajes de Django con las mismas convenciones que el marco con sesión (D-29): hoy, el de la baja de la propia
+cuenta del Administrador.{% endcomment %}
 {% block cuerpo %}
 <div class="auth">
   <div class="auth-brand">
     <div class="logo">{% icono "leafmark" 16 %}</div>
     <div><b>{{ nombre_organizacion }}</b><small>Sistema de gestión InfoPonia</small></div>
   </div>
+  {% if messages %}
+  <div data-avisos>
+    {# Respaldo sin JavaScript: el mensaje queda fijo en la página. Con JavaScript, infoponia.js lo reemplaza por un aviso breve. #}
+    {% for mensaje in messages %}{% if mensaje.level >= 40 %}<div class="alert alert-danger" role="status" data-aviso data-tipo="error">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% else %}<div class="alert alert-ok" role="status" data-aviso data-tipo="ok">{% icono "check" 16 %}<div>{{ mensaje }}</div></div>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
   <div class="auth-card">
     {% block contenido %}{% endblock %}
   </div>
 </div>
+<div class="avisos" id="avisos" role="status" aria-live="polite"></div>
 {% endblock %}

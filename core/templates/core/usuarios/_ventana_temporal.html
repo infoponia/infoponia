@@ -1,4 +1,4 @@
-{% load iconos %}{% comment %}Ventana de la contraseña temporal (equivale a tempPanel y modalHtml 'temp' del prototipo). Se usa en el
+{% load iconos cuentas %}{% comment %}Ventana de la contraseña temporal (equivale a tempPanel y modalHtml 'temp' del prototipo). Se usa en el
 alta, el restablecimiento y la reactivación. Recibe «cuenta», «contrasena_temporal», «modo» ("alta",
 "restablecer" o "reactivar") y «destino» (a dónde lleva «Entendido» si no hay JavaScript). La temporal solo
 existe en la respuesta que incluye esta ventana: no se guarda en ningún lado. Bloquea el fondo hasta
@@ -7,13 +7,13 @@ existe en la respuesta que incluye esta ventana: no se guarda en ningún lado. B
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
     {% if modo == "alta" %}
     <h2 id="ventana-titulo">Cuenta creada</h2>
-    <p>Esta es la contraseña temporal de {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}). Pasásela por un medio seguro: no se vuelve a mostrar.</p>
+    <p>Esta es la contraseña temporal de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}). Pasásela por un medio seguro: no se vuelve a mostrar.</p>
     {% elif modo == "restablecer" %}
     <h2 id="ventana-titulo">Contraseña restablecida</h2>
-    <p>Se cerraron las sesiones abiertas de {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}). Esta es su nueva contraseña temporal:</p>
+    <p>Se cerraron las sesiones abiertas de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}). Esta es su nueva contraseña temporal:</p>
     {% else %}
     <h2 id="ventana-titulo">Cuenta reactivada</h2>
-    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta.get_rol_display }}) volvió a estar activa. Esta es su nueva contraseña temporal:</p>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) volvió a estar activa. Esta es su nueva contraseña temporal:</p>
     {% endif %}
     <div class="temp">
       <div class="muted" style="font-size:12px">Contraseña temporal</div>

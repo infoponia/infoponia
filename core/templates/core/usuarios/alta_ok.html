@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% extends "core/base_con_sesion.html" %}{% load iconos cuentas %}
 {% comment %}Cuenta creada (USR-ALT-USR postcondición c; vAltaOk del prototipo). La contraseña temporal solo existe en
 esta respuesta (la vista usa never_cache y no la guarda): la muestra la ventana compartida
 _ventana_temporal.html.
@@ -7,7 +7,7 @@ Pendiente: aviso al nuevo Gerente con los pendientes (postcondición d) e invern
 {% block contenido %}
 <div class="page narrow">
   <div class="page-h"><h1>Cuenta creada</h1></div>
-  <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Se dio de alta la cuenta de <b>{{ cuenta.get_full_name }}</b> ({{ cuenta.get_rol_display }}) — <span class="mono">{{ cuenta.email }}</span>.</div></div>
+  <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Se dio de alta la cuenta de <b>{{ cuenta.get_full_name }}</b> ({{ cuenta|rol_visible }}) — <span class="mono">{{ cuenta.email }}</span>.</div></div>
   <div style="margin-top:14px"><div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>La contraseña temporal se mostró una sola vez. Si se perdió, restablecela desde la ficha de la cuenta.</div></div></div>
   <div class="row" style="margin-top:16px">
     <a class="btn btn-primary" href="{% url 'core:usuarios' %}" data-foco-al-cerrar>Volver a la lista</a>

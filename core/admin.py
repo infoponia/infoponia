@@ -1,6 +1,6 @@
-# Admin de Usuario y de los seis roles. El Administrador técnico (D-10) da de alta,
-# modifica y da de baja al Gerente desde acá; los demás roles quedan registrados para
-# cuando existan sus propias pantallas.
+# Admin de Usuario y de los seis roles. Solo existe en desarrollo (SEG-18, D-30): en producción la
+# administración de cuentas se hace con las pantallas propias de InfoPonia (D-16), que aplican el alcance,
+# la contraseña temporal, la auditoría y los invariantes de SEG-15, y que este admin no aplica.
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
