@@ -14,16 +14,7 @@ from django.test import TestCase, override_settings
 from django.urls import NoReverseMatch, clear_url_caches, reverse
 
 import config.urls
-from core.models import Usuario
-
-CLAVE = "clave-segura-123"
-
-
-def crear_administrador(email="admin@infoponia.com"):
-    """Crea un Administrador técnico: superusuario sin rol (D-10)."""
-    return Usuario.objects.create_superuser(
-        email=email, password=CLAVE, first_name="Adrián", last_name="Mena"
-    )
+from core.tests.fabricas import crear_administrador
 
 
 def recargar_urls():

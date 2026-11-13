@@ -24,29 +24,10 @@ from django.urls import reverse
 from core import servicios
 from core.models import ADMINISTRADOR, Capataz, Gerente, RegistroAuditoria, Usuario, Vendedor
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
+from core.tests.fabricas import CLAVE, crear_administrador, crear_cuenta, crear_gerente
 
-CLAVE = "clave-segura-123"
-
-
-def crear_gerente(email="gerente@infoponia.com", activo=True):
-    """Crea un Gerente con la contraseña de prueba. Solo puede haber uno activo (D-09)."""
-    return Gerente.objects.create_user(
-        email=email, password=CLAVE, first_name="Gabriela", last_name="Sosa", is_active=activo
-    )
-
-
-def crear_administrador(email="admin@infoponia.com"):
-    """Crea un Administrador técnico: superusuario sin rol (D-10)."""
-    return Usuario.objects.create_superuser(
-        email=email, password=CLAVE, first_name="Adrián", last_name="Mena"
-    )
-
-
-def crear_cuenta(clase, email="laura@infoponia.com", activo=True):
-    """Crea una cuenta del rol de ``clase`` con la contraseña de prueba."""
-    return clase.objects.create_user(
-        email=email, password=CLAVE, first_name="Laura", last_name="Benítez", is_active=activo
-    )
+# Estas pruebas verifican «Laura Benítez» como nombre de la cuenta: se pasa explícito a crear_cuenta.
+LAURA = {"nombre": "Laura", "apellido": "Benítez"}
 
 
 class UsrBajUsrServicioTests(TestCase):
@@ -57,9 +38,9 @@ class UsrBajUsrServicioTests(TestCase):
     def test_pre_a_rechaza_actor_sin_cuenta_activa_de_gerente(self):
         """USR-BAJ-USR precondición a: da de baja una cuenta activa de Gerente o de Administrador (las
         del Administrador están más abajo). Un Capataz o un Gerente dado de baja no pueden."""
-        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA)
         gerente_inactivo = crear_gerente(activo=False)
-        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com")
+        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com", **LAURA)
 
         for actor in (capataz, gerente_inactivo):
             with self.subTest(actor=actor.email):
@@ -72,7 +53,7 @@ class UsrBajUsrServicioTests(TestCase):
         """USR-BAJ-USR precondición b: la cuenta tiene que estar activa; dar de baja una inactiva se
         rechaza y no deja registro de auditoría."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         with self.assertRaises(ValidationError) as contexto:
             servicios.baja_usuario(gerente, cuenta.pk)
@@ -121,7 +102,7 @@ class UsrBajUsrServicioTests(TestCase):
         """USR-BAJ-USR postcondición a: la cuenta queda «inactiva» (baja lógica): no se borra, conserva
         su rol, sus datos y su contraseña, y ya no puede identificarse (regla 2 de USR-INI-SES)."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         servicios.baja_usuario(gerente, cuenta.pk)
 
@@ -139,7 +120,7 @@ class UsrBajUsrServicioTests(TestCase):
         """USR-BAJ-USR postcondición d, SEG-14 y D-22: queda un registro de auditoría con quién actuó,
         su rol, la acción, la cuenta y el cambio de estado; sin contraseñas."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         servicios.baja_usuario(gerente, cuenta.pk)
 
@@ -158,7 +139,7 @@ class UsrBajUsrServicioTests(TestCase):
         """D-22: la baja y su registro de auditoría se guardan en la misma transacción; si falla el
         registro, la cuenta sigue activa."""
         gerente = crear_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
 
         with mock.patch.object(
             RegistroAuditoria.objects, "registrar", side_effect=RuntimeError("falla simulada")
@@ -259,7 +240,7 @@ class UsrBajUsrServicioTests(TestCase):
         """USR-BAJ-USR regla 1 y D-16: las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico
         las gestiona el Gerente; para el Administrador están fuera del alcance."""
         administrador = crear_administrador()
-        capataz = crear_cuenta(Capataz, "capataz@infoponia.com")
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA)
 
         with self.assertRaises(PermissionDenied):
             servicios.baja_usuario(administrador, capataz.pk)
@@ -283,7 +264,7 @@ class UsrBajUsrVistaTests(TestCase):
         cambia nada); al confirmar, la cuenta queda inactiva, se vuelve a la ficha con el aviso y la ficha
         pasa a ofrecer reactivar."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         url = reverse("core:usuario_baja", args=[cuenta.pk])
 
         confirmacion = self.client.get(url, headers={"HX-Request": "true"})
@@ -303,7 +284,7 @@ class UsrBajUsrVistaTests(TestCase):
         """USR-BAJ-USR postcondición b: al dar de baja una cuenta se cierran sus sesiones abiertas: con la
         cuenta ya inactiva, el pedido siguiente de su navegador va al inicio de sesión. Dos clientes: uno
         con la sesión de la cuenta y otro con la del Gerente."""
-        cuenta = crear_cuenta(Capataz)
+        cuenta = crear_cuenta(Capataz, **LAURA)
         navegador_de_la_cuenta = Client()
         self.assertTrue(navegador_de_la_cuenta.login(email=cuenta.email, password=CLAVE))
         self.assertEqual(navegador_de_la_cuenta.get(reverse("core:inicio")).status_code, 200)
@@ -320,7 +301,7 @@ class UsrBajUsrVistaTests(TestCase):
         baja mientras la ventana estaba abierta), la ventana vuelve a mostrarse con el motivo y no queda
         un segundo registro de auditoría."""
         self.entrar_como_gerente()
-        cuenta = crear_cuenta(Capataz, activo=False)
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
         respuesta = self.client.post(reverse("core:usuario_baja", args=[cuenta.pk]))
 
@@ -344,8 +325,8 @@ class UsrBajUsrVistaTests(TestCase):
         self.assertTrue(Usuario.objects.get(pk=administrador.pk).is_active)
         self.assertTrue(Usuario.objects.get(pk=gerente.pk).is_active)
 
-        self.client.force_login(crear_cuenta(Capataz, "capataz@infoponia.com"))
-        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com")
+        self.client.force_login(crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA))
+        objetivo = crear_cuenta(Vendedor, "vendedor@infoponia.com", **LAURA)
         respuesta = self.client.post(reverse("core:usuario_baja", args=[objetivo.pk]))
         self.assertContains(respuesta, "Tu cuenta de Capataz no tiene acceso", status_code=403)
         self.assertTrue(Usuario.objects.get(pk=objetivo.pk).is_active)

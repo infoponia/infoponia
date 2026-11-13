@@ -89,6 +89,13 @@
   mismo, el Administrador sale del Sistema con un aviso. `ADMIN_DJANGO_HABILITADO = DEBUG`: con `DJANGO_DEBUG=0`,
   `/admin/` responde 404. 237 pruebas en total, sin migraciones. Verificada a mano. Rama
   `feature/CRUD-Admin-5b`. Decisión D-30.
+- Tarea chica de limpieza de pruebas (sin cambiar lo que verifica ninguna): las fábricas `crear_gerente`,
+  `crear_administrador`, `crear_capataz` y `crear_cuenta` y los auxiliares `administrador_inactivo` y `dar_temporal_vencida` pasan a
+  `core/tests/fabricas.py`, con una sola firma (nombre y apellido opcionales). Los archivos que verifican un nombre
+  concreto lo pasan explícito (`LAURA` en `test_usr_mod_usr.py` y `test_usr_baj_usr.py`). Las pruebas `test_d29_`
+  (`MarcoVistaTests` y `AvisosYFocoEstilosTests`) se mudaron a `core/tests/test_interfaz.py`. `requirements.txt` ya
+  estaba en ASCII (UTF-8 válido, sin BOM), no en UTF-16: no hizo falta convertirlo. 237 pruebas antes y después,
+  sin migraciones.
 
 ## En curso
 
@@ -136,20 +143,15 @@
 - Proveedor del almacenamiento de objetos para la foto de perfil (tarea 07).
 - Ingreso con Google: trabajo futuro, fuera de este bloque.
 - Hacer configurables por `.env` el host, el puerto, el nombre y el usuario de la base local.
-- `requirements.txt` está guardado en UTF-16 (probablemente generado con `pip freeze >` desde
-  PowerShell): pip lo lee, pero Git lo muestra como texto ilegible. Convertirlo a UTF-8. Cuándo: antes de la
-  tarea 07, que agrega dependencias.
 - Logo y nombre de la organización configurables: hoy el logo es un ícono fijo y el nombre sale de
   `NOMBRE_ORGANIZACION`; serán una imagen y un nombre configurables, en la configuración de la organización.
   Cuándo: sin fecha todavía.
 - Integrar el logo de InfoPonia: favicon y marca en el inicio de sesión. Cuándo: cuando esté el logo definitivo.
 - Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
   de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
-- Unificar las fábricas de pruebas (`crear_gerente`, `crear_administrador`, `crear_cuenta`) en
-  `core/tests/fabricas.py`, con una sola firma (`crear_cuenta` con nombre y apellido opcionales). Cuándo: tarea
-  de limpieza después de la 05.
-- Mudar las pruebas `test_d29_...` de `core/tests/test_usr_ini_ses.py` a `core/tests/test_interfaz.py`. Cuándo:
-  en la misma tarea de limpieza.
+- Fábricas de pruebas que quedaron sin unificar: `dar_contrasena_temporal` (en `test_usr_ini_ses.py` y
+  `test_usr_cmb_ctr.py`, con firmas distintas) y `datos_validos` (en `test_usr_alt_usr.py` y `test_usr_mod_usr.py`,
+  que son funciones distintas). Cuándo: si molestan al escribir las pruebas de la tarea 06.
 - Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
   fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.
