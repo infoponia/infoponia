@@ -839,4 +839,97 @@ Formato:
   - En un entorno de desarrollo con `DEBUG` encendido el admin sigue disponible; en el CI, con `DJANGO_DEBUG=0`, no
     existe, por eso las pruebas no lo usan.
   - La contraseña propia del Administrador solo se cambia por consola hasta la tarea 06.
+- Estado: vigente; D-31 cierra su consecuencia sobre la contraseña propia del Administrador
+
+## D-31 — Mi perfil y cambio voluntario de contraseña (tarea 06a)
+
+- Fecha: 13/11/2026
+- Decidió: Lautaro Fernández (durante la planificación de la tarea 06 y la revisión a mano de la 06a, a propuesta de Claude)
+- Antes: USR-GST-PRF pide una pantalla con los datos de la cuenta con la que se opera, desde la que se cambia la
+  contraseña (regla 3), y USR-CMB-CTR pide la contraseña actual cuando no extiende a USR-INI-SES (regla 1). El
+  prototipo pone el cambio de contraseña dentro de Mi perfil (`vPerfil`, `chgpw`) y rotula la entrada del menú
+  de cuenta «Mi perfil» para las cuentas de los roles y «Mi perfil y contraseña» para el Administrador
+  (`accountPop`). D-27 dejó la lista de requisitos en vivo con solo lo que el navegador puede comprobar y D-30
+  dejó la contraseña propia del Administrador «solo por consola hasta la tarea 06». D-25 reservó «Mi perfil»
+  para la tarea 06. No estaba definido en qué dirección se envía el cambio, ni si la contraseña actual se pide
+  también en el formulario, ni a quién se le pide corregir los datos.
+- Decisión:
+  - Mi perfil (`mi-perfil/`, solo lectura) muestra nombre, apellido, email, teléfono, rol y estado de la cuenta con
+    la que se opera, y nunca la contraseña ni su resumen (regla 1). Para el Administrador el rol dice
+    «Administrador (sin rol operativo)» (D-10). La consulta no se audita (regla 4, SEG-14).
+  - Mi perfil no tiene función en `core/servicios.py`. Sus pruebas se escribieron después de la vista.
+  - El cambio de contraseña es un formulario dentro de Mi perfil que se envía a `mi-perfil/contrasena/`, una vista
+    propia que solo acepta POST (un GET vuelve a Mi perfil) y lleva `never_cache`. Llama a
+    `cambiar_contrasena(request.user, nueva, actual)`, sin cambiarla. Si sale bien: `update_session_auth_hash`
+    (SEG-10), un aviso breve (D-29) y redirección a Mi perfil. Si falla: Mi perfil con los errores en los
+    campos, sin volver a escribir las contraseñas.
+  - `FormularioCambioContrasena` exige también la contraseña actual, con el mismo mensaje que el servicio
+    («Ingresá tu contraseña actual.»). El servicio sigue siendo quien decide si es correcta (regla 1).
+  - La lista de requisitos suma «Es distinta de la contraseña actual» (`data-requisito="distinta"`) solo en Mi
+    perfil: `politica_contrasena.js` la marca comparando con el campo `[data-contrasena-actual]`, que solo existe
+    ahí. En «Elegí tu contraseña» la lista no cambia.
+  - Regla 2 de USR-GST-PRF: la persona no modifica sus datos desde el perfil. El texto «Para corregir estos
+    datos, pedíselo …» nombra a quien gestiona la cuenta según el alcance de D-16 y D-28: «al Administrador» si es
+    un Gerente; «al Gerente (<nombre>)» si es de cualquier otro rol, o «al Gerente» si no hay uno activo (D-13).
+    El texto lo arma `quien_gestiona(cuenta)` en `core/servicios.py`, una función de lectura. El Administrador,
+    que gestiona su propia cuenta, ve en cambio «Modificar mis datos», que lleva a la pantalla de modificar de
+    «Cuentas». En su ficha, el Administrador ve «Tu contraseña la cambiás desde Mi perfil» (`vUsuario`).
+  - El menú de cuenta ofrece «Mi perfil» a todas las cuentas, también al Administrador. Esto se aparta del
+    prototipo, que rotula «Mi perfil y contraseña» para el Administrador.
+  - La foto de perfil (SEG-19) es de la tarea 07: queda el avatar con la sigla y el lugar marcado con un
+    comentario, sin botones. Las cuentas vinculadas son de la 06b. En celular, la cabecera de Mi perfil muestra
+    «Volver» al inicio (`back-btn` del prototipo).
+- Por qué:
+  - Una vista propia solo POST para el cambio, porque Mi perfil es una consulta sin efectos (regla 4) y el cambio
+    es una operación con servicio, auditoría y cambio del resumen de la sesión (SEG-10). Separadas, Mi perfil se
+    puede abrir, recargar y volver a él con «Atrás» sin riesgo, y la operación solo ocurre con un POST con CSRF.
+    Un GET en la dirección de la operación vuelve a Mi perfil en lugar de mostrar un error 405 sin salida. Si
+    sale bien se redirige, así que recargar no reenvía el formulario; `never_cache` evita que el navegador
+    conserve la respuesta de una operación sobre contraseñas.
+  - La contraseña actual es obligatoria también en el formulario porque el servicio se llama recién cuando el
+    formulario es válido. Si el formulario no la exigiera, un envío vacío mostraría primero los errores de la
+    contraseña nueva y, recién al corregirlos, el de la actual: dos rondas. Con la exigencia, los tres errores
+    aparecen juntos, como en `pwChangeErr` del prototipo. El mensaje es el mismo del servicio para que la
+    persona no vea dos textos distintos para lo mismo. Que la contraseña sea correcta lo decide solo el servicio,
+    que además la vuelve a pedir: el formulario no es una segunda fuente de la regla.
+  - «Distinta de la actual» va solo donde está ese campo porque D-27 limita la lista a lo que el navegador puede
+    comprobar. En Mi perfil la persona escribe la actual y el navegador puede compararla; en «Elegí tu contraseña»
+    no conoce la temporal, así que la lista allí no puede prometer esa comprobación. La lista es solo una ayuda
+    visual: el servidor valida siempre (SEG-03).
+  - El texto de a quién pedir los cambios sigue el alcance porque indicarle a la persona alguien que no puede
+    modificar su cuenta la dejaría sin salida: esa persona recibiría un 403 si lo intentara (SEG-13). Quién
+    gestiona a quién ya lo fijan D-16 y D-28, y el texto dice lo mismo. Sin Gerente activo se dice «al Gerente» sin nombre porque el
+    Sistema tiene que funcionar entre la baja de un Gerente y el alta del siguiente (D-13). Se arma en una
+    función y no con una condición en la plantilla, por la razón de `acciones_permitidas` (D-30): repetirla en
+    cada pantalla haría que una nueva la olvidara. «Al» y no «a el»: el prototipo arma el texto sin la
+    contracción.
+  - Mi perfil no tiene servicio por el criterio de D-25 para iniciar sesión: un servicio que solo envolviera una
+    lectura no agregaría nada. USR-GST-PRF no tiene precondiciones de negocio ni cambios que garantizar mientras
+    la persona solo consulta (postcondición a: «no se producen cambios»); el cambio de contraseña ya tiene su
+    servicio, `cambiar_contrasena`. La carga de la foto, que sí modifica datos, tendrá el suyo en la tarea 07. Las
+    pruebas van después de la vista, como pide `CLAUDE.md` para las pantallas sin reglas de negocio.
+  - El menú dice «Mi perfil» para todas las cuentas porque la contraseña está dentro de Mi perfil para todas:
+    `vPerfil` ofrece el mismo formulario al Administrador y a los demás roles. Dos nombres para el mismo destino
+    confunden, y el rótulo más largo sugeriría que la contraseña de los demás está en otro lado. El prototipo es
+    solo guía visual (`CLAUDE.md`, fuente 5) y su rótulo para el Administrador no agrega información: el destino
+    y el formulario son los mismos.
+- Fuentes: `docs/casos_de_uso/usuarios.md` (USR-GST-PRF reglas 1 a 4; USR-CMB-CTR reglas 1 a 3 y
+  postcondiciones c y d; USR-INI-SES regla 4; SEG-03, SEG-04, SEG-10, SEG-13 y SEG-14; «Pantallas»); prototipo
+  `docs/prototipos/cuentas_y_seguridad.html` (`vPerfil`, `accountPop`, `chgpw`, `pwChangeErr`, `policyList`,
+  `vUsuario`); D-10, D-13, D-16, D-25, D-27, D-28, D-29 y D-30; `CLAUDE.md` (tests).
+- Consecuencias:
+  - Cierra la consecuencia de D-30 sobre la contraseña propia del Administrador: la cambia desde Mi perfil, con la
+    contraseña actual, como cualquier persona. La consola de Render sigue siendo la vía de emergencia (D-30).
+  - `quien_gestiona` repite en texto lo que `en_alcance_de` define en código: si cambia el alcance de quién
+    gestiona a quién, hay que actualizar las dos. No se la derivó del queryset porque este responde «qué cuentas
+    gestiona quien actúa» y no «quién gestiona esta cuenta».
+  - Límite conocido: si el cambio falla, la pantalla con los errores es la respuesta del POST a
+    `mi-perfil/contrasena/`; recargarla hace que el navegador pida confirmar el reenvío del formulario. Es
+    inocuo: las contraseñas no se guardan en ningún lado y, si el reenvío tiene éxito, redirige a Mi perfil.
+  - La marca «distinta de la actual» compara con lo que se escribió en el campo, no con la contraseña real: si
+    la actual está mal escrita, la marca puede mostrarse igual. Es una ayuda visual; el servicio decide.
+  - Hasta la 06b, el menú de cuenta solo ofrece «Mi perfil» y «Cerrar sesión», y Mi perfil no tiene la tarjeta de
+    cuentas vinculadas (D-25: solo se muestra lo que existe). La 06b agrega la tarjeta y «Cambiar de cuenta».
+  - Pruebas: `core/tests/test_usr_gst_prf.py` (12, incluida `test_d31_`) y 10 nuevas en `UsrCmbCtrVistaTests`
+    (`core/tests/test_usr_cmb_ctr.py`). Sin migraciones.
 - Estado: vigente

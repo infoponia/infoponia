@@ -234,6 +234,9 @@ a.nav-item{text-decoration:none}
 .shell.sin-lateral{grid-template-columns:1fr}
 .shell form.pop-form{display:block}
 .shell form.pop-form .pop-act{border-top:1px solid var(--border)}
+/* «Mi perfil» del menú de cuenta es un enlace con el aspecto de las demás acciones del menú (tarea 06a). */
+a.pop-act{color:inherit;text-decoration:none}
+a.pop-act:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .aviso-recuperar{margin-top:16px;font-size:13px}
 .pw .eye svg{pointer-events:none}
 

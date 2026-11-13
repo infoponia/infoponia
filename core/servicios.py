@@ -1,7 +1,7 @@
 # Servicios de core: un caso de uso por función, dentro de transaction.atomic(). Hoy: el cambio de
-# contraseña (USR-CMB-CTR) y la gestión de cuentas del Gerente y del Administrador (USR-CNS-USR,
-# USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR), con los invariantes de SEG-15. Las vistas solo validan la
-# entrada y llaman acá.
+# contraseña (USR-CMB-CTR), lo que necesita Mi perfil (USR-GST-PRF) y la gestión de cuentas del Gerente y
+# del Administrador (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR), con los invariantes de SEG-15.
+# Las vistas solo validan la entrada y llaman acá.
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
@@ -172,6 +172,8 @@ def _error_gerente_activo(activo=None, reactivando=False):
 def cambiar_contrasena(usuario, contrasena_nueva, contrasena_actual=None):
     """USR-CMB-CTR: la persona reemplaza la contraseña de su propia cuenta por una nueva.
 
+    Lo usan las dos pantallas del caso de uso: «Elegí tu contraseña» (cuando extiende a USR-INI-SES) y el
+    cambio voluntario desde Mi perfil (USR-GST-PRF regla 3, tarea 06a).
     El modo lo decide el estado de la cuenta, no quien llama: si la cuenta tiene contraseña temporal
     el caso extiende a USR-INI-SES y no pide la contraseña actual; si no, la pide (regla 1).
     Regla 3: se cambia solo la contraseña de ``usuario``; este servicio no recibe ni busca otra
@@ -330,6 +332,24 @@ def gerente_activo_que_impide_reactivar(cuenta):
     if cuenta.is_active or cuenta.rol != Usuario.Rol.GERENTE:
         return None
     return _gerente_activo()
+
+
+def quien_gestiona(cuenta):
+    """A quién le pide la persona que corrija los datos de ``cuenta`` (regla 2 de USR-GST-PRF), como texto
+    para «Para corregir estos datos, pedíselo …» de Mi perfil: «al Administrador» para el Gerente; «al Gerente
+    (<nombre>)» para los demás roles, o «al Gerente» si no hay uno activo (D-13). ``None`` para el
+    Administrador, que modifica sus propios datos (D-16). El prototipo dice «a el»; acá va la contracción.
+
+    Sigue el alcance de ``en_alcance_de``: el Administrador gestiona al Gerente y el Gerente a los demás roles.
+    No bloquea ni cambia nada (regla 4 de USR-GST-PRF: la consulta no se audita).
+    """
+    rol = rol_de(cuenta)
+    if rol == ADMINISTRADOR:
+        return None
+    if rol == Usuario.Rol.GERENTE:
+        return "al Administrador"
+    activo = _gerente_activo()
+    return f"al Gerente ({activo.get_full_name()})" if activo else "al Gerente"
 
 
 def gerente_activo_que_impide_el_alta(actor):

@@ -1,6 +1,6 @@
 # Vistas de core: inicio de sesión, cierre de sesión, elegir contraseña (cambio forzado por contraseña
-# temporal), inicio de cada cuenta y cuentas del Gerente y del Administrador. Solo orquestan: validan la
-# entrada, llaman al servicio y renderizan.
+# temporal), Mi perfil con el cambio voluntario de contraseña, inicio de cada cuenta y cuentas del Gerente y
+# del Administrador. Solo orquestan: validan la entrada, llaman al servicio y renderizan.
 
 from django.contrib import messages
 from django.contrib.auth import logout, update_session_auth_hash
@@ -14,6 +14,7 @@ from django.views.decorators.vary import vary_on_headers
 from core.acceso import ADMINISTRADOR, rol_de, rol_requerido
 from core.forms import (
     FormularioAltaUsuario,
+    FormularioCambioContrasena,
     FormularioContrasenaNueva,
     FormularioFiltroUsuarios,
     FormularioInicioSesion,
@@ -31,6 +32,7 @@ from core.servicios import (
     gerente_activo_que_impide_reactivar,
     modificar_usuario,
     obtener_cuenta,
+    quien_gestiona,
     reactivar_usuario,
     restablecer_contrasena,
 )
@@ -81,6 +83,67 @@ def elegir_contrasena(request):
     else:
         form = FormularioContrasenaNueva()
     return render(request, "core/elegir_contrasena.html", {"form": form})
+
+
+# ---- Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR, tarea 06a) ----
+# Mi perfil no tiene servicio: solo muestra la cuenta con la que se opera y no modifica nada, igual que
+# iniciar sesión (D-25). La foto de perfil (SEG-19) llega en la tarea 07 y las cuentas vinculadas en la 06b.
+
+MENSAJE_CONTRASENA_ACTUALIZADA = (
+    "Contraseña actualizada. Se cerraron las demás sesiones abiertas con esta cuenta; esta sigue abierta."
+)
+
+
+def _render_mi_perfil(request, form):
+    """Mi perfil con el formulario de cambio de contraseña ``form`` (vacío o con los errores del envío)."""
+    return render(
+        request,
+        "core/mi_perfil.html",
+        {"form": form, "quien_gestiona": quien_gestiona(request.user)},
+    )
+
+
+def mi_perfil(request):
+    """Mi perfil (USR-GST-PRF, vPerfil): los datos de la cuenta con la que se opera y el cambio de contraseña.
+
+    - Regla 1: nombre, apellido, email, teléfono, rol y estado; nunca la contraseña.
+    - Regla 2: la persona no modifica sus datos desde acá, salvo el Administrador, que gestiona su cuenta.
+    - Regla 4 y SEG-14: la consulta no se audita.
+    Con contraseña temporal no se llega: el middleware lleva a «Elegí tu contraseña» (SEG-04).
+    """
+    return _render_mi_perfil(request, FormularioCambioContrasena())
+
+
+@never_cache
+def cambiar_mi_contrasena(request):
+    """Cambio voluntario de la contraseña desde Mi perfil (USR-CMB-CTR por sí mismo, USR-GST-PRF regla 3).
+
+    Solo acepta POST: un GET vuelve a Mi perfil. Cambia siempre la contraseña de ``request.user`` (regla 3):
+    la cuenta no viaja en la URL ni en el formulario. El servicio pide la contraseña actual (regla 1) y aplica
+    la política (regla 2, SEG-03). Si sale bien, conserva esta sesión y cierra las demás (SEG-10) y vuelve a
+    Mi perfil con un aviso breve (D-29); si no, muestra Mi perfil con los errores, sin volver a escribir las
+    contraseñas en los campos. Sin la marca ``@permitido_con_contrasena_temporal``: con una temporal, el
+    middleware lleva a «Elegí tu contraseña» (SEG-04).
+    """
+    if request.method != "POST":
+        return redirect("core:mi_perfil")
+    form = FormularioCambioContrasena(request.POST)
+    if form.is_valid():
+        try:
+            cambiar_contrasena(
+                request.user,
+                form.cleaned_data["contrasena_nueva"],
+                contrasena_actual=form.cleaned_data["contrasena_actual"],
+            )
+        except ValidationError as error:
+            for campo, errores in error.error_dict.items():
+                for e in errores:
+                    form.add_error(campo if campo in form.fields else None, e)
+        else:
+            update_session_auth_hash(request, request.user)  # SEG-10
+            messages.success(request, MENSAJE_CONTRASENA_ACTUALIZADA)
+            return redirect("core:mi_perfil")
+    return _render_mi_perfil(request, form)
 
 
 def inicio(request):

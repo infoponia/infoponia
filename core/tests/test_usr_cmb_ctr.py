@@ -1,7 +1,8 @@
 # Pruebas de USR-CMB-CTR (Cambiar Contraseña) y de los requisitos que cita: SEG-02, SEG-03, SEG-10 y
 # SEG-14 (docs/casos_de_uso/usuarios.md), más D-18 y D-22. Las de servicio llaman directo a
 # core.servicios.cambiar_contrasena; las de la vista (integración) usan el cliente de prueba contra la
-# pantalla «Elegí tu contraseña» (vForced). Cada prueba arma sus propios datos.
+# pantalla «Elegí tu contraseña» (vForced) y el cambio voluntario de Mi perfil (vPerfil, tarea 06a). Cada
+# prueba arma sus propios datos.
 
 import json
 
@@ -14,7 +15,7 @@ from django.utils import timezone
 
 from core.models import Capataz, RegistroAuditoria
 from core.servicios import cambiar_contrasena
-from core.tests.fabricas import CLAVE, crear_capataz
+from core.tests.fabricas import CLAVE, crear_administrador, crear_capataz
 
 # Nombre y apellido largos, para poder probar el parecido con los datos de la cuenta (SEG-03).
 MAXIMILIANO = {"first_name": "Maximiliano", "last_name": "Fernández"}
@@ -218,7 +219,8 @@ class UsrCmbCtrServicioTests(TestCase):
 
 
 class UsrCmbCtrVistaTests(TestCase):
-    """Flujo principal del cambio forzado por contraseña temporal (pantalla vForced, vista con el cliente)."""
+    """Flujo principal de las dos pantallas del caso de uso, con el cliente: el cambio forzado por contraseña
+    temporal (vForced) y el cambio voluntario desde Mi perfil (vPerfil, tarea 06a)."""
 
     def entrar_con_temporal(self, email="capataz@infoponia.com", cliente=None):
         """Crea una cuenta con contraseña temporal, se identifica con ella y devuelve (cuenta, temporal)."""
@@ -349,3 +351,159 @@ class UsrCmbCtrVistaTests(TestCase):
                 respuesta, reverse("core:inicio"), fetch_redirect_response=False
             )
         self.assertFalse(RegistroAuditoria.objects.exists())
+
+    # ---- Cambio voluntario desde Mi perfil (USR-CMB-CTR por sí mismo, USR-GST-PRF regla 3; tarea 06a) ----
+
+    def entrar_sin_temporal(self, cuenta=None, cliente=None):
+        """Abre una sesión con una cuenta sin contraseña temporal (un Capataz, si no se indica) y la devuelve."""
+        cliente = cliente or self.client
+        cuenta = cuenta or crear_capataz(**MAXIMILIANO)
+        cliente.post(reverse("core:iniciar_sesion"), {"username": cuenta.email, "password": CLAVE})
+        return cuenta
+
+    def cambiar(self, actual=CLAVE, nueva=NUEVA, repetida=None, cliente=None, **extra):
+        """Envía el formulario «Cambiar contraseña» de Mi perfil y devuelve la respuesta."""
+        cliente = cliente or self.client
+        datos = {
+            "contrasena_actual": actual,
+            "contrasena_nueva": nueva,
+            "contrasena_repetida": nueva if repetida is None else repetida,
+            **extra,
+        }
+        return cliente.post(reverse("core:cambiar_mi_contrasena"), datos)
+
+    def test_flujo_principal_voluntario_cambia_la_contrasena_y_vuelve_a_mi_perfil(self):
+        """USR-CMB-CTR flujo principal (por sí mismo, desde USR-GST-PRF, vPerfil): con la contraseña actual,
+        la persona elige una nueva, vuelve a Mi perfil con el aviso (D-29) y queda el registro de auditoría
+        (postcondición d)."""
+        capataz = self.entrar_sin_temporal()
+
+        respuesta = self.cambiar()
+
+        self.assertRedirects(respuesta, reverse("core:mi_perfil"), fetch_redirect_response=False)
+        pantalla = self.client.get(reverse("core:mi_perfil"))
+        self.assertContains(pantalla, "Contraseña actualizada.")
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(NUEVA))
+        registro = RegistroAuditoria.objects.get()
+        self.assertEqual(registro.accion, RegistroAuditoria.Accion.CAMBIO_CONTRASENA)
+        self.assertEqual(registro.detalle, {"era_temporal": False})
+
+    def test_regla_1_voluntario_pide_la_contrasena_actual(self):
+        """USR-CMB-CTR regla 1: sin la contraseña actual no se cambia nada y el campo muestra el error."""
+        capataz = self.entrar_sin_temporal()
+
+        respuesta = self.cambiar(actual="")
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, "Ingresá tu contraseña actual.")
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(CLAVE))
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_regla_1_voluntario_rechaza_contrasena_actual_incorrecta(self):
+        """USR-CMB-CTR regla 1: una contraseña actual incorrecta no cambia nada; el error que informa el
+        servicio queda en el campo de la contraseña actual."""
+        capataz = self.entrar_sin_temporal()
+
+        respuesta = self.cambiar(actual="otra-clave-cualquiera")
+
+        self.assertTrue(
+            respuesta.context["form"].has_error("contrasena_actual", code="incorrecta")
+        )
+        self.assertContains(respuesta, "La contraseña actual no es correcta.")
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(CLAVE))
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_regla_2_voluntario_rechaza_contrasena_igual_a_la_actual(self):
+        """USR-CMB-CTR regla 2 y SEG-03: la contraseña nueva es distinta de la actual."""
+        capataz = self.entrar_sin_temporal()
+
+        respuesta = self.cambiar(nueva=CLAVE)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.context["form"].has_error("contrasena_nueva"))
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(CLAVE))
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_flujo_principal_voluntario_pide_repetir_la_contrasena_nueva(self):
+        """USR-CMB-CTR flujo principal (vPerfil): las dos contraseñas nuevas tienen que coincidir; si no, se
+        muestra el error y no cambia nada. Las contraseñas escritas no vuelven en la respuesta."""
+        capataz = self.entrar_sin_temporal()
+
+        respuesta = self.cambiar(repetida=NUEVA + "x")
+
+        self.assertContains(respuesta, "Las contraseñas no coinciden.")
+        self.assertNotContains(respuesta, NUEVA)
+        self.assertNotContains(respuesta, CLAVE)
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(CLAVE))
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_post_c_voluntario_cierra_las_demas_sesiones_y_mantiene_la_actual(self):
+        """USR-CMB-CTR postcondición c y SEG-10: el cambio voluntario cierra las demás sesiones abiertas con
+        esa cuenta y la actual sigue."""
+        capataz = self.entrar_sin_temporal()
+        otra_sesion = Client()
+        self.entrar_sin_temporal(cuenta=capataz, cliente=otra_sesion)
+
+        self.cambiar()
+
+        self.assertEqual(self.client.get(reverse("core:mi_perfil")).status_code, 200)
+        respuesta = otra_sesion.get(reverse("core:mi_perfil"))
+        self.assertRedirects(
+            respuesta,
+            f"{reverse('core:iniciar_sesion')}?next={reverse('core:mi_perfil')}",
+            fetch_redirect_response=False,
+        )
+
+    def test_regla_3_voluntario_cambia_solo_la_cuenta_con_sesion(self):
+        """USR-CMB-CTR regla 3: aunque el pedido traiga el email o el id de otra cuenta, se cambia la
+        contraseña de la cuenta con sesión."""
+        propia = self.entrar_sin_temporal(cuenta=crear_capataz(email="propia@infoponia.com"))
+        ajena = crear_capataz(email="ajena@infoponia.com")
+
+        self.cambiar(email=ajena.email, id=ajena.pk, usuario=ajena.pk)
+
+        propia.refresh_from_db()
+        ajena.refresh_from_db()
+        self.assertTrue(propia.check_password(NUEVA))
+        self.assertTrue(ajena.check_password(CLAVE))
+
+    def test_seg04_con_temporal_el_cambio_voluntario_redirige_a_elegir_contrasena(self):
+        """SEG-04 y regla 4 de USR-INI-SES: con contraseña temporal no se usa el cambio voluntario (que pide
+        la actual): el middleware lleva a «Elegí tu contraseña» y no cambia nada."""
+        capataz, temporal = self.entrar_con_temporal()
+
+        respuesta = self.cambiar(actual=temporal)
+
+        self.assertRedirects(
+            respuesta, reverse("core:elegir_contrasena"), fetch_redirect_response=False
+        )
+        capataz.refresh_from_db()
+        self.assertTrue(capataz.check_password(temporal))
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_flujo_principal_voluntario_get_redirige_a_mi_perfil(self):
+        """USR-CMB-CTR (vPerfil): el formulario está en Mi perfil; abrir su dirección con GET no cambia nada
+        y lleva a Mi perfil."""
+        self.entrar_sin_temporal()
+
+        respuesta = self.client.get(reverse("core:cambiar_mi_contrasena"))
+
+        self.assertRedirects(respuesta, reverse("core:mi_perfil"), fetch_redirect_response=False)
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_d30_el_administrador_cambia_su_contrasena_desde_mi_perfil(self):
+        """D-16 y D-30: el Administrador cambia su propia contraseña como cualquier persona (USR-CMB-CTR),
+        ya no solo por consola."""
+        administrador = self.entrar_sin_temporal(cuenta=crear_administrador())
+
+        respuesta = self.cambiar()
+
+        self.assertRedirects(respuesta, reverse("core:mi_perfil"), fetch_redirect_response=False)
+        administrador.refresh_from_db()
+        self.assertTrue(administrador.check_password(NUEVA))
+        self.assertEqual(RegistroAuditoria.objects.get().rol, "administrador")
