@@ -196,6 +196,56 @@ class AvisosYFocoEstilosTests(TestCase):
         self.assertIn(".toast,.toast-saliendo{animation:none}", reducido)
         self.assertIn(".toast-barra{display:none}", reducido)
 
+    def test_d29_en_pantallas_angostas_los_avisos_van_abajo_sobre_el_pie(self):
+        """D-29 (actualizada el 14/11/2026): en menos de 760px los avisos no van arriba, donde taparían el título y
+        el comienzo de la página, sino abajo, sobre el pie, apilados hacia arriba (el primero queda junto al borde,
+        como en escritorio queda junto al encabezado). Siguen ocupando el ancho con 12px de margen."""
+        css = _css()
+
+        movil = re.search(r"@media\(max-width:760px\)\{\.avisos,\.shell\.field \.avisos\{([^}]*)\}", css)
+        self.assertIsNotNone(movil, "falta la regla de menos de 760px")
+        for propiedad in (
+            "left:12px",
+            "right:12px",
+            "width:auto",
+            "top:auto",
+            "bottom:calc(var(--footer-height) + 10px)",
+            "flex-direction:column-reverse",
+        ):
+            self.assertIn(propiedad, movil.group(1))
+
+    def test_d29_en_pantallas_angostas_los_avisos_entran_y_salen_por_abajo(self):
+        """D-29 (actualizada el 14/11/2026): en menos de 760px el aviso entra deslizándose desde abajo y sale hacia
+        abajo. Solo cambia el nombre de la animación: la duración (250ms y 200ms) y la curva son las de siempre, y
+        las de escritorio (desde la derecha) quedan como estaban."""
+        css = _css()
+
+        self.assertRegex(
+            css,
+            r"@keyframes avisoEntraAbajo\{from\{opacity:0;transform:translateY\(32px\)\}to\{opacity:1;transform:none\}\}",
+        )
+        self.assertRegex(
+            css,
+            r"@keyframes avisoSaleAbajo\{from\{opacity:1;transform:none\}to\{opacity:0;transform:translateY\(32px\)\}\}",
+        )
+        self.assertIn(
+            "@media(max-width:760px){.toast{animation-name:avisoEntraAbajo}"
+            ".toast-saliendo{animation-name:avisoSaleAbajo}}",
+            css,
+        )
+        self.assertIn("animation:avisoEntra .25s ease-out", _regla(css, ".toast"))
+        self.assertIn("animation:avisoSale .2s", _regla(css, ".toast-saliendo"))
+
+    def test_d29_con_reducir_movimiento_tambien_en_pantallas_angostas_no_se_animan(self):
+        """D-29 (actualizada el 14/11/2026): el bloque de «reducir movimiento» viene DESPUÉS del que cambia las
+        animaciones en pantallas angostas. Las dos reglas tienen la misma especificidad y gana la última: si el
+        orden fuera el inverso, en un celular con «reducir movimiento» los avisos volverían a deslizarse."""
+        css = _css()
+
+        angosto = css.index("@media(max-width:760px){.toast{animation-name:avisoEntraAbajo}")
+        reducido = css.index("@media(prefers-reduced-motion:reduce)")
+        self.assertLess(angosto, reducido)
+
     def test_d29_todos_los_botones_muestran_el_foco_con_el_verde_primario(self):
         """D-29: al navegar con Tab, todo .btn muestra un borde de foco en el verde primario (:focus-visible),
         separado del botón para que se vea también en el primario y en el peligroso."""

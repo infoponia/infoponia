@@ -184,7 +184,8 @@ footer.bot button{background:none;border:none;font:inherit;color:inherit;text-de
 .field .btn{min-height:48px}
 .field .acc-item,.field .pop-act{min-height:52px}
 /* Avisos breves: un contenedor fijo (región «status» para los lectores de pantalla) arriba a la derecha,
-   debajo del encabezado, y un .toast por aviso, apilados hacia abajo. El JavaScript los crea y los quita a
+   debajo del encabezado (en menos de 760px, abajo: ver el final de este archivo), y un .toast por aviso, apilados
+   hacia abajo. El JavaScript los crea y los quita a
    los 10 s o al cerrarlos con la cruz. Cada uno es una tarjeta con una franja a la izquierda, el ícono y la
    barra de tiempo del color de su tipo (--color-aviso: éxito o error). Texto, cruz e ícono tienen contraste
    AA sobre el blanco de la tarjeta (18,5:1, 5,8:1, 5,4:1 y 6,3:1). */
@@ -202,6 +203,13 @@ footer.bot button{background:none;border:none;font:inherit;color:inherit;text-de
 @keyframes avisoEntra{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
 @keyframes avisoSale{from{opacity:1;transform:none}to{opacity:0;transform:translateX(32px)}}
 @keyframes avisoBarra{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+/* En pantallas angostas (menos de 760px) los avisos van abajo, sobre el pie (ver el final de este archivo): entran
+   desde abajo y salen hacia abajo (D-29). Solo cambia el nombre de la animación; la duración, la curva y la barra
+   de tiempo son las de siempre. Este bloque va ANTES del de «reducir movimiento», que viene a continuación: si fuera
+   después, volvería a poner la animación y anularía el «sin movimiento». */
+@keyframes avisoEntraAbajo{from{opacity:0;transform:translateY(32px)}to{opacity:1;transform:none}}
+@keyframes avisoSaleAbajo{from{opacity:1;transform:none}to{opacity:0;transform:translateY(32px)}}
+@media(max-width:760px){.toast{animation-name:avisoEntraAbajo}.toast-saliendo{animation-name:avisoSaleAbajo}}
 /* Con «reducir movimiento»: sin desplazamiento ni barra animada; el aviso solo aparece y desaparece. */
 @media(prefers-reduced-motion:reduce){.toast,.toast-saliendo{animation:none}.toast-barra{display:none}}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
@@ -255,6 +263,9 @@ a.pop-act:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .dd-opcion[aria-selected="true"]{background:#e6f4ec;color:var(--status-ok);font-weight:600}
 /* campo con error de formulario (el servidor lo informa en un .err debajo del campo) */
 .fld:has(.err) .field-input{border-color:var(--status-danger)}
-@media(max-width:760px){.avisos,.shell.field .avisos{left:12px;right:12px;width:auto;max-width:none}}
+/* Menos de 760px: los avisos ocupan el ancho con 12px de margen y van ABAJO, sobre el pie, para no tapar el título ni el
+   comienzo de la página. Se apilan hacia arriba (column-reverse): el primero queda pegado al borde y los que llegan
+   después se suman encima, como en escritorio, donde el primero queda junto al encabezado y los demás debajo. */
+@media(max-width:760px){.avisos,.shell.field .avisos{left:12px;right:12px;width:auto;max-width:none;top:auto;bottom:calc(var(--footer-height) + 10px);flex-direction:column-reverse}}
 /* Foco visible de los botones al navegar con Tab: borde en el verde primario, separado del botón. */
 .btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}

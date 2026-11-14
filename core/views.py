@@ -270,10 +270,10 @@ def cambiar_de_cuenta(request):
 
     ``cuenta_para_cambiar`` verifica que la cuenta esté en el grupo, activa y sin contraseña temporal. Después,
     ``login()`` con la otra cuenta: Django vacía la sesión anterior y crea una con un identificador nuevo. Hay un
-    solo backend de autenticación configurado, así que no hace falta indicarlo. El aviso se agrega DESPUÉS del
-    ``login()`` para que quede en la sesión nueva. El cambio no se audita (SEG-14). La persona llega al inicio de
-    la otra cuenta, que dice con qué rol opera. Si la cuenta ya no está disponible, aviso de error y vuelta al
-    inicio; una cuenta fuera del grupo o un dato mal formado dan el 403.
+    solo backend de autenticación configurado, así que no hace falta indicarlo. El cambio no se audita (SEG-14).
+    La persona llega al inicio de la otra cuenta, que dice con qué rol y cuenta opera: no se agrega un aviso de
+    éxito que repita eso (D-32). Si la cuenta ya no está disponible, aviso de error y vuelta al inicio; una cuenta
+    fuera del grupo o un dato mal formado dan el 403.
     """
     try:
         cuenta_id = int(request.POST.get("cuenta_id", ""))
@@ -285,9 +285,6 @@ def cambiar_de_cuenta(request):
         messages.error(request, error.messages[0])
         return redirect("core:inicio")
     login(request, cuenta)
-    messages.success(
-        request, f"Operás como {nombre_visible_del_rol(cuenta)} · {cuenta.get_full_name()}"
-    )
     return redirect("core:inicio")
 
 
