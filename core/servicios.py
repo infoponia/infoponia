@@ -112,8 +112,14 @@ def _bloquear_gerentes():
     ``is_active``: la fila que la otra operación está activando puede figurar como inactiva. El orden
     fijo evita que dos operaciones se esperen mutuamente (deadlock). Si no hay ninguna fila de Gerente
     (el primer alta), no hay nada que bloquear: la cubre la restricción ``un_solo_gerente_activo``.
+    ``FOR NO KEY UPDATE`` y no ``FOR UPDATE`` (D-32): el Gerente es quien actúa en otras operaciones y la clave
+    foránea de su auditoría pide ``FOR KEY SHARE`` sobre su fila al confirmar; ``FOR UPDATE`` chocaría con eso.
     """
-    list(Usuario.objects.select_for_update().filter(rol=Usuario.Rol.GERENTE).order_by("pk"))
+    list(
+        Usuario.objects.select_for_update(no_key=True)
+        .filter(rol=Usuario.Rol.GERENTE)
+        .order_by("pk")
+    )
 
 
 def _bloquear_administradores_activos():
@@ -125,9 +131,11 @@ def _bloquear_administradores_activos():
     cuenta que la primera dio de baja ya no figura, y la cuenta de los que quedan es la real. A diferencia
     del Gerente, no hay una restricción de la base que respalde esta regla (compara varias filas): el
     bloqueo es lo único que la garantiza. El orden fijo evita que dos operaciones se esperen mutuamente.
+    ``FOR NO KEY UPDATE`` y no ``FOR UPDATE`` (D-32): los Administradores son quienes actúan en otras
+    operaciones, y la clave foránea de su auditoría pide ``FOR KEY SHARE`` sobre su fila al confirmar.
     """
     list(
-        Usuario.objects.select_for_update()
+        Usuario.objects.select_for_update(no_key=True)
         .filter(is_superuser=True, is_active=True)
         .order_by("pk")
     )
@@ -237,8 +245,9 @@ def cambiar_contrasena(usuario, contrasena_nueva, contrasena_actual=None):
     """
     with transaction.atomic():
         # Se bloquea la fila para que dos cambios simultáneos no se pisen y para decidir el modo
-        # con el estado real de la cuenta.
-        cuenta = Usuario.objects.select_for_update().get(pk=usuario.pk)
+        # con el estado real de la cuenta. FOR NO KEY UPDATE (D-32): no choca con el FOR KEY SHARE que
+        # pide la auditoría de otra operación en la que esta cuenta es quien actúa.
+        cuenta = Usuario.objects.select_for_update(no_key=True).get(pk=usuario.pk)
         era_temporal = cuenta.tiene_contrasena_temporal
 
         errores = {}
@@ -562,8 +571,12 @@ def _bloquear_cuenta_en_alcance(actor, cuenta_id, bloqueo_previo=None, cuida_gru
 
     Precondición a (``actor`` es un Gerente o un Administrador activos, D-16) y regla 1 de USR-MOD-USR y
     USR-BAJ-USR. Un id inexistente da ``Http404`` y una cuenta fuera del alcance, ``PermissionDenied``
-    (D-28), igual que ``obtener_cuenta``. ``select_for_update()`` (CLAUDE.md) evita que dos operaciones
-    simultáneas sobre la misma cuenta se pisen; hay que llamarla dentro de ``transaction.atomic()``.
+    (D-28), igual que ``obtener_cuenta``. ``select_for_update(no_key=True)`` (CLAUDE.md, D-32) evita que dos
+    operaciones simultáneas sobre la misma cuenta se pisen; hay que llamarla dentro de
+    ``transaction.atomic()``. Es ``FOR NO KEY UPDATE`` y no ``FOR UPDATE`` porque la cuenta puede ser quien
+    actúa en otra operación al mismo tiempo (el Gerente que se restablece mientras modifica su cuenta vinculada,
+    o dos Administradores que se modifican entre sí): la clave foránea de esa auditoría pide ``FOR KEY SHARE``
+    sobre su fila al confirmar, y ``FOR UPDATE`` haría que cada operación espere a la otra (deadlock).
 
     Orden de los bloqueos (SEG-15, D-30): primero el grupo de filas que cuida un invariante
     (``bloqueo_previo(cuenta)``: todos los Gerentes, o todos los Administradores activos, en orden de id) y
@@ -587,7 +600,7 @@ def _bloquear_cuenta_en_alcance(actor, cuenta_id, bloqueo_previo=None, cuida_gru
     if bloqueo_previo is not None:
         bloqueo_previo(cuenta)
     _exigir_actor_sigue_activo(actor)
-    bloqueada = Usuario.objects.select_for_update().get(pk=cuenta.pk)
+    bloqueada = Usuario.objects.select_for_update(no_key=True).get(pk=cuenta.pk)
     if cuida_grupo and bloqueada.grupo_id != cuenta.grupo_id:
         raise _error_cambio_simultaneo()
     return bloqueada

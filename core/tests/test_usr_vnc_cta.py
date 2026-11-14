@@ -1357,3 +1357,36 @@ class UsrVncCtaConcurrenciaTests(TransactionTestCase):
         else:
             self.assertEqual(grupo_de(c), grupo_de(v))  # c entró al grupo y X salió después
             self.assertIsNotNone(grupo_de(c))
+
+    def test_d32_restablecer_al_gerente_mientras_modifica_su_cuenta_vinculada_no_hace_deadlock(self):
+        """D-32 (límite conocido) y D-30: el Gerente G, vinculado con su cuenta de Agrónomo X, modifica los datos de
+        X mientras el Administrador restablece la contraseña de G (que saca a G de su grupo y lo disuelve, SEG-11).
+
+        Orden fijo (``primera="a"``): la modificación tiene tomada la fila de X y se detiene antes de confirmar; recién
+        entonces arranca el restablecimiento, que toma la fila de G y queda esperando la de X; ahí se libera la
+        modificación. Al confirmar, la clave foránea de su auditoría necesita un bloqueo ``FOR KEY SHARE`` sobre la
+        fila de G (quien actúa). Si el restablecimiento tiene G con ``FOR UPDATE``, cada una espera a la otra y
+        PostgreSQL aborta una: un error 500. Con ``FOR NO KEY UPDATE`` no chocan: las dos terminan bien."""
+        administrador = crear_administrador()
+        gerente = crear_gerente()
+        agronomo = crear_cuenta(Agronomo, email="agronomo@infoponia.com", nombre="Ana", apellido="Ibáñez")
+        agrupar(gerente, agronomo)
+
+        resultados = correr_a_la_vez(
+            lambda: servicios.modificar_usuario(
+                gerente, agronomo.pk, "Ana María", "Ibáñez", agronomo.email, "+54 376 400-1001"
+            ),
+            lambda: servicios.restablecer_contrasena(administrador, gerente.pk),
+            primera="a",
+        )
+
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir (un deadlock)")
+        self.assertEqual(rechazos, [])
+        self.assertEqual(len(exitos), 2)
+        self.assertEqual(Usuario.objects.get(pk=agronomo.pk).first_name, "Ana María")
+        restablecido = Usuario.objects.get(pk=gerente.pk)
+        self.assertTrue(restablecido.tiene_contrasena_temporal)
+        self.assertIsNone(restablecido.grupo_id)
+        self.assertIsNone(grupo_de(agronomo))
+        self.assertFalse(GrupoCuentas.objects.exists())
