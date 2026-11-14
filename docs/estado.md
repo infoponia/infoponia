@@ -133,6 +133,15 @@
   (`test_d32_…`), que fallaban con deadlock antes del cambio; las 10 de concurrencia, corridas con los bloqueos
   devueltos a `FOR UPDATE`, sin bloqueos y sin los de los invariantes, fallan donde corresponde. 342 pruebas en
   total, sin migraciones. Rama `chore/pendientes`. Actualiza D-30 y D-32.
+- Tarea chica de pruebas de concurrencia: las 8 pruebas de SEG-15 y de las cuentas vinculadas que esperaban una ventana
+  fija de 1,5 s pasan al parámetro `primera` de `correr_a_la_vez`, que ahora es obligatorio; la ventana fija se
+  elimina. Con ella, en una máquina lenta seis de las ocho podían pasar sin probar nada y dos fallaban aunque todo
+  estuviera bien; ahora detectan lo mismo a velocidad normal y con la segunda operación 3 s tarde. `correr_a_la_vez`
+  suma `detener_antes_de` y hay 3 pruebas nuevas (`test_d32_…`): el orden de bloqueos de `restablecer_contrasena`
+  (única que detecta que falte el bloqueo del grupo) y `cuida_grupo` en restablecer y en reactivar. La prueba de
+  restablecer y vincular corre los dos órdenes. Matriz de 11 modos de bloqueos desactivados, a velocidad normal y
+  lenta: cada prueba falla cuando falta su protección. 13 pruebas de concurrencia, 5 corridas seguidas sin fallas.
+  345 pruebas en total, ninguna aserción cambiada, sin migraciones. Rama `chore/pendientes`. Actualiza D-32.
 
 ## En curso
 
@@ -172,10 +181,6 @@
 
 ## Temas abiertos
 
-- **Prioridad.** Pasar las pruebas de concurrencia existentes al parámetro `primera` de `correr_a_la_vez`. El
-  experimento del 14/11/2026 mostró que, con la ventana fija de 1,5 s, en una máquina lenta pueden pasar sin probar
-  nada, y eso debilita la evidencia de SEG-15 de D-30 y D-32. Cuándo: la próxima tarea chica, antes de agregar más
-  pruebas de concurrencia.
 - Reparto final de apps entre los dos integrantes: D-23 fija cuentas en `core` y una app por módulo
   de negocio; faltan los nombres y quién toma cada una.
 - Lista cerrada de los casos de uso del 80% y orden de implementación.

@@ -719,7 +719,11 @@ class UsrAltUsrConcurrenciaTests(TransactionTestCase):
         )
 
     def altas_simultaneas(self):
-        """Dos Administradores dan de alta, a la vez, un Gerente cada uno (con emails distintos)."""
+        """Dos Administradores dan de alta, a la vez, un Gerente cada uno (con emails distintos).
+
+        La primera alta se detiene al registrar la auditoría (con su Gerente ya escrito y sin confirmar) y
+        recién entonces arranca la segunda. Las dos son iguales, así que da lo mismo cuál va primera; se fija
+        «a» para que el orden no dependa de la velocidad de la máquina."""
         primero = crear_administrador()
         segundo = crear_administrador(email="admin2@infoponia.com")
         return correr_a_la_vez(
@@ -729,6 +733,7 @@ class UsrAltUsrConcurrenciaTests(TransactionTestCase):
             lambda: servicios.alta_usuario(
                 segundo, **datos_validos(rol=Usuario.Rol.GERENTE, email="g2@infoponia.com")
             ),
+            primera="a",
         )
 
     def test_seg15_altas_simultaneas_dejan_un_solo_gerente_activo(self):

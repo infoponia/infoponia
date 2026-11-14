@@ -429,9 +429,12 @@ class UsrBajUsrConcurrenciaTests(TransactionTestCase):
         primero = crear_administrador()
         segundo = crear_administrador(email="admin2@infoponia.com")
 
+        # Las dos bajas son iguales: da lo mismo cuál va primera; la primera se detiene al registrar y recién
+        # entonces arranca la segunda, que tiene que quedar esperando el bloqueo.
         resultados = correr_a_la_vez(
             lambda: servicios.baja_usuario(primero, primero.pk),
             lambda: servicios.baja_usuario(segundo, segundo.pk),
+            primera="a",
         )
 
         exitos, rechazos, otros = separar(resultados)
@@ -456,9 +459,12 @@ class UsrBajUsrConcurrenciaTests(TransactionTestCase):
         segundo = crear_administrador(email="admin2@infoponia.com")
         tercero = crear_administrador(email="admin3@infoponia.com")
 
+        # El cruce es simétrico: da lo mismo cuál va primera. La primera confirma y deja inactivo al actor de
+        # la segunda, que esperaba el bloqueo y tiene que volver a verificar que su actor siga activo.
         resultados = correr_a_la_vez(
             lambda: servicios.baja_usuario(primero, segundo.pk),
             lambda: servicios.baja_usuario(segundo, primero.pk),
+            primera="a",
         )
 
         exitos, rechazos, otros = separar(resultados)

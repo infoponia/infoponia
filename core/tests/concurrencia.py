@@ -5,6 +5,9 @@
 # base (Django abre una por hilo), así que son dos transacciones de verdad, como dos pedidos de dos
 # navegadores. Por eso las pruebas que la usan son TransactionTestCase: TestCase envuelve todo en una sola
 # transacción de una sola conexión y no puede simular esto.
+#
+# El orden de las dos operaciones no depende de la velocidad de la máquina: una de ellas (``primera``) se
+# detiene en un punto exacto y recién entonces arranca la otra (ver ``correr_a_la_vez``).
 
 import threading
 import time
@@ -17,9 +20,7 @@ from core.models import RegistroAuditoria
 
 # Tiempo máximo de cada espera, en segundos: si algo falla, la prueba termina en vez de colgar el CI.
 ESPERA_MAXIMA = 10
-# Cuánto se deja correr a la otra operación mientras la primera está detenida con sus bloqueos tomados.
-VENTANA_DE_LA_OTRA = 1.5
-# Cada cuánto se pregunta, con ``primera``, si la otra operación terminó o quedó esperando un bloqueo.
+# Cada cuánto se pregunta si la otra operación terminó o quedó esperando un bloqueo.
 INTERVALO_DE_CONSULTA = 0.02
 
 
@@ -46,98 +47,113 @@ def _esperar_que_termine_o_se_bloquee(hilo, pids, nombre):
     return "ninguna"
 
 
-def correr_a_la_vez(operacion_a, operacion_b, primera=None):
-    """Corre las dos operaciones a la vez y devuelve ``{"a": resultado_o_excepcion, "b": ...}``.
+def correr_a_la_vez(operacion_a, operacion_b, primera, detener_antes_de=None):
+    """Corre las dos operaciones en dos hilos y devuelve ``{"a": resultado_o_excepcion, "b": ...}``.
 
-    1. Los dos hilos arrancan juntos (``threading.Barrier``).
-    2. La primera operación que llega a ``RegistroAuditoria.objects.registrar`` (ya tomó sus bloqueos y
-       escribió su cambio, pero todavía no confirmó la transacción) se detiene ahí.
-    3. Mientras está detenida, la otra corre durante ``VENTANA_DE_LA_OTRA`` segundos. Si el servicio
-       bloquea bien las filas, la otra queda esperando el bloqueo; si no, avanza con datos viejos.
-    4. Se libera la primera, que confirma, y se espera a que terminen las dos.
+    ``primera`` ("a" o "b", obligatorio) es la operación que se detiene en un punto exacto; la otra no arranca
+    hasta que ``primera`` se detuvo. Así el choque que la prueba quiere demostrar no depende de la velocidad de
+    la máquina:
 
-    Con ``primera`` ("a" o "b"), el orden deja de depender de la velocidad de la máquina:
+    1. ``primera`` corre hasta su punto de parada y se detiene ahí, con lo que tenga tomado hasta ese momento.
+       Por defecto es ``RegistroAuditoria.objects.registrar``: ya tomó sus bloqueos y escribió su cambio, pero
+       todavía no confirmó la transacción.
+    2. Recién entonces arranca la otra operación. Si el servicio bloquea bien las filas, queda esperando el
+       bloqueo; si no, avanza con datos viejos.
+    3. ``primera`` se libera cuando la otra terminó o cuando su conexión quedó esperando un bloqueo de la base
+       (se pregunta a ``pg_stat_activity``), y se espera a que terminen las dos. Si no pasa ninguna de las dos
+       cosas en ``ESPERA_MAXIMA``, la prueba falla con un error que lo dice, en vez de pasar sin probar nada.
 
-    - La otra operación no arranca hasta que ``primera`` se detuvo en ``registrar`` (o terminó sin llegar):
-      ``primera`` es siempre la que se detiene.
-    - ``primera`` se libera en un punto exacto y no después de ``VENTANA_DE_LA_OTRA``: cuando la otra
-      terminó o cuando su conexión quedó esperando un bloqueo de la base (se pregunta a
-      ``pg_stat_activity``). Si no pasa ninguna de las dos cosas en ``ESPERA_MAXIMA``, la prueba falla con
-      un error que lo dice, en vez de pasar sin haber probado nada.
+    ``detener_antes_de`` cambia el punto de parada: ``(objeto, "nombre")`` detiene a ``primera`` justo ANTES de
+    que llame a ``objeto.nombre`` (por ejemplo, ``(servicios, "_sacar_del_grupo")``), cuando todavía no tomó
+    lo que esa función toma. Sirve para probar el orden de los bloqueos o lo que pasa si algo cambia en el
+    medio de una operación, que el punto de parada por defecto, al final, no puede reproducir. Solo se detiene
+    la primera llamada de ``primera``.
+
+    Falla con ``AssertionError`` si ``primera`` no llegó a su punto de parada o si la otra no terminó ni
+    quedó esperando un bloqueo.
 
     Cada hilo cierra su conexión a la base al terminar (``connection.close()``), para no dejar
     conexiones abiertas que hagan fallar el borrado de la base de prueba.
     """
-    if primera not in (None, "a", "b"):
-        raise ValueError(f"primera tiene que ser 'a', 'b' o None, no {primera!r}")
-    barrera = threading.Barrier(2, timeout=ESPERA_MAXIMA)
-    hay_una_detenida = threading.Event()
-    # Con ``primera``: la otra arranca cuando ``primera`` se detuvo (o terminó sin llegar a detenerse).
-    puede_arrancar_la_otra = threading.Event()
+    if primera not in ("a", "b"):
+        raise ValueError(f"primera tiene que ser 'a' o 'b', no {primera!r}")
+    otra = "b" if primera == "a" else "a"
+    # ``primera`` se detuvo (o terminó sin llegar a detenerse): la otra puede arrancar.
+    primera_libre = threading.Event()
     seguir = threading.Event()
-    reclamo = threading.Lock()
-    estado = {"detenida": None, "la_otra": None}
+    estado = {"se_detuvo": False, "la_otra": None}
     resultados = {}
     pids = {}
-    registrar_original = RegistroAuditoria.objects.registrar
 
-    def registrar_y_detenerse(*args, **kwargs):
-        """Registra y, si es la primera operación en llegar acá, espera la señal para seguir."""
-        registro = registrar_original(*args, **kwargs)
-        with reclamo:
-            soy_la_primera = estado["detenida"] is None
-            if soy_la_primera:
-                estado["detenida"] = threading.current_thread().name
-        if soy_la_primera:
-            hay_una_detenida.set()
-            puede_arrancar_la_otra.set()
-            seguir.wait(ESPERA_MAXIMA)
-        return registro
+    def es_la_primera_vez_de_primera():
+        """Solo se detiene el hilo ``primera``, y solo la primera vez que llega al punto de parada."""
+        return threading.current_thread().name == primera and not estado["se_detuvo"]
+
+    def detenerse():
+        estado["se_detuvo"] = True
+        primera_libre.set()
+        seguir.wait(ESPERA_MAXIMA)
 
     def correr(nombre, operacion):
-        """Cuerpo de cada hilo: espera a la otra (y, con ``primera``, a que ``primera`` se detenga), anota el
-        identificador de su conexión, corre la operación y guarda el resultado."""
+        """Cuerpo de cada hilo: la otra espera a que ``primera`` se detenga; anota el identificador de su
+        conexión (para preguntar si quedó esperando un bloqueo), corre la operación y guarda el resultado."""
         try:
-            barrera.wait()
-            if primera is not None:
-                if nombre != primera:
-                    puede_arrancar_la_otra.wait(ESPERA_MAXIMA)
-                # El identificador de la conexión de este hilo, para preguntar si quedó esperando un bloqueo.
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT pg_backend_pid()")
-                    pids[nombre] = cursor.fetchone()[0]
+            if nombre != primera:
+                primera_libre.wait(ESPERA_MAXIMA)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_backend_pid()")
+                pids[nombre] = cursor.fetchone()[0]
             resultados[nombre] = operacion()
         except Exception as error:  # se guarda para que la prueba la inspeccione
             resultados[nombre] = error
         finally:
             if nombre == primera:
-                puede_arrancar_la_otra.set()  # si terminó sin detenerse, que la otra no espere de más
+                primera_libre.set()  # si terminó sin detenerse, que la otra no espere de más
             connection.close()
+
+    if detener_antes_de is None:
+        objeto, atributo = RegistroAuditoria.objects, "registrar"
+        funcion_original = getattr(objeto, atributo)
+
+        def parada(*args, **kwargs):
+            """Registra y, si es ``primera``, se detiene DESPUÉS de registrar."""
+            registro = funcion_original(*args, **kwargs)
+            if es_la_primera_vez_de_primera():
+                detenerse()
+            return registro
+
+        punto = "registrar la auditoría"
+    else:
+        objeto, atributo = detener_antes_de
+        funcion_original = getattr(objeto, atributo)
+
+        def parada(*args, **kwargs):
+            """Si es ``primera``, se detiene ANTES de llamar a la función."""
+            if es_la_primera_vez_de_primera():
+                detenerse()
+            return funcion_original(*args, **kwargs)
+
+        punto = f"llamar a {atributo}"
 
     hilos = {
         nombre: threading.Thread(target=correr, args=(nombre, operacion), name=nombre)
         for nombre, operacion in (("a", operacion_a), ("b", operacion_b))
     }
-    with mock.patch.object(
-        RegistroAuditoria.objects, "registrar", side_effect=registrar_y_detenerse
-    ):
+    with mock.patch.object(objeto, atributo, side_effect=parada):
         for hilo in hilos.values():
             hilo.start()
-        if hay_una_detenida.wait(ESPERA_MAXIMA):
-            otra = "b" if estado["detenida"] == "a" else "a"
-            if primera is None:
-                hilos[otra].join(VENTANA_DE_LA_OTRA)
-            else:
-                estado["la_otra"] = _esperar_que_termine_o_se_bloquee(hilos[otra], pids, otra)
+        primera_libre.wait(ESPERA_MAXIMA)
+        if estado["se_detuvo"]:
+            estado["la_otra"] = _esperar_que_termine_o_se_bloquee(hilos[otra], pids, otra)
         seguir.set()
         for hilo in hilos.values():
             hilo.join(ESPERA_MAXIMA)
     colgados = [nombre for nombre, hilo in hilos.items() if hilo.is_alive()]
     if colgados:
         raise AssertionError(f"Las operaciones {colgados} no terminaron en {ESPERA_MAXIMA} s.")
-    if primera is not None and estado["detenida"] != primera:
+    if not estado["se_detuvo"]:
         raise AssertionError(
-            f"Se pidió que «{primera}» se detuviera primero, pero no llegó a registrar la auditoría."
+            f"Se pidió que «{primera}» se detuviera primero, pero no llegó a {punto}."
         )
     if estado["la_otra"] == "ninguna":
         raise AssertionError(
