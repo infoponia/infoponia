@@ -1085,13 +1085,27 @@ Formato:
   - Las pruebas que simulan un cambio entre la verificación y el bloqueo lo hacen dentro de la transacción del
     servicio y se deshace con el rechazo; solo verifican qué responde el servicio. Que dos operaciones reales se
     esperen entre sí lo prueban las de concurrencia (`core/tests/concurrencia.py`).
-  - Las dos pruebas `test_d32_…` usan el parámetro `primera` de `correr_a_la_vez` (14/11/2026): la otra operación
-    arranca recién cuando la primera se detuvo con sus bloqueos tomados, y la primera se libera cuando la otra
-    terminó o quedó esperando un bloqueo (se pregunta a `pg_stat_activity`), no después de un tiempo fijo. Las
-    ocho pruebas de concurrencia anteriores siguen con la ventana fija de 1,5 s. El experimento del 14/11/2026
-    mostró que, con esa ventana, en una máquina lenta pueden pasar sin probar nada, y eso debilita la evidencia
-    de SEG-15 de D-30 y de esta decisión. Pasarlas a `primera` está en «Temas abiertos» de `docs/estado.md`, con
-    prioridad.
+  - Todas las pruebas de concurrencia fijan el orden de las dos operaciones con el parámetro `primera` de
+    `correr_a_la_vez` (14/11/2026), que es obligatorio: la otra operación arranca recién cuando la primera se
+    detuvo, y la primera se libera cuando la otra terminó o quedó esperando un bloqueo (se pregunta a
+    `pg_stat_activity`), no después de un tiempo fijo. Antes, las ocho pruebas de SEG-15 y de las cuentas
+    vinculadas esperaban una ventana fija de 1,5 s, y el experimento del 14/11/2026 mostró que en una máquina
+    lenta (la segunda operación arrancando 3 s tarde) seis de ellas podían pasar sin probar nada y dos fallaban
+    aunque todo estuviera bien. Con `primera` quedaron igual de sensibles en una máquina lenta que en una normal:
+    cada una falla cuando falta su protección (matriz de 11 modos, a velocidad normal y con 3 s de demora, sin
+    diferencias) y las 13 pasaron cinco corridas seguidas. La ventana fija se eliminó de `correr_a_la_vez`.
+  - `correr_a_la_vez` suma `detener_antes_de=(objeto, "nombre")`, que detiene a `primera` justo ANTES de llamar
+    a esa función en lugar de después de registrar la auditoría. Hace falta para probar el orden de los
+    bloqueos, que el punto de parada por defecto no puede reproducir (ahí la primera ya tomó todos sus
+    bloqueos). Lo usan tres pruebas nuevas: `test_d32_restablecer_y_vincular_a_la_vez_respetan_el_orden_de_bloqueos`,
+    única que detecta que falte el bloqueo del grupo en `restablecer_contrasena` (sin él, deadlock), y
+    `test_d32_restablecer_cuyo_grupo_cambia_mientras_espera_da_cambio_simultaneo` y
+    `test_d32_reactivar_cuyo_grupo_cambia_mientras_espera_da_cambio_simultaneo`, que prueban `cuida_grupo`: el
+    servicio se detiene antes de su bloqueo previo, ya leída la cuenta, y la otra operación cambia el grupo de la
+    cuenta y confirma. Sin `cuida_grupo`, el restablecimiento o la reactivación siguen con un grupo que no
+    bloquearon: las dos pruebas fallan.
+  - `test_seg11_restablecer_y_vincular_a_la_vez_no_dejan_la_temporal_en_el_grupo` corre los dos órdenes (con
+    `subTest`), para que se ejecuten las dos ramas de su final.
   - Quien tiene un grupo suma una consulta por pantalla (el menú de cuenta); sin grupo no consulta la base.
   - El tope de intentos de identificación, para el inicio de sesión y el vínculo juntos, queda para la tarea 09:
     necesita una decisión nueva que reemplace a SEG-05 y D-19, y un modelo o una caché para contar.

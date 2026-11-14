@@ -1275,9 +1275,12 @@ class UsrVncCtaConcurrenciaTests(TransactionTestCase):
         d = crear_cuenta(Tecnico, email="d@infoponia.com")
         agrupar(a, b)
 
+        # Las dos vinculaciones son del mismo tipo: da lo mismo cuál va primera; la primera se detiene al
+        # registrar (con C ya vinculada y sin confirmar) y recién entonces arranca la segunda.
         resultados = correr_a_la_vez(
             lambda: servicios.vincular_cuenta(a, c.email, CLAVE),
             lambda: servicios.vincular_cuenta(d, c.email, CLAVE),
+            primera="a",
         )
 
         exitos, rechazos, otros = separar(resultados)
@@ -1305,9 +1308,12 @@ class UsrVncCtaConcurrenciaTests(TransactionTestCase):
         c = crear_cuenta(Capataz, email="c@infoponia.com")
         agrupar(a, b, c)
 
+        # Las dos desvinculaciones son del mismo tipo: da lo mismo cuál va primera; la primera se detiene al
+        # registrar (con B ya fuera del grupo y sin confirmar) y recién entonces arranca la segunda.
         resultados = correr_a_la_vez(
             lambda: servicios.desvincular_cuenta(a, b.pk),
             lambda: servicios.desvincular_cuenta(a, c.pk),
+            primera="a",
         )
 
         exitos, rechazos, otros = separar(resultados)
@@ -1326,37 +1332,45 @@ class UsrVncCtaConcurrenciaTests(TransactionTestCase):
         grupo) mientras otra persona vincula a X con su contraseña de antes. Pase lo que pase, ninguna
         cuenta con contraseña temporal queda en un grupo y ningún grupo queda con una sola cuenta. Si el
         restablecimiento gana, la vinculación se rechaza con el mensaje genérico (la cuenta ya tiene una
-        temporal); si gana la vinculación, la cuenta nueva queda en el grupo cuando X sale de él."""
+        temporal); si gana la vinculación, la cuenta nueva queda en el grupo cuando X sale de él.
+
+        Se corren los DOS órdenes (``primera`` = el restablecimiento y ``primera`` = la vinculación), con
+        cuentas nuevas en cada uno, para que se ejecuten las dos ramas del final: con el restablecimiento
+        primero, la vinculación se rechaza; con la vinculación primero, C entra al grupo y X sale después."""
         gerente = crear_gerente()
-        x = crear_cuenta(Agronomo, email="x@infoponia.com")
-        v = crear_cuenta(Vendedor, email="v@infoponia.com")
-        c = crear_cuenta(Capataz, email="c@infoponia.com")
-        agrupar(x, v)
 
-        resultados = correr_a_la_vez(
-            lambda: servicios.restablecer_contrasena(gerente, x.pk),
-            lambda: servicios.vincular_cuenta(c, x.email, CLAVE),
-        )
+        for primera in ("a", "b"):  # «a» es el restablecimiento; «b», la vinculación
+            with self.subTest(primera=primera):
+                x = crear_cuenta(Agronomo, email=f"x-{primera}@infoponia.com")
+                v = crear_cuenta(Vendedor, email=f"v-{primera}@infoponia.com")
+                c = crear_cuenta(Capataz, email=f"c-{primera}@infoponia.com")
+                agrupar(x, v)
 
-        exitos, rechazos, otros = separar(resultados)
-        self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir")
-        self.assertNotIsInstance(resultados["a"], Exception, "el restablecimiento siempre se hace")
-        for rechazo in rechazos:
-            self.assertEqual(codigos(rechazo), ["no_se_pudo_vincular"])
-        ahora = Usuario.objects.get(pk=x.pk)
-        self.assertTrue(ahora.tiene_contrasena_temporal)
-        self.assertIsNone(ahora.grupo_id)
-        self.assertFalse(
-            Usuario.objects.filter(
-                fecha_contrasena_temporal__isnull=False, grupo__isnull=False
-            ).exists()
-        )
-        self.assertEqual(grupos_con_menos_de_dos_cuentas(), [])
-        if rechazos:
-            self.assertIsNone(grupo_de(c))
-        else:
-            self.assertEqual(grupo_de(c), grupo_de(v))  # c entró al grupo y X salió después
-            self.assertIsNotNone(grupo_de(c))
+                resultados = correr_a_la_vez(
+                    lambda: servicios.restablecer_contrasena(gerente, x.pk),
+                    lambda: servicios.vincular_cuenta(c, x.email, CLAVE),
+                    primera=primera,
+                )
+
+                exitos, rechazos, otros = separar(resultados)
+                self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir")
+                self.assertNotIsInstance(resultados["a"], Exception, "el restablecimiento siempre se hace")
+                for rechazo in rechazos:
+                    self.assertEqual(codigos(rechazo), ["no_se_pudo_vincular"])
+                ahora = Usuario.objects.get(pk=x.pk)
+                self.assertTrue(ahora.tiene_contrasena_temporal)
+                self.assertIsNone(ahora.grupo_id)
+                self.assertFalse(
+                    Usuario.objects.filter(
+                        fecha_contrasena_temporal__isnull=False, grupo__isnull=False
+                    ).exists()
+                )
+                self.assertEqual(grupos_con_menos_de_dos_cuentas(), [])
+                if rechazos:
+                    self.assertIsNone(grupo_de(c))
+                else:
+                    self.assertEqual(grupo_de(c), grupo_de(v))  # c entró al grupo y X salió después
+                    self.assertIsNotNone(grupo_de(c))
 
     def test_d32_restablecer_al_gerente_mientras_modifica_su_cuenta_vinculada_no_hace_deadlock(self):
         """D-32 (límite conocido) y D-30: el Gerente G, vinculado con su cuenta de Agrónomo X, modifica los datos de
@@ -1390,3 +1404,122 @@ class UsrVncCtaConcurrenciaTests(TransactionTestCase):
         self.assertIsNone(restablecido.grupo_id)
         self.assertIsNone(grupo_de(agronomo))
         self.assertFalse(GrupoCuentas.objects.exists())
+
+    def test_d32_restablecer_y_vincular_a_la_vez_respetan_el_orden_de_bloqueos(self):
+        """D-30 y D-32: el orden de los bloqueos es primero el grupo y después la cuenta. El Gerente restablece la
+        contraseña de X (que está en un grupo con V) mientras otra persona vincula a X con su contraseña de antes.
+
+        Se detiene el restablecimiento justo ANTES de sacar a X del grupo (``detener_antes_de``): ya tiene
+        tomada la fila de X y todavía no tocó el grupo. Recién entonces arranca la vinculación, que toma el
+        grupo y queda esperando la fila de X. Si el restablecimiento no hubiera bloqueado el grupo primero, al
+        seguir necesitaría el grupo (que la vinculación tiene tomado) y cada una esperaría a la otra: un
+        deadlock. Con el orden correcto, la vinculación espera el grupo desde el principio, ve después que X
+        ya tiene una temporal y se rechaza con el mensaje genérico. Esta es la única prueba que detecta que
+        falte el bloqueo del grupo en ``restablecer_contrasena``: las demás detienen a la primera al registrar,
+        cuando ya tomó todos sus bloqueos y el cruce no puede ocurrir."""
+        gerente = crear_gerente()
+        x = crear_cuenta(Agronomo, email="x@infoponia.com")
+        v = crear_cuenta(Vendedor, email="v@infoponia.com")
+        c = crear_cuenta(Capataz, email="c@infoponia.com")
+        agrupar(x, v)
+
+        resultados = correr_a_la_vez(
+            lambda: servicios.restablecer_contrasena(gerente, x.pk),
+            lambda: servicios.vincular_cuenta(c, x.email, CLAVE),
+            primera="a",
+            detener_antes_de=(servicios, "_sacar_del_grupo"),
+        )
+
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir (un deadlock)")
+        self.assertNotIsInstance(resultados["a"], Exception, "el restablecimiento siempre se hace")
+        self.assertEqual(len(rechazos), 1)
+        self.assertEqual(codigos(rechazos[0]), ["no_se_pudo_vincular"])
+        ahora = Usuario.objects.get(pk=x.pk)
+        self.assertTrue(ahora.tiene_contrasena_temporal)
+        for cuenta in (x, v, c):
+            self.assertIsNone(grupo_de(cuenta))
+        self.assertFalse(GrupoCuentas.objects.exists())
+        self.assertEqual(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.RESTABLECIMIENTO).count(), 1
+        )
+        self.assertFalse(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.VINCULACION).exists()
+        )
+
+    def test_d32_restablecer_cuyo_grupo_cambia_mientras_espera_da_cambio_simultaneo(self):
+        """D-32 (``cuida_grupo``) y SEG-11: el Gerente restablece la contraseña de X, que no tiene grupo cuando
+        el restablecimiento lo lee. Antes de que tome los bloqueos, otra persona vincula a X con su contraseña
+        y confirma: X queda en un grupo con C. El restablecimiento tomó el bloqueo previo con el grupo que
+        leyó (ninguno), así que no tiene bloqueado el grupo al que X pertenece ahora; sacar a X de ahí sin
+        bloquearlo podría cruzarse con otras operaciones sobre ese grupo. Por eso, al ver que el grupo
+        cambió, se rechaza con «cambio_simultaneo» y no cambia nada: X conserva su contraseña y su grupo.
+
+        Se detiene el restablecimiento justo ANTES de su bloqueo previo (``detener_antes_de``), ya leída la
+        cuenta; la vinculación se completa entera y recién entonces sigue el restablecimiento."""
+        gerente = crear_gerente()
+        x = crear_cuenta(Agronomo, email="x@infoponia.com")
+        c = crear_cuenta(Capataz, email="c@infoponia.com")
+
+        resultados = correr_a_la_vez(
+            lambda: servicios.restablecer_contrasena(gerente, x.pk),
+            lambda: servicios.vincular_cuenta(c, x.email, CLAVE),
+            primera="a",
+            detener_antes_de=(servicios, "_bloquear_grupo_de_restablecimiento"),
+        )
+
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir")
+        self.assertEqual(len(exitos), 1)  # la vinculación
+        self.assertEqual(len(rechazos), 1)  # el restablecimiento
+        self.assertEqual(codigos(rechazos[0]), ["cambio_simultaneo"])
+        ahora = Usuario.objects.get(pk=x.pk)
+        self.assertFalse(ahora.tiene_contrasena_temporal)
+        self.assertTrue(ahora.check_password(CLAVE))
+        self.assertIsNotNone(grupo_de(x))
+        self.assertEqual(grupo_de(x), grupo_de(c))
+        self.assertFalse(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.RESTABLECIMIENTO).exists()
+        )
+        self.assertEqual(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.VINCULACION).count(), 1
+        )
+
+    def test_d32_reactivar_cuyo_grupo_cambia_mientras_espera_da_cambio_simultaneo(self):
+        """D-32 (``cuida_grupo``) y SEG-11: el Gerente reactiva la cuenta inactiva X, que está en un grupo con V y
+        W cuando la reactivación la lee. Antes de que tome los bloqueos, V desvincula a X (la baja no la había
+        sacado del grupo: regla 2 de USR-BAJ-USR; regla 8 de USR-VNC-CTA) y confirma. La reactivación tomó el
+        grupo que leyó, que ya no es el de X (ahora no tiene), así que se rechaza con «cambio_simultaneo»: X
+        sigue inactiva y sin grupo, y el grupo de V y W sigue intacto.
+
+        Se detiene la reactivación justo ANTES de su bloqueo previo (``detener_antes_de``), ya leída la
+        cuenta; la desvinculación se completa entera y recién entonces sigue la reactivación."""
+        gerente = crear_gerente()
+        x = crear_cuenta(Agronomo, email="x@infoponia.com", activo=False)
+        v = crear_cuenta(Vendedor, email="v@infoponia.com")
+        w = crear_cuenta(Capataz, email="w@infoponia.com")
+        agrupar(x, v, w)
+
+        resultados = correr_a_la_vez(
+            lambda: servicios.reactivar_usuario(gerente, x.pk),
+            lambda: servicios.desvincular_cuenta(v, x.pk),
+            primera="a",
+            detener_antes_de=(servicios, "_bloquear_grupo_de_reactivacion"),
+        )
+
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir")
+        self.assertEqual(len(exitos), 1)  # la desvinculación
+        self.assertEqual(len(rechazos), 1)  # la reactivación
+        self.assertEqual(codigos(rechazos[0]), ["cambio_simultaneo"])
+        ahora = Usuario.objects.get(pk=x.pk)
+        self.assertFalse(ahora.is_active)
+        self.assertIsNone(ahora.grupo_id)
+        self.assertIsNotNone(grupo_de(v))
+        self.assertEqual(grupo_de(v), grupo_de(w))
+        self.assertFalse(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.REACTIVACION).exists()
+        )
+        self.assertEqual(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.DESVINCULACION).count(), 1
+        )

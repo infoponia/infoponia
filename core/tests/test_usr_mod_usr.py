@@ -1155,9 +1155,12 @@ class UsrModUsrConcurrenciaTests(TransactionTestCase):
         gerente_1 = crear_gerente(email="gerente1@infoponia.com", activo=False)
         gerente_2 = crear_gerente(email="gerente2@infoponia.com", activo=False)
 
+        # Las dos reactivaciones son iguales: da lo mismo cuál va primera; la primera se detiene al registrar,
+        # con su Gerente ya activo y sin confirmar, y recién entonces arranca la segunda.
         resultados = correr_a_la_vez(
             lambda: servicios.reactivar_usuario(primero, gerente_1.pk),
             lambda: servicios.reactivar_usuario(segundo, gerente_2.pk),
+            primera="a",
         )
 
         exitos, rechazos, otros = separar(resultados)
