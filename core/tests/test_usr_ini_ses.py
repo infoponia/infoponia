@@ -18,25 +18,20 @@ from django.utils import timezone
 
 from core.contrasenas import generar_contrasena_temporal
 from core.models import Capataz, Usuario
-from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_capataz, crear_gerente
+from core.tests.fabricas import (
+    CLAVE,
+    agrupar,
+    crear_administrador,
+    crear_capataz,
+    crear_gerente,
+    dar_contrasena_temporal,
+)
 
 
 # Texto exacto del prototipo (vLogin) para cualquier falla de identificación (SEG-06).
 MENSAJE_GENERICO = (
     "No pudimos iniciar sesión. Revisá el email y la contraseña, y volvé a intentarlo."
 )
-
-
-def dar_contrasena_temporal(usuario, generada_hace=None):
-    """Le asigna a la cuenta una contraseña temporal (SEG-04) y devuelve su texto plano.
-
-    Con ``generada_hace`` se corre la fecha de generación hacia atrás, para probar el vencimiento.
-    """
-    temporal = usuario.asignar_contrasena_temporal()
-    if generada_hace is not None:
-        usuario.fecha_contrasena_temporal = timezone.now() - generada_hace
-    usuario.save()
-    return temporal
 
 
 class UsrIniSesReglasTests(TestCase):

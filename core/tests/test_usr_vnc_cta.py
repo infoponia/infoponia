@@ -42,7 +42,6 @@
 #   quedaba, detalle {"grupo": id, "disuelto": bool}. Nunca contraseñas.
 # - Si dos grupos se unen, queda el de menor id.
 
-import json
 from datetime import timedelta
 from unittest import mock
 
@@ -51,7 +50,6 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from core import servicios
 from core.models import (
@@ -64,7 +62,15 @@ from core.models import (
     Vendedor,
 )
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
-from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_cuenta, crear_gerente
+from core.tests.fabricas import (
+    CLAVE,
+    agrupar,
+    contenido_de_auditoria,
+    crear_administrador,
+    crear_cuenta,
+    crear_gerente,
+    poner_temporal,
+)
 
 # Textos exactos de las pantallas del prototipo (modalHtml 'link' y link-do).
 MENSAJE_NO_SE_PUDO_VINCULAR = (
@@ -78,17 +84,6 @@ MENSAJE_CAMBIO_SIMULTANEO = "Las cuentas cambiaron mientras hacías esto. Volvé
 def grupo_de(cuenta):
     """El id del grupo de la cuenta, leído de la base (``None`` si no tiene grupo)."""
     return Usuario.objects.get(pk=cuenta.pk).grupo_id
-
-
-def poner_temporal(cuenta, hace=timedelta(0)):
-    """Marca la contraseña de la cuenta como temporal, generada ``hace`` tiempo, SIN cambiarla: sigue siendo
-    ``CLAVE``. Así la contraseña es correcta y lo único que puede hacer fallar al servicio es la temporal."""
-    Usuario.objects.filter(pk=cuenta.pk).update(fecha_contrasena_temporal=timezone.now() - hace)
-
-
-def contenido_de_auditoria(registro):
-    """Todo lo que guarda un registro de auditoría, como texto, para buscar contraseñas en él."""
-    return json.dumps([registro.afectados, registro.detalle], ensure_ascii=False)
 
 
 def ids_afectados(registro):

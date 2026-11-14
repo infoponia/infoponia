@@ -19,7 +19,6 @@
 # registro de auditoría agrega ``sale_del_grupo`` (id del grupo) solo si la cuenta estaba en uno; si el
 # grupo se disolvió, la cuenta que quedaba sola figura también entre las afectadas.
 
-import json
 from unittest import mock
 
 from types import SimpleNamespace
@@ -44,6 +43,7 @@ from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
     CLAVE,
     agrupar,
+    contenido_de_auditoria,
     crear_administrador,
     crear_cuenta,
     crear_gerente,
@@ -65,11 +65,6 @@ def datos_validos(cuenta, **cambios):
     }
     datos.update(cambios)
     return datos
-
-
-def contenido_de_auditoria(registro):
-    """Todo lo que guarda un registro de auditoría, como texto, para buscar contraseñas en él."""
-    return json.dumps([registro.afectados, registro.detalle], ensure_ascii=False)
 
 
 class UsrModUsrServicioTests(TestCase):
