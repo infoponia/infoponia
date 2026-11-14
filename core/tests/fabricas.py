@@ -1,8 +1,9 @@
 # Fábricas y auxiliares compartidos por las pruebas de core/tests/: crean cuentas con la contraseña de
-# prueba y arman estados repetidos (administrador dado de baja, contraseña temporal vencida, grupo de
-# cuentas vinculadas). Tienen una sola firma; el archivo de pruebas que verifica un nombre o apellido
-# concretos lo pasa explícito.
+# prueba y arman estados repetidos (administrador dado de baja, contraseña temporal, vencida o no, grupo de
+# cuentas vinculadas) y leen el contenido de un registro de auditoría. Tienen una sola firma; el archivo de
+# pruebas que verifica un nombre o apellido concretos lo pasa explícito.
 
+import json
 from datetime import timedelta
 
 from django.utils import timezone
@@ -69,8 +70,34 @@ def administrador_inactivo(email="admin.anterior@infoponia.com"):
     return cuenta
 
 
+def dar_contrasena_temporal(usuario, generada_hace=None):
+    """Le asigna a la cuenta una contraseña temporal (SEG-04), la guarda y devuelve su texto plano.
+
+    Con ``generada_hace`` (un ``timedelta``) se corre la fecha de generación hacia atrás, para probar el
+    vencimiento: a los 7 días ya venció. CAMBIA la contraseña de la cuenta por la temporal; para marcarla como
+    temporal sin cambiar la contraseña, ``poner_temporal``.
+    """
+    temporal = usuario.asignar_contrasena_temporal()
+    if generada_hace is not None:
+        usuario.fecha_contrasena_temporal = timezone.now() - generada_hace
+    usuario.save()
+    return temporal
+
+
 def dar_temporal_vencida(cuenta):
     """Le da a la cuenta una contraseña temporal generada hace 8 días (ya venció, SEG-04)."""
-    cuenta.asignar_contrasena_temporal()
-    cuenta.fecha_contrasena_temporal = timezone.now() - timedelta(days=8)
-    cuenta.save()
+    dar_contrasena_temporal(cuenta, generada_hace=timedelta(days=8))
+
+
+def poner_temporal(cuenta, hace=timedelta(0)):
+    """Marca la contraseña de la cuenta como temporal, generada ``hace`` tiempo, SIN cambiarla: sigue siendo
+    ``CLAVE``. Así la contraseña es correcta y lo único que puede hacer fallar al servicio es la temporal.
+    Escribe directo en la base y no toca la instancia ``cuenta``. Para una temporal real, con su propio texto,
+    ``dar_contrasena_temporal``."""
+    Usuario.objects.filter(pk=cuenta.pk).update(fecha_contrasena_temporal=timezone.now() - hace)
+
+
+def contenido_de_auditoria(registro):
+    """Todo lo que guarda un registro de auditoría (cuentas afectadas y detalle), como texto, para buscar
+    contraseñas en él (SEG-02, SEG-14)."""
+    return json.dumps([registro.afectados, registro.detalle], ensure_ascii=False)

@@ -15,19 +15,19 @@ from django.utils import timezone
 
 from core.models import Capataz, GrupoCuentas, RegistroAuditoria, Usuario, Vendedor
 from core.servicios import cambiar_contrasena
-from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_capataz, crear_cuenta
+from core.tests.fabricas import (
+    CLAVE,
+    agrupar,
+    crear_administrador,
+    crear_capataz,
+    crear_cuenta,
+    dar_contrasena_temporal,
+)
 
 # Nombre y apellido largos, para poder probar el parecido con los datos de la cuenta (SEG-03).
 MAXIMILIANO = {"first_name": "Maximiliano", "last_name": "Fernández"}
 # Cumple SEG-03 y no se parece a los datos de la cuenta de prueba.
 NUEVA = "huerta-hidro-2026"
-
-
-def dar_contrasena_temporal(usuario):
-    """Le asigna a la cuenta una contraseña temporal (SEG-04) y devuelve su texto plano."""
-    temporal = usuario.asignar_contrasena_temporal()
-    usuario.save()
-    return temporal
 
 
 def codigos(error, campo):

@@ -117,8 +117,13 @@
   cambiar de cuenta ya no se muestra el aviso «Operás como …», porque el inicio lo indica (SEG-09). Solo hoja de
   estilos y una línea de la vista, sin migraciones. 340 pruebas en total: 3 nuevas de pantallas angostas, y una
   aserción de `test_seg09_cambiar_de_cuenta_genera_sesion_nueva_y_llega_al_inicio` que pasa a exigir que no haya aviso.
-  Falta mirarla a mano con el navegador a menos de 760px o en un celular. Rama `chore/pendientes`. Actualiza D-29 y
-  D-32.
+  Verificada a mano. Rama `chore/pendientes`. Actualiza D-29 y D-32.
+- Tarea chica de pendientes, punto 2 (limpieza de pruebas, sin cambiar lo que verifica ninguna): `contenido_de_auditoria`
+  (estaba en `test_usr_mod_usr.py` y en `test_usr_vnc_cta.py`), `poner_temporal` y `dar_contrasena_temporal` (estaba en
+  `test_usr_ini_ses.py` y en `test_usr_cmb_ctr.py`; queda con la firma de la primera, `(usuario, generada_hace=None)`,
+  que con un solo argumento hace lo mismo que la segunda) pasan a `core/tests/fabricas.py`, y `dar_temporal_vencida`
+  delega en la última. Se sacaron los imports que quedaron sin uso. 340 pruebas antes y después, con la misma lista de
+  nombres y ninguna aserción cambiada; sin migraciones. Rama `chore/pendientes`.
 
 ## En curso
 
@@ -172,11 +177,11 @@
 - Integrar el logo de InfoPonia: favicon y marca en el inicio de sesión. Cuándo: cuando esté el logo definitivo.
 - Campana y notificaciones del marco: se agregan cuando exista el primer aviso (por ejemplo, el resumen
   de pendientes del Gerente, D-14). El prototipo ya tiene el diseño (`notifPop`).
-- Fábricas de pruebas que quedaron sin unificar: `dar_contrasena_temporal` (en `test_usr_ini_ses.py` y
-  `test_usr_cmb_ctr.py`, con firmas distintas), `datos_validos` (en `test_usr_alt_usr.py` y `test_usr_mod_usr.py`,
-  que son funciones distintas), `poner_temporal` (en `test_usr_vnc_cta.py`: marca la temporal sin cambiar la
-  contraseña, una tercera variante de la temporal) y `contenido_de_auditoria` (duplicada en `test_usr_mod_usr.py` y
-  `test_usr_vnc_cta.py`). Cuándo: en una tarea chica de limpieza, como la de las fábricas (ya terminó la 06).
+- Funciones de pruebas con el mismo nombre y distinto trabajo, que no se unificaron a propósito: `datos_validos`
+  (`test_usr_alt_usr.py` arma los datos de un alta; `test_usr_mod_usr.py` toma los datos actuales de una cuenta) y
+  `codigos` (`core/tests/concurrencia.py` devuelve todos los códigos de un error; `test_usr_cmb_ctr.py` recibe el
+  campo y devuelve solo los de ese campo). Si se renombran, que sea sin cambiar lo que verifica ninguna prueba.
+  Cuándo: opcional, sin fecha.
 - Tope de intentos de identificación: SEG-05 y D-19 no lo tienen. El inicio de sesión y `vincular_cuenta` son el
   mismo oráculo de contraseñas, así que se evalúan juntos, por ejemplo con una espera creciente y no con el bloqueo
   de la cuenta (bloquearla dejaría sin acceso a quien tenga un email conocido). Necesita una decisión nueva que
