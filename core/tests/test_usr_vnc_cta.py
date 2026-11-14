@@ -1011,8 +1011,8 @@ class UsrVncCtaVistaTests(TestCase):
     def test_seg09_cambiar_de_cuenta_genera_sesion_nueva_y_llega_al_inicio(self):
         """SEG-09: desde el menú de cuenta se pasa a otra cuenta del grupo sin volver a identificarse. La sesión
         pasa a la otra cuenta con un identificador de sesión nuevo (no se reutiliza el de la cuenta
-        anterior), la persona llega al inicio, que indica con qué rol opera, y el cambio no se audita
-        (SEG-14)."""
+        anterior), la persona llega al inicio, que indica con qué rol y cuenta opera, y el cambio no se audita
+        (SEG-14). No hay un aviso de éxito que repita lo que ya dice el inicio (D-32, 14/11/2026)."""
         agronomo, vendedor = self.crear_par()
         agrupar(agronomo, vendedor)
         self.entrar(agronomo)
@@ -1025,9 +1025,13 @@ class UsrVncCtaVistaTests(TestCase):
         self.assertRedirects(respuesta, reverse("core:inicio"))
         self.assertEqual(self.cuenta_en_sesion(), str(vendedor.pk))
         self.assertNotEqual(self.cookie_de_sesion(), sesion_anterior)
-        self.assertContains(respuesta, "Operás como")
-        self.assertContains(respuesta, "vendedor@infoponia.com")
-        self.assertContains(respuesta, "Operás como Vendedor · Vera Sáenz")  # el aviso breve
+        # SEG-09: el inicio indica con qué rol y con qué cuenta se opera...
+        self.assertRegex(
+            respuesta.content.decode(),
+            r'Operás como <b[^>]*>Vendedor</b> con la cuenta <span class="mono">vendedor@infoponia\.com</span>',
+        )
+        # ...y por eso no se suma un aviso breve que lo repita (antes: «Operás como Vendedor · Vera Sáenz»).
+        self.assertNotContains(respuesta, "data-aviso")
         self.assertFalse(RegistroAuditoria.objects.exists())
 
     def test_seg09_la_sesion_anterior_ya_no_sirve_despues_del_cambio(self):

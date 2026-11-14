@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 13/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 14/11/2026. Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -112,6 +112,13 @@
   (vincular, desvincular, «Salir del grupo» y «Cambiar»), «Cambiar de cuenta» en el menú de cuenta y los vínculos en
   solo lectura en la ficha. Pruebas de concurrencia con dos hilos, verificadas contra bloqueos desactivados. 337
   pruebas en total. Verificada a mano. Rama `feature/vinculo-cuentas`. Decisión D-32.
+- Tarea chica de pendientes, punto 1 (diseño): los avisos breves de D-29 van abajo, sobre el pie, en pantallas de
+  menos de 760px (apilados hacia arriba; entran y salen por abajo; sin movimiento con `prefers-reduced-motion`), y al
+  cambiar de cuenta ya no se muestra el aviso «Operás como …», porque el inicio lo indica (SEG-09). Solo hoja de
+  estilos y una línea de la vista, sin migraciones. 340 pruebas en total: 3 nuevas de pantallas angostas, y una
+  aserción de `test_seg09_cambiar_de_cuenta_genera_sesion_nueva_y_llega_al_inicio` que pasa a exigir que no haya aviso.
+  Falta mirarla a mano con el navegador a menos de 760px o en un celular. Rama `chore/pendientes`. Actualiza D-29 y
+  D-32.
 
 ## En curso
 
@@ -180,10 +187,6 @@
   cuando este corrige la cuenta de otro rol vinculada a la suya, PostgreSQL puede abortar una de las dos operaciones
   (error 500). Pasarlos a `select_for_update(no_key=True)` lo evita y toca código ya mergeado: hay que revisar de
   nuevo las pruebas de concurrencia de la 05 y la 06b. Cuándo: tarea chica de limpieza o tarea 09.
-- Diseño de los avisos breves (D-29), para una tarea chica de diseño: en pantallas angostas (menos de 760px) tapan el
-  título y el texto del comienzo de la página; evaluar mostrarlos abajo en celular.
-- Aviso «Operás como …» al cambiar de cuenta (SEG-09): repite lo que ya muestra el inicio (el rol y la cuenta con la
-  que se opera); evaluar si hace falta. Cuándo: la misma tarea chica de diseño.
 - Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
   fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.

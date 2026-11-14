@@ -684,10 +684,14 @@ Formato:
     región con `role="status"`, que está vacía en toda pantalla con sesión, para que los lectores de
     pantalla anuncien cada aviso nuevo.
   - Se ubican arriba a la derecha, debajo del encabezado, con un ancho máximo de 380px, y varios se apilan
-    hacia abajo. En pantallas de menos de 760px ocupan el ancho con 12px de margen.
+    hacia abajo. En pantallas de menos de 760px ocupan el ancho con 12px de margen y van abajo, sobre el
+    pie (10px por encima de `--footer-height`), apilados hacia arriba: el primero queda junto al borde y los
+    que llegan después se suman encima (actualizado el 14/11/2026).
   - Al aparecer se deslizan desde la derecha con fundido (250ms, ease-out); al irse, por tiempo o por la
-    cruz, se desvanecen hacia la derecha (200ms) y recién después se quitan de la página. Con
-    `prefers-reduced-motion` no hay desplazamiento ni barra animada: solo aparecen y desaparecen.
+    cruz, se desvanecen hacia la derecha (200ms) y recién después se quitan de la página. En pantallas de
+    menos de 760px entran deslizándose desde abajo y salen hacia abajo, con la misma duración y la misma
+    curva (actualizado el 14/11/2026). Con `prefers-reduced-motion` no hay desplazamiento ni barra animada:
+    solo aparecen y desaparecen, también en pantallas angostas.
   - Sin JavaScript queda el aviso fijo en la página, como respaldo. Los errores que se muestran debajo de
     los campos de un formulario no son avisos y no cambian.
   - El botón secundario (`.btn-ghost`) usa borde y texto en el verde primario sobre fondo blanco: 6,54:1
@@ -705,15 +709,24 @@ Formato:
   (ícono de error). Sin foco visible, quien navega con teclado no sabe dónde está. Sin `Cache-Control`, el
   navegador guarda por su cuenta los archivos que solo traen `Last-Modified` y no vuelve a pedirlos: un
   cambio de JavaScript no llegaba y los avisos de la 04b parecían no desaparecer; con la fecha del archivo
-  en la URL, cada cambio es una URL nueva.
+  en la URL, cada cambio es una URL nueva. Abajo en pantallas angostas (actualizado el 14/11/2026): en menos
+  de 760px el aviso de arriba tapaba el título y el texto del comienzo de la página, que es lo primero que se
+  lee, y como el aviso ocupa todo el ancho, no queda un costado libre; abajo, sobre el pie, no tapa eso. Se apilan hacia
+  arriba para que, como en escritorio, el primer aviso quede junto al borde y los siguientes no lo muevan de
+  lugar. Solo cambia la posición y el nombre de la animación (nada de JavaScript): el temporizador, la cruz,
+  el `role="status"` y el respaldo sin JavaScript son los de siempre. El bloque de animaciones de pantallas
+  angostas va antes del de `prefers-reduced-motion` porque, con la misma especificidad, gana la última regla:
+  en el orden inverso, un celular con ese ajuste volvería a animar los avisos.
 - Fuentes: D-24 y D-25; WCAG 2.x: criterios 1.4.3 (contraste mínimo), 1.4.11 (contraste de componentes),
-  2.4.7 (foco visible) y 4.1.3 (mensajes de estado); revisión a mano de la tarea 04b.
+  2.4.7 (foco visible) y 4.1.3 (mensajes de estado); revisión a mano de las tareas 04b y 06b.
 - Consecuencias: toda pantalla nueva usa estas convenciones. Las verifican las pruebas
-  `test_d29_...` de `core/tests/test_usr_ini_ses.py`; el temporizador, la cruz y las animaciones son
-  JavaScript y se prueban a mano. En la tarea 09 se evalúa reemplazar `static_v` por
+  `test_d29_...` de `core/tests/test_interfaz.py` (incluidas las de pantallas angostas: avisos abajo, entrada y
+  salida por abajo, y «reducir movimiento»); el temporizador y la cruz son JavaScript y se prueban a mano, y
+  la posición abajo se mira a mano con el navegador a menos de 760px o en un celular (un teclado virtual abierto
+  podría tapar un aviso de abajo). En la tarea 09 se evalúa reemplazar `static_v` por
   `ManifestStaticFilesStorage` de WhiteNoise (`whitenoise.storage`) en producción, que pone un hash en el
   nombre de cada archivo.
-- Estado: vigente
+- Estado: vigente; actualizada el 14/11/2026 (avisos abajo en pantallas de menos de 760px)
 
 ## D-30 — Cuentas del Administrador: SEG-15, pantallas y admin de Django (tarea 05)
 
@@ -976,6 +989,9 @@ Formato:
     «cambio_simultaneo».
   - El cambio de cuenta no bloquea nada: `login()` guarda el resumen de contraseña de la cuenta a la que se pasa,
     así que si después se la restablece, Django cierra esa sesión; si se la da de baja, deja de cargarla.
+  - Al cambiar de cuenta no se muestra un aviso de éxito: la persona llega al inicio de la otra cuenta, que ya
+    indica con qué rol y con qué cuenta opera (SEG-09). Sí se muestra el aviso de error si la cuenta ya no está
+    disponible (actualizado el 14/11/2026, tarea chica de diseño).
   - «Salir del grupo» (regla 8): Mi perfil ofrece sacar del grupo también la cuenta con la que se opera. Esto se
     aparta del prototipo, que solo lista las otras cuentas.
   - La ficha de quien gestiona una cuenta muestra sus vínculos con rol, email y estado, en solo lectura; la
@@ -1025,6 +1041,11 @@ Formato:
     conflictos entre bloqueos de fila está en la documentación de PostgreSQL 17 (Explicit Locking, Tabla 13.3).
   - El cambio de cuenta no necesita bloquear porque el resumen de contraseña guardado en la sesión ya cubre los dos
     casos peligrosos (restablecimiento y baja), sin tomar ningún bloqueo en cada cambio.
+  - Sin aviso de éxito al cambiar de cuenta porque SEG-09 ya pide que el inicio indique con qué rol se opera y lo
+    hace («Operás como … con la cuenta …»): el aviso «Operás como Vendedor · Vera Sáenz» repetía eso y solo
+    agregaba el nombre completo, que la cabecera muestra en escritorio y el inicio reemplaza por el email, que
+    identifica la cuenta. Una persona que usa lector de pantalla recibe una página nueva, y el texto del inicio
+    es lo primero que se lee. El aviso de error se mantiene: ahí no hay otra pantalla que explique qué pasó.
   - «Salir del grupo» porque la regla 8 dice que la persona puede desvincular también la cuenta con la que opera,
     y sin ese botón tendría que entrar a otra cuenta del grupo para sacar la que está usando.
   - Enlace a la ficha solo si está en el alcance para que ningún enlace lleve a un 403 (como `acciones_permitidas`,
