@@ -852,7 +852,8 @@ Formato:
   - En un entorno de desarrollo con `DEBUG` encendido el admin sigue disponible; en el CI, con `DJANGO_DEBUG=0`, no
     existe, por eso las pruebas no lo usan.
   - La contraseña propia del Administrador solo se cambia por consola hasta la tarea 06.
-- Estado: vigente; D-31 cierra su consecuencia sobre la contraseña propia del Administrador
+- Estado: vigente; D-31 cierra su consecuencia sobre la contraseña propia del Administrador; D-32 (14/11/2026) pasa
+  sus bloqueos de filas de `FOR UPDATE` a `FOR NO KEY UPDATE`, sin cambiar su orden
 
 ## D-31 — Mi perfil y cambio voluntario de contraseña (tarea 06a)
 
@@ -987,6 +988,10 @@ Formato:
     cuentas, en orden de id. Los bloqueos nuevos son `FOR NO KEY UPDATE` (`select_for_update(no_key=True)`).
     Restablecer y reactivar relevan el grupo de la cuenta después de bloquearla (`cuida_grupo`) y, si cambió, dan
     «cambio_simultaneo».
+  - Desde el 14/11/2026, todos los bloqueos de filas de `core/servicios.py` son `FOR NO KEY UPDATE`, también los
+    cuatro anteriores a esta decisión, que eran `FOR UPDATE`: `_bloquear_gerentes` y
+    `_bloquear_administradores_activos` (05), el bloqueo de la cuenta en `_bloquear_cuenta_en_alcance` (04b y 05b)
+    y el de la propia cuenta en `cambiar_contrasena` (03). El orden de los bloqueos no cambia.
   - El cambio de cuenta no bloquea nada: `login()` guarda el resumen de contraseña de la cuenta a la que se pasa,
     así que si después se la restablece, Django cierra esa sesión; si se la da de baja, deja de cargarla.
   - Al cambiar de cuenta no se muestra un aviso de éxito: la persona llega al inicio de la otra cuenta, que ya
@@ -1061,16 +1066,35 @@ Formato:
   D-30 y D-31; `CLAUDE.md` (tests y bloqueos); documentación de PostgreSQL 17 (bloqueos de fila).
 - Consecuencias:
   - Migración `0006`, sin cambio de datos: no hay grupos todavía. Render la aplica en el despliegue.
-  - Límite conocido: restablecer y reactivar bloquean la cuenta con `FOR UPDATE`, como desde la 05. Si el
-    Administrador restablece al Gerente justo cuando el Gerente corrige, desde su cuenta, la cuenta de otro rol
-    vinculada a la suya, PostgreSQL puede abortar una de las dos operaciones, que la persona vería como un error
-    500. Pasar los bloqueos existentes a `no_key=True` lo evitaría; no se incluye en esta tarea (queda en «Temas
-    abiertos» de `docs/estado.md`).
+  - Límite conocido, resuelto el 14/11/2026: restablecer y reactivar bloqueaban la cuenta con `FOR UPDATE`. Si el
+    Administrador restablecía al Gerente justo cuando el Gerente corregía, desde su cuenta, la cuenta de otro rol
+    vinculada a la suya, PostgreSQL abortaba una de las dos operaciones (un error 500). El mismo ciclo aparecía
+    cuando dos Administradores se modificaban entre sí. Con los cuatro bloqueos anteriores pasados a
+    `FOR NO KEY UPDATE` ya no pasa. Ninguno necesitaba `FOR UPDATE`: ese modo solo protege contra un `DELETE` o
+    contra el cambio de una columna con índice único, y las cuentas no se borran (baja lógica, y la auditoría las
+    protege con `PROTECT`) ni cambian de `id`; la exclusión entre nuestras operaciones sigue igual, porque
+    `FOR NO KEY UPDATE` choca consigo mismo. Lo verifican `test_d32_restablecer_al_gerente_mientras_modifica_su_cuenta_vinculada_no_hace_deadlock`
+    y `test_d32_dos_administradores_que_se_modifican_entre_si_a_la_vez_no_hacen_deadlock`. Antes del cambio
+    fallaban con `OperationalError: deadlock detected`; después pasan. Con todos los bloqueos devueltos en memoria a
+    `FOR UPDATE` vuelven a fallar las dos y las otras ocho pasan; sin los bloqueos de los invariantes o sin ningún
+    bloqueo, fallan las pruebas de SEG-15 y de las cuentas vinculadas, como antes.
+  - Residual: si un `UPDATE` cambia el email (columna con índice único), PostgreSQL toma `FOR UPDATE` en esa
+    sentencia, se haya bloqueado antes como se haya bloqueado. Dos Administradores que se cambian el email
+    mutuamente en el mismo instante todavía pueden terminar en deadlock. Es mucho menos probable que el caso
+    resuelto y no se cubre.
   - Las pruebas que simulan un cambio entre la verificación y el bloqueo lo hacen dentro de la transacción del
     servicio y se deshace con el rechazo; solo verifican qué responde el servicio. Que dos operaciones reales se
-    esperen entre sí lo prueban las de concurrencia, con una ventana de 1,5 s (`core/tests/concurrencia.py`).
+    esperen entre sí lo prueban las de concurrencia (`core/tests/concurrencia.py`).
+  - Las dos pruebas `test_d32_…` usan el parámetro `primera` de `correr_a_la_vez` (14/11/2026): la otra operación
+    arranca recién cuando la primera se detuvo con sus bloqueos tomados, y la primera se libera cuando la otra
+    terminó o quedó esperando un bloqueo (se pregunta a `pg_stat_activity`), no después de un tiempo fijo. Las
+    ocho pruebas de concurrencia anteriores siguen con la ventana fija de 1,5 s. El experimento del 14/11/2026
+    mostró que, con esa ventana, en una máquina lenta pueden pasar sin probar nada, y eso debilita la evidencia
+    de SEG-15 de D-30 y de esta decisión. Pasarlas a `primera` está en «Temas abiertos» de `docs/estado.md`, con
+    prioridad.
   - Quien tiene un grupo suma una consulta por pantalla (el menú de cuenta); sin grupo no consulta la base.
   - El tope de intentos de identificación, para el inicio de sesión y el vínculo juntos, queda para la tarea 09:
     necesita una decisión nueva que reemplace a SEG-05 y D-19, y un modelo o una caché para contar.
   - El DER se actualiza después, a partir del código.
-- Estado: vigente
+- Estado: vigente; actualizada el 14/11/2026 (sin aviso de éxito al cambiar de cuenta; todos los bloqueos pasan a
+  `FOR NO KEY UPDATE` y el límite conocido queda resuelto)

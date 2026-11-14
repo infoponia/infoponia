@@ -1170,3 +1170,35 @@ class UsrModUsrConcurrenciaTests(TransactionTestCase):
         self.assertEqual(
             RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.REACTIVACION).count(), 1
         )
+
+    def test_d32_dos_administradores_que_se_modifican_entre_si_a_la_vez_no_hacen_deadlock(self):
+        """D-32 y D-30 (D-16: los Administradores se gestionan entre sí): el Administrador 1 modifica los datos del 2
+        mientras el 2 modifica los del 1. Solo cambia el teléfono, una columna sin índice único.
+
+        Orden fijo (``primera="a"``): la modificación del 1 tiene tomada la fila del 2 y se detiene antes de
+        confirmar; recién entonces arranca la del 2, que toma la fila del 1, la guarda y, al confirmar, la clave
+        foránea de su auditoría pide ``FOR KEY SHARE`` sobre la fila del 2 (quien actúa). Ahí se libera la primera,
+        que al confirmar pide lo mismo sobre la fila del 1. Si las filas se bloquean con ``FOR UPDATE``, cada una
+        espera a la otra y PostgreSQL aborta una (un error 500); con ``FOR NO KEY UPDATE`` no chocan."""
+        uno = crear_administrador(email="admin1@infoponia.com", nombre="Uno", apellido="Primero")
+        dos = crear_administrador(email="admin2@infoponia.com", nombre="Dos", apellido="Segundo")
+
+        resultados = correr_a_la_vez(
+            lambda: servicios.modificar_usuario(
+                uno, dos.pk, "Dos", "Segundo", dos.email, "+54 376 400-2002"
+            ),
+            lambda: servicios.modificar_usuario(
+                dos, uno.pk, "Uno", "Primero", uno.email, "+54 376 400-1001"
+            ),
+            primera="a",
+        )
+
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], "ninguna operación puede terminar con un error sin traducir (un deadlock)")
+        self.assertEqual(rechazos, [])
+        self.assertEqual(len(exitos), 2)
+        self.assertEqual(Usuario.objects.get(pk=dos.pk).telefono, "+54 376 400-2002")
+        self.assertEqual(Usuario.objects.get(pk=uno.pk).telefono, "+54 376 400-1001")
+        self.assertEqual(
+            RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.MODIFICACION).count(), 2
+        )

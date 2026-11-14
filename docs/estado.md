@@ -124,6 +124,15 @@
   que con un solo argumento hace lo mismo que la segunda) pasan a `core/tests/fabricas.py`, y `dar_temporal_vencida`
   delega en la última. Se sacaron los imports que quedaron sin uso. 340 pruebas antes y después, con la misma lista de
   nombres y ninguna aserción cambiada; sin migraciones. Rama `chore/pendientes`.
+- Tarea chica de pendientes, punto 3 (bloqueos): los cuatro bloqueos que todavía usaban `FOR UPDATE`
+  (`_bloquear_gerentes`, `_bloquear_administradores_activos`, el de la cuenta en `_bloquear_cuenta_en_alcance` y el de
+  `cambiar_contrasena`) pasan a `select_for_update(no_key=True)`. Resuelve el límite conocido de D-32 (restablecer
+  al Gerente mientras modifica su cuenta vinculada) y el mismo ciclo entre dos Administradores que se modifican
+  entre sí; queda el residual del cambio simultáneo de email. `correr_a_la_vez` suma el parámetro `primera`, que
+  fija el orden de las dos operaciones sin depender de la velocidad de la máquina. 2 pruebas de concurrencia nuevas
+  (`test_d32_…`), que fallaban con deadlock antes del cambio; las 10 de concurrencia, corridas con los bloqueos
+  devueltos a `FOR UPDATE`, sin bloqueos y sin los de los invariantes, fallan donde corresponde. 342 pruebas en
+  total, sin migraciones. Rama `chore/pendientes`. Actualiza D-30 y D-32.
 
 ## En curso
 
@@ -163,6 +172,10 @@
 
 ## Temas abiertos
 
+- **Prioridad.** Pasar las pruebas de concurrencia existentes al parámetro `primera` de `correr_a_la_vez`. El
+  experimento del 14/11/2026 mostró que, con la ventana fija de 1,5 s, en una máquina lenta pueden pasar sin probar
+  nada, y eso debilita la evidencia de SEG-15 de D-30 y D-32. Cuándo: la próxima tarea chica, antes de agregar más
+  pruebas de concurrencia.
 - Reparto final de apps entre los dos integrantes: D-23 fija cuentas en `core` y una app por módulo
   de negocio; faltan los nombres y quién toma cada una.
 - Lista cerrada de los casos de uso del 80% y orden de implementación.
@@ -186,12 +199,6 @@
   mismo oráculo de contraseñas, así que se evalúan juntos, por ejemplo con una espera creciente y no con el bloqueo
   de la cuenta (bloquearla dejaría sin acceso a quien tenga un email conocido). Necesita una decisión nueva que
   reemplace a D-19 y SEG-05, y un modelo o una caché para contar. Cuándo: tarea 09.
-- Bloqueos de la 05 a `no_key=True` (límite conocido de D-32): `_bloquear_gerentes` y
-  `_bloquear_administradores_activos` (05), `_bloquear_cuenta_en_alcance` (04b y 05b) y, por coherencia,
-  `cambiar_contrasena` (03) usan `select_for_update()` (`FOR UPDATE`). Si el Administrador restablece al Gerente justo
-  cuando este corrige la cuenta de otro rol vinculada a la suya, PostgreSQL puede abortar una de las dos operaciones
-  (error 500). Pasarlos a `select_for_update(no_key=True)` lo evita y toca código ya mergeado: hay que revisar de
-  nuevo las pruebas de concurrencia de la 05 y la 06b. Cuándo: tarea chica de limpieza o tarea 09.
 - Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
   fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.
