@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 14/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 16/11/2026. Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -142,10 +142,36 @@
   restablecer y vincular corre los dos órdenes. Matriz de 11 modos de bloqueos desactivados, a velocidad normal y
   lenta: cada prueba falla cuando falta su protección. 13 pruebas de concurrencia, 5 corridas seguidas sin fallas.
   345 pruebas en total, ninguna aserción cambiada, sin migraciones. Rama `chore/pendientes`. Actualiza D-32.
+- Tarea chica de experiencia de uso (Neon Free se suspende a los 5 minutos y el primer pedido tarda): (1) envíos en
+  curso: `infoponia.js` deshabilita el botón de envío de todo formulario POST con un indicador y el verbo de la acción
+  (`data-enviando`, por defecto «Guardando…») y descarta un segundo envío; (2) errores de HTMX: dos avisos de error de
+  D-29 («Revisá tu conexión…» sin conexión o sin respuesta en 30 s; «Volvé a intentarlo.» con un error del servidor),
+  con el límite en `base.html`; Render usa el `--timeout` por defecto de gunicorn (30 s); (3) al iniciar sesión, si la
+  pantalla pedida (`next`) no es accesible por rol para la cuenta que entra, va a su inicio y no al 403
+  (`pantalla_accesible_para`, `core/acceso.py`). 359 pruebas en total (14 nuevas: 9 en `test_usr_ini_ses.py` y 5 en
+  `test_interfaz.py`), sin migraciones, ninguna existente cambió. Rama `chore/pendientes`. Actualiza D-29.
+- Forma de trabajo con las pruebas (`CLAUDE.md`, sección Tests): en local solo las de los módulos tocados, con
+  `--keepdb --parallel`; la suite completa la corre el CI en el PR; las 4 clases de concurrencia (13 pruebas) llevan
+  `@tag("concurrencia")` y se excluyen con `--exclude-tag concurrencia` salvo que la tarea toque bloqueos; sin
+  experimentos ni matrices de bloqueos salvo que la tarea lo pida. Con `manage.py test`, `config/settings.py` usa
+  `MD5PasswordHasher` (detectado con `sys.argv`) para que crear cuentas en las pruebas no cueste 1.000.000 de
+  iteraciones de PBKDF2; `test_usr_cns_usr.py` ya no busca el texto «pbkdf2» sino el prefijo del hash real. Si se
+  cambia el algoritmo de producción, hay que probarlo a mano. Sin otros cambios de comportamiento.
 
 ## En curso
 
-- Nada por ahora.
+- Revisión a mano de la tarea chica de experiencia de uso (JavaScript, no probado en un navegador):
+  1. Doble clic y doble Enter en un formulario con el servidor lento: llega un solo POST.
+  2. El botón muestra el indicador y el verbo, no cambia de ancho y se restaura al volver atrás desde el caché.
+  3. Con «Reducir movimiento» activado en el sistema, el indicador no gira.
+  4. Con JavaScript desactivado, el formulario envía igual.
+  5. Servidor apagado o sin red, clic en «Restablecer» o «Dar de baja»: aviso «Revisá tu conexión…», la pantalla no
+     cambia y el aviso se cierra solo a los 10 s.
+  6. Un 500 en un pedido de HTMX (forzado en local) muestra «Volvé a intentarlo.», sin mencionar la conexión; un
+     pedido que supera los 30 s, el de la conexión.
+  7. Sesión vencida en `/usuarios/` con un Gerente, entra un Capataz en el mismo navegador: llega a su inicio.
+  8. Al deshabilitarse el botón enfocado dentro de una ventana, el foco se pierde (comportamiento del navegador):
+     ver si molesta.
 
 ## Siguiente
 
@@ -206,6 +232,9 @@
   reemplace a D-19 y SEG-05, y un modelo o una caché para contar. Cuándo: tarea 09.
 - Búsqueda de la lista de cuentas sin distinguir tildes, con `unaccent` de PostgreSQL. Cuándo: opcional, sin
   fecha.
+- Volver a la pantalla pedida después de iniciar sesión (D-29): solo se evalúa el rol. Una cuenta fuera de alcance
+  dentro de una pantalla permitida (por ejemplo, `/usuarios/7/`) sigue dando 403; cubrirla exigiría ejecutar la
+  pantalla pedida dos veces. Cuándo: sin fecha.
 - Ámbito por invernadero de SEG-13: se agrega en `core/acceso.py` cuando exista `Invernadero`.
 - Render tiene `DJANGO_DEBUG=0` (verificado el 12/11/2026); en la tarea 09, `DEBUG` queda apagado por defecto en
   el código.

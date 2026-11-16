@@ -13,9 +13,12 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, TransactionTestCase, override_settings
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
+from django.views.decorators.vary import vary_on_headers
 
+from core.acceso import ADMINISTRADOR, pantalla_accesible_para, rol_requerido
 from core.contrasenas import generar_contrasena_temporal
 from core.models import Capataz, Usuario
 from core.tests.fabricas import (
@@ -409,6 +412,46 @@ class UsrIniSesReglasTests(TestCase):
                 self.assertNotContains(respuesta, texto)
 
 
+class PantallaAccesibleTests(TestCase):
+    """``pantalla_accesible_para`` y las anotaciones de ``rol_requerido`` (SEG-13, D-29): la decisión de a dónde
+    volver después de iniciar sesión se toma sin ejecutar la pantalla pedida."""
+
+    def test_seg13_los_roles_de_rol_requerido_sobreviven_a_otros_decoradores(self):
+        """SEG-13 (D-29): ``rol_requerido`` anota sus roles en la vista y la anotación sigue visible cuando otro
+        decorador (``never_cache``, ``vary_on_headers``) la envuelve por fuera."""
+
+        @never_cache
+        @vary_on_headers("HX-Request")
+        @rol_requerido(Usuario.Rol.GERENTE)
+        def vista(request):
+            return None
+
+        self.assertEqual(vista.roles_permitidos, (Usuario.Rol.GERENTE,))
+
+    def test_seg13_las_pantallas_de_usuarios_declaran_gerente_y_administrador(self):
+        """SEG-13 (D-29): la lista de usuarios, que protege ``rol_requerido``, declara los roles que el inicio de
+        sesión consulta."""
+        vista = resolve(reverse("core:usuarios")).func
+
+        self.assertEqual(set(vista.roles_permitidos), {Usuario.Rol.GERENTE, ADMINISTRADOR})
+
+    def test_seg13_pantalla_inexistente_o_sin_roles_se_considera_accesible(self):
+        """SEG-13 y USR-INI-SES (D-29): una URL que no resuelve, o una pantalla que no declara roles (Mi perfil),
+        no se rechaza: se conserva el comportamiento de siempre y las decide la propia pantalla."""
+        capataz = crear_capataz()
+
+        self.assertTrue(pantalla_accesible_para(capataz, "/pantalla-pedida/"))
+        self.assertTrue(pantalla_accesible_para(capataz, reverse("core:mi_perfil")))
+
+    def test_seg13_rol_distinto_de_los_declarados_no_es_accesible(self):
+        """SEG-13 (D-29): una cuenta cuyo rol no figura en la pantalla pedida no puede abrirla."""
+        capataz = crear_capataz()
+
+        self.assertFalse(pantalla_accesible_para(capataz, reverse("core:usuarios")))
+        self.assertFalse(pantalla_accesible_para(capataz, reverse("core:usuarios") + "?rol=capataz"))
+        self.assertTrue(pantalla_accesible_para(crear_gerente(), reverse("core:usuarios")))
+
+
 class UsrIniSesVistaTests(TestCase):
     """Flujo principal de USR-INI-SES y lo que cada rol ve en su inicio (vista con el cliente de prueba)."""
 
@@ -445,6 +488,57 @@ class UsrIniSesVistaTests(TestCase):
         )
 
         self.assertRedirects(respuesta, "/pantalla-pedida/", fetch_redirect_response=False)
+
+    def iniciar_pidiendo(self, cuenta, destino):
+        """Envía el formulario de inicio de sesión como llega cuando se pidió ``destino`` con la sesión cerrada."""
+        return self.client.post(
+            reverse("core:iniciar_sesion") + "?next=" + destino,
+            {"username": cuenta.email, "password": CLAVE, "next": destino},
+        )
+
+    def test_seg13_next_de_pantalla_de_otro_rol_lleva_al_inicio_de_la_cuenta(self):
+        """SEG-13 y USR-INI-SES flujo principal (D-29): si la pantalla pedida no es accesible para la cuenta que
+        acaba de entrar (otra persona en el mismo navegador), va a su inicio y no al 403."""
+        capataz = crear_capataz()
+
+        respuesta = self.iniciar_pidiendo(capataz, reverse("core:usuarios"))
+
+        # assertRedirects sigue la redirección y exige un 200: el inicio, no la página 403.
+        self.assertRedirects(respuesta, reverse("core:inicio"))
+
+    def test_seg13_next_de_pantalla_permitida_se_respeta(self):
+        """SEG-13 y USR-INI-SES flujo principal (D-29): si la cuenta sí puede abrir la pantalla pedida, vuelve a ella."""
+        for crear in (crear_gerente, crear_administrador):
+            with self.subTest(cuenta=crear.__name__):
+                respuesta = self.iniciar_pidiendo(crear(), reverse("core:usuarios"))
+
+                self.assertRedirects(respuesta, reverse("core:usuarios"))
+                self.client.logout()
+
+    def test_seg13_next_con_consulta_se_evalua_por_la_ruta(self):
+        """SEG-13 (D-29): la consulta de la URL pedida (``?rol=capataz``) no cambia la decisión: se evalúa la ruta."""
+        capataz = crear_capataz()
+
+        respuesta = self.iniciar_pidiendo(capataz, reverse("core:usuarios") + "?rol=capataz")
+
+        self.assertRedirects(respuesta, reverse("core:inicio"))
+
+    def test_seg13_next_de_otro_sitio_sigue_ignorado(self):
+        """SEG-13 (D-29): un ``next`` hacia otro sitio sigue descartándose y la cuenta va a su inicio."""
+        gerente = crear_gerente()
+
+        respuesta = self.iniciar_pidiendo(gerente, "//ejemplo.com/")
+
+        self.assertRedirects(respuesta, reverse("core:inicio"))
+
+    def test_seg13_con_sesion_abierta_el_inicio_de_sesion_con_next_inaccesible_lleva_al_inicio(self):
+        """SEG-13 (D-29): quien abre el inicio de sesión con la sesión ya abierta y un ``next`` que su cuenta no
+        puede abrir va a su inicio (``redirect_authenticated_user`` pasa por la misma decisión)."""
+        self.client.force_login(crear_capataz())
+
+        respuesta = self.client.get(reverse("core:iniciar_sesion") + "?next=" + reverse("core:usuarios"))
+
+        self.assertRedirects(respuesta, reverse("core:inicio"))
 
     def test_post_a_gerente_ve_menu_lateral_con_panel_de_control(self):
         """USR-INI-SES postcondición a: el Gerente opera con los permisos de su rol (menú lateral)."""

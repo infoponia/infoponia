@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 
 import os
+import sys
 
 import dj_database_url
 
@@ -151,6 +152,12 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'core.contrasenas.DistintaDeLaActualValidator',
     },
 ]
+
+# Solo para las pruebas: MD5 es inseguro y nunca debe usarse en producción. Con el algoritmo por defecto
+# (PBKDF2, 1.000.000 de iteraciones) cada contraseña creada en una prueba tarda cientos de milisegundos. Se aplica
+# solo con ``manage.py test``; runserver, gunicorn y los demás comandos usan el algoritmo por defecto de Django.
+if sys.argv[1:2] == ["test"]:
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 
 # Internationalization

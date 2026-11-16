@@ -75,7 +75,7 @@ hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular l
     {% if not es_administrador %}
     <div class="pop-sec">Cambiar de cuenta</div>
     {% for otra in cuentas_vinculadas %}
-    <form class="pop-form" method="post" action="{% url 'core:cambiar_de_cuenta' %}">
+    <form class="pop-form" method="post" action="{% url 'core:cambiar_de_cuenta' %}" data-enviando="Cambiando…">
       {% csrf_token %}
       <input type="hidden" name="cuenta_id" value="{{ otra.pk }}">
       <button class="acc-item" type="submit"{% if not otra.se_puede_pasar %} disabled{% endif %}>
@@ -97,7 +97,7 @@ hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular l
     <a class="pop-act" href="{% url 'core:mi_perfil' %}">{% icono "user" 16 %}Mi perfil</a>
     <form class="pop-form" method="post" action="{% url 'core:cerrar_sesion' %}">
       {% csrf_token %}
-      <button class="pop-act" type="submit">{% icono "out" 16 %}Cerrar sesión</button>
+      <button class="pop-act" type="submit" data-enviando="Cerrando sesión…">{% icono "out" 16 %}Cerrar sesión</button>
     </form>
   </div>
 </div>

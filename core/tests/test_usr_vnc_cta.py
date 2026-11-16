@@ -48,7 +48,7 @@ from unittest import mock
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
 from core import servicios
@@ -1257,6 +1257,7 @@ class UsrVncCtaVistaTests(TestCase):
         self.assertContains(respuesta, "Cambiar el email no afecta las cuentas vinculadas.")
 
 
+@tag("concurrencia")
 class UsrVncCtaConcurrenciaTests(TransactionTestCase):
     """Operaciones simultáneas sobre un mismo grupo (D-17, D-30). Son ``TransactionTestCase`` porque cada
     operación corre en su propio hilo, con su propia conexión y transacción (ver

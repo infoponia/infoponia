@@ -12,7 +12,7 @@ from unittest import mock
 
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
 from django.db import IntegrityError
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
 from core import servicios
@@ -699,6 +699,7 @@ class UsrAltUsrVistaTests(TestCase):
         self.assertContains(respuesta, reverse("core:usuario", args=[inactivo.pk]))
 
 
+@tag("concurrencia")
 class UsrAltUsrConcurrenciaTests(TransactionTestCase):
     """SEG-15 en ``alta_usuario``: dos altas de Gerente simultáneas dejan un solo Gerente activo y la
     segunda recibe un rechazo con mensaje, no un error 500. Son ``TransactionTestCase`` porque cada

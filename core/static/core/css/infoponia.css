@@ -269,3 +269,11 @@ a.pop-act:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 @media(max-width:760px){.avisos,.shell.field .avisos{left:12px;right:12px;width:auto;max-width:none;top:auto;bottom:calc(var(--footer-height) + 10px);flex-direction:column-reverse}}
 /* Foco visible de los botones al navegar con Tab: borde en el verde primario, separado del botón. */
 .btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+/* Envío en curso (D-29): infoponia.js deshabilita el botón de un formulario POST y le pone el indicador `.giro` y el verbo
+   de la acción hasta que llega la respuesta. El indicador es un anillo con un tramo de color que gira; toma el color del
+   texto del botón. Sin JavaScript no se agrega nada de esto. */
+button.enviando:disabled{cursor:progress}
+.giro{display:inline-block;flex-shrink:0;width:13px;height:13px;margin-right:6px;vertical-align:-2px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:giro .8s linear infinite}
+@keyframes giro{to{transform:rotate(360deg)}}
+/* Con «reducir movimiento» el indicador no gira: queda el anillo quieto. Va después de la regla base (misma especificidad). */
+@media(prefers-reduced-motion:reduce){.giro{animation:none}}

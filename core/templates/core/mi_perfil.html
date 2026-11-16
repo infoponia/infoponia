@@ -92,7 +92,7 @@ pide la contraseña actual). Tarea 06a.
         <form method="post" action="{% url 'core:cambiar_de_cuenta' %}">
           {% csrf_token %}
           <input type="hidden" name="cuenta_id" value="{{ otra.pk }}">
-          <button class="btn btn-primary btn-sm" type="submit">Cambiar</button>
+          <button class="btn btn-primary btn-sm" type="submit" data-enviando="Cambiando…">Cambiar</button>
         </form>
         {% endif %}
         <a class="btn btn-ghost btn-sm" href="{% url 'core:desvincular_cuenta' otra.pk %}"
