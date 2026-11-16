@@ -9,7 +9,7 @@ from django.conf import settings
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from core.tests.fabricas import crear_gerente
+from core.tests.fabricas import agrupar, crear_capataz, crear_gerente, dar_contrasena_temporal
 
 
 def _luminancia(color):
@@ -257,3 +257,122 @@ class AvisosYFocoEstilosTests(TestCase):
     def test_d29_botones_enlace_no_se_subrayan(self):
         """D-29: un botón que es un enlace (<a class="btn">) no se subraya, igual que uno que es <button>."""
         self.assertIn("text-decoration:none", _regla(_css(), ".btn"))
+
+
+class EnviosEnCursoTests(TestCase):
+    """Envíos en curso (D-29): lo que se puede verificar en el HTML del servidor y en la hoja de estilos. El
+    comportamiento del botón (indicador, doble envío, restauración) y el aviso de error de HTMX son JavaScript y
+    se prueban a mano. Cada prueba arma sus propios datos."""
+
+    def paginas_con_formularios_post(self):
+        """HTML de las pantallas y ventanas que tienen formularios POST, de cada rol que las ve."""
+        paginas = {}
+        HTMX = {"HX-Request": "true"}
+
+        paginas["iniciar_sesion"] = self.client.get(reverse("core:iniciar_sesion")).content.decode()
+
+        nueva = crear_capataz(email="nueva@infoponia.com")
+        dar_contrasena_temporal(nueva)
+        self.client.force_login(nueva)
+        paginas["elegir_contrasena"] = self.client.get(reverse("core:elegir_contrasena")).content.decode()
+
+        gerente = crear_gerente()
+        activa = crear_capataz(email="activa@infoponia.com")
+        inactiva = crear_capataz(email="baja@infoponia.com", is_active=False)
+        self.client.force_login(gerente)
+        paginas["inicio_gerente"] = self.client.get(reverse("core:inicio")).content.decode()
+        paginas["alta"] = self.client.get(reverse("core:usuario_nuevo")).content.decode()
+        paginas["modificar"] = self.client.get(reverse("core:usuario_modificar", args=[activa.pk])).content.decode()
+        paginas["restablecer"] = self.client.get(
+            reverse("core:usuario_restablecer", args=[activa.pk]), headers=HTMX
+        ).content.decode()
+        paginas["baja"] = self.client.get(
+            reverse("core:usuario_baja", args=[activa.pk]), headers=HTMX
+        ).content.decode()
+        paginas["reactivar"] = self.client.get(
+            reverse("core:usuario_reactivar", args=[inactiva.pk]), headers=HTMX
+        ).content.decode()
+
+        uno = crear_capataz(email="uno@infoponia.com")
+        otro = crear_capataz(email="otro@infoponia.com")
+        agrupar(uno, otro)
+        self.client.force_login(uno)
+        paginas["mi_perfil"] = self.client.get(reverse("core:mi_perfil")).content.decode()
+        paginas["menu_de_cuenta"] = self.client.get(reverse("core:inicio")).content.decode()
+        paginas["vincular"] = self.client.get(reverse("core:vincular_cuenta"), headers=HTMX).content.decode()
+        paginas["desvincular"] = self.client.get(
+            reverse("core:desvincular_cuenta", args=[otro.pk]), headers=HTMX
+        ).content.decode()
+        return paginas
+
+    @staticmethod
+    def botones_de_envio_post(html):
+        """Lista de ``(atributos, texto)`` de los botones de envío de los formularios POST de ``html``. Los
+        atributos son los del formulario seguidos de los del botón: el verbo ``data-enviando`` puede ir en
+        cualquiera de los dos."""
+        botones = []
+        for formulario in re.finditer(r"<form\b([^>]*)>(.*?)</form>", html, re.S):
+            if not re.search(r'method="post"', formulario.group(1), re.I):
+                continue
+            for boton in re.finditer(r"<button\b([^>]*)>(.*?)</button>", formulario.group(2), re.S):
+                if 'type="submit"' in boton.group(1) or "type=" not in boton.group(1):
+                    atributos = formulario.group(1) + " " + boton.group(1)
+                    texto = re.sub(r"<[^>]+>", "", boton.group(2)).strip()
+                    botones.append((atributos, texto))
+        return botones
+
+    def test_d29_el_html_del_servidor_trae_los_botones_de_envio_sin_cambios(self):
+        """D-29: sin JavaScript el formulario funciona como siempre. El botón de envío llega del servidor
+        habilitado, visible y con su texto: el indicador y el estado «enviando» los agrega solo el script."""
+        total = 0
+        for nombre, html in self.paginas_con_formularios_post().items():
+            for atributos, texto in self.botones_de_envio_post(html):
+                total += 1
+                with self.subTest(pagina=nombre, boton=texto):
+                    self.assertNotIn("disabled", atributos)
+                    self.assertNotIn("hidden", atributos)
+                    self.assertNotIn("enviando", atributos.replace("data-enviando", ""))
+                    self.assertTrue(texto)
+                    self.assertNotIn("giro", html)
+        self.assertGreaterEqual(total, 12, "las pantallas de la prueba dejaron de traer formularios POST")
+
+    def test_d29_los_botones_con_otro_verbo_traen_el_texto_de_la_accion_en_curso(self):
+        """D-29: «Guardando…» es el texto por defecto de los botones «Guardar…»; todo otro botón de envío de un
+        formulario POST declara su verbo en ``data-enviando`` (por ejemplo «Ingresando…»), terminado en «…»."""
+        for nombre, html in self.paginas_con_formularios_post().items():
+            for atributos, texto in self.botones_de_envio_post(html):
+                if texto.startswith("Guardar"):
+                    continue
+                with self.subTest(pagina=nombre, boton=texto):
+                    self.assertRegex(atributos, r'data-enviando="[^"]+…"')
+
+    def test_d29_el_limite_de_espera_de_htmx_es_de_30_segundos_con_y_sin_sesion(self):
+        """D-29: toda pantalla trae la configuración de HTMX con 30 s de límite; sin ella HTMX no corta nunca un
+        pedido sin respuesta y el aviso de error no llegaría."""
+        etiqueta = '<meta name="htmx-config" content=\'{"timeout": 30000}\'>'
+        sin_sesion = self.client.get(reverse("core:iniciar_sesion"))
+        self.client.force_login(crear_gerente())
+        con_sesion = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(sin_sesion, etiqueta)
+        self.assertContains(con_sesion, etiqueta)
+
+    def test_d29_el_indicador_gira_y_con_reducir_movimiento_queda_quieto(self):
+        """D-29: el indicador de envío en curso es un anillo con un tramo de color que gira; con
+        prefers-reduced-motion no se anima. El bloque de «reducir movimiento» va después de la regla base: con la
+        misma especificidad, gana la última."""
+        css = _css()
+
+        regla = _regla(css, ".giro")
+        self.assertIn("border-top-color:transparent", regla)
+        self.assertIn("border-radius:50%", regla)
+        self.assertIn("animation:giro", regla)
+        self.assertIn("@keyframes giro{to{transform:rotate(360deg)}}", css)
+        reducido = "@media(prefers-reduced-motion:reduce){.giro{animation:none}}"
+        self.assertIn(reducido, css)
+        self.assertLess(css.index(".giro{"), css.index(reducido))
+
+    def test_d29_el_boton_enviando_muestra_el_cursor_de_espera(self):
+        """D-29: mientras el botón está deshabilitado por un envío en curso, el cursor indica espera (y no el
+        «no permitido» de los botones deshabilitados, que tiene menos especificidad)."""
+        self.assertIn("cursor:progress", _regla(_css(), "button.enviando:disabled"))

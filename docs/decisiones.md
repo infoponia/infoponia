@@ -700,6 +700,28 @@ Formato:
     borde de 2px en el verde primario (`:focus-visible`), separado 2px del botón.
   - Los archivos estáticos propios (hoja de estilos y scripts) se piden con `{% static_v %}`, que agrega la
     fecha del archivo a la URL, porque `runserver` los sirve sin `Cache-Control`.
+  - Envíos en curso (actualizado el 16/11/2026): al enviar un formulario POST, el botón de envío se deshabilita
+    y muestra un indicador animado con el verbo de la acción («Guardando…» por defecto; otro verbo va en
+    `data-enviando`, en el botón o, si no, en su formulario) hasta que llega la respuesta, y un segundo envío del
+    mismo formulario se descarta (también con Enter). Lo hace `infoponia.js` para todos los formularios, incluidos
+    los de las ventanas que inserta HTMX y los de `hx-post`; los formularios GET (el filtro de la lista) quedan
+    afuera. El botón vuelve a su estado al volver atrás desde el caché del navegador, al terminar un pedido de
+    HTMX o a los 30 s sin respuesta. Con `prefers-reduced-motion` el indicador no gira. Sin JavaScript, el
+    formulario envía como siempre.
+  - Errores de HTMX (actualizado el 16/11/2026): si un pedido de HTMX falla, la pantalla queda como estaba y se
+    muestra un aviso de error de este mismo estilo, sin apilar uno idéntico a otro que ya se ve. Con un error del
+    servidor (4xx o 5xx) dice «No pudimos completar la acción. Volvé a intentarlo.», sin mencionar la conexión; sin
+    conexión o sin respuesta a tiempo dice «No pudimos completar la acción. Revisá tu conexión y volvé a
+    intentarlo.». El límite de espera es de 30 s (`<meta name="htmx-config">` de `base.html`; HTMX no corta
+    ningún pedido por defecto). Render arranca con `gunicorn config.wsgi:application`, sin `--timeout`, así que
+    usa el valor por defecto de gunicorn, 30 s, y el límite de HTMX queda bien. Si se cambia el `--timeout` de
+    gunicorn, hay que revisar el de HTMX.
+  - Volver a la pantalla pedida (actualizado el 16/11/2026; SEG-13 y USR-INI-SES, flujo principal): después de
+    iniciar sesión se vuelve a la pantalla pedida (`next`) si el rol de la cuenta puede abrirla; si no (por
+    ejemplo, entra otra persona en el mismo navegador), se va al inicio de la cuenta, y no al 403. Lo decide
+    `pantalla_accesible_para` (`core/acceso.py`) con los roles que `rol_requerido` deja anotados en la vista. Una
+    URL que no existe se conserva como siempre. Una cuenta fuera de alcance dentro de una pantalla permitida
+    (por ejemplo, `/usuarios/7/`) sigue dando 403.
 - Por qué: el botón secundario tiene que verse en una tarjeta blanca y cumplir el contraste mínimo de texto
   (4,5:1) y de componentes (3:1). Un aviso que se integra con el sistema (tarjeta, colores de estado)
   no parece un cuerpo extraño y no empuja ni tapa el contenido; 10 segundos dan tiempo de leerlo y la
@@ -716,17 +738,30 @@ Formato:
   lugar. Solo cambia la posición y el nombre de la animación (nada de JavaScript): el temporizador, la cruz,
   el `role="status"` y el respaldo sin JavaScript son los de siempre. El bloque de animaciones de pantallas
   angostas va antes del de `prefers-reduced-motion` porque, con la misma especificidad, gana la última regla:
-  en el orden inverso, un celular con ese ajuste volvería a animar los avisos.
+  en el orden inverso, un celular con ese ajuste volvería a animar los avisos. Envíos en curso y errores de HTMX
+  (16/11/2026): en producción, la base de Neon (plan Free) se suspende a los 5 minutos sin uso y el primer pedido
+  tarda; la página no daba señal de estar trabajando y un usuario tocó Guardar dos veces, y un segundo envío puede
+  fallar o duplicar una operación. Un límite de espera menor que el de gunicorn cortaría pedidos que el servidor
+  todavía completa, y el aviso «volvé a intentarlo» invitaría a repetir una operación ya hecha. Se distinguen dos
+  mensajes porque, si el servidor respondió con un error, la conexión funcionó y pedir que se la revise confunde.
+  Volver a la pantalla pedida (16/11/2026): el 403 de una pantalla que la cuenta que acaba de entrar no puede abrir
+  es un tropiezo evitable; cubrir también las cuentas fuera de alcance exigiría ejecutar la pantalla pedida dos
+  veces, con los efectos que eso tenga en el futuro.
 - Fuentes: D-24 y D-25; WCAG 2.x: criterios 1.4.3 (contraste mínimo), 1.4.11 (contraste de componentes),
   2.4.7 (foco visible) y 4.1.3 (mensajes de estado); revisión a mano de las tareas 04b y 06b.
 - Consecuencias: toda pantalla nueva usa estas convenciones. Las verifican las pruebas
   `test_d29_...` de `core/tests/test_interfaz.py` (incluidas las de pantallas angostas: avisos abajo, entrada y
   salida por abajo, y «reducir movimiento»); el temporizador y la cruz son JavaScript y se prueban a mano, y
   la posición abajo se mira a mano con el navegador a menos de 760px o en un celular (un teclado virtual abierto
-  podría tapar un aviso de abajo). En la tarea 09 se evalúa reemplazar `static_v` por
+  podría tapar un aviso de abajo). Las pruebas `test_d29_` de `EnviosEnCursoTests` (`core/tests/test_interfaz.py`)
+  verifican lo que se ve en el HTML y en la hoja de estilos (botones de envío sin cambios en el HTML del servidor,
+  `data-enviando` en los que no dicen «Guardar…», el límite de 30 s y el indicador con «reducir movimiento»); las
+  de `test_usr_ini_ses.py` (`test_seg13_next_…`), la vuelta a la pantalla pedida. El comportamiento del botón, el
+  doble envío y el aviso de error de HTMX son JavaScript y se prueban a mano (lista en `docs/estado.md`). En la tarea 09 se evalúa reemplazar `static_v` por
   `ManifestStaticFilesStorage` de WhiteNoise (`whitenoise.storage`) en producción, que pone un hash en el
   nombre de cada archivo.
-- Estado: vigente; actualizada el 14/11/2026 (avisos abajo en pantallas de menos de 760px)
+- Estado: vigente; actualizada el 14/11/2026 (avisos abajo en pantallas de menos de 760px) y el 16/11/2026
+  (envíos en curso, errores de HTMX y vuelta a la pantalla pedida)
 
 ## D-30 — Cuentas del Administrador: SEG-15, pantallas y admin de Django (tarea 05)
 

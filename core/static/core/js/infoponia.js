@@ -1,5 +1,5 @@
 // Comportamiento mínimo de las pantallas de InfoPonia: menú de cuenta, mostrar u ocultar la contraseña,
-// avisos breves (10 s y con cruz), botón «Copiar» y ventanas. Sin JavaScript, el inicio y el cierre de sesión siguen
+// avisos breves (10 s y con cruz), botón «Copiar», ventanas, envíos en curso y errores de HTMX. Sin JavaScript, el inicio y el cierre de sesión siguen
 // funcionando. El desplegable propio está en desplegable.js.
 (function () {
   "use strict";
@@ -229,5 +229,155 @@
     if (contenedor && contenedor.hasAttribute("data-avisos") && !contenedor.children.length) {
       contenedor.remove();
     }
+  });
+})();
+
+// ---- Envíos en curso y errores de HTMX (D-29). Sin JavaScript, los formularios envían como siempre.
+(function () {
+  "use strict";
+
+  var TEXTO_POR_DEFECTO = "Guardando…";
+  // Dos mensajes de error de HTMX (D-29): sin conexión o sin respuesta a tiempo, se sugiere revisar la conexión;
+  // con un error del servidor (4xx o 5xx) la conexión funcionó, así que no se la menciona.
+  var MENSAJE_SIN_CONEXION = "No pudimos completar la acción. Revisá tu conexión y volvé a intentarlo.";
+  var MENSAJE_ERROR_DEL_SERVIDOR = "No pudimos completar la acción. Volvé a intentarlo.";
+  // El mismo límite que tiene HTMX para cortar un pedido (<meta name="htmx-config"> de base.html): pasado ese
+  // tiempo sin respuesta, el botón vuelve a su estado normal. No es menor a propósito: con la base de datos
+  // despertando, devolver el botón antes de la respuesta reabriría la posibilidad del doble envío.
+  // Se lee al usarlo y no al cargar: HTMX junta su configuración (la del <meta>) recién cuando la página termina de cargar.
+  function esperaMaxima() {
+    return (window.htmx && window.htmx.config && window.htmx.config.timeout) || 30000;
+  }
+  var BOTONES_DE_ENVIO = 'button[type="submit"], button:not([type]), input[type="submit"]';
+
+  // Formularios con un envío en curso: form -> lo necesario para devolver el botón a su estado normal.
+  var enCurso = new Map();
+
+  // Marca el formulario como «enviando». Cambia el botón (indicador y verbo) y lo deshabilita. Devuelve el
+  // estado, o null si ya había un envío en curso. ``botonClicado`` es el botón que disparó el envío.
+  function empezar(form, botonClicado) {
+    if (enCurso.has(form)) return null;
+    var boton = botonClicado && botonClicado.form === form ? botonClicado : form.querySelector(BOTONES_DE_ENVIO);
+    var estado = { boton: boton, contenido: null, anchoMinimo: null, desactivados: [], temporizador: null };
+    enCurso.set(form, estado);
+    form.setAttribute("aria-busy", "true");
+
+    if (boton && boton.tagName === "BUTTON") {
+      estado.contenido = boton.innerHTML;
+      estado.anchoMinimo = boton.style.minWidth;
+      // Se fija el ancho actual para que el botón no cambie de tamaño al cambiar el texto.
+      boton.style.minWidth = boton.getBoundingClientRect().width + "px";
+      var giro = document.createElement("span");
+      giro.className = "giro";
+      giro.setAttribute("aria-hidden", "true");
+      boton.textContent = "";
+      boton.appendChild(giro);
+      // El verbo puede estar en el botón o, si no, en su formulario (data-enviando).
+      var verbo = boton.getAttribute("data-enviando") || form.getAttribute("data-enviando") || TEXTO_POR_DEFECTO;
+      boton.appendChild(document.createTextNode(verbo));
+      boton.classList.add("enviando");
+    }
+    estado.temporizador = setTimeout(function () {
+      terminar(form);
+    }, esperaMaxima());
+    return estado;
+  }
+
+  // Deshabilita los botones de envío del formulario. En un envío común se hace un instante después del evento
+  // ``submit``: un botón deshabilitado antes de que el navegador arme los datos no manda su nombre ni su valor.
+  function deshabilitar(form, estado) {
+    if (enCurso.get(form) !== estado) return; // ya terminó
+    form.querySelectorAll(BOTONES_DE_ENVIO).forEach(function (b) {
+      if (!b.disabled) {
+        b.disabled = true;
+        estado.desactivados.push(b);
+      }
+    });
+  }
+
+  // Devuelve el formulario a su estado normal: texto original, botones habilitados.
+  function terminar(form) {
+    var estado = enCurso.get(form);
+    if (!estado) return;
+    clearTimeout(estado.temporizador);
+    enCurso.delete(form);
+    form.removeAttribute("aria-busy");
+    estado.desactivados.forEach(function (b) {
+      b.disabled = false;
+    });
+    if (estado.boton && estado.contenido !== null) {
+      estado.boton.innerHTML = estado.contenido;
+      estado.boton.style.minWidth = estado.anchoMinimo;
+      estado.boton.classList.remove("enviando");
+    }
+  }
+
+  function terminarTodos() {
+    enCurso.forEach(function (estado, form) {
+      terminar(form);
+    });
+  }
+
+  // ---- Formulario común (POST). Se engancha en el documento para cubrir también las ventanas que inserta HTMX.
+  // Los GET (el filtro de la lista) quedan afuera: no duplican nada y se reenvían a cada tecla.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (e.defaultPrevented || !form.matches || !form.matches("form") || form.method.toLowerCase() !== "post") return;
+    if (enCurso.has(form)) {
+      e.preventDefault(); // segundo envío (otro clic o Enter): se descarta
+      return;
+    }
+    var estado = empezar(form, e.submitter);
+    setTimeout(function () {
+      deshabilitar(form, estado);
+    }, 0);
+  });
+
+  // ---- Formulario enviado por HTMX (hx-post, hx-put, hx-patch, hx-delete). HTMX cancela el envío nativo, por eso
+  // se usan sus eventos. ``htmx:afterRequest`` se dispara con éxito y con error.
+  function formularioDelPedido(e) {
+    var elt = e.detail && e.detail.elt;
+    var verbo = e.detail && e.detail.requestConfig && e.detail.requestConfig.verb;
+    var form = elt && (elt.tagName === "FORM" ? elt : elt.form);
+    return form && verbo && verbo !== "get" ? form : null;
+  }
+
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var form = formularioDelPedido(e);
+    if (!form) return;
+    var estado = empezar(form, e.detail.elt);
+    if (estado) deshabilitar(form, estado);
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    var form = formularioDelPedido(e);
+    if (form) terminar(form);
+  });
+
+  // Volver atrás desde la memoria del navegador (o desde la copia de HTMX) no debe dejar un botón trabado.
+  window.addEventListener("pageshow", function (e) {
+    if (e.persisted) terminarTodos();
+  });
+  document.addEventListener("htmx:beforeHistorySave", terminarTodos);
+
+  // ---- Errores de HTMX: error del servidor (4xx o 5xx), sin conexión o sin respuesta a tiempo. La pantalla queda
+  // como estaba (HTMX no cambia nada en esos casos) y se muestra el aviso de error de D-29. Si ya hay uno igual a
+  // la vista, no se apila otro.
+  function avisarError(mensaje) {
+    var region = document.getElementById("avisos");
+    var yaEsta =
+      region &&
+      Array.prototype.some.call(region.querySelectorAll(".toast:not(.toast-saliendo) .toast-texto"), function (t) {
+        return t.textContent === mensaje;
+      });
+    if (!yaEsta) window.mostrarAviso(mensaje, "error");
+  }
+  document.addEventListener("htmx:sendError", function () {
+    avisarError(MENSAJE_SIN_CONEXION);
+  });
+  document.addEventListener("htmx:timeout", function () {
+    avisarError(MENSAJE_SIN_CONEXION);
+  });
+  document.addEventListener("htmx:responseError", function () {
+    avisarError(MENSAJE_ERROR_DEL_SERVIDOR);
   });
 })();

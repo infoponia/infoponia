@@ -13,7 +13,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.views.decorators.vary import vary_on_headers
 
-from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, rol_de, rol_requerido
+from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, pantalla_accesible_para, rol_de, rol_requerido
 from core.forms import (
     FormularioAltaUsuario,
     FormularioCambioContrasena,
@@ -56,6 +56,18 @@ class IniciarSesionView(LoginView):
     template_name = "core/iniciar_sesion.html"
     authentication_form = FormularioInicioSesion
     redirect_authenticated_user = True
+
+    def get_success_url(self):
+        """Vuelve a la pantalla pedida (``next``) y, si esa cuenta no puede abrirla, va a su inicio.
+
+        USR-INI-SES flujo principal y SEG-13 (D-29): si la sesión se cerró y entra otra persona en el mismo
+        navegador, la pantalla que pedía la cuenta anterior podría dar 403. Django ya descarta los destinos de
+        otros sitios en ``get_redirect_url``. También cubre a quien abre el inicio de sesión con la sesión abierta.
+        """
+        destino = self.get_redirect_url()
+        if destino and not pantalla_accesible_para(self.request.user, destino):
+            return self.get_default_redirect_url()
+        return super().get_success_url()
 
 
 # SEG-08: Django vacía la sesión en el servidor, no solo la cookie, y solo acepta POST.

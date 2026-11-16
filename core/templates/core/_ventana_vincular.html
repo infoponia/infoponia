@@ -15,7 +15,7 @@ SEG-06: no dice qué dato falló.{% endcomment %}
       {% include "core/usuarios/_campo.html" with campo=form.email requerido=True %}
       {% include "core/_campo_contrasena.html" with campo=form.contrasena autocompletar="off" %}
       <div class="acts">
-        <button class="btn btn-primary" type="submit">Vincular</button>
+        <button class="btn btn-primary" type="submit" data-enviando="Vinculando…">Vincular</button>
         <a class="btn btn-ghost" href="{% url 'core:mi_perfil' %}" data-cerrar-ventana>Cancelar</a>
       </div>
     </form>

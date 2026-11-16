@@ -1,9 +1,11 @@
 # Control de acceso según el rol (SEG-13). Lo usan las pantallas de todos los módulos.
 
 from functools import wraps
+from urllib.parse import urlsplit
 
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
+from django.urls import Resolver404, resolve
 
 # ``ADMINISTRADOR`` y ``rol_de`` viven en core/models.py (los usa también la auditoría, D-22) y se
 # vuelven a exportar acá: el resto del código los sigue importando de core.acceso. D-10: el
@@ -42,6 +44,26 @@ def rol_requerido(*roles):
                 )
             return vista(request, *args, **kwargs)
 
+        # Los roles quedan anotados en la vista para poder saber, sin ejecutarla, si una cuenta puede entrar
+        # (ver ``pantalla_accesible_para``). ``wraps`` copia este atributo si otro decorador envuelve la vista.
+        envoltura.roles_permitidos = roles
         return envoltura
 
     return decorador
+
+
+def pantalla_accesible_para(usuario, url):
+    """Dice si ``usuario`` puede abrir la pantalla ``url`` según su rol (SEG-13).
+
+    Lo usa el inicio de sesión para no llevar a una cuenta a un 403 cuando vuelve a la pantalla pedida
+    (USR-INI-SES, flujo principal; D-29). Solo mira el rol declarado por ``rol_requerido``: una cuenta fuera del
+    alcance dentro de una pantalla permitida se sigue rechazando en el servicio, y acá cuenta como accesible.
+    Una URL que no resuelve, o una vista sin roles declarados, también se consideran accesibles: se conserva el
+    comportamiento de siempre y el 404 o la vista deciden después.
+    """
+    try:
+        coincidencia = resolve(urlsplit(url).path)
+    except Resolver404:
+        return True
+    roles = getattr(coincidencia.func, "roles_permitidos", None)
+    return roles is None or rol_de(usuario) in roles

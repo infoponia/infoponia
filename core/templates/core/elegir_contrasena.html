@@ -62,7 +62,7 @@ informa como error del campo.{% endcomment %}
 {# SEG-08 y regla 4 de USR-INI-SES: con contraseña temporal se puede cerrar sesión (POST, con CSRF). #}
 <form method="post" action="{% url 'core:cerrar_sesion' %}" class="aviso-recuperar muted">
   {% csrf_token %}
-  Cuenta: <b style="color:var(--foreground)">{{ user.email }}</b> · <button class="link" type="submit">Cerrar sesión</button>
+  Cuenta: <b style="color:var(--foreground)">{{ user.email }}</b> · <button class="link" type="submit" data-enviando="Cerrando sesión…">Cerrar sesión</button>
 </form>
 
 <script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>

@@ -16,7 +16,7 @@ dirección; abrir la ventana (GET) no cambia nada.{% endcomment %}
       {% csrf_token %}
       <div class="acts">
         <a class="btn btn-primary" href="{% url 'core:mi_perfil' %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
-        <button class="btn btn-danger" type="submit">{% if propia %}Salir del grupo{% else %}Desvincular{% endif %}</button>
+        <button class="btn btn-danger" type="submit" data-enviando="Desvinculando…">{% if propia %}Salir del grupo{% else %}Desvincular{% endif %}</button>
       </div>
     </form>
   </div>

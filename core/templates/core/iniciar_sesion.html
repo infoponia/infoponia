@@ -37,7 +37,7 @@ nada de los elementos «Solo prototipo» (D-24). Una sola alerta genérica, sin 
     {% for error in form.password.errors %}<div class="err" id="error-password">{{ error }}</div>{% endfor %}
   </div>
 
-  <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
+  <button class="btn btn-primary btn-block" type="submit" data-enviando="Ingresando…">Ingresar</button>
 </form>
 
 {# SEG-12: el correo no está configurado todavía (recuperación en la tarea 08); se muestra el aviso. #}
