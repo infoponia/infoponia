@@ -65,7 +65,7 @@ Estado actual y próximos pasos: `docs/estado.md`. Leelo al empezar cada sesión
 
 ## Tests
 
-Las pruebas se escriben en `<app>/tests/` y se acumulan: cada tarea corre todas las anteriores.
+Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en cada PR.
 
 - Unidad: una prueba por regla de negocio, extensión y postcondición relevante del caso de uso.
   Son obligatorias, como mínimo, en reglas con dinero, stock o alcance por usuario.
@@ -77,9 +77,20 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: cada tarea corre todas 
 - Nunca borres ni debilites una prueba existente para que pase. Si una regla cambió, avisá y
   proponé el cambio de la prueba.
 - Cada prueba arma sus propios datos y no depende de otra.
-- Mientras trabajás, corré solo las pruebas del tema (`python manage.py test core.tests.test_usuario`).
-  La suite completa se corre una vez, al terminar la tarea.
-- Para correr la suite como el CI (producción, con `DEBUG` apagado), en local: poné `DJANGO_DEBUG=0` y una
+- Forma de correr las pruebas en local: solo las de los módulos que tocás, siempre con `--keepdb` y
+  `--parallel` (`python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia`).
+  No corras la suite completa local al terminar la tarea: la corre el CI en el PR.
+- Las clases de pruebas de concurrencia (dos hilos, `TransactionTestCase`) llevan `@tag("concurrencia")`
+  (`from django.test import tag`). En local se excluyen con `--exclude-tag concurrencia`, salvo que la tarea
+  toque servicios con bloqueos (`select_for_update`) o concurrencia: ahí se corren las del módulo tocado.
+- Con `manage.py test`, `config/settings.py` usa `MD5PasswordHasher` como único algoritmo de contraseñas (se
+  detecta con `sys.argv`; `runserver`, gunicorn y los demás comandos no lo cambian), porque el PBKDF2 por defecto
+  hace lento cada `create_user`. Las pruebas no deben depender del algoritmo (no busques «pbkdf2»: compará con el
+  prefijo del hash real). Si se cambia el algoritmo de producción, hay que probarlo a mano: las pruebas no lo ejercitan.
+- Nada de experimentos ni de matrices de bloqueos desactivados (correr las pruebas de concurrencia con los
+  bloqueos quitados o cambiados) salvo que la tarea toque bloqueos o concurrencia, o que el estudiante lo pida.
+- Para reproducir en local un fallo del CI (producción, con `DEBUG` apagado), o si el estudiante pide la
+  suite completa: poné `DJANGO_DEBUG=0` y una
   `DJANGO_SECRET_KEY` inventada en la misma línea. Sin la clave, con `DEBUG` apagado la configuración queda sin
   `SECRET_KEY` y fallan casi todas las pruebas. No leas `.env` ni uses la clave real.
   En PowerShell: `$env:DJANGO_DEBUG="0"; $env:DJANGO_SECRET_KEY="clave-falsa-solo-para-pruebas"; python manage.py test`
@@ -125,7 +136,7 @@ python manage.py runserver
 python manage.py makemigrations
 python manage.py migrate
 python manage.py test
-python manage.py test core.tests.test_usuario
+python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia
 ```
 
 ## Seguridad
@@ -136,6 +147,7 @@ python manage.py test core.tests.test_usuario
 
 ## Al terminar cada tarea
 
-1. Corré la suite completa (`python manage.py test`) y mostrá el resultado.
+1. Corré las pruebas de los módulos que tocaste (con `--keepdb --parallel`, sin las de `concurrencia` salvo que
+   la tarea toque bloqueos) y mostrá el resultado. La suite completa la corre el CI en el PR.
 2. Proponé la actualización de `docs/estado.md` y, si hubo decisiones nuevas, la entrada en `docs/decisiones.md`.
 3. Proponé un mensaje de commit. El commit lo hace el estudiante.

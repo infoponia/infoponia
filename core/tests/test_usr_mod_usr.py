@@ -26,7 +26,7 @@ from types import SimpleNamespace
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.http import Http404
-from django.test import Client, TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
 from core import servicios
@@ -1137,6 +1137,7 @@ class UsrModUsrVistaTests(TestCase):
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
 
+@tag("concurrencia")
 class UsrModUsrConcurrenciaTests(TransactionTestCase):
     """SEG-15 en ``reactivar_usuario``: dos reactivaciones simultáneas de Gerentes distintos dejan un solo
     Gerente activo y la segunda recibe un rechazo con mensaje, no un error 500 ni un deadlock. Son

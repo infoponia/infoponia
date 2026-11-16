@@ -18,7 +18,7 @@ from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
-from django.test import Client, TestCase, TransactionTestCase
+from django.test import Client, TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
 from core import servicios
@@ -411,6 +411,7 @@ class UsrBajUsrVistaTests(TestCase):
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
 
+@tag("concurrencia")
 class UsrBajUsrConcurrenciaTests(TransactionTestCase):
     """SEG-15 en ``baja_usuario``: dos bajas simultáneas de Administradores dejan al menos uno activo, y
     la segunda recibe un rechazo con mensaje, no un error 500 ni un deadlock. Son ``TransactionTestCase``

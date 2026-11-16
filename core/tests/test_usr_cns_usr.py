@@ -377,7 +377,8 @@ class UsrCnsUsrVistaTests(TestCase):
         for respuesta in (ficha, lista):
             self.assertNotContains(respuesta, temporal)
             self.assertNotContains(respuesta, cuenta.password)
-            self.assertNotContains(respuesta, "pbkdf2")
+            # Ni el prefijo del algoritmo del resumen (el de las pruebas puede no ser el de producción).
+            self.assertNotContains(respuesta, cuenta.password.split("$")[0] + "$")
 
     def test_seg13_capataz_recibe_403_en_usuarios(self):
         """SEG-13: un Capataz no accede a la lista ni a la ficha; recibe 403 con mensaje que nombra su rol."""
