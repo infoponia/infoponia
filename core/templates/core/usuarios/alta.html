@@ -3,7 +3,8 @@
 prototipo; D-16). El formulario va con «novalidate»: el teléfono se valida al confirmar, no mientras se
 escribe. Con «gerente_activo» (regla 2, D-30) no se muestra el formulario: solo el aviso, con «Ver a
 <nombre>» y «Volver a Cuentas», para no completar datos que no se pueden guardar. Sin el campo de
-invernadero del Transportista (para más adelante).{% endcomment %}
+invernadero del Transportista (para más adelante). La forma de primer acceso (invitación por correo o contraseña
+temporal, regla 4, D-35) se elige con _forma_de_acceso.html.{% endcomment %}
 {% block titulo %}{% if es_administrador %}Alta de Gerente{% else %}Nuevo usuario{% endif %} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
@@ -46,7 +47,10 @@ invernadero del Transportista (para más adelante).{% endcomment %}
       </div>
     </div>
 
-    <div class="alert alert-info" style="margin-top:16px">{% icono "info" 16 %}<div>Al dar de alta la cuenta, el Sistema genera una <b>contraseña temporal</b> y te la muestra una sola vez. Vence a los 7 días si la persona no la cambia.</div></div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Primer acceso</div>
+      {% include "core/usuarios/_forma_de_acceso.html" %}
+    </div>
     <div class="row" style="margin-top:16px">
       <button class="btn btn-primary" type="submit" data-enviando="Dando de alta…">Dar de alta</button>
       <a class="btn btn-ghost" href="{% url 'core:usuarios' %}">Cancelar</a>

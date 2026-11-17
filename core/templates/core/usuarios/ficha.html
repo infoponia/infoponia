@@ -25,7 +25,13 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
       <dt>Estado</dt><dd>{% if cuenta.is_active %}Activo{% else %}Inactivo{% endif %}</dd>
       <dt>Contraseña</dt>
       <dd>
-        {% if cuenta.tiene_contrasena_temporal %}
+        {% if cuenta.tiene_invitacion_pendiente %}
+          {% if cuenta.invitacion_vencida %}
+            Invitación vencida <span class="muted">Venció: hay que restablecer el acceso.</span>
+          {% else %}
+            Invitación pendiente <span class="muted">La persona todavía no eligió su contraseña. Vence a los 7 días de enviada.</span>
+          {% endif %}
+        {% elif cuenta.tiene_contrasena_temporal %}
           {% if cuenta.contrasena_temporal_vencida %}
             Temporal vencida <span class="muted">Venció: hay que restablecerla.</span>
           {% else %}
@@ -74,7 +80,7 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
     <div class="row">
       {% if "restablecer" in acciones %}
       <a class="btn btn-ghost" href="{% url 'core:usuario_restablecer' cuenta.pk %}"
-         hx-get="{% url 'core:usuario_restablecer' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Restablecer contraseña</a>
+         hx-get="{% url 'core:usuario_restablecer' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Restablecer acceso</a>
       {% endif %}
       {% if "baja" in acciones %}
       <a class="btn btn-danger" href="{% url 'core:usuario_baja' cuenta.pk %}"
@@ -92,7 +98,10 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
 
 {% block ventanas %}
 <div id="ventana-confirmar">
-  {% if contrasena_temporal %}
+  {% if resultado_acceso.forma == "invitacion" %}
+    {% url 'core:usuario' cuenta.pk as destino_ficha %}
+    {% include "core/usuarios/_ventana_invitacion.html" with modo=accion destino=destino_ficha %}
+  {% elif contrasena_temporal %}
     {% url 'core:usuario' cuenta.pk as destino_ficha %}
     {% include "core/usuarios/_ventana_temporal.html" with modo=accion destino=destino_ficha %}
   {% elif accion %}

@@ -69,6 +69,7 @@ from core.tests.fabricas import (
     crear_administrador,
     crear_cuenta,
     crear_gerente,
+    dar_invitacion,
     poner_temporal,
 )
 
@@ -676,6 +677,21 @@ class UsrVncCtaServicioTests(TestCase):
         self.assertFalse(RegistroAuditoria.objects.exists())
         self.assertEqual(grupo_de(agronomo), grupo.pk)
         self.assertEqual(grupo_de(vendedor), grupo.pk)
+
+
+    def test_regla_4_cuenta_con_invitacion_pendiente_no_se_vincula(self):
+        """USR-VNC-CTA regla 4, SEG-20 y D-35: una cuenta con la invitación pendiente no tiene contraseña, así que no
+        se puede vincular con ninguna: el rechazo es el mensaje genérico, como una contraseña incorrecta, y no se
+        arma ningún grupo."""
+        agronomo, vendedor = self.crear_par()
+        dar_invitacion(vendedor)
+
+        for contrasena in (CLAVE, "cualquier-otra-123"):
+            with self.subTest(contrasena=contrasena):
+                self.assertVinculacionRechazada(
+                    agronomo, vendedor.email, contrasena, "no_se_pudo_vincular", MENSAJE_NO_SE_PUDO_VINCULAR
+                )
+        self.assertFalse(GrupoCuentas.objects.exists())
 
 
 class UsrVncCtaConsultasTests(TestCase):

@@ -1,0 +1,17 @@
+{% load iconos cuentas %}{% comment %}Ventana del resultado de restablecer o reactivar con una invitación por correo (SEG-20, regla 4 y 11 de USR-MOD-USR, D-35),
+la contraparte de _ventana_temporal.html. Recibe «cuenta», «resultado_acceso», «modo» ("restablecer" o "reactivar"),
+«acciones», «destino» (a dónde lleva «Entendido» si no hay JavaScript) y «tenia_grupo» (la cuenta estaba en un grupo de
+cuentas vinculadas y salió de él, SEG-11). No hay nada secreto que mostrar: el enlace solo viaja por correo.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if modo == "restablecer" %}
+    <h2 id="ventana-titulo">Acceso restablecido</h2>
+    <p>Se cerraron las sesiones abiertas de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}){% if tenia_grupo %} y la cuenta salió de su grupo de cuentas vinculadas{% endif %}. Su contraseña anterior dejó de servir.</p>
+    {% else %}
+    <h2 id="ventana-titulo">Cuenta reactivada</h2>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) volvió a estar activa{% if tenia_grupo %} y salió de su grupo de cuentas vinculadas{% endif %}.</p>
+    {% endif %}
+    {% include "core/usuarios/_resultado_invitacion.html" %}
+    <div class="acts"><a class="btn btn-primary" href="{{ destino }}" data-cerrar-ventana data-foco-inicial>Entendido</a></div>
+  </div>
+</div>

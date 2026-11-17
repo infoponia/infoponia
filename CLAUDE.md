@@ -87,6 +87,13 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   detecta con `sys.argv`; `runserver`, gunicorn y los demás comandos no lo cambian), porque el PBKDF2 por defecto
   hace lento cada `create_user`. Las pruebas no deben depender del algoritmo (no busques «pbkdf2»: compará con el
   prefijo del hash real). Si se cambia el algoritmo de producción, hay que probarlo a mano: las pruebas no lo ejercitan.
+- Con `manage.py test`, `CORREO_CONFIGURADO` arranca en `False` (aunque el `.env` tenga `CORREO_CONSOLA=1` o
+  credenciales), para que las pruebas den lo mismo en cada máquina y en el CI. Las pruebas que necesitan el correo lo
+  encienden con `@override_settings(CORREO_CONFIGURADO=True)`.
+- Después de una migración nueva, con `--keepdb --parallel` los clones de la base de pruebas no la reciben y falla con un
+  error de columna inexistente. Si aparece, corré una vez sin `--keepdb` y con `--noinput` para recrear la base
+  (`python manage.py test core.tests.test_usuario --parallel --noinput --exclude-tag concurrencia`) y después volvé a
+  `--keepdb`.
 - Nada de experimentos ni de matrices de bloqueos desactivados (correr las pruebas de concurrencia con los
   bloqueos quitados o cambiados) salvo que la tarea toque bloqueos o concurrencia, o que el estudiante lo pida.
 - Para reproducir en local un fallo del CI (producción, con `DEBUG` apagado), o si el estudiante pide la

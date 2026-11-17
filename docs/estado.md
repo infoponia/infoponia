@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 16/11/2026 (tarea 08). Este archivo se reescribe al final de cada sesión.
+Última actualización: 17/11/2026 (tarea 08b). Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -170,6 +170,23 @@
   concurrencia) y dos pantallas sumadas a `EnviosEnCursoTests`; corridos con los de `test_interfaz`, `test_usr_ini_ses` y
   `test_usr_cmb_ctr`: 146 pruebas, OK. Sin migraciones ni dependencias nuevas. Falta la revisión a mano (ver «En curso»)
   y cargar las variables de correo en Render. Decisiones D-33 y D-34.
+- Tarea 08b: invitación por correo en el alta, el restablecimiento y la reactivación (USR-ALT-USR 0.4, USR-MOD-USR 0.5,
+  USR-CNS-USR 0.4, SEG-04 y SEG-20; D-35). Quien gestiona la cuenta elige cómo obtiene la persona su primer acceso: una
+  invitación por correo (por defecto, solo con el correo configurado) o una contraseña temporal. La invitación deja la
+  cuenta con contraseña no utilizable y `Usuario.fecha_invitacion` (migración `0007`, con la restricción
+  `invitacion_o_temporal` y la acción de auditoría `aceptacion_invitacion`); el enlace vence a los 7 días
+  (`core/tokens.py`, un generador propio que no sirve para la recuperación ni al revés). Elegir la contraseña con un enlace
+  es un solo servicio, compartido con la recuperación de la 08 (`_elegir_contrasena_con_enlace`: bloquea y revalida después
+  de bloquear); `confirmar_invitacion` no exige el correo configurado. Los servicios devuelven un `ResultadoAcceso`; el
+  envío va fuera de la transacción y, si falla, la cuenta queda con la invitación pendiente y la pantalla avisa y ofrece
+  «Restablecer acceso». Pantallas: el radio de la forma de acceso en el alta y en las ventanas de restablecer y reactivar,
+  los resultados, el enlace de la invitación (`invitacion/…`, con el token fuera de la URL), las insignias «Invitación
+  pendiente» y «Invitación vencida», y la pista de Spam también en «Revisá tu correo». «Restablecer contraseña» pasa a
+  «Restablecer acceso». Una cuenta con invitación pendiente no se puede vincular (ya ocurría; ahora tiene prueba). 64
+  pruebas nuevas (62 sin concurrencia y 2 de concurrencia); los módulos tocados dan 437 pruebas sin concurrencia y 16 de
+  concurrencia, OK; el experimento de mover la revalidación antes del bloqueo hace fallar las tres de enlaces de un solo uso
+  (invitación, restablecer mientras se acepta y recuperación). Con `manage.py test`, `CORREO_CONFIGURADO` arranca en
+  `False`. Decisión D-35. Sin dependencias nuevas.
 
 ## En curso
 
@@ -199,6 +216,21 @@
      correo no deseado).
   5. El botón «Enviar enlace» muestra «Enviando…» y no deja enviar dos veces (JavaScript, D-29).
 
+- Tarea 08b (invitación por correo), a mano:
+  1. En local, con `DJANGO_DEBUG=1` y `CORREO_CONSOLA=1` en `.env`: «Nuevo usuario» muestra el radio con la invitación
+     marcada. Al dar de alta con la invitación, la consola de `runserver` imprime el correo con el enlace; abrirlo, elegir la
+     contraseña y entrar con ella. La URL de «Elegí tu contraseña» no lleva el token.
+  2. La lista y la ficha de esa cuenta, antes de aceptar, muestran «Invitación pendiente». Reenviar la invitación
+     (Restablecer acceso, eligiendo la invitación) deja sin efecto el enlace anterior.
+  3. Sin `CORREO_CONSOLA`: el alta y las ventanas de restablecer y reactivar no muestran el radio y dan la temporal de
+     siempre.
+  4. Con una falla de envío (por ejemplo, `EMAIL_HOST_PASSWORD` mal cargada en Render): el alta o el restablecimiento
+     avisan con el aviso de error y ofrecen «Restablecer acceso»; la cuenta queda con la invitación pendiente.
+  5. En Render, con el correo cargado: dar de alta una cuenta propia con la invitación, ver que llega (y en qué carpeta) y
+     que el enlace empieza con `https://`.
+  6. Los botones «Dar de alta», «Restablecer» y «Reactivar» muestran «Dando de alta…», «Restableciendo…» y «Reactivando…» y
+     no dejan enviar dos veces (JavaScript, D-29).
+
 ## Siguiente
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
@@ -211,8 +243,8 @@
    | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b hecha** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
    | 06 | **06a y 06b hechas** (Mi perfil, «Mi perfil» y «Cambiar de cuenta» en el menú de cuenta, cambio voluntario de contraseña con el servicio de la tarea 03, y cuentas vinculadas: USR-VNC-CTA, SEG-09 y SEG-11) | — |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
-   | 08 | **Hecha** (recuperar contraseña por correo: USR-RCP-CTR, SEG-12; configuración del correo, D-33 y D-34). Falta cargar las variables de correo en Render | — |
-   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29); tope de intentos de identificación para el inicio de sesión y `vincular_cuenta` juntos, que reemplazaría a SEG-05 y D-19 (ver «Temas abiertos» y D-32); tope de pedidos del enlace de recuperación (D-34: sin él se puede llenar de correos a una persona o agotar el límite diario de Gmail); evaluar enviar el correo de recuperación en segundo plano (hoy el pedido tarda más cuando la cuenta existe) | — |
+   | 08 | **08 y 08b hechas** (recuperar contraseña por correo: USR-RCP-CTR, SEG-12; configuración del correo, D-33 y D-34; invitación por correo en el alta, el restablecimiento y la reactivación: SEG-20, D-35). Falta cargar las variables de correo en Render | — |
+   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29); tope de intentos de identificación para el inicio de sesión y `vincular_cuenta` juntos, que reemplazaría a SEG-05 y D-19 (ver «Temas abiertos» y D-32); tope de pedidos del enlace de recuperación (D-34: sin él se puede llenar de correos a una persona o agotar el límite diario de Gmail; las invitaciones las envía quien gestiona la cuenta, con sesión, pero el límite diario es el mismo); evaluar enviar el correo de recuperación en segundo plano (hoy el pedido tarda más cuando la cuenta existe) | — |
 
 ## Registrado el 05/11/2026
 
@@ -238,9 +270,6 @@
 - Lista cerrada de los casos de uso del 80% y orden de implementación.
 - Tope de pedidos de recuperación de contraseña (D-34): sin límite, el pedido puede usarse para llenar de correos a
   una persona o agotar el límite diario de Gmail. Junto con el tope de identificación. Cuándo: tarea 09.
-- `docs/casos_de_uso/usuarios.md` («Lo que queda para más adelante») todavía dice que el proveedor de correo no está
-  decidido. Es copia del documento de Drive: hay que actualizarlo allá y volver a copiarlo. Cuándo: antes del cierre
-  de la tarea 08.
 - Proveedor del almacenamiento de objetos para la foto de perfil (tarea 07).
 - Ingreso con Google: trabajo futuro, fuera de este bloque.
 - Hacer configurables por `.env` el host, el puerto, el nombre y el usuario de la base local.

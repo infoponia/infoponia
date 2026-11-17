@@ -1,0 +1,16 @@
+{% extends "core/base_sin_sesion.html" %}{% load iconos %}
+{% comment %}Enlace de invitación no válido (SEG-20, D-35): una sola pantalla para una invitación usada, vencida, alterada,
+reemplazada por otra o de una cuenta inactiva; no dice cuál fue la causa. Con el correo configurado ofrece pedir un enlace
+con «¿Olvidaste tu contraseña?» (SEG-20: el resultado es el mismo que aceptar la invitación); si no, pedirle a quien
+gestiona la cuenta que restablezca el acceso.{% endcomment %}
+{% block titulo %}Invitación no válida · InfoPonia{% endblock %}
+{% block contenido %}
+<h1>Invitación no válida</h1>
+<div style="margin:12px 0">
+  <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>Esta invitación no es válida o ya venció.{% if correo_configurado %} Pedí un enlace nuevo para elegir tu contraseña.{% else %} Pedile a quien gestiona tu cuenta que te restablezca el acceso.{% endif %}</div></div>
+</div>
+<div class="row">
+  {% if correo_configurado %}<a class="btn btn-primary" href="{% url 'core:recuperar_contrasena' %}">Pedir un enlace nuevo</a>{% endif %}
+  <a class="btn btn-ghost" href="{% url 'core:iniciar_sesion' %}">Volver a iniciar sesión</a>
+</div>
+{% endblock %}

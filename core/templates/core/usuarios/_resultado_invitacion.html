@@ -1,0 +1,16 @@
+{% load iconos %}{% comment %}Resultado de dar de alta, restablecer o reactivar con una invitación por correo (postcondición c de USR-ALT-USR, regla 11,
+SEG-20, D-35). Recibe «cuenta», «resultado_acceso», «modo» ("alta", "restablecer" o "reactivar") y «acciones» (las de
+core.servicios.acciones_permitidas). Si la invitación salió, lo dice con la pista de la carpeta de Spam; si no, avisa de
+la falla y ofrece restablecer el acceso, para reenviarla o generar una contraseña temporal (regla 11 de USR-MOD-USR).
+La cuenta ya está creada o restablecida con la invitación pendiente en los dos casos.{% endcomment %}
+{% if resultado_acceso.invitacion_enviada %}
+<div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Le enviamos una invitación a <b class="mono">{{ cuenta.email }}</b>. Vence en 7 días. Si no le llega, que revise la carpeta de Spam, o restablecé el acceso con una contraseña temporal.</div></div>
+{% else %}
+<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>No pudimos enviar la invitación a <b class="mono">{{ cuenta.email }}</b>. {% if modo == "alta" %}La cuenta quedó creada{% elif modo == "reactivar" %}La cuenta quedó activa{% else %}El acceso quedó restablecido{% endif %} con la invitación pendiente, pero la persona no recibió el correo. Reenviá la invitación o generá una contraseña temporal restableciendo el acceso.
+  {% if "restablecer" in acciones %}
+  <div class="row" style="margin-top:8px">
+    <a class="btn btn-ghost btn-sm" href="{% url 'core:usuario_restablecer' cuenta.pk %}"{% if modo != "alta" %} hx-get="{% url 'core:usuario_restablecer' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML"{% endif %}>Restablecer acceso</a>
+  </div>
+  {% endif %}
+</div></div>
+{% endif %}

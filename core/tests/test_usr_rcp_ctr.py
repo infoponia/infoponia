@@ -7,13 +7,11 @@
 import importlib
 import re
 from datetime import datetime, timedelta
-from smtplib import SMTPException
 from unittest import mock
 
 from django.contrib.auth.tokens import PasswordResetTokenGenerator, default_token_generator
 from django.core import mail
 from django.core.exceptions import ValidationError
-from django.core.mail.backends.base import BaseEmailBackend
 from django.db import connection
 from django.test import Client, TestCase, TransactionTestCase, override_settings, tag
 from django.test.utils import CaptureQueriesContext
@@ -26,13 +24,16 @@ from core.forms import FormularioContrasenaNueva
 from core.models import GrupoCuentas, RegistroAuditoria, Usuario
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
+    BACKEND_QUE_FALLA,
     CLAVE,
     agrupar,
     contenido_de_auditoria,
     crear_administrador,
     crear_capataz,
     dar_contrasena_temporal,
+    dar_invitacion,
     dar_temporal_vencida,
+    sin_csrf,
 )
 
 # Cumple SEG-03 y no se parece a los datos de las cuentas de prueba.
@@ -53,12 +54,6 @@ def construir_url(ruta):
     return BASE + ruta
 
 
-def sin_csrf(contenido):
-    """El contenido de una respuesta sin el token CSRF, que cambia en cada pedido: sirve para comparar si dos
-    pantallas son la misma."""
-    return re.sub(rb'"X-CSRFToken": "[^"]*"', b'"X-CSRFToken": ""', contenido)
-
-
 def enlace_del_correo(mensaje):
     """``(cuenta_id, token)`` del enlace que trae el cuerpo de un correo de recuperación."""
     encontrado = PATRON_ENLACE.search(mensaje.body)
@@ -66,13 +61,6 @@ def enlace_del_correo(mensaje):
         raise AssertionError(f"El correo no trae un enlace de recuperación:\n{mensaje.body}")
     uidb64, token = encontrado.groups()
     return int(force_str(urlsafe_base64_decode(uidb64))), token
-
-
-class BackendQueFalla(BaseEmailBackend):
-    """Backend de correo que simula un servidor SMTP caído (SEG-12: el envío falla estando configurado)."""
-
-    def send_messages(self, email_messages):
-        raise SMTPException("El servidor de correo no responde.")
 
 
 @override_settings(CORREO_CONFIGURADO=True)
@@ -176,7 +164,7 @@ class UsrRcpCtrServicioTests(TestCase):
         self.assertEqual(escrituras, [])
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
 
-    @override_settings(EMAIL_BACKEND="core.tests.test_usr_rcp_ctr.BackendQueFalla")
+    @override_settings(EMAIL_BACKEND=BACKEND_QUE_FALLA)
     def test_seg12_falla_del_envio_queda_en_el_registro_de_errores_sin_propagarse(self):
         """SEG-12 y D-34: si el envío falla estando configurado, el servicio no propaga el error (la persona
         recibe la misma respuesta) y la falla queda en los registros de errores, con el id de la cuenta y sin el
@@ -311,6 +299,22 @@ class UsrRcpCtrServicioTests(TestCase):
             f"{reverse('core:iniciar_sesion')}?next={reverse('core:inicio')}",
             fetch_redirect_response=False,
         )
+
+
+    def test_post_b_recuperar_con_invitacion_pendiente_la_deja_sin_invitacion(self):
+        """USR-RCP-CTR postcondición b, SEG-20 y D-35: una cuenta con la invitación pendiente puede recuperar; al
+        elegir la contraseña queda sin la invitación (nunca con la invitación y una contraseña a la vez) y la
+        auditoría lo dice."""
+        capataz = dar_invitacion(crear_capataz())
+        token = default_token_generator.make_token(Usuario.objects.get(pk=capataz.pk))
+
+        servicios.confirmar_recuperacion(capataz.pk, token, NUEVA)
+
+        capataz = Usuario.objects.get(pk=capataz.pk)
+        self.assertTrue(capataz.check_password(NUEVA))
+        self.assertIsNone(capataz.fecha_invitacion)
+        registro = RegistroAuditoria.objects.get()
+        self.assertTrue(registro.detalle["invitacion_pendiente"])
 
     def test_post_d_audita_con_usuario_y_rol_de_la_cuenta_sin_contrasenas(self):
         """USR-RCP-CTR postcondición d, SEG-14 y D-22: un registro con la acción de recuperación; el usuario y
@@ -685,7 +689,7 @@ class UsrRcpCtrVistaTests(TestCase):
                 self.assertEqual(sin_csrf(respuesta.content), sin_csrf(base.content))
         self.assertEqual([m.to for m in mail.outbox], [[activa.email]])
 
-    @override_settings(EMAIL_BACKEND="core.tests.test_usr_rcp_ctr.BackendQueFalla")
+    @override_settings(EMAIL_BACKEND=BACKEND_QUE_FALLA)
     def test_seg12_falla_del_envio_da_la_misma_respuesta(self):
         """SEG-12: si el envío falla estando configurado, la persona recibe la misma respuesta que si hubiera
         salido bien (sin un error 500) y la falla queda en los registros de errores."""
@@ -934,6 +938,12 @@ class UsrRcpCtrVistaTests(TestCase):
         self.assertRedirects(correcto, reverse("core:iniciar_sesion"), fetch_redirect_response=False)
         capataz.refresh_from_db()
         self.assertTrue(capataz.check_password(NUEVA))
+
+    def test_d35_la_pantalla_revisa_tu_correo_sugiere_la_carpeta_de_spam(self):
+        """D-35 (lineamiento 11): «Revisá tu correo» sugiere revisar la carpeta de Spam si el correo no llega."""
+        respuesta = self.client.get(reverse("core:recuperacion_enviada"))
+
+        self.assertContains(respuesta, "Revisá la carpeta de Spam")
 
     def test_post_d_la_recuperacion_por_las_pantallas_queda_auditada(self):
         """USR-RCP-CTR postcondición d: la recuperación hecha por las pantallas deja el registro de auditoría con

@@ -1,0 +1,23 @@
+{% load iconos %}{% comment %}Forma de primer acceso de la persona (regla 4 de USR-ALT-USR y de USR-MOD-USR, regla 10, SEG-04, SEG-20, D-35). Se usa en el
+alta y en las ventanas de restablecer y reactivar. Recibe «correo_configurado», «acceso» (la forma elegida; la invitación
+va marcada por defecto) y, opcional, «error_acceso». Con el correo configurado (settings.CORREO_CONFIGURADO) ofrece la
+invitación por correo, marcada por defecto, y la contraseña temporal; sin él solo se ofrece la temporal (regla 10): no hay
+campo, y el servidor rechaza igual una invitación enviada a mano. Quien gestiona la cuenta nunca elige la contraseña.{% endcomment %}
+{% if correo_configurado %}
+<div class="fld" role="radiogroup" aria-labelledby="acceso-titulo">
+  <label id="acceso-titulo">Primer acceso de la persona<span class="req" aria-hidden="true"> *</span></label>
+  <div class="acceso-opciones">
+    <label class="chk">
+      <input type="radio" name="acceso" value="invitacion"{% if acceso != "temporal" %} checked{% endif %}>
+      <span><b>Invitación por correo</b> (recomendada)<span class="hint" style="display:block">Le enviamos un correo al email de la cuenta con un enlace para que elija su contraseña. El enlace vence en 7 días y sirve una sola vez.</span></span>
+    </label>
+    <label class="chk">
+      <input type="radio" name="acceso" value="temporal"{% if acceso == "temporal" %} checked{% endif %}>
+      <span><b>Contraseña temporal</b><span class="hint" style="display:block">El Sistema genera una contraseña temporal y te la muestra una sola vez. Pasásela a la persona por un medio seguro. Vence a los 7 días si no la cambia.</span></span>
+    </label>
+  </div>
+  {% if error_acceso %}<div class="err">{{ error_acceso }}</div>{% endif %}
+</div>
+{% else %}
+<div class="alert alert-info" style="margin-top:16px">{% icono "info" 16 %}<div>La invitación por correo no está disponible porque el envío de correo no está configurado. El Sistema genera una <b>contraseña temporal</b> y te la muestra una sola vez. Vence a los 7 días si la persona no la cambia.</div></div>
+{% endif %}

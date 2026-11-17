@@ -1,6 +1,6 @@
 # Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, el grupo de
 # cuentas vinculadas y el registro de auditoría. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17, D-18, D-19
-# y D-22 en docs/decisiones.md.
+# D-22 y D-35 en docs/decisiones.md.
 
 from datetime import timedelta
 
@@ -171,6 +171,16 @@ class Usuario(AbstractUser):
         blank=True,
         editable=False,
     )
+    # D-35, SEG-20: fecha y hora en que se envió la invitación pendiente; nula si la cuenta no tiene una. Mientras
+    # está pendiente, la contraseña no es utilizable (la persona todavía no eligió la suya). La fija el sistema
+    # (``asignar_invitacion``) y la borra elegir una contraseña: aceptar la invitación, recuperarla o recibir una
+    # temporal. Nunca convive con ``fecha_contrasena_temporal`` (restricción ``invitacion_o_temporal``).
+    fecha_invitacion = models.DateTimeField(
+        "fecha de envío de la invitación",
+        null=True,
+        blank=True,
+        editable=False,
+    )
 
     # D-17: grupo de cuentas vinculadas; opcional. PROTECT: un grupo no se borra mientras tenga cuentas (el
     # servicio las saca antes de borrarlo).
@@ -221,6 +231,12 @@ class Usuario(AbstractUser):
                 violation_error_code="email_repetido",
                 violation_error_message="Ya existe una cuenta con ese email.",
             ),
+            # D-35: una cuenta nunca tiene a la vez una invitación pendiente y una contraseña temporal. Respaldo de la
+            # base: los servicios la cuidan con ``asignar_invitacion`` y ``asignar_contrasena_temporal``.
+            models.CheckConstraint(
+                condition=Q(fecha_invitacion__isnull=True) | Q(fecha_contrasena_temporal__isnull=True),
+                name="invitacion_o_temporal",
+            ),
         ]
 
     def __str__(self):
@@ -268,7 +284,31 @@ class Usuario(AbstractUser):
         temporal = generar_contrasena_temporal()
         self.set_password(temporal)
         self.fecha_contrasena_temporal = timezone.now()
+        # D-35: si tenía una invitación pendiente, deja de tenerla (nunca las dos a la vez).
+        self.fecha_invitacion = None
         return temporal
+
+    @property
+    def tiene_invitacion_pendiente(self):
+        """True si la cuenta tiene una invitación pendiente: la persona todavía no eligió su contraseña (SEG-20)."""
+        return self.fecha_invitacion is not None
+
+    def invitacion_vencida(self, ahora=None):
+        """True si la invitación está pendiente y ya cumplió su vigencia de 7 días (SEG-20, D-35), el mismo plazo
+        que la contraseña temporal: a los 7 días exactos ya está vencida. Sin invitación devuelve False."""
+        if not self.tiene_invitacion_pendiente:
+            return False
+        ahora = ahora or timezone.now()
+        return ahora >= self.fecha_invitacion + VIGENCIA_CONTRASENA_TEMPORAL
+
+    def asignar_invitacion(self):
+        """Deja la cuenta con una invitación pendiente (SEG-20, D-35): sin contraseña utilizable (la anterior deja
+        de servir y las sesiones abiertas se cierran, porque cambia el resumen), con la fecha de la invitación y
+        sin contraseña temporal. No la graba: la graba el servicio que la llama (alta, restablecimiento o
+        reactivación), dentro de su transacción. El enlace lo arma y lo envía el servicio, después de confirmar."""
+        self.set_unusable_password()
+        self.fecha_invitacion = timezone.now()
+        self.fecha_contrasena_temporal = None
 
 
 class RolFijoMixin:
@@ -464,6 +504,7 @@ class RegistroAuditoria(models.Model):
         RESTABLECIMIENTO = "restablecimiento", "Restablecimiento de cuenta"
         CAMBIO_CONTRASENA = "cambio_contrasena", "Cambio de contraseña"
         RECUPERACION_CONTRASENA = "recuperacion_contrasena", "Recuperación de contraseña"
+        ACEPTACION_INVITACION = "aceptacion_invitacion", "Aceptación de invitación"
         VINCULACION = "vinculacion", "Vinculación de cuentas"
         DESVINCULACION = "desvinculacion", "Desvinculación de cuentas"
 

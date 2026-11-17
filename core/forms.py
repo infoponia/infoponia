@@ -5,7 +5,14 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from core.servicios import clases_de_rol_que_da_de_alta, roles_que_gestiona
+from django.conf import settings
+
+from core.servicios import (
+    ACCESO_INVITACION,
+    acceso_del_pedido,
+    clases_de_rol_que_da_de_alta,
+    roles_que_gestiona,
+)
 
 # SEG-06: el mismo mensaje sea cual sea la causa (email inexistente, contraseña incorrecta,
 # cuenta inactiva). Texto del prototipo (vLogin).
@@ -222,12 +229,16 @@ class FormularioDatosPersonales(forms.Form):
 
 
 class FormularioAltaUsuario(FormularioDatosPersonales):
-    """Alta de una cuenta (USR-ALT-USR): los datos personales y el rol.
+    """Alta de una cuenta (USR-ALT-USR): los datos personales, el rol y la forma de primer acceso.
 
     Regla 1: las opciones de rol son las que ``actor`` da de alta. El Administrador da de alta solo al
     Gerente (D-16): el campo se muestra con «Gerente», deshabilitado, como el prototipo (vAlta). Un campo
     deshabilitado no toma lo que llega en el pedido, sino su valor inicial, así que un rol enviado a mano
     se ignora. La regla la vuelve a controlar ``alta_usuario``.
+
+    ``acceso`` (regla 4, D-35): cómo obtiene la persona su primer acceso. Con el correo configurado la pantalla
+    ofrece la invitación (marcada por defecto) y la contraseña temporal; sin él, solo la temporal y el campo no
+    viaja. El valor se pasa tal cual al servicio, que rechaza una invitación sin el correo configurado (regla 10).
     """
 
     rol = forms.CharField(
@@ -236,8 +247,12 @@ class FormularioAltaUsuario(FormularioDatosPersonales):
         widget=forms.Select(attrs={"class": "field-input", "data-desplegable": ""}),
     )
 
+    acceso = forms.CharField(required=False)
+
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
+        self.correo_configurado = settings.CORREO_CONFIGURADO
+        self.fields["acceso"].initial = ACCESO_INVITACION if self.correo_configurado else ""
         roles = [(rol.value, rol.label) for rol in clases_de_rol_que_da_de_alta(actor)]
         campo = self.fields["rol"]
         if len(roles) == 1:
@@ -248,6 +263,10 @@ class FormularioAltaUsuario(FormularioDatosPersonales):
             campo.widget.attrs.pop("data-desplegable", None)
         else:
             campo.widget.choices = [("", "Seleccionar…")] + roles
+
+    def clean_acceso(self):
+        """Sin el correo configurado la pantalla no ofrece elegir: un pedido sin el campo es la temporal."""
+        return acceso_del_pedido(self.cleaned_data.get("acceso"))
 
 
 class FormularioModificarUsuario(FormularioDatosPersonales):

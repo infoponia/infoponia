@@ -31,13 +31,17 @@ from core.forms import (
 from core.middleware import permitido_con_contrasena_temporal
 from core.models import Usuario
 from core.servicios import (
+    ACCESO_INVITACION,
     MENSAJE_FUERA_DEL_GRUPO,
     acciones_permitidas,
+    acceso_del_pedido,
     alta_usuario,
     baja_usuario,
     cambiar_contrasena,
+    confirmar_invitacion,
     confirmar_recuperacion,
     consultar_usuarios,
+    cuenta_de_la_invitacion,
     cuenta_del_enlace,
     cuenta_para_cambiar,
     cuentas_vinculadas,
@@ -224,6 +228,66 @@ def recuperacion_elegir(request, uidb64):
     else:
         form = FormularioContrasenaNueva()
     return render(request, "core/recuperar_elegir.html", {"form": form, "email_cuenta": cuenta.email})
+
+
+# ---- Aceptar la invitación por correo (SEG-20, tarea 08b, D-35) ----
+# Misma técnica que la recuperación: el enlace guarda el token en la sesión (con su propia clave) y redirige a una
+# URL sin él; una sola pantalla de enlace no válido; solo sin sesión; al terminar, al inicio de sesión sin entrar.
+
+CLAVE_SESION_TOKEN_INVITACION = "_invitacion_token"
+MENSAJE_INVITACION_ACEPTADA = "Contraseña guardada. Ingresá con tu nueva contraseña."
+
+
+def _invitacion_no_valida(request):
+    """Pantalla «Invitación no válida»: la misma para una invitación usada, vencida, alterada, reemplazada o de una
+    cuenta inactiva. Ofrece «¿Olvidaste tu contraseña?» si el correo está configurado (SEG-20)."""
+    return render(
+        request,
+        "core/invitacion_enlace_invalido.html",
+        {"correo_configurado": settings.CORREO_CONFIGURADO},
+    )
+
+
+@_pantalla_de_recuperacion
+def invitacion_enlace(request, uidb64, token):
+    """Entrada del enlace de la invitación: si es válido guarda el token en la sesión y redirige a la pantalla de
+    la contraseña, con una URL sin el token; si no, muestra «Invitación no válida». No exige el correo configurado:
+    aceptar no envía nada (D-35)."""
+    if cuenta_de_la_invitacion(uidb64, token) is None:
+        return _invitacion_no_valida(request)
+    request.session[CLAVE_SESION_TOKEN_INVITACION] = token
+    return redirect("core:invitacion_elegir", uidb64=uidb64)
+
+
+@sensitive_post_parameters("contrasena_nueva", "contrasena_repetida")
+@_pantalla_de_recuperacion
+def invitacion_elegir(request, uidb64):
+    """«Elegí tu contraseña para empezar a usar InfoPonia» (SEG-20): con el token de la sesión muestra el
+    formulario; al enviarlo llama a ``confirmar_invitacion``, que vuelve a validar todo con la cuenta bloqueada. Si
+    sale bien lleva al inicio de sesión con un aviso, sin iniciar sesión (D-29, D-35)."""
+    token = request.session.get(CLAVE_SESION_TOKEN_INVITACION)
+    cuenta = cuenta_de_la_invitacion(uidb64, token) if token else None
+    if cuenta is None:
+        return _invitacion_no_valida(request)
+    if request.method == "POST":
+        form = FormularioContrasenaNueva(request.POST)
+        if form.is_valid():
+            try:
+                confirmar_invitacion(cuenta.pk, token, form.cleaned_data["contrasena_nueva"])
+            except ValidationError as error:
+                if not hasattr(error, "error_dict"):
+                    # Invitación usada en otra pestaña, reemplazada o cuenta dada de baja mientras se escribía.
+                    return _invitacion_no_valida(request)
+                for campo, errores in error.error_dict.items():
+                    for e in errores:
+                        form.add_error(campo if campo in form.fields else None, e)
+            else:
+                request.session.pop(CLAVE_SESION_TOKEN_INVITACION, None)
+                messages.success(request, MENSAJE_INVITACION_ACEPTADA)
+                return redirect("core:iniciar_sesion")
+    else:
+        form = FormularioContrasenaNueva()
+    return render(request, "core/invitacion_elegir.html", {"form": form, "email_cuenta": cuenta.email})
 
 
 # ---- Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR, tarea 06a) ----
@@ -497,7 +561,9 @@ def usuario_nuevo(request):
         form = FormularioAltaUsuario(request.POST, actor=request.user)
         form.is_valid()  # todos los campos son opcionales; las reglas son del servicio
         try:
-            cuenta, contrasena_temporal = alta_usuario(request.user, **form.cleaned_data)
+            cuenta, acceso = alta_usuario(
+                request.user, **form.cleaned_data, construir_url=request.build_absolute_uri
+            )
         except ValidationError as error:
             for campo, errores in error.error_dict.items():
                 for e in errores:
@@ -510,7 +576,12 @@ def usuario_nuevo(request):
             return render(
                 request,
                 "core/usuarios/alta_ok.html",
-                {"cuenta": cuenta, "contrasena_temporal": contrasena_temporal},
+                {
+                    "cuenta": cuenta,
+                    "resultado_acceso": acceso,
+                    "contrasena_temporal": acceso.contrasena_temporal,
+                    "acciones": acciones_permitidas(request.user, cuenta),
+                },
             )
     else:
         form = FormularioAltaUsuario(actor=request.user)
@@ -519,6 +590,9 @@ def usuario_nuevo(request):
         "core/usuarios/alta.html",
         {
             "form": form,
+            "correo_configurado": form.correo_configurado,
+            "acceso": form["acceso"].value(),
+            "error_acceso": form["acceso"].errors[0] if form["acceso"].errors else "",
             "cuenta_inactiva": cuenta_inactiva,
             # Regla 8 y D-30: «Reactivar cuenta» solo si quien da de alta puede reactivarla hoy.
             "puede_reactivar": cuenta_inactiva is not None
@@ -603,9 +677,19 @@ def _gestionar_cuenta(request, cuenta_id, accion):
     }
     if accion == "reactivar":
         contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
+    # D-35: restablecer y reactivar eligen la forma de acceso (invitación o contraseña temporal); la baja no.
+    contexto["correo_configurado"] = settings.CORREO_CONFIGURADO
+    contexto["acceso"] = ACCESO_INVITACION if settings.CORREO_CONFIGURADO else ""
     if request.method == "POST":
         try:
-            resultado = _SERVICIO_DE_ACCION[accion](request.user, cuenta.pk)
+            if accion == "baja":
+                resultado = _SERVICIO_DE_ACCION[accion](request.user, cuenta.pk)
+            else:
+                acceso = acceso_del_pedido(request.POST.get("acceso"))
+                contexto["acceso"] = acceso
+                resultado = _SERVICIO_DE_ACCION[accion](
+                    request.user, cuenta.pk, acceso=acceso, construir_url=request.build_absolute_uri
+                )
         except ValidationError as error:
             contexto["error"] = error.messages[0]
             if accion == "reactivar":
@@ -629,7 +713,8 @@ def _gestionar_cuenta(request, cuenta_id, accion):
             contexto["acciones"] = acciones_permitidas(request.user, cuenta)
             # La ficha que queda detrás de la ventana muestra los vínculos de ahora (la cuenta salió de su grupo).
             contexto["vinculadas"] = cuentas_vinculadas(cuenta, actor=request.user)
-            contexto["contrasena_temporal"] = resultado
+            contexto["resultado_acceso"] = resultado
+            contexto["contrasena_temporal"] = resultado.contrasena_temporal
     elif request.headers.get("HX-Request") == "true":
         return render(request, "core/usuarios/_ventana_confirmar.html", contexto)
     return render(request, "core/usuarios/ficha.html", contexto)
