@@ -5,6 +5,8 @@
 # datos. Los servicios se llaman a través del módulo (servicios.x) para que, mientras no existan, cada
 # prueba falle por separado en vez de romper la importación del archivo.
 
+from datetime import timedelta
+
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.test import TestCase
@@ -26,6 +28,7 @@ from core.tests.fabricas import (
     crear_administrador,
     crear_cuenta,
     crear_gerente,
+    dar_invitacion,
     dar_temporal_vencida,
 )
 
@@ -345,6 +348,30 @@ class UsrCnsUsrVistaTests(TestCase):
         self.assertContains(entera, "capataz@infoponia.com")
         self.assertNotContains(entera, "vendedor@infoponia.com")
 
+    def test_regla_3_ficha_y_lista_indican_la_invitacion_pendiente_y_vencida(self):
+        """USR-CNS-USR regla 3 (versión 0.4), SEG-20 y D-35: la ficha y la lista indican si la cuenta tiene una
+        invitación pendiente (la persona todavía no eligió su contraseña) y si venció (más de 7 días), con el
+        mismo tratamiento que la contraseña temporal; una cuenta sin invitación no las lleva."""
+        self.entrar_como_gerente()
+        pendiente = dar_invitacion(crear_cuenta(Capataz, "pendiente@infoponia.com"))
+        vencida = dar_invitacion(crear_cuenta(Capataz, "vencida@infoponia.com"), hace=timedelta(days=8))
+        normal = crear_cuenta(Vendedor, "normal@infoponia.com")
+
+        ficha_pendiente = self.client.get(reverse("core:usuario", args=[pendiente.pk]))
+        ficha_vencida = self.client.get(reverse("core:usuario", args=[vencida.pk]))
+        ficha_normal = self.client.get(reverse("core:usuario", args=[normal.pk]))
+        lista = self.client.get(reverse("core:usuarios"))
+
+        self.assertContains(ficha_pendiente, "Invitación pendiente")
+        self.assertNotContains(ficha_pendiente, "Invitación vencida")
+        self.assertContains(ficha_vencida, "Invitación vencida")
+        self.assertContains(ficha_vencida, "hay que restablecer el acceso")
+        self.assertContains(lista, "Invitación pendiente")
+        self.assertContains(lista, "Invitación vencida")
+        self.assertNotContains(ficha_normal, "Invitación")
+        self.assertContains(ficha_pendiente, "status-badge status-warn")
+        self.assertContains(ficha_vencida, "status-badge status-danger")
+
     def test_regla_3_ficha_indica_temporal_vencida(self):
         """USR-CNS-USR regla 3: la ficha y la lista indican si la contraseña temporal sigue sin cambiar
         y si venció; una vigente se distingue de una vencida."""
@@ -487,7 +514,7 @@ class UsrCnsUsrVistaTests(TestCase):
         propia = self.client.get(reverse("core:usuario", args=[administrador.pk]))
         self.assertContains(propia, "(vos)")
         self.assertContains(propia, "<dd>Administrador</dd>", html=True)
-        self.assertNotContains(propia, "Restablecer contraseña")
+        self.assertNotContains(propia, "Restablecer acceso")
 
         otro_administrador.is_active = False
         otro_administrador.save()

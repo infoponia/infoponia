@@ -1,11 +1,16 @@
 # Fábricas y auxiliares compartidos por las pruebas de core/tests/: crean cuentas con la contraseña de
 # prueba y arman estados repetidos (administrador dado de baja, contraseña temporal, vencida o no, grupo de
-# cuentas vinculadas) y leen el contenido de un registro de auditoría. Tienen una sola firma; el archivo de
+# cuentas vinculadas, invitación pendiente) y leen el contenido de un registro de auditoría. También los auxiliares de
+# correo que usan varios archivos (backend que falla, URL absoluta de prueba, comparación sin el token CSRF). Tienen una sola firma; el archivo de
 # pruebas que verifica un nombre o apellido concretos lo pasa explícito.
 
+import importlib
 import json
+import re
 from datetime import timedelta
+from smtplib import SMTPException
 
+from django.core.mail.backends.base import BaseEmailBackend
 from django.utils import timezone
 
 from core.models import Capataz, Gerente, GrupoCuentas, Usuario
@@ -101,3 +106,52 @@ def contenido_de_auditoria(registro):
     """Todo lo que guarda un registro de auditoría (cuentas afectadas y detalle), como texto, para buscar
     contraseñas en él (SEG-02, SEG-14)."""
     return json.dumps([registro.afectados, registro.detalle], ensure_ascii=False)
+
+
+def dar_invitacion(cuenta, hace=None):
+    """Le deja a la cuenta una invitación pendiente (SEG-20, D-35): sin contraseña utilizable y con la fecha de la
+    invitación, corrida ``hace`` (un ``timedelta``) hacia atrás si se indica. La graba y devuelve la cuenta."""
+    cuenta.asignar_invitacion()
+    if hace is not None:
+        cuenta.fecha_invitacion = timezone.now() - hace
+    cuenta.save()
+    return cuenta
+
+
+def token_de_invitacion(cuenta):
+    """Token de invitación de la cuenta (D-35). Importa ``core.tokens`` al llamarla, para que mientras no exista
+    falle cada prueba por separado y no la importación del archivo."""
+    return importlib.import_module("core.tokens").generador_invitacion.make_token(cuenta)
+
+
+def invitacion_valida(cuenta, token):
+    """True si ``token`` es una invitación válida para la cuenta (con su estado actual en la base)."""
+    cuenta = Usuario.objects.get(pk=cuenta.pk)
+    return importlib.import_module("core.tokens").generador_invitacion.check_token(cuenta, token)
+
+
+# Base de los enlaces en las pruebas de servicio: la vista pasa ``request.build_absolute_uri``; acá se simula.
+BASE = "https://infoponia.test"
+PATRON_INVITACION = re.compile(re.escape(BASE) + r"/invitacion/([\w-]+)/([\w-]+)/")
+
+
+def construir_url(ruta):
+    """Hace las veces de ``request.build_absolute_uri``: devuelve la ruta como URL absoluta."""
+    return BASE + ruta
+
+
+def sin_csrf(contenido):
+    """El contenido de una respuesta sin el token CSRF, que cambia en cada pedido: sirve para comparar si dos
+    pantallas son la misma."""
+    return re.sub(rb'"X-CSRFToken": "[^"]*"', b'"X-CSRFToken": ""', contenido)
+
+
+class BackendQueFalla(BaseEmailBackend):
+    """Backend de correo que simula un servidor SMTP caído (SEG-12 y regla 11 de USR-ALT-USR: el envío falla
+    estando configurado). Se usa con ``override_settings(EMAIL_BACKEND=BACKEND_QUE_FALLA)``."""
+
+    def send_messages(self, email_messages):
+        raise SMTPException("El servidor de correo no responde.")
+
+
+BACKEND_QUE_FALLA = "core.tests.fabricas.BackendQueFalla"

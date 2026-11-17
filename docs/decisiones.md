@@ -372,7 +372,7 @@ Formato:
   USR-CMB-CTR; pendientes_DER, DER-10.
 - Consecuencias: campo nuevo en `Usuario` (permiso explícito, como en D-17). La temporal vencida se
   rechaza con el mismo mensaje genérico que cualquier otra falla (D-19).
-- Estado: vigente
+- Estado: vigente; reemplazada en parte por D-35 (su primer punto, que el Sistema genera una contraseña temporal al dar de alta, restablecer o reactivar, pasa a ser una de dos formas de primer acceso; el resto vale para la temporal)
 
 ## D-19 — Sesión e identificación
 
@@ -603,7 +603,7 @@ Formato:
   SEG-14); D-18, D-19, D-22 y D-25.
 - Consecuencias: migraciones `0003` y `0004`. La `0004` falla, sin cambiar datos, si hay emails repetidos
   sin distinguir mayúsculas: hay que resolverlos a mano antes de migrar (también en Neon).
-- Estado: vigente
+- Estado: vigente; reemplazada en parte por D-35 (la contraseña temporal ya no es la única forma de primer acceso: la cuenta también puede tener una invitación pendiente)
 
 ## D-28 — Usuarios del Gerente: alcance, teléfono y pantallas (tarea 04)
 
@@ -1288,4 +1288,113 @@ Formato:
     middleware de SEG-04. Es lo esperado.
   - El texto de `docs/casos_de_uso/usuarios.md` («Lo que queda para más adelante») todavía dice que el proveedor de correo
     no está decidido: es copia del documento de Drive y hay que actualizarlo allá.
+- Estado: vigente; D-35 suma `invitacion_pendiente` al detalle de la auditoría de la recuperación y comparte con la invitación el servicio que elige la contraseña con un enlace
+
+## D-35 — Invitación por correo como forma de primer acceso (tarea 08b)
+
+- Fecha: 17/11/2026
+- Decidió: Lautaro Fernández (en el pedido de la tarea 08b y durante su planificación, a propuesta de Claude: la acción de
+  auditoría propia, el servicio compartido con la recuperación y el texto «Restablecer acceso»)
+- Antes: D-18 y D-27 hacían que el alta, el restablecimiento y la reactivación siempre generaran una contraseña temporal,
+  que quien gestiona la cuenta le pasa a la persona por otro medio. Con el correo funcionando (D-33, D-34), los casos de uso
+  (USR-ALT-USR 0.4, USR-MOD-USR 0.5, USR-CNS-USR 0.4, SEG-04 y SEG-20) agregan una invitación por correo como forma de primer
+  acceso, y la dejan como opción por defecto.
+- Decisión:
+  - Estado de la cuenta: la invitación pendiente es una contraseña no utilizable (`set_unusable_password`) más
+    `Usuario.fecha_invitacion` (nulo si no hay invitación), análogo a `fecha_contrasena_temporal`. Una cuenta nunca tiene las
+    dos fechas a la vez: lo cuidan `asignar_invitacion` y `asignar_contrasena_temporal` y lo respalda la restricción de la
+    base `invitacion_o_temporal`. La invitación vence a los 7 días exactos (`invitacion_vencida`), como la temporal.
+    Migración `0007`: el campo, la restricción y la acción de auditoría nueva.
+  - Token: `core/tokens.py`, `GeneradorInvitacion`, una subclase de `PasswordResetTokenGenerator` con otra `key_salt` (un
+    token de recuperación no sirve como invitación ni al revés), con la fecha de la invitación dentro de la firma (cada
+    invitación nueva anula la anterior) y vencimiento de 7 días. `PASSWORD_RESET_TIMEOUT` (la hora de la recuperación) no
+    cambia.
+  - Elegir la contraseña con un enlace: un solo servicio compartido, `_elegir_contrasena_con_enlace` (`atomic`,
+    `select_for_update(no_key=True)`, revalidar el enlace y que la cuenta siga activa DESPUÉS de bloquear, SEG-03,
+    auditoría con la cuenta afectada como usuario, y deja la cuenta sin invitación ni temporal). Lo usan
+    `confirmar_recuperacion` (D-34) y `confirmar_invitacion`. La aceptación se audita con una acción propia,
+    `aceptacion_invitacion`, y no exige el correo configurado: aceptar no envía nada.
+  - Forma de acceso: `alta_usuario`, `restablecer_contrasena` y `reactivar_usuario` reciben `acceso` («invitacion» o
+    «temporal») y `construir_url`, y devuelven un `ResultadoAcceso` (forma, contraseña temporal si la hay, y si la invitación
+    salió). La elige quien gestiona la cuenta con un radio (invitación marcada por defecto) en el formulario de alta y en la
+    ventana de restablecer y reactivar. Sin `CORREO_CONFIGURADO` el radio no se muestra y la forma es la temporal; el
+    servicio rechaza igual una invitación enviada a mano, en el campo `acceso`, con el código `correo_no_configurado`. Con
+    el correo configurado el campo es obligatorio (`acceso_invalido`). La auditoría guarda la forma en `acceso`, sin
+    contraseñas ni el token.
+  - Envío: la escritura y la auditoría van dentro de la transacción; el envío, DESPUÉS de confirmarla (D-14). Si falla, la
+    cuenta queda creada o restablecida con la invitación pendiente, `logger.exception` con el id de la cuenta y sin el
+    enlace (`_enviar_correo`, compartido con la recuperación), y el resultado vuelve a la vista, que avisa de la falla con un
+    aviso de error y ofrece «Restablecer acceso» (regla 11 de USR-ALT-USR).
+  - Restablecer o reactivar con invitación: contraseña no utilizable (la anterior deja de servir y se cierran las sesiones),
+    `fecha_contrasena_temporal` en `None`, `fecha_invitacion` ahora, y salida del grupo (SEG-11), igual que con la temporal.
+    Restablecer con una invitación pendiente invalida el enlace anterior (regla 11 de USR-MOD-USR: reenviar es restablecer).
+    Restablecer con una temporal le quita la invitación pendiente.
+  - Consulta (USR-CNS-USR regla 3): estado visible «Invitación pendiente» o «Invitación vencida» en la lista y la ficha, con
+    el tratamiento de la contraseña temporal sin cambiar o vencida.
+  - Pantallas del enlace (`invitacion/<uidb64>/<token>/`): la misma técnica que la recuperación (token a la sesión con su
+    propia clave, URL del formulario sin token, una sola pantalla «Invitación no válida», solo sin sesión). Texto: «Elegí tu
+    contraseña para empezar a usar InfoPonia». Al terminar lleva al inicio de sesión con el aviso «Contraseña guardada.
+    Ingresá con tu nueva contraseña.», sin iniciar sesión. La pantalla de enlace no válido ofrece «Pedir un enlace nuevo»
+    (la recuperación, SEG-20: el resultado es el mismo) solo si el correo está configurado.
+  - Correo de la invitación en texto plano: saludo con el nombre, que se le creó una cuenta con su rol, el enlace, que vence
+    en 7 días y sirve una sola vez, y que si no la esperaba lo ignore.
+  - Resultado: «Le enviamos una invitación a <email>. Vence en 7 días. Si no le llega, que revise la carpeta de Spam, o
+    restablecé el acceso con una contraseña temporal.» (pantalla «Cuenta creada» y ventana de restablecer y reactivar). La
+    pantalla «Revisá tu correo» de la recuperación también sugiere la carpeta de Spam.
+  - Los textos pasan de «Restablecer contraseña» a «Restablecer acceso» («¿Restablecer el acceso?», «Acceso restablecido»),
+    porque el botón puede mandar una invitación y el caso de uso habla de restablecer el acceso.
+  - Vincular cuentas (USR-VNC-CTA): una cuenta con invitación pendiente no se vincula. No hizo falta cambiar el servicio:
+    `vincular_cuenta` verifica la contraseña de la otra cuenta (`check_password`) antes de bloquear, y una contraseña no
+    utilizable no verifica nunca, así que da `no_se_pudo_vincular`. Lo cubre una prueba.
+  - Pruebas: con `manage.py test`, `CORREO_CONFIGURADO` arranca en `False` (`config/settings.py`), para que den lo mismo en
+    cada máquina y en el CI; las que necesitan el correo lo encienden con `override_settings`.
+- Por qué:
+  - La invitación evita que quien gestiona la cuenta conozca y tenga que transmitir una contraseña, aunque sea temporal:
+    la persona elige la suya desde el primer momento. Es el mismo principio de D-18, llevado un paso más lejos.
+  - Una contraseña no utilizable más una fecha, y no un campo de estado, porque Django ya entiende la contraseña no
+    utilizable: la cuenta no puede identificarse (SEG-06) y las sesiones abiertas se cierran, sin tocar el backend ni el
+    inicio de sesión. La fecha permite decir desde cuándo y cuándo vence, y entra en la firma del token.
+  - La restricción `invitacion_o_temporal` respalda la regla aunque un servicio nuevo olvide limpiar una de las dos fechas;
+    dos estados de primer acceso a la vez no tienen sentido.
+  - Un generador propio, y no otro `PASSWORD_RESET_TIMEOUT`, porque ese ajuste es global: cambiarlo a 7 días alargaría
+    también el plazo de la recuperación, que SEG-12 fija en una hora. Con otra `key_salt`, un enlace de un tipo no sirve para
+    el otro, aunque el usuario y la hora coincidan. El costo es repetir las pocas líneas de `check_token` de Django 5.2, que
+    no ofrece otro gancho para el plazo (se lee `settings.PASSWORD_RESET_TIMEOUT` dentro del método); hay que revisarlas si se
+    actualiza Django, y las pruebas de 7 días ± 1 s y de los tokens cruzados lo detectarían.
+  - Un servicio compartido para elegir la contraseña con un enlace, y no dos copias, porque la regla delicada es la
+    revalidación después del bloqueo (D-34): con dos copias, una corrección en una podría no llegar a la otra. Las dos
+    pruebas de concurrencia (recuperación e invitación) ejercitan la misma función. Evidencia (17/11/2026): con la
+    revalidación movida antes del bloqueo (en memoria, sin tocar el código) fallan la de la invitación y la de la
+    recuperación (`2 != 1` las dos) y la de «restablecer mientras se acepta»; con el código real, las tres pasan.
+  - La aceptación tiene acción de auditoría propia porque se distingue de una recuperación o de un cambio voluntario sin leer
+    el detalle: es la primera vez que la persona elige su contraseña, y es el dato que más interesa encontrar.
+  - El envío va fuera de la transacción por D-14: un servidor SMTP lento (hasta 10 s, D-33) no puede mantener tomados los
+    bloqueos del alta o del restablecimiento (D-30, D-32), ni un correo puede salir para una operación que después se
+    deshizo. El costo es que el correo puede fallar con la cuenta ya creada; por eso la regla 11 y el aviso con la salida.
+  - El radio se oculta sin correo, y además el servicio lo rechaza, porque la pantalla es una ayuda y la regla la aplica el
+    servidor (como la política de contraseñas, D-34). Con el correo configurado el campo es obligatorio para que nadie
+    reciba una invitación sin haberla elegido: la invitación viene marcada, pero siempre es una decisión visible.
+  - «Restablecer acceso» porque el botón ya no siempre genera una contraseña: un texto que dijera «contraseña» sugeriría una
+    temporal que quizá no existe.
+  - Aceptar sin exigir el correo configurado, porque la precondición de SEG-12 existe para no ofrecer lo que no se puede
+    enviar; aceptar una invitación ya enviada no envía nada, y quien la recibió no tiene por qué perder el acceso si el
+    correo deja de estar configurado después.
+- Fuentes: `docs/casos_de_uso/usuarios.md` (USR-ALT-USR 0.4, reglas 4, 10 y 11 y postcondiciones a, c y e; USR-MOD-USR 0.5,
+  objetivo, postcondiciones b y c y reglas 4, 6 y 11; USR-CNS-USR 0.4, regla 3; SEG-04, SEG-06, SEG-11, SEG-12 y SEG-20);
+  D-14, D-18, D-22, D-27, D-30, D-32, D-33 y D-34; código de `django.contrib.auth.tokens` (Django 5.2).
+- Consecuencias:
+  - Reemplaza en parte a D-27 (la contraseña temporal ya no es la única forma de primer acceso) y a D-18 (su primer punto,
+    «el Sistema genera una contraseña temporal al dar de alta, restablecer o reactivar», es ahora una de dos opciones; el
+    resto de D-18 vale para la temporal). D-34 suma `invitacion_pendiente` al detalle de la auditoría de la recuperación.
+  - Migración `0007`: no hay cuentas con invitación hoy, sin cambio de datos. Para quien tenga la base de pruebas con
+    `--keepdb`, hay que recrearla una vez (ver `CLAUDE.md`).
+  - Para que la invitación funcione en producción hay que tener el correo configurado en Render (D-33). Mientras no esté,
+    todo sigue como antes: solo la contraseña temporal.
+  - Límite conocido: si el envío falla, la persona no tiene cómo entrar hasta que quien gestiona la cuenta restablezca el
+    acceso; la pantalla lo avisa y ofrece la salida. Si la persona usa «¿Olvidaste tu contraseña?» antes de aceptar la
+    invitación, el enlace de recuperación la deja en el mismo estado final (SEG-20), y el enlace de invitación deja de servir.
+  - Límite conocido: no hay tope de pedidos de la recuperación (tarea 09), y reenviar invitaciones no tiene tope propio: lo
+    hace quien gestiona la cuenta, con sesión.
+  - Los textos de los casos de uso que cambian con la invitación (SEG-11, SEG-14 y la precondición b de USR-VNC-CTA) ya
+    están actualizados en «CU extendidos» (Drive) y en la copia de `docs/casos_de_uso/usuarios.md`.
 - Estado: vigente

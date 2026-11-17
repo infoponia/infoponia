@@ -12,7 +12,14 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from core.tests.fabricas import agrupar, crear_capataz, crear_gerente, dar_contrasena_temporal
+from core.tests.fabricas import (
+    agrupar,
+    crear_capataz,
+    crear_gerente,
+    dar_contrasena_temporal,
+    dar_invitacion,
+    token_de_invitacion,
+)
 
 
 def _luminancia(color):
@@ -325,6 +332,20 @@ class EnviosEnCursoTests(TestCase):
                 reverse("core:recuperacion_elegir", kwargs={"uidb64": uidb64})
             ).content.decode()
 
+        # Aceptar la invitación (SEG-20, tarea 08b): «Elegí tu contraseña para empezar a usar InfoPonia».
+        invitada = dar_invitacion(crear_capataz(email="invitada@infoponia.com"))
+        uidb64_invitada = urlsafe_base64_encode(force_bytes(invitada.pk))
+        otro_anonimo = Client()
+        otro_anonimo.get(
+            reverse(
+                "core:invitacion_enlace",
+                kwargs={"uidb64": uidb64_invitada, "token": token_de_invitacion(invitada)},
+            )
+        )
+        paginas["invitacion_elegir"] = otro_anonimo.get(
+            reverse("core:invitacion_elegir", kwargs={"uidb64": uidb64_invitada})
+        ).content.decode()
+
         nueva = crear_capataz(email="nueva@infoponia.com")
         dar_contrasena_temporal(nueva)
         self.client.force_login(nueva)
@@ -346,6 +367,16 @@ class EnviosEnCursoTests(TestCase):
         paginas["reactivar"] = self.client.get(
             reverse("core:usuario_reactivar", args=[inactiva.pk]), headers=HTMX
         ).content.decode()
+
+        # Alta, restablecer y reactivar con el correo configurado: el radio de la forma de acceso (D-35).
+        with override_settings(CORREO_CONFIGURADO=True):
+            paginas["alta_con_correo"] = self.client.get(reverse("core:usuario_nuevo")).content.decode()
+            paginas["restablecer_con_correo"] = self.client.get(
+                reverse("core:usuario_restablecer", args=[activa.pk]), headers=HTMX
+            ).content.decode()
+            paginas["reactivar_con_correo"] = self.client.get(
+                reverse("core:usuario_reactivar", args=[inactiva.pk]), headers=HTMX
+            ).content.decode()
 
         uno = crear_capataz(email="uno@infoponia.com")
         otro = crear_capataz(email="otro@infoponia.com")
@@ -374,6 +405,25 @@ class EnviosEnCursoTests(TestCase):
                     texto = re.sub(r"<[^>]+>", "", boton.group(2)).strip()
                     botones.append((atributos, texto))
         return botones
+
+    def test_d29_las_pantallas_de_la_tarea_08_y_08b_tienen_su_formulario_de_envio(self):
+        """D-29: las pantallas de recuperación e invitación (SEG-12, SEG-20) y las del alta, el restablecimiento y la
+        reactivación con la forma de acceso (D-35) están entre las revisadas por las pruebas de envíos en curso:
+        cada una trae al menos un botón de envío de un formulario POST (no una pantalla de error o de aviso)."""
+        paginas = self.paginas_con_formularios_post()
+        for nombre in (
+            "recuperar_contrasena",
+            "recuperar_elegir",
+            "invitacion_elegir",
+            "alta_con_correo",
+            "restablecer_con_correo",
+            "reactivar_con_correo",
+        ):
+            with self.subTest(nombre):
+                self.assertTrue(self.botones_de_envio_post(paginas[nombre]), nombre)
+        # El radio de la forma de acceso solo aparece con el correo configurado.
+        self.assertIn('name="acceso"', paginas["alta_con_correo"])
+        self.assertNotIn('name="acceso"', paginas["alta"])
 
     def test_d29_el_html_del_servidor_trae_los_botones_de_envio_sin_cambios(self):
         """D-29: sin JavaScript el formulario funciona como siempre. El botón de envío llega del servidor

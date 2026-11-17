@@ -4,6 +4,10 @@ Copia para el repo de las secciones «Casos de uso de alto nivel» y «Especific
 Seguridad y acceso» del documento de Drive «CU extendidos» (versión del 08/11/2026). Si este archivo
 y el documento de Drive no coinciden, avisá: no elijas en silencio.
 
+Actualizada el 17/11/2026 con la invitación por correo (D-35): USR-ALT-USR versión 0.4, USR-MOD-USR versión 0.5,
+USR-CNS-USR versión 0.4, USR-VNC-CTA versión 0.4 (precondición b), SEG-04, SEG-11, SEG-14 y SEG-20 (nueva), con el
+texto de «CU extendidos». El proveedor de correo está resuelto en D-33.
+
 Estos casos de uso son de alto nivel (breves): reemplazan a CU-12 y CU-25 a CU-28 de la
 Documentación para la IA y especifican el caso 23 de pendientes_CU. Las decisiones que los
 acompañan están en `docs/decisiones.md` (D-01 a D-24). Los ítems MD-nn y DER-nn que se citan
@@ -42,8 +46,6 @@ cuando se programe la tabla destino, y hasta entonces no se exigen.
   que pueda quedar pendiente.
 - **Efectos de la baja sobre lo asignado:** postcondiciones e, f y g y regla 4 de USR-BAJ-USR
   (alertas por invernadero, pedidos y entregas).
-- **Recuperar Contraseña por correo:** necesita un proveedor de correo, que todavía no está decidido.
-  En desarrollo se usa el backend de consola de Django.
 - **Ingreso con Google:** trabajo futuro; no se implementa en este bloque.
 
 ---
@@ -139,13 +141,17 @@ c. Si el rol es Gerente, no hay un Gerente activo.
 d. Si el rol es Transportista, existe al menos un invernadero activo. *(Para más adelante.)*
 
 **Postcondición:**
-a. Se creó una cuenta en estado «activo», con el rol indicado, nombre, apellido, email, teléfono si
-se indicó, y una contraseña temporal generada por el Sistema.
+a. Se creó una cuenta en estado «activo», con el rol indicado, nombre, apellido, email y teléfono si
+se indicó. Si se eligió la invitación, la cuenta quedó sin contraseña hasta que la persona la elija;
+si se eligió la contraseña temporal, tiene una generada por el Sistema.
 b. Si el rol es Transportista, la cuenta quedó asociada a su invernadero (R155). *(Para más adelante.)*
-c. El Sistema le informó la contraseña temporal a quien hizo el alta, una única vez.
+c. Según la forma de acceso elegida, se envió al email de la cuenta una invitación para que la
+persona elija su contraseña, o el Sistema le informó la contraseña temporal a quien hizo el alta,
+una única vez.
 d. Si el rol es Gerente, se le envió al nuevo Gerente una única notificación dentro del Sistema con la
 cantidad de pendientes que esperan una resolución del Gerente. *(Para más adelante.)*
-e. Se creó un registro de auditoría con usuario, rol, fecha, hora e identificador de la nueva cuenta.
+e. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de la nueva cuenta y la
+forma de acceso elegida.
 
 **Reglas:**
 1. Alcance: el Gerente da de alta cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico;
@@ -153,8 +159,9 @@ e. Se creó un registro de auditoría con usuario, rol, fecha, hora e identifica
    Sistema, porque se crean en la puesta en marcha (SEG-17).
 2. Hay un solo Gerente activo a la vez (D-09).
 3. El email es único entre todas las cuentas (SEG-01).
-4. La contraseña inicial la genera el Sistema, es temporal y vence a los 7 días si no se cambia;
-   quien da de alta no la elige (SEG-04).
+4. Quien da de alta elige cómo obtiene la persona su primer acceso: una invitación por correo (la
+   opción por defecto) o una contraseña temporal generada por el Sistema. Nunca elige la contraseña
+   (SEG-04 y SEG-20).
 5. Los invernaderos del Agrónomo, el Vendedor, el Técnico y el Capataz se asignan desde el
    invernadero, y el vehículo del Transportista desde el vehículo; en el alta solo se indica el
    invernadero del Transportista. *(Para más adelante.)*
@@ -166,10 +173,14 @@ e. Se creó un registro de auditoría con usuario, rol, fecha, hora e identifica
    cuenta nueva con otro email o con un alias.
 9. El teléfono, si se indica, contiene solo dígitos, espacios y los símbolos + - ( ), con el + solo
    al comienzo, y tiene entre 8 y 15 dígitos (D-21).
+10. La invitación solo está disponible si el envío de correo está configurado. Si no, se ofrece solo
+    la contraseña temporal.
+11. Si el envío de la invitación falla, la cuenta se crea igual y el Sistema se lo avisa a quien hizo
+    el alta, para que reenvíe la invitación o genere una contraseña temporal (USR-MOD-USR).
 
 ## USR-MOD-USR · Modificar Usuario
 
-**Objetivo:** actualizar los datos personales de una cuenta, restablecer su contraseña, reactivarla o
+**Objetivo:** actualizar los datos personales de una cuenta, restablecer su acceso, reactivarla o
 quitar su foto de perfil.
 
 **Precondición:**
@@ -180,10 +191,11 @@ c. Si cambia el email, no existe otra cuenta con el email nuevo.
 **Postcondición**, según lo que haya hecho el actor:
 a. Se actualizaron los datos personales indicados: nombre, apellido, email, teléfono y, si es
 Transportista, su invernadero *(para más adelante)*.
-b. Si restableció la contraseña, la cuenta tiene una nueva contraseña temporal generada por el
-Sistema, que se le informó una única vez a quien la restableció; se cerraron las sesiones abiertas
-con esa cuenta, y la cuenta salió de su grupo de cuentas vinculadas.
-c. Si reactivó la cuenta, quedó en estado «activo» y su contraseña se restableció como en «b».
+b. Si restableció el acceso, la contraseña anterior dejó de servir, se cerraron las sesiones abiertas
+con esa cuenta y la cuenta salió de su grupo de cuentas vinculadas. Además, según lo elegido, se
+envió una invitación al email de la cuenta, o la cuenta tiene una contraseña temporal nueva que se
+informó una única vez a quien la restableció.
+c. Si reactivó la cuenta, quedó en estado «activo» y su acceso se restableció como en «b».
 d. Se creó un registro de auditoría con usuario, rol, fecha, hora, identificador de la cuenta y los
 cambios, sin registrar ninguna contraseña. La quita de la foto no se audita.
 e. Si quitó la foto, la cuenta quedó sin foto de perfil.
@@ -195,14 +207,17 @@ e. Si quitó la foto, la cuenta quedó sin foto de perfil.
 2. El rol no se modifica (D-11).
 3. El email se puede cambiar, siempre que siga siendo único; cambiarlo no afecta las cuentas
    vinculadas.
-4. Nadie elige la contraseña de otra persona: solo se restablece. La nueva contraseña temporal vence a
-   los 7 días si no se cambia. Para su propia cuenta, el Administrador usa USR-CMB-CTR (SEG-04 y
-   SEG-11).
+4. Nadie elige la contraseña de otra persona: solo se restablece el acceso, con una invitación o con
+   una contraseña temporal, con las mismas reglas que en el alta (reglas 4, 10 y 11 de USR-ALT-USR).
+   Para su propia cuenta, el Administrador usa USR-CMB-CTR (SEG-04, SEG-11 y SEG-20).
 5. Solo se reactiva un Gerente si no hay otro Gerente activo (D-09).
-6. Toda reactivación restablece la contraseña.
+6. Toda reactivación restablece el acceso.
 7. Quien gestiona la cuenta ve sus cuentas vinculadas en solo lectura, pero no las cambia.
 8. Quien gestiona la cuenta puede quitar su foto de perfil, pero no cambiarla.
 9. El teléfono cumple la regla 9 de USR-ALT-USR.
+10. Los datos personales se pueden modificar con la cuenta activa o inactiva. Modificarlos no cambia su
+    estado: para que una cuenta inactiva vuelva a funcionar hay que reactivarla.
+11. Reenviar una invitación que venció o no llegó es restablecer el acceso eligiendo la invitación.
 
 ## USR-BAJ-USR · Baja Usuario
 
@@ -257,9 +272,9 @@ a. No se producen cambios en el Sistema.
    el Administrador, las del Gerente y de los Administradores (D-16).
 2. Se filtra por rol y por estado, y se busca por nombre, apellido o email.
 3. Datos visibles de cada cuenta: nombre, apellido, email, teléfono, rol, estado, foto de perfil si
-   tiene, si tiene una contraseña temporal sin cambiar y si venció, el invernadero si es
-   Transportista *(para más adelante)*, y sus cuentas vinculadas en solo lectura. Nunca se muestra
-   una contraseña.
+   tiene, si tiene una contraseña temporal sin cambiar y si venció, si tiene una invitación pendiente
+   (la persona todavía no eligió su contraseña) y si venció, el invernadero si es Transportista
+   *(para más adelante)*, y sus cuentas vinculadas en solo lectura. Nunca se muestra una contraseña.
 4. La consulta no se audita (SEG-14).
 
 ## USR-GST-PRF · Gestionar Mi Perfil
@@ -294,8 +309,8 @@ identificarse, o que saque una cuenta de ese grupo.
 
 **Precondición:**
 a. La persona está identificada en el Sistema con una de sus cuentas.
-b. Para vincular: existe otra cuenta activa, sin contraseña temporal, cuyo email y contraseña conoce
-la persona.
+b. Para vincular: existe otra cuenta activa, sin contraseña temporal ni invitación pendiente, cuyo
+email y contraseña conoce la persona.
 c. Para desvincular: la cuenta que se desvincula pertenece al mismo grupo que la cuenta con la que
 opera la persona.
 
@@ -340,10 +355,11 @@ Requisitos técnicos que citan los casos de uso. No son pasos de un actor.
   común (lista de contraseñas comunes de Django); no es solo numérica; no se parece al nombre, al
   apellido ni al email de la cuenta, y es distinta de la actual. Se controla con los validadores de
   contraseñas de Django.
-- **SEG-04 · Contraseña temporal.** El Sistema la genera al dar de alta, restablecer o reactivar una
-  cuenta. Tiene 12 caracteres aleatorios, letras y dígitos sin caracteres ambiguos (0, O, 1, l, I).
-  Se muestra una sola vez a quien gestiona la cuenta. Mientras la cuenta la tenga, la persona solo
-  puede reemplazarla por una propia; el resto de las pantallas está bloqueado. Vence a los 7 días de
+- **SEG-04 · Contraseña temporal.** Es la alternativa a la invitación (SEG-20): el Sistema la genera
+  al dar de alta, restablecer o reactivar una cuenta, cuando quien la gestiona la elige. Tiene 12
+  caracteres aleatorios, letras y dígitos sin caracteres ambiguos (0, O, 1, l, I). Se muestra una
+  sola vez a quien gestiona la cuenta. Mientras la cuenta la tenga, la persona solo puede
+  reemplazarla por una propia; el resto de las pantallas está bloqueado. Vence a los 7 días de
   generada: una contraseña temporal vencida no sirve para identificarse, y quien gestiona la cuenta
   tiene que restablecerla. El Sistema guarda la fecha y hora de generación.
 - **SEG-05 · Intentos de identificación.** No hay límite de intentos ni bloqueo de la cuenta por
@@ -361,7 +377,8 @@ Requisitos técnicos que citan los casos de uso. No son pasos de un actor.
   la persona llega al inicio de esa cuenta, que indica con qué rol opera. El cambio no se audita.
 - **SEG-10 · Efecto del cambio de la propia contraseña.** Se cierran las demás sesiones abiertas con
   esa cuenta y la actual sigue abierta.
-- **SEG-11 · Efecto del restablecimiento y la reactivación.** Generan una contraseña temporal nueva,
+- **SEG-11 · Efecto del restablecimiento y la reactivación.** Restablecen el acceso de la cuenta, con una
+  invitación (SEG-20) o con una contraseña temporal nueva (SEG-04), según lo que elija quien la gestiona;
   cierran todas las sesiones de la cuenta y la sacan de su grupo de cuentas vinculadas.
 - **SEG-12 · Recuperación por correo.** Solo está disponible si el envío de correo está configurado
   (variables de entorno del servidor de correo definidas). El enlace es de un solo uso y vence a la
@@ -373,8 +390,8 @@ Requisitos técnicos que citan los casos de uso. No son pasos de un actor.
   que se opera y, cuando corresponde, su ámbito por invernadero. Si no le corresponde, el Sistema
   rechaza el acceso (error 403) con un mensaje que lo explica.
 - **SEG-14 · Qué se audita.** Se auditan el alta, la modificación, la baja, la reactivación y el
-  restablecimiento de cuentas; el cambio y la recuperación de contraseña, y la vinculación y
-  desvinculación de cuentas. No se auditan la identificación, el cierre de sesión, el cambio de cuenta
+  restablecimiento de cuentas; el cambio y la recuperación de contraseña, la aceptación de una
+  invitación, y la vinculación y desvinculación de cuentas. No se auditan la identificación, el cierre de sesión, el cambio de cuenta
   vinculada, las consultas, ni la carga, el cambio o la quita de la foto de perfil. Ninguna contraseña
   queda en la auditoría (D-22).
 - **SEG-15 · Invariantes de las cuentas.** Siempre hay al menos un Administrador activo y nunca hay
@@ -390,6 +407,11 @@ Requisitos técnicos que citan los casos de uso. No son pasos de un actor.
 - **SEG-19 · Foto de perfil.** Acepta JPG, PNG o WebP. El servidor verifica que el archivo sea una
   imagen real y la vuelve a codificar; después la recorta en cuadrado y la achica a 256 px. Se guarda
   en almacenamiento de objetos, no en el disco del servidor (D-20).
+- **SEG-20 · Invitación por correo.** El enlace es de un solo uso y vence a los 7 días, el mismo plazo que la
+  contraseña temporal. Mientras la persona no elige su contraseña, la cuenta no puede identificarse y el
+  intento recibe el mensaje genérico de SEG-06. Elegir la contraseña con el enlace la reemplaza y no la
+  deja temporal. Si la persona usa «¿Olvidaste tu contraseña?» antes de aceptar la invitación, el resultado
+  es el mismo.
 
 **Trabajo futuro:** ingreso con Google, conectando la cuenta desde el perfil y sin crear cuentas
 nuevas; rol activo dentro de una misma cuenta; recordatorios de pendientes sin resolver.

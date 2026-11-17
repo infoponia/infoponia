@@ -23,10 +23,11 @@ from unittest import mock
 
 from types import SimpleNamespace
 
+from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
 from django.http import Http404
-from django.test import Client, TestCase, TransactionTestCase, tag
+from django.test import Client, TestCase, TransactionTestCase, override_settings, tag
 from django.urls import reverse
 
 from core import servicios
@@ -41,18 +42,27 @@ from core.models import (
 )
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
+    BACKEND_QUE_FALLA,
     CLAVE,
+    PATRON_INVITACION,
     agrupar,
     contenido_de_auditoria,
     crear_administrador,
     crear_cuenta,
     crear_gerente,
+    construir_url,
+    dar_invitacion,
     dar_temporal_vencida,
+    invitacion_valida,
+    token_de_invitacion,
 )
 
 # Estas pruebas verifican «Laura Benítez» como nombre de la cuenta: se pasa explícito a crear_cuenta.
 LAURA = {"nombre": "Laura", "apellido": "Benítez"}
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
+# Formas de acceso al restablecer o reactivar (regla 4 de USR-MOD-USR, D-35).
+INVITACION = "invitacion"
+TEMPORAL = "temporal"
 
 
 def datos_validos(cuenta, **cambios):
@@ -217,7 +227,7 @@ class UsrModUsrServicioTests(TestCase):
         cuenta = crear_cuenta(Capataz, **LAURA)
         resumen_anterior = cuenta.password
 
-        temporal = servicios.restablecer_contrasena(gerente, cuenta.pk)
+        temporal = servicios.restablecer_contrasena(gerente, cuenta.pk).contrasena_temporal
 
         cuenta.refresh_from_db()
         self.assertEqual(len(temporal), 12)
@@ -246,7 +256,7 @@ class UsrModUsrServicioTests(TestCase):
         dar_temporal_vencida(cuenta)
         self.assertTrue(Usuario.objects.get(pk=cuenta.pk).contrasena_temporal_vencida())
 
-        temporal = servicios.restablecer_contrasena(gerente, cuenta.pk)
+        temporal = servicios.restablecer_contrasena(gerente, cuenta.pk).contrasena_temporal
 
         cuenta.refresh_from_db()
         self.assertTrue(cuenta.check_password(temporal))
@@ -258,7 +268,7 @@ class UsrModUsrServicioTests(TestCase):
         gerente = crear_gerente()
         cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
-        temporal = servicios.reactivar_usuario(gerente, cuenta.pk)
+        temporal = servicios.reactivar_usuario(gerente, cuenta.pk).contrasena_temporal
 
         cuenta.refresh_from_db()
         self.assertEqual(len(temporal), 12)
@@ -361,7 +371,7 @@ class UsrModUsrServicioTests(TestCase):
         gerente = crear_gerente()
         cuenta = crear_cuenta(Capataz, **LAURA)
 
-        temporal = servicios.restablecer_contrasena(gerente, cuenta.pk)
+        temporal = servicios.restablecer_contrasena(gerente, cuenta.pk).contrasena_temporal
 
         registro = RegistroAuditoria.objects.get()
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.RESTABLECIMIENTO)
@@ -379,13 +389,13 @@ class UsrModUsrServicioTests(TestCase):
         gerente = crear_gerente()
         cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
 
-        temporal = servicios.reactivar_usuario(gerente, cuenta.pk)
+        temporal = servicios.reactivar_usuario(gerente, cuenta.pk).contrasena_temporal
 
         registro = RegistroAuditoria.objects.get()
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.REACTIVACION)
         self.assertEqual(registro.usuario_id, gerente.pk)
         self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
-        self.assertEqual(registro.detalle, {"estado": ["inactivo", "activo"]})
+        self.assertEqual(registro.detalle, {"estado": ["inactivo", "activo"], "acceso": "temporal"})
         cuenta.refresh_from_db()
         contenido = contenido_de_auditoria(registro)
         self.assertNotIn(temporal, contenido)
@@ -459,14 +469,14 @@ class UsrModUsrServicioTests(TestCase):
             accion=RegistroAuditoria.Accion.RESTABLECIMIENTO
         )
         self.assertEqual(restablecimiento.afectados, [{"modelo": "core.usuario", "id": restablecida.pk}])
-        self.assertEqual(restablecimiento.detalle, {"sale_del_grupo": grupo_de_tres.pk})
+        self.assertEqual(restablecimiento.detalle, {"acceso": "temporal", "sale_del_grupo": grupo_de_tres.pk})
         reactivacion = RegistroAuditoria.objects.get(accion=RegistroAuditoria.Accion.REACTIVACION)
         self.assertEqual(
             {a["id"] for a in reactivacion.afectados}, {reactivada.pk, sola.pk}
         )
         self.assertEqual(
             reactivacion.detalle,
-            {"estado": ["inactivo", "activo"], "sale_del_grupo": grupo_de_dos.pk},
+            {"estado": ["inactivo", "activo"], "acceso": "temporal", "sale_del_grupo": grupo_de_dos.pk},
         )
 
     def test_regla_3_cambiar_el_email_no_afecta_las_cuentas_vinculadas(self):
@@ -636,7 +646,7 @@ class UsrModUsrServicioTests(TestCase):
 
         for cuenta in (gerente, otro_administrador):
             with self.subTest(cuenta=cuenta.email):
-                temporal = servicios.restablecer_contrasena(administrador, cuenta.pk)
+                temporal = servicios.restablecer_contrasena(administrador, cuenta.pk).contrasena_temporal
                 guardada = Usuario.objects.get(pk=cuenta.pk)
                 self.assertTrue(guardada.check_password(temporal))
                 self.assertFalse(guardada.check_password(CLAVE))
@@ -661,7 +671,7 @@ class UsrModUsrServicioTests(TestCase):
         inactivo.save()
         crear_gerente()
 
-        temporal = servicios.reactivar_usuario(administrador, inactivo.pk)
+        temporal = servicios.reactivar_usuario(administrador, inactivo.pk).contrasena_temporal
 
         guardada = Usuario.objects.get(pk=inactivo.pk)
         self.assertTrue(guardada.is_active)
@@ -695,7 +705,7 @@ class UsrModUsrServicioTests(TestCase):
         administrador = crear_administrador()
         inactivo = crear_gerente(activo=False)
 
-        temporal = servicios.reactivar_usuario(administrador, inactivo.pk)
+        temporal = servicios.reactivar_usuario(administrador, inactivo.pk).contrasena_temporal
 
         guardada = Usuario.objects.get(pk=inactivo.pk)
         self.assertTrue(guardada.is_active)
@@ -704,7 +714,7 @@ class UsrModUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.REACTIVACION)
         self.assertEqual(registro.rol, ADMINISTRADOR)
         self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": inactivo.pk}])
-        self.assertEqual(registro.detalle, {"estado": ["inactivo", "activo"]})
+        self.assertEqual(registro.detalle, {"estado": ["inactivo", "activo"], "acceso": "temporal"})
 
     def test_regla_5_integrity_error_de_un_solo_gerente_activo_da_gerente_activo(self):
         """USR-MOD-USR regla 5 y SEG-15 (D-30): si la base rechaza la reactivación por la restricción
@@ -747,6 +757,182 @@ class UsrModUsrServicioTests(TestCase):
                 self.assertEqual(contexto.exception.code, "no_se_pudo_reactivar")
                 self.assertFalse(Usuario.objects.get(pk=inactivo.pk).is_active)
         self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+
+    # ---- Restablecer el acceso con una invitación (tarea 08b, regla 4, 6, 10 y 11, D-35) ----
+
+    def restablecer_con(self, actor, cuenta, acceso):
+        """Restablece el acceso de ``cuenta`` con la forma indicada; devuelve el resultado del servicio."""
+        return servicios.restablecer_contrasena(actor, cuenta.pk, acceso=acceso, construir_url=construir_url)
+
+    def reactivar_con(self, actor, cuenta, acceso):
+        """Reactiva ``cuenta`` con la forma de acceso indicada; devuelve el resultado del servicio."""
+        return servicios.reactivar_usuario(actor, cuenta.pk, acceso=acceso, construir_url=construir_url)
+
+    def token_del_correo(self, mensaje=None):
+        """Token de invitación del último correo enviado (o del indicado)."""
+        mensaje = mensaje or mail.outbox[-1]
+        encontrado = PATRON_INVITACION.search(mensaje.body)
+        self.assertIsNotNone(encontrado, mensaje.body)
+        return encontrado.group(2)
+
+    @override_settings(CORREO_CONFIGURADO=True)
+    def test_regla_4_restablecer_con_invitacion_deja_la_anterior_sin_servir(self):
+        """USR-MOD-USR regla 4, postcondición b, SEG-20 y D-35: restablecer con invitación deja la cuenta sin
+        contraseña utilizable (la anterior deja de servir), sin temporal y con la invitación pendiente, y le envía
+        la invitación a su email."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        resultado = self.restablecer_con(gerente, cuenta, INVITACION)
+
+        cuenta = Usuario.objects.get(pk=cuenta.pk)
+        self.assertEqual(resultado.forma, INVITACION)
+        self.assertIsNone(resultado.contrasena_temporal)
+        self.assertTrue(resultado.invitacion_enviada)
+        self.assertFalse(cuenta.check_password(CLAVE))
+        self.assertFalse(cuenta.has_usable_password())
+        self.assertTrue(cuenta.tiene_invitacion_pendiente)
+        self.assertIsNone(cuenta.fecha_contrasena_temporal)
+        self.assertEqual([m.to for m in mail.outbox], [[cuenta.email]])
+        self.assertTrue(invitacion_valida(cuenta, self.token_del_correo()))
+
+    @override_settings(CORREO_CONFIGURADO=True)
+    def test_post_b_restablecer_con_invitacion_cierra_sesiones_y_saca_del_grupo(self):
+        """USR-MOD-USR postcondición b y SEG-11: con la invitación, como con la temporal, se cierran las sesiones
+        abiertas de la cuenta y la cuenta sale de su grupo de cuentas vinculadas."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        tercera = crear_cuenta(Vendedor, "tercera@infoponia.com", **LAURA)
+        grupo = agrupar(cuenta, otra, tercera)
+        sesion = Client()
+        sesion.force_login(cuenta)
+
+        self.restablecer_con(gerente, cuenta, INVITACION)
+
+        self.assertEqual(sesion.get(reverse("core:inicio")).status_code, 302)
+        self.assertIsNone(Usuario.objects.get(pk=cuenta.pk).grupo_id)
+        self.assertEqual(Usuario.objects.get(pk=otra.pk).grupo_id, grupo.pk)
+
+    @override_settings(CORREO_CONFIGURADO=True)
+    def test_regla_11_reenviar_la_invitacion_anula_el_enlace_anterior(self):
+        """USR-MOD-USR regla 11 y D-35: reenviar una invitación es restablecer el acceso eligiendo la invitación. El
+        enlace anterior deja de servir y el nuevo sirve."""
+        gerente = crear_gerente()
+        cuenta = dar_invitacion(crear_cuenta(Capataz, **LAURA))
+        anterior = token_de_invitacion(cuenta)
+
+        self.restablecer_con(gerente, cuenta, INVITACION)
+
+        self.assertFalse(invitacion_valida(cuenta, anterior))
+        self.assertTrue(invitacion_valida(cuenta, self.token_del_correo()))
+
+    @override_settings(CORREO_CONFIGURADO=True)
+    def test_regla_6_reactivar_con_invitacion(self):
+        """USR-MOD-USR regla 6, postcondición c y D-35: reactivar con invitación deja la cuenta activa, sin
+        contraseña utilizable y con la invitación pendiente, y le envía la invitación."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+
+        resultado = self.reactivar_con(gerente, cuenta, INVITACION)
+
+        cuenta = Usuario.objects.get(pk=cuenta.pk)
+        self.assertTrue(cuenta.is_active)
+        self.assertFalse(cuenta.has_usable_password())
+        self.assertTrue(cuenta.tiene_invitacion_pendiente)
+        self.assertIsNone(cuenta.fecha_contrasena_temporal)
+        self.assertEqual(resultado.forma, INVITACION)
+        self.assertTrue(invitacion_valida(cuenta, self.token_del_correo()))
+
+    @override_settings(CORREO_CONFIGURADO=True)
+    def test_post_d_restablecer_y_reactivar_auditan_la_forma_de_acceso(self):
+        """USR-MOD-USR postcondición d, SEG-14 y D-35: el restablecimiento y la reactivación guardan la forma de
+        acceso elegida en el detalle, sin contraseñas ni el token de la invitación."""
+        gerente = crear_gerente()
+        con_invitacion = crear_cuenta(Capataz, "invitada@infoponia.com", **LAURA)
+        con_temporal = crear_cuenta(Capataz, "temporal@infoponia.com", **LAURA)
+        reactivada = crear_cuenta(Capataz, "reactivada@infoponia.com", activo=False, **LAURA)
+
+        self.restablecer_con(gerente, con_invitacion, INVITACION)
+        token = self.token_del_correo()
+        temporal = self.restablecer_con(gerente, con_temporal, TEMPORAL).contrasena_temporal
+        self.reactivar_con(gerente, reactivada, INVITACION)
+
+        def registro(accion, cuenta):
+            return next(
+                r for r in RegistroAuditoria.objects.filter(accion=accion) if r.afectados[0]["id"] == cuenta.pk
+            )
+
+        restablecimiento = RegistroAuditoria.Accion.RESTABLECIMIENTO
+        self.assertEqual(registro(restablecimiento, con_invitacion).detalle, {"acceso": INVITACION})
+        self.assertEqual(registro(restablecimiento, con_temporal).detalle, {"acceso": TEMPORAL})
+        self.assertEqual(
+            registro(RegistroAuditoria.Accion.REACTIVACION, reactivada).detalle,
+            {"estado": ["inactivo", "activo"], "acceso": INVITACION},
+        )
+        for r in RegistroAuditoria.objects.all():
+            contenido = contenido_de_auditoria(r)
+            self.assertNotIn(token, contenido)
+            self.assertNotIn(temporal, contenido)
+
+    @override_settings(CORREO_CONFIGURADO=True)
+    def test_d35_restablecer_con_temporal_quita_la_invitacion_pendiente(self):
+        """D-35: restablecer con una contraseña temporal a una cuenta con la invitación pendiente le quita la
+        invitación (nunca tiene las dos) y el enlace de la invitación deja de servir."""
+        gerente = crear_gerente()
+        cuenta = dar_invitacion(crear_cuenta(Capataz, **LAURA))
+        anterior = token_de_invitacion(cuenta)
+
+        resultado = self.restablecer_con(gerente, cuenta, TEMPORAL)
+
+        cuenta = Usuario.objects.get(pk=cuenta.pk)
+        self.assertIsNone(cuenta.fecha_invitacion)
+        self.assertTrue(cuenta.tiene_contrasena_temporal)
+        self.assertTrue(cuenta.check_password(resultado.contrasena_temporal))
+        self.assertFalse(invitacion_valida(cuenta, anterior))
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(CORREO_CONFIGURADO=False)
+    def test_regla_10_sin_correo_restablecer_y_reactivar_rechazan_la_invitacion(self):
+        """USR-MOD-USR regla 4 (reglas 10 de USR-ALT-USR) y D-35: sin el envío de correo configurado, restablecer y
+        reactivar rechazan la invitación en el campo ``acceso`` («correo_no_configurado») aunque llegue en el
+        pedido, y no cambian nada."""
+        gerente = crear_gerente()
+        activa = crear_cuenta(Capataz, "activa@infoponia.com", **LAURA)
+        inactiva = crear_cuenta(Capataz, "inactiva@infoponia.com", activo=False, **LAURA)
+
+        for nombre, operacion in {
+            "restablecer": lambda: self.restablecer_con(gerente, activa, INVITACION),
+            "reactivar": lambda: self.reactivar_con(gerente, inactiva, INVITACION),
+        }.items():
+            with self.subTest(nombre):
+                with self.assertRaises(ValidationError) as contexto:
+                    operacion()
+                self.assertIn("correo_no_configurado", [e.code for e in contexto.exception.error_dict["acceso"]])
+
+        self.assertTrue(Usuario.objects.get(pk=activa.pk).check_password(CLAVE))
+        self.assertFalse(Usuario.objects.get(pk=inactiva.pk).is_active)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(CORREO_CONFIGURADO=True, EMAIL_BACKEND=BACKEND_QUE_FALLA)
+    def test_regla_11_si_falla_el_envio_el_acceso_se_restablece_igual(self):
+        """USR-MOD-USR regla 4 (regla 11 de USR-ALT-USR), SEG-12 y D-35: si el envío falla, el acceso se restablece
+        igual (la contraseña anterior ya no sirve y queda la invitación pendiente, auditada); el resultado lo
+        informa y la falla queda en los registros de errores, sin el enlace."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        with self.assertLogs("core.servicios", level="ERROR") as registros:
+            resultado = self.restablecer_con(gerente, cuenta, INVITACION)
+
+        self.assertFalse(resultado.invitacion_enviada)
+        cuenta = Usuario.objects.get(pk=cuenta.pk)
+        self.assertTrue(cuenta.tiene_invitacion_pendiente)
+        self.assertFalse(cuenta.check_password(CLAVE))
+        self.assertTrue(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.RESTABLECIMIENTO).exists())
+        self.assertNotIn("/invitacion/", "\n".join(registros.output))
 
 
 class UsrModUsrVistaTests(TestCase):
@@ -792,12 +978,12 @@ class UsrModUsrVistaTests(TestCase):
         ficha_activa = self.client.get(reverse("core:usuario", args=[activa.pk]))
         ficha_inactiva = self.client.get(reverse("core:usuario", args=[inactiva.pk]))
 
-        for texto in ("Restablecer contraseña", "Dar de baja", "Modificar datos"):
+        for texto in ("Restablecer acceso", "Dar de baja", "Modificar datos"):
             self.assertContains(ficha_activa, texto)
         self.assertNotContains(ficha_activa, "Reactivar cuenta")
         self.assertContains(ficha_inactiva, "Reactivar cuenta")
         self.assertContains(ficha_inactiva, "Modificar datos")
-        for texto in ("Restablecer contraseña", "Dar de baja"):
+        for texto in ("Restablecer acceso", "Dar de baja"):
             self.assertNotContains(ficha_inactiva, texto)
 
     def test_flujo_principal_abrir_la_confirmacion_no_cambia_nada(self):
@@ -810,7 +996,7 @@ class UsrModUsrVistaTests(TestCase):
         restablecer = self.client.get(reverse("core:usuario_restablecer", args=[activa.pk]))
         reactivar = self.client.get(reverse("core:usuario_reactivar", args=[inactiva.pk]))
 
-        self.assertContains(restablecer, "¿Restablecer la contraseña?")
+        self.assertContains(restablecer, "¿Restablecer el acceso?")
         self.assertContains(reactivar, "¿Reactivar la cuenta?")
         activa.refresh_from_db()
         inactiva.refresh_from_db()
@@ -828,11 +1014,11 @@ class UsrModUsrVistaTests(TestCase):
         parcial = self.client.get(url, headers={"HX-Request": "true"})
         entera = self.client.get(url)
 
-        self.assertContains(parcial, "¿Restablecer la contraseña?")
+        self.assertContains(parcial, "¿Restablecer el acceso?")
         self.assertContains(parcial, f'action="{url}"')
         self.assertNotContains(parcial, "<html")
         self.assertContains(entera, "<html")
-        self.assertContains(entera, "¿Restablecer la contraseña?")
+        self.assertContains(entera, "¿Restablecer el acceso?")
         self.assertContains(entera, "laura@infoponia.com")  # la ficha queda detrás de la ventana
 
     def test_flujo_principal_restablece_y_muestra_la_temporal(self):
@@ -849,7 +1035,7 @@ class UsrModUsrVistaTests(TestCase):
         temporal = respuesta.context["contrasena_temporal"]
         cuenta.refresh_from_db()
         self.assertTrue(cuenta.check_password(temporal))
-        self.assertContains(respuesta, "Contraseña restablecida")
+        self.assertContains(respuesta, "Acceso restablecido")
         self.assertContains(respuesta, temporal)
         self.assertIn("no-store", respuesta["Cache-Control"])
         self.assertNotContains(self.client.get(reverse("core:usuario", args=[cuenta.pk])), temporal)
@@ -870,7 +1056,7 @@ class UsrModUsrVistaTests(TestCase):
         self.assertTrue(cuenta.check_password(temporal))
         self.assertContains(respuesta, "Cuenta reactivada")
         self.assertContains(respuesta, temporal)
-        self.assertContains(respuesta, "Restablecer contraseña")  # la ficha detrás ya la muestra activa
+        self.assertContains(respuesta, "Restablecer acceso")  # la ficha detrás ya la muestra activa
         self.assertNotContains(self.client.get(reverse("core:usuario", args=[cuenta.pk])), temporal)
 
     def test_post_b_restablecer_cierra_la_sesion_de_la_cuenta(self):
@@ -1038,11 +1224,11 @@ class UsrModUsrVistaTests(TestCase):
         temporal = respuesta.context["contrasena_temporal"]
         gerente.refresh_from_db()
         self.assertTrue(gerente.check_password(temporal))
-        self.assertContains(respuesta, "Contraseña restablecida")
+        self.assertContains(respuesta, "Acceso restablecido")
         self.assertContains(respuesta, "(Gerente)")
 
     def test_regla_4_administrador_no_restablece_su_propia_contrasena_desde_la_pantalla(self):
-        """USR-MOD-USR regla 4 y D-30: la ficha propia no ofrece «Restablecer contraseña»; si igual se envía
+        """USR-MOD-USR regla 4 y D-30: la ficha propia no ofrece «Restablecer acceso»; si igual se envía
         el pedido a mano, el servicio lo rechaza, la ventana muestra el motivo y la contraseña no cambia."""
         administrador = self.entrar_como_administrador()
         crear_administrador(email="admin2@infoponia.com")
@@ -1050,7 +1236,7 @@ class UsrModUsrVistaTests(TestCase):
         ficha = self.client.get(reverse("core:usuario", args=[administrador.pk]))
         envio = self.client.post(reverse("core:usuario_restablecer", args=[administrador.pk]))
 
-        self.assertNotContains(ficha, "Restablecer contraseña")
+        self.assertNotContains(ficha, "Restablecer acceso")
         self.assertContains(envio, "No se restablece tu propia contraseña")
         self.assertNotIn("contrasena_temporal", envio.context)
         administrador.refresh_from_db()
@@ -1206,3 +1392,173 @@ class UsrModUsrConcurrenciaTests(TransactionTestCase):
         self.assertEqual(
             RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.MODIFICACION).count(), 2
         )
+
+
+@override_settings(CORREO_CONFIGURADO=True)
+class UsrModUsrAccesoVistaTests(TestCase):
+    """Integración de restablecer y reactivar con la forma de acceso (regla 4, 6, 10 y 11 de USR-MOD-USR, D-35): el
+    radio de la ventana, el resultado con la invitación, el aviso de la falla de envío y la temporal de siempre."""
+
+    HTMX = {"HX-Request": "true"}
+
+    def entrar_como_gerente(self):
+        """Crea un Gerente, abre su sesión en ``self.client`` y lo devuelve."""
+        gerente = crear_gerente()
+        self.client.force_login(gerente)
+        return gerente
+
+    def enviar(self, nombre_url, cuenta, **datos):
+        """Envía el formulario de la ventana de ``nombre_url`` («usuario_restablecer» o «usuario_reactivar»)."""
+        return self.client.post(reverse(f"core:{nombre_url}", args=[cuenta.pk]), datos)
+
+    def test_regla_4_la_ventana_de_restablecer_ofrece_la_forma_de_acceso(self):
+        """USR-MOD-USR regla 4 y D-35: con el correo configurado la ventana pregunta «¿Restablecer el acceso?» y
+        ofrece la invitación (marcada) y la contraseña temporal."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        for nombre in ("usuario_restablecer", "usuario_reactivar"):
+            with self.subTest(nombre):
+                if nombre == "usuario_reactivar":
+                    Usuario.objects.filter(pk=cuenta.pk).update(is_active=False)
+                ventana = self.client.get(reverse(f"core:{nombre}", args=[cuenta.pk]), headers=self.HTMX)
+                self.assertContains(ventana, 'name="acceso" value="invitacion" checked')
+                self.assertContains(ventana, 'name="acceso" value="temporal"')
+                self.assertNotContains(ventana, 'name="acceso" value="temporal" checked')
+
+    @override_settings(CORREO_CONFIGURADO=False)
+    def test_regla_10_sin_correo_la_ventana_solo_ofrece_la_temporal(self):
+        """USR-MOD-USR regla 4 (regla 10 de USR-ALT-USR) y D-35: sin el correo configurado la ventana no ofrece la
+        invitación: no hay campo y se explica que se genera una contraseña temporal."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        ventana = self.client.get(reverse("core:usuario_restablecer", args=[cuenta.pk]), headers=self.HTMX)
+
+        self.assertContains(ventana, "¿Restablecer el acceso?")
+        self.assertNotContains(ventana, 'name="acceso"')
+        self.assertContains(ventana, "no está disponible porque el envío de correo no está configurado")
+
+    def test_regla_4_restablecer_con_invitacion_muestra_el_resultado_y_envia_el_correo(self):
+        """USR-MOD-USR regla 4, postcondición b, regla 11 y D-35: restablecer con invitación muestra «Acceso
+        restablecido» con el mensaje pedido, envía el correo, deja la cuenta con la invitación pendiente (la
+        contraseña anterior ya no sirve) y NO muestra ninguna contraseña temporal."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        agrupar(cuenta, otra)
+
+        respuesta = self.enviar("usuario_restablecer", cuenta, acceso=INVITACION)
+
+        cuenta = Usuario.objects.get(pk=cuenta.pk)
+        self.assertTrue(cuenta.tiene_invitacion_pendiente)
+        self.assertFalse(cuenta.check_password(CLAVE))
+        self.assertTemplateUsed(respuesta, "core/usuarios/ficha.html")
+        self.assertContains(respuesta, "Acceso restablecido")
+        self.assertContains(respuesta, "salió de su grupo de cuentas vinculadas")
+        self.assertContains(
+            respuesta,
+            "Le enviamos una invitación a <b class=\"mono\">laura@infoponia.com</b>. Vence en 7 días. Si no le llega, "
+            "que revise la carpeta de Spam, o restablecé el acceso con una contraseña temporal.",
+        )
+        self.assertIsNone(respuesta.context["contrasena_temporal"])
+        self.assertNotContains(respuesta, "contrasena-temporal")
+        self.assertEqual([m.to for m in mail.outbox], [["laura@infoponia.com"]])
+
+    def test_regla_4_restablecer_con_temporal_con_correo_muestra_la_temporal(self):
+        """USR-MOD-USR regla 4 y D-35: eligiendo la contraseña temporal, aunque el correo esté configurado, se
+        muestra una vez (como siempre) y no se envía ningún correo."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        respuesta = self.enviar("usuario_restablecer", cuenta, acceso=TEMPORAL)
+
+        temporal = respuesta.context["contrasena_temporal"]
+        self.assertTrue(Usuario.objects.get(pk=cuenta.pk).check_password(temporal))
+        self.assertContains(respuesta, "Acceso restablecido")
+        self.assertContains(respuesta, temporal)
+        self.assertEqual(mail.outbox, [])
+
+    def test_regla_6_reactivar_con_invitacion_muestra_el_resultado(self):
+        """USR-MOD-USR regla 6, postcondición c y D-35: reactivar con invitación muestra «Cuenta reactivada» con el
+        mensaje de la invitación y deja la cuenta activa con la invitación pendiente."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+
+        respuesta = self.enviar("usuario_reactivar", cuenta, acceso=INVITACION)
+
+        cuenta = Usuario.objects.get(pk=cuenta.pk)
+        self.assertTrue(cuenta.is_active)
+        self.assertTrue(cuenta.tiene_invitacion_pendiente)
+        self.assertContains(respuesta, "Cuenta reactivada")
+        self.assertContains(respuesta, "Le enviamos una invitación a")
+        self.assertEqual([m.to for m in mail.outbox], [["laura@infoponia.com"]])
+
+    def test_regla_4_hay_que_elegir_la_forma_de_acceso(self):
+        """USR-MOD-USR regla 4 y D-35: con el correo configurado el campo es obligatorio: un pedido sin él muestra
+        el error en la ventana y no cambia nada."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        respuesta = self.enviar("usuario_restablecer", cuenta)
+
+        self.assertContains(respuesta, "Elegí cómo va a acceder la persona")
+        self.assertTrue(Usuario.objects.get(pk=cuenta.pk).check_password(CLAVE))
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(CORREO_CONFIGURADO=False)
+    def test_regla_10_sin_correo_una_invitacion_enviada_a_mano_se_rechaza(self):
+        """USR-MOD-USR regla 4 (regla 10 de USR-ALT-USR) y D-35: sin el correo configurado, un pedido con
+        ``acceso=invitacion`` muestra el motivo en la ventana y no cambia nada."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        respuesta = self.enviar("usuario_restablecer", cuenta, acceso=INVITACION)
+
+        self.assertContains(respuesta, "La invitación por correo no está disponible")
+        self.assertTrue(Usuario.objects.get(pk=cuenta.pk).check_password(CLAVE))
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    @override_settings(CORREO_CONFIGURADO=False)
+    def test_regla_10_sin_correo_restablecer_sin_elegir_da_la_temporal(self):
+        """USR-MOD-USR regla 4 y D-35: sin el correo configurado, el pedido sin forma de acceso (como el que arma la
+        ventana) restablece con la contraseña temporal de siempre."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        respuesta = self.enviar("usuario_restablecer", cuenta)
+
+        temporal = respuesta.context["contrasena_temporal"]
+        self.assertTrue(Usuario.objects.get(pk=cuenta.pk).check_password(temporal))
+
+    @override_settings(EMAIL_BACKEND=BACKEND_QUE_FALLA)
+    def test_regla_11_si_falla_el_envio_la_ventana_avisa_y_ofrece_restablecer(self):
+        """USR-MOD-USR regla 4 (regla 11 de USR-ALT-USR) y D-35: si el envío de la invitación falla, el acceso se
+        restablece igual y la ventana lo avisa con un aviso de error (no dice que se envió) que ofrece «Restablecer
+        acceso» para reenviarla."""
+        self.entrar_como_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        with self.assertLogs("core.servicios", level="ERROR"):
+            respuesta = self.enviar("usuario_restablecer", cuenta, acceso=INVITACION)
+
+        self.assertTrue(Usuario.objects.get(pk=cuenta.pk).tiene_invitacion_pendiente)
+        self.assertContains(respuesta, "No pudimos enviar la invitación")
+        self.assertNotContains(respuesta, "Le enviamos una invitación")
+        self.assertContains(respuesta, 'hx-target="#ventana-confirmar"')
+        self.assertContains(respuesta, "Restablecer acceso")
+
+    def test_regla_11_reenviar_una_invitacion_es_restablecer_el_acceso_otra_vez(self):
+        """USR-MOD-USR regla 11 y D-35: la ficha de una cuenta con la invitación pendiente sigue ofreciendo
+        «Restablecer acceso»; al elegir la invitación de nuevo, el enlace anterior deja de servir."""
+        self.entrar_como_gerente()
+        cuenta = dar_invitacion(crear_cuenta(Capataz, **LAURA))
+        anterior = token_de_invitacion(cuenta)
+
+        ficha = self.client.get(reverse("core:usuario", args=[cuenta.pk]))
+        self.enviar("usuario_restablecer", cuenta, acceso=INVITACION)
+
+        self.assertContains(ficha, "Restablecer acceso")
+        self.assertFalse(invitacion_valida(cuenta, anterior))
+        self.assertEqual(len(mail.outbox), 1)

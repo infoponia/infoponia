@@ -98,6 +98,7 @@ label.btn{cursor:pointer}
 .policy li.ok .dot{background:var(--status-ok);border-color:var(--status-ok)}
 .chk{display:flex;gap:8px;align-items:flex-start;font-size:13px}
 .chk input{margin-top:3px;width:15px;height:15px;accent-color:var(--primary)}
+.acceso-opciones{display:grid;gap:10px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .spacer{flex:1}
 .link{background:none;border:none;color:var(--primary);font-size:13px;text-decoration:underline;padding:0}

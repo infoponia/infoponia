@@ -1,0 +1,34 @@
+{% extends "core/base_sin_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Elegir la contraseña con el enlace de la invitación (SEG-20, D-35). Mismo estilo y técnica que la contraseña nueva
+de la recuperación (recuperar_elegir.html): el formulario se envía a esta misma URL, que no lleva el token (está en la
+sesión); la lista de requisitos la marca politica_contrasena.js y la validación es del servidor (SEG-03).{% endcomment %}
+{% block titulo %}Elegí tu contraseña · InfoPonia{% endblock %}
+{% block contenido %}
+<h1>Elegí tu contraseña</h1>
+<p class="lead">Elegí tu contraseña para empezar a usar InfoPonia.</p>
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+<div style="height:14px"></div>
+{% endif %}
+
+<form method="post" novalidate data-politica-contrasena>
+  {% csrf_token %}
+
+  {# Para que el administrador de contraseñas asocie la contraseña a esta cuenta; ver elegir_contrasena.html. #}
+  <input class="sr" type="text" name="username" value="{{ email_cuenta }}" autocomplete="username"
+         readonly tabindex="-1" aria-hidden="true">
+
+  <ul class="policy" aria-label="Requisitos de la contraseña">
+    <li data-requisito="largo"><span class="dot"></span>Al menos 8 caracteres</li>
+    <li data-requisito="no-numerica"><span class="dot"></span>No es solo números</li>
+  </ul>
+
+  {% include "core/_campo_contrasena.html" with campo=form.contrasena_nueva autocompletar="new-password" marca="data-contrasena-nueva" %}
+  {% include "core/_campo_contrasena.html" with campo=form.contrasena_repetida autocompletar="new-password" %}
+
+  <button class="btn btn-primary btn-block" type="submit">Guardar contraseña</button>
+</form>
+
+<script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>
+{% endblock %}

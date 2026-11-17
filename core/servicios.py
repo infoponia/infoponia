@@ -1,7 +1,8 @@
 # Servicios de core: un caso de uso por función, dentro de transaction.atomic(). Hoy: el cambio de
 # contraseña (USR-CMB-CTR), lo que necesita Mi perfil (USR-GST-PRF), la gestión de cuentas del Gerente y
 # del Administrador (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR), con los invariantes de SEG-15, y
-# las cuentas vinculadas (USR-VNC-CTA y SEG-09) y la recuperación de contraseña por correo (USR-RCP-CTR y SEG-12).
+# las cuentas vinculadas (USR-VNC-CTA y SEG-09), la recuperación de contraseña por correo (USR-RCP-CTR y SEG-12) y la
+# invitación por correo como forma de primer acceso (SEG-20, D-35).
 # Las vistas solo validan la entrada y llaman acá.
 
 import logging
@@ -34,6 +35,7 @@ from core.models import (
     Vendedor,
     rol_de,
 )
+from core.tokens import generador_invitacion
 from core.validadores import validar_telefono
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,16 @@ MENSAJE_YA_VINCULADA = "Esa cuenta ya está vinculada a la tuya."
 MENSAJE_CAMBIO_SIMULTANEO = "Las cuentas cambiaron mientras hacías esto. Volvé a intentarlo."
 MENSAJE_FUERA_DEL_GRUPO = "Esa cuenta no está en tu grupo de cuentas vinculadas."
 MENSAJE_CUENTA_NO_DISPONIBLE = "No se puede pasar a esa cuenta ahora: no está disponible."
+
+# Forma de primer acceso de una cuenta al darla de alta, restablecerla o reactivarla (regla 4 de USR-ALT-USR y de
+# USR-MOD-USR, SEG-04, SEG-20, D-35): una invitación por correo o una contraseña temporal.
+ACCESO_INVITACION = "invitacion"
+ACCESO_TEMPORAL = "temporal"
+FORMAS_DE_ACCESO = (ACCESO_INVITACION, ACCESO_TEMPORAL)
+# Lo que devuelven el alta, el restablecimiento y la reactivación sobre el acceso: la forma elegida, la contraseña
+# temporal (solo si se eligió; se muestra una vez y no se guarda) y si la invitación salió (regla 11: si falló, la
+# vista se lo avisa a quien gestiona la cuenta).
+ResultadoAcceso = namedtuple("ResultadoAcceso", "forma contrasena_temporal invitacion_enviada")
 
 # D-09 y SEG-15: nombre de la restricción de la base que impide un segundo Gerente activo (core/models.py).
 RESTRICCION_UN_SOLO_GERENTE_ACTIVO = "un_solo_gerente_activo"
@@ -488,12 +500,22 @@ def _limpiar_datos_personales(nombre, apellido, email, telefono):
     return nombre, apellido, email, telefono, errores
 
 
-def alta_usuario(actor, rol, nombre, apellido, email, telefono=""):
-    """USR-ALT-USR: da de alta una cuenta con la contraseña temporal que genera el Sistema.
+def alta_usuario(
+    actor, rol, nombre, apellido, email, telefono="", acceso=ACCESO_TEMPORAL, construir_url=None
+):
+    """USR-ALT-USR: da de alta una cuenta con la forma de primer acceso que elige quien la da de alta.
 
-    Devuelve ``(cuenta, contrasena_temporal)``; la temporal se muestra una sola vez a quien hizo el
-    alta (postcondición c) y no se guarda en ningún lado. No recibe contraseña: nadie elige la de
-    otra persona (regla 4, SEG-04).
+    Devuelve ``(cuenta, ResultadoAcceso)``. No recibe contraseña: nadie elige la de otra persona (regla 4, SEG-04,
+    SEG-20).
+
+    - Regla 4 (D-35): ``acceso`` es una invitación por correo (``ACCESO_INVITACION``: la cuenta queda sin
+      contraseña hasta que la persona la elija, postcondición a) o una contraseña temporal (``ACCESO_TEMPORAL``:
+      se muestra una sola vez a quien hizo el alta y no se guarda en ningún lado, postcondición c). Sin indicarla,
+      la temporal: las vistas siempre la pasan explícita.
+    - Regla 10: sin el correo configurado, la invitación se rechaza en el campo ``acceso``.
+    - Postcondición c y regla 11 (D-35, D-14): la invitación se envía DESPUÉS de confirmar la transacción; si el
+      envío falla, la cuenta queda creada con la invitación pendiente y ``invitacion_enviada`` es False.
+      ``construir_url`` arma la URL absoluta del enlace (la vista pasa ``request.build_absolute_uri``).
 
     - Precondición a: ``actor`` es un Gerente o un Administrador activos (D-16). Precondición b y
       regla 3: email único sin distinguir mayúsculas (SEG-01).
@@ -505,8 +527,8 @@ def alta_usuario(actor, rol, nombre, apellido, email, telefono=""):
     - Regla 7: nombre, apellido, email y rol obligatorios; el teléfono es opcional.
     - Regla 8: el email de una cuenta inactiva no crea otra (ver ``_error_de_email_repetido``).
     - Regla 9 y D-21/D-28: formato y largo del teléfono.
-    - Postcondiciones a y e (SEG-14, D-22): la cuenta y su registro de auditoría, sin contraseñas,
-      se guardan en la misma transacción.
+    - Postcondiciones a y e (SEG-14, D-22): la cuenta y su registro de auditoría, con la forma de acceso y sin
+      contraseñas ni el token, se guardan en la misma transacción.
 
     Pendiente: invernadero del Transportista (R155) y aviso al nuevo Gerente (postcondición d).
 
@@ -524,6 +546,10 @@ def alta_usuario(actor, rol, nombre, apellido, email, telefono=""):
         errores["rol"] = [ValidationError("Elegí el rol.", code="required")]
     elif rol not in clases:
         errores["rol"] = [ValidationError("Ese rol no se puede dar de alta acá.", code="rol_invalido")]
+    # Regla 4 y regla 10: la forma de acceso, junto con los demás errores.
+    errores_de_acceso = _errores_de_forma_de_acceso(acceso)
+    if errores_de_acceso:
+        errores["acceso"] = errores_de_acceso
 
     with transaction.atomic():
         if rol == Usuario.Rol.GERENTE and "rol" not in errores:
@@ -540,8 +566,8 @@ def alta_usuario(actor, rol, nombre, apellido, email, telefono=""):
         cuenta = clases[rol](
             email=email, first_name=nombre, last_name=apellido, telefono=telefono, is_active=True
         )
-        # Regla 4, SEG-04 y D-18: la temporal la genera el modelo; acá solo se guarda.
-        contrasena_temporal = cuenta.asignar_contrasena_temporal()
+        # Regla 4, SEG-04, SEG-20, D-18 y D-35: la temporal o la invitación las prepara el modelo; acá se guardan.
+        contrasena_temporal = _preparar_acceso(cuenta, acceso)
         try:
             # Savepoint: si una operación simultánea ganó de mano, la base rechaza esta alta y se informa
             # el motivo en vez de un error 500. Sin Gerentes previos no hay filas que bloquear y el
@@ -561,9 +587,16 @@ def alta_usuario(actor, rol, nombre, apellido, email, telefono=""):
             usuario=actor,
             accion=RegistroAuditoria.Accion.ALTA,
             afectados=[cuenta],
-            detalle={"rol": rol, "email": email, "nombre": nombre, "apellido": apellido},
+            detalle={
+                "rol": rol,
+                "email": email,
+                "nombre": nombre,
+                "apellido": apellido,
+                "acceso": acceso,
+            },
         )
-    return cuenta, contrasena_temporal
+    # Fuera de la transacción (D-14): la cuenta ya está confirmada.
+    return cuenta, _resultado_acceso(cuenta, acceso, contrasena_temporal, construir_url)
 
 
 def _error_general(mensaje, codigo):
@@ -730,11 +763,15 @@ def _auditar_con_salida_del_grupo(actor, accion, cuenta, salida, detalle=None):
     )
 
 
-def restablecer_contrasena(actor, cuenta_id):
-    """USR-MOD-USR: genera una contraseña temporal nueva para una cuenta activa y la devuelve.
+def restablecer_contrasena(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=None):
+    """USR-MOD-USR: restablece el acceso de una cuenta activa y devuelve un ``ResultadoAcceso``.
 
-    - Regla 4, SEG-04 y D-18: la genera el Sistema (no recibe contraseña, nadie elige la de otra
-      persona), vence a los 7 días y se muestra una sola vez a quien la restablece.
+    - Regla 4, SEG-04, SEG-20 y D-35: con una invitación por correo (la cuenta queda sin contraseña hasta que la
+      persona la elija) o con una contraseña temporal que genera el Sistema (no recibe contraseña, nadie elige la
+      de otra persona), que vence a los 7 días y se muestra una sola vez a quien la restablece. Las mismas reglas
+      que el alta: sin el correo configurado se rechaza la invitación (regla 10 de USR-ALT-USR) y, si el envío
+      falla, el acceso se restablece igual (regla 11). Restablecer con otra invitación es reenviarla (regla 11 de
+      USR-MOD-USR): el enlace anterior deja de servir. La invitación se envía después de confirmar (D-14).
     - Postcondición b y SEG-11: al cambiar el resumen de la contraseña, las sesiones abiertas con la
       cuenta dejan de ser válidas (Django compara ese resumen en cada pedido).
     - Regla 1: el Gerente no restablece su propia contraseña (no está en su alcance).
@@ -746,6 +783,7 @@ def restablecer_contrasena(actor, cuenta_id):
       queda con una sola cuenta, se disuelve. Se bloquea el grupo antes que la cuenta (``cuida_grupo``); si su
       grupo cambió en el intervalo, «cambio_simultaneo». La auditoría suma ``sale_del_grupo``.
     """
+    _exigir_forma_de_acceso(acceso)
     with transaction.atomic():
         cuenta = _bloquear_cuenta_en_alcance(
             actor,
@@ -763,21 +801,21 @@ def restablecer_contrasena(actor, cuenta_id):
                 "La cuenta está inactiva: reactivala para generarle una contraseña temporal.",
                 code="cuenta_inactiva",
             )
-        temporal = cuenta.asignar_contrasena_temporal()
-        cuenta.save(update_fields=["password", "fecha_contrasena_temporal"])
+        temporal = _preparar_acceso(cuenta, acceso)
+        cuenta.save(update_fields=["password", "fecha_contrasena_temporal", "fecha_invitacion"])
         # Postcondición b de USR-MOD-USR y SEG-11: la cuenta sale de su grupo de cuentas vinculadas.
         salida = _sacar_del_grupo(cuenta)
         _auditar_con_salida_del_grupo(
-            actor, RegistroAuditoria.Accion.RESTABLECIMIENTO, cuenta, salida
+            actor, RegistroAuditoria.Accion.RESTABLECIMIENTO, cuenta, salida, detalle={"acceso": acceso}
         )
-    return temporal
+    return _resultado_acceso(cuenta, acceso, temporal, construir_url)
 
 
-def reactivar_usuario(actor, cuenta_id):
-    """USR-MOD-USR: reactiva una cuenta inactiva con una contraseña temporal nueva, que devuelve.
+def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=None):
+    """USR-MOD-USR: reactiva una cuenta inactiva y restablece su acceso; devuelve un ``ResultadoAcceso``.
 
-    - Postcondición c y regla 6: la cuenta queda activa y su contraseña se restablece como en
-      ``restablecer_contrasena`` (SEG-04, SEG-11).
+    - Postcondición c y regla 6: la cuenta queda activa y su acceso se restablece como en
+      ``restablecer_contrasena``, con una invitación o una contraseña temporal (SEG-04, SEG-11, SEG-20, D-35).
     - D-28: solo para cuentas inactivas.
     - Regla 5, D-09 y SEG-15: solo se reactiva un Gerente si no hay otro activo. Se bloquean todas las
       filas de Gerente (antes que la cuenta) y después se busca al Gerente activo en una consulta aparte;
@@ -789,6 +827,7 @@ def reactivar_usuario(actor, cuenta_id):
       grupo de cuentas vinculadas (la baja no la había sacado: regla 2 de USR-BAJ-USR). Orden de los
       bloqueos: el grupo de cuentas, después las filas de Gerente, después la cuenta.
     """
+    _exigir_forma_de_acceso(acceso)
     with transaction.atomic():
         cuenta = _bloquear_cuenta_en_alcance(
             actor,
@@ -803,12 +842,14 @@ def reactivar_usuario(actor, cuenta_id):
             if activo is not None:
                 raise _error_gerente_activo(activo, reactivando=True)
         cuenta.is_active = True
-        temporal = cuenta.asignar_contrasena_temporal()
+        temporal = _preparar_acceso(cuenta, acceso)
         try:
             # Savepoint: si una operación simultánea ganó de mano, la base rechaza esta reactivación y
             # se informa el motivo en vez de un error 500.
             with transaction.atomic():
-                cuenta.save(update_fields=["is_active", "password", "fecha_contrasena_temporal"])
+                cuenta.save(
+                    update_fields=["is_active", "password", "fecha_contrasena_temporal", "fecha_invitacion"]
+                )
         except IntegrityError as error:
             if _nombre_de_restriccion(error) == RESTRICCION_UN_SOLO_GERENTE_ACTIVO:
                 raise _error_gerente_activo(reactivando=True) from error
@@ -822,9 +863,9 @@ def reactivar_usuario(actor, cuenta_id):
             RegistroAuditoria.Accion.REACTIVACION,
             cuenta,
             salida,
-            detalle={"estado": ["inactivo", "activo"]},
+            detalle={"estado": ["inactivo", "activo"], "acceso": acceso},
         )
-    return temporal
+    return _resultado_acceso(cuenta, acceso, temporal, construir_url)
 
 
 def baja_usuario(actor, cuenta_id):
@@ -1176,16 +1217,46 @@ def _error_enlace_invalido():
     return ValidationError(MENSAJE_ENLACE_INVALIDO, code="enlace_invalido")
 
 
+def _enviar_correo(cuenta, asunto, plantilla, contexto):
+    """Envía a ``cuenta`` un correo en texto plano con ``plantilla`` y devuelve True si salió (D-33, D-35).
+
+    Si el envío falla, la falla queda en los registros de errores (``logger.exception``) con el id de la cuenta y
+    nunca con el contenido del correo, que lleva un enlace que da acceso a la cuenta (SEG-12, regla 11 de
+    USR-ALT-USR); devuelve False y quien llama decide qué ver la persona. Se llama siempre fuera de una transacción:
+    un servidor SMTP lento (hasta ``EMAIL_TIMEOUT``) no puede mantener bloqueos tomados (D-14).
+    """
+    cuerpo = render_to_string(plantilla, {**contexto, "nombre_organizacion": settings.NOMBRE_ORGANIZACION})
+    try:
+        send_mail(asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, [cuenta.email])
+    except Exception:
+        logger.exception("No se pudo enviar el correo «%s» a la cuenta %s.", asunto, cuenta.pk)
+        return False
+    return True
+
+
+def _ruta_del_enlace(nombre_url, cuenta, generador):
+    """Ruta (sin dominio) de un enlace con el id de la cuenta y un token de ``generador``. La ruta existe en un solo
+    lugar, core/urls.py; la base absoluta la pone quien llama (``construir_url``)."""
+    return reverse(
+        nombre_url,
+        kwargs={
+            "uidb64": urlsafe_base64_encode(force_bytes(cuenta.pk)),
+            "token": generador.make_token(cuenta),
+        },
+    )
+
+
 def pedir_recuperacion(email, construir_url):
     """USR-RCP-CTR: envía a ``email`` un enlace para elegir una contraseña nueva, si hay una cuenta activa con él.
 
     - Precondición a y regla 5: sin el correo configurado, ``ValidationError`` («correo_no_configurado»).
     - Regla 2 y SEG-12: no devuelve nada, y no hace nada distinto exista o no la cuenta, así que quien llama no
       puede distinguir los casos. Una cuenta inactiva no recibe nada. El email se compara sin distinguir
-      mayúsculas (SEG-01). Pueden recuperar las cuentas activas de cualquier rol y los Administradores (D-34).
+      mayúsculas (SEG-01). Pueden recuperar las cuentas activas de cualquier rol y los Administradores (D-34),
+      también las que tienen una invitación pendiente (SEG-20: el resultado es el mismo que aceptarla).
     - Regla 1: el enlace lleva el id de la cuenta y un token de un solo uso que vence a la hora.
     - SEG-12: si el envío falla, la persona recibe la misma respuesta y la falla queda en los registros de errores
-      (``logger.exception``), con el id de la cuenta y nunca el enlace ni el token, que dan acceso a la cuenta.
+      (``_enviar_correo``), sin el enlace.
     - ``construir_url(ruta)`` convierte la ruta en una URL absoluta (la vista pasa ``request.build_absolute_uri``,
       que da https detrás del proxy de Render); así el servicio no depende del pedido.
 
@@ -1196,27 +1267,35 @@ def pedir_recuperacion(email, construir_url):
     cuenta = Usuario.objects.filter(email__iexact=(email or "").strip(), is_active=True).first()
     if cuenta is None:
         return None
-    # La ruta existe en un solo lugar: core/urls.py. ``construir_url`` le pone la base absoluta.
-    ruta = reverse(
-        "core:recuperacion_enlace",
-        kwargs={
-            "uidb64": urlsafe_base64_encode(force_bytes(cuenta.pk)),
-            "token": default_token_generator.make_token(cuenta),
-        },
-    )
-    cuerpo = render_to_string(
+    enlace = construir_url(_ruta_del_enlace("core:recuperacion_enlace", cuenta, default_token_generator))
+    _enviar_correo(
+        cuenta,
+        ASUNTO_RECUPERACION,
         "core/correos/recuperar_contrasena.txt",
-        {
-            "nombre": cuenta.first_name,
-            "enlace": construir_url(ruta),
-            "nombre_organizacion": settings.NOMBRE_ORGANIZACION,
-        },
+        {"nombre": cuenta.first_name, "enlace": enlace},
     )
-    try:
-        send_mail(ASUNTO_RECUPERACION, cuerpo, settings.DEFAULT_FROM_EMAIL, [cuenta.email])
-    except Exception:
-        logger.exception("No se pudo enviar el correo de recuperación de contraseña a la cuenta %s.", cuenta.pk)
     return None
+
+
+def _cuenta_del_token(uidb64, token, generador, exige_invitacion):
+    """La cuenta activa de ``uidb64`` si ``token`` es válido para ella con ``generador`` (y, si
+    ``exige_invitacion``, si tiene la invitación pendiente); si no, ``None``. Lectura sin bloqueo."""
+    try:
+        cuenta_id = int(force_str(urlsafe_base64_decode(uidb64)))
+    except (TypeError, ValueError, OverflowError, UnicodeDecodeError):
+        return None
+    cuenta = Usuario.objects.filter(pk=cuenta_id, is_active=True).first()
+    if cuenta is None or not _enlace_vigente(cuenta, token, generador, exige_invitacion):
+        return None
+    return cuenta
+
+
+def _enlace_vigente(cuenta, token, generador, exige_invitacion):
+    """True si ``cuenta`` está activa, el token es válido con ``generador`` y, si ``exige_invitacion``, la cuenta
+    todavía tiene la invitación pendiente. Es la regla del enlace de un solo uso (D-34, D-35)."""
+    if not cuenta.is_active or not generador.check_token(cuenta, token):
+        return False
+    return cuenta.tiene_invitacion_pendiente or not exige_invitacion
 
 
 def cuenta_del_enlace(uidb64, token):
@@ -1227,37 +1306,32 @@ def cuenta_del_enlace(uidb64, token):
     (usado, vencido o alterado). No decide el cambio: ``confirmar_recuperacion`` vuelve a validar todo con la cuenta
     bloqueada.
     """
-    try:
-        cuenta_id = int(force_str(urlsafe_base64_decode(uidb64)))
-    except (TypeError, ValueError, OverflowError, UnicodeDecodeError):
-        return None
-    cuenta = Usuario.objects.filter(pk=cuenta_id, is_active=True).first()
-    if cuenta is None or not default_token_generator.check_token(cuenta, token):
-        return None
-    return cuenta
+    return _cuenta_del_token(uidb64, token, default_token_generator, exige_invitacion=False)
 
 
-def confirmar_recuperacion(cuenta_id, token, contrasena_nueva):
-    """USR-RCP-CTR: la persona elige una contraseña nueva con el enlace que recibió por correo.
+def cuenta_de_la_invitacion(uidb64, token):
+    """La cuenta a la que pertenece un enlace de invitación válido, o ``None`` (SEG-20, D-35). Como
+    ``cuenta_del_enlace``, con el generador de la invitación y exigiendo que la invitación siga pendiente."""
+    return _cuenta_del_token(uidb64, token, generador_invitacion, exige_invitacion=True)
 
-    - Precondición a y regla 5: sin el correo configurado, ``ValidationError`` («correo_no_configurado»).
-    - Regla 1 y SEG-12: el enlace es de un solo uso. La cuenta se bloquea (``FOR NO KEY UPDATE``, D-32) y DESPUÉS
-      de bloquear se vuelve a validar que el token siga siendo válido y que la cuenta siga activa. Validar solo
-      antes (o solo en la vista) no alcanza: dos pedidos simultáneos con el mismo enlace pasarían los dos; el
-      segundo, que esperó el bloqueo, relee la cuenta con el resumen de contraseña nuevo y el token ya no vale.
-      Un enlace usado, vencido, alterado o de una cuenta inactiva da «enlace_invalido» (D-34).
-    - Regla 4 y SEG-03: la contraseña nueva cumple la política (``validate_password``, incluida «distinta de la
-      actual»); los errores van en el campo ``contrasena_nueva`` y no cambia nada. La vacía se controla acá porque
-      ``validate_password`` no la rechaza con un mensaje propio; se usa el mismo mensaje que ``cambiar_contrasena``.
-    - Postcondiciones a y b: guarda la contraseña y deja ``fecha_contrasena_temporal`` en ``None``; una temporal,
-      aunque esté vencida, puede recuperar.
-    - Postcondición c: al cambiar el resumen de la contraseña, Django invalida todas las sesiones abiertas de la
-      cuenta (el mismo mecanismo que ``restablecer_contrasena``).
-    - Regla 3: no genera una contraseña temporal y no toca el grupo de cuentas vinculadas.
-    - Postcondición d, SEG-14 y D-22: auditoría en la misma transacción; el usuario y el rol registrados son los de
-      la cuenta afectada. Sin contraseñas ni el token.
+
+def _elegir_contrasena_con_enlace(cuenta_id, token, contrasena_nueva, generador, accion, exige_invitacion):
+    """La persona elige su contraseña con un enlace de un solo uso que recibió por correo (D-34, D-35). La usan la
+    recuperación (USR-RCP-CTR) y la aceptación de la invitación (SEG-20), para que la regla delicada esté en un
+    solo lugar.
+
+    - Dentro de ``transaction.atomic()``: se bloquea la cuenta (``FOR NO KEY UPDATE``, D-32) y DESPUÉS de bloquear
+      se vuelve a validar el enlace (``_enlace_vigente``). Validar solo antes, o solo en la vista, no alcanza: dos
+      pedidos simultáneos con el mismo enlace pasarían los dos; el segundo, que esperó el bloqueo, relee la cuenta
+      con el resumen de contraseña nuevo y el token ya no vale («enlace_invalido»).
+    - SEG-03: la vacía con el mismo mensaje que ``cambiar_contrasena`` y el formulario; el resto con
+      ``validate_password`` (incluida «distinta de la actual»). Los errores van en ``contrasena_nueva``.
+    - Guarda la contraseña y deja sin contraseña temporal y sin invitación pendiente (una cuenta nunca tiene las dos
+      fechas, D-35). Al cambiar el resumen, Django cierra todas las sesiones de la cuenta. No toca el grupo de
+      cuentas vinculadas.
+    - Auditoría en la misma transacción con ``accion``; usuario y rol, los de la cuenta afectada (D-22). El detalle
+      dice si la contraseña era temporal y si había una invitación pendiente; nunca contraseñas ni el token.
     """
-    _exigir_correo_configurado()
     with transaction.atomic():
         cuenta = (
             Usuario.objects.select_for_update(no_key=True).filter(pk=cuenta_id).first()
@@ -1265,7 +1339,7 @@ def confirmar_recuperacion(cuenta_id, token, contrasena_nueva):
             else None
         )
         # Después de bloquear: con la fila releída, el token y el estado de la cuenta son los reales.
-        if cuenta is None or not cuenta.is_active or not default_token_generator.check_token(cuenta, token):
+        if cuenta is None or not _enlace_vigente(cuenta, token, generador, exige_invitacion):
             raise _error_enlace_invalido()
 
         if not contrasena_nueva:
@@ -1277,14 +1351,148 @@ def confirmar_recuperacion(cuenta_id, token, contrasena_nueva):
         except ValidationError as error:
             raise ValidationError({"contrasena_nueva": error.error_list}) from error
 
-        era_temporal = cuenta.tiene_contrasena_temporal
+        detalle = {
+            "era_temporal": cuenta.tiene_contrasena_temporal,
+            "invitacion_pendiente": cuenta.tiene_invitacion_pendiente,
+        }
         cuenta.set_password(contrasena_nueva)
         cuenta.fecha_contrasena_temporal = None
-        cuenta.save(update_fields=["password", "fecha_contrasena_temporal"])
+        cuenta.fecha_invitacion = None
+        cuenta.save(update_fields=["password", "fecha_contrasena_temporal", "fecha_invitacion"])
         RegistroAuditoria.objects.registrar(
-            usuario=cuenta,
-            accion=RegistroAuditoria.Accion.RECUPERACION_CONTRASENA,
-            afectados=[cuenta],
-            detalle={"era_temporal": era_temporal},
+            usuario=cuenta, accion=accion, afectados=[cuenta], detalle=detalle
         )
     return cuenta
+
+
+def confirmar_recuperacion(cuenta_id, token, contrasena_nueva):
+    """USR-RCP-CTR: la persona elige una contraseña nueva con el enlace de recuperación que recibió por correo.
+
+    - Precondición a y regla 5: sin el correo configurado, ``ValidationError`` («correo_no_configurado»).
+    - Regla 1 y SEG-12: enlace de un solo uso, revalidado después de bloquear la cuenta; un enlace usado, vencido,
+      alterado o de una cuenta inactiva da «enlace_invalido» (D-34).
+    - Regla 4 y SEG-03: política de contraseñas.
+    - Postcondiciones a, b y c: contraseña nueva, sin temporal (aunque estuviera vencida) y sin invitación pendiente
+      (SEG-20), con las sesiones cerradas. Regla 3: no genera temporal ni toca las cuentas vinculadas.
+    - Postcondición d: auditoría con la cuenta afectada. Todo esto lo hace ``_elegir_contrasena_con_enlace``.
+    """
+    _exigir_correo_configurado()
+    return _elegir_contrasena_con_enlace(
+        cuenta_id,
+        token,
+        contrasena_nueva,
+        default_token_generator,
+        RegistroAuditoria.Accion.RECUPERACION_CONTRASENA,
+        exige_invitacion=False,
+    )
+
+
+def confirmar_invitacion(cuenta_id, token, contrasena_nueva):
+    """SEG-20: la persona elige su contraseña con el enlace de la invitación y empieza a usar el Sistema (D-35).
+
+    Mismo patrón que la recuperación (``_elegir_contrasena_con_enlace``): enlace de un solo uso revalidado después
+    de bloquear la cuenta, que además tiene que seguir con la invitación pendiente; vence a los 7 días
+    (``core/tokens.py``); SEG-03; la contraseña elegida no queda temporal; auditoría «aceptacion_invitacion» con la
+    cuenta afectada. No exige el correo configurado: aceptar no envía nada, así que una invitación ya enviada se
+    puede aceptar aunque el correo deje de estar configurado.
+    """
+    return _elegir_contrasena_con_enlace(
+        cuenta_id,
+        token,
+        contrasena_nueva,
+        generador_invitacion,
+        RegistroAuditoria.Accion.ACEPTACION_INVITACION,
+        exige_invitacion=True,
+    )
+
+
+# ---- Forma de primer acceso: invitación por correo o contraseña temporal (SEG-04, SEG-20, tarea 08b, D-35) ----
+
+ASUNTO_INVITACION = "Te invitamos a InfoPonia"
+MENSAJE_ACCESO_INVALIDO = "Elegí cómo va a acceder la persona: con una invitación por correo o con una contraseña temporal."
+MENSAJE_INVITACION_NO_DISPONIBLE = (
+    "La invitación por correo no está disponible: el envío de correo no está configurado. "
+    "Elegí la contraseña temporal."
+)
+
+
+def acceso_del_pedido(valor):
+    """El valor del campo ``acceso`` de un pedido, listo para pasarlo al servicio (D-35).
+
+    Sin el correo configurado la pantalla no ofrece elegir (solo la contraseña temporal), así que un pedido sin
+    el campo es la temporal. Con el correo configurado el campo es obligatorio: vacío se pasa tal cual y el servicio
+    lo rechaza («acceso_invalido»). Un valor presente (por ejemplo, «invitacion» enviado a mano sin el correo
+    configurado) se pasa también tal cual: lo juzga el servicio, no esta función.
+    """
+    valor = (valor or "").strip()
+    if not valor and not settings.CORREO_CONFIGURADO:
+        return ACCESO_TEMPORAL
+    return valor
+
+
+def _errores_de_forma_de_acceso(acceso):
+    """Errores del campo ``acceso`` (regla 4 y regla 10 de USR-ALT-USR, D-35), o una lista vacía.
+
+    Una forma que no es invitación ni temporal da «acceso_invalido». La invitación sin el correo configurado da
+    «correo_no_configurado»: el servidor la rechaza aunque llegue en el pedido, porque la pantalla no la ofrece.
+    """
+    if acceso not in FORMAS_DE_ACCESO:
+        return [ValidationError(MENSAJE_ACCESO_INVALIDO, code="acceso_invalido")]
+    if acceso == ACCESO_INVITACION and not settings.CORREO_CONFIGURADO:
+        return [ValidationError(MENSAJE_INVITACION_NO_DISPONIBLE, code="correo_no_configurado")]
+    return []
+
+
+def _exigir_forma_de_acceso(acceso):
+    """Rechaza la forma de acceso con ``ValidationError`` en el campo ``acceso`` si no es válida (antes de bloquear
+    nada: no hace falta mirar la cuenta para saberlo)."""
+    errores = _errores_de_forma_de_acceso(acceso)
+    if errores:
+        raise ValidationError({"acceso": errores})
+
+
+def _preparar_acceso(cuenta, acceso):
+    """Deja en la instancia ``cuenta`` el acceso elegido, sin grabarlo, y devuelve la contraseña temporal o ``None``.
+
+    Con la invitación, la cuenta queda sin contraseña utilizable (la anterior deja de servir y sus sesiones se
+    cierran) y sin temporal; con la temporal, sin invitación pendiente. Nunca las dos (D-35)."""
+    if acceso == ACCESO_INVITACION:
+        cuenta.asignar_invitacion()
+        return None
+    return cuenta.asignar_contrasena_temporal()
+
+
+def _resultado_acceso(cuenta, acceso, contrasena_temporal, construir_url):
+    """Arma el ``ResultadoAcceso`` y, con la invitación, la envía. Se llama DESPUÉS de confirmar la transacción
+    (D-14, D-35): el correo nunca sale para una cuenta que después se deshizo, y un servidor SMTP lento no mantiene
+    bloqueos tomados."""
+    enviada = False
+    if acceso == ACCESO_INVITACION:
+        enviada = _enviar_invitacion(cuenta, construir_url)
+    return ResultadoAcceso(acceso, contrasena_temporal, enviada)
+
+
+def _enviar_invitacion(cuenta, construir_url):
+    """Envía la invitación a la cuenta (SEG-20, postcondición c de USR-ALT-USR) y devuelve True si salió.
+
+    El correo saluda con el nombre, dice que se le creó una cuenta con su rol, trae el enlace y dice que vence en 7
+    días, que sirve una sola vez y que, si no la esperaba, lo ignore. Si falla, regla 11: queda en los registros de
+    errores sin el enlace y devuelve False.
+    """
+    # Se lee de la base para firmar con la fecha de la invitación tal como quedó guardada.
+    cuenta = Usuario.objects.get(pk=cuenta.pk)
+    enlace = construir_url(_ruta_del_enlace("core:invitacion_enlace", cuenta, generador_invitacion))
+    return _enviar_correo(
+        cuenta,
+        ASUNTO_INVITACION,
+        "core/correos/invitacion.txt",
+        {"nombre": cuenta.first_name, "rol": _rol_para_el_correo(cuenta), "enlace": enlace},
+    )
+
+
+def _rol_para_el_correo(cuenta):
+    """El rol de la cuenta como lo lee la persona: «Administrador» para el Administrador (D-10), el nombre del rol
+    para los demás."""
+    if cuenta.is_superuser:
+        return "Administrador"
+    return Usuario.Rol(cuenta.rol).label

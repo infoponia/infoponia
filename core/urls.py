@@ -18,6 +18,10 @@ urlpatterns = [
     path("recuperar-contrasena/enviado/", views.recuperacion_enviada, name="recuperacion_enviada"),
     path("recuperar-contrasena/<str:uidb64>/elegir/", views.recuperacion_elegir, name="recuperacion_elegir"),
     path("recuperar-contrasena/<str:uidb64>/<str:token>/", views.recuperacion_enlace, name="recuperacion_enlace"),
+    # Aceptar la invitación por correo (SEG-20; tarea 08b, D-35). Como en la recuperación, la de ``elegir`` va antes
+    # de la del token.
+    path("invitacion/<str:uidb64>/elegir/", views.invitacion_elegir, name="invitacion_elegir"),
+    path("invitacion/<str:uidb64>/<str:token>/", views.invitacion_enlace, name="invitacion_enlace"),
     # Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR; tarea 06a).
     path("mi-perfil/", views.mi_perfil, name="mi_perfil"),
     path("mi-perfil/contrasena/", views.cambiar_mi_contrasena, name="cambiar_mi_contrasena"),

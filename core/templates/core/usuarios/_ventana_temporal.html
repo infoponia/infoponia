@@ -10,7 +10,7 @@ existe en la respuesta que incluye esta ventana: no se guarda en ningún lado. B
     <h2 id="ventana-titulo">Cuenta creada</h2>
     <p>Esta es la contraseña temporal de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}). Pasásela por un medio seguro: no se vuelve a mostrar.</p>
     {% elif modo == "restablecer" %}
-    <h2 id="ventana-titulo">Contraseña restablecida</h2>
+    <h2 id="ventana-titulo">Acceso restablecido</h2>
     <p>Se cerraron las sesiones abiertas de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}){% if tenia_grupo %} y la cuenta salió de su grupo de cuentas vinculadas{% endif %}. Esta es su nueva contraseña temporal:</p>
     {% else %}
     <h2 id="ventana-titulo">Cuenta reactivada</h2>

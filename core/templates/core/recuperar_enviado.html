@@ -5,7 +5,7 @@ exista o no la cuenta (regla 2, SEG-12) y no repite el email escrito (ver la vis
 {% block contenido %}
 <h1>Revisá tu correo</h1>
 <p class="lead">Si el email que ingresaste corresponde a una cuenta, te enviamos un enlace para elegir una contraseña nueva. El enlace se puede usar una sola vez y vence en 1 hora.</p>
-<p class="hint">¿No te llegó? Revisá la carpeta de correo no deseado o pedí otro enlace.</p>
+<p class="hint">¿No te llegó? Revisá la carpeta de Spam (correo no deseado) o pedí otro enlace.</p>
 <div class="row" style="margin-top:14px">
   <a class="btn btn-ghost" href="{% url 'core:recuperar_contrasena' %}">Pedir otro enlace</a>
   <a class="btn btn-primary" href="{% url 'core:iniciar_sesion' %}">Volver a iniciar sesión</a>

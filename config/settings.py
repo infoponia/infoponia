@@ -208,6 +208,11 @@ if CORREO_CONSOLA:
 # SEG-12: única fuente de verdad de si la recuperación por correo está disponible. El código la lee de settings en
 # cada pedido (así las pruebas la cambian con override_settings).
 CORREO_CONFIGURADO = correo_configurado(os.environ, DEBUG)
+# D-35: con ``manage.py test`` el correo arranca sin configurar, aunque el .env de quien corre las pruebas tenga
+# CORREO_CONSOLA=1 o credenciales: así las pruebas dan lo mismo en cada máquina y en el CI. Las que necesitan correo
+# lo encienden con override_settings(CORREO_CONFIGURADO=True).
+if sys.argv[1:2] == ["test"]:
+    CORREO_CONFIGURADO = False
 
 # SEG-12: el enlace de recuperación vence a la hora.
 PASSWORD_RESET_TIMEOUT = 3600

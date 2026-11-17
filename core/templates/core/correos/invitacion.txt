@@ -1,0 +1,12 @@
+{% autoescape off %}Hola {{ nombre }},
+
+Se te creó una cuenta de {{ rol }} en {{ nombre_organizacion }}, en el sistema de gestión InfoPonia. Para empezar a usarla, elegí tu contraseña con este enlace:
+
+{{ enlace }}
+
+El enlace vence en 7 días y sirve una sola vez. Si vence, pedile a quien gestiona tu cuenta que te envíe otra invitación, o usá «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.
+
+Si no esperabas esta invitación, ignorá este correo.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}
