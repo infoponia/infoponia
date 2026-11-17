@@ -1,0 +1,12 @@
+{% autoescape off %}Hola {{ nombre }},
+
+Recibimos un pedido para elegir una contraseña nueva en la cuenta de {{ nombre_organizacion }} asociada a este correo. Para elegirla, abrí este enlace:
+
+{{ enlace }}
+
+El enlace vence en una hora y sirve una sola vez. Al elegir la contraseña nueva se cierran las sesiones abiertas de tu cuenta.
+
+Si no lo pediste vos, ignorá este correo: tu contraseña no cambia.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

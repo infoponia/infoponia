@@ -1,16 +1,25 @@
 # Servicios de core: un caso de uso por función, dentro de transaction.atomic(). Hoy: el cambio de
 # contraseña (USR-CMB-CTR), lo que necesita Mi perfil (USR-GST-PRF), la gestión de cuentas del Gerente y
 # del Administrador (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR), con los invariantes de SEG-15, y
-# las cuentas vinculadas (USR-VNC-CTA y SEG-09). Las vistas solo validan la entrada y llaman acá.
+# las cuentas vinculadas (USR-VNC-CTA y SEG-09) y la recuperación de contraseña por correo (USR-RCP-CTR y SEG-12).
+# Las vistas solo validan la entrada y llaman acá.
 
+import logging
 from collections import namedtuple
 
+from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
+from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from core.models import (
     ADMINISTRADOR,
@@ -26,6 +35,8 @@ from core.models import (
     rol_de,
 )
 from core.validadores import validar_telefono
+
+logger = logging.getLogger(__name__)
 
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
 MENSAJE_FUERA_DE_ALCANCE = "Esa cuenta no está dentro de las que gestionás."
@@ -1136,4 +1147,144 @@ def obtener_cuenta_del_grupo(actor, cuenta_id):
     cuenta = Usuario.objects.filter(pk=cuenta_id).first()
     if propia.grupo_id is None or cuenta is None or cuenta.grupo_id != propia.grupo_id:
         raise PermissionDenied(MENSAJE_FUERA_DEL_GRUPO)
+    return cuenta
+
+
+# ---- Recuperar contraseña por correo (USR-RCP-CTR y SEG-12, tarea 08, D-33 y D-34) ----
+# Se apoya en el generador de tokens de Django (``default_token_generator``): firma el id, el resumen de la contraseña,
+# el último inicio de sesión y la hora, y vence a los ``PASSWORD_RESET_TIMEOUT`` segundos (3600). Como firma el
+# resumen de la contraseña, el enlace deja de servir en cuanto se usa. La lógica de negocio y la auditoría están
+# acá; las vistas solo guardan el token en la sesión y renderizan.
+
+MENSAJE_CORREO_NO_CONFIGURADO = (
+    "La recuperación por correo no está disponible. Pedile a quien gestiona tu cuenta que la restablezca."
+)
+MENSAJE_ENLACE_INVALIDO = "Este enlace no es válido o ya venció. Pedí uno nuevo para elegir una contraseña."
+ASUNTO_RECUPERACION = "Recuperá tu contraseña de InfoPonia"
+
+
+def _exigir_correo_configurado():
+    """Precondición a de USR-RCP-CTR y regla 5 (SEG-12): sin el envío de correo configurado el caso de uso no está
+    disponible. Lee ``settings.CORREO_CONFIGURADO`` en cada llamada (única fuente de verdad, D-33)."""
+    if not settings.CORREO_CONFIGURADO:
+        raise ValidationError(MENSAJE_CORREO_NO_CONFIGURADO, code="correo_no_configurado")
+
+
+def _error_enlace_invalido():
+    """Error de un enlace usado, vencido, alterado o de una cuenta que ya no puede recuperar (D-34): siempre el
+    mismo, para no revelar cuál fue la causa."""
+    return ValidationError(MENSAJE_ENLACE_INVALIDO, code="enlace_invalido")
+
+
+def pedir_recuperacion(email, construir_url):
+    """USR-RCP-CTR: envía a ``email`` un enlace para elegir una contraseña nueva, si hay una cuenta activa con él.
+
+    - Precondición a y regla 5: sin el correo configurado, ``ValidationError`` («correo_no_configurado»).
+    - Regla 2 y SEG-12: no devuelve nada, y no hace nada distinto exista o no la cuenta, así que quien llama no
+      puede distinguir los casos. Una cuenta inactiva no recibe nada. El email se compara sin distinguir
+      mayúsculas (SEG-01). Pueden recuperar las cuentas activas de cualquier rol y los Administradores (D-34).
+    - Regla 1: el enlace lleva el id de la cuenta y un token de un solo uso que vence a la hora.
+    - SEG-12: si el envío falla, la persona recibe la misma respuesta y la falla queda en los registros de errores
+      (``logger.exception``), con el id de la cuenta y nunca el enlace ni el token, que dan acceso a la cuenta.
+    - ``construir_url(ruta)`` convierte la ruta en una URL absoluta (la vista pasa ``request.build_absolute_uri``,
+      que da https detrás del proxy de Render); así el servicio no depende del pedido.
+
+    No usa ``transaction.atomic()`` a propósito: no escribe nada en la base ni audita (solo lee y envía), y el envío
+    por SMTP no debe hacerse con una transacción abierta (D-14: las notificaciones van fuera de la transacción).
+    """
+    _exigir_correo_configurado()
+    cuenta = Usuario.objects.filter(email__iexact=(email or "").strip(), is_active=True).first()
+    if cuenta is None:
+        return None
+    # La ruta existe en un solo lugar: core/urls.py. ``construir_url`` le pone la base absoluta.
+    ruta = reverse(
+        "core:recuperacion_enlace",
+        kwargs={
+            "uidb64": urlsafe_base64_encode(force_bytes(cuenta.pk)),
+            "token": default_token_generator.make_token(cuenta),
+        },
+    )
+    cuerpo = render_to_string(
+        "core/correos/recuperar_contrasena.txt",
+        {
+            "nombre": cuenta.first_name,
+            "enlace": construir_url(ruta),
+            "nombre_organizacion": settings.NOMBRE_ORGANIZACION,
+        },
+    )
+    try:
+        send_mail(ASUNTO_RECUPERACION, cuerpo, settings.DEFAULT_FROM_EMAIL, [cuenta.email])
+    except Exception:
+        logger.exception("No se pudo enviar el correo de recuperación de contraseña a la cuenta %s.", cuenta.pk)
+    return None
+
+
+def cuenta_del_enlace(uidb64, token):
+    """La cuenta a la que pertenece un enlace de recuperación válido, o ``None`` (D-34).
+
+    Es una lectura, sin bloqueo, para que la vista decida si muestra el formulario o la pantalla de enlace no
+    válido. ``None`` si el id no se puede decodificar, la cuenta no existe o está inactiva, o el token no es válido
+    (usado, vencido o alterado). No decide el cambio: ``confirmar_recuperacion`` vuelve a validar todo con la cuenta
+    bloqueada.
+    """
+    try:
+        cuenta_id = int(force_str(urlsafe_base64_decode(uidb64)))
+    except (TypeError, ValueError, OverflowError, UnicodeDecodeError):
+        return None
+    cuenta = Usuario.objects.filter(pk=cuenta_id, is_active=True).first()
+    if cuenta is None or not default_token_generator.check_token(cuenta, token):
+        return None
+    return cuenta
+
+
+def confirmar_recuperacion(cuenta_id, token, contrasena_nueva):
+    """USR-RCP-CTR: la persona elige una contraseña nueva con el enlace que recibió por correo.
+
+    - Precondición a y regla 5: sin el correo configurado, ``ValidationError`` («correo_no_configurado»).
+    - Regla 1 y SEG-12: el enlace es de un solo uso. La cuenta se bloquea (``FOR NO KEY UPDATE``, D-32) y DESPUÉS
+      de bloquear se vuelve a validar que el token siga siendo válido y que la cuenta siga activa. Validar solo
+      antes (o solo en la vista) no alcanza: dos pedidos simultáneos con el mismo enlace pasarían los dos; el
+      segundo, que esperó el bloqueo, relee la cuenta con el resumen de contraseña nuevo y el token ya no vale.
+      Un enlace usado, vencido, alterado o de una cuenta inactiva da «enlace_invalido» (D-34).
+    - Regla 4 y SEG-03: la contraseña nueva cumple la política (``validate_password``, incluida «distinta de la
+      actual»); los errores van en el campo ``contrasena_nueva`` y no cambia nada. La vacía se controla acá porque
+      ``validate_password`` no la rechaza con un mensaje propio; se usa el mismo mensaje que ``cambiar_contrasena``.
+    - Postcondiciones a y b: guarda la contraseña y deja ``fecha_contrasena_temporal`` en ``None``; una temporal,
+      aunque esté vencida, puede recuperar.
+    - Postcondición c: al cambiar el resumen de la contraseña, Django invalida todas las sesiones abiertas de la
+      cuenta (el mismo mecanismo que ``restablecer_contrasena``).
+    - Regla 3: no genera una contraseña temporal y no toca el grupo de cuentas vinculadas.
+    - Postcondición d, SEG-14 y D-22: auditoría en la misma transacción; el usuario y el rol registrados son los de
+      la cuenta afectada. Sin contraseñas ni el token.
+    """
+    _exigir_correo_configurado()
+    with transaction.atomic():
+        cuenta = (
+            Usuario.objects.select_for_update(no_key=True).filter(pk=cuenta_id).first()
+            if cuenta_id is not None
+            else None
+        )
+        # Después de bloquear: con la fila releída, el token y el estado de la cuenta son los reales.
+        if cuenta is None or not cuenta.is_active or not default_token_generator.check_token(cuenta, token):
+            raise _error_enlace_invalido()
+
+        if not contrasena_nueva:
+            raise ValidationError(
+                {"contrasena_nueva": [ValidationError("Ingresá la contraseña nueva.", code="required")]}
+            )
+        try:
+            validate_password(contrasena_nueva, cuenta)
+        except ValidationError as error:
+            raise ValidationError({"contrasena_nueva": error.error_list}) from error
+
+        era_temporal = cuenta.tiene_contrasena_temporal
+        cuenta.set_password(contrasena_nueva)
+        cuenta.fecha_contrasena_temporal = None
+        cuenta.save(update_fields=["password", "fecha_contrasena_temporal"])
+        RegistroAuditoria.objects.registrar(
+            usuario=cuenta,
+            accion=RegistroAuditoria.Accion.RECUPERACION_CONTRASENA,
+            afectados=[cuenta],
+            detalle={"era_temporal": era_temporal},
+        )
     return cuenta

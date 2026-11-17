@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 16/11/2026. Este archivo se reescribe al final de cada sesión.
+Última actualización: 16/11/2026 (tarea 08). Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -157,6 +157,19 @@
   `MD5PasswordHasher` (detectado con `sys.argv`) para que crear cuentas en las pruebas no cueste 1.000.000 de
   iteraciones de PBKDF2; `test_usr_cns_usr.py` ya no busca el texto «pbkdf2» sino el prefijo del hash real. Si se
   cambia el algoritmo de producción, hay que probarlo a mano. Sin otros cambios de comportamiento.
+- Tarea 08: recuperar contraseña por correo (USR-RCP-CTR, SEG-12) y configuración del envío de correo (D-33 y D-34).
+  Gmail por SMTP con la cuenta exclusiva de notificaciones, contraseña de aplicación solo en Render, `EMAIL_TIMEOUT = 10`
+  y `CORREO_CONFIGURADO` como única fuente de verdad (`config/correo.py`); con `DEBUG` y `CORREO_CONSOLA=1`, el correo va
+  a la consola. Servicios `pedir_recuperacion`, `cuenta_del_enlace` y `confirmar_recuperacion`: el pedido no escribe ni
+  audita y da la misma respuesta exista o no la cuenta; la confirmación bloquea la cuenta (`FOR NO KEY UPDATE`) y vuelve a
+  validar el token después de bloquear, así que el enlace es de un solo uso aun con dos pedidos simultáneos (verificado:
+  con la validación antes del bloqueo, la prueba de concurrencia falla con `2 != 1`). Recuperan las cuentas activas de
+  cualquier rol y también las de los Administradores. Pantallas de pedido, «Revisá tu correo», contraseña nueva y «Enlace
+  no válido», con el token fuera de la URL; al terminar se lleva al inicio de sesión sin iniciar sesión. El inicio de
+  sesión ofrece «¿Olvidaste tu contraseña?» solo con el correo configurado. `test_usr_rcp_ctr.py`: 48 pruebas (47 más 1 de
+  concurrencia) y dos pantallas sumadas a `EnviosEnCursoTests`; corridos con los de `test_interfaz`, `test_usr_ini_ses` y
+  `test_usr_cmb_ctr`: 146 pruebas, OK. Sin migraciones ni dependencias nuevas. Falta la revisión a mano (ver «En curso»)
+  y cargar las variables de correo en Render. Decisiones D-33 y D-34.
 
 ## En curso
 
@@ -173,6 +186,19 @@
   8. Al deshabilitarse el botón enfocado dentro de una ventana, el foco se pierde (comportamiento del navegador):
      ver si molesta.
 
+- Tarea 08 (correo y recuperación de contraseña), a mano:
+  1. En local, con `DJANGO_DEBUG=1` y `CORREO_CONSOLA=1` en `.env`: pedir el enlace desde el inicio de sesión, ver el
+     correo en la consola de `runserver`, abrir el enlace, elegir una contraseña nueva y entrar con ella. La URL de «Elegí
+     una contraseña nueva» no lleva el token.
+  2. Abrir el mismo enlace una segunda vez, y uno viejo después de iniciar sesión: «Enlace no válido» con «Pedir un enlace
+     nuevo».
+  3. Sin `CORREO_CONSOLA`: el inicio de sesión muestra el aviso y `/recuperar-contrasena/` no tiene formulario.
+  4. En Render: cargar `EMAIL_HOST_USER` (`infoponia.notificaciones@gmail.com`) y `EMAIL_HOST_PASSWORD` (contraseña de
+     aplicación de Google) en las variables de entorno; confirmar que `DJANGO_ALLOWED_HOSTS` no tenga `*`; hacer un pedido
+     real y comprobar que el enlace del correo empieza con `https://` y que el correo llega (revisar también la carpeta de
+     correo no deseado).
+  5. El botón «Enviar enlace» muestra «Enviando…» y no deja enviar dos veces (JavaScript, D-29).
+
 ## Siguiente
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
@@ -185,8 +211,8 @@
    | 05 | **05a hecha** (consultar, alta de Gerente, menú «Cuentas», SEG-15 del Gerente); **05b hecha** (modificar, restablecer, reactivar, baja, SEG-15 de los Administradores y SEG-18). Cuentas del Administrador con el mismo flujo y su alcance (D-16, en `en_alcance_de`); invariantes de las cuentas (SEG-15: siempre hay al menos un Administrador activo y nunca hay más de un Gerente activo, verificado bloqueando las filas involucradas durante la operación); admin de Django deshabilitado en producción (SEG-18); entrada «Cuentas» en el menú lateral del Administrador | — |
    | 06 | **06a y 06b hechas** (Mi perfil, «Mi perfil» y «Cambiar de cuenta» en el menú de cuenta, cambio voluntario de contraseña con el servicio de la tarea 03, y cuentas vinculadas: USR-VNC-CTA, SEG-09 y SEG-11) | — |
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
-   | 08 | Recuperar contraseña (USR-RCP-CTR, SEG-12) | Proveedor de correo decidido; en desarrollo, backend de consola |
-   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29); tope de intentos de identificación para el inicio de sesión y `vincular_cuenta` juntos, que reemplazaría a SEG-05 y D-19 (ver «Temas abiertos» y D-32) | — |
+   | 08 | **Hecha** (recuperar contraseña por correo: USR-RCP-CTR, SEG-12; configuración del correo, D-33 y D-34). Falta cargar las variables de correo en Render | — |
+   | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29); tope de intentos de identificación para el inicio de sesión y `vincular_cuenta` juntos, que reemplazaría a SEG-05 y D-19 (ver «Temas abiertos» y D-32); tope de pedidos del enlace de recuperación (D-34: sin él se puede llenar de correos a una persona o agotar el límite diario de Gmail); evaluar enviar el correo de recuperación en segundo plano (hoy el pedido tarda más cuando la cuenta existe) | — |
 
 ## Registrado el 05/11/2026
 
@@ -210,8 +236,11 @@
 - Reparto final de apps entre los dos integrantes: D-23 fija cuentas en `core` y una app por módulo
   de negocio; faltan los nombres y quién toma cada una.
 - Lista cerrada de los casos de uso del 80% y orden de implementación.
-- Recuperar contraseña depende del correo, que solo funcionará en Render pago. Falta decidir el
-  proveedor de correo (tarea 08).
+- Tope de pedidos de recuperación de contraseña (D-34): sin límite, el pedido puede usarse para llenar de correos a
+  una persona o agotar el límite diario de Gmail. Junto con el tope de identificación. Cuándo: tarea 09.
+- `docs/casos_de_uso/usuarios.md` («Lo que queda para más adelante») todavía dice que el proveedor de correo no está
+  decidido. Es copia del documento de Drive: hay que actualizarlo allá y volver a copiarlo. Cuándo: antes del cierre
+  de la tarea 08.
 - Proveedor del almacenamiento de objetos para la foto de perfil (tarea 07).
 - Ingreso con Google: trabajo futuro, fuera de este bloque.
 - Hacer configurables por `.env` el host, el puerto, el nombre y el usuario de la base local.

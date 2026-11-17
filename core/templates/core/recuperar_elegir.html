@@ -1,0 +1,37 @@
+{% extends "core/base_sin_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Contraseña nueva con el enlace del correo (USR-RCP-CTR, vReset del prototipo). La lista de requisitos se marca al
+escribir con politica_contrasena.js; la validación siempre es del servidor (SEG-03). «Distinta de la actual» no figura en
+la lista: el navegador no conoce la contraseña actual (D-27); si falla, el servidor lo informa como error del campo.
+El formulario se envía a esta misma URL, que no lleva el token (está en la sesión).{% endcomment %}
+{% block titulo %}Elegí una contraseña nueva · InfoPonia{% endblock %}
+{% block contenido %}
+<h1>Elegí una contraseña nueva</h1>
+<p class="lead">Al guardarla, se cierran las sesiones abiertas de tu cuenta.</p>
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+<div style="height:14px"></div>
+{% endif %}
+
+<form method="post" novalidate data-politica-contrasena>
+  {% csrf_token %}
+
+  {# Para que el administrador de contraseñas asocie la contraseña nueva a esta cuenta; ver elegir_contrasena.html. #}
+  <input class="sr" type="text" name="username" value="{{ email_cuenta }}" autocomplete="username"
+         readonly tabindex="-1" aria-hidden="true">
+
+  <ul class="policy" aria-label="Requisitos de la contraseña">
+    <li data-requisito="largo"><span class="dot"></span>Al menos 8 caracteres</li>
+    <li data-requisito="no-numerica"><span class="dot"></span>No es solo números</li>
+  </ul>
+
+  {% include "core/_campo_contrasena.html" with campo=form.contrasena_nueva autocompletar="new-password" marca="data-contrasena-nueva" %}
+  {% include "core/_campo_contrasena.html" with campo=form.contrasena_repetida autocompletar="new-password" %}
+
+  <button class="btn btn-primary btn-block" type="submit">Guardar contraseña</button>
+</form>
+
+<div class="aviso-recuperar"><a class="link" href="{% url 'core:iniciar_sesion' %}">Volver a iniciar sesión</a></div>
+
+<script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>
+{% endblock %}
