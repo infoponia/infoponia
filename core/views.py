@@ -3,13 +3,17 @@
 # y cuentas del Gerente y del Administrador. Solo orquestan: validan la entrada, llaman al servicio y
 # renderizan.
 
+import functools
+
 from django.contrib import messages
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect, render
+from django.conf import settings
 from django.views.decorators.cache import never_cache
+from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST
 from django.views.decorators.vary import vary_on_headers
 
@@ -21,6 +25,7 @@ from core.forms import (
     FormularioFiltroUsuarios,
     FormularioInicioSesion,
     FormularioModificarUsuario,
+    FormularioPedirRecuperacion,
     FormularioVincularCuenta,
 )
 from core.middleware import permitido_con_contrasena_temporal
@@ -31,7 +36,9 @@ from core.servicios import (
     alta_usuario,
     baja_usuario,
     cambiar_contrasena,
+    confirmar_recuperacion,
     consultar_usuarios,
+    cuenta_del_enlace,
     cuenta_para_cambiar,
     cuentas_vinculadas,
     desvincular_cuenta,
@@ -40,6 +47,7 @@ from core.servicios import (
     modificar_usuario,
     obtener_cuenta,
     obtener_cuenta_del_grupo,
+    pedir_recuperacion,
     quien_gestiona,
     reactivar_usuario,
     restablecer_contrasena,
@@ -56,6 +64,13 @@ class IniciarSesionView(LoginView):
     template_name = "core/iniciar_sesion.html"
     authentication_form = FormularioInicioSesion
     redirect_authenticated_user = True
+
+    def get_context_data(self, **kwargs):
+        """Suma ``correo_configurado``: con el correo configurado se ofrece «¿Olvidaste tu contraseña?»; si no,
+        el aviso de que lo restablezca quien gestiona la cuenta (SEG-12, regla 5 de USR-RCP-CTR)."""
+        contexto = super().get_context_data(**kwargs)
+        contexto["correo_configurado"] = settings.CORREO_CONFIGURADO
+        return contexto
 
     def get_success_url(self):
         """Vuelve a la pantalla pedida (``next``) y, si esa cuenta no puede abrirla, va a su inicio.
@@ -104,6 +119,111 @@ def elegir_contrasena(request):
     else:
         form = FormularioContrasenaNueva()
     return render(request, "core/elegir_contrasena.html", {"form": form})
+
+
+# ---- Recuperar contraseña por correo (USR-RCP-CTR y SEG-12, tarea 08, D-34) ----
+# Pantallas solo para quien no tiene sesión. Solo orquestan: la lógica y la auditoría están en los servicios.
+# El enlace del correo lleva el token; ``recuperacion_enlace`` lo guarda en la sesión y redirige a una URL sin él
+# (la misma técnica que ``PasswordResetConfirmView`` de Django), para que el token no quede en el historial, en
+# la cabecera Referer ni en los registros del servidor mientras se escribe la contraseña.
+
+CLAVE_SESION_TOKEN_RECUPERACION = "_recuperacion_token"
+MENSAJE_CONTRASENA_RECUPERADA = "Contraseña actualizada. Ingresá con la nueva contraseña."
+
+
+def _pantalla_de_recuperacion(vista):
+    """Marca de las pantallas de recuperación: exentas del login obligatorio, nunca guardadas en el caché del
+    navegador, y solo para quien no tiene sesión (con sesión iniciada llevan al inicio, requisito 8 de D-34)."""
+
+    @functools.wraps(vista)
+    def envuelta(request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect("core:inicio")
+        return vista(request, *args, **kwargs)
+
+    return login_not_required(never_cache(envuelta))
+
+
+def _enlace_no_valido(request):
+    """Pantalla «Enlace no válido»: la misma para un enlace usado, vencido, alterado o de una cuenta inactiva
+    (regla 6 de D-34; el token de Django no distingue «usado» de «vencido»), con la opción de pedir otro."""
+    return render(request, "core/recuperar_enlace_invalido.html")
+
+
+@_pantalla_de_recuperacion
+def recuperar_contrasena(request):
+    """Pedido del enlace (USR-RCP-CTR, vRecover): pide el email y llama a ``pedir_recuperacion``.
+
+    Siempre redirige a «Revisá tu correo», exista o no la cuenta y salga bien o mal el envío (regla 2, SEG-12).
+    Sin el correo configurado no hay formulario: solo el aviso de que lo restablezca quien gestiona la cuenta
+    (regla 5), también ante un POST.
+    """
+    if not settings.CORREO_CONFIGURADO:
+        return render(request, "core/recuperar_contrasena.html", {"correo_configurado": False})
+    if request.method == "POST":
+        form = FormularioPedirRecuperacion(request.POST)
+        if form.is_valid():
+            try:
+                pedir_recuperacion(form.cleaned_data["email"], request.build_absolute_uri)
+            except ValidationError:
+                # El correo dejó de estar configurado entre la comprobación y el servicio: el aviso de la regla 5.
+                return render(request, "core/recuperar_contrasena.html", {"correo_configurado": False})
+            return redirect("core:recuperacion_enviada")
+    else:
+        form = FormularioPedirRecuperacion()
+    return render(request, "core/recuperar_contrasena.html", {"correo_configurado": True, "form": form})
+
+
+@_pantalla_de_recuperacion
+def recuperacion_enviada(request):
+    """«Revisá tu correo» (vRecoverSent). No muestra el email escrito: para mostrarlo haría falta guardarlo en
+    la sesión (el pedido no escribe en la base) o ponerlo en la URL (queda en el historial y en los registros)."""
+    return render(request, "core/recuperar_enviado.html")
+
+
+@_pantalla_de_recuperacion
+def recuperacion_enlace(request, uidb64, token):
+    """Entrada del enlace del correo: si es válido guarda el token en la sesión y redirige a la pantalla de la
+    contraseña nueva, con una URL sin el token; si no, muestra «Enlace no válido»."""
+    if not settings.CORREO_CONFIGURADO:
+        return redirect("core:recuperar_contrasena")  # muestra el aviso de la regla 5
+    if cuenta_del_enlace(uidb64, token) is None:
+        return _enlace_no_valido(request)
+    request.session[CLAVE_SESION_TOKEN_RECUPERACION] = token
+    return redirect("core:recuperacion_elegir", uidb64=uidb64)
+
+
+@sensitive_post_parameters("contrasena_nueva", "contrasena_repetida")
+@_pantalla_de_recuperacion
+def recuperacion_elegir(request, uidb64):
+    """Contraseña nueva (vReset): con el token de la sesión muestra el formulario; al enviarlo llama a
+    ``confirmar_recuperacion``, que vuelve a validar todo con la cuenta bloqueada. Si sale bien lleva al inicio
+    de sesión con un aviso, SIN iniciar sesión (D-29: no se entra solo con tener el correo)."""
+    if not settings.CORREO_CONFIGURADO:
+        return redirect("core:recuperar_contrasena")
+    token = request.session.get(CLAVE_SESION_TOKEN_RECUPERACION)
+    cuenta = cuenta_del_enlace(uidb64, token) if token else None
+    if cuenta is None:
+        return _enlace_no_valido(request)
+    if request.method == "POST":
+        form = FormularioContrasenaNueva(request.POST)
+        if form.is_valid():
+            try:
+                confirmar_recuperacion(cuenta.pk, token, form.cleaned_data["contrasena_nueva"])
+            except ValidationError as error:
+                if not hasattr(error, "error_dict"):
+                    # Enlace usado en otra pestaña, vencido o cuenta dada de baja mientras se escribía.
+                    return _enlace_no_valido(request)
+                for campo, errores in error.error_dict.items():
+                    for e in errores:
+                        form.add_error(campo if campo in form.fields else None, e)
+            else:
+                request.session.pop(CLAVE_SESION_TOKEN_RECUPERACION, None)
+                messages.success(request, MENSAJE_CONTRASENA_RECUPERADA)
+                return redirect("core:iniciar_sesion")
+    else:
+        form = FormularioContrasenaNueva()
+    return render(request, "core/recuperar_elegir.html", {"form": form, "email_cuenta": cuenta.email})
 
 
 # ---- Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR, tarea 06a) ----

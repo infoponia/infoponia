@@ -66,6 +66,22 @@ class FormularioContrasenaNueva(forms.Form):
         return datos
 
 
+class FormularioPedirRecuperacion(forms.Form):
+    """Email de la cuenta cuya contraseña se olvidó (USR-RCP-CTR, vRecover del prototipo).
+
+    Solo controla que haya un email con forma de email. Si hay una cuenta con él lo decide el servicio
+    ``pedir_recuperacion``, y la respuesta es la misma exista o no (regla 2, SEG-12).
+    """
+
+    email = forms.EmailField(
+        label="Email",
+        error_messages={
+            "required": "Ingresá tu email.",
+            "invalid": "Ingresá un email válido, por ejemplo nombre@dominio.com.",
+        },
+    )
+
+
 class FormularioCambioContrasena(FormularioContrasenaNueva):
     """Cambio voluntario de contraseña desde Mi perfil (USR-CMB-CTR por sí mismo, USR-GST-PRF regla 3).
 

@@ -6,8 +6,11 @@ import re
 from pathlib import Path
 
 from django.conf import settings
-from django.test import TestCase, override_settings
+from django.contrib.auth.tokens import default_token_generator
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from core.tests.fabricas import agrupar, crear_capataz, crear_gerente, dar_contrasena_temporal
 
@@ -259,6 +262,39 @@ class AvisosYFocoEstilosTests(TestCase):
         self.assertIn("text-decoration:none", _regla(_css(), ".btn"))
 
 
+class PlantillasTests(TestCase):
+    """Reglas de escritura de las plantillas de ``core/templates``."""
+
+    def test_plantillas_los_comentarios_de_una_linea_cierran_en_la_misma_linea(self):
+        """Django: ``{# ... #}`` solo comenta una línea. Si el ``{#`` abre en una línea y cierra en otra, Django no lo
+        toma como comentario y el texto se ve en la pantalla (o en el correo). Los comentarios de varias líneas
+        van entre ``{% comment %}`` y ``{% endcomment %}``. Revisa todas las plantillas (.html y .txt)."""
+        raiz = Path(settings.BASE_DIR) / "core" / "templates"
+        plantillas = [*raiz.rglob("*.html"), *raiz.rglob("*.txt")]
+        self.assertGreater(len(plantillas), 0)  # que la prueba no pase sin revisar nada
+
+        abiertos_sin_cerrar = []
+        for plantilla in plantillas:
+            texto = plantilla.read_text(encoding="utf-8")
+            for numero, linea in enumerate(texto.splitlines(), start=1):
+                resto = linea
+                while "{#" in resto:
+                    apertura = resto.index("{#")
+                    cierre = resto.find("#}", apertura + 2)
+                    if cierre < 0:
+                        abiertos_sin_cerrar.append(
+                            f"{plantilla.relative_to(raiz)}:{numero}: {linea.strip()[:80]}"
+                        )
+                        break
+                    resto = resto[cierre + 2 :]
+
+        self.assertEqual(
+            abiertos_sin_cerrar,
+            [],
+            "Hay '{#' que no cierra con '#}' en la misma línea: usá {% comment %}...{% endcomment %}.",
+        )
+
+
 class EnviosEnCursoTests(TestCase):
     """Envíos en curso (D-29): lo que se puede verificar en el HTML del servidor y en la hoja de estilos. El
     comportamiento del botón (indicador, doble envío, restauración) y el aviso de error de HTMX son JavaScript y
@@ -270,6 +306,24 @@ class EnviosEnCursoTests(TestCase):
         HTMX = {"HX-Request": "true"}
 
         paginas["iniciar_sesion"] = self.client.get(reverse("core:iniciar_sesion")).content.decode()
+
+        # Recuperar contraseña (USR-RCP-CTR, tarea 08): el pedido y la contraseña nueva, con el correo configurado.
+        with override_settings(CORREO_CONFIGURADO=True):
+            paginas["recuperar_contrasena"] = self.client.get(
+                reverse("core:recuperar_contrasena")
+            ).content.decode()
+            olvidada = crear_capataz(email="olvidada@infoponia.com")
+            uidb64 = urlsafe_base64_encode(force_bytes(olvidada.pk))
+            anonimo = Client()
+            anonimo.get(
+                reverse(
+                    "core:recuperacion_enlace",
+                    kwargs={"uidb64": uidb64, "token": default_token_generator.make_token(olvidada)},
+                )
+            )
+            paginas["recuperar_elegir"] = anonimo.get(
+                reverse("core:recuperacion_elegir", kwargs={"uidb64": uidb64})
+            ).content.decode()
 
         nueva = crear_capataz(email="nueva@infoponia.com")
         dar_contrasena_temporal(nueva)

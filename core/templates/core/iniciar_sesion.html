@@ -40,8 +40,13 @@ nada de los elementos «Solo prototipo» (D-24). Una sola alerta genérica, sin 
   <button class="btn btn-primary btn-block" type="submit" data-enviando="Ingresando…">Ingresar</button>
 </form>
 
-{# SEG-12: el correo no está configurado todavía (recuperación en la tarea 08); se muestra el aviso. #}
+{% comment %}SEG-12 y regla 5 de USR-RCP-CTR: con el correo configurado (settings.CORREO_CONFIGURADO) se ofrece la
+recuperación; si no, el aviso.{% endcomment %}
 <div class="aviso-recuperar">
+  {% if correo_configurado %}
+  <a class="link" href="{% url 'core:recuperar_contrasena' %}">¿Olvidaste tu contraseña?</a>
+  {% else %}
   <span class="muted">¿Olvidaste tu contraseña? Pedile a quien gestiona tu cuenta que la restablezca.</span>
+  {% endif %}
 </div>
 {% endblock %}

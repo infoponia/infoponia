@@ -17,6 +17,8 @@ import sys
 
 import dj_database_url
 
+from config.correo import correo_configurado, correo_por_consola
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -185,3 +187,27 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ---- Correo (D-33, SEG-12, USR-RCP-CTR) ----
+# Gmail por SMTP con la cuenta exclusiva para el correo del sistema. La contraseña es una contraseña de aplicación
+# de Google que vive solo en las variables de entorno de Render: nunca en el código (el repositorio es público).
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+# Gmail exige que el remitente sea la cuenta con la que se autentica.
+DEFAULT_FROM_EMAIL = "InfoPonia <infoponia.notificaciones@gmail.com>"
+# Obligatorio: gunicorn corta a los 30 s y un servidor SMTP colgado no puede tirar el worker.
+EMAIL_TIMEOUT = 10
+
+# Desarrollo sin credenciales: con DEBUG y CORREO_CONSOLA=1 el correo se imprime en la consola de runserver.
+CORREO_CONSOLA = correo_por_consola(os.environ, DEBUG)
+if CORREO_CONSOLA:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# SEG-12: única fuente de verdad de si la recuperación por correo está disponible. El código la lee de settings en
+# cada pedido (así las pruebas la cambian con override_settings).
+CORREO_CONFIGURADO = correo_configurado(os.environ, DEBUG)
+
+# SEG-12: el enlace de recuperación vence a la hora.
+PASSWORD_RESET_TIMEOUT = 3600

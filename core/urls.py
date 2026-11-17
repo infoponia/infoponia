@@ -12,6 +12,12 @@ urlpatterns = [
     path("iniciar-sesion/", views.IniciarSesionView.as_view(), name="iniciar_sesion"),
     path("cerrar-sesion/", views.cerrar_sesion, name="cerrar_sesion"),
     path("elegir-contrasena/", views.elegir_contrasena, name="elegir_contrasena"),
+    # Recuperar contraseña por correo (USR-RCP-CTR y SEG-12; tarea 08). La de ``elegir`` va antes de la del token:
+    # «elegir» también encajaría como token.
+    path("recuperar-contrasena/", views.recuperar_contrasena, name="recuperar_contrasena"),
+    path("recuperar-contrasena/enviado/", views.recuperacion_enviada, name="recuperacion_enviada"),
+    path("recuperar-contrasena/<str:uidb64>/elegir/", views.recuperacion_elegir, name="recuperacion_elegir"),
+    path("recuperar-contrasena/<str:uidb64>/<str:token>/", views.recuperacion_enlace, name="recuperacion_enlace"),
     # Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR; tarea 06a).
     path("mi-perfil/", views.mi_perfil, name="mi_perfil"),
     path("mi-perfil/contrasena/", views.cambiar_mi_contrasena, name="cambiar_mi_contrasena"),
