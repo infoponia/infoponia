@@ -30,6 +30,7 @@ from core.tests.fabricas import (
     BACKEND_QUE_FALLA,
     CLAVE,
     PATRON_INVITACION,
+    afectado,
     construir_url,
     contenido_de_auditoria,
     crear_administrador,
@@ -350,10 +351,46 @@ class UsrAltUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.ALTA)
         self.assertEqual(registro.usuario_id, gerente.pk)
         self.assertEqual(registro.rol, "gerente")
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
+        self.assertEqual(
+            registro.afectados,
+            [
+                {
+                    "modelo": "core.usuario",
+                    "id": cuenta.pk,
+                    "texto": "Laura Benítez (laura@infoponia.com)",
+                    "rol": "capataz",
+                }
+            ],
+        )
+        # D-36: en un alta, cada dato que se cargó es un cambio con «antes» nulo; la forma de acceso es contexto.
+        # El teléfono vacío no es un cambio y no figura.
+        self.assertEqual(
+            registro.detalle,
+            {
+                "cambios": {
+                    "rol": {"antes": None, "despues": "capataz"},
+                    "nombre": {"antes": None, "despues": "Laura"},
+                    "apellido": {"antes": None, "despues": "Benítez"},
+                    "email": {"antes": None, "despues": "laura@infoponia.com"},
+                },
+                "datos": {"acceso": "temporal"},
+            },
+        )
         contenido = json.dumps([registro.afectados, registro.detalle])
         self.assertNotIn(temporal, contenido)
         self.assertNotIn(cuenta.password, contenido)
+
+    def test_d36_alta_audita_el_telefono_cargado(self):
+        """D-36 y USR-ALT-USR postcondición e: un teléfono cargado en el alta es un cambio con «antes» nulo, como
+        el resto de los datos de la cuenta nueva."""
+        gerente = crear_gerente()
+
+        self.alta(gerente, telefono="+54 376 400-1001")
+
+        registro = RegistroAuditoria.objects.get()
+        self.assertEqual(
+            registro.detalle["cambios"]["telefono"], {"antes": None, "despues": "+54 376 400-1001"}
+        )
 
     def test_d22_alta_rechazada_no_deja_registro_de_auditoria(self):
         """D-22: un alta rechazada no deja registro de auditoría."""
@@ -505,8 +542,11 @@ class UsrAltUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.ALTA)
         self.assertEqual(registro.usuario_id, administrador.pk)
         self.assertEqual(registro.rol, ADMINISTRADOR)
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
-        self.assertEqual(registro.detalle["rol"], Usuario.Rol.GERENTE)
+        self.assertEqual(registro.afectados, [afectado(cuenta)])
+        self.assertEqual(registro.afectados[0]["rol"], Usuario.Rol.GERENTE)
+        self.assertEqual(
+            registro.detalle["cambios"]["rol"], {"antes": None, "despues": Usuario.Rol.GERENTE}
+        )
         contenido = json.dumps([registro.afectados, registro.detalle])
         self.assertNotIn(temporal, contenido)
         self.assertNotIn(cuenta.password, contenido)
@@ -590,8 +630,8 @@ class UsrAltUsrServicioTests(TestCase):
         registros = {
             r.afectados[0]["id"]: r for r in RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA)
         }
-        self.assertEqual(registros[invitada.pk].detalle["acceso"], INVITACION)
-        self.assertEqual(registros[con_temporal.pk].detalle["acceso"], TEMPORAL)
+        self.assertEqual(registros[invitada.pk].detalle["datos"], {"acceso": INVITACION})
+        self.assertEqual(registros[con_temporal.pk].detalle["datos"], {"acceso": TEMPORAL})
         token = PATRON_INVITACION.search(mail.outbox[0].body).group(2)
         for registro in registros.values():
             contenido = contenido_de_auditoria(registro)
@@ -1002,7 +1042,9 @@ class UsrAltUsrInvitacionTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.ACEPTACION_INVITACION)
         self.assertEqual(registro.usuario_id, cuenta.pk)
         self.assertEqual(registro.rol, "capataz")
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
+        self.assertEqual(registro.afectados, [afectado(cuenta)])
+        # D-36: lo que tenía la cuenta antes de aceptar es contexto («datos»).
+        self.assertEqual(registro.detalle, {"datos": {"era_temporal": False, "invitacion_pendiente": True}})
         contenido = contenido_de_auditoria(registro)
         for secreto in (NUEVA, token):
             self.assertNotIn(secreto, contenido)

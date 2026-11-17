@@ -1,6 +1,6 @@
 # Estado del proyecto — InfoPonia
 
-Última actualización: 17/11/2026 (tarea 08b). Este archivo se reescribe al final de cada sesión.
+Última actualización: 17/11/2026 (tarea AUD-CNS-REG). Este archivo se reescribe al final de cada sesión.
 
 ## Hecho
 
@@ -188,6 +188,20 @@
   (invitación, restablecer mientras se acepta y recuperación). Con `manage.py test`, `CORREO_CONFIGURADO` arranca en
   `False`. Decisión D-35. Sin dependencias nuevas.
 
+- Tarea AUD-CNS-REG: consultar el registro de auditoría (AUD-CNS-REG 0.1, `docs/casos_de_uso/auditoria.md`) y formato
+  obligatorio del detalle (D-36). `RegistroAuditoria.objects.registrar` valida que el detalle tenga solo «cambios»
+  (`{campo: {antes, despues}}`, el valor anterior es obligatorio) y «datos» (contexto), con las referencias como
+  `{id, texto}`; los afectados se guardan con texto y rol. Todos los servicios que auditan pasan al formato nuevo (las
+  pruebas de detalle exacto cambian de forma, no de rigor). Migración de datos `0008` (única excepción deliberada a D-22:
+  convierte los registros existentes, idempotente, con vuelta, sin llamar a código de la app) e índices `0009` (GIN
+  `jsonb_path_ops` en los afectados y btree en la fecha). Alcance: `visibles_para(actor)`, con las acciones clasificadas
+  en `ACCIONES_DE_CUENTAS` y `ACCIONES_DE_NEGOCIO` (una prueba obliga a clasificar cada acción nueva); servicios
+  `consultar_auditoria`, `obtener_registro` y `puede_ver_auditoria_de`. Pantallas «Auditoría» (lista paginada de 25 con
+  filtros, y detalle con Campo / Antes / Después, solo GET), entrada en el menú del Gerente y del Administrador, y «Ver
+  auditoría» en la ficha de una cuenta. Los módulos tocados dan 509 pruebas sin concurrencia ni migración, 16 de
+  concurrencia y 1 de migración (`@tag("migracion")`, nueva en `CLAUDE.md`), OK; `makemigrations --check` sin cambios. Sin
+  dependencias nuevas (`GinIndex` no necesita `django.contrib.postgres` en `INSTALLED_APPS`). Decisión D-36.
+
 ## En curso
 
 - Revisión a mano de la tarea chica de experiencia de uso (JavaScript, no probado en un navegador):
@@ -231,6 +245,21 @@
   6. Los botones «Dar de alta», «Restablecer» y «Reactivar» muestran «Dando de alta…», «Restableciendo…» y «Reactivando…» y
      no dejan enviar dos veces (JavaScript, D-29).
 
+- Tarea AUD-CNS-REG (auditoría), a mano:
+  1. Antes de mergear: Render corre `migrate` y la `0008` falla, sin cambiar nada, si encuentra un detalle viejo que no
+     reconoce. Probarla contra una copia de la base de producción, o mirar los detalles de `core_registroauditoria` en Neon.
+  2. En local, con registros reales (alta, modificación, baja, reactivación, restablecimiento, vinculación...): entrar
+     como Gerente y como Administrador a «Auditoría» y comprobar que cada registro muestra bien la tabla Campo / Antes /
+     Después y los datos de contexto, con «—» para los valores nulos y los textos de las cuentas y de los grupos.
+  3. Los filtros con el navegador: fechas, la cuenta que actuó (incluida «InfoPonia»), acción y cuenta afectada; los
+     desplegables con teclado; el paginado (hace falta pasar de 25 registros) y que «Volver» desde el detalle deje la
+     misma lista. Con JavaScript desactivado, «Filtrar» envía el formulario.
+  4. «Ver auditoría» en la ficha de una cuenta: abre la lista con la etiqueta «Registros de … (actuó o fue afectada)» y
+     «Quitar filtro» la saca. Como Gerente, probar a mano `?actuo=<id de un Administrador>`: da 403.
+  5. Que el Gerente no vea lo que solo involucra a Administradores o a su cuenta (por ejemplo, el cambio de su propia
+     contraseña), y que el Administrador vea todo.
+  6. Los índices (D-36) no se midieron con `EXPLAIN` en una tabla grande; revisar cuando haya volumen.
+
 ## Siguiente
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
@@ -245,6 +274,10 @@
    | 07 | Foto de perfil (SEG-19) | Proveedor de almacenamiento decidido; permiso para Pillow y `django-storages` (D-20) |
    | 08 | **08 y 08b hechas** (recuperar contraseña por correo: USR-RCP-CTR, SEG-12; configuración del correo, D-33 y D-34; invitación por correo en el alta, el restablecimiento y la reactivación: SEG-20, D-35). Falta cargar las variables de correo en Render | — |
    | 09 | Seguridad de producción: HTTPS, cookies seguras y HSTS (SEG-16); `DEBUG` apagado si falta la variable de entorno; evaluar reemplazar `static_v` por `ManifestStaticFilesStorage` de WhiteNoise en producción (D-29); tope de intentos de identificación para el inicio de sesión y `vincular_cuenta` juntos, que reemplazaría a SEG-05 y D-19 (ver «Temas abiertos» y D-32); tope de pedidos del enlace de recuperación (D-34: sin él se puede llenar de correos a una persona o agotar el límite diario de Gmail; las invitaciones las envía quien gestiona la cuenta, con sesión, pero el límite diario es el mismo); evaluar enviar el correo de recuperación en segundo plano (hoy el pedido tarda más cuando la cuenta existe) | — |
+
+3. Trabajo futuro de la auditoría (fuera de la tarea AUD-CNS-REG): exportar los registros filtrados a CSV. Los módulos de
+   negocio, al auditar, siguen el formato de D-36 (`cambios` y `datos`, referencias con `referencia()`), suman el nombre
+   visible de sus campos a `RegistroAuditoria.ETIQUETAS` y clasifican su acción en `ACCIONES_DE_NEGOCIO`.
 
 ## Registrado el 05/11/2026
 

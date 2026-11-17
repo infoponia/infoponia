@@ -1,6 +1,7 @@
 # Fábricas y auxiliares compartidos por las pruebas de core/tests/: crean cuentas con la contraseña de
 # prueba y arman estados repetidos (administrador dado de baja, contraseña temporal, vencida o no, grupo de
-# cuentas vinculadas, invitación pendiente) y leen el contenido de un registro de auditoría. También los auxiliares de
+# cuentas vinculadas, invitación pendiente) y leen el contenido de un registro de auditoría o arman sus afectados y
+# referencias esperados (D-36). También los auxiliares de
 # correo que usan varios archivos (backend que falla, URL absoluta de prueba, comparación sin el token CSRF). Tienen una sola firma; el archivo de
 # pruebas que verifica un nombre o apellido concretos lo pasa explícito.
 
@@ -106,6 +107,25 @@ def contenido_de_auditoria(registro):
     """Todo lo que guarda un registro de auditoría (cuentas afectadas y detalle), como texto, para buscar
     contraseñas en él (SEG-02, SEG-14)."""
     return json.dumps([registro.afectados, registro.detalle], ensure_ascii=False)
+
+
+def afectado(cuenta):
+    """Cómo queda una cuenta entre los afectados de un registro de auditoría (D-36): ``core.usuario``, su id, el
+    texto «Nombre Apellido (email)» (solo el email si no tiene nombre) y su rol («administrador» para un
+    Administrador). Lee la cuenta de la base, así que el texto es el de sus datos actuales."""
+    cuenta = Usuario.objects.get(pk=cuenta.pk)
+    nombre = f"{cuenta.first_name} {cuenta.last_name}".strip()
+    return {
+        "modelo": "core.usuario",
+        "id": cuenta.pk,
+        "texto": f"{nombre} ({cuenta.email})" if nombre else cuenta.email,
+        "rol": "administrador" if cuenta.is_superuser else cuenta.rol,
+    }
+
+
+def ref_grupo(grupo_id):
+    """Referencia a un grupo de cuentas vinculadas en el detalle de la auditoría (D-36): ``{"id", "texto"}``."""
+    return {"id": grupo_id, "texto": f"Grupo {grupo_id}"}
 
 
 def dar_invitacion(cuenta, hace=None):

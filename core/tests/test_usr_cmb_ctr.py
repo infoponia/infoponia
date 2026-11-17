@@ -17,6 +17,7 @@ from core.models import Capataz, GrupoCuentas, RegistroAuditoria, Usuario, Vende
 from core.servicios import cambiar_contrasena
 from core.tests.fabricas import (
     CLAVE,
+    afectado,
     agrupar,
     crear_administrador,
     crear_capataz,
@@ -185,8 +186,8 @@ class UsrCmbCtrServicioTests(TestCase):
         self.assertEqual(registro.usuario_id, capataz.pk)
         self.assertEqual(registro.rol, "capataz")
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.CAMBIO_CONTRASENA)
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": capataz.pk}])
-        self.assertEqual(registro.detalle, {"era_temporal": False})
+        self.assertEqual(registro.afectados, [afectado(capataz)])
+        self.assertEqual(registro.detalle, {"datos": {"era_temporal": False}})
         self.assertTrue(antes <= registro.fecha_hora <= timezone.now())
 
     def test_post_d_la_auditoria_no_guarda_ninguna_contrasena(self):
@@ -200,7 +201,7 @@ class UsrCmbCtrServicioTests(TestCase):
 
         capataz.refresh_from_db()
         registro = RegistroAuditoria.objects.get()
-        self.assertEqual(registro.detalle, {"era_temporal": True})
+        self.assertEqual(registro.detalle, {"datos": {"era_temporal": True}})
         contenido = json.dumps(model_to_dict(registro), default=str)
         for secreto in (temporal, NUEVA, resumen_temporal, capataz.password):
             self.assertNotIn(secreto, contenido)
@@ -400,7 +401,7 @@ class UsrCmbCtrVistaTests(TestCase):
         self.assertTrue(capataz.check_password(NUEVA))
         registro = RegistroAuditoria.objects.get()
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.CAMBIO_CONTRASENA)
-        self.assertEqual(registro.detalle, {"era_temporal": False})
+        self.assertEqual(registro.detalle, {"datos": {"era_temporal": False}})
 
     def test_regla_1_voluntario_pide_la_contrasena_actual(self):
         """USR-CMB-CTR regla 1: sin la contraseña actual no se cambia nada y el campo muestra el error."""

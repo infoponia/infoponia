@@ -26,6 +26,7 @@ from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
     BACKEND_QUE_FALLA,
     CLAVE,
+    afectado,
     agrupar,
     contenido_de_auditoria,
     crear_administrador,
@@ -314,7 +315,7 @@ class UsrRcpCtrServicioTests(TestCase):
         self.assertTrue(capataz.check_password(NUEVA))
         self.assertIsNone(capataz.fecha_invitacion)
         registro = RegistroAuditoria.objects.get()
-        self.assertTrue(registro.detalle["invitacion_pendiente"])
+        self.assertEqual(registro.detalle, {"datos": {"era_temporal": False, "invitacion_pendiente": True}})
 
     def test_post_d_audita_con_usuario_y_rol_de_la_cuenta_sin_contrasenas(self):
         """USR-RCP-CTR postcondición d, SEG-14 y D-22: un registro con la acción de recuperación; el usuario y
@@ -328,7 +329,8 @@ class UsrRcpCtrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.RECUPERACION_CONTRASENA)
         self.assertEqual(registro.usuario_id, capataz.pk)
         self.assertEqual(registro.rol, "capataz")
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": capataz.pk}])
+        self.assertEqual(registro.afectados, [afectado(capataz)])
+        self.assertEqual(registro.detalle, {"datos": {"era_temporal": False, "invitacion_pendiente": False}})
         contenido = contenido_de_auditoria(registro)
         for secreto in (NUEVA, CLAVE, token):
             self.assertNotIn(secreto, contenido)

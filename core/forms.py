@@ -7,10 +7,14 @@ from django.contrib.auth.forms import AuthenticationForm
 
 from django.conf import settings
 
+from core.acceso import nombre_visible_del_rol
+from core.models import RegistroAuditoria
 from core.servicios import (
     ACCESO_INVITACION,
+    ACTUO_INFOPONIA,
     acceso_del_pedido,
     clases_de_rol_que_da_de_alta,
+    cuentas_filtrables_para_auditoria,
     roles_que_gestiona,
 )
 
@@ -185,6 +189,85 @@ class FormularioFiltroUsuarios(forms.Form):
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["rol"].widget.choices = [("", "Todos los roles")] + roles_que_gestiona(actor)
+
+
+class FormularioFiltroAuditoria(forms.Form):
+    """Filtros de la lista de auditoría (AUD-CNS-REG regla 2): rango de fechas, cuenta que actuó, acción y cuenta
+    afectada, más ``cuenta`` (oculto), que es el filtro de la ficha (regla 7): «actuó o fue afectada».
+
+    Solo valida la forma de lo que llega (fechas, números, que «desde» no sea posterior a «hasta»). Qué registros ve
+    cada uno y si puede filtrar por una cuenta lo decide ``core.servicios.consultar_auditoria`` (403 o 404, D-28):
+    por eso las cuentas no se validan contra la lista. Los desplegables llevan ``data-desplegable`` (D-24).
+    """
+
+    MENSAJE_CUENTA = "Elegí una cuenta de la lista."
+
+    desde = forms.DateField(
+        required=False,
+        label="Desde",
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date", "class": "field-input"}),
+        error_messages={"invalid": "Ingresá una fecha «desde» válida."},
+    )
+    hasta = forms.DateField(
+        required=False,
+        label="Hasta",
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date", "class": "field-input"}),
+        error_messages={"invalid": "Ingresá una fecha «hasta» válida."},
+    )
+    actuo = forms.CharField(
+        required=False,
+        widget=forms.Select(
+            attrs={"class": "field-input", "data-desplegable": "", "aria-label": "Filtrar por la cuenta que actuó"}
+        ),
+    )
+    accion = forms.CharField(
+        required=False,
+        widget=forms.Select(
+            attrs={"class": "field-input", "data-desplegable": "", "aria-label": "Filtrar por acción"}
+        ),
+    )
+    afectada = forms.IntegerField(
+        required=False,
+        min_value=1,
+        widget=forms.Select(
+            attrs={"class": "field-input", "data-desplegable": "", "aria-label": "Filtrar por la cuenta afectada"}
+        ),
+        error_messages={"invalid": MENSAJE_CUENTA, "min_value": MENSAJE_CUENTA},
+    )
+    cuenta = forms.IntegerField(
+        required=False,
+        min_value=1,
+        widget=forms.HiddenInput,
+        error_messages={"invalid": MENSAJE_CUENTA, "min_value": MENSAJE_CUENTA},
+    )
+
+    def __init__(self, *args, actor, **kwargs):
+        super().__init__(*args, **kwargs)
+        cuentas = [
+            (str(cuenta.pk), f"{cuenta.get_full_name() or cuenta.email} ({nombre_visible_del_rol(cuenta)})")
+            for cuenta in cuentas_filtrables_para_auditoria(actor)
+        ]
+        self.fields["actuo"].widget.choices = [
+            ("", "Cualquier cuenta que actuó"),
+            (ACTUO_INFOPONIA, "InfoPonia (el Sistema)"),
+        ] + cuentas
+        self.fields["afectada"].widget.choices = [("", "Cualquier cuenta afectada")] + cuentas
+        self.fields["accion"].widget.choices = [("", "Todas las acciones")] + list(RegistroAuditoria.Accion.choices)
+
+    def clean_actuo(self):
+        """La cuenta que actuó es el id de una cuenta o «infoponia»; cualquier otra cosa no es una cuenta."""
+        valor = (self.cleaned_data["actuo"] or "").strip()
+        if valor and valor != ACTUO_INFOPONIA and not (valor.isascii() and valor.isdigit() and int(valor) > 0):
+            raise forms.ValidationError(self.MENSAJE_CUENTA)
+        return valor
+
+    def clean(self):
+        """Un rango de fechas al revés no es válido (lo informa y la lista sale vacía)."""
+        datos = super().clean()
+        desde, hasta = datos.get("desde"), datos.get("hasta")
+        if desde and hasta and desde > hasta:
+            self.add_error("desde", "La fecha «desde» es posterior a la fecha «hasta».")
+        return datos
 
 
 class FormularioDatosPersonales(forms.Form):

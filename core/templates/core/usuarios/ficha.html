@@ -12,6 +12,12 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
   <div class="page-h">
     <h1>{{ cuenta.get_full_name }}{% if cuenta.pk == user.pk %} <span class="muted" style="font-weight:400;font-size:14px">(vos)</span>{% endif %}</h1>
     {% include "core/usuarios/_insignias.html" %}
+    {# Regla 7 de AUD-CNS-REG: abre la auditoría filtrada por esta cuenta (actuó o fue afectada). Solo si quien mira #}
+    {# puede abrirla (puede_ver_auditoria): nadie llega por este enlace a un 403 (D-30). #}
+    {% if puede_ver_auditoria %}
+    <span class="spacer"></span>
+    <a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria' %}?cuenta={{ cuenta.pk }}">{% icono "eye" 14 %} Ver auditoría</a>
+    {% endif %}
   </div>
 
   <div class="card">

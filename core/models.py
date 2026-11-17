@@ -1,11 +1,12 @@
 # Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, el grupo de
 # cuentas vinculadas y el registro de auditoría. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17, D-18, D-19
-# D-22 y D-35 en docs/decisiones.md.
+# D-22, D-35 y D-36 en docs/decisiones.md.
 
 from datetime import timedelta
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -113,8 +114,14 @@ class GrupoCuentas(models.Model):
         verbose_name = "Grupo de cuentas vinculadas"
         verbose_name_plural = "Grupos de cuentas vinculadas"
 
+    @staticmethod
+    def texto_de(grupo_id):
+        """Texto de un grupo a partir de su id. Sirve aunque el grupo ya no exista: la auditoría guarda la
+        referencia de un grupo que se disolvió (D-36)."""
+        return f"Grupo {grupo_id}"
+
     def __str__(self):
-        return f"Grupo {self.pk}"
+        return self.texto_de(self.pk)
 
 
 class Usuario(AbstractUser):
@@ -417,8 +424,39 @@ class RegistroAuditoriaInmutableError(Exception):
     """Se intentó modificar o borrar un registro de auditoría, al que solo se agregan filas (D-22)."""
 
 
+# D-36: roles de las cuentas operativas (todas las del dominio menos el Gerente). El Gerente ve los registros de
+# cuentas en los que actuó o fue afectada una de ellas (regla 1 de AUD-CNS-REG, MD-58). El rol de una cuenta no
+# cambia (MD-55), así que el rol que se guarda en la auditoría sirve para filtrar.
+ROLES_OPERATIVOS = tuple(rol for rol in Usuario.Rol.values if rol != Usuario.Rol.GERENTE)
+
+MODELO_CUENTA = "core.usuario"
+
+
+def texto_de(objeto):
+    """Texto con el que la auditoría recuerda a ``objeto`` en el momento del cambio (D-36): de una cuenta,
+    «Nombre Apellido (email)» o solo el email si no tiene nombre; de cualquier otro objeto, su ``str``."""
+    if isinstance(objeto, Usuario):
+        nombre = f"{objeto.first_name} {objeto.last_name}".strip()
+        return f"{nombre} ({objeto.email})" if nombre else objeto.email
+    return str(objeto)
+
+
+def referencia(objeto):
+    """Referencia a otro objeto dentro del detalle de la auditoría (D-36): ``{"id", "texto"}``. El texto es lo que
+    se veía en ese momento, para que el registro siga mostrando lo que era aunque el objeto cambie después.
+    Los servicios la usan para todo dato que apunte a una cuenta, un grupo y, más adelante, a un invernadero,
+    un insumo, etc."""
+    return {"id": objeto.pk, "texto": texto_de(objeto)}
+
+
+def referencia_a_grupo(grupo_id):
+    """Referencia a un grupo de cuentas vinculadas a partir de su id (D-36). Sirve aunque el grupo ya no exista:
+    la desvinculación que lo disuelve y la salida del grupo auditan un grupo que acaba de borrarse."""
+    return {"id": grupo_id, "texto": GrupoCuentas.texto_de(grupo_id)}
+
+
 class RegistroAuditoriaQuerySet(models.QuerySet):
-    """QuerySet que no permite modificar ni borrar en bloque (D-22)."""
+    """QuerySet que no permite modificar ni borrar en bloque (D-22) y que tiene el alcance de la consulta."""
 
     def update(self, **kwargs):
         raise RegistroAuditoriaInmutableError("El registro de auditoría no se modifica (D-22).")
@@ -428,6 +466,31 @@ class RegistroAuditoriaQuerySet(models.QuerySet):
 
     def delete(self):
         raise RegistroAuditoriaInmutableError("El registro de auditoría no se borra (D-22).")
+
+    def visibles_para(self, actor):
+        """Registros que ``actor`` puede consultar (regla 1 de AUD-CNS-REG). Es el único lugar del alcance.
+
+        - Administrador activo: todos.
+        - Gerente activo: los registros de los módulos de negocio (los de una acción que no está en
+          ``ACCIONES_DE_CUENTAS``) y los de cuentas en los que actuó, o fue afectada, una cuenta de rol operativo
+          (MD-58). No ve los que solo involucran a Administradores o a Gerentes (la cuenta del Gerente, la actual
+          y las anteriores). Un registro es «de cuentas» por su acción, no por sus afectados: así una acción
+          nueva de un módulo de negocio queda visible sin tocar esto, aunque solo afecte a la cuenta del Gerente.
+        - Cualquier otro actor, o una cuenta inactiva: ninguno.
+
+        Los afectados se buscan con ``contains`` sobre jsonb (``@>``), que usa el índice GIN de la tabla (D-36).
+        """
+        if actor is None or not getattr(actor, "is_active", False):
+            return self.none()
+        rol = rol_de(actor)
+        if rol == ADMINISTRADOR:
+            return self.all()
+        if rol != Usuario.Rol.GERENTE:
+            return self.none()
+        condicion = ~Q(accion__in=list(ACCIONES_DE_CUENTAS)) | Q(rol__in=ROLES_OPERATIVOS)
+        for rol_operativo in ROLES_OPERATIVOS:
+            condicion |= Q(afectados__contains=[{"modelo": MODELO_CUENTA, "rol": rol_operativo}])
+        return self.filter(condicion)
 
 
 class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQuerySet)):
@@ -446,14 +509,19 @@ class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQue
         - ``usuario``: la cuenta que actuó, o ``None`` si la acción la hace InfoPonia (el rol que
           se guarda es entonces ``ROL_INFOPONIA``). Se guarda el rol que tiene en este momento.
         - ``accion``: un valor de ``RegistroAuditoria.Accion`` (lista cerrada de SEG-14).
-        - ``afectados``: las cuentas u objetos afectados; cada uno, una instancia de modelo
-          (las cuentas siempre se anotan como ``core.usuario``).
-        - ``detalle``: diccionario con los cambios. Sin contraseñas (SEG-02, SEG-14).
+        - ``afectados``: las cuentas u objetos afectados; cada uno, una instancia de modelo. Se guardan como
+          ``{"modelo", "id", "texto"}`` y, las cuentas (siempre ``core.usuario``), también con su ``"rol"`` (D-36).
+        - ``detalle``: en el formato obligatorio de D-36, con dos claves opcionales. ``"cambios"``:
+          ``{campo: {"antes": valor, "despues": valor}}`` para todo dato que cambió (en un alta, ``antes`` es
+          ``None``). ``"datos"``: ``{clave: valor}`` para el contexto que no tiene antes y después. Una referencia a
+          otro objeto es ``referencia(objeto)``. Cualquier otra forma falla con ``ValueError``, igual que una
+          contraseña (SEG-02, SEG-14).
         """
         if accion not in RegistroAuditoria.Accion.values:
             raise ValueError(f"Acción de auditoría desconocida: {accion!r} (lista cerrada, SEG-14).")
         detalle = {} if detalle is None else detalle
         self._rechazar_contrasenas(detalle)
+        self._validar_formato(detalle)
         return self.create(
             usuario=usuario,
             rol=ROL_INFOPONIA if usuario is None else rol_de(usuario),
@@ -464,10 +532,17 @@ class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQue
 
     @staticmethod
     def _identificar(objeto):
-        """``{"modelo": ..., "id": ...}`` de un objeto afectado. Una cuenta es siempre ``core.usuario``,
-        sea cual sea su rol, para poder buscar todos los registros de una cuenta por su id."""
-        modelo = Usuario if isinstance(objeto, Usuario) else type(objeto)
-        return {"modelo": modelo._meta.label_lower, "id": objeto.pk}
+        """Cómo se guarda un objeto afectado (D-36): ``{"modelo", "id", "texto"}`` y, si es una cuenta, también
+        ``"rol"``. Una cuenta es siempre ``core.usuario``, sea cual sea su rol, para poder buscar todos los
+        registros de una cuenta por su id; su rol es ``rol_de`` («administrador» para el Administrador)."""
+        if isinstance(objeto, Usuario):
+            return {
+                "modelo": MODELO_CUENTA,
+                "id": objeto.pk,
+                "texto": texto_de(objeto),
+                "rol": rol_de(objeto),
+            }
+        return {"modelo": type(objeto)._meta.label_lower, "id": objeto.pk, "texto": texto_de(objeto)}
 
     @classmethod
     def _rechazar_contrasenas(cls, valor):
@@ -484,6 +559,55 @@ class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQue
             for contenido in valor:
                 cls._rechazar_contrasenas(contenido)
 
+    @classmethod
+    def _validar_formato(cls, detalle):
+        """D-36: el detalle solo tiene las claves ``cambios`` y ``datos``; cada cambio es exactamente
+        ``{"antes", "despues"}`` y con valores distintos (lo que hace obligatorio el valor anterior); todo
+        diccionario dentro de un valor es una referencia ``{"id", "texto"}``. Falla con ``ValueError``."""
+        if not isinstance(detalle, dict):
+            raise ValueError("El detalle de auditoría tiene que ser un diccionario (D-36).")
+        sobrantes = set(detalle) - {"cambios", "datos"}
+        if sobrantes:
+            raise ValueError(
+                "El detalle de auditoría solo admite las claves 'cambios' y 'datos' (D-36); "
+                f"sobra {sorted(sobrantes)}."
+            )
+        cambios = detalle.get("cambios", {})
+        if not isinstance(cambios, dict):
+            raise ValueError("'cambios' tiene que ser un diccionario {campo: {antes, despues}} (D-36).")
+        for campo, cambio in cambios.items():
+            if not isinstance(cambio, dict) or set(cambio) != {"antes", "despues"}:
+                raise ValueError(
+                    f"El cambio de {campo!r} tiene que ser exactamente {{'antes': ..., 'despues': ...}} (D-36)."
+                )
+            antes, despues = cambio["antes"], cambio["despues"]
+            if antes == despues and type(antes) is type(despues):
+                raise ValueError(f"El cambio de {campo!r} no cambió nada: 'antes' es igual a 'despues' (D-36).")
+            cls._validar_valor(antes, campo)
+            cls._validar_valor(despues, campo)
+        datos = detalle.get("datos", {})
+        if not isinstance(datos, dict):
+            raise ValueError("'datos' tiene que ser un diccionario {clave: valor} (D-36).")
+        for clave, valor in datos.items():
+            cls._validar_valor(valor, clave)
+
+    @classmethod
+    def _validar_valor(cls, valor, donde):
+        """Un valor del detalle: nulo, booleano, número, texto, una referencia ``{"id", "texto"}`` o una lista
+        de esos. Cualquier otro diccionario se rechaza: una referencia mal formada no se descubriría hasta
+        mostrar el registro."""
+        if valor is None or isinstance(valor, (bool, int, float, str)):
+            return
+        if isinstance(valor, (list, tuple)):
+            for elemento in valor:
+                cls._validar_valor(elemento, donde)
+            return
+        if isinstance(valor, dict):
+            if set(valor) == {"id", "texto"} and isinstance(valor["texto"], str):
+                return
+            raise ValueError(f"Un diccionario en {donde!r} tiene que ser una referencia {{'id', 'texto'}} (D-36).")
+        raise ValueError(f"El valor de {donde!r} no se puede guardar en la auditoría (D-36): {valor!r}.")
+
 
 class RegistroAuditoria(models.Model):
     """Registro de auditoría: a esta tabla solo se agregan filas (D-22, SEG-14).
@@ -492,10 +616,12 @@ class RegistroAuditoria(models.Model):
     qué acción, qué cuentas u objetos afectó y el detalle de los cambios. Nunca guarda contraseñas.
     Se escribe con ``RegistroAuditoria.objects.registrar(...)`` desde el servicio del caso de uso,
     dentro de la misma transacción. Una fila guardada no se modifica ni se borra.
+    El detalle tiene un formato obligatorio (D-36): ``cambios`` con antes y después, y ``datos`` de contexto.
     """
 
     class Accion(models.TextChoices):
-        """Lista cerrada de acciones auditadas (SEG-14)."""
+        """Lista cerrada de acciones auditadas (SEG-14). Cada acción nueva tiene que estar clasificada en
+        ``ACCIONES_DE_CUENTAS`` o en ``ACCIONES_DE_NEGOCIO`` (D-36): de eso depende qué ve el Gerente."""
 
         ALTA = "alta", "Alta de cuenta"
         MODIFICACION = "modificacion", "Modificación de cuenta"
@@ -507,6 +633,31 @@ class RegistroAuditoria(models.Model):
         ACEPTACION_INVITACION = "aceptacion_invitacion", "Aceptación de invitación"
         VINCULACION = "vinculacion", "Vinculación de cuentas"
         DESVINCULACION = "desvinculacion", "Desvinculación de cuentas"
+
+    # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
+    # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
+    # al final, con su clave tal cual.
+    ETIQUETAS = {
+        "acceso": "Forma de acceso",
+        "era_temporal": "La contraseña era temporal",
+        "invitacion_pendiente": "Tenía una invitación pendiente",
+        "rol": "Rol",
+        "nombre": "Nombre",
+        "apellido": "Apellido",
+        "email": "Email",
+        "estado": "Estado",
+        "telefono": "Teléfono",
+        "grupo": "Grupo de cuentas vinculadas",
+        "grupo_unido": "Grupo que se unió",
+        "disuelto": "El grupo se disolvió",
+    }
+    # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
+    VALORES_VISIBLES = {
+        "rol": {**dict(Usuario.Rol.choices), ADMINISTRADOR: "Administrador"},
+        "estado": {"activo": "Activo", "inactivo": "Inactivo"},
+        "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
+    }
+    SIN_VALOR = "—"
 
     # PROTECT: las cuentas no se borran (se dan de baja), y si alguien lo intentara no puede
     # llevarse el registro con ella. Nulo: acción de InfoPonia (D-22, por ejemplo MD-62).
@@ -524,7 +675,7 @@ class RegistroAuditoria(models.Model):
     afectados = models.JSONField(
         "cuentas u objetos afectados",
         default=list,
-        help_text='Lista de {"modelo": "core.usuario", "id": 7}.',
+        help_text='Lista de {"modelo": "core.usuario", "id": 7, "texto": "...", "rol": "capataz"}.',
     )
     detalle = models.JSONField("detalle de los cambios", default=dict)
 
@@ -534,9 +685,74 @@ class RegistroAuditoria(models.Model):
         verbose_name = "Registro de auditoría"
         verbose_name_plural = "Registros de auditoría"
         ordering = ["-fecha_hora", "-id"]
+        # D-36: la tabla solo crece. El GIN con ``jsonb_path_ops`` sirve a ``@>`` (``afectados__contains``), que usan el
+        # alcance del Gerente y el filtro por cuenta afectada, y es más chico y rápido que el ``jsonb_ops`` por
+        # defecto; alcanza porque no se usa otro operador. El btree sirve al orden de cada página (del más reciente
+        # al más viejo) y al rango de fechas. El filtro por la cuenta que actuó ya tiene el índice de su clave foránea.
+        indexes = [
+            GinIndex(fields=["afectados"], opclasses=["jsonb_path_ops"], name="auditoria_afectados_gin"),
+            models.Index(fields=["-fecha_hora", "-id"], name="auditoria_fecha_idx"),
+        ]
 
     def __str__(self):
         return f"{self.fecha_hora:%d/%m/%Y %H:%M} · {self.rol} · {self.get_accion_display()}"
+
+    @classmethod
+    def _en_orden(cls, claves):
+        """``claves`` en el orden de ``ETIQUETAS``; las que no figuran, al final y en su orden."""
+        conocidas = list(cls.ETIQUETAS)
+        return sorted(claves, key=lambda c: conocidas.index(c) if c in conocidas else len(conocidas))
+
+    @classmethod
+    def _valor_visible(cls, campo, valor):
+        """Un valor del detalle como texto: nulo como «—», un booleano como «Sí» o «No», una referencia con
+        su texto guardado, una lista con sus elementos separados por comas y los valores con lista cerrada con su
+        nombre visible."""
+        if valor is None:
+            return cls.SIN_VALOR
+        if isinstance(valor, bool):
+            return "Sí" if valor else "No"
+        if isinstance(valor, dict):
+            return valor["texto"]
+        if isinstance(valor, (list, tuple)):
+            return ", ".join(cls._valor_visible(campo, elemento) for elemento in valor)
+        return cls.VALORES_VISIBLES.get(campo, {}).get(valor, str(valor))
+
+    def rol_visible(self):
+        """Nombre visible del rol que tenía quien actuó en ese momento («Capataz», «Administrador»)."""
+        return self.VALORES_VISIBLES["rol"].get(self.rol, self.rol)
+
+    def afectados_visibles(self):
+        """Los afectados como ``(texto, rol visible o None)``, con el texto que tenían en el momento del cambio
+        (regla 3 de AUD-CNS-REG). El rol solo lo tienen las cuentas."""
+        return [
+            (
+                afectado.get("texto") or f"{afectado['modelo']} {afectado['id']}",
+                self.VALORES_VISIBLES["rol"].get(afectado["rol"], afectado["rol"]) if afectado.get("rol") else None,
+            )
+            for afectado in self.afectados
+        ]
+
+    def filas_de_cambios(self):
+        """Los cambios del detalle como filas ``(campo, antes, despues)`` en texto, para la tabla Campo / Antes /
+        Después (regla 3 de AUD-CNS-REG)."""
+        cambios = self.detalle.get("cambios", {})
+        return [
+            (
+                self.ETIQUETAS.get(campo, campo),
+                self._valor_visible(campo, cambios[campo]["antes"]),
+                self._valor_visible(campo, cambios[campo]["despues"]),
+            )
+            for campo in self._en_orden(cambios)
+        ]
+
+    def filas_de_datos(self):
+        """Los datos de contexto del detalle como filas ``(dato, valor)`` en texto."""
+        datos = self.detalle.get("datos", {})
+        return [
+            (self.ETIQUETAS.get(clave, clave), self._valor_visible(clave, datos[clave]))
+            for clave in self._en_orden(datos)
+        ]
 
     def save(self, *args, **kwargs):
         """Solo permite agregar: guardar una fila que ya existe falla (D-22)."""
@@ -547,3 +763,24 @@ class RegistroAuditoria(models.Model):
     def delete(self, *args, **kwargs):
         """Un registro de auditoría no se borra (D-22)."""
         raise RegistroAuditoriaInmutableError("El registro de auditoría no se borra (D-22).")
+
+
+# D-36: cada acción de ``RegistroAuditoria.Accion`` se clasifica en uno de estos dos conjuntos, y en uno solo (lo
+# exige una prueba). ``visibles_para`` decide por ``ACCIONES_DE_CUENTAS``: lo que no está ahí es de un módulo de
+# negocio y el Gerente lo ve sin importar a quién afecte. Agregar una acción obliga a clasificarla.
+ACCIONES_DE_CUENTAS = frozenset(
+    {
+        RegistroAuditoria.Accion.ALTA,
+        RegistroAuditoria.Accion.MODIFICACION,
+        RegistroAuditoria.Accion.BAJA,
+        RegistroAuditoria.Accion.REACTIVACION,
+        RegistroAuditoria.Accion.RESTABLECIMIENTO,
+        RegistroAuditoria.Accion.CAMBIO_CONTRASENA,
+        RegistroAuditoria.Accion.RECUPERACION_CONTRASENA,
+        RegistroAuditoria.Accion.ACEPTACION_INVITACION,
+        RegistroAuditoria.Accion.VINCULACION,
+        RegistroAuditoria.Accion.DESVINCULACION,
+    }
+)
+# Hoy no hay módulos de negocio; sus acciones se agregan acá cuando existan.
+ACCIONES_DE_NEGOCIO = frozenset()

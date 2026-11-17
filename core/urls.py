@@ -1,5 +1,5 @@
 # Rutas de core: inicio, inicio de sesión, cierre de sesión, elegir contraseña, Mi perfil y cuentas del Gerente y del
-# Administrador (consultar, alta, modificar y baja).
+# Administrador (consultar, alta, modificar y baja) y la consulta del registro de auditoría.
 
 from django.urls import path
 
@@ -38,4 +38,7 @@ urlpatterns = [
     path("usuarios/<int:cuenta_id>/restablecer/", views.usuario_restablecer, name="usuario_restablecer"),
     path("usuarios/<int:cuenta_id>/reactivar/", views.usuario_reactivar, name="usuario_reactivar"),
     path("usuarios/<int:cuenta_id>/baja/", views.usuario_baja, name="usuario_baja"),
+    # Consultar el registro de auditoría (AUD-CNS-REG; D-36): solo lectura.
+    path("auditoria/", views.auditoria, name="auditoria"),
+    path("auditoria/<int:registro_id>/", views.auditoria_registro, name="auditoria_registro"),
 ]

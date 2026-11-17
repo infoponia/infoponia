@@ -2,11 +2,13 @@
 # contraseña (USR-CMB-CTR), lo que necesita Mi perfil (USR-GST-PRF), la gestión de cuentas del Gerente y
 # del Administrador (USR-CNS-USR, USR-ALT-USR, USR-MOD-USR y USR-BAJ-USR), con los invariantes de SEG-15, y
 # las cuentas vinculadas (USR-VNC-CTA y SEG-09), la recuperación de contraseña por correo (USR-RCP-CTR y SEG-12) y la
-# invitación por correo como forma de primer acceso (SEG-20, D-35).
+# invitación por correo como forma de primer acceso (SEG-20, D-35) y la consulta del registro de auditoría
+# (AUD-CNS-REG, D-36).
 # Las vistas solo validan la entrada y llaman acá.
 
 import logging
 from collections import namedtuple
+from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
@@ -19,11 +21,13 @@ from django.db.models import Q
 from django.http import Http404
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from core.models import (
     ADMINISTRADOR,
+    MODELO_CUENTA,
     Agronomo,
     Capataz,
     Gerente,
@@ -33,6 +37,7 @@ from core.models import (
     Transportista,
     Usuario,
     Vendedor,
+    referencia_a_grupo,
     rol_de,
 )
 from core.tokens import generador_invitacion
@@ -43,6 +48,9 @@ logger = logging.getLogger(__name__)
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
 MENSAJE_FUERA_DE_ALCANCE = "Esa cuenta no está dentro de las que gestionás."
 MENSAJE_SIN_ACCESO = "Tu cuenta no tiene acceso a la gestión de usuarios."
+# Consultar el registro de auditoría (AUD-CNS-REG, D-36).
+MENSAJE_SIN_ACCESO_A_AUDITORIA = "Tu cuenta no tiene acceso a la auditoría."
+MENSAJE_REGISTRO_FUERA_DE_ALCANCE = "Ese registro de auditoría no está dentro de los que podés consultar."
 
 # Cuentas vinculadas (USR-VNC-CTA, tarea 06b). Los textos de vincular son los del prototipo (modalHtml 'link'
 # y link-do).
@@ -84,11 +92,11 @@ CLASES_DE_ROL_QUE_DA_DE_ALTA_EL_GERENTE = {
 CLASES_DE_ROL_QUE_DA_DE_ALTA_EL_ADMINISTRADOR = {Usuario.Rol.GERENTE: Gerente}
 
 
-def _exigir_actor_activo(actor, roles):
+def _exigir_actor_activo(actor, roles, mensaje=MENSAJE_SIN_ACCESO):
     """Precondición a de los casos de uso de cuentas: ``actor`` es una cuenta activa con un rol de
     ``roles``. Se rechaza con ``PermissionDenied`` (SEG-13)."""
     if actor is None or not actor.is_active or rol_de(actor) not in roles:
-        raise PermissionDenied(MENSAJE_SIN_ACCESO)
+        raise PermissionDenied(mensaje)
 
 
 def _exigir_gestor_activo(actor):
@@ -309,7 +317,7 @@ def cambiar_contrasena(usuario, contrasena_nueva, contrasena_actual=None):
             usuario=cuenta,
             accion=RegistroAuditoria.Accion.CAMBIO_CONTRASENA,
             afectados=[cuenta],
-            detalle={"era_temporal": era_temporal},
+            detalle={"datos": {"era_temporal": era_temporal}},  # D-36
         )
 
     usuario.password = cuenta.password
@@ -402,6 +410,116 @@ def acciones_permitidas(actor, cuenta):
 def _hay_otro_administrador_activo(cuenta):
     """True si hay un Administrador activo distinto de ``cuenta`` (precondición c de USR-BAJ-USR)."""
     return Usuario.objects.filter(is_superuser=True, is_active=True).exclude(pk=cuenta.pk).exists()
+
+
+# ---- AUD-CNS-REG: consultar el registro de auditoría (D-36) ----
+
+# Valor de «cuenta que actuó» para los registros que hizo InfoPonia, sin una cuenta detrás (regla 3).
+ACTUO_INFOPONIA = "infoponia"
+
+
+def _exigir_consulta_de_auditoria(actor):
+    """Precondición a de AUD-CNS-REG: ``actor`` es una cuenta activa de Gerente o de Administrador (SEG-13)."""
+    _exigir_actor_activo(actor, (Usuario.Rol.GERENTE, ADMINISTRADOR), MENSAJE_SIN_ACCESO_A_AUDITORIA)
+
+
+def puede_ver_auditoria_de(actor, cuenta):
+    """True si ``actor`` puede abrir la auditoría de ``cuenta`` (regla 7 de AUD-CNS-REG): la ficha muestra «Ver
+    auditoría» solo entonces, para que ningún enlace lleve a un 403 (D-30). Es lo mismo que ``_cuenta_filtrable``
+    permite: el Administrador, cualquier cuenta; el Gerente, todas menos las de Administrador (D-36)."""
+    if actor is None or not actor.is_active:
+        return False
+    rol = rol_de(actor)
+    if rol == ADMINISTRADOR:
+        return True
+    return rol == Usuario.Rol.GERENTE and not cuenta.is_superuser
+
+
+def cuentas_filtrables_para_auditoria(actor):
+    """Cuentas que ``actor`` puede elegir en los filtros de la auditoría (regla 2 de AUD-CNS-REG, D-36): las mismas por
+    las que ``consultar_auditoria`` no da 403. Las desplegables de la pantalla las ofrecen todas, ordenadas por
+    apellido. Precondición a: Gerente o Administrador activos."""
+    _exigir_consulta_de_auditoria(actor)
+    cuentas = Usuario.objects.all()
+    if rol_de(actor) != ADMINISTRADOR:
+        cuentas = cuentas.exclude(is_superuser=True)
+    return cuentas.order_by("last_name", "first_name", "email")
+
+
+def _cuenta_filtrable(actor, cuenta_id):
+    """La cuenta por la que ``actor`` quiere filtrar la auditoría (regla 2 de AUD-CNS-REG, D-28 y D-36). Un id que
+    no existe da ``Http404``; el Gerente que filtra por una cuenta de Administrador recibe ``PermissionDenied``
+    (nunca aparece en un registro que él pueda ver). El Gerente sí puede filtrar por su cuenta y por las de Gerentes
+    anteriores: aparecen en registros que ve (por ejemplo, el Gerente anterior que modificó a un Capataz).
+    Los otros filtros se siguen limitando a lo visible (regla 1)."""
+    cuenta = Usuario.objects.filter(pk=cuenta_id).first()
+    if cuenta is None:
+        raise Http404("No existe esa cuenta.")
+    if not puede_ver_auditoria_de(actor, cuenta):
+        raise PermissionDenied(MENSAJE_FUERA_DE_ALCANCE)
+    return cuenta
+
+
+def _el_dia_empieza(dia):
+    """Fecha y hora del comienzo de ``dia`` en la zona horaria del sistema (``TIME_ZONE``)."""
+    return timezone.make_aware(datetime.combine(dia, time.min))
+
+
+def consultar_auditoria(
+    actor, desde=None, hasta=None, quien_actuo=None, accion=None, afectado_id=None, cuenta_id=None
+):
+    """AUD-CNS-REG: registros de auditoría que ``actor`` puede ver, filtrados y del más reciente al más viejo.
+
+    - Precondición a y SEG-13: ``actor`` es un Gerente o un Administrador activos; si no, ``PermissionDenied``.
+    - Regla 1: solo los de ``RegistroAuditoria.objects.visibles_para(actor)``, el único lugar del alcance.
+    - Regla 2: los filtros se combinan. ``desde`` y ``hasta`` son fechas, inclusive, en la zona horaria del sistema
+      (se consulta ``>= desde 00:00`` y ``< hasta + 1 día 00:00``, que puede usar el índice de la fecha).
+      ``quien_actuo`` es el id de la cuenta que actuó, o ``ACTUO_INFOPONIA`` para los registros sin cuenta.
+      ``accion`` es un valor de ``RegistroAuditoria.Accion``. ``afectado_id`` es el id de una cuenta afectada
+      (``contains`` sobre jsonb, que usa el índice GIN). ``cuenta_id`` es una cuenta que actuó o fue afectada: es el
+      filtro de la ficha (regla 7).
+    - Una cuenta que no existe da ``Http404``; una fuera del alcance del Gerente, ``PermissionDenied`` (D-28, D-36).
+    - Regla 6, SEG-14 y postcondición a: no escribe ni audita; no abre ``transaction.atomic()`` porque solo lee.
+
+    Devuelve un QuerySet perezoso con ``usuario`` ya cargado.
+    """
+    _exigir_consulta_de_auditoria(actor)
+    registros = RegistroAuditoria.objects.visibles_para(actor).select_related("usuario")
+    if desde is not None:
+        registros = registros.filter(fecha_hora__gte=_el_dia_empieza(desde))
+    if hasta is not None:
+        registros = registros.filter(fecha_hora__lt=_el_dia_empieza(hasta + timedelta(days=1)))
+    if quien_actuo == ACTUO_INFOPONIA:
+        registros = registros.filter(usuario__isnull=True)
+    elif quien_actuo is not None:
+        registros = registros.filter(usuario_id=_cuenta_filtrable(actor, quien_actuo).pk)
+    if accion:
+        registros = registros.filter(accion=accion)
+    if afectado_id is not None:
+        cuenta = _cuenta_filtrable(actor, afectado_id)
+        registros = registros.filter(afectados__contains=[{"modelo": MODELO_CUENTA, "id": cuenta.pk}])
+    if cuenta_id is not None:
+        cuenta = _cuenta_filtrable(actor, cuenta_id)
+        registros = registros.filter(
+            Q(usuario_id=cuenta.pk) | Q(afectados__contains=[{"modelo": MODELO_CUENTA, "id": cuenta.pk}])
+        )
+    return registros.order_by("-fecha_hora", "-id")
+
+
+def obtener_registro(actor, registro_id):
+    """Un registro de auditoría si está dentro de los que ``actor`` puede ver (regla 1 de AUD-CNS-REG, D-28).
+
+    Un id que no existe da ``Http404``; uno que existe pero está fuera del alcance, ``PermissionDenied`` con
+    mensaje (SEG-13). Precondición a: Gerente o Administrador activos. No audita (regla 6).
+    """
+    _exigir_consulta_de_auditoria(actor)
+    visibles = RegistroAuditoria.objects.visibles_para(actor).select_related("usuario")
+    registro = visibles.filter(pk=registro_id).first()
+    if registro is None:
+        if not RegistroAuditoria.objects.filter(pk=registro_id).exists():
+            raise Http404("No existe ese registro de auditoría.")
+        raise PermissionDenied(MENSAJE_REGISTRO_FUERA_DE_ALCANCE)
+    return registro
 
 
 def gerente_activo_que_impide_reactivar(cuenta):
@@ -582,17 +700,18 @@ def alta_usuario(
                 {"email": [ValidationError(MENSAJE_EMAIL_REPETIDO, code="email_repetido")]}
             ) from error
 
-        # Postcondición e, SEG-14 y D-22: sin ninguna contraseña en el detalle.
+        # Postcondición e, SEG-14, D-22 y D-36: sin ninguna contraseña en el detalle. En un alta, todo dato cargado
+        # es un cambio con «antes» nulo (el teléfono, solo si se cargó); la forma de acceso es contexto.
+        datos_del_alta = {"rol": str(rol), "nombre": nombre, "apellido": apellido, "email": email}
+        if telefono:
+            datos_del_alta["telefono"] = telefono
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.ALTA,
             afectados=[cuenta],
             detalle={
-                "rol": rol,
-                "email": email,
-                "nombre": nombre,
-                "apellido": apellido,
-                "acceso": acceso,
+                "cambios": {campo: {"antes": None, "despues": valor} for campo, valor in datos_del_alta.items()},
+                "datos": {"acceso": acceso},
             },
         )
     # Fuera de la transacción (D-14): la cuenta ya está confirmada.
@@ -680,7 +799,7 @@ def modificar_usuario(actor, cuenta_id, nombre, apellido, email, telefono=""):
         if errores:
             raise ValidationError(errores)
 
-        # Solo los campos que cambiaron, como {campo: [antes, después]} para la auditoría.
+        # Solo los campos que cambiaron, como {campo: {antes, despues}} para la auditoría (D-36).
         nuevos = {
             "nombre": ("first_name", nombre),
             "apellido": ("last_name", apellido),
@@ -691,7 +810,7 @@ def modificar_usuario(actor, cuenta_id, nombre, apellido, email, telefono=""):
         for clave, (campo, despues) in nuevos.items():
             antes = getattr(cuenta, campo)
             if antes != despues:
-                cambios[clave] = [antes, despues]
+                cambios[clave] = {"antes": antes, "despues": despues}
                 setattr(cuenta, campo, despues)
         if not cambios:
             return cuenta  # D-28
@@ -709,7 +828,7 @@ def modificar_usuario(actor, cuenta_id, nombre, apellido, email, telefono=""):
             usuario=actor,
             accion=RegistroAuditoria.Accion.MODIFICACION,
             afectados=[cuenta],
-            detalle=cambios,
+            detalle={"cambios": cambios},
         )
     return cuenta
 
@@ -749,15 +868,21 @@ def _sacar_del_grupo(cuenta, otras=None):
     return SalidaDelGrupo(grupo_id, disuelto, otras if disuelto else [])
 
 
-def _auditar_con_salida_del_grupo(actor, accion, cuenta, salida, detalle=None):
-    """Registra ``accion`` sobre ``cuenta`` y, si salió de un grupo (SEG-11), lo deja en el registro: el detalle
-    suma ``sale_del_grupo`` (id del grupo) y, si el grupo se disolvió, la cuenta que quedaba sola figura
-    también entre las afectadas. Sin grupo, el registro es el de siempre. Nunca contraseñas (D-22)."""
-    detalle = dict(detalle or {})
+def _auditar_con_salida_del_grupo(actor, accion, cuenta, salida, cambios=None, datos=None):
+    """Registra ``accion`` sobre ``cuenta`` con los ``cambios`` y los ``datos`` indicados (D-36) y, si salió de un
+    grupo (SEG-11), lo deja en el registro: la salida es un cambio de la cuenta, ``grupo`` de la referencia al
+    grupo a nulo, y, si el grupo se disolvió, la cuenta que quedaba sola figura también entre las afectadas. Sin
+    grupo, el registro es el de siempre. Nunca contraseñas (D-22)."""
+    cambios = dict(cambios or {})
     afectados = [cuenta]
     if salida is not None:
-        detalle["sale_del_grupo"] = salida.grupo_id
+        cambios["grupo"] = {"antes": referencia_a_grupo(salida.grupo_id), "despues": None}
         afectados += salida.otras_afectadas
+    detalle = {}
+    if cambios:
+        detalle["cambios"] = cambios
+    if datos:
+        detalle["datos"] = datos
     RegistroAuditoria.objects.registrar(
         usuario=actor, accion=accion, afectados=afectados, detalle=detalle
     )
@@ -781,7 +906,7 @@ def restablecer_contrasena(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_u
     - Postcondición d, SEG-14 y D-22: auditoría sin contraseñas, en la misma transacción.
     - Postcondición b y SEG-11 (tarea 06b, D-17): la cuenta sale de su grupo de cuentas vinculadas; si el grupo
       queda con una sola cuenta, se disuelve. Se bloquea el grupo antes que la cuenta (``cuida_grupo``); si su
-      grupo cambió en el intervalo, «cambio_simultaneo». La auditoría suma ``sale_del_grupo``.
+      grupo cambió en el intervalo, «cambio_simultaneo». La auditoría suma el cambio ``grupo`` (D-36).
     """
     _exigir_forma_de_acceso(acceso)
     with transaction.atomic():
@@ -806,7 +931,7 @@ def restablecer_contrasena(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_u
         # Postcondición b de USR-MOD-USR y SEG-11: la cuenta sale de su grupo de cuentas vinculadas.
         salida = _sacar_del_grupo(cuenta)
         _auditar_con_salida_del_grupo(
-            actor, RegistroAuditoria.Accion.RESTABLECIMIENTO, cuenta, salida, detalle={"acceso": acceso}
+            actor, RegistroAuditoria.Accion.RESTABLECIMIENTO, cuenta, salida, datos={"acceso": acceso}
         )
     return _resultado_acceso(cuenta, acceso, temporal, construir_url)
 
@@ -863,7 +988,8 @@ def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=No
             RegistroAuditoria.Accion.REACTIVACION,
             cuenta,
             salida,
-            detalle={"estado": ["inactivo", "activo"], "acceso": acceso},
+            cambios={"estado": {"antes": "inactivo", "despues": "activo"}},
+            datos={"acceso": acceso},
         )
     return _resultado_acceso(cuenta, acceso, temporal, construir_url)
 
@@ -905,7 +1031,7 @@ def baja_usuario(actor, cuenta_id):
             usuario=actor,
             accion=RegistroAuditoria.Accion.BAJA,
             afectados=[cuenta],
-            detalle={"estado": ["activo", "inactivo"]},
+            detalle={"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}},
         )
     return cuenta
 
@@ -1055,7 +1181,12 @@ def vincular_cuenta(actor, email, contrasena):
             usuario=actor,
             accion=RegistroAuditoria.Accion.VINCULACION,
             afectados=afectados,
-            detalle={"grupo": grupo_id, "grupo_unido": grupo_unido},
+            detalle={
+                "datos": {
+                    "grupo": referencia_a_grupo(grupo_id),
+                    "grupo_unido": None if grupo_unido is None else referencia_a_grupo(grupo_unido),
+                }
+            },
         )
     otra_ahora.grupo_id = grupo_id
     return otra_ahora
@@ -1105,7 +1236,7 @@ def desvincular_cuenta(actor, cuenta_id):
             usuario=actor,
             accion=RegistroAuditoria.Accion.DESVINCULACION,
             afectados=[saliente, *salida.otras_afectadas],
-            detalle={"grupo": grupo_id, "disuelto": salida.disuelto},
+            detalle={"datos": {"grupo": referencia_a_grupo(grupo_id), "disuelto": salida.disuelto}},
         )
     return saliente
 
@@ -1352,8 +1483,10 @@ def _elegir_contrasena_con_enlace(cuenta_id, token, contrasena_nueva, generador,
             raise ValidationError({"contrasena_nueva": error.error_list}) from error
 
         detalle = {
-            "era_temporal": cuenta.tiene_contrasena_temporal,
-            "invitacion_pendiente": cuenta.tiene_invitacion_pendiente,
+            "datos": {
+                "era_temporal": cuenta.tiene_contrasena_temporal,
+                "invitacion_pendiente": cuenta.tiene_invitacion_pendiente,
+            }
         }
         cuenta.set_password(contrasena_nueva)
         cuenta.fecha_contrasena_temporal = None

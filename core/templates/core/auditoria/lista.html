@@ -1,0 +1,38 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}Auditoría: lista paginada del registro de auditoría (AUD-CNS-REG; no hay prototipo de esta pantalla, D-24, así que sigue
+el estilo de la lista de Cuentas y las convenciones de D-29). Solo lectura: no tiene ninguna acción de modificar ni de
+borrar (regla 4). Los filtros funcionan con HTMX (reemplazan solo la tabla y actualizan la URL); sin JavaScript, el botón
+«Filtrar» envía el formulario. El campo oculto «cuenta» es el filtro de la ficha de una cuenta (regla 7): se conserva al
+filtrar y se muestra como una etiqueta con «Quitar filtro».{% endcomment %}
+{% block titulo %}Auditoría · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page">
+  <div class="page-h">
+    <h1>Auditoría</h1>
+  </div>
+  <p class="muted" style="margin-bottom:14px">Quién hizo qué, cuándo y con qué cambios.
+    {% if es_administrador %}Ves todos los registros.{% else %}Ves los registros de los módulos de negocio y los de las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico; no los que solo involucran a Administradores o a Gerentes.{% endif %}
+    Los registros no se pueden modificar ni borrar.</p>
+
+  {% if cuenta_filtrada %}
+  <div class="filtro-activo">
+    <span>Registros de <b>{{ cuenta_filtrada.get_full_name|default:cuenta_filtrada.email }}</b> (actuó o fue afectada)</span>
+    <a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria' %}{% if consulta_sin_cuenta %}?{{ consulta_sin_cuenta }}{% endif %}">Quitar filtro</a>
+  </div>
+  {% endif %}
+
+  <form class="filters" method="get" action="{% url 'core:auditoria' %}"
+        hx-get="{% url 'core:auditoria' %}" hx-target="#tabla-auditoria" hx-push-url="true"
+        hx-trigger="change, submit">
+    <label class="filtro" for="{{ form.desde.id_for_label }}">Desde {{ form.desde }}</label>
+    <label class="filtro" for="{{ form.hasta.id_for_label }}">Hasta {{ form.hasta }}</label>
+    {{ form.actuo }}
+    {{ form.accion }}
+    {{ form.afectada }}
+    {{ form.cuenta }}
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+  </form>
+
+  <div id="tabla-auditoria">{% include "core/auditoria/_tabla_auditoria.html" %}</div>
+</div>
+{% endblock %}
