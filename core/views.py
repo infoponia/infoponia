@@ -10,11 +10,12 @@ from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.shortcuts import redirect, render
 from django.conf import settings
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, pantalla_accesible_para, rol_de, rol_requerido
@@ -22,6 +23,7 @@ from core.forms import (
     FormularioAltaUsuario,
     FormularioCambioContrasena,
     FormularioContrasenaNueva,
+    FormularioFiltroAuditoria,
     FormularioFiltroUsuarios,
     FormularioInicioSesion,
     FormularioModificarUsuario,
@@ -40,6 +42,7 @@ from core.servicios import (
     cambiar_contrasena,
     confirmar_invitacion,
     confirmar_recuperacion,
+    consultar_auditoria,
     consultar_usuarios,
     cuenta_de_la_invitacion,
     cuenta_del_enlace,
@@ -50,8 +53,10 @@ from core.servicios import (
     gerente_activo_que_impide_reactivar,
     modificar_usuario,
     obtener_cuenta,
+    obtener_registro,
     obtener_cuenta_del_grupo,
     pedir_recuperacion,
+    puede_ver_auditoria_de,
     quien_gestiona,
     reactivar_usuario,
     restablecer_contrasena,
@@ -540,6 +545,8 @@ def usuario_ficha(request, cuenta_id):
             "acciones": acciones_permitidas(request.user, cuenta),
             # Regla 3 de USR-CNS-USR y regla 7 de USR-MOD-USR: los vínculos, en solo lectura.
             "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
+            # Regla 7 de AUD-CNS-REG: «Ver auditoría» solo si quien mira puede abrir la auditoría de esa cuenta.
+            "puede_ver_auditoria": puede_ver_auditoria_de(request.user, cuenta),
         },
     )
 
@@ -742,3 +749,88 @@ def usuario_reactivar(request, cuenta_id):
 def usuario_baja(request, cuenta_id):
     """Dar de baja una cuenta activa (USR-BAJ-USR)."""
     return _gestionar_cuenta(request, cuenta_id, "baja")
+
+
+# ---- Consultar el registro de auditoría (AUD-CNS-REG, D-36) ----
+
+# D-36: 25 registros por página. Cada fila ocupa dos o tres renglones (quién, acción y afectados), así que una
+# página entra en una o dos pantallas sin recorrer una lista enorme.
+POR_PAGINA_AUDITORIA = 25
+
+
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
+@require_safe
+@never_cache
+@vary_on_headers("HX-Request")
+def auditoria(request):
+    """Lista paginada del registro de auditoría con filtros (AUD-CNS-REG, reglas 1, 2 y 3). Solo lectura.
+
+    - Regla 4: solo acepta GET (``require_safe``): un POST da 405; ninguna pantalla modifica ni borra registros.
+    - Regla 6: no audita. Un pedido de HTMX (los filtros y las páginas) recibe solo la tabla.
+    - Filtrar por una cuenta fuera del alcance del Gerente da 403; por una que no existe, 404 (D-28): lo decide el
+      servicio. Con un filtro mal formado, la pantalla lo informa y la lista sale vacía.
+    - ``cuenta`` es el filtro de la ficha (regla 7): se conserva en el formulario y se muestra como una etiqueta
+      con «Quitar filtro».
+    """
+    form = FormularioFiltroAuditoria(request.GET, actor=request.user)
+    pagina = cuenta_filtrada = None
+    if form.is_valid():
+        filtros = form.cleaned_data
+        registros = consultar_auditoria(
+            request.user,
+            desde=filtros["desde"],
+            hasta=filtros["hasta"],
+            quien_actuo=filtros["actuo"] or None,
+            accion=filtros["accion"] or None,
+            afectado_id=filtros["afectada"],
+            cuenta_id=filtros["cuenta"],
+        )
+        pagina = Paginator(registros, POR_PAGINA_AUDITORIA).get_page(request.GET.get("pagina"))
+        if filtros["cuenta"]:
+            cuenta_filtrada = Usuario.objects.get(pk=filtros["cuenta"])  # el servicio ya verificó que existe
+
+    # Los enlaces de página y de «Quitar filtro» conservan el resto de los filtros; ``urlencode`` escapa todo.
+    consulta = request.GET.copy()
+    consulta_completa = consulta.urlencode()
+    consulta.pop("pagina", None)
+    consulta_base = consulta.urlencode()
+    consulta.pop("cuenta", None)
+    parcial = (
+        request.headers.get("HX-Request") == "true"
+        and request.headers.get("HX-History-Restore-Request") != "true"
+    )
+    plantilla = "core/auditoria/_tabla_auditoria.html" if parcial else "core/auditoria/lista.html"
+    return render(
+        request,
+        plantilla,
+        {
+            "form": form,
+            "pagina": pagina,
+            "cuenta_filtrada": cuenta_filtrada,
+            "consulta_completa": consulta_completa,
+            "consulta_base": consulta_base,
+            "consulta_sin_cuenta": consulta.urlencode(),
+        },
+    )
+
+
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
+@require_safe
+@never_cache
+def auditoria_registro(request, registro_id):
+    """Detalle de un registro de auditoría (AUD-CNS-REG regla 3): fecha y hora, quién actuó con su rol de ese
+    momento, la acción, los afectados con el texto guardado y la tabla Campo / Antes / Después. Fuera del alcance
+    da 403; un id que no existe, 404 (D-28). Solo lectura: no hay ninguna acción de modificar ni de borrar."""
+    registro = obtener_registro(request.user, registro_id)
+    return render(
+        request,
+        "core/auditoria/registro.html",
+        {
+            "registro": registro,
+            "afectados": registro.afectados_visibles(),
+            "cambios": registro.filas_de_cambios(),
+            "datos": registro.filas_de_datos(),
+            # «Volver» a la lista con los mismos filtros y la misma página.
+            "volver": request.GET.urlencode(),
+        },
+    )

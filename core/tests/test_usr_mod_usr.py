@@ -16,8 +16,8 @@
 # activo, «gerente_activo» (regla 5); si la base rechaza la reactivación por una restricción que no se
 # puede identificar, ValidationError con el código «no_se_pudo_reactivar» (nunca un error 500).
 # Tarea 06b (D-17, SEG-11): restablecer y reactivar sacan la cuenta de su grupo de cuentas vinculadas, y el
-# registro de auditoría agrega ``sale_del_grupo`` (id del grupo) solo si la cuenta estaba en uno; si el
-# grupo se disolvió, la cuenta que quedaba sola figura también entre las afectadas.
+# registro de auditoría agrega el cambio ``grupo`` (de la referencia al grupo a nulo, D-36) solo si la cuenta
+# estaba en uno; si el grupo se disolvió, la cuenta que quedaba sola figura también entre las afectadas.
 
 from unittest import mock
 
@@ -45,6 +45,7 @@ from core.tests.fabricas import (
     BACKEND_QUE_FALLA,
     CLAVE,
     PATRON_INVITACION,
+    afectado,
     agrupar,
     contenido_de_auditoria,
     crear_administrador,
@@ -54,6 +55,7 @@ from core.tests.fabricas import (
     dar_invitacion,
     dar_temporal_vencida,
     invitacion_valida,
+    ref_grupo,
     token_de_invitacion,
 )
 
@@ -359,10 +361,26 @@ class UsrModUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.MODIFICACION)
         self.assertEqual(registro.usuario_id, gerente.pk)
         self.assertEqual(registro.rol, "gerente")
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
+        # D-36: el texto del afectado es el de la cuenta ya modificada; lo anterior queda en los cambios.
+        self.assertEqual(
+            registro.afectados,
+            [
+                {
+                    "modelo": "core.usuario",
+                    "id": cuenta.pk,
+                    "texto": "Laura Gómez (laura@infoponia.com)",
+                    "rol": "capataz",
+                }
+            ],
+        )
         self.assertEqual(
             registro.detalle,
-            {"apellido": ["Benítez", "Gómez"], "telefono": ["", "+54 376 400-1001"]},
+            {
+                "cambios": {
+                    "apellido": {"antes": "Benítez", "despues": "Gómez"},
+                    "telefono": {"antes": "", "despues": "+54 376 400-1001"},
+                }
+            },
         )
 
     def test_post_d_restablecer_audita_sin_contrasena(self):
@@ -377,7 +395,9 @@ class UsrModUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.RESTABLECIMIENTO)
         self.assertEqual(registro.usuario_id, gerente.pk)
         self.assertEqual(registro.rol, "gerente")
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
+        self.assertEqual(registro.afectados, [afectado(cuenta)])
+        # D-36: sin grupo no cambia ningún dato de la cuenta que se audite; la forma de acceso es contexto.
+        self.assertEqual(registro.detalle, {"datos": {"acceso": "temporal"}})
         cuenta.refresh_from_db()
         contenido = contenido_de_auditoria(registro)
         self.assertNotIn(temporal, contenido)
@@ -394,8 +414,11 @@ class UsrModUsrServicioTests(TestCase):
         registro = RegistroAuditoria.objects.get()
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.REACTIVACION)
         self.assertEqual(registro.usuario_id, gerente.pk)
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
-        self.assertEqual(registro.detalle, {"estado": ["inactivo", "activo"], "acceso": "temporal"})
+        self.assertEqual(registro.afectados, [afectado(cuenta)])
+        self.assertEqual(
+            registro.detalle,
+            {"cambios": {"estado": {"antes": "inactivo", "despues": "activo"}}, "datos": {"acceso": "temporal"}},
+        )
         cuenta.refresh_from_db()
         contenido = contenido_de_auditoria(registro)
         self.assertNotIn(temporal, contenido)
@@ -450,8 +473,8 @@ class UsrModUsrServicioTests(TestCase):
         self.assertFalse(GrupoCuentas.objects.exists())
 
     def test_post_d_la_auditoria_registra_la_salida_del_grupo(self):
-        """USR-MOD-USR postcondición d y SEG-14: si la cuenta estaba en un grupo, el registro lo indica
-        (``sale_del_grupo``) para el restablecimiento y para la reactivación. Si el grupo se disolvió, la
+        """USR-MOD-USR postcondición d, SEG-14 y D-36: si la cuenta estaba en un grupo, el registro lo indica
+        (el cambio ``grupo``, de la referencia al grupo a nulo) para el restablecimiento y para la reactivación. Si el grupo se disolvió, la
         cuenta que quedaba sola figura también entre las afectadas. Sin grupo, el registro no cambia."""
         gerente = crear_gerente()
         restablecida = crear_cuenta(Capataz, "restablecida@infoponia.com", **LAURA)
@@ -468,15 +491,26 @@ class UsrModUsrServicioTests(TestCase):
         restablecimiento = RegistroAuditoria.objects.get(
             accion=RegistroAuditoria.Accion.RESTABLECIMIENTO
         )
-        self.assertEqual(restablecimiento.afectados, [{"modelo": "core.usuario", "id": restablecida.pk}])
-        self.assertEqual(restablecimiento.detalle, {"acceso": "temporal", "sale_del_grupo": grupo_de_tres.pk})
-        reactivacion = RegistroAuditoria.objects.get(accion=RegistroAuditoria.Accion.REACTIVACION)
+        self.assertEqual(restablecimiento.afectados, [afectado(restablecida)])
+        # D-36: la salida del grupo es un cambio de la cuenta, de una referencia al grupo a nulo.
         self.assertEqual(
-            {a["id"] for a in reactivacion.afectados}, {reactivada.pk, sola.pk}
+            restablecimiento.detalle,
+            {
+                "cambios": {"grupo": {"antes": ref_grupo(grupo_de_tres.pk), "despues": None}},
+                "datos": {"acceso": "temporal"},
+            },
         )
+        reactivacion = RegistroAuditoria.objects.get(accion=RegistroAuditoria.Accion.REACTIVACION)
+        self.assertEqual(reactivacion.afectados, [afectado(reactivada), afectado(sola)])
         self.assertEqual(
             reactivacion.detalle,
-            {"estado": ["inactivo", "activo"], "acceso": "temporal", "sale_del_grupo": grupo_de_dos.pk},
+            {
+                "cambios": {
+                    "estado": {"antes": "inactivo", "despues": "activo"},
+                    "grupo": {"antes": ref_grupo(grupo_de_dos.pk), "despues": None},
+                },
+                "datos": {"acceso": "temporal"},
+            },
         )
 
     def test_regla_3_cambiar_el_email_no_afecta_las_cuentas_vinculadas(self):
@@ -713,8 +747,12 @@ class UsrModUsrServicioTests(TestCase):
         registro = RegistroAuditoria.objects.get()
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.REACTIVACION)
         self.assertEqual(registro.rol, ADMINISTRADOR)
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": inactivo.pk}])
-        self.assertEqual(registro.detalle, {"estado": ["inactivo", "activo"], "acceso": "temporal"})
+        self.assertEqual(registro.afectados, [afectado(inactivo)])
+        self.assertEqual(registro.afectados[0]["rol"], "gerente")
+        self.assertEqual(
+            registro.detalle,
+            {"cambios": {"estado": {"antes": "inactivo", "despues": "activo"}}, "datos": {"acceso": "temporal"}},
+        )
 
     def test_regla_5_integrity_error_de_un_solo_gerente_activo_da_gerente_activo(self):
         """USR-MOD-USR regla 5 y SEG-15 (D-30): si la base rechaza la reactivación por la restricción
@@ -865,11 +903,11 @@ class UsrModUsrServicioTests(TestCase):
             )
 
         restablecimiento = RegistroAuditoria.Accion.RESTABLECIMIENTO
-        self.assertEqual(registro(restablecimiento, con_invitacion).detalle, {"acceso": INVITACION})
-        self.assertEqual(registro(restablecimiento, con_temporal).detalle, {"acceso": TEMPORAL})
+        self.assertEqual(registro(restablecimiento, con_invitacion).detalle, {"datos": {"acceso": INVITACION}})
+        self.assertEqual(registro(restablecimiento, con_temporal).detalle, {"datos": {"acceso": TEMPORAL}})
         self.assertEqual(
             registro(RegistroAuditoria.Accion.REACTIVACION, reactivada).detalle,
-            {"estado": ["inactivo", "activo"], "acceso": INVITACION},
+            {"cambios": {"estado": {"antes": "inactivo", "despues": "activo"}}, "datos": {"acceso": INVITACION}},
         )
         for r in RegistroAuditoria.objects.all():
             contenido = contenido_de_auditoria(r)

@@ -1,0 +1,50 @@
+{% load iconos %}{% comment %}Tabla de la lista de auditoría (AUD-CNS-REG) con sus errores de filtro y el paginado. Es el fragmento que devuelve la vista a
+los pedidos de HTMX de los filtros y de las páginas. Recibe «form», «pagina» (nula si un filtro no es válido),
+«consulta_base» (los filtros sin la página) y «consulta_completa» (con la página, para volver desde el detalle).
+Todo texto guardado se escapa solo (autoescape): los nombres de las cuentas los escribe quien da de alta.{% endcomment %}
+{% if form.errors %}
+<div class="alert alert-danger" role="alert">
+  {% icono "x" 16 %}
+  <div>
+    <b>Revisá los filtros.</b>
+    <ul class="errores-filtro">{% for campo, errores in form.errors.items %}{% for error in errores %}<li>{{ error }}</li>{% endfor %}{% endfor %}</ul>
+  </div>
+</div>
+{% endif %}
+<div class="tablewrap">
+  <table class="data-table">
+    <caption class="sr">Registros de auditoría, del más reciente al más viejo</caption>
+    <thead><tr><th scope="col">Fecha y hora</th><th scope="col">Quién actuó</th><th scope="col">Acción</th><th scope="col">Afectados</th><th scope="col"><span class="sr">Detalle</span></th></tr></thead>
+    <tbody>
+    {% for registro in pagina %}
+      <tr>
+        <td class="mono" style="font-size:12px;white-space:nowrap">{{ registro.fecha_hora|date:"d/m/Y H:i" }}</td>
+        <td>
+          {% if registro.usuario_id is None %}<b style="font-weight:600">InfoPonia</b>
+          {% else %}<b style="font-weight:600">{{ registro.usuario.get_full_name|default:registro.usuario.email }}</b><div class="muted" style="font-size:11px">{{ registro.rol_visible }}</div>{% endif %}
+        </td>
+        <td>{{ registro.get_accion_display }}</td>
+        <td>{% for texto, rol in registro.afectados_visibles %}<div>{{ texto }}{% if rol %} <span class="muted" style="font-size:11px">{{ rol }}</span>{% endif %}</div>{% empty %}<span class="muted">—</span>{% endfor %}</td>
+        <td style="text-align:right"><a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria_registro' registro.pk %}{% if consulta_completa %}?{{ consulta_completa }}{% endif %}">Ver<span class="sr"> el registro del {{ registro.fecha_hora|date:"d/m/Y H:i" }}: {{ registro.get_accion_display }}</span></a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="muted" style="text-align:center;padding:24px">{% if form.errors %}Corregí los filtros para ver registros.{% else %}No hay registros de auditoría que coincidan con los filtros.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pagina and pagina.paginator.count %}
+<nav class="pager" aria-label="Páginas de la auditoría">
+  <span class="muted">Registros {{ pagina.start_index }} a {{ pagina.end_index }} de {{ pagina.paginator.count }}</span>
+  <span class="spacer"></span>
+  {% if pagina.has_previous %}
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria' %}?{% if consulta_base %}{{ consulta_base }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}"
+     hx-get="{% url 'core:auditoria' %}?{% if consulta_base %}{{ consulta_base }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}" hx-target="#tabla-auditoria" hx-push-url="true">Anterior</a>
+  {% endif %}
+  <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria' %}?{% if consulta_base %}{{ consulta_base }}&amp;{% endif %}pagina={{ pagina.next_page_number }}"
+     hx-get="{% url 'core:auditoria' %}?{% if consulta_base %}{{ consulta_base }}&amp;{% endif %}pagina={{ pagina.next_page_number }}" hx-target="#tabla-auditoria" hx-push-url="true">Siguiente</a>
+  {% endif %}
+</nav>
+{% endif %}

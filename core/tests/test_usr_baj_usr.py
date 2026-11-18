@@ -24,7 +24,7 @@ from django.urls import reverse
 from core import servicios
 from core.models import ADMINISTRADOR, Capataz, Gerente, RegistroAuditoria, Usuario, Vendedor
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
-from core.tests.fabricas import CLAVE, agrupar, crear_administrador, crear_cuenta, crear_gerente
+from core.tests.fabricas import CLAVE, afectado, agrupar, crear_administrador, crear_cuenta, crear_gerente
 
 # Estas pruebas verifican «Laura Benítez» como nombre de la cuenta: se pasa explícito a crear_cuenta.
 LAURA = {"nombre": "Laura", "apellido": "Benítez"}
@@ -143,8 +143,8 @@ class UsrBajUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.BAJA)
         self.assertEqual(registro.usuario_id, gerente.pk)
         self.assertEqual(registro.rol, "gerente")
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": cuenta.pk}])
-        self.assertEqual(registro.detalle, {"estado": ["activo", "inactivo"]})
+        self.assertEqual(registro.afectados, [afectado(cuenta)])
+        self.assertEqual(registro.detalle, {"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}})
         contenido = json.dumps([registro.afectados, registro.detalle])
         self.assertNotIn(cuenta.password, contenido)
 
@@ -224,8 +224,9 @@ class UsrBajUsrServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.BAJA)
         self.assertEqual(registro.usuario_id, administrador.pk)
         self.assertEqual(registro.rol, ADMINISTRADOR)
-        self.assertEqual(registro.afectados, [{"modelo": "core.usuario", "id": administrador.pk}])
-        self.assertEqual(registro.detalle, {"estado": ["activo", "inactivo"]})
+        self.assertEqual(registro.afectados, [afectado(administrador)])
+        self.assertEqual(registro.afectados[0]["rol"], ADMINISTRADOR)
+        self.assertEqual(registro.detalle, {"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}})
 
     def test_regla_1_administrador_da_de_baja_a_otro_administrador(self):
         """USR-BAJ-USR regla 1 y D-16: el Administrador da de baja a otro Administrador; queda él, activo."""

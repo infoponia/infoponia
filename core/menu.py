@@ -13,8 +13,11 @@ _USUARIOS = ("Usuarios y seguridad", "core:usuarios", "users")
 # D-16: la misma pantalla de cuentas, con el alcance del Administrador y el nombre del prototipo (NAV).
 _CUENTAS = ("Cuentas", "core:usuarios", "users")
 
+# AUD-CNS-REG (D-36): el Gerente y el Administrador consultan la auditoría, cada uno con su alcance.
+_AUDITORIA = ("Auditoría", "core:auditoria", "eye")
+
 MENU_POR_ROL = {
-    Rol.GERENTE: [_PANEL, _USUARIOS],
+    Rol.GERENTE: [_PANEL, _USUARIOS, _AUDITORIA],
     Rol.AGRONOMO: [_PANEL],
     Rol.VENDEDOR: [_PANEL],
     # Roles de campo (celular): sin menú lateral.
@@ -22,7 +25,7 @@ MENU_POR_ROL = {
     Rol.TECNICO: [],
     Rol.TRANSPORTISTA: [],
     # Tarea 05a: sin «Panel de control»; su inicio es «Cuentas» (prototipo, enter()).
-    ADMINISTRADOR: [_CUENTAS],
+    ADMINISTRADOR: [_CUENTAS, _AUDITORIA],
 }
 
 # FIELD del prototipo: usan el marco angosto de celular, sin menú lateral.

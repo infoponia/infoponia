@@ -1,0 +1,57 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}Detalle de un registro de auditoría (AUD-CNS-REG regla 3). Solo lectura: no tiene ninguna acción de modificar ni de
+borrar (regla 4); solo «Volver» a la lista, con los mismos filtros. Los afectados y las referencias se muestran con el texto
+que tenían en el momento del cambio (D-36); un valor nulo, como «—». Nunca hay una contraseña ni un enlace de acceso
+(regla 5): ``registrar`` no los deja guardar.{% endcomment %}
+{% block titulo %}{{ registro.get_accion_display }} · Auditoría · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria' %}{% if volver %}?{{ volver }}{% endif %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver a la auditoría</a>
+  <div class="page-h">
+    <h1>{{ registro.get_accion_display }}</h1>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Registro</div>
+    <dl class="dl">
+      <dt>Fecha y hora</dt><dd class="mono" style="font-size:12px">{{ registro.fecha_hora|date:"d/m/Y H:i:s" }}</dd>
+      <dt>Quién actuó</dt>
+      <dd>{% if registro.usuario_id is None %}InfoPonia <span class="muted">(el Sistema)</span>{% else %}{{ registro.usuario.get_full_name|default:registro.usuario.email }}<div class="mono muted" style="font-size:11px">{{ registro.usuario.email }}</div>{% endif %}</dd>
+      {% if registro.usuario_id is not None %}<dt>Rol en ese momento</dt><dd>{{ registro.rol_visible }}</dd>{% endif %}
+      <dt>Acción</dt><dd>{{ registro.get_accion_display }}</dd>
+      <dt>Afectados</dt>
+      <dd>
+        {% for texto, rol in afectados %}<div>{{ texto }}{% if rol %} <span class="muted" style="font-size:11px">{{ rol }}</span>{% endif %}</div>{% empty %}<span class="muted">—</span>{% endfor %}
+      </dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Cambios</div>
+    {% if cambios %}
+    <div class="tablewrap">
+      <table class="data-table">
+        <caption class="sr">Datos que cambiaron, con su valor anterior y su valor nuevo</caption>
+        <thead><tr><th scope="col">Campo</th><th scope="col">Antes</th><th scope="col">Después</th></tr></thead>
+        <tbody>
+        {% for campo, antes, despues in cambios %}
+          <tr><th scope="row" style="text-transform:none;letter-spacing:0;font-size:13px;color:inherit">{{ campo }}</th><td>{{ antes }}</td><td>{{ despues }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">Este registro no tiene datos que hayan cambiado.</p>
+    {% endif %}
+  </div>
+
+  {% if datos %}
+  <div class="card">
+    <div class="card-title">Datos del momento</div>
+    <dl class="dl">
+      {% for dato, valor in datos %}<dt>{{ dato }}</dt><dd>{{ valor }}</dd>{% endfor %}
+    </dl>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

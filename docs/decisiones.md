@@ -451,7 +451,7 @@ Formato:
   auditoría).
 - Consecuencias: desvío respecto del DER, que no tiene la entidad: se agrega al actualizar el DER a
   partir del código. Los módulos de negocio la reutilizan.
-- Estado: vigente
+- Estado: vigente; D-36 completa el formato obligatorio del detalle y de los afectados, y la consulta (AUD-CNS-REG)
 
 ## D-23 — Ubicación del código: cuentas en core, una app por módulo de negocio
 
@@ -603,7 +603,7 @@ Formato:
   SEG-14); D-18, D-19, D-22 y D-25.
 - Consecuencias: migraciones `0003` y `0004`. La `0004` falla, sin cambiar datos, si hay emails repetidos
   sin distinguir mayúsculas: hay que resolverlos a mano antes de migrar (también en Neon).
-- Estado: vigente; reemplazada en parte por D-35 (la contraseña temporal ya no es la única forma de primer acceso: la cuenta también puede tener una invitación pendiente)
+- Estado: vigente; reemplazada en parte por D-35 (la contraseña temporal ya no es la única forma de primer acceso: la cuenta también puede tener una invitación pendiente) y por D-36 (el formato del detalle de la auditoría)
 
 ## D-28 — Usuarios del Gerente: alcance, teléfono y pantallas (tarea 04)
 
@@ -661,7 +661,7 @@ Formato:
   después de una redirección exigiría guardarla. El mismo límite alcanza a la respuesta de un
   restablecimiento o de una reactivación: recargarla reenvía el formulario. Restablecer generaría otra
   temporal y la mostrada antes dejaría de servir; reactivar daría “La cuenta ya está activa”.
-- Estado: vigente (reemplaza en parte a D-15)
+- Estado: vigente (reemplaza en parte a D-15); D-36 reemplaza el formato del detalle de la auditoría de este punto (`{campo: [antes, después]}`)
 
 ## D-29 — Convenciones de interfaz del sistema
 
@@ -887,7 +887,7 @@ Formato:
   - En un entorno de desarrollo con `DEBUG` encendido el admin sigue disponible; en el CI, con `DJANGO_DEBUG=0`, no
     existe, por eso las pruebas no lo usan.
   - La contraseña propia del Administrador solo se cambia por consola hasta la tarea 06.
-- Estado: vigente; D-31 cierra su consecuencia sobre la contraseña propia del Administrador; D-32 (14/11/2026) pasa
+- Estado: vigente; D-36 suma «Auditoría» al menú del Administrador (ya no tiene una única entrada); D-31 cierra su consecuencia sobre la contraseña propia del Administrador; D-32 (14/11/2026) pasa
   sus bloqueos de filas de `FOR UPDATE` a `FOR NO KEY UPDATE`, sin cambiar su orden
 
 ## D-31 — Mi perfil y cambio voluntario de contraseña (tarea 06a)
@@ -1145,7 +1145,7 @@ Formato:
   - El tope de intentos de identificación, para el inicio de sesión y el vínculo juntos, queda para la tarea 09:
     necesita una decisión nueva que reemplace a SEG-05 y D-19, y un modelo o una caché para contar.
   - El DER se actualiza después, a partir del código.
-- Estado: vigente; actualizada el 14/11/2026 (sin aviso de éxito al cambiar de cuenta; todos los bloqueos pasan a
+- Estado: vigente; D-36 reemplaza el formato del detalle de la auditoría de este punto; actualizada el 14/11/2026 (sin aviso de éxito al cambiar de cuenta; todos los bloqueos pasan a
   `FOR NO KEY UPDATE` y el límite conocido queda resuelto)
 
 ## D-33 — Envío de correo: Gmail por SMTP y una sola fuente de verdad (tarea 08)
@@ -1288,7 +1288,7 @@ Formato:
     middleware de SEG-04. Es lo esperado.
   - El texto de `docs/casos_de_uso/usuarios.md` («Lo que queda para más adelante») todavía dice que el proveedor de correo
     no está decidido: es copia del documento de Drive y hay que actualizarlo allá.
-- Estado: vigente; D-35 suma `invitacion_pendiente` al detalle de la auditoría de la recuperación y comparte con la invitación el servicio que elige la contraseña con un enlace
+- Estado: vigente; D-35 suma `invitacion_pendiente` al detalle de la auditoría de la recuperación y comparte con la invitación el servicio que elige la contraseña con un enlace; D-36 reemplaza el formato de ese detalle (ahora dentro de `datos`)
 
 ## D-35 — Invitación por correo como forma de primer acceso (tarea 08b)
 
@@ -1397,4 +1397,165 @@ Formato:
     hace quien gestiona la cuenta, con sesión.
   - Los textos de los casos de uso que cambian con la invitación (SEG-11, SEG-14 y la precondición b de USR-VNC-CTA) ya
     están actualizados en «CU extendidos» (Drive) y en la copia de `docs/casos_de_uso/usuarios.md`.
-- Estado: vigente
+- Estado: vigente; D-36 reemplaza el formato del detalle de la auditoría de este punto (la forma de acceso pasa a `datos`)
+
+## D-36 — Formato obligatorio del detalle de la auditoría y consulta del registro (tarea AUD-CNS-REG)
+
+- Fecha: 17/11/2026
+- Decidió: (completar con el nombre de quien aprobó) en el pedido de la tarea AUD-CNS-REG, en la revisión de las pruebas y
+  de la migración, a propuesta de Claude: guardar el rol en los afectados, el filtro de la ficha, la clasificación de
+  las acciones y los índices
+- Antes: cada servicio armaba el detalle de `RegistroAuditoria` a su manera (D-22, D-27, D-28, D-32, D-34, D-35): la
+  modificación guardaba `{campo: [antes, después]}`; la baja y la reactivación, `{"estado": [antes, después]}`; el alta,
+  solo los valores nuevos; la vinculación, ids de grupo. Nada obligaba a guardar el valor anterior, y una lista no se
+  distinguía de un «antes y después». Los afectados eran `{"modelo", "id"}`: para mostrar a quién se refería un registro
+  había que buscar la cuenta, que pudo haber cambiado de nombre. Se descartó (opción A) agregar las columnas
+  `valor_anterior` y `valor_nuevo`: obligan a una fila por campo y rompen «una acción = un registro». AUD-CNS-REG
+  (versión 0.1, `docs/casos_de_uso/auditoria.md`) pide ver, de cada dato que cambió, su valor anterior y su valor nuevo, y
+  las referencias con el texto que tenían en el momento del cambio.
+- Decisión:
+  - **Formato del detalle (opción B).** El detalle tiene dos claves opcionales y ninguna más.
+    `"cambios": {campo: {"antes": valor, "despues": valor}}` para todo dato que cambió (en un alta, «antes» es
+    `null`). `"datos": {clave: valor}` para el contexto que no tiene antes y después (forma de acceso, si la contraseña
+    era temporal, grupo vinculado, etc.).
+  - **Referencias.** Una referencia a otro objeto (cuenta, grupo y, más adelante, invernadero, insumo...) se guarda
+    como `{"id": ..., "texto": "<lo que se veía en ese momento>"}` (`referencia(objeto)` en `core/models.py`;
+    `referencia_a_grupo(id)` para un grupo que ya no existe, como el que acaba de disolverse).
+  - **Validación en `RegistroAuditoria.objects.registrar`.** Además de rechazar las contraseñas (D-22), rechaza con
+    `ValueError`: una clave de primer nivel distinta de «cambios» y «datos»; un cambio que no sea exactamente
+    `{"antes", "despues"}`; un cambio con «antes» igual a «despues»; «cambios» o «datos» que no sean diccionarios; y
+    un diccionario dentro de un valor que no sea una referencia con exactamente `{"id", "texto"}`. Esto es lo que hace
+    obligatorio el valor anterior. Se aceptan nulos, booleanos, números, textos, referencias y listas de esos.
+  - **Afectados con texto y rol.** Cada afectado se guarda como `{"modelo", "id", "texto"}`; las cuentas, siempre como
+    `core.usuario`, suman `"rol"` (el que devuelve `rol_de`: «administrador» para el Administrador). El texto de una
+    cuenta es «Nombre Apellido (email)», o solo el email si no tiene nombre (`texto_de`). El rol de una cuenta no cambia
+    (MD-55), así que guardarlo es seguro y permite buscar por rol con una consulta de contención (ver abajo).
+  - **Quién actuó.** No se agrega ninguna columna: la pantalla muestra el nombre y el email actuales de la cuenta, con
+    el rol que tenía en ese momento (ya guardado desde D-22), y «InfoPonia» si no hubo cuenta. Un cambio de nombre o de
+    email de quien actuó queda en su propio registro de modificación.
+  - **Detalle nuevo de cada servicio.** Alta: `cambios` con rol, nombre, apellido, email y, si se cargó, teléfono
+    (todos con «antes» nulo) y `datos: {acceso}`. Modificación: `cambios` con los campos que cambiaron. Baja: `cambios`
+    con el estado. Reactivación: `cambios` con el estado y, si salió de un grupo, `grupo` (de la referencia al grupo a
+    nulo), y `datos: {acceso}`. Restablecimiento: `cambios.grupo` si salió de un grupo y `datos: {acceso}`. Cambio de
+    contraseña, recuperación y aceptación de invitación: `datos` con `era_temporal` (y `invitacion_pendiente`).
+    Vinculación: `datos: {grupo, grupo_unido}` (referencias, la segunda nula si no se unieron grupos). Desvinculación:
+    `datos: {grupo, disuelto}`. En la vinculación y la desvinculación el grupo va en «datos» y no en «cambios» porque
+    cambian varias cuentas a la vez; las que cambiaron ya figuran entre los afectados.
+  - **Textos legibles.** `RegistroAuditoria.ETIQUETAS` da el nombre visible de cada campo y de cada dato, y
+    `VALORES_VISIBLES` el de los valores con lista cerrada (rol, estado, forma de acceso); las acciones ya tenían sus
+    `choices`. `filas_de_cambios()` y `filas_de_datos()` arman las filas en texto: nulo como «—», booleano como «Sí» o
+    «No», referencia con su texto guardado, y una clave desconocida tal cual. El orden de las filas es el de `ETIQUETAS`,
+    no el del JSON, porque `jsonb` no conserva el orden de las claves.
+  - **Migración de datos `0008_formato_detalle_auditoria`: la única excepción deliberada a D-22.** Convierte los
+    registros que ya existen al formato nuevo. D-22 dice que al registro solo se le agregan filas; la migración modifica
+    filas ya guardadas. Se hace una sola vez y a propósito, para unificar el formato antes de que exista una pantalla que
+    lo lea: con dos formatos, la pantalla (y todo módulo que la use) tendría que entender los dos para siempre. Corre
+    sobre el modelo histórico, que no tiene el `save` ni el manager de la app (los que impiden modificar), con
+    `filter(pk=...).update(...)`. Es idempotente (un detalle ya convertido, con claves dentro de «cambios» y «datos», y un
+    afectado que ya tiene «texto» se dejan como están) y tiene `reverse_code`, que deja el formato viejo. Falla con el id
+    del registro, sin cambiar nada, si encuentra un detalle viejo que no reconoce, en vez de descartar datos sin avisar.
+    **No llama a ningún código de la app**: el texto «Grupo N» y el texto de las cuentas están copiados dentro de la
+    migración, para que produzca siempre el mismo resultado aunque la app cambie después.
+  - **Mapeo de la migración.** Alta `{rol, email, nombre, apellido[, acceso]}` → `cambios` (con «antes» nulo) y
+    `datos.acceso`. Modificación `{campo: [a, d]}` → `cambios`. Baja y reactivación `{estado: [a, d]}` → `cambios.estado`;
+    `sale_del_grupo: g` → `cambios.grupo` (de `ref(g)` a nulo); `acceso` → `datos`. Restablecimiento: lo mismo sin estado.
+    Cambio de contraseña, recuperación y aceptación → `datos`. Vinculación y desvinculación → `datos` con referencias.
+    Afectados → suman texto y rol de la cuenta. Una cuenta que ya no exista (no debería pasar: no se borran) queda con
+    «Cuenta <id>» y sin rol.
+  - **Alcance (regla 1 de AUD-CNS-REG, MD-58).** `RegistroAuditoria.objects.visibles_para(actor)` es el único lugar del
+    alcance (como `en_alcance_de` para las cuentas). El Administrador activo ve todo. El Gerente activo ve los registros
+    de los módulos de negocio y los de cuentas en los que actuó, o fue afectada, una cuenta de rol operativo (Agrónomo,
+    Capataz, Vendedor, Transportista, Técnico); no ve los que solo involucran a Administradores o a Gerentes. Cualquier
+    otro actor, o una cuenta inactiva: ninguno.
+  - **Clasificación de las acciones.** Un registro es «de cuentas» por su acción, no por sus afectados:
+    `ACCIONES_DE_CUENTAS` (hoy las 10 acciones) y `ACCIONES_DE_NEGOCIO` (hoy vacío), en `core/models.py`. `visibles_para`
+    decide por `ACCIONES_DE_CUENTAS`; lo que no está ahí es de negocio y el Gerente lo ve. **Agregar una acción a
+    `RegistroAuditoria.Accion` obliga a clasificarla**: la prueba
+    `test_d36_cada_accion_esta_clasificada_en_cuentas_o_en_negocio` exige que cada acción esté en uno de los dos conjuntos
+    y en uno solo, y que ninguno nombre acciones que no existen.
+  - **Consulta.** `consultar_auditoria(actor, desde, hasta, quien_actuo, accion, afectado_id, cuenta_id)` en
+    `core/servicios.py`: precondición de Gerente o Administrador activos (SEG-13, `PermissionDenied`); los filtros se
+    combinan; del más reciente al más viejo (`-fecha_hora, -id`). Rango de fechas inclusive en la zona horaria del sistema
+    (`>= desde 00:00` y `< hasta + 1 día 00:00`). `quien_actuo` es un id o «infoponia» (registros sin cuenta). No abre
+    `atomic`, no escribe y no audita (regla 6, SEG-14). `obtener_registro` da 404 si el registro no existe y 403 si
+    está fuera del alcance (D-28).
+  - **Filtrar por una cuenta (D-28 aplicado a la auditoría).** El Administrador puede filtrar por cualquier cuenta. El
+    Gerente, por cualquiera menos las de Administrador (también por la suya y por las de Gerentes anteriores, que aparecen
+    en registros que él ve, por ejemplo un Gerente anterior que modificó a un Capataz); filtrar por una de Administrador
+    da 403 y una cuenta que no existe, 404. El filtro nunca amplía el alcance: se aplica sobre `visibles_para`.
+  - **Filtro combinado de la ficha.** La regla 2 nombra cuatro filtros (fechas, cuenta que actuó, acción, cuenta afectada).
+    La regla 7 pide que «Ver auditoría» abra la lista «con el filtro de esa cuenta ya aplicado»; se agregó `cuenta`
+    («actuó o fue afectada»), que la regla 2 no nombra, porque la historia de una cuenta incluye lo que hizo y lo que le
+    hicieron. En pantalla es una etiqueta «Registros de <cuenta> (actuó o fue afectada)» con «Quitar filtro». Desde ahí se
+    puede pasar a los filtros de la regla 2.
+  - **Búsqueda en el JSON.** Los afectados se buscan con `afectados__contains` (el operador `@>` de `jsonb`): una cuenta
+    por su id, o «alguna cuenta de rol operativo» con `[{"modelo": "core.usuario", "rol": r}]`. Índices
+    (`0009_indices_auditoria`): un GIN sobre `afectados` con `jsonb_path_ops` (sirve a `@>`, más chico y rápido que
+    `jsonb_ops`, y alcanza porque no se usa otro operador) y un btree sobre `(-fecha_hora, -id)` (el orden de cada
+    página y el rango de fechas). El filtro por la cuenta que actuó ya tiene el índice de su clave foránea.
+  - **Pantallas.** «Auditoría» en el menú del Gerente y del Administrador; lista paginada de 25 con los filtros
+    (desplegables propios, D-24, y avisos de D-29), detalle con la tabla Campo / Antes / Después y los datos de contexto
+    aparte, y «Ver auditoría» en la ficha de una cuenta, solo si quien mira puede abrirla (`puede_ver_auditoria_de`: ningún
+    enlace lleva a un 403, D-30). Solo aceptan GET (un POST, PUT o DELETE da 405): ninguna pantalla modifica ni borra
+    (regla 4). Con un filtro mal formado (una fecha inválida, «desde» posterior a «hasta», una cuenta que no es un número),
+    el aviso va dentro del fragmento de la tabla y la lista sale vacía; así se ve también con HTMX, que solo reemplaza la
+    tabla. El detalle vuelve a la lista con los mismos filtros y la misma página.
+- Por qué:
+  - Un formato único, validado al escribir, hace imposible olvidar el valor anterior: un servicio nuevo que lo omita
+    falla en su primera prueba, no meses después al abrir un registro. Con «cambios» y «datos» separados, la pantalla
+    sabe qué mostrar como tabla Campo / Antes / Después y qué como contexto, sin adivinar si una lista es «antes y
+    después» o una lista de ids. Una fila por acción (y no por campo, opción A) conserva que una acción es un registro.
+  - Las referencias con su texto del momento hacen que el registro siga diciendo lo que era aunque el objeto cambie o
+    se disuelva (un grupo ya no existe, una cuenta cambió de nombre): es el pedido de la regla 3.
+  - El rol dentro de cada afectado evita cruzar el JSON con la tabla de cuentas en cada consulta: la búsqueda del Gerente
+    es una contención sobre `jsonb`, que un índice GIN resuelve, y se escribe sin SQL a mano. Como el rol de una cuenta
+    no cambia (MD-55), el dato guardado no se desactualiza.
+  - Se decide por la acción y no por los afectados porque una acción de un módulo de negocio que afecte solo a la cuenta del
+    Gerente (o a un Administrador) se ocultaría por error si «de cuentas» se dedujera de quién aparece. Con un conjunto
+    explícito, y una prueba que obliga a clasificar cada acción nueva, un módulo nuevo no puede quedar oculto por
+    olvido ni hay que tocar `visibles_para`.
+  - La migración es la única excepción a D-22 porque la alternativa, dejar los registros viejos en su formato, obligaría a
+    mantener para siempre un lector de dos formatos, y hoy todavía no hay pantallas que dependan de ninguno. Es un
+    cambio de formato, no de contenido: no se agrega ni se quita ningún hecho auditado salvo lo que el formato viejo no
+    tenía. Va con su vuelta, es idempotente y falla en voz alta, para que no destruya información sin avisar. No llama
+    a código de la app porque el texto «Grupo N» o el de una cuenta pueden cambiar mañana, y una migración que ya se
+    aplicó (o que se aplica en un despliegue nuevo) tiene que dar siempre lo mismo.
+  - `jsonb_path_ops` y no el GIN por defecto porque la tabla solo crece y la consulta solo usa `@>`; el btree sirve al
+    orden de cada página, que es la consulta más repetida. Costo: un poco más de trabajo en cada alta de auditoría,
+    que son pocas por operación.
+  - El Gerente filtra por las cuentas de Gerente y no por las de Administrador porque las primeras aparecen en registros
+    que él ve y las segundas nunca; con el mismo criterio de D-28 que en Cuentas (403 fuera del alcance, 404 si no
+    existe), un filtro no puede ser una forma de averiguar qué hicieron los Administradores.
+  - 25 por página: cada fila ocupa dos o tres renglones (quién, acción y afectados), así que una página entra en una o dos
+    pantallas sin recorrer una lista enorme, y la consulta paginada con el orden de `-fecha_hora, -id` usa el índice.
+  - Los errores de filtro dentro del fragmento porque HTMX solo reemplaza la tabla: un error junto a cada campo, fuera del
+    fragmento, no se vería al filtrar.
+- Fuentes: `docs/casos_de_uso/auditoria.md` (AUD-CNS-REG 0.1, reglas 1 a 7); `docs/casos_de_uso/usuarios.md` (SEG-13,
+  SEG-14, USR-CNS-USR); D-22, D-24, D-27, D-28, D-29, D-30, D-32, D-34 y D-35; MD-55 y MD-58; documentación de
+  Django 5.2 (`GinIndex` en `django.contrib.postgres.indexes`, opción `opclasses` de `Index`, `contains` de
+  `JSONField`).
+- Consecuencias:
+  - Todo servicio nuevo que audite escribe su detalle con «cambios» y «datos» y las referencias con `referencia()`; si no,
+    `registrar` lanza `ValueError` en su primera prueba. Todo campo auditado nuevo debería sumar su nombre visible a
+    `ETIQUETAS` (si no, la pantalla muestra la clave tal cual). Toda acción nueva se clasifica en
+    `ACCIONES_DE_CUENTAS` o en `ACCIONES_DE_NEGOCIO` (una prueba lo exige). Los módulos de negocio guardan sus afectados
+    con texto y reutilizan `referencia()`.
+  - Migraciones `0008` (datos, más un `AlterField` que solo cambia la ayuda del campo `afectados`) y `0009` (índices). Para
+    quien use `--keepdb`, hay que recrear la base de pruebas una vez (`CLAUDE.md`). La prueba de punta a punta de la
+    migración desarma y rearma el esquema de la base de pruebas: lleva `@tag("migracion")` y en local se excluye junto con
+    las de concurrencia (`CLAUDE.md`); el CI la corre.
+  - **Antes de mergear a main**, como Render corre `migrate` en cada despliegue y la 0008 falla si encuentra un detalle
+    viejo que no reconoce, conviene probarla contra una copia de la base de producción o revisar los detalles de la
+    tabla `core_registroauditoria` de Neon.
+  - Límites conocidos: el texto y el rol de los afectados de los registros anteriores a esta tarea son los de las
+    cuentas AL MOMENTO DE MIGRAR, no los que tenían cuando se hizo el registro (el formato viejo no los guardó); las altas
+    anteriores no guardaron el teléfono; la vuelta de la 0008 pierde el teléfono de las altas nuevas y el texto y el rol de
+    los afectados. Los índices se verificaron en el SQL de la migración (`sqlmigrate`) y funcionan, pero no se midió con
+    `EXPLAIN` sobre una tabla grande: con pocas filas PostgreSQL recorre la tabla entera igual.
+  - `django.contrib.postgres` no está en `INSTALLED_APPS` y no hace falta: la documentación de Django lo pide solo para
+    `OpClass`, y `GinIndex` con `opclasses` se importa de `django.contrib.postgres.indexes` y migra sin él (verificado al
+    correr las migraciones).
+  - El menú del Administrador (D-30) pasa a tener dos entradas, «Cuentas» y «Auditoría». Trabajo futuro, fuera de esta
+    tarea: exportar los registros filtrados a CSV.
+- Estado: vigente; completa a D-22 (el modelo de solo agregar y la lista de acciones) y reemplaza el formato del detalle
+  de D-27, D-28, D-32, D-34 y D-35

@@ -78,11 +78,15 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   proponé el cambio de la prueba.
 - Cada prueba arma sus propios datos y no depende de otra.
 - Forma de correr las pruebas en local: solo las de los módulos que tocás, siempre con `--keepdb` y
-  `--parallel` (`python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia`).
+  `--parallel` (`python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`).
   No corras la suite completa local al terminar la tarea: la corre el CI en el PR.
 - Las clases de pruebas de concurrencia (dos hilos, `TransactionTestCase`) llevan `@tag("concurrencia")`
   (`from django.test import tag`). En local se excluyen con `--exclude-tag concurrencia`, salvo que la tarea
   toque servicios con bloqueos (`select_for_update`) o concurrencia: ahí se corren las del módulo tocado.
+- Las pruebas de migraciones que desarman y vuelven a armar el esquema de la base de pruebas (`TransactionTestCase` con
+  `MigrationExecutor`) llevan `@tag("migracion")`. En local se excluyen junto con las de concurrencia
+  (`--exclude-tag concurrencia --exclude-tag migracion`), salvo que la tarea toque una migración de datos: ahí se
+  corren aparte, una vez al final (`--tag migracion`, sin `--parallel`), y se muestra el resultado.
 - Con `manage.py test`, `config/settings.py` usa `MD5PasswordHasher` como único algoritmo de contraseñas (se
   detecta con `sys.argv`; `runserver`, gunicorn y los demás comandos no lo cambian), porque el PBKDF2 por defecto
   hace lento cada `create_user`. Las pruebas no deben depender del algoritmo (no busques «pbkdf2»: compará con el
@@ -92,7 +96,7 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   encienden con `@override_settings(CORREO_CONFIGURADO=True)`.
 - Después de una migración nueva, con `--keepdb --parallel` los clones de la base de pruebas no la reciben y falla con un
   error de columna inexistente. Si aparece, corré una vez sin `--keepdb` y con `--noinput` para recrear la base
-  (`python manage.py test core.tests.test_usuario --parallel --noinput --exclude-tag concurrencia`) y después volvé a
+  (`python manage.py test core.tests.test_usuario --parallel --noinput --exclude-tag concurrencia --exclude-tag migracion`) y después volvé a
   `--keepdb`.
 - Nada de experimentos ni de matrices de bloqueos desactivados (correr las pruebas de concurrencia con los
   bloqueos quitados o cambiados) salvo que la tarea toque bloqueos o concurrencia, o que el estudiante lo pida.
@@ -143,7 +147,7 @@ python manage.py runserver
 python manage.py makemigrations
 python manage.py migrate
 python manage.py test
-python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia
+python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion
 ```
 
 ## Seguridad
@@ -155,6 +159,6 @@ python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag 
 ## Al terminar cada tarea
 
 1. Corré las pruebas de los módulos que tocaste (con `--keepdb --parallel`, sin las de `concurrencia` salvo que
-   la tarea toque bloqueos) y mostrá el resultado. La suite completa la corre el CI en el PR.
+   la tarea toque bloqueos, ni las de `migracion` salvo que toque una migración de datos) y mostrá el resultado. La suite completa la corre el CI en el PR.
 2. Proponé la actualización de `docs/estado.md` y, si hubo decisiones nuevas, la entrada en `docs/decisiones.md`.
 3. Proponé un mensaje de commit. El commit lo hace el estudiante.

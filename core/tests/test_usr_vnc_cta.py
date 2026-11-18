@@ -37,9 +37,10 @@
 #   actor (o inexistente), PermissionDenied; en el grupo pero inactiva o con contraseña temporal,
 #   ValidationError «cuenta_no_disponible». No escribe ni audita (SEG-14).
 # - Auditoría de la vinculación: accion VINCULACION, afectados = las dos cuentas y las que cambiaron de grupo,
-#   detalle {"grupo": id del grupo resultante, "grupo_unido": id del grupo que se absorbió, o None}. De la
-#   desvinculación: accion DESVINCULACION, afectados = la cuenta que sale y, si el grupo se disolvió, la que
-#   quedaba, detalle {"grupo": id, "disuelto": bool}. Nunca contraseñas.
+#   detalle {"datos": {"grupo": referencia al grupo resultante, "grupo_unido": referencia al grupo que se absorbió,
+#   o None}}. De la desvinculación: accion DESVINCULACION, afectados = la cuenta que sale y, si el grupo se
+#   disolvió, la que quedaba, detalle {"datos": {"grupo": referencia, "disuelto": bool}}. Las referencias son
+#   {"id", "texto"} (D-36). Nunca contraseñas.
 # - Si dos grupos se unen, queda el de menor id.
 
 from datetime import timedelta
@@ -64,6 +65,7 @@ from core.models import (
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
     CLAVE,
+    afectado,
     agrupar,
     contenido_de_auditoria,
     crear_administrador,
@@ -71,6 +73,7 @@ from core.tests.fabricas import (
     crear_gerente,
     dar_invitacion,
     poner_temporal,
+    ref_grupo,
 )
 
 # Textos exactos de las pantallas del prototipo (modalHtml 'link' y link-do).
@@ -85,12 +88,6 @@ MENSAJE_CAMBIO_SIMULTANEO = "Las cuentas cambiaron mientras hacías esto. Volvé
 def grupo_de(cuenta):
     """El id del grupo de la cuenta, leído de la base (``None`` si no tiene grupo)."""
     return Usuario.objects.get(pk=cuenta.pk).grupo_id
-
-
-def ids_afectados(registro):
-    """Los ids de las cuentas afectadas de un registro de auditoría (todas son ``core.usuario``)."""
-    assert all(a["modelo"] == "core.usuario" for a in registro.afectados), registro.afectados
-    return {a["id"] for a in registro.afectados}
 
 
 def grupos_con_menos_de_dos_cuentas():
@@ -465,8 +462,10 @@ class UsrVncCtaServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.VINCULACION)
         self.assertEqual(registro.usuario_id, agronomo.pk)
         self.assertEqual(registro.rol, "agronomo")
-        self.assertEqual(ids_afectados(registro), {agronomo.pk, vendedor.pk})
-        self.assertEqual(registro.detalle, {"grupo": grupo_de(agronomo), "grupo_unido": None})
+        self.assertCountEqual(registro.afectados, [afectado(agronomo), afectado(vendedor)])
+        self.assertEqual(
+            registro.detalle, {"datos": {"grupo": ref_grupo(grupo_de(agronomo)), "grupo_unido": None}}
+        )
 
     def test_post_c_unir_dos_grupos_audita_las_cuentas_que_cambiaron_de_grupo(self):
         """USR-VNC-CTA postcondición c y regla 3: al unir dos grupos, el registro incluye las dos cuentas y
@@ -480,8 +479,12 @@ class UsrVncCtaServicioTests(TestCase):
         servicios.vincular_cuenta(agronomo, vendedor.email, CLAVE)
 
         registro = RegistroAuditoria.objects.get()
-        self.assertEqual(ids_afectados(registro), {agronomo.pk, vendedor.pk, tecnico.pk})
-        self.assertEqual(registro.detalle, {"grupo": primero.pk, "grupo_unido": segundo.pk})
+        self.assertCountEqual(
+            registro.afectados, [afectado(agronomo), afectado(vendedor), afectado(tecnico)]
+        )
+        self.assertEqual(
+            registro.detalle, {"datos": {"grupo": ref_grupo(primero.pk), "grupo_unido": ref_grupo(segundo.pk)}}
+        )
 
     def test_post_c_la_auditoria_no_guarda_ninguna_contrasena(self):
         """USR-VNC-CTA postcondición c, SEG-02 y SEG-14: ni la contraseña indicada ni los resúmenes de las
@@ -597,8 +600,8 @@ class UsrVncCtaServicioTests(TestCase):
         self.assertEqual(registro.accion, RegistroAuditoria.Accion.DESVINCULACION)
         self.assertEqual(registro.usuario_id, agronomo.pk)
         self.assertEqual(registro.rol, "agronomo")
-        self.assertEqual(ids_afectados(registro), {vendedor.pk})
-        self.assertEqual(registro.detalle, {"grupo": grupo.pk, "disuelto": False})
+        self.assertEqual(registro.afectados, [afectado(vendedor)])
+        self.assertEqual(registro.detalle, {"datos": {"grupo": ref_grupo(grupo.pk), "disuelto": False}})
 
     def test_post_c_desvincular_que_disuelve_el_grupo_audita_las_dos_cuentas(self):
         """USR-VNC-CTA postcondición c y postcondición b: si la desvinculación disuelve el grupo, el
@@ -609,8 +612,8 @@ class UsrVncCtaServicioTests(TestCase):
         servicios.desvincular_cuenta(agronomo, vendedor.pk)
 
         registro = RegistroAuditoria.objects.get()
-        self.assertEqual(ids_afectados(registro), {agronomo.pk, vendedor.pk})
-        self.assertEqual(registro.detalle, {"grupo": grupo.pk, "disuelto": True})
+        self.assertCountEqual(registro.afectados, [afectado(agronomo), afectado(vendedor)])
+        self.assertEqual(registro.detalle, {"datos": {"grupo": ref_grupo(grupo.pk), "disuelto": True}})
         self.assertNotIn(CLAVE, contenido_de_auditoria(registro))
 
     # ---- Cambiar de cuenta (SEG-09) ----
@@ -1342,7 +1345,7 @@ class UsrVncCtaConcurrenciaTests(TransactionTestCase):
         self.assertFalse(GrupoCuentas.objects.exists())
         registros = RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.DESVINCULACION)
         self.assertEqual(registros.count(), 2)
-        self.assertEqual(sorted(r.detalle["disuelto"] for r in registros), [False, True])
+        self.assertEqual(sorted(r.detalle["datos"]["disuelto"] for r in registros), [False, True])
 
     def test_seg11_restablecer_y_vincular_a_la_vez_no_dejan_la_temporal_en_el_grupo(self):
         """SEG-11, SEG-04 y regla 4 de USR-VNC-CTA: el Gerente restablece la contraseña de X (que está en un
