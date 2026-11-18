@@ -1,0 +1,232 @@
+# Historial — InfoPonia
+
+Registro de lo hecho, tarea por tarea. Claude Code no lo lee salvo que el estudiante lo pida (regla L6 de `CLAUDE.md`).
+Se agrega una entrada al cerrar cada tarea; las entradas no se reescriben.
+
+Hasta el 17/11/2026 (tarea AUD-CNS-REG) este contenido estaba en `docs/estado.md`, secciones «Hecho», «Registrado el
+05/11/2026» y «Registrado el 08/11/2026». Se copió sin cambios, salvo la ruta de las decisiones, que pasaron a
+`docs/decisiones/`. Lo que sigue vigente de estas entradas está resumido en `.claude/rules/pruebas.md`,
+`.claude/rules/interfaz.md` y `docs/patrones/`.
+
+## Hecho
+
+- Hito 0: proyecto Django mínimo corriendo en local; repositorio `infoponia/infoponia` con main
+  protegida (PR obligatoria con una aprobación); despliegue automático en Render desde main;
+  base de producción en Neon.
+- Decisiones D-01 a D-15 (modelo de usuario, nombres, claves, versión del modelo de dominio,
+  «contacto», un solo Gerente activo, Administrador técnico, el rol no se modifica, varios
+  Administradores, reemplazo del Gerente en dos operaciones, pendientes por rol, tipo de
+  `telefono`). Ver `docs/decisiones/`.
+- Política de pruebas fijada en `CLAUDE.md`: acumulación, unidad por regla, integración por flujo
+  principal, TDD por lote en servicios con revisión del estudiante y convención de nombres.
+- Tarea 01: modelo de usuario propio en la app `core` (D-01 a D-03, D-09 a D-11, D-15).
+  `Usuario` con email único y sin username; seis roles con herencia multi-tabla (Gerente,
+  Agrónomo, Capataz, Vendedor, Transportista, Técnico); restricciones en la base (rol vacío
+  solo para superusuario, un solo Gerente activo) con `Gerente.clean()` como respaldo de
+  formulario; admin con nombres visibles por rol, sin alta de `Usuario` genérico y `rol` de
+  solo lectura; 10 pruebas en `core/tests/test_usuario.py`; migraciones `0001_initial` y
+  `0002_alter_agronomo_options_alter_capataz_options_and_more`. Verificado a mano en el admin
+  local. Rama `feature/usuario-base`.
+- Neon reiniciado y migrado; Administradores recreados (06/11/2026).
+- Despliegue: el servicio de Render está en el plan Starter desde el 11/11/2026, por el acceso a la consola para
+  emergencias (el admin de Django quedó apagado en producción con la 05b) y porque el servicio queda siempre
+  encendido.
+- Tarea chica: renombradas las 10 pruebas de `core/tests/test_usuario.py` con la convención de
+  `CLAUDE.md` (prefijo `test_d<numero>_`), ordenadas por decisión; no se cambió lo que verifican.
+- Confirmado que los commits de la rama `feature/usuario-base` no llevan línea de coautor.
+- Tarea chica: workflow de GitHub Actions (`.github/workflows/pruebas.yml`) que corre `check`,
+  `makemigrations --check --dry-run` y `test` contra PostgreSQL 17 en cada PR y push a main.
+- Casos de uso del bloque Cuentas y seguridad (08/11/2026): nueve casos de uso de alto nivel
+  (USR-INI-SES a USR-VNC-CTA) y la especificación de seguridad SEG-01 a SEG-19, copiados en
+  `docs/casos_de_uso/usuarios.md`. Prototipo HTML del bloque en
+  `docs/prototipos/cuentas_y_seguridad.html`. Decisiones D-16 a D-24, todas vigentes.
+- Tarea 02: plantilla base con los estilos del prototipo y HTMX 2.0.11 servido desde el repo (D-24);
+  inicio y cierre de sesión con email sin distinguir mayúsculas (USR-INI-SES, SEG-01 en parte, SEG-05 a
+  SEG-08); inicio de cada cuenta según el rol, con marco de celular para Capataz, Técnico y Transportista;
+  acceso según el rol con `rol_requerido` y `LoginRequiredMiddleware` (SEG-13, sin el ámbito por
+  invernadero). Fuentes Inter y DM Mono en el repo. Nombre de la organización configurable
+  (`NOMBRE_ORGANIZACION`). 24 pruebas nuevas en `core/tests/test_usr_ini_ses.py` (34 en total), sin
+  migraciones. Carpeta renombrada a `docs/casos_de_uso`. Verificada a mano. Rama
+  `feature/plantilla-front`. Decisiones D-25 y D-26.
+- Tarea 03: Registro de auditoría `RegistroAuditoria` (D-22), contraseña temporal (D-18, SEG-04) y
+  cambio de contraseña (USR-CMB-CTR, SEG-03, SEG-10) con la pantalla «Elegí tu contraseña». Email en
+  minúsculas y único sin distinguir mayúsculas (SEG-01), con migración que falla si hay duplicados. 72
+  pruebas en total. Migraciones `0003` y `0004`. Rama `feature/password-temporal`. Decisión D-27.
+- Tarea 04a: consultar y alta de usuarios del Gerente (USR-CNS-USR, USR-ALT-USR). Servicios
+  `consultar_usuarios`, `obtener_cuenta` y `alta_usuario` en `core/servicios.py`, con auditoría en la misma
+  transacción; alcance del Gerente en un único queryset (`UsuarioQuerySet.en_alcance_de`); teléfono de hasta
+  25 caracteres con validador (D-21, D-28), migración `0005`. Pantallas de lista (filtros y búsqueda con
+  HTMX), ficha y alta con la contraseña temporal mostrada una sola vez; entrada «Usuarios y seguridad» en el
+  menú del Gerente. Componentes de D-24: desplegable propio accesible con teclado (el `<select>` nativo si no
+  hay JavaScript), ventana, botón «Copiar» y avisos breves. La página 403 ofrece «Volver al inicio». 119
+  pruebas en total. Verificada a mano. Rama `feature/CRUD-Usuarios`. Decisión D-28.
+- Tarea 04b: modificar, restablecer, reactivar y baja de usuarios del Gerente (USR-MOD-USR, USR-BAJ-USR).
+  Servicios `modificar_usuario`, `restablecer_contrasena`, `reactivar_usuario` y `baja_usuario` con bloqueo
+  de la cuenta y auditoría en la misma transacción; el alta y la modificación comparten la validación de
+  los datos personales (`_limpiar_datos_personales`). Se pueden modificar los datos de una cuenta inactiva
+  (D-28). Pantallas de modificar y de confirmación (ventana HTMX, o página sin JavaScript); la contraseña
+  temporal de un restablecimiento o una reactivación se muestra una sola vez; el aviso de la regla 8 del
+  alta ofrece «Reactivar cuenta». Ajustes de diseño de la revisión a mano (D-29): los avisos breves pasan
+  a ser tarjetas arriba a la derecha, con franja, ícono y barra de tiempo del color de su tipo; duran 10
+  segundos (éxito y error), tienen una cruz, se anuncian a los lectores de pantalla (`role="status"`) y,
+  sin JavaScript, queda el aviso fijo como respaldo. El botón secundario pasa a borde y texto en el verde
+  primario sobre blanco (contraste 6,5:1, WCAG AA) en todo el sistema, los botones que son enlaces ya no
+  se subrayan y todos los botones muestran el foco con Tab. Los archivos estáticos propios se piden con
+  la fecha del archivo en la URL (`static_v`): `runserver` los sirve sin `Cache-Control` y el navegador
+  guardaba el JavaScript viejo, por eso los avisos de la 04b parecían no desaparecer. 181 pruebas en
+  total, sin migraciones. Verificada a mano. Rama `feature/CRUD-Usuarios-4b`. Decisiones D-28 y D-29.
+- Tarea 05a: consultar y alta de Gerente del Administrador (USR-CNS-USR, USR-ALT-USR, D-16). Rama del
+  Administrador en `UsuarioQuerySet.en_alcance_de` (Gerentes y Administradores, incluida la suya).
+  `acciones_permitidas(actor, cuenta)` decide los botones de la ficha y del aviso de la regla 8: hasta la 05b, el
+  Administrador no ve acciones que lo lleven a un 403. Alta solo de Gerente con la regla 2 y SEG-15: se bloquean
+  todas las filas de Gerente en orden de id, el Gerente activo se busca en una consulta aparte y la restricción
+  `un_solo_gerente_activo` queda de respaldo, traducida sin dar un 500. Pantallas «Cuentas» (con «(vos)» y filtro
+  de rol «Gerente» y «Administrador») y «Alta de Gerente», que con un Gerente activo no muestra el formulario:
+  solo el aviso con «Ver a <nombre>» y «Volver a Cuentas». Menú «Administración» → «Cuentas»; el Administrador
+  entra directo a «Cuentas». Pruebas de operaciones simultáneas con dos hilos (`core/tests/concurrencia.py`).
+  204 pruebas en total, sin migraciones. Verificada a mano. Rama `feature/CRUD-Admin`. Decisión D-30.
+- Tarea 05b: modificar, restablecer, reactivar y baja del Administrador (USR-MOD-USR, USR-BAJ-USR, D-16) y admin
+  de Django apagado en producción (SEG-18). Los servicios aceptan al Administrador con su alcance; regla 4 (no
+  restablece su propia contraseña), regla 5 (un solo Gerente activo al reactivar) y precondición c (siempre queda
+  un Administrador activo), con SEG-15: se bloquea primero el grupo (todos los Gerentes, o todos los
+  Administradores activos, en orden de id), después se verifica que quien actúa siga activo y por último se
+  bloquea la cuenta. `acciones_permitidas` ofrece al Administrador sus botones. La ventana de reactivar un Gerente
+  con otro activo no pide confirmar: muestra el motivo con «Ver a <nombre>» y «Cerrar». Al darse de baja a sí
+  mismo, el Administrador sale del Sistema con un aviso. `ADMIN_DJANGO_HABILITADO = DEBUG`: con `DJANGO_DEBUG=0`,
+  `/admin/` responde 404. 237 pruebas en total, sin migraciones. Verificada a mano. Rama
+  `feature/CRUD-Admin-5b`. Decisión D-30.
+- Tarea chica de limpieza de pruebas (sin cambiar lo que verifica ninguna): las fábricas `crear_gerente`,
+  `crear_administrador`, `crear_capataz` y `crear_cuenta` y los auxiliares `administrador_inactivo` y `dar_temporal_vencida` pasan a
+  `core/tests/fabricas.py`, con una sola firma (nombre y apellido opcionales). Los archivos que verifican un nombre
+  concreto lo pasan explícito (`LAURA` en `test_usr_mod_usr.py` y `test_usr_baj_usr.py`). Las pruebas `test_d29_`
+  (`MarcoVistaTests` y `AvisosYFocoEstilosTests`) se mudaron a `core/tests/test_interfaz.py`. `requirements.txt` ya
+  estaba en ASCII (UTF-8 válido, sin BOM), no en UTF-16: no hizo falta convertirlo. 237 pruebas antes y después,
+  sin migraciones.
+- Tarea 06a: Mi perfil (USR-GST-PRF) y cambio voluntario de contraseña (USR-CMB-CTR con la contraseña actual). Mi
+  perfil muestra los datos de la cuenta con la que se opera; el Administrador modifica los suyos desde «Cuentas» y
+  los demás ven a quién pedir la corrección (`quien_gestiona`). El cambio de contraseña está dentro de Mi perfil,
+  reutiliza `cambiar_contrasena` y se envía a `mi-perfil/contrasena/`, solo por POST; el Administrador ya no la
+  cambia solo por consola. La lista de requisitos suma «distinta de la contraseña actual» solo en Mi perfil. «Mi
+  perfil» entra al menú de cuenta de todas las cuentas, con el mismo nombre para el Administrador (D-31). El lugar
+  de la foto queda preparado para la 07. 259 pruebas en total, sin migraciones. Verificada a mano. Rama
+  `feature/mi-perfil`. Decisión D-31.
+- Tarea 06b: cuentas vinculadas (USR-VNC-CTA, SEG-09 y SEG-11). Modelo `GrupoCuentas`, `Usuario.grupo` y la
+  restricción `administrador_sin_grupo` (migración `0006`). Servicios `vincular_cuenta`, `desvincular_cuenta` y
+  `cuenta_para_cambiar`, y las consultas `cuentas_vinculadas` y `obtener_cuenta_del_grupo`; restablecer y reactivar
+  sacan la cuenta de su grupo. Bloqueos en el orden de D-30 ampliado (grupo, invariantes, cuenta) y
+  «cambio_simultaneo» cuando el grupo cambió mientras se esperaba. Mi perfil con la tarjeta «Cuentas vinculadas»
+  (vincular, desvincular, «Salir del grupo» y «Cambiar»), «Cambiar de cuenta» en el menú de cuenta y los vínculos en
+  solo lectura en la ficha. Pruebas de concurrencia con dos hilos, verificadas contra bloqueos desactivados. 337
+  pruebas en total. Verificada a mano. Rama `feature/vinculo-cuentas`. Decisión D-32.
+- Tarea chica de pendientes, punto 1 (diseño): los avisos breves de D-29 van abajo, sobre el pie, en pantallas de
+  menos de 760px (apilados hacia arriba; entran y salen por abajo; sin movimiento con `prefers-reduced-motion`), y al
+  cambiar de cuenta ya no se muestra el aviso «Operás como …», porque el inicio lo indica (SEG-09). Solo hoja de
+  estilos y una línea de la vista, sin migraciones. 340 pruebas en total: 3 nuevas de pantallas angostas, y una
+  aserción de `test_seg09_cambiar_de_cuenta_genera_sesion_nueva_y_llega_al_inicio` que pasa a exigir que no haya aviso.
+  Verificada a mano. Rama `chore/pendientes`. Actualiza D-29 y D-32.
+- Tarea chica de pendientes, punto 2 (limpieza de pruebas, sin cambiar lo que verifica ninguna): `contenido_de_auditoria`
+  (estaba en `test_usr_mod_usr.py` y en `test_usr_vnc_cta.py`), `poner_temporal` y `dar_contrasena_temporal` (estaba en
+  `test_usr_ini_ses.py` y en `test_usr_cmb_ctr.py`; queda con la firma de la primera, `(usuario, generada_hace=None)`,
+  que con un solo argumento hace lo mismo que la segunda) pasan a `core/tests/fabricas.py`, y `dar_temporal_vencida`
+  delega en la última. Se sacaron los imports que quedaron sin uso. 340 pruebas antes y después, con la misma lista de
+  nombres y ninguna aserción cambiada; sin migraciones. Rama `chore/pendientes`.
+- Tarea chica de pendientes, punto 3 (bloqueos): los cuatro bloqueos que todavía usaban `FOR UPDATE`
+  (`_bloquear_gerentes`, `_bloquear_administradores_activos`, el de la cuenta en `_bloquear_cuenta_en_alcance` y el de
+  `cambiar_contrasena`) pasan a `select_for_update(no_key=True)`. Resuelve el límite conocido de D-32 (restablecer
+  al Gerente mientras modifica su cuenta vinculada) y el mismo ciclo entre dos Administradores que se modifican
+  entre sí; queda el residual del cambio simultáneo de email. `correr_a_la_vez` suma el parámetro `primera`, que
+  fija el orden de las dos operaciones sin depender de la velocidad de la máquina. 2 pruebas de concurrencia nuevas
+  (`test_d32_…`), que fallaban con deadlock antes del cambio; las 10 de concurrencia, corridas con los bloqueos
+  devueltos a `FOR UPDATE`, sin bloqueos y sin los de los invariantes, fallan donde corresponde. 342 pruebas en
+  total, sin migraciones. Rama `chore/pendientes`. Actualiza D-30 y D-32.
+- Tarea chica de pruebas de concurrencia: las 8 pruebas de SEG-15 y de las cuentas vinculadas que esperaban una ventana
+  fija de 1,5 s pasan al parámetro `primera` de `correr_a_la_vez`, que ahora es obligatorio; la ventana fija se
+  elimina. Con ella, en una máquina lenta seis de las ocho podían pasar sin probar nada y dos fallaban aunque todo
+  estuviera bien; ahora detectan lo mismo a velocidad normal y con la segunda operación 3 s tarde. `correr_a_la_vez`
+  suma `detener_antes_de` y hay 3 pruebas nuevas (`test_d32_…`): el orden de bloqueos de `restablecer_contrasena`
+  (única que detecta que falte el bloqueo del grupo) y `cuida_grupo` en restablecer y en reactivar. La prueba de
+  restablecer y vincular corre los dos órdenes. Matriz de 11 modos de bloqueos desactivados, a velocidad normal y
+  lenta: cada prueba falla cuando falta su protección. 13 pruebas de concurrencia, 5 corridas seguidas sin fallas.
+  345 pruebas en total, ninguna aserción cambiada, sin migraciones. Rama `chore/pendientes`. Actualiza D-32.
+- Tarea chica de experiencia de uso (Neon Free se suspende a los 5 minutos y el primer pedido tarda): (1) envíos en
+  curso: `infoponia.js` deshabilita el botón de envío de todo formulario POST con un indicador y el verbo de la acción
+  (`data-enviando`, por defecto «Guardando…») y descarta un segundo envío; (2) errores de HTMX: dos avisos de error de
+  D-29 («Revisá tu conexión…» sin conexión o sin respuesta en 30 s; «Volvé a intentarlo.» con un error del servidor),
+  con el límite en `base.html`; Render usa el `--timeout` por defecto de gunicorn (30 s); (3) al iniciar sesión, si la
+  pantalla pedida (`next`) no es accesible por rol para la cuenta que entra, va a su inicio y no al 403
+  (`pantalla_accesible_para`, `core/acceso.py`). 359 pruebas en total (14 nuevas: 9 en `test_usr_ini_ses.py` y 5 en
+  `test_interfaz.py`), sin migraciones, ninguna existente cambió. Rama `chore/pendientes`. Actualiza D-29.
+- Forma de trabajo con las pruebas (`CLAUDE.md`, sección Tests): en local solo las de los módulos tocados, con
+  `--keepdb --parallel`; la suite completa la corre el CI en el PR; las 4 clases de concurrencia (13 pruebas) llevan
+  `@tag("concurrencia")` y se excluyen con `--exclude-tag concurrencia` salvo que la tarea toque bloqueos; sin
+  experimentos ni matrices de bloqueos salvo que la tarea lo pida. Con `manage.py test`, `config/settings.py` usa
+  `MD5PasswordHasher` (detectado con `sys.argv`) para que crear cuentas en las pruebas no cueste 1.000.000 de
+  iteraciones de PBKDF2; `test_usr_cns_usr.py` ya no busca el texto «pbkdf2» sino el prefijo del hash real. Si se
+  cambia el algoritmo de producción, hay que probarlo a mano. Sin otros cambios de comportamiento.
+- Tarea 08: recuperar contraseña por correo (USR-RCP-CTR, SEG-12) y configuración del envío de correo (D-33 y D-34).
+  Gmail por SMTP con la cuenta exclusiva de notificaciones, contraseña de aplicación solo en Render, `EMAIL_TIMEOUT = 10`
+  y `CORREO_CONFIGURADO` como única fuente de verdad (`config/correo.py`); con `DEBUG` y `CORREO_CONSOLA=1`, el correo va
+  a la consola. Servicios `pedir_recuperacion`, `cuenta_del_enlace` y `confirmar_recuperacion`: el pedido no escribe ni
+  audita y da la misma respuesta exista o no la cuenta; la confirmación bloquea la cuenta (`FOR NO KEY UPDATE`) y vuelve a
+  validar el token después de bloquear, así que el enlace es de un solo uso aun con dos pedidos simultáneos (verificado:
+  con la validación antes del bloqueo, la prueba de concurrencia falla con `2 != 1`). Recuperan las cuentas activas de
+  cualquier rol y también las de los Administradores. Pantallas de pedido, «Revisá tu correo», contraseña nueva y «Enlace
+  no válido», con el token fuera de la URL; al terminar se lleva al inicio de sesión sin iniciar sesión. El inicio de
+  sesión ofrece «¿Olvidaste tu contraseña?» solo con el correo configurado. `test_usr_rcp_ctr.py`: 48 pruebas (47 más 1 de
+  concurrencia) y dos pantallas sumadas a `EnviosEnCursoTests`; corridos con los de `test_interfaz`, `test_usr_ini_ses` y
+  `test_usr_cmb_ctr`: 146 pruebas, OK. Sin migraciones ni dependencias nuevas. Falta la revisión a mano (ver «En curso»)
+  y cargar las variables de correo en Render. Decisiones D-33 y D-34.
+- Tarea 08b: invitación por correo en el alta, el restablecimiento y la reactivación (USR-ALT-USR 0.4, USR-MOD-USR 0.5,
+  USR-CNS-USR 0.4, SEG-04 y SEG-20; D-35). Quien gestiona la cuenta elige cómo obtiene la persona su primer acceso: una
+  invitación por correo (por defecto, solo con el correo configurado) o una contraseña temporal. La invitación deja la
+  cuenta con contraseña no utilizable y `Usuario.fecha_invitacion` (migración `0007`, con la restricción
+  `invitacion_o_temporal` y la acción de auditoría `aceptacion_invitacion`); el enlace vence a los 7 días
+  (`core/tokens.py`, un generador propio que no sirve para la recuperación ni al revés). Elegir la contraseña con un enlace
+  es un solo servicio, compartido con la recuperación de la 08 (`_elegir_contrasena_con_enlace`: bloquea y revalida después
+  de bloquear); `confirmar_invitacion` no exige el correo configurado. Los servicios devuelven un `ResultadoAcceso`; el
+  envío va fuera de la transacción y, si falla, la cuenta queda con la invitación pendiente y la pantalla avisa y ofrece
+  «Restablecer acceso». Pantallas: el radio de la forma de acceso en el alta y en las ventanas de restablecer y reactivar,
+  los resultados, el enlace de la invitación (`invitacion/…`, con el token fuera de la URL), las insignias «Invitación
+  pendiente» y «Invitación vencida», y la pista de Spam también en «Revisá tu correo». «Restablecer contraseña» pasa a
+  «Restablecer acceso». Una cuenta con invitación pendiente no se puede vincular (ya ocurría; ahora tiene prueba). 64
+  pruebas nuevas (62 sin concurrencia y 2 de concurrencia); los módulos tocados dan 437 pruebas sin concurrencia y 16 de
+  concurrencia, OK; el experimento de mover la revalidación antes del bloqueo hace fallar las tres de enlaces de un solo uso
+  (invitación, restablecer mientras se acepta y recuperación). Con `manage.py test`, `CORREO_CONFIGURADO` arranca en
+  `False`. Decisión D-35. Sin dependencias nuevas.
+
+- Tarea AUD-CNS-REG: consultar el registro de auditoría (AUD-CNS-REG 0.1, `docs/casos_de_uso/auditoria.md`) y formato
+  obligatorio del detalle (D-36). `RegistroAuditoria.objects.registrar` valida que el detalle tenga solo «cambios»
+  (`{campo: {antes, despues}}`, el valor anterior es obligatorio) y «datos» (contexto), con las referencias como
+  `{id, texto}`; los afectados se guardan con texto y rol. Todos los servicios que auditan pasan al formato nuevo (las
+  pruebas de detalle exacto cambian de forma, no de rigor). Migración de datos `0008` (única excepción deliberada a D-22:
+  convierte los registros existentes, idempotente, con vuelta, sin llamar a código de la app) e índices `0009` (GIN
+  `jsonb_path_ops` en los afectados y btree en la fecha). Alcance: `visibles_para(actor)`, con las acciones clasificadas
+  en `ACCIONES_DE_CUENTAS` y `ACCIONES_DE_NEGOCIO` (una prueba obliga a clasificar cada acción nueva); servicios
+  `consultar_auditoria`, `obtener_registro` y `puede_ver_auditoria_de`. Pantallas «Auditoría» (lista paginada de 25 con
+  filtros, y detalle con Campo / Antes / Después, solo GET), entrada en el menú del Gerente y del Administrador, y «Ver
+  auditoría» en la ficha de una cuenta. Los módulos tocados dan 509 pruebas sin concurrencia ni migración, 16 de
+  concurrencia y 1 de migración (`@tag("migracion")`, nueva en `CLAUDE.md`), OK; `makemigrations --check` sin cambios. Sin
+  dependencias nuevas (`GinIndex` no necesita `django.contrib.postgres` en `INSTALLED_APPS`). Decisión D-36.
+
+## Registrado el 05/11/2026
+
+- Administrador técnico, un solo Gerente activo y R002 a R006 calculadas: ya están en pendientes_MD
+  (MD-55), pendientes_DER (DER-10), pendientes_CU (caso 23 y ajustes en COM-EVL-DSC y CMP-APR-ODC),
+  el glosario y pendientes_prototipo (pendiente 45). Pendientes por rol (D-14) registrado el mismo
+  día en pendientes_CU, pendientes_MD y pendientes_prototipo. Los CU extendidos y el diagrama del
+  modelo de dominio no se tocaron: se ajustan en la próxima ronda.
+
+## Registrado el 08/11/2026
+
+- Resueltos: la pantalla propia del Administrador (D-16); los plazos sin Gerente activo (ninguno de
+  sus pendientes tiene plazo: regla 3 de USR-BAJ-USR); los casos de uso de iniciar sesión, cerrar
+  sesión y recuperar contraseña (`docs/casos_de_uso/usuarios.md`).
+- Las decisiones del bloque también están en los documentos de Drive: pendientes_MD (MD-58 a MD-64),
+  pendientes_DER (DER-10, DER-12 y DER-13), pendientes_CU y CU extendidos. El DER se actualiza
+  después, a partir del código.
+
+## Entradas nuevas
+
+Una línea por tarea cerrada, con este formato:
+
+- dd/mm/aaaa · <ID> · <qué se hizo, en una línea> · <cantidad de pruebas> · <migraciones> · <decisiones> · rama `<rama>`

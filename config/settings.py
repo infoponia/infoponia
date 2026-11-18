@@ -59,7 +59,7 @@ INSTALLED_APPS = [
 ]
 
 # D-01 a D-03: modelo de usuario propio (email en vez de username, roles con herencia
-# multi-tabla). Ver docs/decisiones.md.
+# multi-tabla). Ver docs/decisiones/ (D-01 a D-03).
 AUTH_USER_MODEL = "core.Usuario"
 
 # Nombre de la organización que se muestra en el marco (cabecera y pantallas sin sesión).
