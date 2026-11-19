@@ -10,7 +10,7 @@ texto de «CU extendidos». El proveedor de correo está resuelto en D-33.
 
 Estos casos de uso son de alto nivel (breves): reemplazan a CU-12 y CU-25 a CU-28 de la
 Documentación para la IA y especifican el caso 23 de pendientes_CU. Las decisiones que los
-acompañan están en `docs/decisiones.md` (D-01 a D-24). Los ítems MD-nn y DER-nn que se citan
+acompañan son D-01 a D-24 (`docs/decisiones/`). Los ítems MD-nn y DER-nn que se citan
 están en los documentos de Drive pendientes_MD y pendientes_DER, y no hace falta leerlos.
 
 Para nombrar las pruebas: en este archivo las reglas de cada caso de uso están numeradas, así que

@@ -4,8 +4,8 @@ Copia para el repo del caso de uso AUD-CNS-REG del documento de Drive «CU exten
 archivo y el documento de Drive no coinciden, avisá: no elijas en silencio.
 
 Es un caso de uso nuevo y propio: no está en `usuarios.md` porque la auditoría no es del bloque de cuentas. La usan hoy
-las cuentas y la usarán los módulos de negocio (D-36). Las decisiones que lo acompañan están en `docs/decisiones.md`
-(D-22 y D-36). Los ítems MD-nn y SEG-nn que se citan están en los documentos de Drive y en `docs/casos_de_uso/usuarios.md`
+las cuentas y la usarán los módulos de negocio (D-36). Las decisiones que lo acompañan son
+D-22 y D-36 (`docs/decisiones/`). Los ítems MD-nn y SEG-nn que se citan están en los documentos de Drive y en `docs/casos_de_uso/usuarios.md`
 (SEG-13, SEG-14).
 
 No hay prototipo de esta pantalla (D-24): sigue el estilo de la lista de Cuentas y las convenciones de D-29.

@@ -1,6 +1,6 @@
 # Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, el grupo de
 # cuentas vinculadas y el registro de auditoría. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17, D-18, D-19
-# D-22, D-35 y D-36 en docs/decisiones.md.
+# D-22, D-35 y D-36 (docs/decisiones/).
 
 from datetime import timedelta
 

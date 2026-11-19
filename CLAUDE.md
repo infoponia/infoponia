@@ -11,30 +11,43 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
 - Cada regla de negocio implementada cita su fuente en el docstring o en un comentario
   (por ejemplo: `# Regla 9 de 8.13 — modelo de dominio, ronda 20`).
 - No agregues dependencias, no modifiques migraciones ya mergeadas en main y no cambies
-  modelos ya mergeados sin permiso explícito.
+  modelos ya mergeados sin permiso explícito. Lo que la tarea permite tocar fuera de su app está en
+  «Permitido fuera de la app».
 - No hagas commits, push ni operaciones de Git que modifiquen el historial. Los commits los hacen los estudiantes.
-- No explores el repo por tu cuenta: trabajá sobre los archivos que se te indiquen.
-  Nunca listes ni leas `.venv/`.
+- Nunca listes ni leas `.venv/`.
 - Verificá versiones y comandos actuales antes de recomendarlos; no recomiendes de memoria.
+
+## Qué leer
+
+L1. Al empezar: este archivo y `docs/estado.md`.
+L2. Leé el archivo de la tarea que te indique el estudiante (`docs/tareas/<app>/<ID>-*.md`).
+    Si no te indica ninguna, preguntá cuál.
+L3. Leé solo lo que la tarea lista en «Leer», y solo las secciones nombradas.
+    - Decisiones: `docs/decisiones/D-NN.md`, solo las listadas.
+    - Prototipo: buscá con Grep la función que nombra la tarea y leé solo esa parte.
+    - Antes de escribir o correr pruebas, leé `.claude/rules/pruebas.md`; antes de tocar plantillas
+      o estilos, `.claude/rules/interfaz.md`.
+L4. Código: leé los archivos que vas a modificar y los que importan de forma directa.
+    Para cualquier otra cosa, pedila y decí para qué la necesitás.
+L5. Si la tarea no cubre un tema, buscalo en `docs/decisiones/README.md` y avisá antes de seguir.
+L6. No leas `docs/historial.md`, `docs/revisiones_pendientes.md` ni un prototipo entero,
+    salvo que el estudiante lo pida.
+L7. Si la tarea contradice un caso de uso, el extracto del modelo, una decisión o el código,
+    frená y preguntá. El prototipo es solo una guía visual: si su lógica difiere del caso
+    de uso, manda el caso de uso.
+L8. Las decisiones se citan por su ID («D-36»), sin ruta: el archivo es `docs/decisiones/D-36.md`.
 
 ## Fuentes de verdad (de mayor a menor peso)
 
-1. `docs/decisiones.md`: bitácora de decisiones tomadas por el equipo.
-2. Modelo de dominio (ronda 20) y glosario.
-3. Casos de uso extendidos y pendientes.
+1. Decisiones del equipo (`docs/decisiones/`).
+2. Modelo de dominio (ronda 20, D-07) y glosario: extractos en `docs/modelo/`.
+3. Casos de uso extendidos y pendientes: extractos en `docs/casos_de_uso/`.
 4. Casos de uso originales (desactualizados; solo orientativos).
-5. Prototipo: solo guía visual.
+5. Prototipo: solo guía visual (`docs/prototipos/`).
 
-Los casos de uso y la especificación de seguridad de cada bloque que se implementa están copiados
-en `docs/casos_de_uso/` (por ejemplo, `docs/casos_de_uso/usuarios.md`). Esa copia es la que se usa
-en el repo: leé solo las secciones que indique la tarea. Los documentos de Drive no se leen.
-Los prototipos de cada bloque están en `docs/prototipos/`: buscá la pantalla por el nombre que
-indique la tarea y no leas el archivo entero.
-Los recuadros «Solo prototipo», los datos de prueba y los interruptores de simulación del prototipo
-no se implementan: la lista está en `docs/casos_de_uso/usuarios.md`, sección «Elementos del
-prototipo que no van en el sistema».
-
-Estado actual y próximos pasos: `docs/estado.md`. Leelo al empezar cada sesión.
+Los documentos de Drive no se leen: el repo tiene sus copias. Si una copia del repo y lo que sabés de Drive no
+coinciden, avisá. Los elementos «Solo prototipo» no se implementan (lista en cada caso de uso y en el `README.md`
+de cada prototipo).
 
 ## Stack
 
@@ -46,16 +59,27 @@ Estado actual y próximos pasos: `docs/estado.md`. Leelo al empezar cada sesión
 ## Arquitectura
 
 - Monolito Django (MTV) con capa de servicios.
-- Cada caso de uso es una función de servicio en `<app>/servicios.py`, dentro de `transaction.atomic()`.
-  Sus pre y postcondiciones salen del caso de uso extendido y de las reglas del modelo de dominio.
+- Cada caso de uso es una función de servicio dentro de `transaction.atomic()`. Sus pre y postcondiciones salen del
+  caso de uso extendido y de las reglas del modelo de dominio. En `core`, los servicios están en `core/servicios.py`;
+  en las apps nuevas, en el paquete `<app>/servicios/`, un archivo por entidad raíz, importado del módulo y sin
+  reexportar en `__init__.py` (D-37).
 - Las vistas solo orquestan: validan la entrada, llaman al servicio y renderizan.
 - El alcance por usuario se aplica con un único manager o queryset por modelo.
-- Modelo de usuario: ver D-01 a D-04 en `docs/decisiones.md`.
+- Modelo de usuario: D-01 a D-04.
+- Apps por niveles (D-37): `core` (1), `contabilidad` (2), `maestros` (3), `inventario` (4), `produccion` (5),
+  `compras` y `comercial` (6), `iot` (7).
+  - A1. Una app solo importa de apps de nivel menor. `compras` y `comercial` no se importan entre sí.
+  - A2. Toda FK o M2M se declara en la app de nivel mayor.
+  - A3. Un caso de uso que toca varias apps vive en la más alta que toca.
+  - A4. Cuando una app baja necesita preguntarle algo a una alta, la alta se registra en un punto de extensión de la
+    baja, en `AppConfig.ready()`.
+- Antes de crear un modelo, revisá `docs/disparadores.md`. Si el servicio audita, seguí `docs/patrones/auditoria.md`;
+  si bloquea filas, `docs/patrones/bloqueos.md` (cuando la tarea los nombre).
 
 ## Convenciones
 
 - Nombres en español según el glosario, en snake_case, conservando el sufijo de la clase
-  (`nombre_invernadero`). Las correcciones de errores de tipeo del diagrama se registran en `docs/decisiones.md`.
+  (`nombre_invernadero`). Las correcciones de errores de tipeo del diagrama se registran en una decisión.
 - Clave primaria: `id` automático de Django, equivalente a `idX` del diagrama.
 - Dinero siempre con `Decimal` y `DecimalField`. Nunca `float`.
 - `select_for_update()` en reservas de stock y en toda operación concurrente sobre cantidades.
@@ -63,76 +87,10 @@ Estado actual y próximos pasos: `docs/estado.md`. Leelo al empezar cada sesión
 - Docstring en cada clase y función; comentarios en la lógica no evidente.
 - Patrones de diseño solo si están identificados y justificados en un comentario.
 
-## Tests
+## Pruebas
 
-Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en cada PR.
-
-- Unidad: una prueba por regla de negocio, extensión y postcondición relevante del caso de uso.
-  Son obligatorias, como mínimo, en reglas con dinero, stock o alcance por usuario.
-- Integración: una prueba por flujo principal de cada caso de uso (vista con el cliente de
-  prueba de Django). No escribas pruebas de navegador.
-- Orden en servicios: primero escribí todas las pruebas de las reglas del caso de uso, corrélas y
-  mostrá que fallan; esperá que el estudiante las revise; después implementá el servicio.
-  En vistas y en pantallas sin reglas de negocio, las pruebas van después.
-- Nunca borres ni debilites una prueba existente para que pase. Si una regla cambió, avisá y
-  proponé el cambio de la prueba.
-- Cada prueba arma sus propios datos y no depende de otra.
-- Forma de correr las pruebas en local: solo las de los módulos que tocás, siempre con `--keepdb` y
-  `--parallel` (`python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`).
-  No corras la suite completa local al terminar la tarea: la corre el CI en el PR.
-- Las clases de pruebas de concurrencia (dos hilos, `TransactionTestCase`) llevan `@tag("concurrencia")`
-  (`from django.test import tag`). En local se excluyen con `--exclude-tag concurrencia`, salvo que la tarea
-  toque servicios con bloqueos (`select_for_update`) o concurrencia: ahí se corren las del módulo tocado.
-- Las pruebas de migraciones que desarman y vuelven a armar el esquema de la base de pruebas (`TransactionTestCase` con
-  `MigrationExecutor`) llevan `@tag("migracion")`. En local se excluyen junto con las de concurrencia
-  (`--exclude-tag concurrencia --exclude-tag migracion`), salvo que la tarea toque una migración de datos: ahí se
-  corren aparte, una vez al final (`--tag migracion`, sin `--parallel`), y se muestra el resultado.
-- Con `manage.py test`, `config/settings.py` usa `MD5PasswordHasher` como único algoritmo de contraseñas (se
-  detecta con `sys.argv`; `runserver`, gunicorn y los demás comandos no lo cambian), porque el PBKDF2 por defecto
-  hace lento cada `create_user`. Las pruebas no deben depender del algoritmo (no busques «pbkdf2»: compará con el
-  prefijo del hash real). Si se cambia el algoritmo de producción, hay que probarlo a mano: las pruebas no lo ejercitan.
-- Con `manage.py test`, `CORREO_CONFIGURADO` arranca en `False` (aunque el `.env` tenga `CORREO_CONSOLA=1` o
-  credenciales), para que las pruebas den lo mismo en cada máquina y en el CI. Las pruebas que necesitan el correo lo
-  encienden con `@override_settings(CORREO_CONFIGURADO=True)`.
-- Después de una migración nueva, con `--keepdb --parallel` los clones de la base de pruebas no la reciben y falla con un
-  error de columna inexistente. Si aparece, corré una vez sin `--keepdb` y con `--noinput` para recrear la base
-  (`python manage.py test core.tests.test_usuario --parallel --noinput --exclude-tag concurrencia --exclude-tag migracion`) y después volvé a
-  `--keepdb`.
-- Nada de experimentos ni de matrices de bloqueos desactivados (correr las pruebas de concurrencia con los
-  bloqueos quitados o cambiados) salvo que la tarea toque bloqueos o concurrencia, o que el estudiante lo pida.
-- Para reproducir en local un fallo del CI (producción, con `DEBUG` apagado), o si el estudiante pide la
-  suite completa: poné `DJANGO_DEBUG=0` y una
-  `DJANGO_SECRET_KEY` inventada en la misma línea. Sin la clave, con `DEBUG` apagado la configuración queda sin
-  `SECRET_KEY` y fallan casi todas las pruebas. No leas `.env` ni uses la clave real.
-  En PowerShell: `$env:DJANGO_DEBUG="0"; $env:DJANGO_SECRET_KEY="clave-falsa-solo-para-pruebas"; python manage.py test`
-  (después, `Remove-Item Env:DJANGO_DEBUG, Env:DJANGO_SECRET_KEY` para volver al modo normal).
-  Con la herramienta Bash: `DJANGO_DEBUG=0 DJANGO_SECRET_KEY=clave-falsa-solo-para-pruebas .venv/Scripts/python.exe manage.py test`.
-  Si la base `test_infoponia` quedó de una corrida interrumpida, agregá `--noinput` para recrearla.
-
-### Nombres
-
-Los nombres concretos de esta sección son ejemplos del formato, no archivos ni pruebas que haya
-que crear.
-
-- Archivo por caso de uso: `<app>/tests/test_<codigo_cu>.py`.
-  Ejemplo: `compras/tests/test_cmp_apr_odc.py`.
-- Clases: `<CodigoCu>ServicioTests` (unidad) y `<CodigoCu>VistaTests` (integración).
-  Ejemplo: `CmpAprOdcServicioTests`.
-- Prueba: `test_<origen>_<que_espera>`, en snake_case, sin tildes ni ñ, con el resultado en presente.
-  Formatos según el origen, con un ejemplo cada uno:
-  - Regla del CU, `test_regla_<nombre_regla>_<que_espera>`.
-    Ejemplo: `test_regla_orden_resoluble_rechaza_orden_ya_aprobada`
-  - Regla del modelo, `test_regla_<seccion>_<numero>_<que_espera>`.
-    Ejemplo: `test_regla_8_16_24_orden_resuelta_no_vuelve_a_resolverse`
-  - Extensión, `test_ext_<id>_<que_espera>`.
-    Ejemplo: `test_ext_8b_destino_inactivo_no_registra_cambios`
-  - Postcondición, `test_post_<letra>_<que_espera>`.
-    Ejemplo: `test_post_d_sube_cantidad_en_transito`
-  - Flujo principal, `test_flujo_principal_<que_espera>`.
-    Ejemplo: `test_flujo_principal_aprueba_orden`
-  - Decisión sin caso de uso, `test_d<numero>_<que_espera>`.
-    Ejemplo: `test_d09_un_solo_gerente_activo`
-- Cada prueba tiene un docstring con la fuente exacta (caso de uso y regla, o decisión).
+Las reglas de pruebas (tipos, orden, etiquetas, cómo correrlas y nombres) están en `.claude/rules/pruebas.md`.
+Cada tarea trae su «Comando de pruebas». La suite completa la corre el CI en el PR.
 
 ## Comandos
 
@@ -158,7 +116,14 @@ python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag 
 
 ## Al terminar cada tarea
 
-1. Corré las pruebas de los módulos que tocaste (con `--keepdb --parallel`, sin las de `concurrencia` salvo que
-   la tarea toque bloqueos, ni las de `migracion` salvo que toque una migración de datos) y mostrá el resultado. La suite completa la corre el CI en el PR.
-2. Proponé la actualización de `docs/estado.md` y, si hubo decisiones nuevas, la entrada en `docs/decisiones.md`.
-3. Proponé un mensaje de commit. El commit lo hace el estudiante.
+M1. Corré el «Comando de pruebas» de la tarea y mostrá el resultado.
+M2. Completá en el archivo de la tarea «Cierre» (qué se hizo, pruebas, decisiones) y «Verificación a mano»
+    (los pasos para el estudiante).
+M3. Proponé, sin aplicarlos:
+    - el `docs/estado.md` nuevo;
+    - la fila de la tarea en `docs/tareas/README.md` (si queda hecha, se saca);
+    - una línea para `docs/historial.md`;
+    - la sección de la tarea en `docs/revisiones_pendientes.md`, si hay pasos a mano;
+    - si hubo decisión, `docs/decisiones/D-NN.md` y su fila en `docs/decisiones/README.md`;
+    - si creaste modelos, los disparadores que se cumplieron (se tachan) y los que nacen.
+M4. Proponé el mensaje de commit. El commit lo hace el estudiante.
