@@ -111,7 +111,7 @@ Avisá y esperá respuesta antes de implementarlas; después van a una decisión
 
 ## Cierre (la completa Claude Code al cerrar)
 
-**Estado: MAE-01a hecha; MAE-01b pendiente.** La tarea se partió en dos, como la 04a y la 04b (D-39).
+**Estado: MAE-01a hecha; MAE-01b hecha** (ver `MAE-01b-invernadero-modificar-y-baja.md`). La tarea se partió en dos, como la 04a y la 04b (D-39).
 
 **Qué se hizo (MAE-01a)**
 
@@ -144,4 +144,4 @@ pruebas de `core` no resolvía la entrada «Producción» del menú, así que in
 
 **Para más adelante:** el aviso «Personal por asignar» del Inicio del Gerente (regla 5 de PROD-CNS-INV) pasa a MAE-02, que
 crea las alertas; las postcondiciones d y e de PROD-ALT-INV, a MAE-02 y a la decisión sobre las notificaciones (D-38).
-MAE-01b: modificar, reactivar y dar de baja.
+MAE-01b: hecha.

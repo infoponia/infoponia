@@ -1,13 +1,14 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
-{% comment %}Nuevo invernadero (PROD-ALT-INV, VIEWS['inv-form'] del prototipo). Va con «novalidate»: las reglas son del
-servicio. Las listas de provincia, departamento y localidad se encadenan con HTMX; sin JavaScript, «Actualizar» reenvía
-el formulario sin guardar. En MAE-01b este mismo formulario sirve para modificar.{% endcomment %}
-{% block titulo %}Nuevo invernadero · InfoPonia{% endblock %}
+{% comment %}Nuevo invernadero (PROD-ALT-INV) o modificar uno (PROD-MOD-INV, con «invernadero»): VIEWS['inv-form'] del
+prototipo. Va con «novalidate»: las reglas son del servicio. Las listas de provincia, departamento y localidad se encadenan
+con HTMX; sin JavaScript, «Actualizar» reenvía el formulario sin guardar. Con «aviso» (regla 2 de PROD-MOD-INV) muestra la
+ventana que pide confirmar el cambio de personal.{% endcomment %}
+{% block titulo %}{% if invernadero %}Modificar invernadero{% else %}Nuevo invernadero{% endif %} · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
 <div class="page narrow">
-  <a class="btn btn-ghost btn-sm" href="{% url 'maestros:invernaderos' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
-  <div class="page-h"><h1>Nuevo invernadero</h1></div>
+  <a class="btn btn-ghost btn-sm" href="{% if invernadero %}{% url 'maestros:invernadero' invernadero.pk %}{% else %}{% url 'maestros:invernaderos' %}{% endif %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>{% if invernadero %}Modificar invernadero{% else %}Nuevo invernadero{% endif %}</h1></div>
   {% if form.non_field_errors %}
   <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
   {% endif %}
@@ -38,18 +39,27 @@ el formulario sin guardar. En MAE-01b este mismo formulario sirve para modificar
 
     <div class="card" style="margin-top:16px">
       <div class="card-title">Personal</div>
-      <p class="muted" style="margin:-6px 0 14px;font-size:13px">Es opcional: podés crear el invernadero ahora y asignar al personal después. Mientras falte un rol, se va a ver el aviso.</p>
+      <p class="muted" style="margin:-6px 0 14px;font-size:13px">Es opcional: podés {% if invernadero %}guardar el invernadero sin personal y asignarlo después{% else %}crear el invernadero ahora y asignar al personal después{% endif %}. Mientras falte un rol, se va a ver el aviso.</p>
       <div class="grid2">
         {% for campo, ayuda in form.personal %}{% include "core/usuarios/_campo.html" with campo=campo ayuda=ayuda %}{% endfor %}
       </div>
     </div>
 
+    {% if not invernadero %}
     <div class="alert alert-info" role="status" style="margin-top:16px">{% icono "info" 16 %}<div>Los sectores no se cargan en este formulario: los registra el Agrónomo del invernadero. Hasta que haya al menos un sector por cada etapa de una variedad, no es posible sembrarla.</div></div>
+    {% endif %}
 
     <div class="row" style="margin-top:16px">
+      {% if invernadero %}
+      <button class="btn btn-primary" type="submit" data-enviando="Guardando…">Guardar cambios</button>
+      <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}">Cancelar</a>
+      {% else %}
       <button class="btn btn-primary" type="submit" data-enviando="Creando…">Crear invernadero</button>
       <a class="btn btn-ghost" href="{% url 'maestros:invernaderos' %}">Cancelar</a>
+      {% endif %}
     </div>
   </form>
 </div>
 {% endblock %}
+
+{% block ventanas %}{% if aviso %}{% include "maestros/invernaderos/_ventana_personal.html" %}{% endif %}{% endblock %}

@@ -1,4 +1,4 @@
-# Formularios de maestros: el alta de un invernadero (PROD-ALT-INV). Como en core, el formulario solo normaliza lo que
+# Formularios de maestros: el alta y la modificación de un invernadero (PROD-ALT-INV y PROD-MOD-INV). Como en core, el formulario solo normaliza lo que
 # se escribe y arma las listas; todas las reglas las aplica el servicio (maestros/servicios/invernaderos.py), y la
 # vista pasa sus errores al formulario. Provincia, departamento y localidad son listas encadenadas de Georef (regla 3).
 
@@ -6,7 +6,7 @@ from django import forms
 from django.urls import reverse_lazy
 
 from maestros.servicios import geografia
-from maestros.servicios.invernaderos import NOMBRE_DEL_ROL, cuentas_asignables
+from maestros.servicios.invernaderos import NOMBRE_DEL_ROL, cuentas_asignables, datos_de_la_direccion
 
 SELECCIONAR = [("", "Seleccionar…")]
 
@@ -29,8 +29,29 @@ def _lista(etiqueta):
     )
 
 
+def datos_iniciales(invernadero):
+    """Lo que el formulario muestra al modificar un invernadero (``INIT['inv-form']`` del prototipo): su nombre, su
+    dirección con la provincia y el departamento de su localidad, y su personal."""
+    direccion = invernadero.direccion
+    hija = direccion.concreta()
+    localidad = direccion.localidad
+    return {
+        "nombre": invernadero.nombre_invernadero,
+        "tipo_direccion": hija.ZONA,
+        "provincia": localidad.departamento.provincia_id,
+        "departamento": localidad.departamento_id,
+        "localidad": localidad.pk,
+        **{campo: valor or "" for campo, valor in datos_de_la_direccion(hija).items()},
+        **{atributo: getattr(invernadero, f"{atributo}_id") or "" for atributo in NOMBRE_DEL_ROL},
+    }
+
+
 class FormularioInvernadero(forms.Form):
-    """Alta de un invernadero (PROD-ALT-INV, ``VIEWS['inv-form']`` del prototipo).
+    """Alta o modificación de un invernadero (PROD-ALT-INV y PROD-MOD-INV, ``VIEWS['inv-form']`` del prototipo).
+
+    Con ``invernadero`` (modificar), el formulario sin datos arranca con los suyos (``datos_iniciales``) y las listas de
+    personal muestran, además de las cuentas activas, a la persona asignada que quedó inactiva, con esa marca (regla 4 de
+    PROD-MOD-INV).
 
     ``provincia`` y ``departamento`` no se guardan: solo encadenan las listas hasta la ``localidad``. Las opciones de
     cada lista salen de lo que llega en ``data``: sin provincia no hay departamentos, y sin departamento, no hay
@@ -72,8 +93,11 @@ class FormularioInvernadero(forms.Form):
         "tecnico": "Solo hace falta si el invernadero tiene sistema IoT.",
     }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, invernadero=None, **kwargs):
+        if invernadero is not None and not args and "data" not in kwargs:
+            kwargs.setdefault("initial", datos_iniciales(invernadero))
         super().__init__(*args, **kwargs)
+        self.invernadero = invernadero
 
         def valor(nombre):
             """Lo que se eligió en el campo ``nombre`` (enviado o inicial), o texto vacío."""
@@ -111,9 +135,12 @@ class FormularioInvernadero(forms.Form):
             }
         )
         for atributo in NOMBRE_DEL_ROL:
-            self.fields[atributo].widget.choices = [("", "Sin asignar")] + [
-                (c.pk, c.get_full_name() or c.email) for c in cuentas_asignables(atributo)
-            ]
+            opciones = [(c.pk, c.get_full_name() or c.email) for c in cuentas_asignables(atributo)]
+            asignada = getattr(invernadero, atributo) if invernadero is not None else None
+            if asignada is not None and not asignada.is_active:
+                # Regla 4 de PROD-MOD-INV: la persona asignada que quedó inactiva se muestra con esa marca.
+                opciones.append((asignada.pk, f"{asignada.get_full_name() or asignada.email} — inactivo"))
+            self.fields[atributo].widget.choices = [("", "Sin asignar")] + opciones
 
     @property
     def es_urbana(self):

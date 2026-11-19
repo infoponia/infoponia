@@ -5,7 +5,7 @@ from django.conf import settings
 from django.urls import reverse
 
 from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, rol_de
-from core.menu import MENU_POR_ROL, ROLES_DE_CAMPO, SIGLAS
+from core.menu import ROLES_DE_CAMPO, SIGLAS, menu_de
 from core.servicios import cuentas_vinculadas
 
 
@@ -29,7 +29,7 @@ def marco(request):
             "activo": request.path == reverse(nombre_url)
             or (reverse(nombre_url) != "/" and request.path.startswith(reverse(nombre_url))),
         }
-        for texto, nombre_url, icono in MENU_POR_ROL.get(rol, [])
+        for texto, nombre_url, icono in menu_de(rol)
     ]
     return contexto | {
         "rol_visible": nombre_visible_del_rol(usuario),

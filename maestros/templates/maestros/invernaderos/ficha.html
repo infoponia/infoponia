@@ -1,7 +1,9 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}Ficha del invernadero (PROD-CNS-INV, VIEWS.inv del prototipo): ubicación, equipo y el aviso de personal
 faltante (regla 4). Sin capacidad, sectores, lotes, cámara ni bitácora (regla 3: llegan con sus tareas), sin el enlace
-«Registrar sistema IoT» (solo prototipo) y, en MAE-01a, sin botones de modificar ni de baja (MAE-01b, D-30).{% endcomment %}
+«Registrar sistema IoT» (solo prototipo). Las acciones (MAE-01b) son las de «acciones» (maestros.servicios.invernaderos.
+acciones_permitidas, D-30): nadie llega por un botón a un 403. «Dar de baja» abre la ventana con HTMX; sin JavaScript, el
+enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no tiene ventana (ACT['inv-react']).{% endcomment %}
 {% block titulo %}{{ invernadero.nombre_invernadero }} · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
@@ -14,7 +16,25 @@ faltante (regla 4). Sin capacidad, sectores, lotes, cámara ni bitácora (regla 
   </div>
 
   {% if invernadero.activo and faltan %}
-  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>{% if faltan|length == 1 %}Falta{% else %}Faltan{% endif %} asignar: {% for f in faltan %}{% if f.2 %}{{ f.1 }}{% else %}{{ f.1 }} (el asignado está inactivo){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}.</b> Hasta que se {% if faltan|length == 1 %}asigne{% else %}asignen{% endif %}, no se pueden realizar las tareas que dependen de {% if faltan|length == 1 %}ese rol{% else %}esos roles{% endif %}. {% if es_gerente %}Lo asigna el Gerente al modificar el invernadero.{% else %}Los asigna el Gerente.{% endif %}</div></div>
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>{% if faltan|length == 1 %}Falta{% else %}Faltan{% endif %} asignar: {% for f in faltan %}{% if f.2 %}{{ f.1 }}{% else %}{{ f.1 }} (el asignado está inactivo){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}.</b> Hasta que se {% if faltan|length == 1 %}asigne{% else %}asignen{% endif %}, no se pueden realizar las tareas que dependen de {% if faltan|length == 1 %}ese rol{% else %}esos roles{% endif %}. {% if es_gerente %}Lo asigna el Gerente al modificar el invernadero. {% if "modificar" in acciones %}<a href="{% url 'maestros:invernadero_modificar' invernadero.pk %}">Asignar personal</a>{% endif %}{% else %}Los asigna el Gerente.{% endif %}</div></div>
+  {% endif %}
+  {% if acciones %}
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Acciones</div>
+    <div class="row">
+      {% if "modificar" in acciones %}<a class="btn btn-ghost" href="{% url 'maestros:invernadero_modificar' invernadero.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+      {% if "baja" in acciones %}
+      <a class="btn btn-danger" href="{% url 'maestros:invernadero_baja' invernadero.pk %}"
+         hx-get="{% url 'maestros:invernadero_baja' invernadero.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 14 %} Dar de baja</a>
+      {% endif %}
+      {% if "reactivar" in acciones %}
+      <form method="post" action="{% url 'maestros:invernadero_reactivar' invernadero.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit" data-enviando="Reactivando…">Reactivar</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
   {% endif %}
   {% if not invernadero.tiene_sectores %}
   <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>Sin sectores: todavía no se puede sembrar. Los registra el Agrónomo del invernadero.</div></div>
@@ -39,4 +59,10 @@ faltante (regla 4). Sin capacidad, sectores, lotes, cámara ni bitácora (regla 
   </div>
 </div>
 {% endwith %}
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if ventana == "baja" %}{% include "maestros/invernaderos/_ventana_baja.html" %}{% endif %}
+</div>
 {% endblock %}

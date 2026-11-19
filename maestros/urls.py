@@ -1,5 +1,5 @@
-# Rutas de maestros bajo /produccion/: lista, ficha y alta de invernaderos (MAE-01a) y los fragmentos de HTMX del
-# formulario. Las de texto fijo van antes que la ficha (``<int:...>`` no las confunde, pero así se lee el orden).
+# Rutas de maestros bajo /produccion/: lista, ficha, alta, modificación, baja y reactivación de invernaderos (MAE-01) y los
+# fragmentos de HTMX del formulario. Las de texto fijo van antes que la ficha (``<int:...>`` no las confunde, pero así se lee el orden).
 
 from django.urls import path
 
@@ -15,4 +15,7 @@ urlpatterns = [
     path("nuevo/departamentos/", views.departamentos, name="departamentos"),
     path("nuevo/localidades/", views.localidades, name="localidades"),
     path("<int:invernadero_id>/", views.invernadero, name="invernadero"),
+    path("<int:invernadero_id>/modificar/", views.invernadero_modificar, name="invernadero_modificar"),
+    path("<int:invernadero_id>/baja/", views.invernadero_baja, name="invernadero_baja"),
+    path("<int:invernadero_id>/reactivar/", views.invernadero_reactivar, name="invernadero_reactivar"),
 ]

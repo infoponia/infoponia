@@ -54,4 +54,6 @@ Cada caso de uso de estas apps los repite en su lista «Solo prototipo», como `
 - La nota del Dashboard en el inicio del Gerente.
 - Las fuentes de Google (el sistema usa las del repo, D-26).
 - Los nombres fijos en los textos de las notificaciones.
+- Que `ACT['inv-save']` notifique también a la persona saliente y avise de los cambios de nombre: el caso de uso
+  solo notifica a la persona asignada (postcondición c de PROD-MOD-INV), y manda el caso de uso (L7).
 - Los datos de ejemplo (seed).

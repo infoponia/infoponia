@@ -10,11 +10,13 @@ from django.db import connection
 from core.models import Agronomo, Capataz, Tecnico, Vendedor
 from core.tests.fabricas import crear_cuenta
 from maestros.models import (
+    Departamento,
     Direccion,
     DireccionRural,
     DireccionUrbana,
     Invernadero,
     Localidad,
+    Provincia,
 )
 
 
@@ -92,6 +94,26 @@ def crear_invernadero(nombre="Invernadero B", activo=True, tipo="urbana", **pers
         direccion = DireccionUrbana.objects.create(localidad=localidad(), calle="Calle 122", numero_calle="3310")
     else:
         direccion = DireccionRural.objects.create(localidad=localidad(), ruta="Ruta Nacional 14", kilometro="871")
+    return Invernadero.objects.create(
+        nombre_invernadero=nombre,
+        estado_invernadero="activo" if activo else "inactivo",
+        direccion=Direccion.objects.get(pk=direccion.pk),
+        **personal,
+    )
+
+
+def crear_invernadero_con_geografia_propia(nombre="Invernadero B", activo=True, **personal):
+    """Como ``crear_invernadero``, pero con una provincia, un departamento y una localidad propios en vez de Georef.
+    Es para los ``TransactionTestCase`` (las pruebas de concurrencia): al terminar cada prueba, su ``flush`` vacía todas
+    las tablas, Georef incluida, así que no se puede contar con las localidades de la migración."""
+    provincia, _ = Provincia.objects.get_or_create(id_georef="99", defaults={"nombre_provincia": "Provincia de prueba"})
+    departamento, _ = Departamento.objects.get_or_create(
+        id_georef="99001", defaults={"nombre_departamento": "Departamento de prueba", "provincia": provincia}
+    )
+    sitio, _ = Localidad.objects.get_or_create(
+        id_georef="99001001", defaults={"nombre_localidad": "Localidad de prueba", "departamento": departamento}
+    )
+    direccion = DireccionUrbana.objects.create(localidad=sitio, calle="Calle 122", numero_calle="3310")
     return Invernadero.objects.create(
         nombre_invernadero=nombre,
         estado_invernadero="activo" if activo else "inactivo",

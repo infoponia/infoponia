@@ -270,14 +270,29 @@ class ProdCnsInvVistaTests(ConGeoref, TestCase):
         self.assertEqual(self.client.get(reverse("maestros:invernadero", args=[ajeno.pk])).status_code, 403)
         self.assertEqual(self.client.get(reverse("maestros:invernadero", args=[0])).status_code, 404)
 
-    def test_regla_6_la_ficha_de_mae_01a_no_ofrece_modificar_ni_dar_de_baja(self):
-        """PROD-CNS-INV y D-30: modificar y dar de baja llegan con MAE-01b; hasta entonces ningún botón lleva a una
-        pantalla que no existe."""
-        invernadero = crear_invernadero("A", agronomo=self.agronomo)
+    def test_regla_6_la_ficha_ofrece_al_gerente_modificar_y_dar_de_baja_o_reactivar(self):
+        """PROD-CNS-INV, regla 6 (y D-30): «el Gerente solo modifica, da de baja o reactiva el invernadero». Sobre uno
+        activo ve «Modificar» y «Dar de baja»; sobre uno inactivo, solo «Reactivar»."""
+        activo = crear_invernadero("A", agronomo=self.agronomo)
+        inactivo = crear_invernadero("B", activo=False)
         self.client.force_login(self.gerente)
+        respuesta = self.client.get(reverse("maestros:invernadero", args=[activo.pk]))
+        self.assertContains(respuesta, reverse("maestros:invernadero_modificar", args=[activo.pk]))
+        self.assertContains(respuesta, reverse("maestros:invernadero_baja", args=[activo.pk]))
+        self.assertNotContains(respuesta, reverse("maestros:invernadero_reactivar", args=[activo.pk]))
+        respuesta = self.client.get(reverse("maestros:invernadero", args=[inactivo.pk]))
+        self.assertContains(respuesta, reverse("maestros:invernadero_reactivar", args=[inactivo.pk]))
+        self.assertNotContains(respuesta, reverse("maestros:invernadero_modificar", args=[inactivo.pk]))
+        self.assertNotContains(respuesta, reverse("maestros:invernadero_baja", args=[inactivo.pk]))
+
+    def test_regla_6_el_agronomo_no_ve_acciones_del_invernadero(self):
+        """PROD-CNS-INV, regla 6 y D-30: el Agrónomo a cargo no modifica, ni da de baja, ni reactiva el invernadero:
+        la ficha no le ofrece ningún botón que lo lleve a un 403."""
+        invernadero = crear_invernadero("A", agronomo=self.agronomo)
+        self.client.force_login(self.agronomo)
         respuesta = self.client.get(reverse("maestros:invernadero", args=[invernadero.pk]))
-        self.assertNotContains(respuesta, "Dar de baja")
-        self.assertNotContains(respuesta, ">Modificar<")
+        for nombre in ("invernadero_modificar", "invernadero_baja", "invernadero_reactivar"):
+            self.assertNotContains(respuesta, reverse(f"maestros:{nombre}", args=[invernadero.pk]))
 
     def test_regla_7_las_pantallas_solo_leen_y_no_auditan(self):
         """PROD-CNS-INV, regla 7 y SEG-14: la lista y la ficha solo aceptan GET (un POST da 405) y no auditan."""
