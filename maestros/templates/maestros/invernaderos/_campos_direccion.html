@@ -1,0 +1,20 @@
+{% comment %}Los datos de la dirección del tipo elegido (regla 2 de PROD-ALT-INV). Urbana: calle y número obligatorios; piso,
+departamento (unidad), barrio y referencias opcionales. Rural: ruta o camino y kilómetro obligatorios; lote opcional.
+Recibe «form».{% endcomment %}
+{% if form.es_urbana %}
+<div class="grid2">
+  {% include "core/usuarios/_campo.html" with campo=form.calle requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=form.numero_calle requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=form.piso %}
+  {% include "core/usuarios/_campo.html" with campo=form.departamento_unidad %}
+  {% include "core/usuarios/_campo.html" with campo=form.barrio %}
+  {% include "core/usuarios/_campo.html" with campo=form.referencias %}
+</div>
+{% elif form.es_rural %}
+<div class="grid3">
+  {% include "core/usuarios/_campo.html" with campo=form.ruta requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=form.kilometro requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=form.lote_rural %}
+</div>
+<div class="hint" style="margin-top:-6px">Si el invernadero está en un paraje que no figura como localidad, elegí la localidad más cercana: la ubicación exacta la dan la ruta y el kilómetro.</div>
+{% endif %}

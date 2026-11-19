@@ -633,6 +633,11 @@ class RegistroAuditoria(models.Model):
         ACEPTACION_INVITACION = "aceptacion_invitacion", "Aceptación de invitación"
         VINCULACION = "vinculacion", "Vinculación de cuentas"
         DESVINCULACION = "desvinculacion", "Desvinculación de cuentas"
+        # Invernadero (MAE-01, D-39 decisión 4): <acción>_<entidad>, para no chocar con las de cuentas.
+        ALTA_INVERNADERO = "alta_invernadero", "Alta de invernadero"
+        MODIFICACION_INVERNADERO = "modificacion_invernadero", "Modificación de invernadero"
+        BAJA_INVERNADERO = "baja_invernadero", "Baja de invernadero"
+        REACTIVACION_INVERNADERO = "reactivacion_invernadero", "Reactivación de invernadero"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -650,12 +655,29 @@ class RegistroAuditoria(models.Model):
         "grupo": "Grupo de cuentas vinculadas",
         "grupo_unido": "Grupo que se unió",
         "disuelto": "El grupo se disolvió",
+        # Invernadero (MAE-01, D-39): el orden es el de la pantalla. «nombre» y «estado» ya existen.
+        "tipo_direccion": "Tipo de dirección",
+        "localidad": "Localidad",
+        "calle": "Calle",
+        "numero_calle": "Número",
+        "piso": "Piso",
+        "departamento_unidad": "Departamento (unidad)",
+        "barrio": "Barrio",
+        "referencias": "Referencias",
+        "ruta": "Ruta o camino",
+        "kilometro": "Kilómetro",
+        "lote_rural": "Lote",
+        "agronomo": "Agrónomo",
+        "capataz": "Capataz",
+        "vendedor": "Vendedor",
+        "tecnico": "Técnico",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
         "rol": {**dict(Usuario.Rol.choices), ADMINISTRADOR: "Administrador"},
         "estado": {"activo": "Activo", "inactivo": "Inactivo"},
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
+        "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
     }
     SIN_VALOR = "—"
 
@@ -671,7 +693,8 @@ class RegistroAuditoria(models.Model):
     )
     rol = models.CharField("rol en ese momento", max_length=20)
     fecha_hora = models.DateTimeField("fecha y hora", default=timezone.now, editable=False)
-    accion = models.CharField("acción", max_length=30, choices=Accion.choices)
+    # D-39: 50 caracteres (eran 30) para que ningún nombre «<acción>_<entidad>» futuro quede corto.
+    accion = models.CharField("acción", max_length=50, choices=Accion.choices)
     afectados = models.JSONField(
         "cuentas u objetos afectados",
         default=list,
@@ -782,5 +805,12 @@ ACCIONES_DE_CUENTAS = frozenset(
         RegistroAuditoria.Accion.DESVINCULACION,
     }
 )
-# Hoy no hay módulos de negocio; sus acciones se agregan acá cuando existan.
-ACCIONES_DE_NEGOCIO = frozenset()
+# Las acciones de los módulos de negocio se agregan acá cuando existen (MAE-01: invernadero).
+ACCIONES_DE_NEGOCIO = frozenset(
+    {
+        RegistroAuditoria.Accion.ALTA_INVERNADERO,
+        RegistroAuditoria.Accion.MODIFICACION_INVERNADERO,
+        RegistroAuditoria.Accion.BAJA_INVERNADERO,
+        RegistroAuditoria.Accion.REACTIVACION_INVERNADERO,
+    }
+)

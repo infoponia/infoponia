@@ -1,16 +1,15 @@
 # Estado — InfoPonia
 
-Actualizado: 18/11/2026, al cerrar PRD-00 (crear las apps de D-37). Este archivo se reescribe al cerrar cada tarea y
-no pasa de 2 KB: lo hecho va a `docs/historial.md`.
+Actualizado: 19/11/2026, al cerrar MAE-01a (invernadero: modelos, Georef, alta y consulta). Este archivo se reescribe al
+cerrar cada tarea y no pasa de 2 KB: lo hecho va a `docs/historial.md`.
 
 ## En curso
 
-- Ninguna tarea de código. El traspaso de la documentación al esquema nuevo (DOC-01 a DOC-03) está aplicado y espera
-  aprobación en el PR `feature/doc-esquema-nuevo`.
+- Ninguna tarea de código. MAE-01a está lista y espera revisión (rama `feature/mae-01-invernadero`).
 
 ## Siguiente
 
-- MAE-01 (Invernadero) y después MAE-02 (Alerta). Detalle en docs/tareas/README.md.
+- MAE-01b (modificar, reactivar y dar de baja el invernadero) y después MAE-02 (Alerta). Detalle en docs/tareas/README.md.
 - USR-09 y AUD-02, sin fecha.
 
 ## Revisiones a mano pendientes
@@ -20,6 +19,7 @@ no pasa de 2 KB: lo hecho va a `docs/historial.md`.
 - USR-08b: 6 pasos → sección USR-08b
 - AUD-01: 6 pasos → sección AUD-01
 - CFG: 1 paso → sección CFG (exigir el check de `pruebas.yml` en main)
+- MAE-01a: 11 pasos → sección MAE-01a (incluye aplicar las migraciones en Neon antes del merge)
 
 ## Esperas y bloqueos
 

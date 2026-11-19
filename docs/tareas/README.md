@@ -31,8 +31,8 @@
 | USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
 | USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
-| MAE-01 | Invernadero: alta, modificación, baja y consulta | maestros | pendiente | PRD-00 | `maestros/MAE-01-invernadero.md` |
-| MAE-02 | Alerta común (la usan producción e IoT) | maestros | pendiente | MAE-01. Archivo por escribir | — |
+| MAE-01b | Invernadero: modificar, reactivar y dar de baja | maestros | pendiente | MAE-01a (hecha, en revisión). Archivo por escribir | — |
+| MAE-02 | Alerta común (la usan producción e IoT) | maestros | pendiente | MAE-01b. Archivo por escribir | — |
 
 ## Tareas hechas antes del traspaso (18/11/2026)
 

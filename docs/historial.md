@@ -232,3 +232,4 @@ Una línea por tarea cerrada, con este formato:
 - dd/mm/aaaa · <ID> · <qué se hizo, en una línea> · <cantidad de pruebas> · <migraciones> · <decisiones> · rama `<rama>`
 
 - 18/11/2026 · PRD-00 · creadas las apps contabilidad, maestros, inventario y produccion (vacías, con servicios/ y tests/) y registradas en INSTALLED_APPS por niveles · 522 pruebas, sin cambios · sin migraciones · aplica D-37 · rama `feature/prd-00-crear-apps`
+- 19/11/2026 · MAE-01a · invernadero: modelos de maestros (geografía, dirección multi-tabla, invernadero), Georef cargado por migración, alta (PROD-ALT-INV) y consulta (PROD-CNS-INV), menú «Producción», primeras acciones de auditoría de negocio y validadores de formato y de contenido · 99 pruebas nuevas en maestros · core 0010, maestros 0001 y 0002 · D-39 · rama `feature/mae-01-invernadero`

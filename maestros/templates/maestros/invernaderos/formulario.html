@@ -1,0 +1,55 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Nuevo invernadero (PROD-ALT-INV, VIEWS['inv-form'] del prototipo). Va con «novalidate»: las reglas son del
+servicio. Las listas de provincia, departamento y localidad se encadenan con HTMX; sin JavaScript, «Actualizar» reenvía
+el formulario sin guardar. En MAE-01b este mismo formulario sirve para modificar.{% endcomment %}
+{% block titulo %}Nuevo invernadero · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
+<div class="page narrow">
+  <a class="btn btn-ghost btn-sm" href="{% url 'maestros:invernaderos' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>Nuevo invernadero</h1></div>
+  {% if form.non_field_errors %}
+  <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+  {% endif %}
+
+  <form id="form-invernadero" method="post" novalidate>
+    {% csrf_token %}
+    <div class="card">
+      <div class="card-title">Identificación</div>
+      {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Dirección</div>
+      <div class="fld">
+        <span class="lbl">Tipo de dirección<span class="req" aria-hidden="true"> *</span></span>
+        <div class="tipo-dir" role="radiogroup" aria-label="Tipo de dirección">
+          {% for radio in form.tipo_direccion %}<label>{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}
+        </div>
+        {% for error in form.tipo_direccion.errors %}<div class="err">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="grid3">
+        {% include "core/usuarios/_campo.html" with campo=form.provincia requerido=True %}
+        <div id="departamento-y-localidad" style="display:contents">{% include "maestros/invernaderos/_departamento_y_localidad.html" %}</div>
+      </div>
+      <div id="campos-direccion">{% include "maestros/invernaderos/_campos_direccion.html" %}</div>
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="actualizar" value="1">Actualizar listas y datos de la dirección</button></noscript>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Personal</div>
+      <p class="muted" style="margin:-6px 0 14px;font-size:13px">Es opcional: podés crear el invernadero ahora y asignar al personal después. Mientras falte un rol, se va a ver el aviso.</p>
+      <div class="grid2">
+        {% for campo, ayuda in form.personal %}{% include "core/usuarios/_campo.html" with campo=campo ayuda=ayuda %}{% endfor %}
+      </div>
+    </div>
+
+    <div class="alert alert-info" role="status" style="margin-top:16px">{% icono "info" 16 %}<div>Los sectores no se cargan en este formulario: los registra el Agrónomo del invernadero. Hasta que haya al menos un sector por cada etapa de una variedad, no es posible sembrarla.</div></div>
+
+    <div class="row" style="margin-top:16px">
+      <button class="btn btn-primary" type="submit" data-enviando="Creando…">Crear invernadero</button>
+      <a class="btn btn-ghost" href="{% url 'maestros:invernaderos' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

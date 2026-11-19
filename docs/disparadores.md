@@ -9,21 +9,23 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 ## Cuando exista Invernadero
 
-1. **Roles del invernadero.** Las asociaciones del invernadero con su Agrónomo, Capataz, Vendedor y Técnico se agregan
+1. ~~**Roles del invernadero.**~~ Hecho el 19/11/2026 en MAE-01a (FK nulas en `Invernadero`). Las asociaciones del invernadero con su Agrónomo, Capataz, Vendedor y Técnico se agregan
    en la misma tarea que crea `Invernadero` (D-04). Según D-37, son FK declaradas en `Invernadero` (regla
    A2), no campos en los roles de `core`.
 2. **Invernadero del Transportista (R155).** Precondición d, postcondición b y reglas 5 y 7 de USR-ALT-USR;
    postcondición a de USR-MOD-USR; regla 3 de USR-CNS-USR; regla 1 de USR-GST-PRF. Mientras no exista `Invernadero`, el
    Transportista se da de alta sin invernadero (`usuarios.md`, «Lo que queda para más adelante»). Según D-37,
-   R155 es una M2M en `Invernadero` (A2). **Pendiente de decidir:** cómo se asigna. Hay dos opciones: el alta de
+   R155 es una M2M en `Invernadero` (A2). **Pendiente de decidir:** cómo se asigna (MAE-01 lo dejó fuera; sigue abierto). Hay dos opciones: el alta de
    Transportista de `core` muestra el campo por un punto de extensión (A4), o el Transportista se asigna desde el
    invernadero, como los otros cuatro roles; la segunda cambia el caso de uso y va a pendientes_CU.
 3. **Ámbito por invernadero de SEG-13.** `estado.md` lo ubicaba en `core/acceso.py`, pero `core` no puede importar una
    app de negocio (D-23). Va como un punto de extensión de `core` en el que `maestros` registra el ámbito (D-37, regla
-   A4).
+   A4). En MAE-01 el alcance vive en `InvernaderoQuerySet.en_alcance_de`; sigue abierto hasta que una pantalla fuera de
+   `maestros` lo necesite.
 4. **Efectos de la baja de una cuenta con invernaderos a cargo.** Postcondición e de USR-BAJ-USR (queda para el Gerente
    una alerta «invernadero sin {rol}») y regla 4 (antes de confirmar, la baja informa lo que la cuenta tiene asignado).
-   La alerta necesita también `Alerta` (ver «Cuando exista la primera notificación»).
+   La alerta necesita también `Alerta` (ver «Cuando exista la primera notificación»). Va con MAE-02, que hace la alerta de
+   esa misma baja.
 
 5. **Alerta con su invernadero.** `Alerta` vive en `maestros` y apunta al invernadero con una clave foránea (D-38). La
    crea MAE-02, después de MAE-01. El modelo no tiene esa asociación: anotarlo en pendientes_MD.
@@ -61,3 +63,42 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 1. **Formato y clasificación (D-36).** Detalle con «cambios» y «datos», referencias con `referencia()`, nombres visibles
    en `RegistroAuditoria.ETIQUETAS` y cada acción nueva en `ACCIONES_DE_NEGOCIO`. Cómo hacerlo: `docs/patrones/auditoria.md`.
+
+## Cuando exista SectorProduccion
+
+1. **Sectores del invernadero.** La marca «sin sectores» (`Invernadero.tiene_sectores`, hoy `False`), la capacidad y la
+   pestaña de sectores de la ficha (regla 3 de PROD-CNS-INV) y la postcondición b de PROD-BAJ-INV (los sectores pasan a
+   inactivos). Nació en MAE-01a.
+
+## Cuando exista SistemaIoT
+
+1. **IoT del invernadero.** `Invernadero.tiene_sistema_iot` (hoy `False`), la alerta y el campo del Técnico (regla 5 de
+   PROD-ALT-INV) y la precondición h de PROD-BAJ-INV. Nació en MAE-01a.
+
+## Cuando exista InsumoInvernadero
+
+1. **Insumos del invernadero.** Postcondición c y precondición f de PROD-BAJ-INV. Nació en MAE-01a.
+
+## Cuando exista Lote, OrdenTrabajo o StockCosechado
+
+1. **Baja del invernadero y ficha.** Precondiciones c, d y e de PROD-BAJ-INV y las pestañas de lotes y de cámara de la
+   ficha. Se conectan por el punto de extensión `maestros/extensiones.py` (D-37, regla A4), que crea MAE-01b. Nació en
+   MAE-01a.
+
+## Cuando exista Cliente o CompraVenta
+
+1. **Dirección usada.** Regla 3 de 8.18: una dirección que usa una compra-venta o un detalle de suministro no se modifica
+   ni se elimina; se registra una nueva y la anterior pasa a inactiva. MAE-01b crea una dirección nueva al cambiar de
+   urbana a rural y borra la anterior solo mientras nada más la referencie: revisarlo cuando existan esas clases. Nació en
+   MAE-01a.
+
+## Cuando se actualicen los datos de Georef
+
+1. **Carpeta y migración nuevas.** Los CSV de `maestros/datos/georef_2026-11-18/` no se editan: una actualización va en una
+   carpeta nueva y una migración nueva (D-39).
+
+## Cuando una migración cargue datos que las pruebas usen
+
+1. **Plan de cuentas de `contabilidad`, categorías de `inventario`, Georef de `maestros`.** Las clases de pruebas que los
+   usan heredan del mixin que los carga una vez, los confirma y corre `ANALYZE`. Cómo hacerlo:
+   `docs/patrones/datos_de_migracion.md`.

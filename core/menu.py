@@ -16,9 +16,13 @@ _CUENTAS = ("Cuentas", "core:usuarios", "users")
 # AUD-CNS-REG (D-36): el Gerente y el Administrador consultan la auditoría, cada uno con su alcance.
 _AUDITORIA = ("Auditoría", "core:auditoria", "eye")
 
+# MAE-01: «Producción» (NAV del prototipo), con la lista de invernaderos. El Gerente y el Agrónomo consultan, cada uno
+# con su alcance (regla 1 de PROD-CNS-INV).
+_PRODUCCION = ("Producción", "maestros:invernaderos", "leaf")
+
 MENU_POR_ROL = {
-    Rol.GERENTE: [_PANEL, _USUARIOS, _AUDITORIA],
-    Rol.AGRONOMO: [_PANEL],
+    Rol.GERENTE: [_PANEL, _PRODUCCION, _USUARIOS, _AUDITORIA],
+    Rol.AGRONOMO: [_PANEL, _PRODUCCION],
     Rol.VENDEDOR: [_PANEL],
     # Roles de campo (celular): sin menú lateral.
     Rol.CAPATAZ: [],

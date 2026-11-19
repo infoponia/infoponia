@@ -84,6 +84,43 @@ Tarea AUD-CNS-REG (auditoría), a mano:
    contraseña), y que el Administrador vea todo.
 6. Los índices (D-36) no se midieron con `EXPLAIN` en una tabla grande; revisar cuando haya volumen.
 
+## MAE-01a · Tarea MAE-01a (invernadero: modelos, alta y consulta)
+
+Tarea MAE-01a (maestros), a mano. Con el entorno virtual activo y la base local:
+
+1. `python manage.py migrate`. Tiene que aplicar `core 0010` y `maestros 0001` y `0002` (la 0002 carga Georef y tarda unos
+   segundos). Comprobá en `python manage.py shell`: `from maestros.models import *; Provincia.objects.count(),
+   Departamento.objects.count(), Localidad.objects.count()` da `(24, 527, 3923)`.
+2. `python manage.py runserver` e iniciá sesión como Gerente. En el menú lateral aparece «Producción». Con una cuenta de
+   Agrónomo también aparece; con una de Vendedor, no.
+3. Como Gerente, «Producción» → «Nuevo invernadero». Elegí «Urbana»: aparecen calle y número (obligatorios), piso,
+   departamento (unidad), barrio y referencias. Elegí «Rural»: ruta y kilómetro (obligatorios) y lote.
+4. Listas encadenadas: elegí una provincia (por ejemplo Misiones): el departamento se llena con sus departamentos y la
+   localidad queda vacía. Elegí el departamento: la localidad se llena con las suyas. Cambiá la provincia: el
+   departamento y la localidad se reinician. Probá con el teclado (flechas, Enter, Esc) y en un celular o con la ventana
+   angosta.
+5. Intentá guardar sin nombre, o con el nombre de un invernadero existente en otras mayúsculas o con espacios: el error sale
+   junto al campo y lo escrito se conserva. Probá el formato: en una rural, el kilómetro «4», «4,5» y «875,5» se aceptan, y
+   «abc», «4.5» (con punto) y «6,7777» no; en una urbana, el número «1234», «1234 bis» y «S/N» se aceptan, y «casa» no.
+   Probá también el contenido: una ruta o una calle «-----------------» se rechaza, y «12», «RN 12» y «Ruta Nacional 12»
+   se aceptan; un piso o un barrio de puros símbolos se rechaza, y vacío se acepta. Guardá una urbana y una rural, la primera sin personal y la segunda con
+   un Agrónomo, un Capataz y un Vendedor.
+6. Después de guardar vas a la ficha con el aviso «Invernadero creado: …». La ficha muestra la ubicación, el equipo, la
+   marca «Sin sectores: todavía no se puede sembrar» y, en la que no tiene personal, el aviso «Faltan asignar…». No hay
+   botones de modificar ni de baja (llegan con MAE-01b).
+7. En «Producción» las dos tarjetas muestran su dirección, «Personal por asignar» y los «Sin asignar» y «No hace falta
+   sin IoT» que correspondan. Dá de baja (en el admin de Django o con `shell`) la cuenta de un Capataz asignado: su
+   invernadero pasa a mostrar «Inactivo» junto a su nombre.
+8. Como Agrónomo, «Producción» muestra solo los invernaderos activos a tu cargo y no ofrece «Nuevo invernadero».
+   Escribiendo a mano `/produccion/nuevo/` da el 403. Con la cuenta de Capataz, `/produccion/` da el 403.
+9. Como Gerente, «Auditoría»: aparece «Alta de invernadero» con el invernadero y las personas asignadas como afectados y
+   la tabla Campo / Antes / Después (Nombre, Estado, Tipo de dirección, Localidad…). Entrar a la lista o a la ficha no
+   deja ningún registro nuevo.
+10. Sin JavaScript (desactivalo en el navegador): al elegir el tipo de dirección o una provincia, el botón «Actualizar
+    listas y datos de la dirección» arma los datos y las listas sin guardar.
+11. Antes de mergear a main: Render corre `migrate` en cada despliegue. La `maestros 0002` inserta 3923 filas (unos
+    segundos) y la `core 0010` cambia el `varchar` de `accion`. Revisá el log del primer despliegue.
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que

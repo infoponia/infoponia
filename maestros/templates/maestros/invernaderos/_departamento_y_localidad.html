@@ -1,0 +1,4 @@
+{% comment %}Los campos de departamento y localidad de la provincia elegida (regla 3 de PROD-ALT-INV). Con HTMX, al
+cambiar la provincia se reemplaza este bloque; al cambiar el departamento, solo la localidad. Recibe «form».{% endcomment %}
+{% include "core/usuarios/_campo.html" with campo=form.departamento requerido=True %}
+<div id="campo-localidad" style="display:contents">{% include "maestros/invernaderos/_localidad.html" %}</div>
