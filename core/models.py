@@ -671,6 +671,10 @@ class RegistroAuditoria(models.Model):
         "capataz": "Capataz",
         "vendedor": "Vendedor",
         "tecnico": "Técnico",
+        # Alertas (MAE-02a, D-41): listas de referencias en los datos del caso de uso que las crea, resuelve o traspasa.
+        "alertas_creadas": "Alertas creadas",
+        "alertas_resueltas": "Alertas resueltas",
+        "alertas_traspasadas": "Alertas traspasadas",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {

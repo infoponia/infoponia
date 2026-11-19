@@ -13,7 +13,8 @@
 #   - Falla con ValidationError por campo (claves: nombre, tipo_direccion, localidad, calle, numero_calle, ruta,
 #     kilometro, agronomo, capataz, vendedor, tecnico) y no cambia nada.
 #
-# Fuera de alcance de esta tarea (D-38 y «Límites» de MAE-01): las postcondiciones d y e (alertas y notificaciones).
+# MAE-02a: la postcondición d (alertas de personal faltante) está conectada. Fuera de alcance: la postcondición e
+# (notificaciones), que va a una tarea aparte en core (D-42).
 
 import importlib
 import inspect
@@ -28,6 +29,7 @@ from django.urls import reverse
 from core.models import RegistroAuditoria, referencia
 from core.tests.fabricas import afectado, crear_administrador, crear_capataz, crear_gerente
 from maestros.models import (
+    Alerta,
     Departamento,
     DireccionRural,
     DireccionUrbana,
@@ -42,6 +44,7 @@ from maestros.tests.fabricas import (
     crear_capataz_activo,
     crear_invernadero,
     crear_tecnico,
+    FallaDePrueba,
     crear_vendedor,
     datos_alta,
     localidad,
@@ -451,7 +454,16 @@ class ProdAltInvServicioTests(ConGeoref, TestCase):
             "numero_calle": "2450",
             "barrio": "Villa Sarita",
         }
-        self.assertEqual(registro.detalle, {"cambios": {k: {"antes": None, "despues": v} for k, v in esperado.items()}})
+        # MAE-02a (D6, D-41): el alta sin personal crea sus tres alertas, que van en ``datos`` (referencias con su texto).
+        alertas_creadas = [{"id": a.pk, "texto": a.descripcion_alerta} for a in Alerta.objects.order_by("pk")]
+        self.assertEqual(len(alertas_creadas), 3)
+        self.assertEqual(
+            registro.detalle,
+            {
+                "cambios": {k: {"antes": None, "despues": v} for k, v in esperado.items()},
+                "datos": {"alertas_creadas": alertas_creadas},
+            },
+        )
         self.assertEqual(registro.afectados[0]["id"], invernadero.pk)
 
     def test_post_f_el_detalle_de_una_rural(self):
@@ -498,12 +510,62 @@ class ProdAltInvServicioTests(ConGeoref, TestCase):
         self.assertFalse(Invernadero.objects.exists())
         self.assertFalse(DireccionUrbana.objects.exists())
 
-    # ---- D-38: fuera de alcance ----
+    # ---- MAE-02a: alertas de personal faltante (postcondición d; reemplazan a test_d38_…) ----
+    # Las notificaciones (postcondición e) siguen fuera de alcance: van a una tarea aparte en core (D-42).
 
-    def test_d38_el_alta_no_genera_alertas_ni_notificaciones(self):
-        """D-38: las alertas son de MAE-02 y las notificaciones no se modelan; el alta solo audita."""
+    def test_post_d_por_cada_rol_sin_asignar_queda_una_alerta_activa_para_el_gerente(self):
+        """PROD-ALT-INV, postcondición d: por cada rol (Agrónomo, Capataz, Vendedor) sin asignar, una alerta activa
+        «invernadero sin {rol} activo» para el Gerente (regla 3 de 8.22: destinatario ``GERENTE``)."""
+        invernadero = self.alta()
+        activas = Alerta.objects.filter(invernadero=invernadero, estado_alerta="activa")
+        self.assertCountEqual(
+            activas.values_list("tipo_alerta", flat=True), ["sin_agronomo", "sin_capataz", "sin_vendedor"]
+        )
+        for alerta in activas:
+            self.assertEqual((alerta.para_gerente, alerta.agronomo_id), (True, None))
+            self.assertEqual(alerta.estado_lectura_alerta, "no_leida")
+
+    def test_post_d_solo_alerta_los_roles_que_quedaron_sin_asignar(self):
+        """PROD-ALT-INV, postcondición d: «por cada uno de esos tres roles que quedó sin asignar»."""
+        invernadero = self.alta(agronomo_id=crear_agronomo().pk)
+        self.assertCountEqual(
+            Alerta.objects.filter(invernadero=invernadero).values_list("tipo_alerta", flat=True),
+            ["sin_capataz", "sin_vendedor"],
+        )
+
+    def test_post_d_con_el_personal_completo_no_crea_alertas(self):
+        """PROD-ALT-INV, postcondición d: con los tres roles asignados no hay nada que alertar."""
+        self.alta(agronomo_id=crear_agronomo().pk, capataz_id=crear_capataz_activo().pk, vendedor_id=crear_vendedor().pk)
+        self.assertFalse(Alerta.objects.exists())
+
+    def test_regla_5_sin_sistema_iot_no_crea_la_alerta_de_tecnico(self):
+        """PROD-ALT-INV, regla 5: «como un invernadero nuevo no [tiene sistema IoT], no genera la alerta de Técnico
+        faltante»."""
+        self.alta()
+        self.assertFalse(Alerta.objects.filter(tipo_alerta="sin_tecnico").exists())
+
+    def test_post_d_un_alta_rechazada_no_deja_alertas(self):
+        """PROD-ALT-INV, postcondición d y D-22: si el alta falla, no queda ninguna alerta (misma transacción)."""
+        with mock.patch.object(RegistroAuditoria.objects, "registrar", side_effect=FallaDePrueba("falla")):
+            with self.assertRaises(FallaDePrueba), transaction.atomic():
+                self.alta()
+        self.assertFalse(Alerta.objects.exists())
+
+    def test_post_f_un_solo_registro_con_las_alertas_creadas_en_datos(self):
+        """PROD-ALT-INV, postcondición f y D-36 (D6 de MAE-02): sigue siendo un solo registro («una acción = un
+        registro»); las alertas creadas van en ``datos.alertas_creadas`` como referencias (id y texto)."""
         self.alta()
         self.assertEqual(RegistroAuditoria.objects.count(), 1)
+        datos = RegistroAuditoria.objects.get(accion=ALTA).detalle["datos"]
+        esperado = [{"id": a.pk, "texto": a.descripcion_alerta} for a in Alerta.objects.order_by("pk")]
+        self.assertEqual(len(esperado), 3)
+        self.assertEqual(datos["alertas_creadas"], esperado)
+        self.assertNotIn("alertas_resueltas", datos)
+
+    def test_post_f_sin_alertas_creadas_el_detalle_no_trae_datos(self):
+        """D-36 y D6 de MAE-02: solo figuran las claves de ``datos`` que no están vacías."""
+        self.alta(agronomo_id=crear_agronomo().pk, capataz_id=crear_capataz_activo().pk, vendedor_id=crear_vendedor().pk)
+        self.assertNotIn("datos", RegistroAuditoria.objects.get(accion=ALTA).detalle)
 
 
 class ProdAltInvVistaTests(ConGeoref, TestCase):

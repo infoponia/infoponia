@@ -32,14 +32,18 @@ from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import crear_administrador, crear_capataz, crear_gerente
 from maestros import extensiones
 from maestros.extensiones import Impedimento
-from maestros.models import Direccion, Invernadero
-from maestros.servicios import invernaderos
+from maestros.alertas import Clase
+from maestros.models import Alerta, Direccion, Invernadero
+from maestros.servicios import alertas, invernaderos
 from maestros.tests.fabricas import (
     ConGeoref,
     crear_agronomo,
+    crear_alerta,
     crear_capataz_activo,
     crear_invernadero,
     crear_invernadero_con_geografia_propia,
+    tipo_de_alerta_de_prueba,
+    tipo_falso,
 )
 
 BAJA = RegistroAuditoria.Accion.BAJA_INVERNADERO
@@ -311,10 +315,70 @@ class ProdBajInvServicioTests(ConGeoref, TestCase):
                 self.baja()
         self.assertTrue(self.recargado().activo)
 
-    def test_d38_la_baja_no_genera_alertas_ni_notificaciones(self):
-        """D-38: las alertas de la postcondición e son de MAE-02; la baja solo audita (un registro)."""
+    # ---- MAE-02a: alertas (postcondición e; reemplazan a test_d38_la_baja_…) ----
+
+    def test_post_e_las_alertas_activas_pasan_a_resuelta_con_su_fecha(self):
+        """PROD-BAJ-INV, postcondición e: las alertas activas del invernadero (de estado y de evento) pasaron a
+        «resuelta», con su fecha; las ya resueltas conservan la suya y las de otro invernadero no se tocan."""
+        otro = crear_invernadero("Invernadero B")
+        de_estado = crear_alerta(self.invernadero, tipo_alerta="sin_vendedor", clave_estado="")
+        de_evento = crear_alerta(self.invernadero)
+        vieja = crear_alerta(self.invernadero, resuelta=True)
+        fecha_vieja = vieja.fecha_resolucion
+        ajena = crear_alerta(otro)
+        self.baja()
+        for alerta in (de_estado, de_evento, vieja, ajena):
+            alerta.refresh_from_db()
+        for alerta in (de_estado, de_evento):
+            self.assertEqual(alerta.estado_alerta, "resuelta")
+            self.assertIsNotNone(alerta.fecha_resolucion)
+        self.assertEqual(vieja.fecha_resolucion, fecha_vieja)
+        self.assertEqual(ajena.estado_alerta, "activa")
+
+    def test_post_e_la_baja_no_cambia_la_lectura_de_las_alertas(self):
+        """Regla 7 de 8.18: los dos estados son independientes; resolver no marca «leída»."""
+        alerta = crear_alerta(self.invernadero)
+        self.baja()
+        alerta.refresh_from_db()
+        self.assertEqual(alerta.estado_lectura_alerta, "no_leida")
+
+    def test_post_e_un_invernadero_inactivo_no_genera_alertas(self):
+        """PROD-BAJ-INV, postcondición e: «el invernadero dejó de generar alertas»: después de la baja, la API no crea
+        alertas de evento ni de estado ni de personal."""
+        self.baja()
+        with tipo_de_alerta_de_prueba(tipo_falso("prueba_evento"), tipo_falso("prueba_estado", clase=Clase.ESTADO)):
+            self.assertIsNone(alertas.crear_alerta_de_evento(self.invernadero.pk, "prueba_evento", "x"))
+            self.assertIsNone(alertas.asegurar_alerta_de_estado(self.invernadero.pk, "prueba_estado"))
+        self.assertEqual(list(alertas.sincronizar_alertas_de_personal(self.recargado()).creadas), [])
+        self.assertFalse(Alerta.objects.filter(estado_alerta="activa").exists())
+
+    def test_post_e_una_baja_rechazada_no_resuelve_alertas(self):
+        """PROD-BAJ-INV, postcondición e y regla 2: si un impedimento rechaza la baja, las alertas siguen activas."""
+        alerta = crear_alerta(self.invernadero)
+        with con_impedimentos(lambda invernadero: [impedimento()]), self.assertRaises(ValidationError):
+            self.baja()
+        alerta.refresh_from_db()
+        self.assertEqual(alerta.estado_alerta, "activa")
+
+    def test_post_e_si_falla_la_auditoria_las_alertas_siguen_activas(self):
+        """D-22 y postcondición e: las alertas se resuelven en la misma transacción; si la auditoría falla, se deshace."""
+        alerta = crear_alerta(self.invernadero)
+        with mock.patch.object(RegistroAuditoria.objects, "registrar", side_effect=FallaDePrueba("falla")):
+            with self.assertRaises(FallaDePrueba), transaction.atomic():
+                self.baja()
+        alerta.refresh_from_db()
+        self.assertEqual(alerta.estado_alerta, "activa")
+
+    def test_post_f_un_solo_registro_con_las_alertas_resueltas_en_datos(self):
+        """PROD-BAJ-INV, postcondición f y D-36 (D6 de MAE-02): un solo registro con el cambio de estado en ``cambios`` y
+        las alertas resueltas en ``datos.alertas_resueltas`` (solo las que pasaron de activa a resuelta)."""
+        activa = crear_alerta(self.invernadero, descripcion_alerta="Activa")
+        crear_alerta(self.invernadero, descripcion_alerta="Vieja", resuelta=True)
         self.baja()
         self.assertEqual(RegistroAuditoria.objects.count(), 1)
+        detalle = RegistroAuditoria.objects.get(accion=BAJA).detalle
+        self.assertEqual(detalle["cambios"], {"estado": {"antes": "activo", "despues": "inactivo"}})
+        self.assertEqual(detalle["datos"], {"alertas_resueltas": [{"id": activa.pk, "texto": "Activa"}]})
 
 
 class ProdBajInvBloqueoTests(ConGeoref, TestCase):

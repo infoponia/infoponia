@@ -1,8 +1,11 @@
 # Modelos de maestros (nivel 3 de D-37) para MAE-01: la geografía de Georef, la dirección (jerarquía multi-tabla,
 # como Usuario y los roles, D-01) y el invernadero con su personal. Decisiones D-04, D-05, D-28, D-37 y D-39.
+# MAE-02a: Alerta (D-38: vive en maestros con una FK al invernadero; los orígenes de las apps altas la apuntan desde su app).
 
 from django.db import models
+from django.db.models import Q
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 from core.models import Agronomo, Capataz, Tecnico, Usuario, Vendedor, rol_de
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
@@ -246,3 +249,102 @@ class Invernadero(models.Model):
             if persona is None or not persona.is_active:
                 faltan.append((atributo, nombre, persona is None))
         return faltan
+
+
+class AlertaQuerySet(models.QuerySet):
+    """QuerySet de alertas con el alcance por usuario en un único lugar (D-28, regla 1 de 8.9)."""
+
+    def para(self, usuario):
+        """Alertas que ``usuario`` recibe: el Gerente activo, las marcadas ``para_gerente`` (R007); el Agrónomo activo,
+        las suyas (R049); cualquier otro, o una cuenta inactiva, ninguna."""
+        if usuario is None or not getattr(usuario, "is_active", False):
+            return self.none()
+        rol = rol_de(usuario)
+        if rol == Usuario.Rol.GERENTE:
+            return self.filter(para_gerente=True)
+        if rol == Usuario.Rol.AGRONOMO:
+            return self.filter(agronomo_id=usuario.pk)
+        return self.none()
+
+    def activas(self):
+        """Solo las alertas en estado «activa»."""
+        return self.filter(estado_alerta="activa")
+
+    def no_leidas(self):
+        """Solo las alertas «no leída» (las que cuenta la campana, tarea de notificaciones)."""
+        return self.filter(estado_lectura_alerta="no_leida")
+
+
+class Alerta(models.Model):
+    """Alerta (D-38; docs/modelo/maestros.md, ficha ``Alerta``): aviso de un hecho que requiere atención y que sigue
+    activo hasta que ese hecho se resuelve.
+
+    - Regla 7 de 8.18: ``estado_alerta`` nace «activa» y pasa a «resuelta» cuando se resuelve el hecho (ahí se carga
+      ``fecha_resolucion``); ``estado_lectura_alerta`` nace «no leída» y pasa a «leída» cuando la abre uno de sus
+      destinatarios. Los dos estados son independientes.
+    - Regla 1 de 8.9: al menos un destinatario, el Gerente (R007, ``para_gerente``: hay a lo sumo un Gerente activo, D-09)
+      o el Agrónomo (R049, ``agronomo``). Se aparta del diagrama (FK al Gerente) para que el Gerente nuevo vea lo
+      pendiente (D-14).
+    - ``tipo_alerta`` es un código registrado en ``maestros.alertas`` (sin ``choices``: cada app agrega los suyos).
+    - ``clave_estado`` identifica la condición de las alertas de estado (a lo sumo una activa por invernadero, tipo y
+      clave); en las de evento es nula.
+    """
+
+    class Severidad(models.TextChoices):
+        CRITICA = "critica", "Crítica"
+        ADVERTENCIA = "advertencia", "Advertencia"
+        INFORMATIVA = "informativa", "Informativa"
+
+    class Estado(models.TextChoices):
+        ACTIVA = "activa", "Activa"
+        RESUELTA = "resuelta", "Resuelta"
+
+    class Lectura(models.TextChoices):
+        NO_LEIDA = "no_leida", "No leída"
+        LEIDA = "leida", "Leída"
+
+    invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="alertas")
+    tipo_alerta = models.CharField("tipo", max_length=50)
+    descripcion_alerta = models.CharField("descripción", max_length=200)
+    nivel_severidad = models.CharField("severidad", max_length=15, choices=Severidad.choices)
+    estado_alerta = models.CharField("estado", max_length=10, choices=Estado.choices, default=Estado.ACTIVA)
+    estado_lectura_alerta = models.CharField(
+        "lectura", max_length=10, choices=Lectura.choices, default=Lectura.NO_LEIDA
+    )
+    fecha_hora_alerta = models.DateTimeField("fecha y hora", default=timezone.now, editable=False)
+    fecha_resolucion = models.DateTimeField("fecha de resolución", null=True, blank=True)
+    para_gerente = models.BooleanField("para el Gerente", default=False)
+    # A2 de D-37: la FK se declara acá, en la app de nivel mayor. Es el mismo modelo que ``Invernadero.agronomo``.
+    agronomo = models.ForeignKey(Agronomo, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")
+    clave_estado = models.CharField(max_length=100, null=True, blank=True)
+
+    objects = AlertaQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-fecha_hora_alerta", "-id"]
+        verbose_name = "Alerta"
+        verbose_name_plural = "Alertas"
+        indexes = [models.Index(fields=["invernadero", "estado_alerta"], name="alerta_inv_estado")]
+        constraints = [
+            # Regla 1 de 8.9: toda alerta tiene al menos un destinatario.
+            models.CheckConstraint(
+                condition=Q(para_gerente=True) | Q(agronomo__isnull=False), name="alerta_con_destinatario"
+            ),
+            # Regla 7 de 8.18: la fecha de resolución se carga cuando la alerta pasa a resuelta, y solo entonces.
+            models.CheckConstraint(
+                condition=(Q(estado_alerta="activa") & Q(fecha_resolucion__isnull=True))
+                | (Q(estado_alerta="resuelta") & Q(fecha_resolucion__isnull=False)),
+                name="alerta_resolucion_coherente",
+            ),
+            # Alertas de estado: a lo sumo una activa por invernadero, tipo y clave. Índice parcial: no sube el UPDATE a
+            # FOR UPDATE (docs/patrones/bloqueos.md). Respaldo del bloqueo del invernadero.
+            models.UniqueConstraint(
+                fields=["invernadero", "tipo_alerta", "clave_estado"],
+                condition=Q(estado_alerta="activa") & Q(clave_estado__isnull=False),
+                name="alerta_de_estado_unica",
+            ),
+        ]
+
+    def __str__(self):
+        """La descripción: es el texto que guarda la auditoría al referenciarla (D-36)."""
+        return self.descripcion_alerta

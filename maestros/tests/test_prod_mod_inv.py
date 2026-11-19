@@ -33,22 +33,26 @@ from django.http import Http404
 from django.test import TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
-from core.models import RegistroAuditoria, referencia
+from core.models import Agronomo, Capataz, RegistroAuditoria, referencia
 from core.servicios import baja_usuario
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import afectado, crear_administrador, crear_capataz, crear_gerente
 from maestros import extensiones
-from maestros.models import Departamento, Direccion, DireccionRural, DireccionUrbana, Invernadero, Provincia
+from maestros.alertas import Destinatario
+from maestros.models import Alerta, Departamento, Direccion, DireccionRural, DireccionUrbana, Invernadero, Provincia
 from maestros.servicios import invernaderos
 from maestros.tests.fabricas import (
     ConGeoref,
     crear_agronomo,
+    crear_alerta,
     crear_capataz_activo,
     crear_invernadero,
     crear_invernadero_con_geografia_propia,
     crear_tecnico,
     crear_vendedor,
     localidad,
+    tipo_de_alerta_de_prueba,
+    tipo_falso,
 )
 
 MODIFICACION = RegistroAuditoria.Accion.MODIFICACION_INVERNADERO
@@ -549,8 +553,16 @@ class ProdModInvServicioTests(ConGeoref, TestCase):
             registro.afectados,
             [{"modelo": "maestros.invernadero", "id": self.invernadero.pk, "texto": "Invernadero Norte"}],
         )
+        # MAE-02a (D6, D-41): el invernadero de este ``setUp`` se creó directo en la base (sin pasar por
+        # ``alta_invernadero``), así que no tiene la alerta «sin Vendedor». Es el caso de un invernadero viejo (D9): al
+        # modificarlo se sincronizan sus alertas y esa alerta se crea, y va en ``datos.alertas_creadas``.
+        sin_vendedor = Alerta.objects.get(tipo_alerta="sin_vendedor")
         self.assertEqual(
-            registro.detalle, {"cambios": {"nombre": {"antes": "Invernadero A", "despues": "Invernadero Norte"}}}
+            registro.detalle,
+            {
+                "cambios": {"nombre": {"antes": "Invernadero A", "despues": "Invernadero Norte"}},
+                "datos": {"alertas_creadas": [{"id": sin_vendedor.pk, "texto": sin_vendedor.descripcion_alerta}]},
+            },
         )
 
     def test_post_f_el_detalle_solo_tiene_lo_que_cambio(self):
@@ -656,10 +668,209 @@ class ProdModInvServicioTests(ConGeoref, TestCase):
         self.assertIsInstance(invernadero.direccion.concreta(), DireccionUrbana)
         self.assertFalse(DireccionRural.objects.exists())
 
-    def test_d38_la_modificacion_no_genera_alertas_ni_notificaciones(self):
-        """D-38: las alertas son de MAE-02 y las notificaciones no se modelan; solo se audita (un registro)."""
+    # ---- MAE-02a: alertas (postcondiciones b y d, regla 2, D4; reemplazan a test_d38_la_modificacion_…) ----
+    # Las notificaciones (postcondición c) siguen fuera de alcance: van a una tarea aparte en core (D-42).
+
+    def tipos_de_destinatario(self):
+        """Un tipo falso por cada destinatario posible, registrados mientras dura el bloque."""
+        return tipo_de_alerta_de_prueba(
+            tipo_falso("prueba_agronomo_o_gerente", destinatario=Destinatario.AGRONOMO_O_GERENTE),
+            tipo_falso("prueba_agronomo_y_gerente", destinatario=Destinatario.AGRONOMO_Y_GERENTE),
+            tipo_falso("prueba_gerente", destinatario=Destinatario.GERENTE),
+        )
+
+    def alertas_de_destinatario(self, invernadero=None, **campos):
+        """Una alerta activa de cada tipo de ``tipos_de_destinatario``: ``(o_gerente, y_gerente, de_gerente)``. La de
+        tipo ``GERENTE`` siempre va solo al Gerente."""
+        invernadero = invernadero or self.invernadero
+        return (
+            crear_alerta(invernadero, tipo_alerta="prueba_agronomo_o_gerente", **campos),
+            crear_alerta(invernadero, tipo_alerta="prueba_agronomo_y_gerente", **campos),
+            crear_alerta(invernadero, tipo_alerta="prueba_gerente", para_gerente=True),
+        )
+
+    def recargar(self, *alertas):
+        for alerta in alertas:
+            alerta.refresh_from_db()
+
+    def test_post_b_asignar_un_rol_resuelve_su_alerta(self):
+        """PROD-MOD-INV, postcondición b: la alerta «invernadero sin {rol} activo» de ese rol pasó a «resuelta» (con su
+        fecha)."""
+        sin_vendedor = crear_alerta(self.invernadero, tipo_alerta="sin_vendedor", clave_estado="")
+        self.mod(vendedor_id=crear_vendedor().pk, personal_confirmado=True)
+        sin_vendedor.refresh_from_db()
+        self.assertEqual(sin_vendedor.estado_alerta, "resuelta")
+        self.assertIsNotNone(sin_vendedor.fecha_resolucion)
+
+    def test_post_b_asignar_un_rol_no_resuelve_las_alertas_de_los_otros_roles(self):
+        """PROD-MOD-INV, postcondición b: solo la del rol que se asignó; los otros roles sin persona siguen alertando."""
+        self.mod(vendedor_id=crear_vendedor().pk, personal_confirmado=True)
+        self.mod(capataz_id=None, personal_confirmado=True)
+        self.assertEqual(
+            list(Alerta.objects.filter(estado_alerta="activa").values_list("tipo_alerta", flat=True)), ["sin_capataz"]
+        )
+
+    def test_post_b_las_alertas_activas_del_agronomo_pasan_al_entrante(self):
+        """PROD-MOD-INV, postcondición b y MD-60: al Agrónomo entrante pasan las alertas activas del invernadero (las
+        resueltas y las de tipo ``GERENTE`` no)."""
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        with self.tipos_de_destinatario():
+            o_gerente, y_gerente, de_gerente = self.alertas_de_destinatario(para_gerente=False, agronomo=self.agronomo)
+            resuelta = crear_alerta(
+                self.invernadero,
+                tipo_alerta="prueba_agronomo_o_gerente",
+                para_gerente=False,
+                agronomo=self.agronomo,
+                resuelta=True,
+            )
+            self.mod(agronomo_id=nuevo.pk, personal_confirmado=True)
+        self.recargar(o_gerente, y_gerente, de_gerente, resuelta)
+        self.assertEqual((o_gerente.agronomo, o_gerente.para_gerente), (nuevo, False))
+        self.assertEqual(y_gerente.agronomo, nuevo)
+        self.assertEqual((de_gerente.agronomo_id, de_gerente.para_gerente), (None, True))
+        self.assertEqual(resuelta.agronomo_id, self.agronomo.pk)
+
+    def test_regla_3_sin_entrante_las_alertas_del_agronomo_pasan_al_gerente(self):
+        """PROD-MOD-INV, regla 3 y MD-61: si se quita al Agrónomo sin reemplazarlo, sus alertas quedan sin responsable y
+        van al Gerente (mientras no haya un Agrónomo activo)."""
+        with self.tipos_de_destinatario():
+            o_gerente, y_gerente, de_gerente = self.alertas_de_destinatario(para_gerente=False, agronomo=self.agronomo)
+            self.mod(agronomo_id=None, personal_confirmado=True)
+        self.recargar(o_gerente, y_gerente, de_gerente)
+        for alerta in (o_gerente, y_gerente, de_gerente):
+            self.assertEqual((alerta.agronomo_id, alerta.para_gerente), (None, True))
+
+    def test_d41_asignar_agronomo_pasa_las_alertas_agronomo_o_gerente_y_el_gerente_deja_de_recibirlas(self):
+        """D4 (i), destinatario ``AGRONOMO_O_GERENTE``: las que fueron al Gerente por falta de Agrónomo pasan al entrante
+        (``agronomo=entrante, para_gerente=False``)."""
+        sin_agronomo = crear_invernadero("Sin agrónomo", capataz=self.capataz)
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        with self.tipos_de_destinatario():
+            o_gerente, _, _ = self.alertas_de_destinatario(sin_agronomo, para_gerente=True, agronomo=None)
+            self.mod(sin_agronomo, agronomo_id=nuevo.pk, personal_confirmado=True)
+        o_gerente.refresh_from_db()
+        self.assertEqual((o_gerente.agronomo, o_gerente.para_gerente), (nuevo, False))
+        self.assertNotIn(o_gerente, Alerta.objects.para(self.gerente))
+        self.assertIn(o_gerente, Alerta.objects.para(nuevo))
+
+    def test_d41_asignar_agronomo_suma_al_agronomo_en_las_alertas_agronomo_y_gerente_y_el_gerente_sigue(self):
+        """D4 (i), destinatario ``AGRONOMO_Y_GERENTE``: pasa al entrante (``agronomo=entrante``) y ``para_gerente`` sigue
+        en ``True``."""
+        sin_agronomo = crear_invernadero("Sin agrónomo", capataz=self.capataz)
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        with self.tipos_de_destinatario():
+            _, y_gerente, _ = self.alertas_de_destinatario(sin_agronomo, para_gerente=True, agronomo=None)
+            self.mod(sin_agronomo, agronomo_id=nuevo.pk, personal_confirmado=True)
+        y_gerente.refresh_from_db()
+        self.assertEqual((y_gerente.agronomo, y_gerente.para_gerente), (nuevo, True))
+
+    def test_d41_asignar_agronomo_no_toca_las_alertas_de_tipo_gerente(self):
+        """D4 (i), destinatario ``GERENTE`` (por ejemplo, «invernadero sin Vendedor activo»): no se tocan al asignar un
+        Agrónomo."""
+        sin_agronomo = crear_invernadero("Sin agrónomo", capataz=self.capataz)
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        sin_vendedor = crear_alerta(sin_agronomo, tipo_alerta="sin_vendedor", clave_estado="")
+        with self.tipos_de_destinatario():
+            _, _, de_gerente = self.alertas_de_destinatario(sin_agronomo, para_gerente=True, agronomo=None)
+            self.mod(sin_agronomo, agronomo_id=nuevo.pk, personal_confirmado=True)
+        self.recargar(de_gerente, sin_vendedor)
+        for alerta in (de_gerente, sin_vendedor):
+            self.assertEqual((alerta.agronomo_id, alerta.para_gerente), (None, True))
+
+    def test_post_d_dejar_un_rol_sin_asignar_crea_su_alerta(self):
+        """PROD-MOD-INV, postcondición d: si dejó un rol sin asignar, una alerta activa «invernadero sin {rol} activo»
+        para el Gerente."""
+        self.mod(capataz_id=None, personal_confirmado=True)
+        alerta = Alerta.objects.get(tipo_alerta="sin_capataz", estado_alerta="activa")
+        self.assertEqual(
+            (alerta.invernadero_id, alerta.para_gerente, alerta.agronomo_id), (self.invernadero.pk, True, None)
+        )
+
+    def test_post_d_la_del_tecnico_solo_con_sistema_iot(self):
+        """PROD-MOD-INV, postcondición d: «la del Técnico solo se genera si el invernadero tiene sistema IoT»."""
+        Invernadero.objects.filter(pk=self.invernadero.pk).update(tecnico=crear_tecnico())
+        self.mod(tecnico_id=None, personal_confirmado=True)
+        self.assertFalse(Alerta.objects.filter(tipo_alerta="sin_tecnico").exists())
+        with mock.patch.object(Invernadero, "tiene_sistema_iot", return_value=True):
+            self.mod(nombre="Otro nombre")
+        self.assertTrue(Alerta.objects.filter(tipo_alerta="sin_tecnico", estado_alerta="activa").exists())
+
+    def test_post_d_conservar_una_persona_inactiva_mantiene_la_alerta(self):
+        """PROD-MOD-INV, postcondición d y regla 4: la persona asignada que quedó inactiva se conserva, y el rol sigue
+        sin «una persona activa»: hay una alerta activa (una sola, aunque se modifique dos veces) hasta que se la
+        reemplace."""
+        Capataz.objects.filter(pk=self.capataz.pk).update(is_active=False)
+        self.mod(nombre="Otro nombre")
+        self.mod(nombre="Otro nombre más")
+        self.assertEqual(Alerta.objects.filter(tipo_alerta="sin_capataz", estado_alerta="activa").count(), 1)
+        self.assertEqual(self.recargado().capataz_id, self.capataz.pk)
+
+    def test_post_d_las_alertas_de_personal_no_se_repiten_al_modificar_dos_veces(self):
+        """PROD-MOD-INV, postcondición d: a lo sumo una activa por invernadero y tipo (D-41)."""
+        self.mod(nombre="Uno")
+        self.mod(nombre="Dos")
+        self.assertEqual(Alerta.objects.filter(tipo_alerta="sin_vendedor", estado_alerta="activa").count(), 1)
+
+    def test_d28_sin_cambios_no_crea_alertas(self):
+        """D-28 y D-41: si no cambió nada, no se guarda, no se audita y no se tocan las alertas."""
+        self.mod()
+        self.assertFalse(Alerta.objects.exists())
+
+    def test_regla_2_el_aviso_cuenta_las_alertas_que_recibe_el_agronomo(self):
+        """PROD-MOD-INV, regla 2: el aviso del cambio de Agrónomo suma a «Recibe» las alertas activas que pasarían al
+        entrante, como ``("alertas activas", N)``; no cuenta las resueltas."""
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        with self.tipos_de_destinatario():
+            self.alertas_de_destinatario(para_gerente=False, agronomo=self.agronomo)
+            crear_alerta(
+                self.invernadero,
+                tipo_alerta="prueba_agronomo_o_gerente",
+                agronomo=self.agronomo,
+                para_gerente=False,
+                resuelta=True,
+            )
+            with self.assertRaises(invernaderos.FaltaConfirmarPersonal) as contexto:
+                self.mod(agronomo_id=nuevo.pk)
+        entrada = next(e for e in contexto.exception.aviso if e["rol"] == "agronomo")
+        self.assertIn(("alertas activas", 2), entrada["recibe"])
+        self.assertEqual(Alerta.objects.filter(agronomo=self.agronomo, estado_alerta="activa").count(), 2)
+
+    def test_regla_2_sin_alertas_el_aviso_no_suma_la_entrada_de_alertas(self):
+        """PROD-MOD-INV, regla 2: sin alertas que pasar, «Recibe» no trae la entrada (no aparece «0 alertas»)."""
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        with self.assertRaises(invernaderos.FaltaConfirmarPersonal) as contexto:
+            self.mod(agronomo_id=nuevo.pk)
+        entrada = next(e for e in contexto.exception.aviso if e["rol"] == "agronomo")
+        self.assertEqual(entrada["recibe"], [])
+
+    def test_post_f_un_solo_registro_con_las_alertas_en_datos(self):
+        """PROD-MOD-INV, postcondición f y D-36 (D6 de MAE-02): sigue siendo un solo registro; las alertas creadas,
+        resueltas y traspasadas van en ``datos`` como referencias, y solo las claves que no están vacías."""
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        sin_vendedor = crear_alerta(self.invernadero, tipo_alerta="sin_vendedor", clave_estado="")
+        propia = crear_alerta(self.invernadero, tipo_alerta="otro_tipo", para_gerente=False, agronomo=self.agronomo)
+        with tipo_de_alerta_de_prueba(tipo_falso("otro_tipo", destinatario=Destinatario.AGRONOMO_O_GERENTE)):
+            self.mod(agronomo_id=nuevo.pk, capataz_id=None, vendedor_id=crear_vendedor().pk, personal_confirmado=True)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=MODIFICACION).count(), 1)
+        datos = RegistroAuditoria.objects.get(accion=MODIFICACION).detalle["datos"]
+        creada = Alerta.objects.get(tipo_alerta="sin_capataz")
+        self.assertEqual(datos["alertas_creadas"], [{"id": creada.pk, "texto": creada.descripcion_alerta}])
+        self.assertEqual(datos["alertas_resueltas"], [{"id": sin_vendedor.pk, "texto": sin_vendedor.descripcion_alerta}])
+        self.assertEqual(datos["alertas_traspasadas"], [{"id": propia.pk, "texto": propia.descripcion_alerta}])
+
+    def test_post_f_sin_alertas_que_cambiar_el_detalle_no_trae_datos(self):
+        """D-36 y D6 de MAE-02: si ninguna alerta cambió, el detalle conserva solo ``cambios`` (sin ``datos`` vacío)."""
+        Invernadero.objects.filter(pk=self.invernadero.pk).update(vendedor=crear_vendedor())
+        crear_alerta(self.invernadero, tipo_alerta="sin_vendedor", clave_estado="", resuelta=True)
         self.mod(nombre="Norte")
-        self.assertEqual(RegistroAuditoria.objects.count(), 1)
+        self.assertNotIn("datos", RegistroAuditoria.objects.get(accion=MODIFICACION).detalle)
+
+    def test_d22_si_falla_la_auditoria_no_quedan_alertas_nuevas(self):
+        """D-22 y D-41: las alertas se crean en la misma transacción; si la auditoría falla, no queda ninguna."""
+        with mock.patch.object(RegistroAuditoria.objects, "registrar", side_effect=FallaDePrueba("falla")):
+            with self.assertRaises(FallaDePrueba), transaction.atomic():
+                self.mod(capataz_id=None, personal_confirmado=True)
+        self.assertFalse(Alerta.objects.exists())
 
 
 class ProdModInvReactivacionServicioTests(ConGeoref, TestCase):
@@ -714,7 +925,17 @@ class ProdModInvReactivacionServicioTests(ConGeoref, TestCase):
         self.assertEqual(
             registro.afectados, [{"modelo": "maestros.invernadero", "id": self.invernadero.pk, "texto": "Viejo"}]
         )
-        self.assertEqual(registro.detalle, {"cambios": {"estado": {"antes": "inactivo", "despues": "activo"}}})
+        # MAE-02a (D6, D-41): el invernadero de este ``setUp`` se creó directo en la base, con solo Agrónomo: al
+        # reactivarlo se crean las alertas «sin Capataz» y «sin Vendedor» y van en ``datos.alertas_creadas``.
+        alertas_creadas = [{"id": a.pk, "texto": a.descripcion_alerta} for a in Alerta.objects.order_by("pk")]
+        self.assertEqual(len(alertas_creadas), 2)
+        self.assertEqual(
+            registro.detalle,
+            {
+                "cambios": {"estado": {"antes": "inactivo", "despues": "activo"}},
+                "datos": {"alertas_creadas": alertas_creadas},
+            },
+        )
         self.assertEqual(RegistroAuditoria.objects.count(), 1)
 
     def test_regla_5_un_invernadero_activo_no_se_reactiva(self):
@@ -751,10 +972,52 @@ class ProdModInvReactivacionServicioTests(ConGeoref, TestCase):
                 invernaderos.reactivar_invernadero(self.gerente, self.invernadero.pk)
         self.assertFalse(self.recargado().activo)
 
-    def test_d38_la_reactivacion_no_genera_alertas_ni_notificaciones(self):
-        """D-38: las alertas de la postcondición e son de MAE-02; la reactivación solo audita (un registro)."""
+    # ---- MAE-02a: alertas (postcondición e; reemplazan a test_d38_la_reactivacion_…) ----
+
+    def test_post_e_reactivar_crea_una_alerta_por_cada_rol_sin_persona_activa(self):
+        """PROD-MOD-INV, postcondición e: al reactivar, una alerta «invernadero sin {rol} activo» por cada rol sin una
+        persona activa (acá tiene solo Agrónomo: faltan el Capataz y el Vendedor; el Técnico no, sin IoT)."""
+        invernaderos.reactivar_invernadero(self.gerente, self.invernadero.pk)
+        activas = Alerta.objects.filter(invernadero=self.invernadero, estado_alerta="activa")
+        self.assertCountEqual(activas.values_list("tipo_alerta", flat=True), ["sin_capataz", "sin_vendedor"])
+        self.assertTrue(all(a.para_gerente and a.agronomo_id is None for a in activas))
+
+    def test_post_e_reactivar_cuenta_como_faltante_a_la_persona_inactiva(self):
+        """PROD-MOD-INV, postcondición e: «por cada rol sin una persona activa»: una persona asignada pero inactiva
+        cuenta."""
+        Agronomo.objects.filter(pk=self.agronomo.pk).update(is_active=False)
+        invernaderos.reactivar_invernadero(self.gerente, self.invernadero.pk)
+        self.assertTrue(Alerta.objects.filter(tipo_alerta="sin_agronomo", estado_alerta="activa").exists())
+
+    def test_post_e_reactivar_con_el_personal_completo_no_crea_alertas(self):
+        """PROD-MOD-INV, postcondición e: sin roles faltantes no hay alertas."""
+        completo = crear_invernadero(
+            "Completo",
+            activo=False,
+            agronomo=crear_agronomo("a2@infoponia.com"),
+            capataz=crear_capataz_activo(),
+            vendedor=crear_vendedor(),
+        )
+        invernaderos.reactivar_invernadero(self.gerente, completo.pk)
+        self.assertFalse(Alerta.objects.filter(invernadero=completo).exists())
+
+    def test_post_e_reactivar_un_invernadero_ya_activo_se_rechaza_y_no_crea_alertas(self):
+        """PROD-MOD-INV, postcondición e: reactivar uno que ya está activo se rechaza y no crea alertas."""
+        activo = crear_invernadero("Activo")
+        with self.assertRaises(ValidationError):
+            invernaderos.reactivar_invernadero(self.gerente, activo.pk)
+        self.assertFalse(Alerta.objects.exists())
+
+    def test_post_f_reactivar_audita_un_solo_registro_con_las_alertas_en_datos(self):
+        """PROD-MOD-INV, postcondición f y D-36 (D6 de MAE-02): un solo registro con el cambio de estado en ``cambios`` y
+        las alertas creadas en ``datos.alertas_creadas``."""
         invernaderos.reactivar_invernadero(self.gerente, self.invernadero.pk)
         self.assertEqual(RegistroAuditoria.objects.count(), 1)
+        detalle = RegistroAuditoria.objects.get(accion=REACTIVACION).detalle
+        self.assertEqual(detalle["cambios"], {"estado": {"antes": "inactivo", "despues": "activo"}})
+        esperado = [{"id": a.pk, "texto": a.descripcion_alerta} for a in Alerta.objects.order_by("pk")]
+        self.assertEqual(len(esperado), 2)
+        self.assertEqual(detalle["datos"], {"alertas_creadas": esperado})
 
 
 class ProdModInvAccionesTests(ConGeoref, TestCase):

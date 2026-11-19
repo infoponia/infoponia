@@ -28,11 +28,10 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
    `maestros` lo necesite.
 4. **Efectos de la baja de una cuenta con invernaderos a cargo.** Postcondición e de USR-BAJ-USR (queda para el Gerente
    una alerta «invernadero sin {rol}») y regla 4 (antes de confirmar, la baja informa lo que la cuenta tiene asignado).
-   La alerta necesita también `Alerta` (ver «Cuando exista la primera notificación»). Va con MAE-02, que hace la alerta de
-   esa misma baja. Tiene que bloquear en el orden de `docs/patrones/bloqueos.md`, sección «Invernadero» (D-40): la cuenta
+   La alerta necesita también `Alerta` (ver «Cuando exista la primera notificación»). `Alerta` ya existe (MAE-02a). Va con MAE-02b, por un punto de extensión de `core` (`core/extensiones.py`). Tiene que bloquear en el orden de `docs/patrones/bloqueos.md`, sección «Invernadero» (D-40): la cuenta
    primero y después los invernaderos.
 
-5. **Alerta con su invernadero.** `Alerta` vive en `maestros` y apunta al invernadero con una clave foránea (D-38). La
+5. ~~**Alerta con su invernadero.**~~ Hecho el 19/11/2026 en MAE-02a (FK `Alerta.invernadero`); la asociación está anotada en `docs/modelo/maestros.md`, pendientes de MD. Texto original: `Alerta` vive en `maestros` y apunta al invernadero con una clave foránea (D-38). La
    crea MAE-02, después de MAE-01. El modelo no tiene esa asociación: anotarlo en pendientes_MD.
 
 ## Cuando exista PerfilOrganizacion
@@ -42,6 +41,9 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
    `aplicarMarca`.
 
 ## Cuando exista la primera notificación o alerta
+
+Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La campana suma las alertas no leídas con
+`Alerta.objects.para(usuario).activas().no_leidas()` (ya existe, MAE-02a) por un punto de extensión de `core`.
 
 1. **Campana y notificaciones del marco.** Se agregan al marco de `core` (D-25). Diseño: `notifPop` en
    `docs/prototipos/cuentas_y_seguridad.html`; `shell`, `alertas` y `myNotif` en el prototipo de producción.
@@ -99,18 +101,41 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 ## Cuando exista Alerta (MAE-02)
 
-1. **Alertas de personal faltante del invernadero.** Postcondición d de PROD-ALT-INV (una alerta «invernadero sin {rol} activo»
+1. ~~**Alertas de personal faltante del invernadero.**~~ Hecho el 19/11/2026 en MAE-02a (las `test_d38_…` se reemplazaron). Texto original: Postcondición d de PROD-ALT-INV (una alerta «invernadero sin {rol} activo»
    por cada rol sin asignar); de PROD-MOD-INV, la b (la alerta del rol que se asigna pasa a «resuelta»), la d (alerta si deja
    un rol sin asignar; la del Técnico solo con sistema IoT) y la e (alertas al reactivar); y la e de PROD-BAJ-INV (las alertas
    activas pasan a «resuelta»). Se conectan en `alta_invernadero`, `modificar_invernadero`, `reactivar_invernadero` y
    `baja_invernadero`; sus pruebas `test_d38_…` hay que cambiarlas. Nació en MAE-01b.
+
+## Cuando exista SistemaIoT (alertas)
+
+1. **Alerta del Técnico.** Al registrar o dar de baja el `SistemaIoT` de un invernadero, el caso de uso llama a
+   `maestros.servicios.alertas.sincronizar_alertas_de_personal` (la alerta «invernadero sin Técnico activo» solo cuenta con sistema
+   IoT, regla 3 de 8.22). Hoy `Invernadero.tiene_sistema_iot()` es `False`. Nació en MAE-02a.
+
+## Cuando exista Hardware, Telemetría, Merma o SolicitudRevisión
+
+1. **Origen de la alerta (restricción C5).** Cada app declara el enlace desde su propia app (`OneToOneField` a `Alerta`, o una tabla de
+   enlace para Hardware, R052), en la misma transacción que la alerta; el `origen` de su `TipoAlerta` dice cuál. Contrato en
+   `docs/api/alertas.md`, sección 4. Mostrar el origen en una pantalla va por un punto de extensión. Nació en MAE-02a.
+
+## Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)
+
+1. **Consulta de alertas.** MAE-02b hace CU-46 como último paso; si queda afuera por tiempo, nace acá. CU-41 reutiliza
+   `consultar_alertas` (`docs/api/alertas.md`). Nació en MAE-02a.
+
+## Cuando el invernadero ya exista en Neon con datos (D9)
+
+1. **Invernaderos anteriores a MAE-02a.** No tienen alertas de personal hasta su primera modificación con cambios o su
+   reactivación; guardar sin cambios no las crea (D-28). Decidir antes de desplegar si hace falta una migración de datos (sería una
+   tarea nueva, con D-39 y `docs/patrones/datos_de_migracion.md`). Nació en MAE-02a.
 
 ## Cuando exista OrdenTrabajo, MantenimientoIoT, Contrato o Pedido
 
 1. **Traspaso por cambio de personal.** Postcondición b de PROD-MOD-INV (MD-60 y MD-62). Cada app registra
    `registrar_traspaso(contar, traspasar)` de `maestros/extensiones.py`: al Capataz, las órdenes a realizar del invernadero;
    al Técnico, los mantenimientos a realizar; al Vendedor, los contratos vigentes o abiertos (regla 8 de 8.21); al Agrónomo,
-   las alertas activas (MAE-02) y, si el saliente sigue activo, se cancelan sus pedidos sin orden de compra con destino a ese
+   las alertas activas (hecho en MAE-02a, directo en `modificar_invernadero`, no por registrante) y, si el saliente sigue activo, se cancelan sus pedidos sin orden de compra con destino a ese
    invernadero y se avisa a los proveedores invitados. `contar` alimenta el aviso de la regla 2 y la notificación de la
    postcondición c. Bloquean sus filas después del invernadero y en orden de id. Nació en MAE-01b.
 

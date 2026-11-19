@@ -12,9 +12,12 @@ class MaestrosConfig(AppConfig):
     name = 'maestros'
 
     def ready(self):
-        """Registra la entrada «Producción» en el menú de `core`."""
+        """Registra la entrada «Producción» en el menú de `core` y los cuatro tipos de alerta de personal (MAE-02a)."""
         from core.menu import registrar_entrada
         from core.models import Usuario
+        from maestros.servicios.alertas import registrar_tipos_de_personal
+
+        registrar_tipos_de_personal()
 
         registrar_entrada(
             ("Producción", "maestros:invernaderos", "leaf"),
