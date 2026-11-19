@@ -19,12 +19,10 @@ Copiados sin cambios de `docs/estado.md`, «Temas abiertos», el 18/11/2026.
 - Volver a la pantalla pedida después de iniciar sesión (D-29): solo se evalúa el rol. Una cuenta fuera de alcance
   dentro de una pantalla permitida (por ejemplo, `/usuarios/7/`) sigue dando 403; cubrirla exigiría ejecutar la
   pantalla pedida dos veces. Cuándo: sin fecha.
-- Estilo del prototipo de producción (agregado el 18/11/2026, esquema de documentación v2, sección 9, punto 1). El
-  prototipo usa «Diseño v2»: solo Inter, bordes de 10 px y el `<select>` nativo en los filtros, que D-24 descartó; el
-  sistema usa Inter y DM Mono y bordes de 4 px (`core/static/core/css/infoponia.css`). Opciones: (a) adoptar v2 en la
-  hoja de estilos común antes de la primera pantalla de producción, con una revisión visual de cuentas; (b) seguir con
-  el estilo actual y tomar del prototipo solo la estructura; (c) v2 solo en producción. Mientras tanto rige (b)
-  (`.claude/rules/interfaz.md`). Cuándo: antes de la primera pantalla de producción.
+- Mecanismo de notificaciones (agregado el 18/11/2026, D-38). Las notificaciones no se modelan: son una característica
+  del sistema, no un concepto del negocio. Pero varias postcondiciones las piden (PROD-ALT-INV e, PROD-MOD-INV c,
+  USR-ALT-USR d) y el prototipo las muestra en la campana. Falta decidir si se construye el mecanismo y cuándo. Mientras
+  tanto, esas postcondiciones quedan sin implementar. Cuándo: sin fecha.
 
 ## Adónde fueron los demás temas de `estado.md` (18/11/2026)
 

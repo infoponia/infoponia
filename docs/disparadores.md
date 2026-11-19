@@ -25,6 +25,9 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
    una alerta «invernadero sin {rol}») y regla 4 (antes de confirmar, la baja informa lo que la cuenta tiene asignado).
    La alerta necesita también `Alerta` (ver «Cuando exista la primera notificación»).
 
+5. **Alerta con su invernadero.** `Alerta` vive en `maestros` y apunta al invernadero con una clave foránea (D-38). La
+   crea MAE-02, después de MAE-01. El modelo no tiene esa asociación: anotarlo en pendientes_MD.
+
 ## Cuando exista PerfilOrganizacion
 
 1. **Logo y nombre configurables.** El nombre deja de salir de `NOMBRE_ORGANIZACION` (D-25) y el logo deja de ser un

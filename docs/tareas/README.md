@@ -15,8 +15,7 @@
 |---|---|
 | USR | core, cuentas y seguridad |
 | AUD | core, auditoría |
-| ALR | core, alertas y notificaciones |
-| MAE | maestros (incluye organización, configuración y geografía) |
+| MAE | maestros (incluye organización, configuración, geografía y alertas) |
 | INV | inventario |
 | PRD | produccion (y PRD-00, que crea las apps) |
 | CMP | compras |
@@ -32,8 +31,8 @@
 | USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
 | USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
-| PRD-00 | Crear las apps de los módulos de negocio | config | pendiente | — | `produccion/PRD-00-crear-apps.md` |
-| ALR-01 | Alerta común (la usan producción e IoT) | core | pendiente | Archivo por escribir. Va antes que el invernadero; la hace Fabrizio | — |
+| MAE-01 | Invernadero: alta, modificación, baja y consulta | maestros | pendiente | PRD-00 | `maestros/MAE-01-invernadero.md` |
+| MAE-02 | Alerta común (la usan producción e IoT) | maestros | pendiente | MAE-01. Archivo por escribir | — |
 
 ## Tareas hechas antes del traspaso (18/11/2026)
 
