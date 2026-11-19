@@ -3,13 +3,19 @@
 # Reutilizan las fábricas de cuentas de core/tests/fabricas.py. Una sola firma por función.
 
 import importlib
+from contextlib import contextmanager
+from unittest import mock
 
 from django.apps import apps
 from django.db import connection
+from django.utils import timezone
 
 from core.models import Agronomo, Capataz, Tecnico, Vendedor
 from core.tests.fabricas import crear_cuenta
+from maestros import alertas as registro_de_alertas
+from maestros.alertas import Clase, Destinatario, TipoAlerta
 from maestros.models import (
+    Alerta,
     Departamento,
     Direccion,
     DireccionRural,
@@ -119,4 +125,54 @@ def crear_invernadero_con_geografia_propia(nombre="Invernadero B", activo=True, 
         estado_invernadero="activo" if activo else "inactivo",
         direccion=Direccion.objects.get(pk=direccion.pk),
         **personal,
+    )
+
+
+# ---- MAE-02a: alertas ----
+
+
+class FallaDePrueba(Exception):
+    """Falla propia de las pruebas: no es un ``RuntimeError``, para que un ``NotImplementedError`` (que sí lo es) no haga
+    pasar por casualidad una prueba que espera que algo falle (los servicios nuevos arrancan con ``NotImplementedError``)."""
+
+
+def tipo_falso(
+    codigo="prueba_evento",
+    destinatario=Destinatario.GERENTE,
+    clase=Clase.EVENTO,
+    severidad=Alerta.Severidad.ADVERTENCIA,
+    origen=None,
+):
+    """Un ``TipoAlerta`` de prueba."""
+    return TipoAlerta(
+        codigo=codigo,
+        nombre=f"Tipo {codigo}",
+        destinatario=destinatario,
+        severidad=severidad,
+        clase=clase,
+        origen=origen,
+    )
+
+
+@contextmanager
+def tipo_de_alerta_de_prueba(*tipos):
+    """Registra ``tipos`` mientras dura el bloque y los quita al terminar, aunque la prueba falle: no contamina el registro
+    global (``mock.patch.dict`` restaura el diccionario). Devuelve el primero."""
+    with mock.patch.dict(registro_de_alertas._TIPOS, {tipo.codigo: tipo for tipo in tipos}):
+        yield tipos[0]
+
+
+def crear_alerta(invernadero, tipo_alerta="prueba_evento", para_gerente=True, agronomo=None, resuelta=False, **extra):
+    """Crea una alerta directo en la base (sin pasar por la API). ``resuelta=True`` la deja resuelta con su fecha."""
+    if resuelta:
+        extra.setdefault("estado_alerta", Alerta.Estado.RESUELTA)
+        extra.setdefault("fecha_resolucion", timezone.now())
+    return Alerta.objects.create(
+        invernadero=invernadero,
+        tipo_alerta=tipo_alerta,
+        descripcion_alerta=extra.pop("descripcion_alerta", f"Alerta {tipo_alerta}"),
+        nivel_severidad=extra.pop("nivel_severidad", Alerta.Severidad.ADVERTENCIA),
+        para_gerente=para_gerente,
+        agronomo=agronomo,
+        **extra,
     )

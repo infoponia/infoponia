@@ -1,7 +1,9 @@
 # Servicios de Invernadero: alta (PROD-ALT-INV) y consulta (PROD-CNS-INV), de MAE-01a, y modificación con su
 # reactivación (PROD-MOD-INV) y baja (PROD-BAJ-INV), de MAE-01b. Cada caso de uso es una función dentro de
 # ``transaction.atomic()`` y audita con el formato de D-36 (docs/patrones/auditoria.md). D-37: un archivo por entidad
-# raíz; D-38: sin alertas ni notificaciones. Modelo de dominio: ronda 22 (docs/modelo/maestros.md).
+# raíz. MAE-02a (D-41): las alertas de personal faltante se crean, traspasan y resuelven con ``maestros.servicios.alertas``
+# y van en los ``datos`` del registro de auditoría; las notificaciones no existen todavía (D-38, D-42). Modelo de
+# dominio: ronda 22 (docs/modelo/maestros.md).
 
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
@@ -21,6 +23,7 @@ from core.models import (
 )
 from maestros import extensiones
 from maestros.models import Direccion, DireccionRural, DireccionUrbana, Invernadero, Localidad
+from maestros.servicios import alertas as api_alertas
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
 
 TIPOS_DE_DIRECCION = ("urbana", "rural")
@@ -65,6 +68,24 @@ FORMATOS = {
     "referencias": validar_con_contenido,
     "lote_rural": validar_con_contenido,
 }
+
+
+def _detalle_con_alertas(cambios, creadas=(), resueltas=(), traspasadas=()):
+    """El detalle de auditoría (D-36) con ``cambios`` y, solo si no están vacías, las alertas que el caso de uso creó,
+    resolvió o traspasó, como referencias en ``datos`` (D6 de MAE-02, D-41)."""
+    detalle = {"cambios": cambios}
+    datos = {
+        clave: [referencia(alerta) for alerta in alertas]
+        for clave, alertas in (
+            ("alertas_creadas", creadas),
+            ("alertas_resueltas", resueltas),
+            ("alertas_traspasadas", traspasadas),
+        )
+        if alertas
+    }
+    if datos:
+        detalle["datos"] = datos
+    return detalle
 
 
 def _tiene_contenido(texto):
@@ -252,7 +273,9 @@ def alta_invernadero(
     - Postcondiciones a, b y c: invernadero activo, sin sectores ni sistema IoT, con su dirección y su personal.
     - Postcondición f, D-22 y D-36: un registro de auditoría, en la misma transacción, con el invernadero y las
       personas asignadas como afectados y los datos cargados en ``cambios`` (con «antes» nulo).
-    - Fuera de alcance (D-38): las alertas de personal faltante (postcondición d) y las notificaciones (e).
+    - Postcondición d y regla 5 (MAE-02a): por cada rol sin asignar queda una alerta activa para el Gerente; la del Técnico
+      solo con sistema IoT. Van en ``datos.alertas_creadas`` del registro.
+    - Fuera de alcance: las notificaciones (postcondición e; tarea aparte en core, D-42).
 
     Falla con ``ValidationError`` por campo y no cambia nada.
     """
@@ -305,6 +328,9 @@ def alta_invernadero(
         except IntegrityError:
             raise ValidationError({"nombre": _error(MENSAJE_NOMBRE_REPETIDO, "nombre_repetido")})
 
+        # Postcondición d: las alertas de personal faltante (el invernadero ya está bloqueado por su propio INSERT).
+        alertas_creadas = api_alertas.sincronizar_alertas_de_personal(invernadero).creadas
+
         # D-36: ``cambios`` con cada dato cargado y «antes» nulo; los opcionales vacíos no figuran.
         cargados = {
             "nombre": nombre,
@@ -318,7 +344,10 @@ def alta_invernadero(
             usuario=actor,
             accion=RegistroAuditoria.Accion.ALTA_INVERNADERO,
             afectados=[invernadero, *personal.values()],
-            detalle={"cambios": {campo: {"antes": None, "despues": valor} for campo, valor in cargados.items()}},
+            detalle=_detalle_con_alertas(
+                {campo: {"antes": None, "despues": valor} for campo, valor in cargados.items()},
+                creadas=alertas_creadas,
+            ),
         )
     return invernadero
 
@@ -457,18 +486,26 @@ def datos_de_la_direccion(hija):
 
 def _aviso_de_personal(invernadero, cambiados):
     """Regla 2 de PROD-MOD-INV: por cada rol que cambia, quién sale, quién entra y lo que recibiría la persona
-    entrante (lo cuentan los registrantes de ``maestros.extensiones``)."""
-    return [
-        {
-            "rol": atributo,
-            "nombre_rol": NOMBRE_DEL_ROL[atributo],
-            "saliente": saliente,
-            "entrante": entrante,
-            "recibe": extensiones.contar_traspaso(invernadero, atributo, saliente, entrante),
-            "queda_vacio": entrante is None,
-        }
-        for atributo, (saliente, entrante) in cambiados.items()
-    ]
+    entrante (lo cuentan los registrantes de ``maestros.extensiones``). Al Agrónomo entrante se suman las alertas activas
+    que le pasarían (MAE-02a, D4), como ``("alertas activas", N)``, solo si hay alguna."""
+    aviso = []
+    for atributo, (saliente, entrante) in cambiados.items():
+        recibe = extensiones.contar_traspaso(invernadero, atributo, saliente, entrante)
+        if atributo == "agronomo":
+            cantidad = api_alertas.contar_alertas_que_recibe(invernadero, saliente, entrante)
+            if cantidad:
+                recibe = [*recibe, ("alertas activas", cantidad)]
+        aviso.append(
+            {
+                "rol": atributo,
+                "nombre_rol": NOMBRE_DEL_ROL[atributo],
+                "saliente": saliente,
+                "entrante": entrante,
+                "recibe": recibe,
+                "queda_vacio": entrante is None,
+            }
+        )
+    return aviso
 
 
 def modificar_invernadero(
@@ -506,13 +543,16 @@ def modificar_invernadero(
     - Regla 2: un cambio de personal sin ``personal_confirmado`` lanza ``FaltaConfirmarPersonal`` con el aviso, y no
       guarda nada.
     - Regla 3 y postcondición b: lo que tenía el saliente pasa al entrante (o queda sin responsable, y pasa a quien se
-      asigne después); lo hacen los registrantes de ``maestros.extensiones.traspasar``. Las alertas de la
-      postcondición b son de MAE-02.
+      asigne después); lo hacen los registrantes de ``maestros.extensiones.traspasar``. Las alertas activas del
+      Agrónomo pasan al entrante (o al Gerente si el rol queda vacío, MD-61) y las «invernadero sin {rol} activo» del rol
+      asignado pasan a «resuelta» (MAE-02a, D4 de D-41).
+    - Postcondiciones d y regla 3 de 8.22 (MAE-02a): si dejó un rol sin asignar (o con la persona inactiva), queda una alerta
+      activa para el Gerente; la del Técnico solo con sistema IoT. D-28: sin cambios, no se tocan las alertas.
     - Postcondición a: se actualizan el nombre, la dirección y el personal. Si cambia el tipo de dirección se crea la
       nueva y se borra la anterior (D-39, opción A: nada más la referencia todavía).
     - Postcondición f, D-22 y D-36: un registro de auditoría en la misma transacción con lo que cambió; los afectados
       son el invernadero y las personas que salen y entran. D-28: si no cambió nada, no se guarda ni se audita.
-    - Fuera de alcance (D-38): las alertas (postcondiciones b, d y e) y las notificaciones (c).
+    - Fuera de alcance: las notificaciones (postcondición c; tarea aparte en core, D-42).
 
     Bloqueos (ver el encabezado de esta sección): cuentas y quien actúa, el invernadero y, recién ahí, los traspasos.
     Si dos Gerentes modifican a la vez, gana el último: lo que cambió se calcula contra lo leído después de bloquear.
@@ -634,6 +674,15 @@ def modificar_invernadero(
         if direccion_vieja is not None:
             Direccion.objects.filter(pk=direccion_vieja).delete()  # D-39, opción A
 
+        # Postcondiciones b y d (MAE-02a): las alertas del Agrónomo pasan al entrante y se sincronizan las de personal. Son
+        # filas de ``maestros``: se bloquean después del invernadero y ANTES de las de las apps altas (orden de D-40), por eso
+        # van antes de ``extensiones.traspasar`` y se llaman directo, sin pasar por un registrante.
+        alertas_traspasadas = []
+        if "agronomo" in cambiados:
+            saliente, entrante = cambiados["agronomo"]
+            alertas_traspasadas = api_alertas.traspasar_alertas_del_agronomo(invernadero, saliente, entrante)
+        sincronizadas = api_alertas.sincronizar_alertas_de_personal(invernadero)
+
         # Postcondición b y regla 3: el traspaso (punto de extensión), con el invernadero ya guardado.
         for atributo, (saliente, entrante) in cambiados.items():
             extensiones.traspasar(actor, invernadero, atributo, saliente, entrante)
@@ -648,7 +697,12 @@ def modificar_invernadero(
             usuario=actor,
             accion=RegistroAuditoria.Accion.MODIFICACION_INVERNADERO,
             afectados=afectados,
-            detalle={"cambios": cambios},
+            detalle=_detalle_con_alertas(
+                cambios,
+                creadas=sincronizadas.creadas,
+                resueltas=sincronizadas.resueltas,
+                traspasadas=alertas_traspasadas,
+            ),
         )
     return invernadero
 
@@ -658,8 +712,8 @@ def reactivar_invernadero(actor, invernadero_id):
 
     - Precondición a: ``actor`` es un Gerente activo; un id inexistente da ``Http404``.
     - Un invernadero ya activo se rechaza con el código ``invernadero_activo``.
-    - Postcondición e (sin las alertas, que son de MAE-02) y regla 6: queda «activo»; sus sectores y sus insumos
-      siguen inactivos (los reactivan el Agrónomo y Habilitar Insumo en Invernadero): no interviene ningún punto de
+    - Postcondición e y regla 6: queda «activo» y una alerta «invernadero sin {rol} activo» por cada rol sin una
+      persona activa (MAE-02a); sus sectores y sus insumos siguen inactivos (los reactivan el Agrónomo y Habilitar Insumo en Invernadero): no interviene ningún punto de
       extensión.
     - Postcondición f, D-22 y D-36: un registro ``reactivacion_invernadero`` con el cambio de estado.
     Orden de bloqueos: quien actúa sigue activo; el invernadero.
@@ -672,11 +726,16 @@ def reactivar_invernadero(actor, invernadero_id):
             raise _error_general(MENSAJE_YA_ACTIVO, "invernadero_activo")
         invernadero.estado_invernadero = Invernadero.Estado.ACTIVO
         invernadero.save(update_fields=["estado_invernadero"])
+        sincronizadas = api_alertas.sincronizar_alertas_de_personal(invernadero)
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.REACTIVACION_INVERNADERO,
             afectados=[invernadero],
-            detalle={"cambios": {"estado": {"antes": "inactivo", "despues": "activo"}}},
+            detalle=_detalle_con_alertas(
+                {"estado": {"antes": "inactivo", "despues": "activo"}},
+                creadas=sincronizadas.creadas,
+                resueltas=sincronizadas.resueltas,
+            ),
         )
     return invernadero
 
@@ -716,8 +775,9 @@ def baja_invernadero(actor, invernadero_id):
     - Postcondiciones b y c: los efectos (sectores e insumos pasan a inactivos) los aplican los registrantes de
       ``maestros.extensiones.aplicar_efectos_de_baja``, que auditan sus propios logs por sector e insumo (f).
     - Postcondición f, D-22 y D-36: un registro ``baja_invernadero`` con el cambio de estado, en la misma transacción.
-    - Fuera de alcance (D-38): las alertas de la postcondición e.
-    Orden de bloqueos: quien actúa sigue activo; el invernadero; recién ahí, los registrantes.
+    - Postcondición e (MAE-02a): las alertas activas del invernadero pasan a «resuelta» y van en ``datos.alertas_resueltas``;
+      el invernadero inactivo deja de generar alertas (``maestros.servicios.alertas`` no crea nada sobre él).
+    Orden de bloqueos: quien actúa sigue activo; el invernadero; sus alertas activas; recién ahí, los registrantes.
     """
     _exigir_gerente(actor, "dar de baja")
     with transaction.atomic():
@@ -725,6 +785,7 @@ def baja_invernadero(actor, invernadero_id):
         invernadero = _bloquear_invernadero(invernadero_id)
         if not invernadero.activo:
             raise _error_general(MENSAJE_YA_INACTIVO, "invernadero_inactivo")
+        api_alertas.bloquear_alertas_activas(invernadero.pk)  # D-40: las alertas, antes que las filas de las apps altas
         impedimentos = extensiones.impedimentos_de_baja(invernadero)
         if impedimentos:
             raise ValidationError(
@@ -736,12 +797,15 @@ def baja_invernadero(actor, invernadero_id):
             )
         invernadero.estado_invernadero = Invernadero.Estado.INACTIVO
         invernadero.save(update_fields=["estado_invernadero"])
+        alertas_resueltas = api_alertas.resolver_alertas_activas(invernadero)
         extensiones.aplicar_efectos_de_baja(actor, invernadero)
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.BAJA_INVERNADERO,
             afectados=[invernadero],
-            detalle={"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}},
+            detalle=_detalle_con_alertas(
+                {"estado": {"antes": "activo", "despues": "inactivo"}}, resueltas=alertas_resueltas
+            ),
         )
     return invernadero
 

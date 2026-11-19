@@ -162,6 +162,39 @@ un Gerente, un Agrónomo, un Capataz y un Vendedor activos; y dos invernaderos c
 14. Antes de mergear a main: esta tarea no tiene migraciones, así que el despliegue de Render no cambia la base. Si todavía no se
     aplicaron en Neon las de MAE-01a (`core 0010`, `maestros 0001` y `0002`), hay que hacerlo antes.
 
+## MAE-02a · Tarea MAE-02a (alerta: modelo, API y alertas de personal del invernadero)
+
+Tarea MAE-02a (maestros), a mano. Con el entorno virtual activo y la base local (`python manage.py runserver`, con `DEBUG` encendido
+para usar `/admin/`). Hay una migración nueva: `python manage.py migrate`. Cuentas de prueba: un Gerente, un Agrónomo, un Capataz y un
+Vendedor activos.
+
+1. `python manage.py migrate` aplica `maestros 0003_alerta`.
+2. «Producción» → «Nuevo invernadero» sin personal. En «Auditoría», el alta muestra «Alertas creadas» (sin Agrónomo, sin Capataz y
+   sin Vendedor; no sin Técnico). En `/admin/` hay 3 alertas activas, todas «para el Gerente».
+3. «Nuevo invernadero» con el personal completo (Agrónomo, Capataz y Vendedor): no se crea ninguna alerta y el alta no muestra
+   «Alertas creadas» en «Auditoría».
+4. En el invernadero sin personal, «Modificar», asigná un Capataz y confirmá. «Auditoría» muestra «Alertas resueltas» con
+   «Invernadero sin Capataz activo»; en el admin esa alerta queda resuelta, con su fecha de resolución, y sigue «no leída». Las de
+   Agrónomo y Vendedor siguen activas.
+5. Quitá el Capataz: la ventana dice que el rol queda vacío; al confirmar se crea una alerta nueva y la anterior sigue resuelta.
+6. Guardá sin cambiar nada: no hay registro nuevo en «Auditoría» ni alertas nuevas (D-28).
+7. Dá de baja el invernadero: «Auditoría» lista «Alertas resueltas» con todas las activas y en el admin no queda ninguna activa.
+   Reactivalo: se vuelven a crear las de los roles sin una persona activa.
+8. Asigná un Capataz, dá de baja su cuenta (desde «Usuarios y seguridad») y después modificá solo el nombre del invernadero: se
+   crea «Invernadero sin Capataz activo» (consecuencia de D-41: la baja de la cuenta todavía no crea la alerta, es de MAE-02b, y
+   el invernadero la recibe en su primera modificación con cambios; guardar sin cambios no la crea).
+9. Renombrá un invernadero que tenga alertas activas: en el admin, ninguna muestra el nombre viejo (la descripción es solo el nombre
+   del tipo; el invernadero está en su propio campo).
+10. Sin JavaScript (desactivalo en el navegador), los pasos 4, 5 y 7 funcionan igual: no hay pantallas nuevas.
+11. El traspaso de MD-60, la regla D4 y el «N alertas activas» de la regla 2 no se pueden ver a mano en la 02a: ningún tipo de
+    `maestros` va al Agrónomo (los cuatro `sin_{rol}` son de destinatario `GERENTE`), así que la ventana nunca muestra alertas en
+    «Recibe». Los cubren solo las pruebas.
+12. `python manage.py test maestros core --keepdb --tag concurrencia` da 30 pruebas OK. Después, una vez,
+    `python manage.py test maestros core --keepdb --exclude-tag concurrencia`: las de concurrencia vacían Georef y `ConGeoref` lo
+    vuelve a cargar solo.
+13. Después del merge: verificar en el log del despliegue de Render que se aplicó `maestros 0003_alerta` (Render corre `migrate` en
+    cada despliegue; la migración es solo esquema).
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que

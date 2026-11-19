@@ -74,6 +74,12 @@ camino.
 - **Regla de 8.22 (MD-60), ámbito del Agrónomo:** opera sobre las órdenes de los invernaderos a su cargo (R051),
   cualquiera sea quien las planificó. Un Agrónomo recién asignado las ve y las gestiona como si las hubiera
   planificado él.
+- **Regla 4 de 8.22 (MD-61):** «El IoT se opera por invernadero (R068): cada consulta y cada acción es sobre un invernadero
+  elegido, nunca sobre todos a la vez. El Agrónomo opera el IoT de cada invernadero a su cargo (R051): telemetría, alertas,
+  umbrales, reglas de actuación, comandos y mantenimientos técnicos. El Gerente puede hacer lo mismo en cualquier invernadero.
+  Las alertas de un invernadero van a su Agrónomo (R049), y van al Gerente activo (R007) solo mientras el invernadero no tenga un
+  Agrónomo activo». (Texto copiado el 19/11/2026. La regla 3 de 8.22 es la específica de los cuatro tipos «invernadero sin {rol}
+  activo», que van al Gerente aunque haya Agrónomo: D11 de MAE-02.)
 
 ---
 
@@ -148,7 +154,7 @@ notificación, que es solo informativa (glosario, «Alerta»). **Las notificacio
 | `nivelSeveridad` | — | El modelo no precisa sus valores. El prototipo usa tres: crítica, advertencia e informativa |
 | `estadoAlerta` | activa / resuelta | Precisado en la 17ª ronda |
 | `fechaResolucion` | — | |
-| `estadoLecturaAlerta` | no leída / leída | Precisado en la 17ª ronda. Ver regla 7 de 8.18, cuyo texto no está en este extracto |
+| `estadoLecturaAlerta` | no leída / leída | Precisado en la 17ª ronda. Ver regla 7 de 8.18, más abajo |
 
 ### Valores de `tipoAlerta` registrados hasta la ronda 22
 
@@ -204,6 +210,10 @@ PROD-BAJ-INV). Es lo que fundamenta D-38 y lo que MAE-02 tiene que resolver; con
 de reservas sin cobertura o transición planificada (regla 15 de 8.8), al Agrónomo; y la de merma en cámara con producto
 reservado (regla 8 de 8.9), al Agrónomo, con notificación al Vendedor. Una misma merma puede disparar más de una.
 
+**Regla 7 de 8.18.** «`estadoAlerta` nace activa y pasa a resuelta cuando se resuelve el hecho que la originó; en ese momento se
+carga `fechaResolucion`. No hay otros valores. `estadoLecturaAlerta` nace no leída y pasa a leída cuando uno de sus destinatarios
+la abre. Los dos estados son independientes: una alerta puede estar leída y seguir activa». (Texto copiado el 19/11/2026.)
+
 **Resolución automática.** Varias alertas se resuelven solas cuando desaparece el hecho que las originó:
 «stock inconsistente» cuando el stock vuelve a cubrir las reservas (MD-85); «insumo vencido» e «insumo por vencer»
 cuando la cantidad disponible del lote llega a cero, con a lo sumo una activa por lote y por tipo (MD-96);
@@ -220,6 +230,9 @@ cuando la cantidad disponible del lote llega a cero, con a lo sumo una activa po
 | MD-87 | Decidido sin aplicar (15/11/2026) | Personal opcional del invernadero (R051, R097, R134 y R149 a 0..1); nombre único sin distinguir mayúsculas; regla 4 de 8.4 reescrita |
 | MD-88 | Decidido sin aplicar (15/11/2026) | Geografía precargada de Georef, sin ABM; R110 deja de ser composición |
 | MD-96 | Aplicado en parte (glosario) | Precisiones de «insumo por vencer» e «insumo vencido» |
+| Sin ID (MAE-02a) | Propuesto | `nivelSeveridad`: el modelo no define sus valores; el sistema usa tres (los del prototipo): crítica, advertencia e informativa |
+| Sin ID (MAE-02a) | Propuesto | R007 (Gerente «recibe» Alerta) se guarda como el booleano `para_gerente` y no como FK: hay a lo sumo un Gerente activo (D-09) y el Gerente nuevo tiene que ver lo pendiente (D-14). R049 sigue como FK al Agrónomo |
+| Sin ID (MAE-02a) | Propuesto | Asociación Alerta–Invernadero (`Alerta.invernadero`, FK): el modelo no la tiene (D-38) |
 
 MD-87 y MD-88 son los que más pesan en MAE-01: sin ellos, el modelo exige personal y sectores que los casos de uso ya
 dejan opcionales.
