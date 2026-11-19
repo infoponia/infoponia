@@ -230,3 +230,5 @@ Hasta el 17/11/2026 (tarea AUD-CNS-REG) este contenido estaba en `docs/estado.md
 Una línea por tarea cerrada, con este formato:
 
 - dd/mm/aaaa · <ID> · <qué se hizo, en una línea> · <cantidad de pruebas> · <migraciones> · <decisiones> · rama `<rama>`
+
+- 18/11/2026 · PRD-00 · creadas las apps contabilidad, maestros, inventario y produccion (vacías, con servicios/ y tests/) y registradas en INSTALLED_APPS por niveles · 522 pruebas, sin cambios · sin migraciones · aplica D-37 · rama `feature/prd-00-crear-apps`

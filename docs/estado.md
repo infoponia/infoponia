@@ -1,16 +1,16 @@
 # Estado — InfoPonia
 
-Actualizado: 18/11/2026, al pasar la documentación al esquema nuevo y aprobar D-37 (el último cierre de código fue
-AUD-01, la tarea AUD-CNS-REG). Este archivo se reescribe al cerrar cada tarea y no pasa de 2 KB: lo hecho va a
-`docs/historial.md`.
+Actualizado: 18/11/2026, al cerrar PRD-00 (crear las apps de D-37). Este archivo se reescribe al cerrar cada tarea y
+no pasa de 2 KB: lo hecho va a `docs/historial.md`.
 
 ## En curso
 
-- Ninguna tarea de código. Pendiente de aplicar: el traspaso de la documentación al esquema nuevo (DOC-01 a DOC-03).
+- Ninguna tarea de código. El traspaso de la documentación al esquema nuevo (DOC-01 a DOC-03) está aplicado y espera
+  aprobación en el PR `feature/doc-esquema-nuevo`.
 
 ## Siguiente
 
-- PRD-00 (crear las apps de D-37) y ALR-01 (Alerta común), en ese orden. Detalle en `docs/tareas/README.md`.
+- MAE-01 (Invernadero) y después MAE-02 (Alerta). Detalle en docs/tareas/README.md.
 - USR-09 y AUD-02, sin fecha.
 
 ## Revisiones a mano pendientes

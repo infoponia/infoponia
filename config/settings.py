@@ -55,7 +55,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core',
+    # Apps propias, en el orden de sus niveles (D-37): una app solo importa de las que están arriba.
+    'core',          # nivel 1
+    'contabilidad',  # nivel 2
+    'maestros',      # nivel 3
+    'inventario',    # nivel 4
+    'produccion',    # nivel 5
 ]
 
 # D-01 a D-03: modelo de usuario propio (email en vez de username, roles con herencia
