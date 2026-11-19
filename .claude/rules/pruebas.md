@@ -44,6 +44,9 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   error de columna inexistente. Si aparece, corré una vez sin `--keepdb` y con `--noinput` para recrear la base
   (`python manage.py test core.tests.test_usuario --parallel --noinput --exclude-tag concurrencia --exclude-tag migracion`) y después volvé a
   `--keepdb`.
+- Si tus pruebas usan datos cargados por una migración (Georef, plan de cuentas, categorías del sistema), leé
+  `docs/patrones/datos_de_migracion.md`: con `--keepdb`, un `TransactionTestCase` de otra app los vacía, y sin `ANALYZE`
+  las consultas se vuelven muy lentas. Las clases que los usan heredan del mixin de ese patrón.
 - Nada de experimentos ni de matrices de bloqueos desactivados (correr las pruebas de concurrencia con los
   bloqueos quitados o cambiados) salvo que la tarea toque bloqueos o concurrencia, o que el estudiante lo pida.
 - Para reproducir en local un fallo del CI (producción, con `DEBUG` apagado), o si el estudiante pide la

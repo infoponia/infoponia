@@ -13,7 +13,7 @@ está en `docs/historial.md`, `docs/revisiones_pendientes.md`, `docs/temas_abier
 
 ## Formato de una decisión nueva
 
-Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-39**):
+Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-40**):
 
 ```
 ## D-NN — Título
@@ -75,3 +75,5 @@ iot, contabilidad.
 | D-36 | Formato obligatorio del detalle de la auditoría y consulta del registro (tarea AUD-CNS-REG) | auditoría | vigente | Detalle con «cambios» y «datos», referencias con `referencia()`, afectados con texto; toda acción nueva se clasifica en `ACCIONES_DE_CUENTAS` o `ACCIONES_DE_NEGOCIO` | tu caso de uso audita (ver `docs/patrones/auditoria.md`) |
 | D-37 | Reparto de apps y sentido de las dependencias | transversal | vigente; reemplazada en parte por D-38 | Apps por niveles: `core`, `contabilidad`, `maestros` (con organización, configuración y geografía), `inventario`, `produccion`, `compras` y `comercial`, `iot`; una app solo importa de las de nivel menor; la FK va en la app de nivel mayor; servicios en un paquete por entidad | creás una app, un modelo con FK a otra app o un caso de uso que toca varias apps |
 | D-38 | Alerta vive en maestros, no en core | maestros | vigente | `Alerta` va en `maestros` con FK al invernadero; las notificaciones no se modelan; el invernadero se programa antes que la alerta | tu caso de uso genera o resuelve alertas |
+| D-39 | Invernadero, dirección y Georef en maestros (tarea MAE-01) | maestros | vigente | Georef recortado en CSV del repo y cargado por migración (3923 localidades); dirección multi-tabla; acciones de auditoría `<acción>_<entidad>` y `accion` de 50 caracteres; validadores de formato y de contenido de los textos (`maestros/validadores.py`); pruebas con datos de migración: mixin `ConGeoref` y `ANALYZE` | creás un modelo o una migración de datos en `maestros`, una acción de auditoría nueva o pruebas que usan datos de una migración (ver `docs/patrones/datos_de_migracion.md`) |
+| D-40 | Invernadero: modificar, dar de baja y bloqueos (MAE-01b) | maestros | vigente | Gana el último al modificar; cambio de dirección con la nueva y la anterior borrada, y el `UPDATE` antes de los traspasos; `FaltaConfirmarPersonal` y ventana armada en el servidor; orden de bloqueos cuentas → invernadero → apps altas; contrato de `bloquear_invernadero_activo` para quien cree algo que impide la baja | tu caso de uso crea algo que impide la baja de un invernadero, asigna una cuenta a un invernadero o da de baja una cuenta con invernaderos |

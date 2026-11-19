@@ -29,6 +29,7 @@ docs/
 ├── patrones/
 │   ├── auditoria.md              cómo audita un módulo de negocio (D-22, D-36)
 │   ├── bloqueos.md               bloqueos de filas y pruebas de concurrencia (D-30, D-32)
+│   ├── datos_de_migracion.md     datos cargados por migración y pruebas: TransactionTestCase, ANALYZE y el mixin (MAE-01)
 │   └── abm.md                    (se escribe después de la primera tarea de ABM)
 ├── casos_de_uso/
 │   ├── _plantilla.md             encabezado y secciones de un extracto

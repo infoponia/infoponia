@@ -1,0 +1,32 @@
+{% load iconos %}{% comment %}Ventana de la regla 2 de PROD-MOD-INV: antes de guardar un cambio de personal, informa qué pasa. Por cada rol
+que cambia dice quién entra y quién sale, lo que recibe la persona entrante (lo cuentan los registrantes de
+maestros.extensiones; hoy ninguno) y, si el rol queda vacío, que no se podrán hacer las tareas que dependen de él hasta
+que se asigne a alguien (MODALS / «cambios» de VIEWS['inv-form'] del prototipo). Es parte de la página, sin JavaScript
+propio: con JavaScript se abre como ventana (data-ventana) y sin él se ve al principio de la página. Los botones envían el
+formulario del invernadero (form="form-invernadero"): «Volver» reenvía sin guardar (el botón «actualizar») y «Confirmar y
+guardar» manda personal_confirmado. Recibe «aviso» (FaltaConfirmarPersonal.aviso).{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Confirmá el cambio de personal</h2>
+    <p>Al guardar, pasa esto:</p>
+    <ul class="cambios-de-personal">
+      {% for cambio in aviso %}
+      <li>
+        {% if cambio.entrante %}
+          {% if cambio.saliente %}<b>{{ cambio.entrante.get_full_name|default:cambio.entrante.email }}</b> pasa a ser {{ cambio.nombre_rol }} y reemplaza a <b>{{ cambio.saliente.get_full_name|default:cambio.saliente.email }}</b>.
+          {% else %}<b>{{ cambio.entrante.get_full_name|default:cambio.entrante.email }}</b> pasa a ser {{ cambio.nombre_rol }} del invernadero, que no tenía.{% endif %}
+          {% if cambio.recibe %}
+          <ul>{% for descripcion, cantidad in cambio.recibe %}<li>Recibe {{ cantidad }} {{ descripcion }} de este invernadero.</li>{% endfor %}</ul>
+          {% endif %}
+        {% else %}
+          El invernadero queda <b>sin {{ cambio.nombre_rol }}</b>: no se podrán realizar las tareas que dependen de ese rol hasta que se asigne a alguien. Lo que tenía {{ cambio.saliente.get_full_name|default:cambio.saliente.email }} en este invernadero queda sin responsable y pasa a quien se asigne después.
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="acts">
+      <button class="btn btn-primary" type="submit" form="form-invernadero" name="actualizar" value="1" data-foco-inicial data-enviando="Volviendo…">Volver al formulario</button>
+      <button class="btn btn-ghost" type="submit" form="form-invernadero" name="personal_confirmado" value="1" data-enviando="Guardando…">Confirmar y guardar</button>
+    </div>
+  </div>
+</div>

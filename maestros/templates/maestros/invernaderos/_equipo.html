@@ -1,0 +1,18 @@
+{% comment %}El personal del invernadero (people y person del prototipo; reglas 2 y 4 de PROD-CNS-INV). Recibe
+«invernadero». Marca «Sin asignar», «Inactivo» y, para el Técnico de un invernadero sin IoT, «No hace falta sin IoT»
+(regla 5 de PROD-ALT-INV).{% endcomment %}{% load iconos %}
+<div class="people">
+  {% for p in invernadero.equipo %}
+  <div class="person">
+    {% if p.estado == "sin_asignar" %}<span class="av none">{% icono "warn" 15 %}</span>
+    {% elif p.estado == "no_hace" %}<span class="av off">—</span>
+    {% else %}<span class="av{% if p.estado == 'inactivo' %} off{% endif %}">{{ p.iniciales }}</span>{% endif %}
+    <span class="t">
+      <span class="k">{{ p.nombre }}</span>
+      {% if p.estado == "sin_asignar" %}<span class="v falta">Sin asignar</span>
+      {% elif p.estado == "no_hace" %}<span class="v nohace">No hace falta sin IoT</span>
+      {% else %}<span class="v">{{ p.persona.get_full_name|default:p.persona.email }}{% if p.estado == "inactivo" %} <span class="status-badge status-warn">Inactivo</span>{% endif %}</span>{% endif %}
+    </span>
+  </div>
+  {% endfor %}
+</div>

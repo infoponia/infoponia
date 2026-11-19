@@ -232,3 +232,5 @@ Lo que el prototipo muestra y no va en el sistema. La lista completa está en
 - La nota del Dashboard en el inicio del Gerente.
 - La ventana «Registrar sistema IoT» (`MODALS['iot-info']`): el estado del sistema IoT lo informa el bloque IoT.
 - Los nombres fijos en los textos de las notificaciones.
+- Que `ACT['inv-save']` notifique también a la persona saliente y avise de los cambios de nombre: el caso de uso
+  solo notifica a la persona asignada (postcondición c de PROD-MOD-INV), y manda el caso de uso (L7).
