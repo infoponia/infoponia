@@ -126,3 +126,15 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 | Ficha del nodo y API | Node-RED como nodo de referencia; API `/api/iot/v1/` dentro de InfoPonia, con vistas que devuelven JSON (sin dependencias nuevas) y token guardado como resumen | Lote IoT 3 |
 | Cambios permitidos en otras apps | Cada tarea del IoT los lista (`core`: acciones de auditoría; `maestros`: punto de extensión de `tiene_sistema_iot` y parámetros de `ConfiguracionOperativa`; `produccion`: valor `mantenimiento` y la restricción de prioridad; `inventario`: R072 y el consumo de repuestos) | Cada tarea IOT-NN |
 | Pendientes de MD del IoT | MD-98 a MD-113 están «decididos sin aplicar» en Drive; el modelo del IoT los adopta cuando se escriba `docs/modelo/iot.md` | Lote IoT 1 |
+
+
+## Abiertos desde UI-01 (20/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| `.mono` | La tarea UI-01 pedía quitar `.mono`; se conservó con la definición del prototipo (solo cifras tabulares) porque el prototipo lo usa unas 40 veces y la tarea pide poder copiar su HTML. Corregir el texto de UI-01 | Al validar UI-01 |
+| D-29 contra el prototipo | `.btn-ghost` (contraste AA del borde) y los avisos breves (radio de 6 px, animaciones, posición abajo en menos de 760 px) conservan D-29 y difieren del prototipo. Decidir si D-29 se actualiza al aspecto v2 y se ajustan las pruebas `test_d29_` | Sin fecha |
+| Íconos | `core/templatetags/iconos.py` no estaba en «Permitido fuera de la app» de UI-01; se le agregaron los 20 íconos del prototipo que faltaban para que las tareas de la ronda no toquen `core`. Anotarlo como permitido en la tarea | Al validar UI-01 |
+| `.mnav` del prototipo | El prototipo la deja siempre oculta (su `display:none` va después de la media query). En el sistema se muestra en menos de 760 px. Corregir el prototipo | Sin fecha |
+| Color de la organización | Las variantes oscura y clara salen de `color-mix()` (D-48, ver arriba); si MAE-04 quiere otro cálculo o validar el contraste del color elegido, se decide ahí | MAE-04 |
+| Revisión visual de UI-01 | No hubo navegador en la sesión: las pantallas de `core` (usuarios, auditoría, Mi perfil) conservan su HTML con los componentes v2 que ya usaban; falta confirmar a mano que ninguna se vea con el aspecto viejo | Revisión a mano de UI-01 |

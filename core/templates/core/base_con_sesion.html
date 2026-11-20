@@ -1,8 +1,8 @@
 {% extends "core/base.html" %}{% load iconos cuentas %}
 {% comment %}Marco con sesión (equivale a shell del prototipo): cabecera, menú lateral, contenido, pie y
 menú de cuenta con «Cambiar de cuenta» (SEG-09, tarea 06b), «Mi perfil» (USR-GST-PRF, tarea 06a) y «Cerrar
-sesión» (SEG-08). Sin campana: todavía no
-hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecera muestra «Volver»
+sesión» (SEG-08). Sin campana (NOT-01
+la agrega en su lugar de la cabecera). El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecera muestra «Volver»
 (back-btn del prototipo; el CSS lo oculta en escritorio).{% endcomment %}
 {% block cuerpo %}
 <div class="shell{% if modo_campo %} field{% elif not mostrar_menu_lateral %} sin-lateral{% endif %}">
@@ -13,6 +13,8 @@ hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular l
       <b>{{ nombre_organizacion }}</b>
     </div>
     <div class="spacer"></div>
+    {# NOT-01 llena este lugar con el botón de la campana (.icon-btn con aria-label y, si hay algo sin leer, .dotn), como en #}
+    {# el shell del prototipo. Hasta entonces queda vacío: no hay notificaciones. #}
     <button class="acct" type="button" data-menu-cuenta aria-haspopup="dialog"
             aria-controls="menu-cuenta" aria-expanded="false"
             aria-label="Menú de cuenta: {{ user.get_full_name }}, {{ rol_visible }}">
@@ -34,6 +36,13 @@ hay notificaciones. El bloque «boton_volver» lo usa Mi perfil: en el celular l
   {% endif %}
 
   <main class="main">
+    {# Menú de las pantallas angostas (mnav del prototipo): las mismas entradas del menú lateral, como fichas; el CSS lo muestra #}
+    {# en menos de 760px y lo oculta en el marco de celular. #}
+    {% if mostrar_menu_lateral %}
+    <nav class="mnav" aria-label="Menú">
+      {% for entrada in menu %}<a class="chip" href="{{ entrada.url }}"{% if entrada.activo %} aria-current="page"{% endif %}>{{ entrada.texto }}</a>{% endfor %}
+    </nav>
+    {% endif %}
     {% if messages %}
     <div class="page narrow" data-avisos style="margin-bottom:14px">
       {# Respaldo sin JavaScript: el mensaje queda fijo en la página. Con JavaScript, infoponia.js lo reemplaza por un aviso breve. #}

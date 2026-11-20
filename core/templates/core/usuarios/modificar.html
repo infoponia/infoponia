@@ -6,7 +6,7 @@ de USR-MOD-USR: cambiarlo no afecta las cuentas vinculadas.{% endcomment %}
 {% block titulo %}Modificar {{ cuenta.get_full_name }} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuario' cuenta.pk %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <a class="back" href="{% url 'core:usuario' cuenta.pk %}">{% icono "back" 15 %} Volver</a>
   <div class="page-h"><h1>Modificar datos</h1>{% include "core/usuarios/_insignias.html" %}</div>
 
   {% if form.non_field_errors %}

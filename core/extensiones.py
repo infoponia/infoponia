@@ -99,3 +99,27 @@ def secciones_de_inicio(usuario):
     """Las secciones de todos los registrantes que devuelven una, en el orden de registro."""
     secciones = (funcion(usuario) for funcion in list(_SECCIONES_DE_INICIO))
     return [seccion for seccion in secciones if seccion is not None]
+
+
+# ---- Identidad de la organización (UI-01, D-48) ----
+# Quinto punto, aparte de los cuatro de D-43: ``PerfilOrganizacion`` vive en ``maestros`` (nivel 3) y ``core`` (nivel 1)
+# no puede importarlo (regla A1 de D-37). ``maestros`` registra en ``ready()`` una función que devuelve el perfil
+# guardado (lo hace MAE-04); ``core`` la consulta sin conocerla.
+
+# El nombre y el color principal (``#RRGGBB`` o vacío) de la organización.
+Identidad = namedtuple("Identidad", "nombre color_principal")
+
+_IDENTIDAD = []
+
+
+def registrar_identidad_de_la_organizacion(funcion):
+    """Registra ``funcion() -> Identidad | None``: la identidad guardada de la organización. Idempotente. Se admite un
+    solo registrante útil: ``identidad_registrada`` usa el primero."""
+    return _registrar(_IDENTIDAD, funcion)
+
+
+def identidad_registrada():
+    """La ``Identidad`` del primer registrante, o ``None`` si no hay registrante o no devuelve nada."""
+    for funcion in list(_IDENTIDAD):
+        return funcion()
+    return None

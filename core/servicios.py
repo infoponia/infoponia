@@ -26,6 +26,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from core import extensiones
+from core.identidad import nombre_de_la_organizacion
 from core.models import (
     ADMINISTRADOR,
     MODELO_CUENTA,
@@ -1377,7 +1378,7 @@ def _enviar_correo(cuenta, asunto, plantilla, contexto):
     USR-ALT-USR); devuelve False y quien llama decide qué ver la persona. Se llama siempre fuera de una transacción:
     un servidor SMTP lento (hasta ``EMAIL_TIMEOUT``) no puede mantener bloqueos tomados (D-14).
     """
-    cuerpo = render_to_string(plantilla, {**contexto, "nombre_organizacion": settings.NOMBRE_ORGANIZACION})
+    cuerpo = render_to_string(plantilla, {**contexto, "nombre_organizacion": nombre_de_la_organizacion()})
     try:
         send_mail(asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, [cuenta.email])
     except Exception:

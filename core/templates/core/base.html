@@ -1,4 +1,4 @@
-{% comment %}Plantilla raíz de InfoPonia: CSS propio, HTMX servido desde el repo (D-24) y el token CSRF
+{% comment %}Plantilla raíz de InfoPonia (con y sin sesión): CSS propio (Diseño v2, D-47), HTMX servido desde el repo (D-24) y el token CSRF
 para las peticiones HTMX de las pantallas siguientes.{% endcomment %}{% load static estaticos %}<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,6 +9,9 @@ para las peticiones HTMX de las pantallas siguientes.{% endcomment %}{% load sta
   <meta name="htmx-config" content='{"timeout": 30000}'>
   {# static_v agrega la fecha del archivo a la URL: un cambio en estos archivos llega al navegador sin forzar la recarga. #}
   <link rel="stylesheet" href="{% static_v 'core/css/infoponia.css' %}">
+  {# D-48: color de la organización. Solo llega acá si cumple #RRGGBB (core/identidad.py lo valida); las tres variables tiñen #}
+  {# el sistema y el hover del botón secundario las sigue (la hoja lo deja con colores literales, que una prueba de contraste lee). #}
+  {% if color_principal %}<style>:root{--primary:{{ color_principal }};--primary-dark:color-mix(in srgb,var(--primary) 80%,#000);--primary-soft:color-mix(in srgb,var(--primary) 10%,#fff)}.btn-ghost:hover{background:var(--primary-soft);color:var(--primary-dark);border-color:var(--primary-dark)}</style>{% endif %}
   <script src="{% static 'core/vendor/htmx-2.0.11.min.js' %}" defer></script>
   <script src="{% static_v 'core/js/infoponia.js' %}" defer></script>
   <script src="{% static_v 'core/js/desplegable.js' %}" defer></script>

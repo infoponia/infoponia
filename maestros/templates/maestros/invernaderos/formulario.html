@@ -7,7 +7,7 @@ ventana que pide confirmar el cambio de personal.{% endcomment %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
 <div class="page narrow">
-  <a class="btn btn-ghost btn-sm" href="{% if invernadero %}{% url 'maestros:invernadero' invernadero.pk %}{% else %}{% url 'maestros:invernaderos' %}{% endif %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <a class="back" href="{% if invernadero %}{% url 'maestros:invernadero' invernadero.pk %}{% else %}{% url 'maestros:invernaderos' %}{% endif %}">{% icono "back" 15 %} Volver</a>
   <div class="page-h"><h1>{% if invernadero %}Modificar invernadero{% else %}Nuevo invernadero{% endif %}</h1></div>
   {% if form.non_field_errors %}
   <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
@@ -49,7 +49,7 @@ ventana que pide confirmar el cambio de personal.{% endcomment %}
     <div class="alert alert-info" role="status" style="margin-top:16px">{% icono "info" 16 %}<div>Los sectores no se cargan en este formulario: los registra el Agrónomo del invernadero. Hasta que haya al menos un sector por cada etapa de una variedad, no es posible sembrarla.</div></div>
     {% endif %}
 
-    <div class="row" style="margin-top:16px">
+    <div class="footbar">
       {% if invernadero %}
       <button class="btn btn-primary" type="submit" data-enviando="Guardando…">Guardar cambios</button>
       <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}">Cancelar</a>

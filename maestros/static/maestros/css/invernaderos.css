@@ -1,28 +1,13 @@
-/* Estilos de las pantallas de invernaderos (MAE-01). Solo la disposición: colores, bordes y tipografía salen de las
-   variables de core/static/core/css/infoponia.css (D-24, ninguna pantalla define su propia paleta). Basado en
-   .gh, .people y .person del prototipo de producción. */
-.inv-lista{display:flex;flex-direction:column;gap:12px}
-.inv-card{display:block;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;color:inherit;text-decoration:none}
-.inv-card:hover{border-color:var(--primary)}
-.inv-card:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.inv-card.inactivo{background:var(--background)}
-.inv-card-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.inv-card-h .nombre{font-size:15px;font-weight:700}
-.inv-dir{margin-top:4px;font-size:13px;color:var(--muted-foreground)}
-.inv-aviso{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--status-warn)}
-.people{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px}
-.person{display:flex;align-items:center;gap:10px;min-width:0}
-.person .av{width:30px;height:30px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.person .av.off{background:var(--muted);color:var(--muted-foreground)}
-.person .av.none{background:#fef3e2;color:var(--status-warn)}
-.person .t{display:flex;flex-direction:column;min-width:0}
-.person .k{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-foreground)}
-.person .v{font-size:13px;overflow-wrap:anywhere}
+/* Estilos de las pantallas de invernaderos (MAE-01), sobre el Diseño v2 (D-47, UI-01): las tarjetas (.gh), el personal
+   (.people, .person), .split y .facts salen de core/static/core/css/infoponia.css. Acá quedan solo los detalles propios de
+   estas pantallas. */
+a.gh{color:inherit;text-decoration:none}
+a.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,24,40,.08)}
+a.gh:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.inv-aviso{display:flex;align-items:center;gap:6px;color:var(--status-warn);padding-bottom:12px}
+.gh-p .people{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
 .person .v.falta{color:var(--status-warn)}
 .person .v.nohace{color:var(--muted-foreground)}
-.inv-split{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.inv-split .card + .card{margin-top:0}
 .tipo-dir{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px}
 .tipo-dir label{display:inline-flex;align-items:center;gap:6px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 16px}
-@media(max-width:760px){.inv-split,.grid3{grid-template-columns:1fr}}
+@media(max-width:760px){.gh-p .people{grid-template-columns:1fr 1fr}}

@@ -1,9 +1,9 @@
 # Datos del marco con sesión (cabecera, menú lateral, menú de cuenta con las cuentas vinculadas) disponibles en
 # toda plantilla.
 
-from django.conf import settings
 from django.urls import reverse
 
+from core import extensiones, identidad
 from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, rol_de
 from core.menu import ROLES_DE_CAMPO, SIGLAS, menu_de
 from core.servicios import cuentas_vinculadas
@@ -11,8 +11,15 @@ from core.servicios import cuentas_vinculadas
 
 def marco(request):
     """Agrega al contexto el rol visible, la sigla, el menú y el modo campo de la cuenta."""
-    # El nombre de la organización se muestra también en las pantallas sin sesión.
-    contexto = {"nombre_organizacion": settings.NOMBRE_ORGANIZACION}
+    # El nombre y el color de la organización se muestran también en las pantallas sin sesión (D-48). La identidad se consulta
+    # una sola vez por pedido y se guarda en la solicitud: sin caché de proceso, un cambio rige desde el pedido siguiente.
+    if not hasattr(request, "_identidad_de_la_organizacion"):
+        request._identidad_de_la_organizacion = extensiones.identidad_registrada()
+    registrada = request._identidad_de_la_organizacion
+    contexto = {
+        "nombre_organizacion": identidad.nombre_de_la_organizacion(registrada),
+        "color_principal": identidad.color_principal(registrada),
+    }
     usuario = getattr(request, "user", None)
     if usuario is None or not usuario.is_authenticated:
         return contexto
