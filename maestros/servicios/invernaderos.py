@@ -11,6 +11,7 @@ from django.db.models.functions import Lower
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
+from core.extensiones import Asignacion, Efecto, SeccionDeInicio
 from core.models import (
     Agronomo,
     Capataz,
@@ -22,7 +23,7 @@ from core.models import (
     rol_de,
 )
 from maestros import extensiones
-from maestros.models import Direccion, DireccionRural, DireccionUrbana, Invernadero, Localidad
+from maestros.models import Alerta, Direccion, DireccionRural, DireccionUrbana, Invernadero, Localidad
 from maestros.servicios import alertas as api_alertas
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
 
@@ -70,11 +71,10 @@ FORMATOS = {
 }
 
 
-def _detalle_con_alertas(cambios, creadas=(), resueltas=(), traspasadas=()):
-    """El detalle de auditoría (D-36) con ``cambios`` y, solo si no están vacías, las alertas que el caso de uso creó,
-    resolvió o traspasó, como referencias en ``datos`` (D6 de MAE-02, D-41)."""
-    detalle = {"cambios": cambios}
-    datos = {
+def _datos_de_alertas(creadas=(), resueltas=(), traspasadas=()):
+    """Los ``datos`` de auditoría (D-36) con, solo si no están vacías, las alertas que el caso de uso creó, resolvió o
+    traspasó, como referencias (D6 de MAE-02, D-41). Los usa también la baja y la reactivación de una cuenta (D-43)."""
+    return {
         clave: [referencia(alerta) for alerta in alertas]
         for clave, alertas in (
             ("alertas_creadas", creadas),
@@ -83,6 +83,13 @@ def _detalle_con_alertas(cambios, creadas=(), resueltas=(), traspasadas=()):
         )
         if alertas
     }
+
+
+def _detalle_con_alertas(cambios, creadas=(), resueltas=(), traspasadas=()):
+    """El detalle de auditoría (D-36) con ``cambios`` y, solo si no están vacías, las alertas que el caso de uso creó,
+    resolvió o traspasó, como referencias en ``datos`` (D6 de MAE-02, D-41)."""
+    detalle = {"cambios": cambios}
+    datos = _datos_de_alertas(creadas, resueltas, traspasadas)
     if datos:
         detalle["datos"] = datos
     return detalle
@@ -820,3 +827,168 @@ def acciones_permitidas(actor, invernadero):
     if invernadero.activo:
         return frozenset({ACCION_MODIFICAR, ACCION_BAJA})
     return frozenset({ACCION_REACTIVAR})
+
+
+# ---- MAE-02b: cuentas con invernaderos a cargo (USR-BAJ-USR, USR-MOD-USR) y Inicio del Gerente (PROD-CNS-INV) ----
+# Se registran en ``core.extensiones`` desde ``MaestrosConfig.ready()`` (regla A4 de D-37). Orden de bloqueos (D-40, D-43):
+# la cuenta (que ya bloqueó ``core``), los invernaderos a cargo en orden de id, y las alertas de cada uno en orden de id.
+# IMPORTANTE (D-43): el bloqueo previo de TODOS los invernaderos va ANTES de ``traspasar_alertas_del_agronomo``: esta y
+# ``bloquear_alertas_activas`` solo bloquean filas de ``Alerta`` y no ven una alerta que otra transacción creó y todavía no
+# confirmó; lo que hace esperar al creador es el bloqueo del invernadero (``bloquear_invernadero_para_alertas``).
+
+# Atributo del invernadero de cada rol que tiene invernaderos a cargo (el Gerente, el Administrador y el Transportista no).
+ATRIBUTO_DEL_ROL = {
+    Usuario.Rol.AGRONOMO: "agronomo",
+    Usuario.Rol.CAPATAZ: "capataz",
+    Usuario.Rol.VENDEDOR: "vendedor",
+    Usuario.Rol.TECNICO: "tecnico",
+}
+PLANTILLA_DE_INICIO = "maestros/invernaderos/_inicio_personal.html"
+
+
+def _atributo_del_rol(cuenta):
+    """El atributo del invernadero que apunta a las cuentas del rol de ``cuenta``, o ``None`` si ese rol no tiene
+    invernaderos a cargo."""
+    return ATRIBUTO_DEL_ROL.get(cuenta.rol)
+
+
+def _bloquear_a_cargo(cuenta, atributo):
+    """Bloquea (``FOR NO KEY UPDATE``) todos los invernaderos que tienen a ``cuenta`` en ese rol, en orden de id, y los
+    devuelve ya releídos. NO filtra por estado: uno inactivo puede estar reactivándose en otra transacción y, si se lo
+    excluyera, la baja no lo vería (D-43, docs/patrones/bloqueos.md: conjunto filtrado). Hay que llamarla dentro de
+    ``transaction.atomic()``, con la cuenta ya bloqueada."""
+    ids = Invernadero.objects.filter(**{f"{atributo}_id": cuenta.pk}).order_by("pk").values_list("pk", flat=True)
+    return [api_alertas.bloquear_invernadero_para_alertas(pk) for pk in list(ids)]
+
+
+def _efecto_de_alertas(afectados, creadas, resueltas, traspasadas):
+    """Un ``Efecto`` con los invernaderos donde cambió alguna alerta y los ``datos`` de auditoría de lo hecho."""
+    return Efecto(afectados, _datos_de_alertas(creadas, resueltas, traspasadas))
+
+
+def efectos_de_baja_de_cuenta(actor, cuenta):
+    """Post e de USR-BAJ-USR y regla 4 de 8.22 (MD-61): ``cuenta`` ya está inactiva y bloqueada. Bloquea todos sus
+    invernaderos a cargo (sin filtrar por estado), en orden de id; si es un Agrónomo, pasa sus alertas activas al Gerente
+    (``traspasar_alertas_del_agronomo`` sin entrante, sin mirar el estado del invernadero); y sincroniza solo la alerta
+    «sin {rol}» de su rol (``roles=[rol]``, D-43). Devuelve un ``Efecto`` con los invernaderos donde cambió algo."""
+    atributo = _atributo_del_rol(cuenta)
+    if atributo is None:
+        return Efecto([], {})
+    afectados, creadas, resueltas, traspasadas = [], [], [], []
+    for invernadero in _bloquear_a_cargo(cuenta, atributo):
+        if getattr(invernadero, f"{atributo}_id") != cuenta.pk:
+            continue  # lo asignaron a otra persona mientras esperaba el bloqueo: ya no es suyo
+        pasadas = []
+        if atributo == "agronomo":
+            pasadas = api_alertas.traspasar_alertas_del_agronomo(invernadero, invernadero.agronomo, None)
+        sincronizadas = api_alertas.sincronizar_alertas_de_personal(invernadero, roles=[atributo])
+        if pasadas or sincronizadas.creadas or sincronizadas.resueltas:
+            afectados.append(invernadero)
+        creadas += sincronizadas.creadas
+        resueltas += sincronizadas.resueltas
+        traspasadas += pasadas
+    return _efecto_de_alertas(afectados, creadas, resueltas, traspasadas)
+
+
+def efectos_de_reactivacion_de_cuenta(actor, cuenta):
+    """Post c de USR-MOD-USR y D8 (D4 de D-41): ``cuenta`` ya está activa y bloqueada. Bloquea sus invernaderos a cargo y,
+    si es un Agrónomo, le pasa (con el Agrónomo releído después de bloquear) las alertas que habían ido al Gerente por falta
+    de Agrónomo: las ``AGRONOMO_O_GERENTE`` pasan a él y las ``AGRONOMO_Y_GERENTE`` lo suman; después resuelve la alerta
+    «sin {rol}» de su rol. Devuelve un ``Efecto`` con los invernaderos donde cambió algo."""
+    atributo = _atributo_del_rol(cuenta)
+    if atributo is None:
+        return Efecto([], {})
+    afectados, creadas, resueltas, traspasadas = [], [], [], []
+    for invernadero in _bloquear_a_cargo(cuenta, atributo):
+        if getattr(invernadero, f"{atributo}_id") != cuenta.pk:
+            continue  # lo asignaron a otra persona mientras esperaba el bloqueo: ya no es suyo
+        pasadas = []
+        if atributo == "agronomo":
+            pasadas = api_alertas.traspasar_alertas_del_agronomo(invernadero, None, invernadero.agronomo)
+        sincronizadas = api_alertas.sincronizar_alertas_de_personal(invernadero, roles=[atributo])
+        if pasadas or sincronizadas.creadas or sincronizadas.resueltas:
+            afectados.append(invernadero)
+        creadas += sincronizadas.creadas
+        resueltas += sincronizadas.resueltas
+        traspasadas += pasadas
+    return _efecto_de_alertas(afectados, creadas, resueltas, traspasadas)
+
+
+def _alertas_del_agronomo_a_cargo(cuenta):
+    """Las alertas activas que pasarían al Gerente si se diera de baja al Agrónomo ``cuenta``: las suyas, en los invernaderos
+    que tiene a cargo, de cualquier estado. Es el mismo conjunto que mueve ``efectos_de_baja_de_cuenta``."""
+    return Alerta.objects.filter(estado_alerta="activa", agronomo_id=cuenta.pk, invernadero__agronomo_id=cuenta.pk)
+
+
+def asignaciones_de_cuenta(cuenta):
+    """Regla 4 de USR-BAJ-USR: lo que ``cuenta`` tiene a cargo y qué pasará con eso, para la ventana de baja. Solo lectura:
+    no bloquea ni audita. Devuelve una lista de ``core.extensiones.Asignacion``: los invernaderos activos a cargo (por
+    nombre, sin distinguir mayúsculas) y, para un Agrónomo con alertas activas (``N > 0``), esas alertas."""
+    atributo = _atributo_del_rol(cuenta)
+    if atributo is None:
+        return []
+    asignaciones = []
+    activos = list(
+        Invernadero.objects.filter(**{f"{atributo}_id": cuenta.pk}, estado_invernadero=Invernadero.Estado.ACTIVO)
+        .order_by(Lower("nombre_invernadero"), "pk")
+    )
+    if activos:
+        if atributo == "tecnico" and not any(invernadero.tiene_sistema_iot() for invernadero in activos):
+            que_pasa = "Quedan sin Técnico; sin sistema IoT no generan alerta (regla 3 de 8.22). Lo asigna el Gerente al modificarlos."
+        else:
+            nombre = NOMBRE_DEL_ROL[atributo]
+            que_pasa = (
+                f"{'Queda' if len(activos) == 1 else 'Cada uno queda'} con la alerta «Invernadero sin {nombre} activo» "
+                "para el Gerente hasta que asignes a otra persona al modificarlo."
+            )
+        asignaciones.append(
+            Asignacion(
+                "Invernaderos a cargo: " + ", ".join(i.nombre_invernadero for i in activos), len(activos), que_pasa
+            )
+        )
+    if atributo == "agronomo":
+        cantidad = _alertas_del_agronomo_a_cargo(cuenta).count()
+        if cantidad:
+            asignaciones.append(
+                Asignacion(
+                    "Alertas activas",
+                    cantidad,
+                    f"{'Pasa' if cantidad == 1 else 'Pasan'} al Gerente hasta que asignes otro Agrónomo (regla 4 de 8.22).",
+                )
+            )
+    return asignaciones
+
+
+def invernaderos_con_personal_por_asignar(actor):
+    """Regla 5 de PROD-CNS-INV: los invernaderos activos con personal por asignar, por nombre (sin distinguir mayúsculas),
+    como lista de ``(invernadero, faltantes)`` con ``faltantes`` de ``Invernadero.roles_faltantes()`` (sin persona o con
+    la persona inactiva; el Técnico solo con sistema IoT). Sale de lo que falta y no de las alertas, así también cubre los
+    invernaderos anteriores a MAE-02a (D9). Precondición: Gerente activo (``PermissionDenied``). No audita (regla 7,
+    SEG-14)."""
+    _exigir_gerente(actor, "consultar")
+    invernaderos = (
+        Invernadero.objects.filter(estado_invernadero=Invernadero.Estado.ACTIVO)
+        .select_related(*_RELACIONADOS)
+        .order_by(Lower("nombre_invernadero"), "pk")
+    )
+    return [(i, faltantes) for i in invernaderos if (faltantes := i.roles_faltantes())]
+
+
+def seccion_de_inicio(usuario):
+    """Regla 5 de PROD-CNS-INV: la sección «Personal por asignar» del Inicio, para un Gerente activo; ``None`` para
+    cualquier otro. El contexto trae ``filas`` (cada una con el ``invernadero`` y su ``detalle``: «Falta Capataz · Vendedor
+    inactivo (Nombre)») y ``hay_activos`` (para decir que todo está asignado solo si hay algún invernadero activo)."""
+    if usuario is None or not usuario.is_active or rol_de(usuario) != Usuario.Rol.GERENTE:
+        return None
+    filas = []
+    for invernadero, faltantes in invernaderos_con_personal_por_asignar(usuario):
+        partes = []
+        for atributo, nombre, nunca_asignado in faltantes:
+            if nunca_asignado:
+                partes.append(f"Falta {nombre}")
+            else:
+                persona = getattr(invernadero, atributo)
+                partes.append(f"{nombre} inactivo ({persona.get_full_name() or persona.email})")
+        filas.append({"invernadero": invernadero, "detalle": " · ".join(partes)})
+    hay_activos = bool(filas) or Invernadero.objects.filter(estado_invernadero=Invernadero.Estado.ACTIVO).exists()
+    return SeccionDeInicio(PLANTILLA_DE_INICIO, {"filas": filas, "hay_activos": hay_activos})

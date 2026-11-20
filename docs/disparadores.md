@@ -26,10 +26,10 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
    app de negocio (D-23). Va como un punto de extensión de `core` en el que `maestros` registra el ámbito (D-37, regla
    A4). En MAE-01 el alcance vive en `InvernaderoQuerySet.en_alcance_de`; sigue abierto hasta que una pantalla fuera de
    `maestros` lo necesite.
-4. **Efectos de la baja de una cuenta con invernaderos a cargo.** Postcondición e de USR-BAJ-USR (queda para el Gerente
-   una alerta «invernadero sin {rol}») y regla 4 (antes de confirmar, la baja informa lo que la cuenta tiene asignado).
-   La alerta necesita también `Alerta` (ver «Cuando exista la primera notificación»). `Alerta` ya existe (MAE-02a). Va con MAE-02b, por un punto de extensión de `core` (`core/extensiones.py`). Tiene que bloquear en el orden de `docs/patrones/bloqueos.md`, sección «Invernadero» (D-40): la cuenta
-   primero y después los invernaderos.
+4. ~~**Efectos de la baja de una cuenta con invernaderos a cargo.**~~ Hecho el 19/11/2026 en MAE-02b, por los puntos de extensión de
+   `core/extensiones.py` (D-43). Texto original: postcondición e de USR-BAJ-USR (queda para el Gerente una alerta «invernadero sin
+   {rol}») y regla 4 (antes de confirmar, la baja informa lo que la cuenta tiene asignado). Tiene que bloquear en el orden de
+   `docs/patrones/bloqueos.md`, sección «Invernadero» (D-40): la cuenta primero y después los invernaderos.
 
 5. ~~**Alerta con su invernadero.**~~ Hecho el 19/11/2026 en MAE-02a (FK `Alerta.invernadero`); la asociación está anotada en `docs/modelo/maestros.md`, pendientes de MD. Texto original: `Alerta` vive en `maestros` y apunta al invernadero con una clave foránea (D-38). La
    crea MAE-02, después de MAE-01. El modelo no tiene esa asociación: anotarlo en pendientes_MD.
@@ -56,13 +56,15 @@ Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La 
 
 ## Cuando exista Pedido
 
-1. **Baja de un Agrónomo.** Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se
-   avisa. Regla 4: la baja lo informa antes de confirmar.
+1. **Baja de un Agrónomo.** Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se avisa. Regla 4:
+   la baja lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
+   `core/extensiones.py` (D-43); bloquea sus filas después del invernadero y en orden de id.
 
 ## Cuando exista Entrega
 
-1. **Baja de un Transportista.** Postcondición g de USR-BAJ-USR: sus entregas a realizar quedan sin transportista. Regla
-   4: la baja lo informa antes de confirmar.
+1. **Baja de un Transportista.** Postcondición g de USR-BAJ-USR: sus entregas a realizar quedan sin transportista. Regla 4: la baja
+   lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
+   `core/extensiones.py` (D-43).
 
 ## Cuando exista Cosecha
 
@@ -121,8 +123,19 @@ Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La 
 
 ## Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)
 
-1. **Consulta de alertas.** MAE-02b hace CU-46 como último paso; si queda afuera por tiempo, nace acá. CU-41 reutiliza
-   `consultar_alertas` (`docs/api/alertas.md`). Nació en MAE-02a.
+1. **Consulta de alertas (CU-46).** MAE-02b dejó afuera la pantalla (paso 4): pasa a MAE-02c. Incluye la entrada «Alertas» del menú
+   (desde `MaestrosConfig.ready()`), el alcance `Alerta.objects.para(usuario)`, solo las activas, filtros por invernadero y tipo, el
+   detalle que llama a `abrir_alerta` (ya existe), que funcione sin JavaScript (HTMX solo reemplaza la tabla) y que viva en `maestros`.
+   **Pendiente para pendientes_CU:** abrir la alerta la marca «leída» (regla 7 de 8.18) y choca con la postcondición de CU-46 («no se
+   produjeron cambios en el sistema»). CU-41 reutiliza la consulta: `docs/api/alertas.md` todavía no nombra esa función. Nació en
+   MAE-02a.
+
+## Cuando una app necesite sumar algo al Inicio, a la ventana de baja o a la reactivación de una cuenta
+
+1. **Puntos de extensión de `core` (D-43).** Se registran en `AppConfig.ready()` con `registrar_seccion_de_inicio`,
+   `registrar_asignaciones_de_cuenta`, `registrar_efecto_de_baja_de_cuenta` y `registrar_efecto_de_reactivacion_de_cuenta`. Un efecto
+   corre con la cuenta ya bloqueada y bloquea sus filas después del invernadero y en orden de id (`core/extensiones.py`). Nació en
+   MAE-02b.
 
 ## Cuando el invernadero ya exista en Neon con datos (D9)
 

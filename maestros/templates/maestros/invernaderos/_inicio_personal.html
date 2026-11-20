@@ -1,0 +1,24 @@
+{% load iconos %}{% comment %}«Personal por asignar» del Inicio del Gerente (regla 5 de PROD-CNS-INV; ``personalCard`` y ``alertasInv`` del
+prototipo, sin la tarjeta «Solo prototipo»). Se incluye desde core/inicio.html por core.extensiones (D-43). Recibe
+«datos»: «filas» (cada una con «invernadero» y «detalle») y «hay_activos». Cada fila lleva un enlace común a «Modificar»
+(sin HTMX: funciona sin JavaScript) y solo aparecen invernaderos activos, así que el enlace nunca lleva a una redirección
+(D-30). Sin filas, avisa que todo está asignado, pero solo si hay algún invernadero activo.{% endcomment %}
+<div class="page narrow" style="margin-top:16px">
+  {% if datos.filas %}
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h3 style="margin:0">{% icono "users" 16 %} Personal por asignar</h3>
+      <span class="status-badge status-warn">{{ datos.filas|length }} invernadero{{ datos.filas|length|pluralize:"s" }}</span>
+    </div>
+    {% for fila in datos.filas %}
+    <div class="row" style="padding:12px 0;{% if not forloop.first %}border-top:1px solid var(--border){% endif %}">
+      <span style="color:var(--status-warn);display:flex">{% icono "warn" 16 %}</span>
+      <div style="flex:1;min-width:200px"><b>{{ fila.invernadero.nombre_invernadero }}</b><span class="muted" style="display:block;font-size:13px">{{ fila.detalle }}</span></div>
+      <a class="btn btn-ghost btn-sm" href="{% url 'maestros:invernadero_modificar' fila.invernadero.pk %}">Asignar</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif datos.hay_activos %}
+  <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Todos los invernaderos activos tienen su personal asignado.</div></div>
+  {% endif %}
+</div>

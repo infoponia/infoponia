@@ -4,7 +4,8 @@ rechazó la operación, «error». La operación se hace con un POST a la misma 
 cambia nada. Los textos del prototipo sobre las cuentas vinculadas (SEG-11 y regla 2 de USR-BAJ-USR) se muestran solo
 si la cuenta tiene un grupo: decir que «sale de su grupo» de una cuenta que no tiene uno sería falso.
 Restablecer y reactivar ofrecen la forma de acceso (_forma_de_acceso.html, D-35): invitación o contraseña temporal.
-Pendiente: lo que la baja deja asignado (invernaderos, pedidos, entregas y pendientes del Gerente).
+La baja lista lo que la cuenta tiene asignado («asignaciones», regla 4 de USR-BAJ-USR, D-43: lo registran las apps de
+negocio en core.extensiones). Pendiente: lo que dejan los pedidos, las entregas y los pendientes del Gerente.
 Con «gerente_activo» (reactivar un Gerente con otro activo, regla 5 y D-30) la ventana no ofrece confirmar: muestra
 el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
 <div class="ov" data-ventana>
@@ -29,6 +30,12 @@ el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
     <h2 id="ventana-titulo">¿Dar de baja esta cuenta?</h2>
     <p>{{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) no va a poder iniciar sesión y se cierran sus sesiones abiertas. Su historial se conserva{% if cuenta.grupo_id %} y sus cuentas vinculadas no cambian{% endif %}. Podés reactivarla más adelante.</p>
     {% if cuenta.pk == user.pk %}<p><b>Es tu propia cuenta:</b> se cierra tu sesión y salís del Sistema.</p>{% endif %}
+    {% if asignaciones %}
+    <p style="margin-bottom:4px"><b>Lo que tiene asignado</b></p>
+    <ul style="margin:0 0 10px 18px">
+      {% for asignacion in asignaciones %}<li><b>{{ asignacion.texto }}.</b> {{ asignacion.que_pasa }}</li>{% endfor %}
+    </ul>
+    {% endif %}
     {% endif %}
     {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
     <form method="post" action="{% if accion == 'restablecer' %}{% url 'core:usuario_restablecer' cuenta.pk %}{% elif accion == 'reactivar' %}{% url 'core:usuario_reactivar' cuenta.pk %}{% else %}{% url 'core:usuario_baja' cuenta.pk %}{% endif %}">

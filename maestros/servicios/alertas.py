@@ -6,6 +6,7 @@
 
 from collections import namedtuple
 
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.http import Http404
 from django.utils import timezone
@@ -148,11 +149,18 @@ def resolver_alerta(alerta_id):
     return _resolver(alerta) if alerta.estado_alerta == Alerta.Estado.ACTIVA else None
 
 
-def sincronizar_alertas_de_personal(invernadero):
+def sincronizar_alertas_de_personal(invernadero, roles=None):
     """Deja las alertas «invernadero sin {rol} activo» como pide la condición actual: asegura la de cada rol de
     ``invernadero.roles_faltantes()`` (sin persona o con la persona inactiva; el Técnico solo con sistema IoT, regla 3 de
     8.22) y resuelve las de los demás. Devuelve ``Cambios(creadas, resueltas)``, en el orden de ``Invernadero.ROLES``. Con un
-    invernadero inactivo no hace nada. Lee el invernadero de nuevo, bloqueado: sirve para quien ya lo guardó."""
+    invernadero inactivo no hace nada. Lee el invernadero de nuevo, bloqueado: sirve para quien ya lo guardó.
+
+    ``roles`` (MAE-02b, D-43): lista de atributos del invernadero (``"capataz"``...). Con ``None`` se ocupa de los cuatro
+    roles, como siempre. Con una lista, solo asegura y resuelve las alertas de esos roles y no toca ni bloquea las de los
+    demás (la baja y la reactivación de una cuenta sincronizan solo el rol de la cuenta)."""
+    atributos = [atributo for atributo, _ in Invernadero.ROLES if roles is None or atributo in roles]
+    if roles is not None and set(roles) - set(atributos):
+        raise ValueError(f"Roles desconocidos: {sorted(set(roles) - set(atributos))}.")
     actual = bloquear_invernadero_para_alertas(invernadero.pk)
     if not actual.activo:
         return Cambios([], [])
@@ -164,12 +172,12 @@ def sincronizar_alertas_de_personal(invernadero):
             invernadero=actual,
             estado_alerta="activa",
             clave_estado="",
-            tipo_alerta__in=[f"sin_{atributo}" for atributo, _ in Invernadero.ROLES],
+            tipo_alerta__in=[f"sin_{atributo}" for atributo in atributos],
         )
         .order_by("pk")
     }
     creadas, resueltas = [], []
-    for atributo, _ in Invernadero.ROLES:
+    for atributo in atributos:
         codigo = f"sin_{atributo}"
         if atributo in faltan:
             if codigo not in activas:
@@ -242,3 +250,25 @@ def contar_alertas_que_recibe(invernadero, saliente, entrante):
         return 0
     activas = Alerta.objects.filter(invernadero_id=invernadero.pk, estado_alerta="activa")
     return sum(1 for _ in _pasan_al_entrante(activas, saliente, entrante))
+
+
+def abrir_alerta(actor, alerta_id):
+    """Regla 7 de 8.18 (MAE-02b): un destinatario abre la alerta y su ``estado_lectura_alerta`` pasa a «leída». No toca
+    ``estado_alerta`` ni audita (D-41, SEG-14) y devuelve la alerta releída. ``Http404`` si no existe (D-28);
+    ``PermissionDenied`` si ``actor`` no la recibe (``Alerta.objects.para``), sin cambiar nada.
+
+    Una sola sentencia condicional: ``UPDATE ... WHERE id = X AND <es destinatario> AND no_leida``. No bloquea el
+    invernadero ni toma otra fila que la de la alerta, así que no puede cerrar un ciclo con el orden invernadero → alertas
+    de D-40. Si un traspaso simultáneo cambia el destinatario, PostgreSQL (Read Committed) espera la fila y vuelve a
+    evaluar el ``WHERE`` sobre la versión confirmada: no la marca para quien dejó de recibirla (razonado, no probado:
+    D-43)."""
+    if not Alerta.objects.filter(pk=alerta_id).exists():
+        raise Http404("No existe esa alerta.")
+    with transaction.atomic():
+        propias = Alerta.objects.para(actor).filter(pk=alerta_id)
+        if not propias.exists():
+            raise PermissionDenied("Esa alerta no es para vos.")
+        propias.filter(estado_lectura_alerta=Alerta.Lectura.NO_LEIDA).update(
+            estado_lectura_alerta=Alerta.Lectura.LEIDA
+        )
+        return Alerta.objects.get(pk=alerta_id)

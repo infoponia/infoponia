@@ -18,6 +18,7 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
+from core import extensiones
 from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, pantalla_accesible_para, rol_de, rol_requerido
 from core.forms import (
     FormularioAltaUsuario,
@@ -492,12 +493,13 @@ def cambiar_de_cuenta(request):
 def inicio(request):
     """Inicio de la cuenta: indica con qué rol opera (USR-INI-SES postcondición a, vHome).
 
-    El contenido del panel de cada rol llega con los módulos de negocio. El Administrador no tiene panel:
-    va directo a «Cuentas», como en el prototipo (``enter()``; D-16 y D-30).
+    El contenido del panel de cada rol llega con los módulos de negocio: cada app suma sus secciones por
+    ``core.extensiones.registrar_seccion_de_inicio`` (D-43; maestros: «Personal por asignar» del Gerente, regla 5 de
+    PROD-CNS-INV). El Administrador no tiene panel: va directo a «Cuentas», como en el prototipo (``enter()``; D-16 y D-30).
     """
     if rol_de(request.user) == ADMINISTRADOR:
         return redirect("core:usuarios")
-    return render(request, "core/inicio.html")
+    return render(request, "core/inicio.html", {"secciones": extensiones.secciones_de_inicio(request.user)})
 
 
 # ---- Cuentas: consultar y alta (USR-CNS-USR y USR-ALT-USR, tareas 04a y 05a) ----
@@ -684,6 +686,9 @@ def _gestionar_cuenta(request, cuenta_id, accion):
     }
     if accion == "reactivar":
         contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
+    if accion == "baja":
+        # Regla 4 de USR-BAJ-USR (D-43): lo que la cuenta tiene asignado y qué pasará con eso. Solo lectura.
+        contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
     # D-35: restablecer y reactivar eligen la forma de acceso (invitación o contraseña temporal); la baja no.
     contexto["correo_configurado"] = settings.CORREO_CONFIGURADO
     contexto["acceso"] = ACCESO_INVITACION if settings.CORREO_CONFIGURADO else ""
@@ -702,6 +707,8 @@ def _gestionar_cuenta(request, cuenta_id, accion):
             if accion == "reactivar":
                 # Otra operación pudo activar a un Gerente mientras la ventana estaba abierta.
                 contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
+            elif accion == "baja":
+                contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
         else:
             if accion == "baja" and cuenta.pk == actor_id:
                 # La baja ya cerró la sesión de esta cuenta (``is_active`` en False); se vacía la sesión

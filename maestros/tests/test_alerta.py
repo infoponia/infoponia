@@ -8,7 +8,9 @@
 #   asegurar_alerta_de_estado(invernadero_id, tipo, clave="", descripcion=None) -> Alerta | None (idempotente).
 #   resolver_alerta_de_estado(invernadero_id, tipo, clave="") -> Alerta | None.
 #   resolver_alerta(alerta_id) -> Alerta | None.
-#   sincronizar_alertas_de_personal(invernadero) -> Cambios(creadas, resueltas).
+#   sincronizar_alertas_de_personal(invernadero, roles=None) -> Cambios(creadas, resueltas). ``roles`` (MAE-02b, D-43):
+#       con una lista de atributos, solo asegura y resuelve (y bloquea) esos roles.
+#   abrir_alerta(actor, alerta_id) -> Alerta (MAE-02b, regla 7 de 8.18): marca «leída»; PermissionDenied / Http404.
 #   resolver_alertas_activas(invernadero), traspasar_alertas_del_agronomo(invernadero, saliente, entrante) y
 #   contar_alertas_que_recibe(invernadero, saliente, entrante).
 #   Alerta.objects.para(usuario) / .activas() / .no_leidas(); registro de tipos: registrar_tipo_de_alerta, tipo_de_alerta,
@@ -20,11 +22,13 @@
 import time
 from unittest import mock
 
-from django.db import IntegrityError, transaction
+from django.core.exceptions import PermissionDenied
+from django.db import DatabaseError, IntegrityError, transaction
 from django.http import Http404
 from django.test import SimpleTestCase, TestCase, TransactionTestCase, tag
 from django.utils import timezone
 
+from core.models import RegistroAuditoria
 from core.tests.concurrencia import correr_a_la_vez, separar
 from core.tests.fabricas import crear_administrador, crear_capataz, crear_gerente
 from maestros import alertas as registro
@@ -621,6 +625,173 @@ class AlertaServicioTests(ConGeoref, TestCase):
         self.assertEqual(propia.agronomo_id, self.agronomo.pk)
 
 
+    # ---- sincronizar_alertas_de_personal(invernadero, roles) (MAE-02b, D-43) ----
+
+    def test_d43_sincronizar_con_roles_solo_asegura_esos_roles(self):
+        """D-43: con ``roles=["capataz"]`` solo se asegura la alerta del Capataz. El invernadero también está sin Vendedor,
+        pero esa alerta no se crea ahora. Control: la del Capataz sí se crea."""
+        with transaction.atomic():
+            cambios = alertas.sincronizar_alertas_de_personal(
+                Invernadero.objects.get(pk=self.invernadero.pk), roles=["capataz"]
+            )
+
+        self.assertEqual(self.activas_de(), ["sin_capataz"])
+        self.assertEqual([alerta.tipo_alerta for alerta in cambios.creadas], ["sin_capataz"])
+        self.assertEqual(list(cambios.resueltas), [])
+
+    def test_d43_sincronizar_con_roles_solo_resuelve_esos_roles(self):
+        """D-43: con ``roles=["capataz"]`` solo se resuelve la alerta del Capataz. La del Vendedor ya no corresponde (tiene un
+        Vendedor activo), pero una sincronización completa la resolvería y esta la deja intacta. Control: la del Capataz
+        se resuelve."""
+        Invernadero.objects.filter(pk=self.invernadero.pk).update(
+            capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+        del_capataz = crear_alerta(
+            self.invernadero, "sin_capataz", clave_estado="", descripcion_alerta="Invernadero sin Capataz activo"
+        )
+        del_vendedor = crear_alerta(
+            self.invernadero, "sin_vendedor", clave_estado="", descripcion_alerta="Invernadero sin Vendedor activo"
+        )
+
+        with transaction.atomic():
+            cambios = alertas.sincronizar_alertas_de_personal(
+                Invernadero.objects.get(pk=self.invernadero.pk), roles=["capataz"]
+            )
+
+        del_capataz.refresh_from_db()
+        del_vendedor.refresh_from_db()
+        self.assertEqual([alerta.pk for alerta in cambios.resueltas], [del_capataz.pk])
+        self.assertEqual(del_capataz.estado_alerta, "resuelta")
+        self.assertEqual(del_vendedor.estado_alerta, "activa")
+        self.assertIsNone(del_vendedor.fecha_resolucion)
+
+    def test_d43_sincronizar_con_roles_none_se_ocupa_de_todos(self):
+        """D-43: con ``roles=None`` (como la llaman el alta, la modificación y la reactivación del invernadero) se ocupa de
+        los cuatro roles, como siempre."""
+        with transaction.atomic():
+            cambios = alertas.sincronizar_alertas_de_personal(
+                Invernadero.objects.get(pk=self.invernadero.pk), roles=None
+            )
+
+        self.assertEqual(self.activas_de(), ["sin_capataz", "sin_vendedor"])
+        self.assertEqual(len(cambios.creadas), 2)
+
+    def test_d43_sincronizar_con_un_rol_desconocido_lanza_value_error(self):
+        """D-43: ``roles`` solo admite los atributos de ``Invernadero.ROLES``; un rol desconocido (por ejemplo, un error de
+        tipeo) lanza ``ValueError`` y no cambia nada. Control: un rol válido no lanza y se ocupa de su alerta."""
+        invernadero = Invernadero.objects.get(pk=self.invernadero.pk)
+
+        for roles in (["capatas"], ["capataz", "chofer"], ["Capataz"]):
+            with self.subTest(roles=roles):
+                with self.assertRaises(ValueError):
+                    with transaction.atomic():
+                        alertas.sincronizar_alertas_de_personal(invernadero, roles=roles)
+        self.assertEqual(Alerta.objects.count(), 0)
+
+        with transaction.atomic():
+            cambios = alertas.sincronizar_alertas_de_personal(invernadero, roles=["capataz"])
+        self.assertEqual([alerta.tipo_alerta for alerta in cambios.creadas], ["sin_capataz"])
+
+
+class AlertaAbrirServicioTests(ConGeoref, TestCase):
+    """``abrir_alerta`` (regla 7 de 8.18, MAE-02b): un destinatario abre la alerta y pasa a «leída». No audita (SEG-14, D-41)."""
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.agronomo = crear_agronomo()
+        self.otro_agronomo = crear_agronomo("otro.agronomo@infoponia.com")
+        self.invernadero = crear_invernadero("Invernadero A", agronomo=self.agronomo)
+        self.del_gerente = crear_alerta(self.invernadero, "prueba_evento", para_gerente=True)
+        self.del_agronomo = crear_alerta(self.invernadero, "prueba_evento", para_gerente=False, agronomo=self.agronomo)
+
+    def test_regla_8_18_7_el_gerente_destinatario_la_marca_leida(self):
+        """Regla 7 de 8.18: la alerta nace «no leída» y pasa a «leída» cuando uno de sus destinatarios la abre. El Gerente, si
+        es ``para_gerente``. Devuelve la alerta ya leída."""
+        self.assertEqual(self.del_gerente.estado_lectura_alerta, "no_leida")
+
+        alerta = alertas.abrir_alerta(self.gerente, self.del_gerente.pk)
+
+        self.assertEqual(alerta.pk, self.del_gerente.pk)
+        self.assertEqual(alerta.estado_lectura_alerta, "leida")
+        self.del_gerente.refresh_from_db()
+        self.assertEqual(self.del_gerente.estado_lectura_alerta, "leida")
+
+    def test_regla_8_18_7_el_agronomo_destinatario_la_marca_leida(self):
+        """Regla 7 de 8.18: el Agrónomo destinatario la marca «leída». La del Gerente, en cambio, no cambia."""
+        alertas.abrir_alerta(self.agronomo, self.del_agronomo.pk)
+
+        self.del_agronomo.refresh_from_db()
+        self.del_gerente.refresh_from_db()
+        self.assertEqual(self.del_agronomo.estado_lectura_alerta, "leida")
+        self.assertEqual(self.del_gerente.estado_lectura_alerta, "no_leida")
+
+    def test_regla_8_18_7_abrir_no_cambia_el_estado_activa(self):
+        """Regla 7 de 8.18: los dos estados son independientes. Abrir una alerta activa la deja activa y sin fecha de
+        resolución."""
+        alertas.abrir_alerta(self.gerente, self.del_gerente.pk)
+
+        self.del_gerente.refresh_from_db()
+        self.assertEqual(self.del_gerente.estado_lectura_alerta, "leida")
+        self.assertEqual(self.del_gerente.estado_alerta, "activa")
+        self.assertIsNone(self.del_gerente.fecha_resolucion)
+
+    def test_regla_8_18_7_una_resuelta_abierta_queda_leida_y_resuelta(self):
+        """Regla 7 de 8.18: una alerta resuelta y no leída, al abrirla, queda leída y sigue resuelta, con su fecha."""
+        resuelta = crear_alerta(self.invernadero, "prueba_evento", para_gerente=True, resuelta=True)
+        fecha = resuelta.fecha_resolucion
+
+        alertas.abrir_alerta(self.gerente, resuelta.pk)
+
+        resuelta.refresh_from_db()
+        self.assertEqual(resuelta.estado_lectura_alerta, "leida")
+        self.assertEqual(resuelta.estado_alerta, "resuelta")
+        self.assertEqual(resuelta.fecha_resolucion, fecha)
+
+    def test_regla_8_18_7_abrir_dos_veces_la_deja_leida(self):
+        """Regla 7 de 8.18: abrir una alerta ya leída no falla y la deja leída."""
+        alertas.abrir_alerta(self.gerente, self.del_gerente.pk)
+        alerta = alertas.abrir_alerta(self.gerente, self.del_gerente.pk)
+
+        self.assertEqual(alerta.estado_lectura_alerta, "leida")
+
+    def test_d43_quien_no_es_destinatario_recibe_permission_denied_y_no_cambia(self):
+        """D-41 y D-43: quien no recibe la alerta (otro Agrónomo, el Gerente ante una que no es para él, un Capataz, un
+        Agrónomo dado de baja, ``None``) recibe ``PermissionDenied`` y la alerta no cambia. Control: el destinatario sí."""
+        inactivo = crear_agronomo("inactivo.agronomo@infoponia.com", activo=False)
+        del_inactivo = crear_alerta(self.invernadero, "prueba_evento", para_gerente=False, agronomo=inactivo)
+        casos = (
+            (self.otro_agronomo, self.del_agronomo),
+            (self.gerente, self.del_agronomo),
+            (crear_capataz(), self.del_gerente),
+            (inactivo, del_inactivo),
+            (None, self.del_gerente),
+        )
+
+        for actor, alerta in casos:
+            with self.subTest(actor=getattr(actor, "email", None), alerta=alerta.pk):
+                with self.assertRaises(PermissionDenied):
+                    alertas.abrir_alerta(actor, alerta.pk)
+                alerta.refresh_from_db()
+                self.assertEqual(alerta.estado_lectura_alerta, "no_leida")
+        self.assertEqual(alertas.abrir_alerta(self.agronomo, self.del_agronomo.pk).estado_lectura_alerta, "leida")
+
+    def test_d28_una_alerta_inexistente_da_404(self):
+        """D-28: un id que no existe da ``Http404``, igual que ``obtener_invernadero``; fuera del alcance, ``PermissionDenied``.
+        Control: una que existe se abre."""
+        self.assertEqual(alertas.abrir_alerta(self.gerente, self.del_gerente.pk).pk, self.del_gerente.pk)
+
+        with self.assertRaises(Http404):
+            alertas.abrir_alerta(self.gerente, self.del_gerente.pk + 1000)
+
+    def test_d41_abrir_una_alerta_no_audita(self):
+        """D-41 y SEG-14: abrir una alerta (marcarla leída) no deja registro de auditoría. Control: sí se marcó leída."""
+        alertas.abrir_alerta(self.gerente, self.del_gerente.pk)
+
+        self.del_gerente.refresh_from_db()
+        self.assertEqual(self.del_gerente.estado_lectura_alerta, "leida")
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+
 class _Pausa:
     """Punto de parada de las pruebas de concurrencia: ``correr_a_la_vez(..., detener_antes_de=(pausa, "punto"))`` detiene a
     la operación ``primera`` justo ANTES de llamarlo, con lo que haya tomado hasta ahí (el invernadero bloqueado y la
@@ -755,3 +926,60 @@ class AlertaConcurrenciaTests(TransactionTestCase):
         self.assertEqual((len(exitos), rechazos, otros), (2, [], []))
         alerta = Alerta.objects.get(tipo_alerta="prueba_agronomo_o_gerente")
         self.assertEqual((alerta.agronomo_id, alerta.para_gerente), (entrante.pk, False))
+
+    def test_d43_sincronizar_con_roles_no_bloquea_las_alertas_de_otros_roles(self):
+        """D-43 (no es una de las P de MAE-02): con ``roles=["capataz"]``, la sincronización bloquea solo las alertas de ese rol.
+        Una transacción ``primera`` sincroniza y se detiene antes de confirmar; otra intenta tomar cada alerta con ``NOWAIT``:
+        la del Vendedor está libre y la del Capataz, bloqueada (que es el control de que la prueba detecta los bloqueos). Con
+        ``roles=None`` las dos quedan bloqueadas, como siempre."""
+        Invernadero.objects.filter(pk=self.invernadero.pk).update(
+            capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+
+        def sincronizar(roles):
+            def operacion():
+                with transaction.atomic():
+                    alertas.sincronizar_alertas_de_personal(
+                        Invernadero.objects.get(pk=self.invernadero.pk), roles=roles
+                    )
+                    pausa.punto()
+
+            return operacion
+
+        def probar_bloqueos():
+            estados = {}
+            with transaction.atomic():
+                for codigo in ("sin_vendedor", "sin_capataz"):
+                    try:
+                        with transaction.atomic():
+                            list(
+                                Alerta.objects.select_for_update(no_key=True, nowait=True).filter(
+                                    invernadero=self.invernadero, tipo_alerta=codigo
+                                )
+                            )
+                        estados[codigo] = "libre"
+                    except DatabaseError:
+                        estados[codigo] = "bloqueada"
+            return estados
+
+        for roles, esperado in (
+            (None, {"sin_vendedor": "bloqueada", "sin_capataz": "bloqueada"}),
+            (["capataz"], {"sin_vendedor": "libre", "sin_capataz": "bloqueada"}),
+        ):
+            with self.subTest(roles=roles):
+                Alerta.objects.filter(invernadero=self.invernadero).delete()
+                for atributo in ("capataz", "vendedor"):
+                    crear_alerta(
+                        self.invernadero,
+                        f"sin_{atributo}",
+                        clave_estado="",
+                        descripcion_alerta=f"Invernadero sin {atributo} activo",
+                    )
+
+                resultados = correr_a_la_vez(
+                    sincronizar(roles), probar_bloqueos, primera="a", detener_antes_de=(pausa, "punto")
+                )
+
+                exitos, rechazos, otros = separar(resultados)
+                self.assertEqual((rechazos, otros), ([], []))
+                self.assertEqual(resultados["b"], esperado)

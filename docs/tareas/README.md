@@ -31,8 +31,8 @@
 | USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
 | USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
-| MAE-02b | Alerta: baja y reactivación de cuenta, Inicio del Gerente, `abrir_alerta` y consulta (CU-46) | maestros | pendiente | MAE-02a (hecha, en revisión) | `maestros/MAE-02b-alerta-cuentas-e-inicio.md` |
-| NOT-01 | Notificaciones y campana (D-42) | core | pendiente | MAE-02a (hecha, en revisión). Archivo por escribir | — |
+| MAE-02c | Alerta: consulta (CU-46) y entrada «Alertas» del menú | maestros | pendiente | MAE-02b (hecha, en revisión). Archivo por escribir | — |
+| NOT-01 | Notificaciones y campana (D-42) | core | pendiente | MAE-02a (hecha) y MAE-02b (hecha, en revisión). Archivo por escribir | — |
 
 ## Tareas hechas antes del traspaso (18/11/2026)
 

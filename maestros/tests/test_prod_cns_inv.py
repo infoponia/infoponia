@@ -8,14 +8,16 @@
 # El alcance vive en ``Invernadero.objects.en_alcance_de(actor)`` (D-28). Las marcas de la lista y de la ficha (reglas
 # 2 y 4) las da ``Invernadero.roles_faltantes`` y ``tiene_sectores``.
 #
-# Fuera de alcance de MAE-01: capacidad, sectores, lotes, cámara y bitácora de la ficha (regla 3) y el Inicio del
-# Gerente (regla 5, pasa a MAE-02).
+# Fuera de alcance de MAE-01: capacidad, sectores, lotes, cámara y bitácora de la ficha (regla 3).
+# MAE-02b suma la regla 5 (el Inicio del Gerente): ``invernaderos_con_personal_por_asignar(actor)`` y
+# ``seccion_de_inicio(usuario)``, que ``MaestrosConfig.ready()`` registra en ``core.extensiones`` (D-43).
 
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.test import TestCase
 from django.urls import reverse
 
+from core import extensiones
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_administrador, crear_capataz, crear_gerente
 from maestros.models import Invernadero
@@ -156,6 +158,99 @@ class ProdCnsInvServicioTests(ConGeoref, TestCase):
         list(invernaderos.consultar_invernaderos(self.gerente))
         invernaderos.obtener_invernadero(self.agronomo, invernadero.pk)
         self.assertFalse(RegistroAuditoria.objects.exists())
+
+    # ---- Regla 5 (MAE-02b): el Inicio del Gerente lista el personal por asignar ----
+
+    def personal_por_asignar(self, actor=None):
+        """``[(nombre, [atributos de los roles que faltan])]`` de ``invernaderos_con_personal_por_asignar``."""
+        return [
+            (invernadero.nombre_invernadero, [atributo for atributo, _, _ in faltantes])
+            for invernadero, faltantes in invernaderos.invernaderos_con_personal_por_asignar(actor or self.gerente)
+        ]
+
+    def test_regla_5_lista_los_activos_con_personal_por_asignar_por_nombre(self):
+        """PROD-CNS-INV regla 5: el Inicio del Gerente lista los invernaderos con personal por asignar, por nombre (sin
+        distinguir mayúsculas), con los roles que faltan."""
+        crear_invernadero("Zeta")
+        crear_invernadero("alfa", capataz=crear_capataz_activo())
+
+        self.assertEqual(
+            self.personal_por_asignar(),
+            [("alfa", ["agronomo", "vendedor"]), ("Zeta", ["agronomo", "capataz", "vendedor"])],
+        )
+
+    def test_regla_5_no_lista_los_inactivos_ni_los_completos(self):
+        """PROD-CNS-INV regla 5 y post e de PROD-BAJ-INV: ni los inactivos ni los que tienen todo su personal activo. Control:
+        un activo con personal por asignar sí figura."""
+        crear_invernadero("Inactivo", activo=False)
+        crear_invernadero(
+            "Completo", agronomo=self.agronomo, capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+        crear_invernadero("Con faltante", agronomo=self.otro_agronomo)
+
+        self.assertEqual(self.personal_por_asignar(), [("Con faltante", ["capataz", "vendedor"])])
+
+    def test_regla_5_muestra_al_asignado_inactivo(self):
+        """PROD-CNS-INV regla 5: una persona asignada pero dada de baja cuenta como personal por asignar; el rol viene con
+        ``nunca_asignado`` en falso (el Inicio la nombra)."""
+        capataz = crear_capataz_activo(activo=False)
+        crear_invernadero(
+            "Sur", agronomo=self.agronomo, capataz=capataz, vendedor=crear_vendedor()
+        )
+
+        (invernadero, faltantes), = invernaderos.invernaderos_con_personal_por_asignar(self.gerente)
+
+        self.assertEqual(invernadero.nombre_invernadero, "Sur")
+        self.assertEqual(faltantes, [("capataz", "Capataz", False)])
+
+    def test_regla_5_tecnico_sin_iot_no_cuenta(self):
+        """PROD-CNS-INV regla 5 y regla 5 de PROD-ALT-INV: sin sistema IoT, no falta el Técnico. Control: el invernadero al
+        que le falta el Vendedor sí figura."""
+        crear_invernadero(
+            "Sin tecnico", agronomo=self.agronomo, capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+        crear_invernadero(
+            "Sin vendedor",
+            agronomo=self.otro_agronomo,
+            capataz=crear_capataz_activo("otro.capataz@infoponia.com"),
+        )
+
+        self.assertEqual(self.personal_por_asignar(), [("Sin vendedor", ["vendedor"])])
+
+    def test_regla_5_solo_el_gerente_activo_consulta(self):
+        """PROD-CNS-INV regla 5 y SEG-13: el Agrónomo, el Capataz, un Gerente dado de baja y ``None`` no consultan lo que
+        falta asignar. Control: el Gerente activo sí."""
+        crear_invernadero("Sur")
+        inactivo = crear_gerente(email="anterior@infoponia.com", activo=False)
+
+        for actor in (self.agronomo, crear_capataz(), inactivo, None):
+            with self.subTest(actor=getattr(actor, "email", None)):
+                with self.assertRaises(PermissionDenied):
+                    invernaderos.invernaderos_con_personal_por_asignar(actor)
+        self.assertEqual(len(self.personal_por_asignar()), 1)
+
+    def test_regla_7_la_consulta_del_inicio_no_audita(self):
+        """PROD-CNS-INV regla 7 y SEG-14: consultar lo que falta asignar no audita. Control: devuelve el invernadero."""
+        crear_invernadero("Sur")
+
+        resultado = invernaderos.invernaderos_con_personal_por_asignar(self.gerente)
+
+        self.assertEqual(len(resultado), 1)
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_regla_5_la_seccion_de_inicio_es_solo_del_gerente(self):
+        """PROD-CNS-INV regla 5: ``seccion_de_inicio`` devuelve la sección «Personal por asignar» para el Gerente activo y
+        ``None`` para cualquier otro."""
+        seccion = invernaderos.seccion_de_inicio(self.gerente)
+
+        self.assertEqual(seccion.plantilla, "maestros/invernaderos/_inicio_personal.html")
+        for usuario in (self.agronomo, crear_capataz(), crear_gerente(email="anterior@infoponia.com", activo=False), None):
+            with self.subTest(usuario=getattr(usuario, "email", None)):
+                self.assertIsNone(invernaderos.seccion_de_inicio(usuario))
+
+    def test_d43_maestros_registra_su_seccion_de_inicio(self):
+        """D-43 y A4 de D-37: ``MaestrosConfig.ready()`` registra la sección del Inicio en ``core.extensiones``."""
+        self.assertIn(invernaderos.seccion_de_inicio, extensiones._SECCIONES_DE_INICIO)
 
 
 class ProdCnsInvVistaTests(ConGeoref, TestCase):
@@ -314,3 +409,88 @@ class ProdCnsInvVistaTests(ConGeoref, TestCase):
                 self.assertEqual("Producción" in respuesta.content.decode(), debe)
                 if debe:
                     self.assertContains(respuesta, f'href="{self.url}"')
+
+    # ---- Regla 5 (MAE-02b): «Personal por asignar» en el Inicio del Gerente ----
+
+    def test_regla_5_el_inicio_del_gerente_muestra_personal_por_asignar_y_asignar(self):
+        """PROD-CNS-INV regla 5: el Inicio del Gerente lista los invernaderos con personal por asignar (con lo que falta o
+        la persona inactiva) y un acceso a modificar cada uno."""
+        sur = crear_invernadero("Sur")
+        norte = crear_invernadero(
+            "Norte",
+            agronomo=self.agronomo,
+            capataz=crear_capataz_activo(activo=False),
+            vendedor=crear_vendedor(),
+        )
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, "Personal por asignar")
+        self.assertContains(respuesta, "2 invernaderos")
+        self.assertContains(respuesta, "Falta Agrónomo · Falta Capataz · Falta Vendedor")
+        self.assertContains(respuesta, "Capataz inactivo (Nombre Apellido)")
+        self.assertContains(respuesta, f'href="{reverse("maestros:invernadero_modificar", args=[sur.pk])}"')
+        self.assertContains(respuesta, f'href="{reverse("maestros:invernadero_modificar", args=[norte.pk])}"')
+        self.assertContains(respuesta, "Asignar")
+
+    def test_regla_5_sin_faltantes_dice_que_esta_todo_asignado(self):
+        """PROD-CNS-INV regla 5: sin personal por asignar, el Inicio lo dice. Sin ningún invernadero activo no muestra ni
+        la lista ni ese aviso (no hay nada que decir)."""
+        self.client.force_login(self.gerente)
+        sin_invernaderos = self.client.get(reverse("core:inicio"))
+        crear_invernadero(
+            "Completo", agronomo=self.agronomo, capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+
+        con_uno_completo = self.client.get(reverse("core:inicio"))
+
+        self.assertNotContains(sin_invernaderos, "Todos los invernaderos activos tienen su personal asignado.")
+        self.assertNotContains(sin_invernaderos, "Personal por asignar")
+        self.assertContains(con_uno_completo, "Todos los invernaderos activos tienen su personal asignado.")
+        self.assertNotContains(con_uno_completo, "Personal por asignar")
+
+    def test_regla_5_el_inicio_del_agronomo_no_muestra_la_seccion(self):
+        """PROD-CNS-INV regla 5: la sección es solo del Gerente. Control: con el mismo invernadero, el Gerente la ve."""
+        crear_invernadero("Sur", agronomo=self.agronomo)
+        self.client.force_login(self.agronomo)
+        del_agronomo = self.client.get(reverse("core:inicio"))
+        self.client.force_login(self.gerente)
+        del_gerente = self.client.get(reverse("core:inicio"))
+
+        self.assertNotContains(del_agronomo, "Personal por asignar")
+        self.assertContains(del_gerente, "Personal por asignar")
+
+    def test_regla_7_el_inicio_no_audita(self):
+        """PROD-CNS-INV regla 7 y SEG-14: abrir el Inicio no audita. Control: la sección se muestra."""
+        crear_invernadero("Sur")
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, "Personal por asignar")
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_d30_el_inicio_no_ofrece_asignar_un_invernadero_inactivo(self):
+        """D-30: ningún enlace lleva a un 403 o a una redirección. Modificar un invernadero inactivo no se puede (solo
+        reactivar), así que el Inicio no lo lista. Control: el activo sí tiene su «Asignar»."""
+        activo = crear_invernadero("Activo")
+        inactivo = crear_invernadero("Inactivo", activo=False)
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, reverse("maestros:invernadero_modificar", args=[activo.pk]))
+        self.assertNotContains(respuesta, reverse("maestros:invernadero_modificar", args=[inactivo.pk]))
+
+    def test_d25_sin_javascript_el_inicio_ofrece_asignar_con_un_enlace(self):
+        """D-25 y sin JavaScript: «Asignar» es un enlace común (``href``), sin atributos de HTMX: funciona igual con el
+        JavaScript desactivado."""
+        sur = crear_invernadero("Sur")
+        self.client.force_login(self.gerente)
+        destino = reverse("maestros:invernadero_modificar", args=[sur.pk])
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, f'href="{destino}"')
+        self.assertNotContains(respuesta, f'hx-get="{destino}"')
