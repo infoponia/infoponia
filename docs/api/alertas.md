@@ -1,7 +1,7 @@
 # API de alertas (`maestros`)
 
 Para quien programa un módulo que genera alertas (IoT, producción, inventario, comercial) sin leer el código de `maestros`.
-Versión de MAE-02a (D-41). Si algo de acá contradice una decisión, manda la decisión: avisá.
+Versión de MAE-02b (D-41 y D-43). Si algo de acá contradice una decisión, manda la decisión: avisá.
 
 Todo está en tres lugares:
 
@@ -65,6 +65,11 @@ nada): las del saliente pasan al entrante; sin entrante pasan al Gerente (`agron
 Agrónomo, las `AGRONOMO_O_GERENTE` que habían ido al Gerente pasan a él y el Gerente deja de recibirlas, las
 `AGRONOMO_Y_GERENTE` suman al Agrónomo y el Gerente sigue, y las `GERENTE` no se tocan.
 
+La **baja de la cuenta** del Agrónomo hace lo mismo hacia el Gerente (MD-61, D-43): sus alertas activas pasan a
+`agronomo=None, para_gerente=True`, en todos sus invernaderos, activos o no; y **reactivar** su cuenta aplica D4 a los que
+sigue teniendo a cargo (D8). Tampoco hacés nada vos: lo hacen `baja_usuario` y `reactivar_usuario` de `core`, por
+`core/extensiones.py`.
+
 ## 2. Crear y resolver alertas
 
 Todas las funciones de `maestros.servicios.alertas` corren **dentro de la transacción de quien llama** (`transaction.atomic()`).
@@ -80,6 +85,7 @@ from maestros.servicios import alertas
 | `asegurar_alerta_de_estado(invernadero_id, tipo, clave="", descripcion=None) -> Alerta \| None` | **Idempotente**: devuelve la alerta de estado activa de ese invernadero, tipo y clave; si no hay, la crea. Sin `descripcion`, usa **el nombre del tipo** (no el del invernadero: ya está en la FK y quedaría viejo si se lo renombra; si querés más contexto, pasá tu propia `descripcion`). |
 | `resolver_alerta_de_estado(invernadero_id, tipo, clave="") -> Alerta \| None` | Pasa a «resuelta» (con su fecha) la activa de ese tipo y clave. `None` si no había. |
 | `resolver_alerta(alerta_id) -> Alerta \| None` | Resuelve una alerta (de evento, por lo general). `None` si ya estaba resuelta; `Http404` si no existe. |
+| `abrir_alerta(actor, alerta_id) -> Alerta` | Regla 7 de 8.18: un destinatario (`Alerta.objects.para(actor)`) la abre y su lectura pasa a «leída»; no toca el estado «activa/resuelta» ni audita. `Http404` si no existe y `PermissionDenied` si `actor` no la recibe (sin cambiar nada). Es una sola sentencia condicional: no bloquea el invernadero. |
 | `bloquear_invernadero_para_alertas(invernadero_id) -> Invernadero` | Bloquea el invernadero (`FOR NO KEY UPDATE`) y lo devuelve, activo o no. Las de arriba ya la llaman. |
 
 - **Invernadero inactivo:** `crear_alerta_de_evento` y `asegurar_alerta_de_estado` devuelven `None` y **no crean nada** (post e de
@@ -89,9 +95,10 @@ from maestros.servicios import alertas
   `"lote:12"`); usá `""` si el tipo tiene una sola.
 - **Estados** (regla 7 de 8.18): `estado_alerta` (activa/resuelta) y `estado_lectura_alerta` (no leída/leída) son independientes;
   resolver no marca «leída». La resolución carga `fecha_resolucion`.
-- **Personal del invernadero:** `sincronizar_alertas_de_personal(invernadero)` mantiene las «invernadero sin {rol} activo». La
-  llaman `maestros` y, cuando exista `SistemaIoT` (ver `docs/disparadores.md`), vos al registrarlo o darlo de baja (la del
-  Técnico solo cuenta con sistema IoT).
+- **Personal del invernadero:** `sincronizar_alertas_de_personal(invernadero, roles=None)` mantiene las «invernadero sin {rol}
+  activo». La llaman `maestros` y, cuando exista `SistemaIoT` (ver `docs/disparadores.md`), vos al registrarlo o darlo de baja (la
+  del Técnico solo cuenta con sistema IoT). Con `roles=["capataz"]` (D-43) solo asegura, resuelve y **bloquea** las alertas de esos
+  roles: la baja y la reactivación de una cuenta sincronizan solo el rol de la cuenta. `ValueError` con un rol desconocido.
 
 Ejemplo de un servicio de IoT:
 
@@ -124,6 +131,12 @@ sola, pero si tu servicio bloquea sus propias filas, llamá a `bloquear_invernad
 deadlock con `baja_invernadero`. La clave foránea sola no alcanza: el `INSERT` toma `FOR KEY SHARE`, que no choca con el
 `FOR NO KEY UPDATE` de la baja, y la baja daría de baja un invernadero que acaba de recibir una alerta.
 
+**Baja y reactivación de una cuenta (D-43).** Primero se bloquea la cuenta (`core`); después `maestros` bloquea **todos** los
+invernaderos que la tienen a cargo (activos o no, sin filtrar por estado), en orden de id, y recién después traspasa y
+sincroniza sus alertas. `traspasar_alertas_del_agronomo` y `bloquear_alertas_activas` **no** bloquean el invernadero: solo
+las alertas, que no ven una que otra transacción creó y no confirmó. Si tu servicio toma una cuenta, tomala antes que el
+invernadero.
+
 `bloquear_invernadero_activo` (de `maestros.servicios.invernaderos`) **no** sirve para esto: lanza `invernadero_inactivo`. Es el
 contrato para quien crea algo que *impide* la baja (lotes, órdenes, stock…), no para alertas.
 
@@ -148,7 +161,9 @@ Alerta.objects.para(usuario).activas().no_leidas()   # lo que cuenta la campana
 ```
 
 El Gerente activo recibe las `para_gerente`; el Agrónomo activo, las suyas; cualquier otro rol (o una cuenta inactiva, o `None`),
-ninguna. La pantalla de consulta de alertas (CU-46) y `abrir_alerta` llegan con MAE-02b.
+ninguna. `abrir_alerta(actor, alerta_id)` (MAE-02b) marca «leída» la que abre un destinatario. La pantalla de consulta de
+alertas (CU-46) queda para otra tarea (`docs/disparadores.md`); que abrir la alerta la marque «leída» choca con su
+postcondición («no se produjeron cambios en el sistema»): pendiente para pendientes_CU.
 
 ## 6. Auditoría (D-36, D6 de MAE-02)
 
@@ -159,7 +174,9 @@ from core.models import referencia
 detalle = {"cambios": {...}, "datos": {"alertas_creadas": [referencia(alerta)]}}   # solo las claves que no estén vacías
 ```
 
-Claves reconocidas: `alertas_creadas`, `alertas_resueltas`, `alertas_traspasadas`. Una alerta de IoT creada fuera de un caso de uso
+Claves reconocidas: `alertas_creadas`, `alertas_resueltas`, `alertas_traspasadas`. La baja y la reactivación de una cuenta con
+invernaderos a cargo las guardan en los `datos` de su registro (`baja` y `reactivacion`), con esos invernaderos entre los
+afectados; `abrir_alerta` no audita. Una alerta de IoT creada fuera de un caso de uso
 que audite no deja registro. El texto de la referencia es la descripción de la alerta (por omisión, el nombre del tipo); el invernadero figura entre los afectados del registro.
 
 ## 7. Pruebas de tu app

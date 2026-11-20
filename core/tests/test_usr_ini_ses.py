@@ -5,7 +5,9 @@
 # ...ReglasTests. Cada prueba arma sus propios datos y usa el cliente contra las URL, para que cada una
 # falle o pase por separado. La migración del email (SEG-01, tarea 03) se prueba en MigracionEmailTests.
 
+import copy
 from datetime import timedelta
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.sessions.models import Session
@@ -18,6 +20,7 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_headers
 
+from core import extensiones
 from core.acceso import ADMINISTRADOR, pantalla_accesible_para, rol_requerido
 from core.contrasenas import generar_contrasena_temporal
 from core.models import Capataz, Usuario
@@ -687,3 +690,75 @@ class MigracionEmailTests(TransactionTestCase):
             ["ana@infoponia.com", "pedro@infoponia.com", "luis@infoponia.com"],
         )
         self.assertIn(self.RESTRICCION, self.restricciones())
+
+
+# ---- MAE-02b (D-43): secciones del Inicio registradas por las apps de negocio (regla 5 de PROD-CNS-INV) ----
+
+
+def plantillas_con(**fuentes):
+    """``override_settings`` que suma plantillas en memoria (``nombre.html=«texto»``) a las de las apps, para probar el
+    Inicio con una sección falsa sin crear archivos."""
+    configuracion = copy.deepcopy(settings.TEMPLATES)
+    configuracion[0].pop("APP_DIRS", None)
+    configuracion[0]["OPTIONS"]["loaders"] = [
+        ("django.template.loaders.locmem.Loader", fuentes),
+        "django.template.loaders.app_directories.Loader",
+    ]
+    return override_settings(TEMPLATES=configuracion)
+
+
+class InicioExtensionTests(TestCase):
+    """D-43, regla A4 de D-37: ``core/extensiones.py`` deja que las apps de negocio sumen secciones al Inicio. Con
+    registrantes falsos: ``core`` no conoce ninguna app de negocio."""
+
+    def test_d43_secciones_de_inicio_omite_las_que_devuelven_none(self):
+        """D-43: ``secciones_de_inicio`` llama a cada registrante con el usuario, junta las secciones que devuelven y
+        omite las ``None``, en el orden de registro."""
+        gerente = crear_gerente()
+        primera = extensiones.SeccionDeInicio("una.html", {"clave": 1})
+        segunda = extensiones.SeccionDeInicio("otra.html", {"clave": 2})
+        recibidos = []
+
+        def con_registro(usuario):
+            recibidos.append(usuario.pk)
+            return primera
+
+        with mock.patch.object(
+            extensiones,
+            "_SECCIONES_DE_INICIO",
+            [lambda usuario: None, con_registro, lambda usuario: segunda],
+        ):
+            secciones = extensiones.secciones_de_inicio(gerente)
+
+        self.assertEqual(secciones, [primera, segunda])
+        self.assertEqual(recibidos, [gerente.pk])
+
+    def test_d43_registrar_dos_veces_la_misma_seccion_no_la_repite(self):
+        """D-43: ``registrar_seccion_de_inicio`` es idempotente (``ready()`` puede correr más de una vez)."""
+
+        def seccion(usuario):
+            return None
+
+        with mock.patch.object(extensiones, "_SECCIONES_DE_INICIO", []):
+            extensiones.registrar_seccion_de_inicio(seccion)
+            extensiones.registrar_seccion_de_inicio(seccion)
+            registradas = list(extensiones._SECCIONES_DE_INICIO)
+
+        self.assertEqual(registradas, [seccion])
+
+    def test_d43_el_inicio_incluye_las_secciones_registradas(self):
+        """D-43 y regla 5 de PROD-CNS-INV: el Inicio incluye la plantilla de cada sección con su contexto. Sin
+        registrantes no muestra nada de eso (control en la misma prueba)."""
+        self.client.force_login(crear_gerente())
+        seccion = extensiones.SeccionDeInicio("seccion_falsa.html", {"nombre": "Invernadero Sur"})
+
+        with plantillas_con(**{"seccion_falsa.html": "<p>SECCION FALSA {{ datos.nombre }}</p>"}):
+            with mock.patch.object(extensiones, "_SECCIONES_DE_INICIO", [lambda usuario: seccion]):
+                con = self.client.get(reverse("core:inicio"))
+            with mock.patch.object(extensiones, "_SECCIONES_DE_INICIO", []):
+                sin = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(con, "SECCION FALSA Invernadero Sur")
+        self.assertContains(con, "Operás como")
+        self.assertNotContains(sin, "SECCION FALSA")
+        self.assertContains(sin, "Operás como")

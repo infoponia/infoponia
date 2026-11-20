@@ -25,6 +25,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
+from core import extensiones
 from core.models import (
     ADMINISTRADOR,
     MODELO_CUENTA,
@@ -868,16 +869,18 @@ def _sacar_del_grupo(cuenta, otras=None):
     return SalidaDelGrupo(grupo_id, disuelto, otras if disuelto else [])
 
 
-def _auditar_con_salida_del_grupo(actor, accion, cuenta, salida, cambios=None, datos=None):
+def _auditar_con_salida_del_grupo(actor, accion, cuenta, salida, cambios=None, datos=None, otros_afectados=()):
     """Registra ``accion`` sobre ``cuenta`` con los ``cambios`` y los ``datos`` indicados (D-36) y, si salió de un
     grupo (SEG-11), lo deja en el registro: la salida es un cambio de la cuenta, ``grupo`` de la referencia al
     grupo a nulo, y, si el grupo se disolvió, la cuenta que quedaba sola figura también entre las afectadas. Sin
-    grupo, el registro es el de siempre. Nunca contraseñas (D-22)."""
+    grupo, el registro es el de siempre. ``otros_afectados`` son las instancias que suman los puntos de extensión de
+    ``core/extensiones.py`` (D-43). Nunca contraseñas (D-22)."""
     cambios = dict(cambios or {})
     afectados = [cuenta]
     if salida is not None:
         cambios["grupo"] = {"antes": referencia_a_grupo(salida.grupo_id), "despues": None}
         afectados += salida.otras_afectadas
+    afectados += list(otros_afectados)
     detalle = {}
     if cambios:
         detalle["cambios"] = cambios
@@ -951,6 +954,9 @@ def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=No
     - Postcondición c de USR-MOD-USR y SEG-11 (tarea 06b, D-17): como el restablecimiento, la cuenta sale de su
       grupo de cuentas vinculadas (la baja no la había sacado: regla 2 de USR-BAJ-USR). Orden de los
       bloqueos: el grupo de cuentas, después las filas de Gerente, después la cuenta.
+    - D8 y D-43 (MAE-02b): después de eso, ``core.extensiones.aplicar_efectos_de_reactivacion_de_cuenta``. Las apps de
+      negocio resuelven y traspasan lo suyo (maestros: la alerta «sin {rol}» y, si es un Agrónomo, D4 de D-41). Sus
+      afectados y sus ``datos`` van a la auditoría.
     """
     _exigir_forma_de_acceso(acceso)
     with transaction.atomic():
@@ -983,13 +989,17 @@ def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=No
             ) from error
         # Postcondición c de USR-MOD-USR y SEG-11: la cuenta sale de su grupo de cuentas vinculadas.
         salida = _sacar_del_grupo(cuenta)
+        # D-43 y D8: lo que suman las apps de negocio (en maestros, las alertas de los invernaderos a cargo). Corre después
+        # de bloquear las cuentas y de sacar a esta de su grupo, y antes de auditar.
+        efecto = extensiones.aplicar_efectos_de_reactivacion_de_cuenta(actor, cuenta)
         _auditar_con_salida_del_grupo(
             actor,
             RegistroAuditoria.Accion.REACTIVACION,
             cuenta,
             salida,
             cambios={"estado": {"antes": "inactivo", "despues": "activo"}},
-            datos={"acceso": acceso},
+            datos={"acceso": acceso, **efecto.datos},
+            otros_afectados=efecto.afectados,
         )
     return _resultado_acceso(cuenta, acceso, temporal, construir_url)
 
@@ -1014,7 +1024,14 @@ def baja_usuario(actor, cuenta_id):
     - Regla 2 (tarea 06b, D-17): la baja no afecta a las cuentas vinculadas; la cuenta sigue en su grupo,
       aunque nadie pueda pasar a ella mientras esté inactiva (SEG-09). Este servicio no toca el grupo.
 
-    Pendiente: postcondiciones c, e, f y g y regla 4 (pendientes, invernaderos, pedidos y entregas).
+    - Postcondición e y regla 4, MD-61 y D-43 (MAE-02b): después de guardar la cuenta inactiva y antes de auditar,
+      ``core.extensiones.aplicar_efectos_de_baja_de_cuenta`` (maestros: la alerta «sin {rol}» de cada invernadero a
+      cargo y, si es un Agrónomo, sus alertas pasan al Gerente). Corre con la cuenta ya bloqueada: orden cuenta →
+      invernaderos → alertas (D-40). Los afectados y los ``datos`` que suma van a la auditoría. La regla 4 informa lo
+      asignado en la ventana (``core.extensiones.asignaciones_de_cuenta``).
+
+    Pendiente: postcondiciones c, f y g (pendientes del Gerente, pedidos y entregas) y lo de la regla 4 que no sea de
+    invernaderos (órdenes, contratos, entregas y pedidos).
     """
     with transaction.atomic():
         cuenta = _bloquear_cuenta_en_alcance(actor, cuenta_id, bloqueo_previo=_bloquear_grupo_de_baja)
@@ -1027,11 +1044,15 @@ def baja_usuario(actor, cuenta_id):
             )
         cuenta.is_active = False
         cuenta.save(update_fields=["is_active"])
+        efecto = extensiones.aplicar_efectos_de_baja_de_cuenta(actor, cuenta)
+        detalle = {"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}}
+        if efecto.datos:
+            detalle["datos"] = efecto.datos
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.BAJA,
-            afectados=[cuenta],
-            detalle={"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}},
+            afectados=[cuenta, *efecto.afectados],
+            detalle=detalle,
         )
     return cuenta
 

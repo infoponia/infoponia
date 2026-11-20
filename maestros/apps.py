@@ -12,12 +12,21 @@ class MaestrosConfig(AppConfig):
     name = 'maestros'
 
     def ready(self):
-        """Registra la entrada «Producción» en el menú de `core` y los cuatro tipos de alerta de personal (MAE-02a)."""
+        """Registra la entrada «Producción» en el menú de `core`, los cuatro tipos de alerta de personal (MAE-02a) y, en
+        ``core.extensiones`` (MAE-02b, D-43), los efectos de la baja y la reactivación de una cuenta con invernaderos a cargo,
+        lo que la ventana de baja informa y la sección «Personal por asignar» del Inicio del Gerente."""
+        from core import extensiones
         from core.menu import registrar_entrada
         from core.models import Usuario
+        from maestros.servicios import invernaderos
         from maestros.servicios.alertas import registrar_tipos_de_personal
 
         registrar_tipos_de_personal()
+
+        extensiones.registrar_efecto_de_baja_de_cuenta(invernaderos.efectos_de_baja_de_cuenta)
+        extensiones.registrar_efecto_de_reactivacion_de_cuenta(invernaderos.efectos_de_reactivacion_de_cuenta)
+        extensiones.registrar_asignaciones_de_cuenta(invernaderos.asignaciones_de_cuenta)
+        extensiones.registrar_seccion_de_inicio(invernaderos.seccion_de_inicio)
 
         registrar_entrada(
             ("Producción", "maestros:invernaderos", "leaf"),

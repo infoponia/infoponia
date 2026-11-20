@@ -30,7 +30,8 @@ from django.http import Http404
 from django.test import Client, TestCase, TransactionTestCase, override_settings, tag
 from django.urls import reverse
 
-from core import servicios
+from core import extensiones, servicios
+from core.extensiones import Efecto
 from core.models import (
     ADMINISTRADOR,
     Capataz,
@@ -39,6 +40,7 @@ from core.models import (
     RegistroAuditoria,
     Usuario,
     Vendedor,
+    referencia,
 )
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
@@ -1600,3 +1602,175 @@ class UsrModUsrAccesoVistaTests(TestCase):
         self.assertContains(ficha, "Restablecer acceso")
         self.assertFalse(invitacion_valida(cuenta, anterior))
         self.assertEqual(len(mail.outbox), 1)
+
+
+# ---- MAE-02b (D-43): puntos de extensión de core para la reactivación de una cuenta ----
+
+
+class FallaDePrueba(Exception):
+    """Falla propia de las pruebas: no es un ``RuntimeError``, para que un ``NotImplementedError`` (los esqueletos de
+    MAE-02b) no haga pasar por casualidad una prueba que espera que algo falle."""
+
+
+def efecto_de_reactivacion_que_anota(llamadas, afectados=(), datos=None):
+    """Un registrante falso de ``registrar_efecto_de_reactivacion_de_cuenta``: anota con qué lo llamaron, el estado y el
+    grupo de la cuenta y cuántos registros de auditoría había en ese momento, y devuelve el ``Efecto`` indicado."""
+
+    def efecto(actor, cuenta):
+        actual = Usuario.objects.get(pk=cuenta.pk)
+        llamadas.append(
+            (actor.pk, cuenta.pk, actual.is_active, actual.grupo_id, RegistroAuditoria.objects.count())
+        )
+        return Efecto(list(afectados), {clave: list(valor) for clave, valor in (datos or {}).items()})
+
+    return efecto
+
+
+class UsrModUsrExtensionTests(TestCase):
+    """D-43 y D8, regla A4 de D-37: el punto de extensión de ``core/extensiones.py`` que usa la reactivación de una
+    cuenta (postcondición c de USR-MOD-USR). Con registrantes falsos: ``core`` no conoce ninguna app de negocio."""
+
+    def test_d43_reactivar_llama_a_los_efectos_con_la_cuenta_activa(self):
+        """D-43 y postcondición c de USR-MOD-USR: después de reactivar la cuenta y antes de auditar, se llama a cada
+        registrante con quien actúa y la cuenta."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        llamadas = []
+
+        with mock.patch.object(
+            extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", [efecto_de_reactivacion_que_anota(llamadas)]
+        ):
+            servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        # (actor, cuenta, activa, grupo, registros de auditoría ya escritos): activa y todavía sin auditar.
+        self.assertEqual(llamadas, [(gerente.pk, cuenta.pk, True, None, 0)])
+
+    def test_d43_los_efectos_corren_despues_de_sacar_la_cuenta_del_grupo(self):
+        """D-43, SEG-11 y orden de bloqueos: los efectos corren después de que la cuenta salió de su grupo (que ya tiene
+        bloqueado), no antes."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        tercera = crear_cuenta(Vendedor, "tercera@infoponia.com", **LAURA)
+        agrupar(cuenta, otra, tercera)
+        llamadas = []
+
+        with mock.patch.object(
+            extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", [efecto_de_reactivacion_que_anota(llamadas)]
+        ):
+            servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        self.assertEqual(llamadas, [(gerente.pk, cuenta.pk, True, None, 0)])
+
+    def test_d43_reactivar_junta_afectados_y_datos(self):
+        """D-43 y D-36: los afectados y los ``datos`` de todos los registrantes se suman a la auditoría de la
+        reactivación, junto con la forma de acceso; las listas de una misma clave se concatenan."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        uno = crear_cuenta(Vendedor, "uno@infoponia.com")
+        dos = crear_cuenta(Vendedor, "dos@infoponia.com")
+        primero = efecto_de_reactivacion_que_anota(
+            [], [uno], {"alertas_resueltas": [referencia(uno)], "alertas_traspasadas": [referencia(uno)]}
+        )
+        segundo = efecto_de_reactivacion_que_anota([], [dos], {"alertas_resueltas": [referencia(dos)]})
+
+        with mock.patch.object(extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", [primero, segundo]):
+            servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        registro = RegistroAuditoria.objects.get()
+        self.assertEqual(registro.afectados, [afectado(cuenta), afectado(uno), afectado(dos)])
+        self.assertEqual(
+            registro.detalle,
+            {
+                "cambios": {"estado": {"antes": "inactivo", "despues": "activo"}},
+                "datos": {
+                    "acceso": "temporal",
+                    "alertas_resueltas": [referencia(uno), referencia(dos)],
+                    "alertas_traspasadas": [referencia(uno)],
+                },
+            },
+        )
+
+    def test_d43_reactivar_junta_afectados_y_datos_tambien_con_salida_del_grupo(self):
+        """D-43, D-36 y SEG-11: si la cuenta sale de su grupo, la auditoría conserva el cambio ``grupo`` y suma, además,
+        lo de los registrantes."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        otra = crear_cuenta(Vendedor, "otra@infoponia.com", **LAURA)
+        tercera = crear_cuenta(Vendedor, "tercera@infoponia.com", **LAURA)
+        grupo = agrupar(cuenta, otra, tercera)
+        uno = crear_cuenta(Vendedor, "uno@infoponia.com")
+        efecto = efecto_de_reactivacion_que_anota([], [uno], {"alertas_resueltas": [referencia(uno)]})
+
+        with mock.patch.object(extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", [efecto]):
+            servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        registro = RegistroAuditoria.objects.get()
+        self.assertEqual(registro.afectados, [afectado(cuenta), afectado(uno)])
+        self.assertEqual(
+            registro.detalle,
+            {
+                "cambios": {
+                    "estado": {"antes": "inactivo", "despues": "activo"},
+                    "grupo": {"antes": ref_grupo(grupo.pk), "despues": None},
+                },
+                "datos": {"acceso": "temporal", "alertas_resueltas": [referencia(uno)]},
+            },
+        )
+
+    def test_d43_si_falla_un_registrante_no_se_reactiva(self):
+        """D-22 y D-43: si un registrante falla, la reactivación entera se deshace (la cuenta sigue inactiva y no queda
+        registro). El registrante falso comprueba que vio la cuenta ya activa antes de fallar."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        vio = []
+
+        def falla(actor, cuenta_reactivada):
+            vio.append(Usuario.objects.get(pk=cuenta_reactivada.pk).is_active)
+            raise FallaDePrueba("falla")
+
+        with mock.patch.object(extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", [falla]):
+            with self.assertRaises(FallaDePrueba):
+                servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        self.assertEqual(vio, [True])
+        self.assertFalse(Usuario.objects.get(pk=cuenta.pk).is_active)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_d43_la_reactivacion_rechazada_no_llama_a_los_registrantes(self):
+        """D-43: una reactivación que se rechaza (cuenta ya activa) no llama a los registrantes. Control: la primera,
+        válida, sí los llama."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, activo=False, **LAURA)
+        llamadas = []
+
+        with mock.patch.object(
+            extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", [efecto_de_reactivacion_que_anota(llamadas)]
+        ):
+            servicios.reactivar_usuario(gerente, cuenta.pk)
+            self.assertEqual(len(llamadas), 1)
+            with self.assertRaises(ValidationError):
+                servicios.reactivar_usuario(gerente, cuenta.pk)
+
+        self.assertEqual(len(llamadas), 1)
+
+    def test_d43_registrar_dos_veces_el_mismo_efecto_no_lo_repite(self):
+        """D-43: ``registrar_efecto_de_reactivacion_de_cuenta`` es idempotente (``ready()`` puede correr más de una vez)."""
+        efecto = efecto_de_reactivacion_que_anota([])
+
+        with mock.patch.object(extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", []):
+            extensiones.registrar_efecto_de_reactivacion_de_cuenta(efecto)
+            extensiones.registrar_efecto_de_reactivacion_de_cuenta(efecto)
+            registrados = list(extensiones._EFECTOS_DE_REACTIVACION_DE_CUENTA)
+
+        self.assertEqual(registrados, [efecto])
+
+    def test_d43_aplicar_sin_registrantes_devuelve_un_efecto_vacio(self):
+        """D-43: sin ninguna app registrada, la reactivación no cambia nada (``Efecto`` sin afectados ni datos)."""
+        gerente = crear_gerente()
+        cuenta = crear_cuenta(Capataz, **LAURA)
+
+        with mock.patch.object(extensiones, "_EFECTOS_DE_REACTIVACION_DE_CUENTA", []):
+            efecto = extensiones.aplicar_efectos_de_reactivacion_de_cuenta(gerente, cuenta)
+
+        self.assertEqual(efecto, Efecto([], {}))
