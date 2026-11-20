@@ -92,3 +92,44 @@ Por qué así y no de otra forma:
   de ellos y no de tu app. El mixin hace que tus pruebas se arreglen solas.
 - No cargar los datos en cada prueba: es lo que degrada los planes.
 - No guardar los datos de prueba en la base de desarrollo ni usar la de Neon (`CLAUDE.md`, «Seguridad»).
+
+## Las categorías del sistema de `inventario` (INV-01, ronda «Producción 1»)
+
+Mismo patrón, con estas particularidades:
+
+1. **Una migración de datos** separada de la de esquema: `cargar_categorias_del_sistema`, con `cargar(apps, schema_editor)` y
+   `descargar(apps, schema_editor)`. Los valores van escritos en la migración: cuatro filas de `TipoInsumo`, con su `codigo` fijo
+   (`semillas`, `envases`, `repuestos_de_hardware`, `infraestructura`), su nombre (Semillas, Envases, Repuestos de hardware, Infraestructura),
+   `es_del_sistema` verdadero, `consumo_directo = no_admite` y estado activo.
+2. **Idempotente por `codigo`** (`update_or_create`): correrla dos veces no duplica. **No pisa el nombre** si el estado de la base ya
+   tiene la fila (el nombre de una categoría del sistema no se renombra, pero si alguien lo hiciera a mano no lo revierte una migración).
+3. **`descargar`** borra las cuatro filas solo si ningún insumo las usa.
+4. **Reglas por `codigo`, nunca por nombre** (regla 1 de 8.23): una constante por categoría en `inventario/categorias.py`.
+5. **Pruebas:** `inventario/tests/fabricas.py` tiene `asegurar_datos_de_inventario()` y el mixin `ConDatosDeInventario`, con el mismo esquema que
+   `ConGeoref` (carga solo si faltan, confirma y corre `ANALYZE` sobre `inventario_tipoinsumo`). Las clases de pruebas de `inventario` heredan
+   de él. La migración se prueba aparte, sobre tablas vacías.
+
+## Singletons y catálogos fijos (MAE-03 y MAE-04, ronda «Producción 1»)
+
+El mismo patrón sirve para tres conjuntos chicos de `maestros`: el catálogo de **tipos de etapa** (cinco filas, MD-52), la fila
+de **`ConfiguracionOperativa`** y la de **`PerfilOrganizacion`** (MD-89). Lo que cambia respecto de Georef:
+
+1. **Una migración de datos por conjunto**, separada de la de esquema: `cargar_tipos_de_etapa` (MAE-03) y
+   `cargar_configuracion_y_perfil` (MAE-04), con el número que corresponda al momento de crearlas (ver
+   `docs/patrones/trabajo_en_paralelo.md`). Cada una expone `cargar(apps, schema_editor)` y `descargar(apps, schema_editor)`.
+   **Los valores van escritos en la migración**, no importados del modelo (una migración no depende de código que cambia). Una
+   prueba compara los valores de la migración con los `default` de los campos del modelo, para que no se separen.
+2. **Idempotente.** `cargar` usa `update_or_create` por la clave natural (`codigo` en los tipos de etapa; `singleton=1` en los
+   otros dos): correrla dos veces no duplica ni pisa lo que el Gerente ya cambió. Para el perfil, `cargar` toma
+   `settings.NOMBRE_ORGANIZACION` solo al crear la fila (D-48) y no vuelve a escribir el nombre.
+3. **`descargar` no borra datos del usuario.** La inversa de los tipos de etapa borra las cinco filas solo si ninguna está
+   referenciada; la de los singletons no hace nada (la tabla se elimina con la migración de esquema anterior).
+4. **Unicidad desde la base.** Los singletons tienen la columna `singleton` (valor fijo 1) con restricción única y un
+   `CheckConstraint` `singleton = 1`; los tipos de etapa, `codigo` y `puesto_global` únicos.
+5. **Pruebas.** En `maestros/tests/fabricas.py` se agrega `asegurar_datos_de_maestros()` y el mixin `ConDatosDeMaestros`, con el
+   mismo esquema que `ConGeoref` (carga solo si faltan, confirma y corre `ANALYZE`): vuelve a cargar los tipos de etapa y las
+   dos filas si un `TransactionTestCase` vació la base. Las clases de pruebas de sectores, cultivos, configuración y perfil
+   heredan de él. La migración se prueba aparte sobre tablas vacías (`cargar`, contar filas, `descargar`).
+6. **Lectura.** `maestros.servicios.configuracion.obtener()` y `maestros.servicios.perfil.obtener()` devuelven la fila; si no
+   existiera (por ejemplo, una base vaciada), la **crean con los valores iniciales** de forma segura ante pedidos simultáneos
+   (`get_or_create` sobre `singleton=1`) en vez de fallar. Es una red de seguridad, no el camino normal.

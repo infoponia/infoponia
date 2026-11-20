@@ -36,9 +36,9 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 ## Cuando exista PerfilOrganizacion
 
-1. **Logo y nombre configurables.** El nombre deja de salir de `NOMBRE_ORGANIZACION` (D-25) y el logo deja de ser un
-   ícono fijo: los dos se configuran en la organización. En el prototipo de producción: `VIEWS.config`, `CFG` y
-   `aplicarMarca`.
+1. **Nombre y color configurables (MAE-04, D-48) y logo (fuera de la ronda, D-45).** El nombre sale del perfil, por el punto de
+   extensión de `core` (D-48); `NOMBRE_ORGANIZACION` (D-25) queda como valor por defecto. El logo deja de ser un ícono fijo cuando el almacenamiento esté resuelto (USR-07, D-20); mientras tanto la
+   organización queda sin logo. En el prototipo de producción: `VIEWS.config`, `CFG` y `aplicarMarca`.
 
 ## Cuando exista la primera notificación o alerta
 
@@ -83,13 +83,65 @@ Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La 
    inactivos). Nació en MAE-01a. La postcondición b y el log por sector (f) se conectan con `registrar_efecto_de_baja`: el
    registrante audita su propio log por sector.
 
+## Cuando exista una ocupación de sector, una variedad con semilla o un hardware (registrantes de los puntos de extensión de MAE-03)
+
+MAE-03 crea los puntos de extensión de sectores y cultivos (`docs/api/extensiones_de_maestros.md`) **sin registrantes**. Cada tarea
+que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
+
+1. **PRD-01 (`produccion`):** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
+   (agujeros ocupados y comprometidos, con los lotes y órdenes), `registrar_contenido_de_sector` (lotes y órdenes),
+   `registrar_perfil_de_sector` y `registrar_aviso_de_cambio_de_tipo` (lotes que deben pasar por la etapa y siembras a realizar).
+   Al reservar agujeros usa `bloquear_invernadero_activo` y `bloquear_sectores`.
+2. **PRD-04 (`produccion`):** `registrar_efecto_de_vuelta_a_servicio` (cierra el registro «Fuera de servicio» y escribe la bitácora),
+   `registrar_efecto_de_baja_de_sector` (punto nuevo de `maestros`, D-51 punto 7) y `registrar_efecto_de_baja` (cierra los registros abiertos al dar de baja el invernadero; en el lote 4 se había dicho que no registraba nada)
+   y el caso de uso PROD-PNR-FDS, que es el que produce el estado «fuera de servicio». También el Inicio del Agrónomo, como sección registrada
+   con `registrar_seccion_de_inicio` de `core/extensiones.py` (D-43; la alerta de insumos y de merma del prototipo salen de ahí).
+3. **INV-03 (`inventario`):** `registrar_semillas_de_cultivo` (contar y renombrar con su log `modificacion_semilla`) y
+   `registrar_uso_de_cultivo` (la semilla habilitada más los lotes activos que le informa `produccion`, ver el punto siguiente).
+   Además agrega a `Variedad` las columnas que faltan (rangos, postcosecha y peso en gramos). `EtapaProductiva` **no** tiene estado
+   (opción A, 19/11/2026): no hay nada que agregar ahí.
+4. **Módulo IoT (`iot`) — hecho en la documentación el 20/11/2026, se implementa en IOT-02:** `registrar_impedimento_de_baja_de_sector` con `hardware_activo` (códigos y textos de PROD-BAJ-SCT, regla 3)
+   y `registrar_contenido_de_sector` con el hardware.
+
+## Cuando existan `produccion` y `compras` (puntos de extensión de `inventario`, lote 2)
+
+INV-01 crea los puntos de `docs/api/extensiones_de_inventario.md` **sin registrantes**: sin ellos, no hay reservas ni órdenes que nombrar y no
+hay impedimentos de compras. Cada tarea que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
+
+1. **PRD-01 (`produccion`):** `registrar_reservas_de_insumo` y `registrar_ordenes_que_reservan` (reservas activas de órdenes de siembra y de transición
+   a realizar). Al reservar usa `bloquear_invernadero_activo` y lee `disponible_para_planificar` **después** de bloquear (`docs/api/stock.md`).
+   Al concretar o cancelar usa `registrar_salida_por_consumo` y `reevaluar_alertas_del_insumo`.
+2. **PRD-03 (`produccion`):** la aplicación de insumos usa `registrar_salida_por_consumo` (con `lote` nulo en el movimiento), `proponer_lotes_fefo` y `reevaluar_alertas_del_insumo`; el Inicio del Agrónomo (PRD-04) cuenta las alertas `inv_insumo_por_vencer` sin función nueva de `inventario`.
+3. **INV-03 (`inventario`):** `registrar_semillas_de_cultivo` y `registrar_uso_de_cultivo` (de `maestros`, ver «Cuando exista SectorProduccion»);
+   además declara los puntos de variedades que se cierran en el apartado siguiente.
+4. **`compras` (ronda futura):** `registrar_impedimento_de_deshabilitacion`, la recepción y `cant_transito_insumo`.
+
+## Cuando existan lotes, órdenes de trabajo y contratos (puntos de extensión de variedades, lote 3)
+
+INV-03 crea los tres puntos de variedades de `docs/api/extensiones_de_inventario.md` («Variedades») **sin registrantes**: sin ellos,
+ninguna variedad tiene lotes, órdenes ni contratos, y todas pueden modificarse y darse de baja sin impedimentos. Cada tarea que crea lo
+que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
+
+1. **PRD-01 (`produccion`):** `registrar_uso_de_variedad` (lotes de la variedad, lotes activos por invernadero, órdenes de siembra y de
+   transición a realizar), `registrar_variedades_presentes` (variedades de lotes activos y de órdenes de siembra a realizar por
+   invernadero: la misma definición del «umbral efectivo» de PROD-PNF-SMB) y `registrar_impedimento_de_baja_de_variedad` con los códigos
+   `lotes_activos` y `ordenes_a_realizar`. PRD-01 también llama a `inventario.servicios.variedades` (`docs/api/variedades.md`) para
+   leer la variedad, su ciclo y su semilla; no consulta las tablas a mano.
+2. **`comercial` (ronda futura):** `registrar_impedimento_de_baja_de_variedad` con el código `contratos_abiertos` (contratos vigentes
+   o abiertos con un detalle de la variedad; precondición f de PROD-BAJ-VAR). **Hasta entonces la precondición f no se verifica** (no
+   hay contratos): se anota en el cierre de INV-03 y en `docs/temas_abiertos.md`.
+
 ## Cuando exista SistemaIoT
 
+0. **Traspaso del Técnico y órdenes de mantenimiento** (D-53): IOT-05 agrega el valor `mantenimiento` a `OrdenTrabajo.Tipo`, el `CheckConstraint` de la prioridad obligatoria en ese tipo y su `registrar_traspaso` para el rol Técnico (el punto ya admite varios registrantes y recibe el rol). Si `maestros/extensiones.py` no entrega el rol a quien registra, es una corrección chica dentro de IOT-05.
+0. **Envío de correo desde `iot`** (D-54): usar `core.correo.enviar_correo`, nunca `_enviar_correo`. Lo deja USR-10.
 1. **IoT del invernadero.** `Invernadero.tiene_sistema_iot` (hoy `False`), la alerta y el campo del Técnico (regla 5 de
    PROD-ALT-INV) y la precondición h de PROD-BAJ-INV. Nació en MAE-01a. La precondición h se conecta con
    `registrar_impedimento_de_baja`.
 
 ## Cuando exista InsumoInvernadero
+
+(INV-01 crea el modelo; INV-02 conecta lo de abajo.)
 
 1. **Insumos del invernadero.** Postcondición c y precondición f de PROD-BAJ-INV. Nació en MAE-01a. La c (y el log por insumo
    de la f) se conecta con `registrar_efecto_de_baja`; la f, con `registrar_impedimento_de_baja`.
@@ -97,7 +149,7 @@ Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La 
 ## Cuando exista Lote, OrdenTrabajo o StockCosechado
 
 1. **Baja del invernadero y ficha.** Precondiciones c, d y e de PROD-BAJ-INV y las pestañas de lotes y de cámara de la
-   ficha. Se conectan por el punto de extensión `maestros/extensiones.py` (D-37, regla A4), creado en MAE-01b. Se registra con
+   ficha (la pestaña de lotes la registra PRD-01 con `registrar_pestana_de_invernadero`, ver `docs/api/extensiones_de_maestros.md`; la de cámara queda fuera, D-45). Se conectan por el punto de extensión `maestros/extensiones.py` (D-37, regla A4), creado en MAE-01b. Se registra con
    `registrar_impedimento_de_baja` en `AppConfig.ready()`. Todo caso de uso que cree algo que impide la baja llama a
    `bloquear_invernadero_activo` antes de crearlo (contrato de D-40 y de `docs/patrones/bloqueos.md`). Nació en MAE-01a.
 
@@ -175,3 +227,40 @@ Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La 
 1. **Plan de cuentas de `contabilidad`, categorías de `inventario`, Georef de `maestros`.** Las clases de pruebas que los
    usan heredan del mixin que los carga una vez, los confirma y corre `ANALYZE`. Cómo hacerlo:
    `docs/patrones/datos_de_migracion.md`.
+
+## Cuando exista contabilidad con asientos (D-45)
+
+0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52, CON-01 e INV-02): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
+   ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
+   ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).
+
+1. **Reabrir seis casos de uso de la ronda «Producción 1».** Hasta entonces no verifican el ejercicio vigente ni las
+   cuentas, ni crean `AsientoContable`: PROD-CNC-SMB y PROD-CNC-TRN (precondiciones c y d y su asiento), PROD-REG-MRM,
+   PROD-PNR-FDS, CMP-AJT-STK y PROD-REG-APL (el asiento y las precondiciones contables que cada uno tenga en «CU
+   extendidos»; el extracto de cada caso de uso las marca «Fuera de la ronda (D-45)»). Hay que reabrir sus servicios (PRD-01,
+   PRD-02, PRD-03, PRD-04 e INV-02) y sus pruebas, incluidas las de concurrencia, y respetar el orden de bloqueos del
+   patrón. Anotar lo mismo en pendientes_CU (Drive).
+
+## Cuando se retome la cámara de frío (D-45)
+
+1. **Cámara.** Pestaña `camaraTab` de la ficha del invernadero, `PROD-ASG-CAM` y la extensión 10c de `PROD-REG-MRM` (recorta las
+   reservas de `comercial`). Va con la ronda de cosecha y comercial: necesita `StockCosechado` y `ReservaStock`.
+
+## Cuando existan los pedidos de `compras` (D-45)
+
+1. **Insumo en tránsito y compras.** En la ronda «Producción 1» el stock en tránsito es 0: la columna `cant_transito_insumo` existe y
+   solo la escribirá `compras`. `compras` se enchufa a `inventario` por dos vías ya documentadas (`docs/api/extensiones_de_inventario.md`):
+   el punto `registrar_impedimento_de_deshabilitacion` (orden de compra aprobada sin recibir, pedido en curso: los usan CMP-DSH-IIN, CMP-BAJ-INS y
+   la baja del invernadero) y los servicios de stock (`docs/api/stock.md`) para la **recepción**.
+2. **Recepción y faltante sin lote.** Por la regla 4 de 8.23 la recepción cancela primero el faltante sin lote y crea un lote nuevo por partida
+   (y por fecha de vencimiento); hoy solo lo regulariza un recuento físico (`docs/modelo/inventario.md`, «Diferencias con el caso de uso»). Al
+   escribir la recepción hay que verificar que resuelva la alerta «stock inconsistente» y la de «bajo el mínimo» (tema abierto de CMP-AJT-STK), y
+   que agregue el vínculo `OneToOne` desde su tabla a `MovimientoInsumo` (A2).
+
+## Cuando exista `produccion` completa (lote 5)
+
+1. **Pestaña «Bitácora» de la ficha del invernadero** (`registrar_pestana_de_invernadero`, PRD-03): la de «Lotes activos» ya la registra PRD-01.
+2. **Contabilidad** (ronda futura): los asientos de merma, aplicación de insumos (cuenta «Gastos de Producción», MD-90) y fuera de servicio salen de los registros de `produccion` (`Merma`, `AplicacionInsumos` e `ImputacionCosto`); hoy llevan su monto y no hay asiento (D-45).
+3. **Cosecha** (ronda futura): suma a la bitácora los tipos `cosecha` e `incumplimiento de cláusula suministrante` (hoy no se ofrecen en el filtro de PROD-CNS-BIT) y la condición 1 de la alerta de plantas comprometidas (`aplicar_merma`).
+4. ~~**Módulo IoT** (en paralelo): decide qué pasa con el hardware de un sector que sale de servicio.~~ **Resuelto el 20/11/2026:** no se toca; sus sensores no generan alertas ambientales mientras el sector esté fuera de servicio (`temas_abiertos.md`). PROD-PNR-FDS no cambia.
+5. **Cámara de producto** (ronda futura): las partidas de cámara de PROD-REG-MRM (extensiones 4a y 10c, causas de cámara) y el movimiento «salida por merma».
