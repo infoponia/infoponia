@@ -12,7 +12,8 @@ no dependen entre sí pueden hacerse en paralelo.
 
 | ID | Tarea | App | Casos de uso | Depende de | Lote de documentación |
 |---|---|---|---|---|---|
-| UI-01 | Estilo «Diseño v2» (D-47): hoja de estilos, marco y pantallas ya hechas | core | — (no es un caso de uso) | — | 1 |
+| UI-01 | Estilo «Diseño v2» (D-47): hoja de estilos, marco y pantallas ya hechas — **hecha el 20/11/2026** (a la espera de la revisión a mano) | core | — (no es un caso de uso) | — | 1 |
+
 | NOT-01 | Notificaciones y campana (D-42) | core | — (característica del sistema; cierra las postcondiciones de aviso que hoy están sin implementar) | UI-01 | 1 |
 | MAE-03 | Sectores y cultivos, con los tipos de etapa | maestros | PROD-ALT-SCT, PROD-MOD-SCT, PROD-BAJ-SCT, PROD-CNS-SCT, PROD-ALT-CLT, PROD-MOD-CLT, PROD-BAJ-CLT, PROD-CNS-CLT | UI-01, NOT-01 | 1 |
 | MAE-04 | Configuración operativa y perfil de la organización (sin logo) | maestros | ADM-MOD-CFG, ADM-MOD-ORG | UI-01 | 1 |
@@ -147,7 +148,7 @@ Un lote se programa recién cuando está entregado y validado por completo. **De
 | Semilla de una variedad dada de baja | La baja deja inactiva la semilla pero conserva sus existencias activas (regla 3 de PROD-BAJ-VAR), para poder descartar el stock con un ajuste; el CU manda sobre la regla 3 de 8.4 (`modelo/inventario.md`, «Diferencias», fila 6) | 3 |
 | Precondición f de PROD-BAJ-VAR (contratos) | No se verifica hasta que `comercial` registre su impedimento; anotado en `docs/temas_abiertos.md` | 3 |
 | Contraste del color principal | No se valida; queda en `docs/temas_abiertos.md` | 1 |
-| Estilo del sistema (**decidido el 19/11/2026**) | El del prototipo, D-47; lo aplica UI-01 | todos |
+| Estilo del sistema (**decidido el 19/11/2026**) | El del prototipo, D-47; lo aplicó UI-01 | todos |
 
 ## 8. Disparadores existentes que cierra cada tarea
 

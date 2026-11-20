@@ -6,7 +6,7 @@ que tenían en el momento del cambio (D-36); un valor nulo, como «—». Nunca 
 {% block titulo %}{{ registro.get_accion_display }} · Auditoría · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="btn btn-ghost btn-sm" href="{% url 'core:auditoria' %}{% if volver %}?{{ volver }}{% endif %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver a la auditoría</a>
+  <a class="back" href="{% url 'core:auditoria' %}{% if volver %}?{{ volver }}{% endif %}">{% icono "back" 15 %} Volver a la auditoría</a>
   <div class="page-h">
     <h1>{{ registro.get_accion_display }}</h1>
   </div>

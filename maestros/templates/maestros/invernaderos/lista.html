@@ -14,22 +14,23 @@ Inicio del Gerente (regla 5) es de MAE-02.{% endcomment %}
   </div>
   <h2 class="muted" style="font-size:13px;margin-bottom:12px">Invernaderos</h2>
 
-  <div class="inv-lista">
+  {# Tarjeta de invernadero (gh del prototipo): cabecera, dirección, aviso de personal y equipo. #}
+  <div class="stack tight">
     {% for invernadero in invernaderos %}
-    <a class="inv-card{% if not invernadero.activo %} inactivo{% endif %}" href="{% url 'maestros:invernadero' invernadero.pk %}">
-      <span class="inv-card-h">
-        <span class="nombre">{{ invernadero.nombre_invernadero }}</span>
+    <a class="gh{% if not invernadero.activo %} off{% endif %}" href="{% url 'maestros:invernadero' invernadero.pk %}">
+      <span class="gh-h">
+        <span class="nm">{{ invernadero.nombre_invernadero }}</span>
         {% if not invernadero.activo %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}
         {% if invernadero.tiene_sistema_iot %}<span class="status-badge status-neutral">{% icono "wifi" 12 %} Con IoT</span>{% endif %}
         {% if not invernadero.tiene_sectores %}<span class="status-badge status-warn">Sin sectores: todavía no se puede sembrar</span>{% endif %}
       </span>
-      <span class="inv-dir">{{ invernadero.direccion.concreta.texto }} · {{ invernadero.direccion.localidad }}</span>
+      <span class="gh-a">{{ invernadero.direccion.concreta.texto }} · {{ invernadero.direccion.localidad }}</span>
       {% with faltan=invernadero.roles_faltantes %}
       {% if invernadero.activo and faltan %}
-      <span class="inv-aviso">{% icono "warn" 14 %} Personal por asignar: {% for f in faltan %}{{ f.1 }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+      <span class="gh-a inv-aviso">{% icono "warn" 14 %} Personal por asignar: {% for f in faltan %}{{ f.1 }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
       {% endif %}
       {% endwith %}
-      {% include "maestros/invernaderos/_equipo.html" %}
+      <span class="gh-p">{% include "maestros/invernaderos/_equipo.html" %}</span>
     </a>
     {% empty %}
     <div class="card"><p class="muted">{% if es_gerente %}Todavía no hay invernaderos. Creá el primero con «Nuevo invernadero».{% else %}No tenés invernaderos a tu cargo.{% endif %}</p></div>

@@ -18,7 +18,7 @@ temporal, regla 4, D-35) se elige con _forma_de_acceso.html.{% endcomment %}
     <a class="btn btn-ghost" href="{% url 'core:usuarios' %}">Volver a Cuentas</a>
   </div>
   {% else %}
-  <a class="btn btn-ghost btn-sm" href="{% url 'core:usuarios' %}" style="margin-bottom:14px">{% icono "back" 14 %} Volver</a>
+  <a class="back" href="{% url 'core:usuarios' %}">{% icono "back" 15 %} Volver</a>
   {% if form.non_field_errors %}
   <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
   {% endif %}

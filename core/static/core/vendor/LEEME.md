@@ -26,13 +26,10 @@ poder comprobar después que no cambió.
 | `fuentes/inter-latin-500-normal.woff2` | `@fontsource/inter@5.3.0` | `f3779f1efccc4bdcdf9c0a02ab95bf6bd092ed09c48c08cedc725889edd1d19f` |
 | `fuentes/inter-latin-600-normal.woff2` | `@fontsource/inter@5.3.0` | `f9a06e79cd3a2a20951c0f0e28f66dd0e6d3fda73911d640a2125c8fcb78f21a` |
 | `fuentes/inter-latin-700-normal.woff2` | `@fontsource/inter@5.3.0` | `6f56409fd3d64bb85f7d070bce20749db2d66b6d63cec586cc22d1c761be2491` |
-| `fuentes/dm-mono-latin-400-normal.woff2` | `@fontsource/dm-mono@5.3.0` | `e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e` |
-| `fuentes/dm-mono-latin-500-normal.woff2` | `@fontsource/dm-mono@5.3.0` | `9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951` |
 
 - Integrity de `@fontsource/inter@5.3.0`: `sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==`
-- Integrity de `@fontsource/dm-mono@5.3.0`: `sha512-OINjI8C1S/wpchhQxl7njZdMn4+hnDCpQ4YtvvOpKNARo+0J8O1x1IcrChxNjHOhfVv1by8C/FQoy3hXK+C1Ug==`
-- Licencia: SIL Open Font License 1.1 (`fuentes/OFL-inter.txt` y `fuentes/OFL-dm-mono.txt`). La OFL pide
-  distribuir la licencia junto con las fuentes; por eso las dos copias están en la misma carpeta.
+- Licencia: SIL Open Font License 1.1 (`fuentes/OFL-inter.txt`). La OFL pide distribuir la licencia junto con las fuentes;
+  por eso la copia está en la misma carpeta. DM Mono se quitó en UI-01 (D-47): el estilo v2 usa solo Inter.
 
 ## Para actualizar
 

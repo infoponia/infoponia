@@ -12,13 +12,13 @@ decisión, manda la decisión: avisá.
 
 ## Base
 
-- Plantillas de Django con HTMX. HTMX y las fuentes (Inter y DM Mono) están en el repo, en `core/static/core/` (D-24,
+- Plantillas de Django con HTMX. HTMX y la fuente Inter están en el repo, en `core/static/core/` (D-24,
   D-26). No se agregan archivos de terceros sin permiso.
 - **Estilo (D-47): el de «Diseño v2» del prototipo de producción**, no el de `infoponia.css` anterior. Las variables
   (`--primary`, `--radius`, `--status-*`, colores de etapa, `--font-sans`) están en el bloque `<style>` del prototipo
   (`docs/prototipos/produccion/datos_maestros_y_produccion.html`, líneas 9 a 561; buscá solo las clases que necesites, L6).
   La tarea UI-01 las pasa a la hoja de estilos del sistema; hasta que esté hecha, `core/static/core/css/infoponia.css` es
-  el estilo anterior y no se usa para pantallas nuevas. Solo Inter, con cifras tabulares (`.mono`); bordes de 10 px.
+  el estilo anterior y no se usa para pantallas nuevas. Solo Inter, con cifras tabulares (`.mono`); bordes de 10 px.   La hoja ya es la de Diseño v2 (UI-01). Dos excepciones, por D-29: `.btn-ghost` (borde y texto en el verde primario) y los avisos breves (`.toast`, `.avisos`) conservan sus reglas.
   Ninguna pantalla define su propia paleta.
 - Toda pantalla exige sesión (`LoginRequiredMiddleware`); la que no, se exime con `@login_not_required` (D-25).
 - El menú lateral muestra solo lo que existe: cada tarea agrega su entrada (D-25).

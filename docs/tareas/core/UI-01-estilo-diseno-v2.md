@@ -1,6 +1,6 @@
 # UI-01 · Estilo «Diseño v2» (D-47): hoja de estilos, marco y pantallas ya hechas
 
-Estado: pendiente | App: core (toca las plantillas y los estilos de `maestros`) | Rama: feature/ui-01-estilo-v2 | Ronda: Producción 1
+Estado: hecha, a la espera de la revisión a mano | App: core (toca las plantillas y los estilos de `maestros`) | Rama: feature/ui-01-estilo-v2 | Ronda: Producción 1
 
 Depende de: — (es la primera de la ronda). MAE-02b ya está mergeada (PR #32, 19/11/2026): sus plantillas y su Inicio del Gerente se adaptan acá.
 
@@ -90,4 +90,27 @@ Recorrer, en escritorio y a 375 px: inicio de sesión; inicio de cada rol; Mi pe
 baja, ventanas); Auditoría; Producción (lista, ficha, alta, modificar, baja y reactivar de un invernadero). Sin JavaScript:
 inicio de sesión, lista de usuarios y lista de invernaderos.
 
-## Cierre (la completa Claude Code al cerrar)
+Pasos para vos, además de lo de arriba (no hay navegador en la sesión de Claude Code: lo que se ve lo mirás vos):
+
+1. Escritorio: el marco (cabecera con marca, menú lateral, pie) y que el hueco de la campana, entre el espacio y el menú de cuenta, esté vacío.
+2. 375 px: desaparece el menú lateral y aparece la fila de fichas (`mnav`) con las mismas entradas; Capataz (marco de celular) no la muestra.
+3. Sin JavaScript (desactivalo en las herramientas del navegador): inicio de sesión, lista de usuarios y lista de invernaderos se ven y funcionan; los desplegables quedan nativos.
+4. Avisos breves (D-29): guardar algo y ver el aviso arriba a la derecha (abajo a 375 px); cierra a los 10 s.
+5. Color de la organización (D-48): todavía no hay registrante (lo registra MAE-04), así que no se puede ver en pantalla; lo cubren las pruebas de `core/tests/test_identidad.py`.
+6. Recorrida por rol: Gerente (Inicio con «Personal por asignar», Usuarios, Auditoría, Producción), Agrónomo, Capataz, Administrador.
+
+## Cierre
+
+**Qué se hizo.** La hoja `core/static/core/css/infoponia.css` pasó al «Diseño v2» del prototipo (mismas variables y nombres de clase, un solo tema, solo Inter), con los agregados propios del sistema al final. El marco (`base.html`, `base_con_sesion.html`) tiene el `mnav` de pantallas angostas y deja vacío y comentado el lugar de la campana. Se sumaron a `iconos.py` los 20 íconos del prototipo que faltaban. Identidad de la organización (D-48): `Identidad`, `registrar_identidad_de_la_organizacion` e `identidad_registrada()` en `core/extensiones.py` (sin tocar los cuatro puntos de D-43), `core/identidad.py`, el procesador de contexto (una consulta por pedido), el `<style>` de color en `base.html` (con y sin sesión, solo si el color cumple `#RRGGBB`) y los correos con `nombre_de_la_organizacion()`. Pantallas de `maestros` (lista, ficha, formulario, Inicio del Gerente) pasadas a `gh`, `split`, `facts`, `back` y `footbar`; las de `core` conservan sus componentes (`card`, `card-title`, `dl`, `tablewrap`), que son los mismos del v2, y los botones «Volver» pasaron a `.back`. Se borraron los archivos de DM Mono.
+
+**Pruebas.** `core/tests/test_identidad.py` (10 pruebas; se escribieron antes y fallaron por no existir el módulo). `python manage.py test core maestros --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 951 pruebas, OK. Ninguna prueba existente se modificó. No se corrieron las de concurrencia ni las de migración: la tarea no toca servicios con bloqueos ni migraciones.
+
+**Decisiones y diferencias con la documentación.**
+- `.mono` se conserva con su definición v2 (solo cifras tabulares), contra «quitá `.mono`» de la tarea; sí se quitó `--font-mono`. Lo elegiste vos.
+- `.btn-ghost` y los avisos breves conservan las reglas de D-29 (contraste AA del borde, radio de 6 px, animaciones, posición abajo en < 760 px), porque `test_interfaz.py` las verifica y D-47 conserva D-29; difieren del prototipo.
+- Se quitó la regla del prototipo que dejaba sin borde a los botones de las tablas (rompe el contraste de D-29).
+- El oscuro y el claro de la marca salen de `color-mix()` (80 % con negro y 10 % con blanco): ningún documento lo definía. El hover de `.btn-ghost` queda con colores literales en la hoja (una prueba de contraste los lee) y el marco los reescribe con variables cuando hay color propio.
+- Se agregaron todos los íconos de `ic()` y no solo los listados, aunque `iconos.py` no está en «Permitido fuera de la app» (lo elegiste vos).
+- El prototipo deja `.mnav` oculto siempre (su `display:none` va después de la media query); acá se muestra en menos de 760 px.
+- Recorrida (paso 6): no se pudo hacer con navegador. Se verificó que todas las clases de las plantillas estén definidas en la hoja, que la hoja esté balanceada y las pruebas de vistas; lo visual queda en la verificación a mano.
+- Pantallas de auditoría y de usuarios del Administrador: solo cambiaron el «Volver» y lo que da la hoja nueva; el resto usa los mismos componentes v2 y no se rehízo su HTML.
