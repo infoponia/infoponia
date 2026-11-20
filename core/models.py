@@ -1,6 +1,6 @@
 # Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, el grupo de
-# cuentas vinculadas y el registro de auditoría. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17, D-18, D-19
-# D-22, D-35 y D-36 (docs/decisiones/).
+# cuentas vinculadas, el registro de auditoría y las notificaciones. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17,
+# D-18, D-19, D-22, D-35, D-36 y D-42 (docs/decisiones/).
 
 from datetime import timedelta
 
@@ -818,3 +818,29 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_INVERNADERO,
     }
 )
+
+
+class Notificacion(models.Model):
+    """Aviso de texto para una cuenta, dentro del Sistema (D-42; API en docs/api/notificaciones.md).
+
+    No es un concepto del negocio (D-38): no tiene estado, severidad, origen ni enlace a otras filas. Se crea con las
+    funciones de ``core.notificaciones``, dentro de la transacción del caso de uso que la dispara. No se borra nunca (la
+    cuenta tampoco, ``PROTECT``) y no se audita (D-42): es el efecto de una acción que ya se audita (D-36).
+    """
+
+    destinatario = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="notificaciones")
+    titulo = models.CharField("título", max_length=120)
+    detalle = models.CharField(max_length=500)
+    fecha_hora = models.DateTimeField("fecha y hora", default=timezone.now, editable=False)
+    leida = models.BooleanField("leída", default=False)
+
+    class Meta:
+        # D-42: de la más reciente a la más antigua; ``-id`` desempata las creadas en el mismo instante.
+        ordering = ["-fecha_hora", "-id"]
+        verbose_name = "Notificación"
+        verbose_name_plural = "Notificaciones"
+        indexes = [models.Index(fields=["destinatario", "fecha_hora"], name="notif_dest_fecha")]
+
+    def __str__(self):
+        """El título: es lo que se ve de la notificación en el panel de la campana."""
+        return self.titulo

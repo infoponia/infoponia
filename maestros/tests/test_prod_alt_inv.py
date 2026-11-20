@@ -13,11 +13,12 @@
 #   - Falla con ValidationError por campo (claves: nombre, tipo_direccion, localidad, calle, numero_calle, ruta,
 #     kilometro, agronomo, capataz, vendedor, tecnico) y no cambia nada.
 #
-# MAE-02a: la postcondición d (alertas de personal faltante) está conectada. Fuera de alcance: la postcondición e
-# (notificaciones), que va a una tarea aparte en core (D-42).
+# MAE-02a: la postcondición d (alertas de personal faltante) está conectada. NOT-01 (D-42): la postcondición e (cada persona
+# asignada recibe una notificación) también; sus pruebas son las ``test_post_e_…``.
 
 import importlib
 import inspect
+import json
 from unittest import mock
 
 from django.apps import apps as django_apps
@@ -26,7 +27,7 @@ from django.db import transaction
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import RegistroAuditoria, referencia
+from core.models import Notificacion, RegistroAuditoria, referencia
 from core.tests.fabricas import afectado, crear_administrador, crear_capataz, crear_gerente
 from maestros.models import (
     Alerta,
@@ -510,8 +511,91 @@ class ProdAltInvServicioTests(ConGeoref, TestCase):
         self.assertFalse(Invernadero.objects.exists())
         self.assertFalse(DireccionUrbana.objects.exists())
 
+    # ---- NOT-01: avisos a las personas asignadas (postcondición e; D-42) ----
+
+    def test_post_e_cada_persona_asignada_recibe_una_notificacion_de_que_quedo_a_cargo(self):
+        """PROD-ALT-INV, postcondición e: cada persona asignada recibe una notificación que le avisa que quedó a cargo del
+        invernadero (texto aprobado en NOT-01: «Quedó a cargo de {invernadero}» / «El Gerente le asignó el rol de {rol}.»)."""
+        agronomo, capataz, vendedor, tecnico = crear_agronomo(), crear_capataz_activo(), crear_vendedor(), crear_tecnico()
+        self.alta(agronomo_id=agronomo.pk, capataz_id=capataz.pk, vendedor_id=vendedor.pk, tecnico_id=tecnico.pk)
+
+        esperado = {agronomo: "Agrónomo", capataz: "Capataz", vendedor: "Vendedor", tecnico: "Técnico"}
+        self.assertEqual(Notificacion.objects.count(), 4)
+        for cuenta, rol in esperado.items():
+            with self.subTest(rol=rol):
+                notificacion = Notificacion.objects.get(destinatario=cuenta)
+                self.assertEqual(notificacion.titulo, "Quedó a cargo de Invernadero A")
+                self.assertEqual(notificacion.detalle, f"El Gerente le asignó el rol de {rol}.")
+                self.assertFalse(notificacion.leida)
+
+    def test_post_e_solo_avisa_a_los_roles_que_se_asignaron(self):
+        """PROD-ALT-INV, postcondición e y regla 4: «cada persona asignada»; un rol sin asignar no tiene a quién avisar."""
+        agronomo = crear_agronomo()
+        self.alta(agronomo_id=agronomo.pk)
+
+        self.assertEqual([n.destinatario_id for n in Notificacion.objects.all()], [agronomo.pk])
+
+    def test_post_e_sin_personal_no_notifica_a_nadie(self):
+        """PROD-ALT-INV, regla 4: el personal es opcional; un alta sin personal no deja ninguna notificación (solo alertas)."""
+        self.alta()
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_e_nunca_notifica_al_actor(self):
+        """API, regla de uso 4: el actor (el Gerente que da de alta) no recibe nada."""
+        self.alta(agronomo_id=crear_agronomo().pk, capataz_id=crear_capataz_activo().pk)
+
+        self.assertFalse(Notificacion.objects.filter(destinatario=self.gerente).exists())
+
+    def test_post_e_el_titulo_lleva_el_nombre_guardado_y_no_el_id(self):
+        """API, regla de uso 3: el texto lleva los nombres de las cosas, no los ids; el nombre es el recortado (regla 1)."""
+        invernadero = self.alta(nombre="  Invernadero Norte ", agronomo_id=crear_agronomo().pk)
+
+        notificacion = Notificacion.objects.get()
+        self.assertEqual(notificacion.titulo, "Quedó a cargo de Invernadero Norte")
+        self.assertNotIn(str(invernadero.pk), notificacion.titulo + notificacion.detalle)
+
+    def test_post_e_un_alta_rechazada_no_deja_notificaciones(self):
+        """PROD-ALT-INV, postcondición e y regla de uso 1 de la API: un alta que falla (nombre repetido) no avisa a nadie."""
+        crear_invernadero("Invernadero A")
+
+        with self.assertRaises(ValidationError):
+            self.alta(agronomo_id=crear_agronomo().pk)
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_e_va_dentro_de_la_transaccion_del_alta(self):
+        """API, regla de uso 1: si falla al notificar, el alta entera se deshace (invernadero, dirección y auditoría)."""
+        with mock.patch.object(invernaderos.notificaciones, "notificar_a_varios", side_effect=RuntimeError("falla")):
+            with self.assertRaises(RuntimeError), transaction.atomic():
+                self.alta(agronomo_id=crear_agronomo().pk)
+
+        self.assertFalse(Invernadero.objects.exists())
+        self.assertFalse(DireccionUrbana.objects.exists())
+        self.assertFalse(RegistroAuditoria.objects.filter(accion=ALTA).exists())
+
+    def test_post_e_no_se_audita_el_texto_de_la_notificacion(self):
+        """D-42: el texto del aviso no va al registro de auditoría; el alta sigue con su único registro."""
+        self.alta(agronomo_id=crear_agronomo().pk)
+
+        registro = RegistroAuditoria.objects.get(accion=ALTA)
+        self.assertNotIn("Quedó a cargo", json.dumps(registro.detalle))
+        self.assertNotIn("le asignó", json.dumps(registro.detalle))
+
+    def test_post_e_las_notificaciones_son_independientes_de_las_alertas(self):
+        """PROD-ALT-INV, postcondiciones d y e: la alerta es para el Gerente por el rol que falta; la notificación, para
+        quien quedó a cargo. Ninguna cuenta recibe lo del otro."""
+        agronomo = crear_agronomo()
+        invernadero = self.alta(agronomo_id=agronomo.pk)
+
+        self.assertCountEqual(
+            Alerta.objects.filter(invernadero=invernadero).values_list("tipo_alerta", flat=True),
+            ["sin_capataz", "sin_vendedor"],
+        )
+        self.assertEqual([n.destinatario_id for n in Notificacion.objects.all()], [agronomo.pk])
+
     # ---- MAE-02a: alertas de personal faltante (postcondición d; reemplazan a test_d38_…) ----
-    # Las notificaciones (postcondición e) siguen fuera de alcance: van a una tarea aparte en core (D-42).
+    # Las notificaciones (postcondición e) son de NOT-01 (D-42): sus pruebas están más arriba, en ``test_post_e_…``.
 
     def test_post_d_por_cada_rol_sin_asignar_queda_una_alerta_activa_para_el_gerente(self):
         """PROD-ALT-INV, postcondición d: por cada rol (Agrónomo, Capataz, Vendedor) sin asignar, una alerta activa

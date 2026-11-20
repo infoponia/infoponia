@@ -241,4 +241,6 @@ Una línea por tarea cerrada, con este formato:
 
 - 20/11/2026 · UI-01 · estilo «Diseño v2» (D-47): hoja de estilos del prototipo de producción en `infoponia.css` (mismas variables y clases; `.btn-ghost` y los avisos conservan lo de D-29), marco con `mnav` y lugar vacío de la campana, 20 íconos más, pantallas de `maestros` y botones «Volver» de `core` al estilo nuevo; identidad de la organización (D-48: `Identidad` y `registrar_identidad_de_la_organizacion` en `core/extensiones.py`, `core/identidad.py`, color con `color-mix()` en `base.html`, correos con el nombre registrado); DM Mono quitado del repo · 951 pruebas de `core` y `maestros` en verde, 10 nuevas en `test_identidad.py` (ninguna existente modificada) · sin migraciones · rama `feature/ui-01-estilo-v2`
 
+- 20/11/2026 · NOT-01 · notificaciones y campana (D-42): `core.Notificacion` (migración 0011) y `core/notificaciones.py`; puntos de extensión `registrar_fuente_de_alertas` y `registrar_contador_de_pendientes`; campana en el marco (panel con HTMX, página completa sin JavaScript; el Administrador no la tiene); avisos de USR-ALT-USR d, USR-BAJ-USR c (texto de la ventana), PROD-ALT-INV e y PROD-MOD-INV c; fuentes de `maestros` (`items_de_campana`, `pendientes_de_alertas`). 1100 + 34 + 1 pruebas.
+
 

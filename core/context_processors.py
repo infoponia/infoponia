@@ -1,11 +1,13 @@
 # Datos del marco con sesión (cabecera, menú lateral, menú de cuenta con las cuentas vinculadas) disponibles en
-# toda plantilla.
+# toda plantilla, y el estado de la campana (punto y notificaciones sin leer).
 
 from django.urls import reverse
 
 from core import extensiones, identidad
 from core.acceso import ADMINISTRADOR, nombre_visible_del_rol, rol_de
 from core.menu import ROLES_DE_CAMPO, SIGLAS, menu_de
+from core.models import Usuario
+from core.notificaciones import estado_de_la_campana
 from core.servicios import cuentas_vinculadas
 
 
@@ -48,4 +50,6 @@ def marco(request):
         # SEG-09: las otras cuentas del grupo, para «Cambiar de cuenta» del menú de cuenta. Sin grupo (y para
         # el Administrador, que no tiene vínculos) es [] y no consulta la base.
         "cuentas_vinculadas": cuentas_vinculadas(usuario),
+        # NOT-01 (D-42): la campana es de todos los roles menos el Administrador. ``None``: la plantilla no la muestra.
+        "campana": estado_de_la_campana(usuario) if rol in tuple(Usuario.Rol) else None,
     }

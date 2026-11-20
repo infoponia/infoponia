@@ -1,0 +1,11 @@
+{% load iconos %}{% comment %}Botón de la campana del marco (NOT-01, D-42; el botón «notif» del shell del prototipo). Con JavaScript y HTMX, un clic trae
+el panel (GET core:campana) a #campana-panel; sin ellos es un enlace común a la página completa. «campana» viene del
+procesador de contexto de core: «punto» (alguna alerta activa no leída o alguna notificación sin leer) y «sin_leer». Con el
+punto, el botón lo avisa también por texto (aria-label). En el marco de celular el CSS lo agranda a 44 px.
+Tras cerrar el panel, core:campana_vista devuelve este mismo botón ya actualizado (hx-swap outerHTML).{% endcomment %}
+<a id="campana-boton" class="icon-btn" href="{% url 'core:campana' %}?next={{ request.get_full_path|urlencode }}"
+   hx-get="{% url 'core:campana' %}" hx-target="#campana-panel" hx-swap="innerHTML" hx-push-url="false"
+   aria-haspopup="dialog" aria-expanded="false" data-campana-boton
+   aria-label="Alertas y notificaciones{% if campana.sin_leer %}: {{ campana.sin_leer }} sin leer{% endif %}">
+  {% icono "bell" 18 %}{% if campana.punto %}<span class="dotn"></span>{% endif %}
+</a>

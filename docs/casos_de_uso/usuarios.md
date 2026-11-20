@@ -41,9 +41,6 @@ cuando se programe la tabla destino, y hasta entonces no se exigen.
 - **Invernadero del Transportista (R155):** precondición d, postcondición b y reglas 5 y 7 de
   USR-ALT-USR; postcondición a de USR-MOD-USR; regla 3 de USR-CNS-USR; regla 1 de USR-GST-PRF.
   Mientras no exista Invernadero, el Transportista se da de alta sin invernadero.
-- **Pendientes del Gerente:** postcondición d de USR-ALT-USR (aviso de resumen al nuevo Gerente) y
-  postcondición c de USR-BAJ-USR (cantidad de pendientes al dar de baja al Gerente). Hoy no hay nada
-  que pueda quedar pendiente.
 - **Efectos de la baja sobre lo asignado:** postcondiciones e, f y g y regla 4 de USR-BAJ-USR
   (alertas por invernadero, pedidos y entregas).
 - **Ingreso con Google:** trabajo futuro; no se implementa en este bloque.
@@ -149,7 +146,7 @@ c. Según la forma de acceso elegida, se envió al email de la cuenta una invita
 persona elija su contraseña, o el Sistema le informó la contraseña temporal a quien hizo el alta,
 una única vez.
 d. Si el rol es Gerente, se le envió al nuevo Gerente una única notificación dentro del Sistema con la
-cantidad de pendientes que esperan una resolución del Gerente. *(Para más adelante.)*
+cantidad de pendientes que esperan una resolución del Gerente. 
 e. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de la nueva cuenta y la
 forma de acceso elegida.
 
@@ -233,7 +230,7 @@ c. Si la cuenta es de un Administrador, queda al menos otro Administrador activo
 a. La cuenta quedó en estado «inactivo» (baja lógica).
 b. Se cerraron las sesiones abiertas con esa cuenta.
 c. Si la cuenta era del Gerente, el Sistema le informó al Administrador, en la pantalla de la baja,
-cuántos pendientes quedan esperando hasta el alta de otro Gerente. *(Para más adelante.)*
+cuántos pendientes quedan esperando hasta el alta de otro Gerente.
 d. Se creó un registro de auditoría con usuario, rol, fecha, hora, identificador de la cuenta y el
 cambio de estado.
 e. Si la cuenta tenía invernaderos a cargo, quedó para el Gerente una alerta «invernadero sin {rol}

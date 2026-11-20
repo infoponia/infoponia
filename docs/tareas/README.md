@@ -46,7 +46,6 @@ está en el repo: no se puede programar hasta que llegue su lote de documentaci�
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| NOT-01 | Notificaciones y campana (D-42) | core | pendiente | UI-01 (hecha; MAE-02a y MAE-02b también) | `core/NOT-01-notificaciones.md` |
 | MAE-03 | Sectores y cultivos, con los tipos de etapa | maestros | pendiente | UI-01, NOT-01 | `maestros/MAE-03-sectores-y-cultivos.md` |
 | MAE-04 | Configuración operativa y perfil de la organización (sin logo) | maestros | pendiente | UI-01 | `maestros/MAE-04-configuracion-y-organizacion.md` |
 | CON-01 | `OrigenDocumento`: el documento de origen común (D-52) | contabilidad | pendiente | — | `contabilidad/CON-01-origen-documento.md` |

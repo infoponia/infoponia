@@ -1,6 +1,6 @@
 # NOT-01 · Notificaciones y campana (D-42)
 
-Estado: pendiente | App: core (toca servicios de `core` y de `maestros`) | Rama: feature/not-01-notificaciones | Ronda: Producción 1
+Estado: hecha, a la espera de la revisión a mano | App: core (toca servicios de `core` y de `maestros`) | Rama: feature/not-01-notificaciones | Ronda: Producción 1
 
 Depende de: UI-01 (si no está hecha, frená: el marco y la identidad en `core/extensiones.py` los deja ella). MAE-02a y MAE-02b ya están mergeadas
 
@@ -97,18 +97,99 @@ MAE-03 y PRD-01 usan la API.
   python manage.py test core maestros --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion
   python manage.py test core maestros --keepdb --tag concurrencia
 
-## Verificación a mano (la completa Claude Code al cerrar)
+## Verificación a mano
 
-Hay una migración nueva: `python manage.py migrate`. Cuentas: Gerente, Administrador, Agrónomo, Capataz.
+Hay una migración nueva: `python manage.py migrate`. Después, con el entorno virtual activo: `python manage.py runserver`. Cuentas:
+Gerente, Administrador, Agrónomo y Capataz. No hay navegador en la sesión de Claude Code: **el JavaScript de la campana (abrir,
+cerrar, pestañas, marcar como leídas) se probó solo con pruebas de las vistas y con `node --check`; lo recorrés vos.**
 
-1. Con el Gerente, dar de alta un invernadero con Agrónomo y Capataz. Con cada una de esas cuentas: la campana tiene punto rojo y
-   «Notificaciones (1 sin leer)»; cerrar el panel deja la notificación leída y el punto desaparece.
-2. «Modificar» ese invernadero y cambiar el Agrónomo: el nuevo recibe el aviso con lo que recibe; el anterior no recibe nada.
-   Guardar sin cambiar nada no genera avisos.
-3. Con el Administrador, dar de baja al Gerente: la pantalla de la baja muestra cuántos pendientes quedan. Dar de alta
-   uno nuevo: tiene una notificación con los pendientes (las alertas activas para el Gerente).
-4. Con un invernadero sin Capataz, el Gerente ve en «Alertas» la de «sin Capataz» con su severidad y el enlace a la ficha.
-5. Sin JavaScript, el botón de la campana abre la página completa y se ven las dos pestañas.
-6. A 375 px el panel entra en la pantalla y el botón mide al menos 44 px en los roles de campo.
+1. Con el Gerente, dar de alta un invernadero con Agrónomo y Capataz. Con cada una de esas cuentas: la campana tiene punto rojo y la
+   pestaña dice «Notificaciones (1 sin leer)»; el título es «Quedó a cargo de <invernadero>» y el detalle, «El Gerente le asignó el rol
+   de Agrónomo.» (o Capataz). Abrir la pestaña «Notificaciones» y cerrar el panel (clic en la campana, clic afuera o Esc): la
+   notificación queda leída y, al volver a mirar, el punto desapareció.
+2. Abrir el panel con la pestaña «Alertas» a la vista y cerrarlo: las notificaciones **no** quedan leídas (solo se marcan si se vio
+   su pestaña). Cambiar de pestaña no recarga la página.
+3. «Modificar» ese invernadero y cambiar el Agrónomo: el nuevo recibe el aviso con lo que recibe («Recibe: alertas activas: N.» si
+   tenía alertas, o «No recibe nada pendiente.»); el anterior no recibe nada. Guardar sin cambiar nada, o cambiando solo el nombre,
+   no genera avisos.
+4. Con el Administrador, abrir la baja del Gerente: la ventana muestra «Pendientes del Gerente: N (Alertas activas para el Gerente:
+   N)…» o «No tiene pendientes.». Dar de baja al Gerente y dar de alta uno nuevo: el nuevo tiene una notificación «Pendientes que
+   esperan al Gerente» con el mismo total.
+5. Con un invernadero sin Capataz, el Gerente ve en la pestaña «Alertas» la de «Invernadero sin Capataz activo», con el nombre del
+   invernadero, su severidad (advertencia) y un enlace a la ficha. Mientras la alerta siga sin leer, el punto rojo del Gerente
+   sigue prendido: abrir la ficha no la marca como leída (eso lo hace `abrir_alerta` desde la pantalla de alertas, MAE-02c). El
+   Administrador no tiene campana.
+6. Sin JavaScript (desactivalo en las herramientas del navegador): el botón de la campana abre la página completa «Alertas y
+   notificaciones» con las dos pestañas (son enlaces); «Cerrar» marca las notificaciones solo si se estaba viendo esa pestaña y
+   vuelve a la pantalla de donde se vino.
+7. A 375 px el panel entra en la pantalla (con el Gerente) y, con el Capataz (marco de celular), se abre como hoja inferior y el
+   botón de la campana mide al menos 44 px.
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+**Qué se hizo.**
+- **Modelo y API.** `core.Notificacion` (migración `0011_notificacion`, solo esquema) y `core/notificaciones.py` con `notificar`,
+  `notificar_al_gerente`, `notificar_a_varios`, `de_la_cuenta`, `marcar_vistas`, `pendientes_del_gerente` y `estado_de_la_campana`.
+  Ninguna se audita.
+- **Puntos de extensión.** `ItemDeAlerta`, `registrar_fuente_de_alertas`, `alertas_para`, `registrar_contador_de_pendientes` y
+  `contadores_de_pendientes` en `core/extensiones.py`.
+- **Campana.** Botón en el marco (todos los roles menos el Administrador) con el punto rojo, panel con dos pestañas
+  (`GET core:campana`) y `POST core:campana_vista` al cerrar. Sin JavaScript, el botón lleva a la página completa. Vistas, rutas,
+  procesador de contexto, cuatro plantillas (`_campana`, `_campana_panel`, `_campana_contenido`, `campana`), CSS y JS.
+- **Avisos de `core`.** `alta_usuario` avisa al Gerente nuevo (USR-ALT-USR d); la ventana de baja del Gerente muestra el total y el
+  detalle de pendientes (USR-BAJ-USR c), sin duplicar la ventana ni cambiar lo que lista.
+- **`maestros`.** `items_de_campana` y `pendientes_de_alertas` (registradas en `MaestrosConfig.ready()`), y los avisos de
+  `alta_invernadero` (PROD-ALT-INV e) y `modificar_invernadero` (PROD-MOD-INV c).
+- **Paso 8.** Se actualizaron los comentarios y docstrings que decían que las notificaciones no existían.
+
+**Pruebas.**
+- `python manage.py test core maestros --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 1100 pruebas, OK
+  (antes de la tarea, 1030).
+- `python manage.py test core maestros --keepdb --tag concurrencia`: 34 pruebas, OK.
+- `python manage.py test core maestros --keepdb --tag migracion`: 1 prueba, OK.
+- `python manage.py makemigrations --check --dry-run`: sin cambios.
+- Nuevas: 79 en `core/tests/test_notificaciones.py` (modelo, API, extensiones y campana), 26 en
+  `maestros/tests/test_campana_alertas.py`, 20 de las postcondiciones de `core` (11 `test_post_d_…` y 9 de
+  `UsrBajUsrPendientesTests`) y 24 de las de invernadero (9 `test_post_e_…` y 15 `test_post_c_…`/`test_d28_…`). Se escribieron antes y
+  fallaron en los pasos 2, 5 y 7 (con pausa para tu revisión). Ninguna prueba existente se modificó.
+- La prueba de «dentro de `transaction.atomic()` que falla no queda nada» usa `TestCase` (punto de guardado), no
+  `TransactionTestCase`: no hizo falta el mixin de `datos_de_migracion.md`.
+
+**Decisiones y diferencias con la documentación.**
+- **Textos (L9).** D-42 dice «con el texto de D-42» pero no trae ninguno. Se usaron los que aprobaste: título «Quedó a cargo de
+  <invernadero>»; detalle «El Gerente le asignó el rol de <rol>.» (en la modificación, más «Recibe: <descripción>: <cantidad>, …» o
+  «No recibe nada pendiente.»); «Pendientes que esperan al Gerente» / «Tiene N pendiente(s). <descripción>: <cantidad>.» o «No tiene
+  pendientes.»; en la ventana de baja, «Pendientes del Gerente: N (…). Quedan esperando hasta el alta de otro Gerente; la baja no se
+  bloquea por ellos.». Difiere del ejemplo de `docs/api/notificaciones.md` («lo asignó como Agrónomo») y conviene escribirlos en D-42 y
+  en la API.
+- **D-14 en `alta_usuario`.** El destinatario del aviso es el Gerente recién creado, que ya es el Gerente activo (D-09). El caso «sin
+  Gerente activo, la notificación se omite» que menciona el paso 5 no puede darse ahí: solo se da en `notificar_al_gerente`
+  (probado en la API). `alta_usuario` usa `notificar`, no `notificar_al_gerente`.
+- **Sin campana para el Administrador.** D-42 dice «todos los roles», pero `docs/casos_de_uso/usuarios.md` define «todos los roles»
+  como los seis operativos y dice que el Administrador no tiene campana. Se siguió el caso de uso: sin botón y `core:campana` da 403.
+- **Severidad (MD-109) con respaldo en `items_de_campana`.** La severidad sale del tipo registrado; si el código ya no está registrado,
+  se usa la que se guardó con la alerta (MD-109), en vez de lanzar `ValueError` y romper la campana de todas las pantallas.
+- **Punto rojo y «vistas».** El punto rojo sigue a D-42 (alerta activa no leída o notificación sin leer), no al prototipo (que lo
+  muestra con cualquier alerta). Las notificaciones se marcan al cerrar solo si se vio la pestaña «Notificaciones» durante la
+  apertura (el prototipo, solo si esa pestaña estaba a la vista al cerrar); y solo las 30 mostradas.
+- **Lo que recibe la persona (paso 7).** `_aviso_de_personal` se calcula antes del traspaso (después ya no queda nada en la
+  saliente) y solo si hay un rol entrante no nulo. Cambió el comportamiento: con el cambio confirmado, `contar_traspaso` ahora se
+  llama también, una vez por rol entrante. Un cambio de nombre o de dirección, o quitar a alguien sin reemplazo, no lo llama.
+- **Una notificación por rol.** `notificar_a_varios` se llama una vez por persona entrante, porque cada rol lleva su texto.
+- **Validación del texto.** `notificar_al_gerente` y `notificar_a_varios` validan el título y el detalle aunque no haya destinatarios:
+  un texto vacío es un error de uso. `notificar` y las demás rechazan también el texto en blanco (solo espacios) y guardan el texto
+  recortado.
+- **Estilo de la campana.** Se sumaron a la hoja las clases `.ptabs a`, `.sev-critica|advertencia|informativa` (el azul de la
+  informativa es el de `.status-info`, el v2 no define `--status-info`) y `.plist .acc-item .t span` con `white-space: normal` para
+  que el detalle de una notificación pueda tener varias líneas (en los menús sigue cortándose). Las alertas no leídas llevan
+  `.unread`, que el prototipo no usa para las alertas.
+- **Alertas y lectura.** El enlace de una alerta en la campana lleva a la ficha del invernadero y no llama a `abrir_alerta`: el punto
+  rojo por alertas no leídas se apaga recién cuando MAE-02c las abra por su pantalla. Marcar una alerta como leída es de MAE-02b y
+  está fuera del alcance de NOT-01.
+- **Archivo de pruebas no listado.** `maestros/tests/test_campana_alertas.py` no figura en «Límites», pero lo piden el paso 6 y
+  «Hecho cuando».
+- **Fuera de lo permitido.** El docstring de `AlertaQuerySet.no_leidas` en `maestros/models.py` todavía dice «tarea de
+  notificaciones»; no se tocó porque `maestros/models.py` no está en «Permitido fuera de la app» (queda para `temas_abiertos.md`).
+- **JavaScript sin probar en navegador.** Solo se verificó la sintaxis con `node --check` y el comportamiento servidor con pruebas.
+- **Base de pruebas.** Después de la migración nueva, con `--keepdb --parallel` los clones no la tenían: se recreó la base una vez
+  con `--noinput` (`pruebas.md`).

@@ -2,16 +2,19 @@
 # reactivación (PROD-MOD-INV) y baja (PROD-BAJ-INV), de MAE-01b. Cada caso de uso es una función dentro de
 # ``transaction.atomic()`` y audita con el formato de D-36 (docs/patrones/auditoria.md). D-37: un archivo por entidad
 # raíz. MAE-02a (D-41): las alertas de personal faltante se crean, traspasan y resuelven con ``maestros.servicios.alertas``
-# y van en los ``datos`` del registro de auditoría; las notificaciones no existen todavía (D-38, D-42). Modelo de
-# dominio: ronda 22 (docs/modelo/maestros.md).
+# y van en los ``datos`` del registro de auditoría. NOT-01 (D-42): las personas asignadas reciben una notificación al alta y
+# al modificar el personal, con ``core.notificaciones``, en la misma transacción y sin auditarla. Modelo de dominio: ronda 22
+# (docs/modelo/maestros.md).
 
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 
-from core.extensiones import Asignacion, Efecto, SeccionDeInicio
+from core import notificaciones
+from core.extensiones import Asignacion, Efecto, ItemDeAlerta, SeccionDeInicio
 from core.models import (
     Agronomo,
     Capataz,
@@ -23,6 +26,7 @@ from core.models import (
     rol_de,
 )
 from maestros import extensiones
+from maestros.alertas import tipo_de_alerta
 from maestros.models import Alerta, Direccion, DireccionRural, DireccionUrbana, Invernadero, Localidad
 from maestros.servicios import alertas as api_alertas
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
@@ -245,6 +249,25 @@ def _buscar_localidad(localidad_id, errores):
     return localidad
 
 
+def _titulo_del_aviso(invernadero):
+    """Título de la notificación a quien queda a cargo (postcondición e de PROD-ALT-INV y c de PROD-MOD-INV; texto aprobado
+    en NOT-01, D-42): lleva el nombre del invernadero, no su id."""
+    return f"Quedó a cargo de {invernadero.nombre_invernadero}"
+
+
+def _detalle_del_aviso(rol, recibe=None):
+    """Detalle de esa notificación: «El Gerente le asignó el rol de Capataz.». Al modificar (``recibe`` no es ``None``) suma lo
+    que recibe la persona: «Recibe: órdenes a realizar: 2, alertas activas: 1.» (solo cantidades mayores que cero) o «No
+    recibe nada pendiente.». ``rol`` es el atributo del invernadero (``"capataz"``)."""
+    texto = f"El Gerente le asignó el rol de {NOMBRE_DEL_ROL[rol]}."
+    if recibe is None:
+        return texto
+    recibe = [(descripcion, cantidad) for descripcion, cantidad in recibe if cantidad > 0]
+    if not recibe:
+        return f"{texto} No recibe nada pendiente."
+    return f"{texto} Recibe: " + ", ".join(f"{descripcion}: {cantidad}" for descripcion, cantidad in recibe) + "."
+
+
 def alta_invernadero(
     actor,
     nombre,
@@ -282,7 +305,8 @@ def alta_invernadero(
       personas asignadas como afectados y los datos cargados en ``cambios`` (con «antes» nulo).
     - Postcondición d y regla 5 (MAE-02a): por cada rol sin asignar queda una alerta activa para el Gerente; la del Técnico
       solo con sistema IoT. Van en ``datos.alertas_creadas`` del registro.
-    - Fuera de alcance: las notificaciones (postcondición e; tarea aparte en core, D-42).
+    - Postcondición e (NOT-01, D-42): cada persona asignada recibe una notificación de que quedó a cargo del invernadero, en
+      la misma transacción y sin auditarla; nunca el actor. Un rol sin asignar no tiene a quién avisar.
 
     Falla con ``ValidationError`` por campo y no cambia nada.
     """
@@ -337,6 +361,13 @@ def alta_invernadero(
 
         # Postcondición d: las alertas de personal faltante (el invernadero ya está bloqueado por su propio INSERT).
         alertas_creadas = api_alertas.sincronizar_alertas_de_personal(invernadero).creadas
+
+        # Postcondición e (NOT-01, D-42): un aviso por persona asignada, con el texto de su rol. Se llama una vez por rol
+        # porque cada uno lleva el suyo; ``excluir=actor`` por la regla de uso 4 de la API. No se audita.
+        for atributo, cuenta in personal.items():
+            notificaciones.notificar_a_varios(
+                [cuenta], _titulo_del_aviso(invernadero), _detalle_del_aviso(atributo), excluir=actor
+            )
 
         # D-36: ``cambios`` con cada dato cargado y «antes» nulo; los opcionales vacíos no figuran.
         cargados = {
@@ -559,7 +590,11 @@ def modificar_invernadero(
       nueva y se borra la anterior (D-39, opción A: nada más la referencia todavía).
     - Postcondición f, D-22 y D-36: un registro de auditoría en la misma transacción con lo que cambió; los afectados
       son el invernadero y las personas que salen y entran. D-28: si no cambió nada, no se guarda ni se audita.
-    - Fuera de alcance: las notificaciones (postcondición c; tarea aparte en core, D-42).
+    - Postcondición c (NOT-01, D-42): cada persona que QUEDA A CARGO en este cambio (la entrante de cada rol) recibe una
+      notificación con el invernadero y lo que recibe (``contar_traspaso`` y las alertas del Agrónomo, contadas ANTES del
+      traspaso, cuando todavía están en la persona saliente). La saliente no recibe nada (el caso de uso solo notifica a la
+      persona asignada); tampoco el actor. Sin cambios (D-28) o sin personal entrante, no se notifica. Misma transacción, sin
+      auditar.
 
     Bloqueos (ver el encabezado de esta sección): cuentas y quien actúa, el invernadero y, recién ahí, los traspasos.
     Si dos Gerentes modifican a la vez, gana el último: lo que cambió se calcula contra lo leído después de bloquear.
@@ -646,6 +681,11 @@ def modificar_invernadero(
             raise FaltaConfirmarPersonal(_aviso_de_personal(invernadero, cambiados))
         if not cambios:
             return invernadero  # D-28
+        # Postcondición c (NOT-01, D-42): lo que recibe cada persona entrante se cuenta ACÁ, antes de guardar y de traspasar:
+        # después del traspaso ya no queda nada en la saliente. Solo si hay alguna entrante (un cambio de nombre o de dirección,
+        # o quitar a alguien sin reemplazo, no ejecuta ``contar_traspaso``).
+        entrantes = {atributo: par for atributo, par in cambiados.items() if par[1] is not None}
+        avisos = _aviso_de_personal(invernadero, entrantes) if entrantes else []
 
         # Postcondición a. El UPDATE del invernadero (que puede cambiar ``direccion_id``, columna con índice único, y
         # entonces toma FOR UPDATE) va ANTES de llamar a los registrantes de traspaso: así, ninguna transacción que lo
@@ -693,6 +733,16 @@ def modificar_invernadero(
         # Postcondición b y regla 3: el traspaso (punto de extensión), con el invernadero ya guardado.
         for atributo, (saliente, entrante) in cambiados.items():
             extensiones.traspasar(actor, invernadero, atributo, saliente, entrante)
+
+        # Postcondición c (NOT-01, D-42): un aviso por persona entrante, con su rol y lo que recibe; nunca el actor. El título lleva
+        # el nombre ya guardado (puede haber cambiado en esta misma modificación). No se audita.
+        for entrada in avisos:
+            notificaciones.notificar_a_varios(
+                [entrada["entrante"]],
+                _titulo_del_aviso(invernadero),
+                _detalle_del_aviso(entrada["rol"], entrada["recibe"]),
+                excluir=actor,
+            )
 
         # Postcondición f, D-22 y D-36.
         afectados = [invernadero]
@@ -992,3 +1042,45 @@ def seccion_de_inicio(usuario):
         filas.append({"invernadero": invernadero, "detalle": " · ".join(partes)})
     hay_activos = bool(filas) or Invernadero.objects.filter(estado_invernadero=Invernadero.Estado.ACTIVO).exists()
     return SeccionDeInicio(PLANTILLA_DE_INICIO, {"filas": filas, "hay_activos": hay_activos})
+
+
+# ---- NOT-01 (D-42): lo que `maestros` le da a la campana de `core` ----
+# Se registran en ``core.extensiones`` desde ``MaestrosConfig.ready()`` (regla A4 de D-37): ``core`` no importa a `maestros`.
+# Son solo lectura: no bloquean, no cambian nada y no auditan (SEG-14).
+
+DESCRIPCION_DE_ALERTAS_PARA_EL_GERENTE = "Alertas activas para el Gerente"
+
+
+def items_de_campana(usuario):
+    """Fuente de alertas de la campana (D-42): las alertas ACTIVAS que ``usuario`` recibe (``Alerta.objects.para``: el Gerente
+    las suyas, el Agrónomo las de sus invernaderos, cualquier otro ninguna), leídas o no, como ``ItemDeAlerta``.
+
+    - ``severidad``: la del tipo registrado (``maestros.alertas.tipo_de_alerta``); si el código ya no está registrado, la que se
+      guardó con la alerta (MD-109), para que una alerta vieja no rompa la campana de toda la pantalla.
+    - ``titulo``: la descripción de la alerta («Invernadero sin Capataz activo»); ``detalle``: el nombre del invernadero.
+    - ``url``: la ficha del invernadero. ``leida``: según ``estado_lectura_alerta`` (regla 7 de 8.18).
+    El orden es el de ``Alerta`` (la más reciente primero): ``core`` ordena por severidad y lo conserva dentro de cada nivel.
+    """
+    items = []
+    for alerta in Alerta.objects.para(usuario).activas().select_related("invernadero"):
+        try:
+            severidad = tipo_de_alerta(alerta.tipo_alerta).severidad
+        except ValueError:
+            severidad = alerta.nivel_severidad
+        items.append(
+            ItemDeAlerta(
+                severidad=str(severidad),
+                titulo=alerta.descripcion_alerta,
+                detalle=alerta.invernadero.nombre_invernadero,
+                url=reverse("maestros:invernadero", args=[alerta.invernadero_id]),
+                leida=alerta.estado_lectura_alerta == Alerta.Lectura.LEIDA,
+            )
+        )
+    return items
+
+
+def pendientes_de_alertas():
+    """Contador de pendientes del Gerente (D-14, D-42): las alertas activas con ``para_gerente=True``, como
+    ``[("Alertas activas para el Gerente", N)]``; sin ninguna, ``[]`` (sin nada pendiente, lista vacía)."""
+    cantidad = Alerta.objects.filter(para_gerente=True).activas().count()
+    return [(DESCRIPCION_DE_ALERTAS_PARA_EL_GERENTE, cantidad)] if cantidad else []

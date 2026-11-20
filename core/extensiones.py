@@ -3,7 +3,7 @@
 # sin conocerlas. Patrón: Variaciones protegidas con Indirección (Larman), el mismo de ``core/menu.py`` y
 # ``maestros/extensiones.py``.
 #
-# Cuatro puntos:
+# Cuatro puntos (la identidad de la organización y las fuentes de la campana van aparte, al final):
 #   1. Efectos de la baja de una cuenta (postcondición e y regla 4 de USR-BAJ-USR; MD-61).
 #   2. Efectos de la reactivación de una cuenta (postcondición c de USR-MOD-USR; D8).
 #   3. Lo que la cuenta tiene asignado, para informarlo en la ventana de baja (regla 4 de USR-BAJ-USR).
@@ -123,3 +123,51 @@ def identidad_registrada():
     for funcion in list(_IDENTIDAD):
         return funcion()
     return None
+
+
+# ---- Campana: fuentes de alertas y contadores de pendientes del Gerente (NOT-01, D-42) ----
+# Dos puntos más, aparte de los cuatro de D-43: ``Alerta`` vive en ``maestros`` (D-38) y ``core`` no puede importarlo
+# (regla A1 de D-37). Cada app registra en ``AppConfig.ready()`` de dónde salen sus alertas para la campana y lo que
+# espera una resolución del Gerente. Contrato completo: docs/api/notificaciones.md.
+
+# Una alerta activa tal como la muestra la campana. ``severidad``: ``critica``, ``advertencia`` o ``informativa``;
+# ``url``: adónde lleva (la ficha del invernadero); ``leida``: si el destinatario ya la abrió (regla 7 de 8.18).
+ItemDeAlerta = namedtuple("ItemDeAlerta", "severidad titulo detalle url leida")
+
+# Orden de la campana: lo más urgente arriba (el prototipo, ``alertas``: crítica, advertencia, informativa). Una
+# severidad que no figura va al final.
+ORDEN_DE_SEVERIDAD = {"critica": 0, "advertencia": 1, "informativa": 2}
+
+_FUENTES_DE_ALERTAS = []
+_CONTADORES_DE_PENDIENTES = []
+
+
+def registrar_fuente_de_alertas(funcion):
+    """Registra ``funcion(usuario) -> list[ItemDeAlerta]``: las alertas activas de ``usuario`` en su app (todas las que
+    recibe, leídas o no). Solo lectura. Idempotente."""
+    return _registrar(_FUENTES_DE_ALERTAS, funcion)
+
+
+def alertas_para(usuario):
+    """Las alertas de todas las fuentes para ``usuario``, ordenadas por severidad (crítica, advertencia, informativa) y,
+    dentro de cada nivel, en el orden en que las dio cada fuente y en el de registro de las fuentes (el orden de Python
+    es estable)."""
+    items = []
+    for funcion in list(_FUENTES_DE_ALERTAS):
+        items.extend(funcion(usuario))
+    return sorted(items, key=lambda item: ORDEN_DE_SEVERIDAD.get(item.severidad, len(ORDEN_DE_SEVERIDAD)))
+
+
+def registrar_contador_de_pendientes(funcion):
+    """Registra ``funcion() -> list[tuple[str, int]]``: lo que, en su app, espera una resolución del Gerente, como
+    ``(descripción, cantidad)``; sin nada pendiente, lista vacía (D-14). Idempotente."""
+    return _registrar(_CONTADORES_DE_PENDIENTES, funcion)
+
+
+def contadores_de_pendientes():
+    """Los ``(descripción, cantidad)`` de todos los registrantes, juntos y en el orden de registro. Los suma
+    ``core.notificaciones.pendientes_del_gerente``."""
+    juntos = []
+    for funcion in list(_CONTADORES_DE_PENDIENTES):
+        juntos.extend(funcion())
+    return juntos

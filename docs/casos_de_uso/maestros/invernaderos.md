@@ -211,7 +211,8 @@ destino. Cada una está también en `docs/disparadores.md`.
 
 - **Alertas** (postcondición d de PROD-ALT-INV; postcondiciones b, d y e de PROD-MOD-INV; postcondición e de
   PROD-BAJ-INV): las genera y las resuelve MAE-02, que crea `Alerta` (D-38).
-- **Notificaciones** (postcondición e de PROD-ALT-INV, postcondición c de PROD-MOD-INV): no se modelan (D-38); queda
+- **Notificaciones** (postcondición e de PROD-ALT-INV, postcondición c de PROD-MOD-INV): hecho en NOT-01 (D-42).
+
   por decidir si se construye el mecanismo.
 - **Lo que recibe la persona entrante** (postcondición b de PROD-MOD-INV): órdenes de trabajo, mantenimientos,
   contratos y pedidos. Cada uno se conecta cuando exista su app.

@@ -699,3 +699,22 @@ button.enviando:disabled{cursor:progress}
 /* Tarjetas seguidas (el estilo anterior ya las separaba): en grillas y pilas el espacio lo pone el gap. */
 .card + .card{margin-top:20px}
 .split > .card + .card,.stack > .card + .card,.with-aside .card + .card{margin-top:0}
+
+/* ---- Campana (NOT-01, D-42): la usan el panel (.pop) y la página completa (.campana-pagina) ---- */
+#campana-panel{display:contents}
+a.icon-btn{text-decoration:none}
+.ptabs{display:flex;border-bottom:1px solid var(--border)}
+.ptabs a{flex:1;display:flex;align-items:center;justify-content:center;min-height:44px;padding:10px 8px;font-size:13px;font-weight:600;color:var(--muted-foreground);text-decoration:none;text-align:center;border-bottom:2px solid transparent}
+.ptabs a[aria-current="true"]{color:var(--primary);border-bottom-color:var(--primary)}
+.ptabs a:hover{background:var(--subtle)}
+.ptabs a:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.plist[hidden]{display:none}
+.plist a.acc-item{color:inherit;text-decoration:none}
+.plist a.acc-item:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+/* El detalle de una notificación puede traer varias líneas («Recibe: …»): no se corta como en los menús. */
+.plist .acc-item .t span{white-space:normal;overflow:visible}
+.sev-critica{color:var(--status-danger)}
+.sev-advertencia{color:var(--status-warn)}
+.sev-informativa{color:#1d4f9c}
+/* Roles de campo (celular): el botón de la campana mide al menos 44 px (D-42). */
+.field .icon-btn{min-height:44px;min-width:44px;justify-content:center}

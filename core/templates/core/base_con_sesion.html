@@ -1,8 +1,10 @@
 {% extends "core/base.html" %}{% load iconos cuentas %}
 {% comment %}Marco con sesión (equivale a shell del prototipo): cabecera, menú lateral, contenido, pie y
 menú de cuenta con «Cambiar de cuenta» (SEG-09, tarea 06b), «Mi perfil» (USR-GST-PRF, tarea 06a) y «Cerrar
-sesión» (SEG-08). Sin campana (NOT-01
-la agrega en su lugar de la cabecera). El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecera muestra «Volver»
+sesión» (SEG-08), y la campana de alertas y notificaciones (NOT-01, D-42) en la cabecera, salvo para el Administrador.
+#campana-panel recibe el panel que trae HTMX (display: contents, así no ocupa una celda de la grilla del marco) y el
+formulario oculto es el que infoponia.js dispara al cerrar el panel para marcar como leídas las notificaciones
+mostradas. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecera muestra «Volver»
 (back-btn del prototipo; el CSS lo oculta en escritorio).{% endcomment %}
 {% block cuerpo %}
 <div class="shell{% if modo_campo %} field{% elif not mostrar_menu_lateral %} sin-lateral{% endif %}">
@@ -13,8 +15,8 @@ la agrega en su lugar de la cabecera). El bloque «boton_volver» lo usa Mi perf
       <b>{{ nombre_organizacion }}</b>
     </div>
     <div class="spacer"></div>
-    {# NOT-01 llena este lugar con el botón de la campana (.icon-btn con aria-label y, si hay algo sin leer, .dotn), como en #}
-    {# el shell del prototipo. Hasta entonces queda vacío: no hay notificaciones. #}
+    {# Campana (NOT-01, D-42): todos los roles menos el Administrador, que no la tiene (usuarios.md, «Pantallas»). #}
+    {% if campana %}{% include "core/_campana.html" %}{% endif %}
     <button class="acct" type="button" data-menu-cuenta aria-haspopup="dialog"
             aria-controls="menu-cuenta" aria-expanded="false"
             aria-label="Menú de cuenta: {{ user.get_full_name }}, {{ rol_visible }}">
@@ -68,6 +70,12 @@ la agrega en su lugar de la cabecera). El bloque «boton_volver» lo usa Mi perf
   {# Región de avisos breves: vacía al cargar; infoponia.js le agrega un aviso por mensaje (10 s, con cruz). #}
   {# Al ser role="status", los lectores de pantalla anuncian cada aviso que se le agrega. #}
   <div class="avisos" id="avisos" role="status" aria-live="polite"></div>
+
+  {% if campana %}
+  <div id="campana-panel"></div>
+  <form id="campana-formulario" method="post" action="{% url 'core:campana_vista' %}" hidden
+        hx-post="{% url 'core:campana_vista' %}" hx-trigger="cerrar" hx-target="#campana-boton" hx-swap="outerHTML"></form>
+  {% endif %}
 
   <div class="scrim" data-cerrar-menu hidden></div>
   <div class="pop" id="menu-cuenta" role="dialog" aria-label="Menú de cuenta" hidden>

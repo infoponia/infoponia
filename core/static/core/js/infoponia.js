@@ -381,3 +381,103 @@
     avisarError(MENSAJE_ERROR_DEL_SERVIDOR);
   });
 })();
+
+// ---- Campana de alertas y notificaciones (NOT-01, D-42). Con HTMX, un clic en el botón trae el panel a #campana-panel
+// (hx-get, ver _campana.html); sin JavaScript el botón es un enlace a la página completa. Acá se hace lo que HTMX no:
+// cambiar de pestaña sin recargar, cerrar (clic en el botón, clic afuera o Esc) y, al cerrar, marcar como leídas las
+// notificaciones mostradas: se dispara el evento «cerrar» del formulario oculto #campana-formulario, un POST a
+// core:campana_vista con los ids del panel (solo si se vio la pestaña de notificaciones). Las ajenas las ignora el servidor.
+(function () {
+  "use strict";
+
+  var contenedor = document.getElementById("campana-panel");
+  var formulario = document.getElementById("campana-formulario");
+  if (!contenedor || !formulario) return;
+
+  function boton() {
+    return document.getElementById("campana-boton");
+  }
+
+  function panel() {
+    return contenedor.querySelector("[data-campana-panel]");
+  }
+
+  function mostrarPestana(ventana, nombre) {
+    ventana.setAttribute("data-pestana", nombre);
+    if (nombre === "notificaciones") ventana.setAttribute("data-vistas", "1");
+    ventana.querySelectorAll("[data-campana-tab]").forEach(function (pestana) {
+      var activa = pestana.getAttribute("data-campana-tab") === nombre;
+      if (activa) pestana.setAttribute("aria-current", "true");
+      else pestana.removeAttribute("aria-current");
+      pestana.setAttribute("aria-selected", activa ? "true" : "false");
+    });
+    ventana.querySelectorAll("[data-campana-lista]").forEach(function (lista) {
+      lista.hidden = lista.getAttribute("data-campana-lista") !== nombre;
+    });
+  }
+
+  function cerrar(devolverFoco) {
+    var ventana = panel();
+    if (!ventana) return;
+    var ids = (ventana.getAttribute("data-ids") || "").split(",").filter(Boolean);
+    if (ventana.getAttribute("data-vistas") === "1" && ids.length && window.htmx) {
+      formulario.querySelectorAll("input[name=ids]").forEach(function (campo) { campo.remove(); });
+      ids.forEach(function (id) {
+        var campo = document.createElement("input");
+        campo.type = "hidden";
+        campo.name = "ids";
+        campo.value = id;
+        formulario.appendChild(campo);
+      });
+      window.htmx.trigger(formulario, "cerrar");
+    }
+    contenedor.innerHTML = "";
+    var b = boton();
+    if (b) {
+      b.setAttribute("aria-expanded", "false");
+      if (devolverFoco) b.focus();
+    }
+  }
+
+  // En la fase de captura, antes que HTMX: con el panel abierto, el clic en el botón lo cierra y no pide otro.
+  document.addEventListener(
+    "click",
+    function (e) {
+      var b = e.target.closest("[data-campana-boton]");
+      if (!b || !panel()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      cerrar(true);
+    },
+    true
+  );
+
+  document.addEventListener("click", function (e) {
+    var ventana = panel();
+    if (!ventana) return;
+    if (e.target.closest("[data-campana-cerrar]")) {
+      cerrar(false);
+      return;
+    }
+    var pestana = e.target.closest("[data-campana-tab]");
+    if (pestana && ventana.contains(pestana)) {
+      e.preventDefault();
+      mostrarPestana(ventana, pestana.getAttribute("data-campana-tab"));
+    }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && panel()) cerrar(true);
+  });
+
+  // El panel llegó: se marca abierto y el foco va a la primera pestaña.
+  document.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target !== contenedor) return;
+    var ventana = panel();
+    if (!ventana) return;
+    var b = boton();
+    if (b) b.setAttribute("aria-expanded", "true");
+    var primera = ventana.querySelector("[data-campana-tab]");
+    if (primera) primera.focus();
+  });
+})();
