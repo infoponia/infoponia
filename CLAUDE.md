@@ -8,7 +8,8 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
 
 - Una sola vez por tarea, antes de editar: proponé un plan (los pasos de la tarea y los archivos que tocás) y esperá
   aprobación. Aprobado el plan, hacé todos los pasos de la tarea de corrido, corriendo las pruebas de cada paso antes de
-  pasar al siguiente. No pidas permiso paso por paso: frená solo en los casos de L7 y L9.
+  pasar al siguiente. No pidas permiso paso por paso: frená solo en los casos de L7 y L9 y, en los pasos de servicios, para que el
+  estudiante revise las pruebas que fallan (`.claude/rules/pruebas.md`, «Orden en servicios»).
 - Ante cualquier ambigüedad o contradicción con la documentación: detenete y preguntá. No elijas en silencio.
 - Cada regla de negocio implementada cita su fuente en el docstring o en un comentario
   (por ejemplo: `# Regla 9 de 8.13 — modelo de dominio, ronda 20`).
@@ -132,7 +133,8 @@ M3. Proponé, sin aplicarlos (una sola vez, al cerrar la tarea entera, no por pa
     - la sección de la tarea en `docs/revisiones_pendientes.md`, si hay pasos a mano;
     - si hubo decisión, `docs/decisiones/D-NN.md` y su fila en `docs/decisiones/README.md`;
     - si creaste modelos, los disparadores que se cumplieron (se tachan) y los que nacen;
-    - la fila de la tarea en `docs/tareas/ronda_produccion_1.md`, si la tarea pertenece a esa ronda.
+    - la fila de la tarea en `docs/tareas/ronda_produccion_1.md`, si la tarea pertenece a esa ronda;
+    - lo que implementaste distinto de lo escrito, para `docs/temas_abiertos.md` (no lo corrijas en silencio).
 M4. Proponé el mensaje de commit. El commit lo hace el estudiante.
 
 Las reglas M5 (tachar las revisiones a mano hechas) y M6 (el estudiante aprueba cada lote de documentación antes de

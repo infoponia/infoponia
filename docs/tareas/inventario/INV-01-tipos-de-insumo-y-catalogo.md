@@ -106,8 +106,8 @@ sin tocar el esquema.
    y respaldo sin JavaScript (D-24, D-29, D-47). Las vistas exigen Agrónomo (otros roles: 403; sin sesión: inicio de sesión). Las vistas
    de lectura no se auditan. Pruebas: `inventario/tests/test_inventario_catalogo_vistas.py` (permisos, errores por campo, la baja
    que informa, los campos bloqueados, la entrada del menú solo para el Agrónomo y no para el Gerente ni el Administrador).
-7. **Cierre de documentación.** Cerrar lo que corresponda en `docs/disparadores.md` y marcar INV-01 en `docs/tareas/README.md` y en
-   `docs/tareas/ronda_produccion_1.md`. Si algún texto de la documentación dice algo distinto de lo que implementaste, anotalo en
+7. **Cierre de documentación.** Proponé, sin aplicarlos (M3): cerrar lo que corresponda en `docs/disparadores.md` y marcar INV-01 en `docs/tareas/README.md` y en
+   `docs/tareas/ronda_produccion_1.md`. Si algún texto de la documentación dice algo distinto de lo que implementaste, proponé anotarlo en
    `docs/temas_abiertos.md`: no lo corrijas en silencio.
 
 Si el tiempo apremia, lo último que se recorta es la pantalla de modificación con todos los campos bloqueados mostrados con su

@@ -5,7 +5,7 @@ archivo se reescribe al cerrar cada tarea y no pasa de 2 KB: lo hecho va a `docs
 
 ## En curso
 
-- Ninguna tarea de código. Documentación de la ronda «Producción 1»: lotes 0 a 4 validados, lote 5 (PRD-03 y PRD-04) entregado a validar; con los lotes 4 y 5 en el repo empieza la implementación (PRD-01 primero)
+- Ninguna tarea de código. Documentación de la ronda «Producción 1»: lotes 0 a 4 validados, lote 5 (PRD-03 y PRD-04) entregado a validar; con los lotes 4 y 5 en el repo empieza la implementación (UI-01 primero)
   (`docs/tareas/ronda_produccion_1.md`; D-42 y D-44 a D-50 vigentes, D-51, D-52, D-53 y D-54 a validar).
 
 ## Siguiente

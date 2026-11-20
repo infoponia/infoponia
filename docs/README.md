@@ -64,15 +64,57 @@ Fuera de `docs/`, el esquema también cambia `CLAUDE.md`, `.claude/rules/pruebas
    que nombran en «Leer» (`casos_de_uso/<app>/`, `modelo/<app>.md`), los patrones y los disparadores. El estudiante aprueba
    cada lote antes de programarlo (**M6**) y las tareas figuran en `tareas/README.md`.
 2. **Planificar y programar** (Claude Code): lee `estado.md`, la tarea y solo lo que ella lista. Un plan por tarea, aprobado
-   una vez; después hace todos sus pasos de corrido.
+   una vez; después hace todos sus pasos de corrido. Frena solo en L7 y L9 y, en los pasos de servicios, para que el
+   estudiante revise las pruebas que fallan.
 3. **Cerrar** (Claude Code propone, el estudiante aplica): completa «Cierre» y «Verificación a mano» en la tarea, y
    propone el `estado.md` nuevo, la fila del índice de tareas, una línea para `historial.md`, la sección de
-   `revisiones_pendientes.md`, las decisiones nuevas y los disparadores cumplidos o nuevos.
+   `revisiones_pendientes.md`, las decisiones nuevas, los disparadores cumplidos o nuevos y lo que quedó distinto de lo
+   escrito (`temas_abiertos.md`). El paso «Cierre de documentación» de cada tarea es esa misma propuesta (**M3**).
 4. **Revisar a mano**: quien hace un paso lo tacha en `revisiones_pendientes.md` y en `estado.md`, en el mismo commit
    (**M5**).
 
 Las reglas M5 y M6 son de las personas, no de Claude Code: por eso están acá y no en `CLAUDE.md` (que tiene M1 a M4, las
 del cierre de una tarea).
+
+## Prompt para pedirle una tarea a Claude Code
+
+Es el mismo para cualquier tarea. Reemplazá `<ID>`, `<app>` y `<rama>` (los dos últimos, del encabezado del archivo de la
+tarea) y pegalo como primer mensaje de una conversación nueva, con la rama ya creada desde `main` actualizado. Los
+comandos de `CLAUDE.md` están escritos para PowerShell en Windows; en macOS o Linux, agregá al final: «Estoy en
+macOS/Linux: usá `.venv/bin/python` en lugar de `.venv/Scripts/python.exe`».
+
+```
+Implementá la tarea <ID> (docs/tareas/<app>/<ID>-*.md). Ya estoy en la rama
+<rama>, creada desde main actualizado.
+
+Antes de editar:
+- Leé CLAUDE.md, docs/estado.md y el archivo de la tarea, y después solo lo que
+  su sección «Leer» indica, y solo las secciones nombradas (L3).
+- Verificá que las tareas de «Depende de» estén hechas y mergeadas en main
+  (docs/tareas/README.md y docs/historial.md). Si alguna no lo está, frená y avisame.
+- Proponeme el plan: los pasos de la tarea y los archivos que vas a tocar.
+  Esperá mi aprobación.
+
+Durante la implementación:
+- Seguí los pasos en orden y corré las pruebas de cada paso antes de seguir.
+- En los pasos de servicios, escribí primero las pruebas de sus reglas, mostrá que
+  fallan y esperá que las revise (.claude/rules/pruebas.md). Fuera de eso, no me
+  pidas permiso paso por paso.
+- Respetá «Límites»: nada fuera de «Permitido fuera de la app», ningún modelo
+  ni migración que no esté listado, ninguna dependencia nueva.
+- Si algo no está en «Leer» o dos documentos se contradicen, frená y avisame en
+  lugar de inventar (L7, L9). Si sentís que el contexto no alcanza para terminar,
+  decimelo antes de empezar el paso siguiente.
+
+Al terminar:
+- Corré todos los comandos de pruebas de «Hecho cuando» y mostrá el resultado (M1).
+- Completá «Cierre» y «Verificación a mano» en el archivo de la tarea (M2).
+- Del paso «Cierre de documentación» y de M3, mostrame los cambios propuestos sin
+  aplicarlos; los aplico yo.
+- No hagas commits, push ni PR. Proponeme el mensaje de commit (M4) y el texto del
+  PR: qué hiciste, qué difiere de la documentación y qué pasos de la
+  «Verificación a mano» tengo que hacer yo.
+```
 
 ## Qué se mudó y adónde (18/11/2026)
 

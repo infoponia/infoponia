@@ -1,6 +1,6 @@
 # MAE-01 · Invernadero: alta, modificación, baja y consulta
 
-Estado: pendiente | App: maestros | Rama: feature/mae-01-invernadero
+Estado: hecha | App: maestros | Rama: feature/mae-01-invernadero
 
 Depende de: PRD-00 (si las apps no existen, frená)
 

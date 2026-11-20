@@ -103,9 +103,9 @@ Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `ex
    respaldo sin JavaScript. «Dar de baja» en los lotes vencidos abre el ajuste con el motivo «vencimiento». Las vistas exigen Agrónomo
    a cargo (403 al resto y a un Agrónomo ajeno). Pruebas: `inventario/tests/test_existencias_vistas.py`, `test_ajuste_vistas.py`
    (permisos, errores por campo, resumen, la advertencia 12b, el aviso 14a, el valor sin asiento) y la entrada del menú.
-9. **Cierre de documentación.** Cerrar «Cuando exista InsumoInvernadero» en `docs/disparadores.md`; completar «Cuando existan los pedidos de
+9. **Cierre de documentación.** Proponé, sin aplicarlos (M3): cerrar «Cuando exista InsumoInvernadero» en `docs/disparadores.md`; completar «Cuando existan los pedidos de
    `compras`» (los tres puntos ya existen) y agregar la nota de que el cron job de Render se crea a mano; marcar INV-02 en
-   `docs/tareas/README.md` y `docs/tareas/ronda_produccion_1.md`. Lo que dice la documentación distinto de lo implementado va a
+   `docs/tareas/README.md` y `docs/tareas/ronda_produccion_1.md`. Lo que dice la documentación distinto de lo implementado se propone para
    `docs/temas_abiertos.md`.
 
 Si el tiempo apremia: no se recortan los bloqueos, el todo o nada ni los invariantes. Se puede dejar para una tarea chica aparte, anotada
