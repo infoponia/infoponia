@@ -137,9 +137,9 @@ semillas no existían (INV-01 las rechaza) y MAE-03 dejó puntos de extensión s
    sin JavaScript (D-24, D-29, D-47). Todas las vistas exigen Agrónomo (el Gerente: 404, igual que «Cultivos»). Pruebas: `inventario/tests/test_variedades_vistas.py` (permisos
    por rol; que el Gerente no las ve; errores por campo; que al elegir el perfil se ofrecen solo sus etapas; el resumen con los valores anteriores; la advertencia; la baja con
    impedimentos falsos; el formulario deshabilitado; que el HTML escapa el nombre; que no hay consultas por fila en la tabla).
-9. **Cierre de documentación.** Cerrar lo que corresponda en `docs/disparadores.md` (en especial «Cuando exista una ocupación de sector, una variedad con
+9. **Cierre de documentación.** Proponé, sin aplicarlos (M3): cerrar lo que corresponda en `docs/disparadores.md` (en especial «Cuando exista una ocupación de sector, una variedad con
    semilla o un hardware», punto 3, y el apartado «Cuando existan lotes, órdenes de trabajo y contratos»); marcar INV-03 en `docs/tareas/README.md` y en
-   `docs/tareas/ronda_produccion_1.md`. Anotá en `docs/temas_abiertos.md` que la precondición f de PROD-BAJ-VAR (contratos) no se verifica y cualquier cosa que
+   `docs/tareas/ronda_produccion_1.md`. Para `docs/temas_abiertos.md`, proponé anotar que la precondición f de PROD-BAJ-VAR (contratos) no se verifica y cualquier cosa que
    hayas implementado distinta de lo escrito: no la corrijas en silencio.
 
 Si el tiempo apremia, lo último que se recorta es la pantalla de modificación con el resumen de valores anteriores (queda el servicio completo y se anota). Las reglas

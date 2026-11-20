@@ -5,7 +5,8 @@ paths:
 
 # Pruebas
 
-Copiado sin cambios de la sección «Tests» de `CLAUDE.md` (versión del 17/11/2026, PR #26). Se carga sola al abrir un
+Estas reglas eran la sección «Tests» de `CLAUDE.md` (versión del 17/11/2026, PR #26) y se mudaron acá sin
+cambios; `CLAUDE.md` solo remite a este archivo. Se carga sola al abrir un
 archivo de `tests/`; igual leela antes de escribir o de correr pruebas (regla L3 de `CLAUDE.md`), porque al crear el
 primer archivo de pruebas de una app nueva todavía no abriste ninguno.
 

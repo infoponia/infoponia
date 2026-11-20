@@ -79,9 +79,9 @@ hechos. Los extractos con sus textos exactos:
    en este cambio), con el texto de D-42 y, en la modificación, lo que recibe (`contar_traspaso`, ya armado por
    `_aviso_de_personal`). Nunca al actor. Pruebas: `test_post_e_…` y `test_post_c_…` en los archivos de esos casos de uso;
    incluir que una modificación sin cambios no notifica (D-28) y que la persona saliente no recibe nada.
-8. **Cierre de documentación.** Actualizar los comentarios y docstrings que dicen «las notificaciones no existen todavía» o
-   «tarea aparte en core, D-42» (en `core/servicios.py` y `maestros/servicios/invernaderos.py`), y marcar cerrada la sección
-   «Cuando exista la primera notificación o alerta» de `docs/disparadores.md` y las filas de `docs/tareas/README.md` y de
+8. **Cierre de documentación.** Actualizá los comentarios y docstrings que dicen «las notificaciones no existen todavía» o
+   «tarea aparte en core, D-42» (en `core/servicios.py` y `maestros/servicios/invernaderos.py`). Proponé, sin aplicarlos (M3), el cierre de la sección
+   «Cuando exista la primera notificación o alerta» de `docs/disparadores.md` y los cambios de las filas de `docs/tareas/README.md` y de
    `docs/tareas/ronda_produccion_1.md`.
 
 Si el tiempo apremia, lo último que se recorta es el paso 7 (se anota como disparador); los pasos 1 a 6 no se recortan porque

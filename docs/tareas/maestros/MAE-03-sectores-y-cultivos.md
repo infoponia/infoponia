@@ -102,9 +102,9 @@ paso por paso. Si algo que necesitás no está en «Leer», frená (L9).
    «no tiene variedades»), ventanas de nuevo, renombrar (con el aviso de semillas y de invernaderos notificados) y baja (con el
    conteo de variedades activas), reactivar. Los botones de variedades **no se muestran** hasta INV-03. Pruebas:
    `maestros/tests/test_cultivos_vistas.py`.
-7. **Cierre de documentación.** Anotar en `docs/disparadores.md` lo que dejan registrado las otras tareas (quién se registra en
+7. **Cierre de documentación.** Proponé, sin aplicarlos (M3): anotar en `docs/disparadores.md` lo que dejan registrado las otras tareas (quién se registra en
    cada punto de extensión) y cerrar «Cuando exista SectorProduccion»; marcar MAE-03 en `docs/tareas/README.md` y en
-   `docs/tareas/ronda_produccion_1.md`; si la API cambió, actualizar `docs/api/extensiones_de_maestros.md` y avisar.
+   `docs/tareas/ronda_produccion_1.md`; si la API cambió, proponé también el cambio de `docs/api/extensiones_de_maestros.md` y avisá.
 
 Si el tiempo apremia, lo último que se recorta es la parte de cultivos (pasos 5 y 6; se anota y se hace aparte); los sectores
 no se recortan porque PRD-01 los necesita.

@@ -31,7 +31,7 @@ Ninguno. Es una estructura del modelo (D-52), no un caso de uso.
 
 1. **Modelo y migración.** `OrigenDocumento` con su `Tipo`, `save()` protegido y la convención de la hija. `python manage.py makemigrations contabilidad` y revisar que la migración es solo esa tabla.
 2. **Pruebas** (`contabilidad/tests/test_origen_documento.py`): no se puede crear uno puro; una hija de prueba (declarada dentro de la prueba, sin migración, con `isolate_apps` o un modelo de prueba) fija su `tipo` y queda creada con su `id`; el `tipo` fuera de la lista no es válido; dos hijas de prueba comparten la secuencia de `id`; `makemigrations --check` no deja cambios.
-3. **Cierre de documentación.** Cerrar en `docs/disparadores.md` el apartado «Cuando exista contabilidad con asientos» punto 0 que corresponda a esta tarea; marcar CON-01 en `docs/tareas/README.md`, `docs/tareas/ronda_produccion_1.md` y `docs/estado.md`.
+3. **Cierre de documentación.** Proponé, sin aplicarlos (M3): cerrar en `docs/disparadores.md` el apartado «Cuando exista contabilidad con asientos» punto 0 que corresponda a esta tarea; marcar CON-01 en `docs/tareas/README.md`, `docs/tareas/ronda_produccion_1.md` y `docs/estado.md`.
 
 ## Hecho cuando
 

@@ -1,6 +1,6 @@
 # PRD-00 · Crear las apps de los módulos de negocio
 
-Estado: pendiente | App: config (sin app propia) | Rama: feature/prd-00-crear-apps
+Estado: hecha | App: config (sin app propia) | Rama: feature/prd-00-crear-apps
 
 Depende de: — (D-37 vigente desde el 18/11/2026)
 

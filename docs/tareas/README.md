@@ -50,14 +50,14 @@ está en el repo: no se puede programar hasta que llegue su lote de documentaci�
 | NOT-01 | Notificaciones y campana (D-42) | core | pendiente | UI-01 (MAE-02a y MAE-02b ya están hechas) | `core/NOT-01-notificaciones.md` |
 | MAE-03 | Sectores y cultivos, con los tipos de etapa | maestros | pendiente | UI-01, NOT-01 | `maestros/MAE-03-sectores-y-cultivos.md` |
 | MAE-04 | Configuración operativa y perfil de la organización (sin logo) | maestros | pendiente | UI-01 | `maestros/MAE-04-configuracion-y-organizacion.md` |
-| CON-01 | `OrigenDocumento`: el documento de origen común (D-52) | contabilidad | pendiente | — | `tareas/contabilidad/CON-01-origen-documento.md` |
+| CON-01 | `OrigenDocumento`: el documento de origen común (D-52) | contabilidad | pendiente | — | `contabilidad/CON-01-origen-documento.md` |
 | INV-01 | Tipos de insumo y catálogo de insumos (y los modelos de todo `inventario`) | inventario | pendiente | UI-01, NOT-01, CON-01 | `inventario/INV-01-tipos-de-insumo-y-catalogo.md` |
 | INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | pendiente | INV-01, UI-01 | `inventario/INV-02-insumos-del-invernadero-stock-y-vencimientos.md` |
 | INV-03 | Variedades, con la creación de su semilla | inventario | pendiente | MAE-03, INV-02, UI-01, NOT-01 | `inventario/INV-03-variedades-y-semillas.md` |
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz | produccion | pendiente | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 (y UI-01) | `produccion/PRD-01-siembra-ordenes-y-bandeja.md` |
 | PRD-02 | Transición: planificar, concretar y cancelar | produccion | pendiente | PRD-01 | `produccion/PRD-02-transicion-de-etapa.md` |
-| PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora | produccion | pendiente | PRD-02 | `tareas/produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md` |
-| PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | pendiente | PRD-03 | `tareas/produccion/PRD-04-sector-fuera-de-servicio-e-inicio.md` |
+| PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora | produccion | pendiente | PRD-02 | `produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md` |
+| PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | pendiente | PRD-03 | `produccion/PRD-04-sector-fuera-de-servicio-e-inicio.md` |
 
 ## Tareas hechas antes del traspaso (18/11/2026)
 

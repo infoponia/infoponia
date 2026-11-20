@@ -71,7 +71,7 @@ paso por paso. Si algo que necesitás no está en «Leer», frená (L9).
    junto al formulario; las vistas exigen Gerente (otros roles: 403; sin sesión: inicio de sesión). Las vistas de lectura no
    se auditan. Pruebas: `maestros/tests/test_configuracion_vistas.py` (permisos, errores por campo, todo o nada, mensaje de
    guardado, la entrada del menú solo para el Gerente y el Administrador no la ve).
-5. **Cierre de documentación.** Cerrar «Cuando exista PerfilOrganizacion» en `docs/disparadores.md` (menos el logo, que queda
+5. **Cierre de documentación.** Proponé, sin aplicarlos (M3): cerrar «Cuando exista PerfilOrganizacion» en `docs/disparadores.md` (menos el logo, que queda
    como disparador), agregar a `docs/temas_abiertos.md` el contraste del color principal, y marcar MAE-04 en
    `docs/tareas/README.md` y `docs/tareas/ronda_produccion_1.md`.
 
