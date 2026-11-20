@@ -1,7 +1,7 @@
 # Pruebas de PROD-MOD-INV · Modificar Invernadero, con su reactivación (docs/casos_de_uso/maestros/invernaderos.md) y de lo
 # que cita: regla 5 de PROD-BAJ-INV (se reactiva con PROD-MOD-INV), D-22 (auditoría en la misma transacción), D-28 (sin
 # cambios no se audita), D-30 (ninguna acción lleva a un 403), D-36 (formato del detalle), D-37 (puntos de extensión) y
-# D-38 (sin alertas ni notificaciones). Modelo de dominio: ronda 22 (docs/modelo/maestros.md).
+# D-38 (alertas). Modelo de dominio: ronda 22 (docs/modelo/maestros.md).
 #
 # Servicios que se prueban (maestros/servicios/invernaderos.py), tomados del módulo dentro de cada prueba:
 #   modificar_invernadero(actor, invernadero_id, nombre, *, tipo_direccion, localidad_id, calle="", numero_calle="",
@@ -21,10 +21,11 @@
 # ``traspasar(actor, invernadero, rol, saliente, entrante)``; ``rol`` es el atributo ("capataz"); saliente y entrante
 # son instancias de la clase del rol (Capataz, no Usuario) o None.
 #
-# Fuera de alcance (D-38 y «Límites» de MAE-01b): las postcondiciones b (alerta del rol), d y e (alertas) y la c
-# (notificaciones). Las pruebas de vista y de concurrencia se agregan después de la pausa de revisión.
+# Las postcondiciones b (alerta del rol), d y e (alertas) las conectó MAE-02a (D-41) y la c (notificaciones a quien queda a
+# cargo), NOT-01 (D-42): sus pruebas son las ``test_post_c_…`` de ``ProdModInvServicioTests``.
 
 import inspect
+import json
 from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -33,7 +34,7 @@ from django.http import Http404
 from django.test import TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
-from core.models import Agronomo, Capataz, RegistroAuditoria, referencia
+from core.models import Agronomo, Capataz, Notificacion, RegistroAuditoria, referencia
 from core.servicios import baja_usuario
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import afectado, crear_administrador, crear_capataz, crear_gerente
@@ -669,7 +670,7 @@ class ProdModInvServicioTests(ConGeoref, TestCase):
         self.assertFalse(DireccionRural.objects.exists())
 
     # ---- MAE-02a: alertas (postcondiciones b y d, regla 2, D4; reemplazan a test_d38_la_modificacion_…) ----
-    # Las notificaciones (postcondición c) siguen fuera de alcance: van a una tarea aparte en core (D-42).
+    # Las notificaciones (postcondición c) son de NOT-01 (D-42): sus pruebas están más arriba, en ``test_post_c_…``.
 
     def tipos_de_destinatario(self):
         """Un tipo falso por cada destinatario posible, registrados mientras dura el bloque."""
@@ -871,6 +872,170 @@ class ProdModInvServicioTests(ConGeoref, TestCase):
             with self.assertRaises(FallaDePrueba), transaction.atomic():
                 self.mod(capataz_id=None, personal_confirmado=True)
         self.assertFalse(Alerta.objects.exists())
+
+
+    # ---- NOT-01: avisos a las personas que quedan a cargo (postcondición c; D-42) ----
+    # Texto aprobado: título «Quedó a cargo de {invernadero}»; detalle «El Gerente le asignó el rol de {rol}.» seguido de
+    # «Recibe: {descripción}: {cantidad}, …» (solo cantidades mayores que cero) o de «No recibe nada pendiente.». Solo a
+    # las personas ENTRANTES de este cambio (plan de NOT-01, paso 7; D-28: sin cambios, nada).
+
+    def test_post_c_notifica_a_la_persona_que_queda_a_cargo_y_dice_que_no_recibe_nada_pendiente(self):
+        """PROD-MOD-INV, postcondición c: la persona entrante recibe una notificación con el invernadero; sin nada que
+        recibir, «No recibe nada pendiente.»."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso().patch():
+            self.mod(capataz_id=nuevo.pk, personal_confirmado=True)
+
+        notificacion = Notificacion.objects.get()
+        self.assertEqual(notificacion.destinatario_id, nuevo.pk)
+        self.assertEqual(notificacion.titulo, "Quedó a cargo de Invernadero A")
+        self.assertEqual(notificacion.detalle, "El Gerente le asignó el rol de Capataz. No recibe nada pendiente.")
+        self.assertFalse(notificacion.leida)
+
+    def test_post_c_el_aviso_dice_lo_que_recibe(self):
+        """PROD-MOD-INV, postcondición c: «lo que recibió»: lo que cuentan los registrantes de ``contar_traspaso``."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso(recibe=[("órdenes a realizar", 2), ("mantenimientos a realizar", 1)]).patch():
+            self.mod(capataz_id=nuevo.pk, personal_confirmado=True)
+
+        self.assertEqual(
+            Notificacion.objects.get().detalle,
+            "El Gerente le asignó el rol de Capataz. Recibe: órdenes a realizar: 2, mantenimientos a realizar: 1.",
+        )
+
+    def test_post_c_no_lista_lo_que_viene_en_cero(self):
+        """PROD-MOD-INV, postcondición c: una cantidad en cero no se lista; si todo es cero, «No recibe nada pendiente.»."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso(recibe=[("órdenes a realizar", 0), ("mantenimientos a realizar", 3)]).patch():
+            self.mod(capataz_id=nuevo.pk, personal_confirmado=True)
+        self.assertEqual(
+            Notificacion.objects.get().detalle,
+            "El Gerente le asignó el rol de Capataz. Recibe: mantenimientos a realizar: 3.",
+        )
+
+        Notificacion.objects.all().delete()
+        otro = crear_capataz_activo("otro.capataz@infoponia.com")
+        with RegistranteDeTraspaso(recibe=[("órdenes a realizar", 0)]).patch():
+            self.mod(capataz_id=otro.pk, personal_confirmado=True)
+        self.assertEqual(
+            Notificacion.objects.get().detalle, "El Gerente le asignó el rol de Capataz. No recibe nada pendiente."
+        )
+
+    def test_post_c_el_agronomo_entrante_recibe_las_alertas_activas_que_le_pasan(self):
+        """PROD-MOD-INV, postcondición c y regla 2: al Agrónomo entrante se le avisa de las alertas activas que recibe,
+        contadas ANTES del traspaso (después ya no quedan en el saliente)."""
+        nuevo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        with self.tipos_de_destinatario(), RegistranteDeTraspaso().patch():
+            self.alertas_de_destinatario(para_gerente=False, agronomo=self.agronomo)
+            self.mod(agronomo_id=nuevo.pk, personal_confirmado=True)
+
+        notificacion = Notificacion.objects.get(destinatario=nuevo)
+        self.assertEqual(
+            notificacion.detalle, "El Gerente le asignó el rol de Agrónomo. Recibe: alertas activas: 2."
+        )
+
+    def test_post_c_la_persona_saliente_no_recibe_nada(self):
+        """PROD-MOD-INV, postcondición c y «Solo prototipo»: el caso de uso solo notifica a la persona asignada; el
+        prototipo avisaba también a la saliente y manda el caso de uso (L7)."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso().patch():
+            self.mod(capataz_id=nuevo.pk, personal_confirmado=True)
+
+        self.assertFalse(Notificacion.objects.filter(destinatario=self.capataz).exists())
+
+    def test_post_c_las_personas_que_siguen_a_cargo_no_reciben_nada(self):
+        """PROD-MOD-INV, postcondición c: solo las que quedan a cargo EN ESTE CAMBIO; el Agrónomo y el Vendedor que no
+        cambiaron no reciben nada."""
+        vendedor = crear_vendedor()
+        invernadero = crear_invernadero("Invernadero B", agronomo=self.agronomo, capataz=self.capataz, vendedor=vendedor)
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso().patch():
+            self.mod(invernadero, capataz_id=nuevo.pk, personal_confirmado=True)
+
+        self.assertEqual([n.destinatario_id for n in Notificacion.objects.all()], [nuevo.pk])
+
+    def test_post_c_si_cambian_dos_roles_cada_entrante_recibe_la_suya_con_su_rol(self):
+        """PROD-MOD-INV, postcondición c: un aviso por persona entrante, con el rol que le tocó."""
+        nuevo_agronomo = crear_agronomo("nuevo.agronomo@infoponia.com")
+        vendedor = crear_vendedor()
+        with RegistranteDeTraspaso().patch():
+            self.mod(agronomo_id=nuevo_agronomo.pk, vendedor_id=vendedor.pk, personal_confirmado=True)
+
+        detalles = {n.destinatario_id: n.detalle for n in Notificacion.objects.all()}
+        self.assertEqual(set(detalles), {nuevo_agronomo.pk, vendedor.pk})
+        self.assertIn("rol de Agrónomo", detalles[nuevo_agronomo.pk])
+        self.assertIn("rol de Vendedor", detalles[vendedor.pk])
+
+    def test_post_c_quitar_a_alguien_sin_reemplazarlo_no_notifica_a_nadie(self):
+        """PROD-MOD-INV, regla 3: sin persona entrante no hay a quién avisar; la saliente tampoco recibe nada."""
+        with RegistranteDeTraspaso().patch():
+            self.mod(capataz_id=None, personal_confirmado=True)
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_c_nunca_notifica_al_actor(self):
+        """API, regla de uso 4: el Gerente que modifica no recibe nada."""
+        with RegistranteDeTraspaso().patch():
+            self.mod(capataz_id=crear_capataz_activo("nuevo.capataz@infoponia.com").pk, personal_confirmado=True)
+
+        self.assertFalse(Notificacion.objects.filter(destinatario=self.gerente).exists())
+
+    def test_d28_una_modificacion_sin_cambios_no_notifica(self):
+        """D-28 y paso 7 de NOT-01: si no cambió nada, no se guarda, no se audita y no se notifica."""
+        with RegistranteDeTraspaso().patch():
+            self.mod()
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_c_cambiar_solo_el_nombre_o_la_direccion_no_notifica(self):
+        """PROD-MOD-INV, postcondición c: el aviso es por el personal que queda a cargo; un cambio de nombre o de dirección
+        no lo es (plan de NOT-01, paso 7)."""
+        with RegistranteDeTraspaso().patch():
+            self.mod(nombre="Invernadero Norte", calle="Otra calle")
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_c_un_cambio_de_personal_sin_confirmar_no_notifica(self):
+        """PROD-MOD-INV, regla 2: sin confirmar no se guarda nada, y tampoco se avisa."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso().patch(), self.assertRaises(invernaderos.FaltaConfirmarPersonal):
+            self.mod(capataz_id=nuevo.pk)
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_c_si_el_traspaso_falla_no_queda_ninguna_notificacion(self):
+        """PROD-MOD-INV, postcondición c y regla de uso 1 de la API: el aviso es de la misma transacción."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        registrante = RegistranteDeTraspaso()
+        with mock.patch.object(registrante, "traspasar", side_effect=FallaDePrueba("falla")), registrante.patch():
+            with self.assertRaises(FallaDePrueba), transaction.atomic():
+                self.mod(capataz_id=nuevo.pk, personal_confirmado=True)
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_c_si_falla_al_notificar_se_deshace_el_cambio_de_personal(self):
+        """API, regla de uso 1: si falla al notificar, la modificación entera se deshace."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso().patch():
+            with mock.patch.object(
+                invernaderos.notificaciones, "notificar_a_varios", side_effect=FallaDePrueba("falla")
+            ):
+                with self.assertRaises(FallaDePrueba), transaction.atomic():
+                    self.mod(nombre="Invernadero Norte", capataz_id=nuevo.pk, personal_confirmado=True)
+
+        self.assertEqual(self.recargado().nombre_invernadero, "Invernadero A")
+        self.assertEqual(self.recargado().capataz_id, self.capataz.pk)
+        self.assertFalse(RegistroAuditoria.objects.filter(accion=MODIFICACION).exists())
+
+    def test_post_c_no_se_audita_el_texto_de_la_notificacion(self):
+        """D-42: el texto del aviso no va al registro de auditoría."""
+        nuevo = crear_capataz_activo("nuevo.capataz@infoponia.com")
+        with RegistranteDeTraspaso(recibe=[("órdenes a realizar", 2)]).patch():
+            self.mod(capataz_id=nuevo.pk, personal_confirmado=True)
+
+        registro = RegistroAuditoria.objects.get(accion=MODIFICACION)
+        self.assertNotIn("Quedó a cargo", json.dumps(registro.detalle))
+        self.assertNotIn("Recibe:", json.dumps(registro.detalle))
 
 
 class ProdModInvReactivacionServicioTests(ConGeoref, TestCase):

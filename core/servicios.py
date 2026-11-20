@@ -25,7 +25,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
-from core import extensiones
+from core import extensiones, notificaciones
 from core.identidad import nombre_de_la_organizacion
 from core.models import (
     ADMINISTRADOR,
@@ -620,6 +620,21 @@ def _limpiar_datos_personales(nombre, apellido, email, telefono):
     return nombre, apellido, email, telefono, errores
 
 
+# Aviso al nuevo Gerente (postcondición d de USR-ALT-USR; NOT-01, D-42). El texto se arma acá y no en ``core.notificaciones``
+# (D-42): con los nombres de las cosas, no con ids.
+TITULO_PENDIENTES_DEL_GERENTE = "Pendientes que esperan al Gerente"
+
+
+def _detalle_de_pendientes(total, detalle):
+    """El detalle del aviso de resumen al nuevo Gerente: «Tiene 3 pendientes. Alertas activas para el Gerente: 3.», o
+    «No tiene pendientes.» si la suma es 0 (D-14, D-42). ``total`` y ``detalle`` son lo que da
+    ``core.notificaciones.pendientes_del_gerente``."""
+    if total == 0:
+        return "No tiene pendientes."
+    cantidad = f"Tiene {total} pendiente{'' if total == 1 else 's'}."
+    return " ".join([cantidad, *(f"{descripcion}: {n}." for descripcion, n in detalle)])
+
+
 def alta_usuario(
     actor, rol, nombre, apellido, email, telefono="", acceso=ACCESO_TEMPORAL, construir_url=None
 ):
@@ -649,8 +664,12 @@ def alta_usuario(
     - Regla 9 y D-21/D-28: formato y largo del teléfono.
     - Postcondiciones a y e (SEG-14, D-22): la cuenta y su registro de auditoría, con la forma de acceso y sin
       contraseñas ni el token, se guardan en la misma transacción.
+    - Postcondición d, D-14 y D-42 (NOT-01): si el rol es Gerente, una única notificación al Gerente recién creado, con la
+      cantidad de pendientes que esperan una resolución del Gerente (``notificaciones.pendientes_del_gerente``), en la
+      misma transacción: si el alta falla, no queda. El destinatario es la cuenta nueva, que ya es el Gerente activo
+      (D-09): la omisión «sin Gerente activo» de D-14 solo se da en ``notificar_al_gerente``, no acá. No se audita.
 
-    Pendiente: invernadero del Transportista (R155) y aviso al nuevo Gerente (postcondición d).
+    Pendiente: invernadero del Transportista (R155).
 
     Falla con ``ValidationError`` por campo y no crea nada.
     """
@@ -716,6 +735,11 @@ def alta_usuario(
                 "datos": {"acceso": acceso},
             },
         )
+        # Postcondición d (NOT-01, D-42): el aviso de resumen al nuevo Gerente, dentro de la transacción y sin auditarlo.
+        if rol == Usuario.Rol.GERENTE:
+            notificaciones.notificar(
+                cuenta, TITULO_PENDIENTES_DEL_GERENTE, _detalle_de_pendientes(*notificaciones.pendientes_del_gerente())
+            )
     # Fuera de la transacción (D-14): la cuenta ya está confirmada.
     return cuenta, _resultado_acceso(cuenta, acceso, contrasena_temporal, construir_url)
 
@@ -1031,7 +1055,11 @@ def baja_usuario(actor, cuenta_id):
       invernaderos → alertas (D-40). Los afectados y los ``datos`` que suma van a la auditoría. La regla 4 informa lo
       asignado en la ventana (``core.extensiones.asignaciones_de_cuenta``).
 
-    Pendiente: postcondiciones c, f y g (pendientes del Gerente, pedidos y entregas) y lo de la regla 4 que no sea de
+    - Postcondición c y regla 3 (NOT-01, D-42): los pendientes del Gerente que quedan esperando los muestra la ventana de baja
+      (``core.views._gestionar_cuenta``, con ``notificaciones.pendientes_del_gerente``); no es una notificación y la baja
+      no se bloquea por ellos.
+
+    Pendiente: postcondiciones f y g (pedidos y entregas) y lo de la regla 4 que no sea de
     invernaderos (órdenes, contratos, entregas y pedidos).
     """
     with transaction.atomic():

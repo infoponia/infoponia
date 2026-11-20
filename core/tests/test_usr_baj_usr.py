@@ -9,9 +9,10 @@
 # «cuenta_inactiva». Tarea 05b (D-16, SEG-15): dar de baja a un Administrador cuando no queda otro activo
 # lanza ValidationError con el código «ultimo_administrador».
 #
+# NOT-01 (D-42): la postcondición c (pendientes del Gerente en la ventana de baja) se prueba en ``UsrBajUsrPendientesTests``.
 # Fuera de estas pruebas, por no existir todavía lo que las motiva (ver «Lo que queda para más adelante»
-# de docs/casos_de_uso/usuarios.md): postcondiciones c, e, f y g y regla 4 (pendientes, invernaderos,
-# pedidos y entregas). La regla 2 (cuentas vinculadas) se prueba desde la tarea 06b.
+# de docs/casos_de_uso/usuarios.md): postcondiciones f y g y la parte de la regla 4 que no es de invernaderos (pedidos y
+# entregas). La regla 2 (cuentas vinculadas) se prueba desde la tarea 06b.
 
 import json
 from unittest import mock
@@ -21,9 +22,18 @@ from django.http import Http404
 from django.test import Client, TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
-from core import extensiones, servicios
+from core import extensiones, servicios, views
 from core.extensiones import Asignacion, Efecto
-from core.models import ADMINISTRADOR, Capataz, Gerente, RegistroAuditoria, Usuario, Vendedor, referencia
+from core.models import (
+    ADMINISTRADOR,
+    Capataz,
+    Gerente,
+    Notificacion,
+    RegistroAuditoria,
+    Usuario,
+    Vendedor,
+    referencia,
+)
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import CLAVE, afectado, agrupar, crear_administrador, crear_cuenta, crear_gerente
 
@@ -675,3 +685,119 @@ class UsrBajUsrVentanaTests(TestCase):
         self.assertContains(respuesta, "<html")
         self.assertContains(respuesta, "Lo que tiene asignado")
         self.assertContains(respuesta, "Invernadero Sur")
+
+
+class UsrBajUsrPendientesTests(TestCase):
+    """Postcondición c de USR-BAJ-USR (NOT-01, D-42, D-14): al dar de baja al Gerente, la pantalla de la baja le informa al
+    Administrador cuántos pendientes quedan esperando. No es una notificación: es un texto de la ventana."""
+
+    def setUp(self):
+        self.client.force_login(crear_administrador())
+        self.gerente = crear_gerente()
+        self.url = reverse("core:usuario_baja", args=[self.gerente.pk])
+
+    def _ventana(self, contadores, **extra):
+        with mock.patch.object(extensiones, "_CONTADORES_DE_PENDIENTES", contadores):
+            return self.client.get(self.url, headers={"HX-Request": "true"}, **extra)
+
+    def test_post_c_la_ventana_de_baja_del_gerente_muestra_el_total_y_el_detalle(self):
+        """USR-BAJ-USR postcondición c: «cuántos pendientes quedan esperando hasta el alta de otro Gerente»."""
+        respuesta = self._ventana([lambda: [("Alertas activas para el Gerente", 3)]])
+
+        self.assertContains(
+            respuesta,
+            "Pendientes del Gerente: 3 (Alertas activas para el Gerente: 3). "
+            "Quedan esperando hasta el alta de otro Gerente; la baja no se bloquea por ellos.",
+        )
+
+    def test_post_c_suma_los_pendientes_de_todas_las_fuentes(self):
+        """USR-BAJ-USR postcondición c y D-42: el total suma todos los contadores y el detalle los nombra."""
+        respuesta = self._ventana(
+            [
+                lambda: [("Alertas activas para el Gerente", 3)],
+                lambda: [("Órdenes de compra por aprobar", 2)],
+            ]
+        )
+
+        self.assertContains(
+            respuesta,
+            "Pendientes del Gerente: 5 (Alertas activas para el Gerente: 3, Órdenes de compra por aprobar: 2).",
+        )
+
+    def test_post_c_sin_pendientes_dice_que_no_tiene(self):
+        """D-42: con la lista vacía la ventana lo dice («No tiene pendientes»)."""
+        respuesta = self._ventana([])
+
+        self.assertContains(respuesta, "No tiene pendientes.")
+        self.assertNotContains(respuesta, "Pendientes del Gerente:")
+
+    def test_post_c_sin_javascript_la_ficha_trae_la_ventana_con_los_pendientes(self):
+        """USR-BAJ-USR postcondición c, sin JavaScript: pedida sin ``HX-Request``, la ficha trae el texto."""
+        with mock.patch.object(extensiones, "_CONTADORES_DE_PENDIENTES", [lambda: [("Alertas activas para el Gerente", 3)]]):
+            respuesta = self.client.get(self.url)
+
+        self.assertContains(respuesta, "<html")
+        self.assertContains(respuesta, "Pendientes del Gerente: 3")
+
+    def test_post_c_solo_se_muestra_en_la_baja_de_un_gerente(self):
+        """USR-BAJ-USR postcondición c: «si la cuenta era del Gerente». La baja de un Capataz (la mira el Gerente) o de un
+        Administrador (la mira el Administrador, D-16) no la muestra."""
+        capataz = crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA)
+        otro_administrador = crear_administrador("otro.admin@infoponia.com")
+        el_gerente = Client()
+        el_gerente.force_login(self.gerente)
+
+        with mock.patch.object(
+            extensiones, "_CONTADORES_DE_PENDIENTES", [lambda: [("Alertas activas para el Gerente", 3)]]
+        ):
+            de_capataz = el_gerente.get(
+                reverse("core:usuario_baja", args=[capataz.pk]), headers={"HX-Request": "true"}
+            )
+            de_administrador = self.client.get(
+                reverse("core:usuario_baja", args=[otro_administrador.pk]), headers={"HX-Request": "true"}
+            )
+
+        for respuesta in (de_capataz, de_administrador):
+            self.assertNotContains(respuesta, "Pendientes del Gerente")
+            self.assertNotContains(respuesta, "No tiene pendientes")
+
+    def test_post_c_no_cambia_lo_que_ya_lista_la_ventana(self):
+        """D-43 y paso 5: el texto de pendientes se suma a lo que ya listan los registrantes, sin duplicar la ventana."""
+        asignacion = Asignacion("Invernadero Sur", 1, "Queda con la alerta.")
+
+        with mock.patch.object(extensiones, "_ASIGNACIONES_DE_CUENTA", [lambda c: [asignacion]]):
+            respuesta = self._ventana([lambda: [("Alertas activas para el Gerente", 3)]])
+
+        self.assertContains(respuesta, "Lo que tiene asignado")
+        self.assertContains(respuesta, "Invernadero Sur")
+        self.assertContains(respuesta, "Pendientes del Gerente: 3")
+        self.assertContains(respuesta, "¿Dar de baja esta cuenta?", count=1)
+        self.assertContains(respuesta, 'role="dialog"', count=1)
+
+    def test_post_c_la_ventana_sigue_mostrando_los_pendientes_si_el_servicio_rechaza_la_baja(self):
+        """USR-BAJ-USR postcondición c: si la baja se rechaza, la ventana vuelve con el motivo y con lo mismo de antes."""
+        def rechaza(actor, cuenta_id):
+            raise ValidationError("La cuenta ya está inactiva.", code="cuenta_inactiva")
+
+        with mock.patch.dict(views._SERVICIO_DE_ACCION, {"baja": rechaza}), mock.patch.object(
+            extensiones, "_CONTADORES_DE_PENDIENTES", [lambda: [("Alertas activas para el Gerente", 3)]]
+        ):
+            respuesta = self.client.post(self.url)
+
+        self.assertContains(respuesta, "La cuenta ya está inactiva.")
+        self.assertContains(respuesta, "Pendientes del Gerente: 3")
+
+    def test_regla_3_la_baja_del_gerente_no_se_bloquea_por_los_pendientes(self):
+        """USR-BAJ-USR regla 3: «la baja del Gerente no se bloquea por los pendientes que tenga»."""
+        with mock.patch.object(extensiones, "_CONTADORES_DE_PENDIENTES", [lambda: [("Alertas activas para el Gerente", 3)]]):
+            respuesta = self.client.post(self.url)
+
+        self.assertRedirects(respuesta, reverse("core:usuario", args=[self.gerente.pk]))
+        self.assertFalse(Usuario.objects.get(pk=self.gerente.pk).is_active)
+
+    def test_post_c_la_baja_no_crea_notificaciones(self):
+        """D-42 y USR-BAJ-USR postcondición c: «no es una notificación: es un texto de la pantalla»."""
+        with mock.patch.object(extensiones, "_CONTADORES_DE_PENDIENTES", [lambda: [("Alertas activas para el Gerente", 3)]]):
+            self.client.post(self.url)
+
+        self.assertEqual(Notificacion.objects.count(), 0)

@@ -132,7 +132,7 @@ Un lote se programa recién cuando está entregado y validado por completo. **De
 | Tema | Propuesta de trabajo (se usa hasta que se decida otra cosa) | Lote que la necesita |
 |---|---|---|
 | Catálogos fijos del prototipo (**confirmado el 19/11/2026**): unidades de medida, perfiles de sector y causas de merma | Listas fijas en el código (`TextChoices`), sin tabla ni migración de datos. Los tipos de etapa sí son una tabla (D-37), **con los cinco tipos del catálogo (Germinación, Crecimiento, Floración, Fructificación y Maduración) cargados por migración**, con su orden global y sus perfiles permitidos (MD-52). Solo Germinación y Maduración son obligatorias en el ciclo de toda variedad. *(Corrección del 19/11/2026: este texto decía solo dos.)* | 1, 3 y 5 |
-| Notificaciones | D-42 (vigente, validada el 19/11/2026) y la API `docs/api/notificaciones.md`; NOT-01 la implementa | 1 |
+| Notificaciones | D-42 (vigente, validada el 19/11/2026) y la API `docs/api/notificaciones.md`; NOT-01 la implementó | 1 |
 | Nombre y color de la organización en `core` | D-48 (vigente, validada el 19/11/2026): punto de extensión de `core`; sin perfil, `NOMBRE_ORGANIZACION` | 1 |
 | Parámetro «vigencia del enlace de decisión ante un faltante» | Se agrega a la pantalla de configuración aunque el prototipo no lo muestre: lo piden el CU y el modelo (L7) | 1 |
 | Revisión diaria de vencimientos (CMP-REV-VNC, **decidido el 19/11/2026**) | Un comando de Django (`manage.py revisar_vencimientos`, nombre propuesto) que se ejecuta una vez por día como tarea programada de Render (cron job); el diseño va en el lote 2 | 2 |
@@ -156,7 +156,7 @@ Cada archivo de tarea los trae en «Límites». Salen de `docs/disparadores.md`.
 
 | Tarea | Disparadores que cierra |
 |---|---|
-| NOT-01 | «Cuando exista la primera notificación o alerta» (campana, pendientes del Gerente, avisos al personal del invernadero) |
+| NOT-01 | «Cuando exista la primera notificación o alerta» (campana, pendientes del Gerente, avisos al personal del invernadero) — hecha el 20/11/2026 (a la espera de la revisión a mano) |
 | MAE-03 | «Cuando exista SectorProduccion» (`Invernadero.tiene_sectores`, pestaña de sectores, postcondición b de PROD-BAJ-INV) |
 | MAE-04 | «Cuando exista PerfilOrganizacion» (el nombre configurable; el logo queda afuera, D-45) |
 | INV-02 | «Cuando exista InsumoInvernadero» (postcondición c y precondición f de PROD-BAJ-INV, por `maestros/extensiones.py`) |

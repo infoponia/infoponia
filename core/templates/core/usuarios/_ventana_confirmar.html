@@ -5,7 +5,8 @@ cambia nada. Los textos del prototipo sobre las cuentas vinculadas (SEG-11 y reg
 si la cuenta tiene un grupo: decir que «sale de su grupo» de una cuenta que no tiene uno sería falso.
 Restablecer y reactivar ofrecen la forma de acceso (_forma_de_acceso.html, D-35): invitación o contraseña temporal.
 La baja lista lo que la cuenta tiene asignado («asignaciones», regla 4 de USR-BAJ-USR, D-43: lo registran las apps de
-negocio en core.extensiones). Pendiente: lo que dejan los pedidos, las entregas y los pendientes del Gerente.
+negocio en core.extensiones). Si la cuenta es la del Gerente, «pendientes» (total y detalle, NOT-01, D-42) dice cuántos quedan
+esperando hasta el alta de otro Gerente (postcondición c): es un texto, no una notificación. Pendiente: lo que dejan los pedidos y las entregas.
 Con «gerente_activo» (reactivar un Gerente con otro activo, regla 5 y D-30) la ventana no ofrece confirmar: muestra
 el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
 <div class="ov" data-ventana>
@@ -35,6 +36,13 @@ el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
     <ul style="margin:0 0 10px 18px">
       {% for asignacion in asignaciones %}<li><b>{{ asignacion.texto }}.</b> {{ asignacion.que_pasa }}</li>{% endfor %}
     </ul>
+    {% endif %}
+    {% if pendientes %}
+    {% if pendientes.total %}
+    <p>Pendientes del Gerente: {{ pendientes.total }} ({% for descripcion, cantidad in pendientes.detalle %}{{ descripcion }}: {{ cantidad }}{% if not forloop.last %}, {% endif %}{% endfor %}). Quedan esperando hasta el alta de otro Gerente; la baja no se bloquea por ellos.</p>
+    {% else %}
+    <p>No tiene pendientes.</p>
+    {% endif %}
     {% endif %}
     {% endif %}
     {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}

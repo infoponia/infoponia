@@ -1,0 +1,33 @@
+{% load iconos %}{% comment %}Las dos pestañas de la campana y sus listas (notifPop del prototipo de cuentas; shell, alertas y myNotif del de
+producción; NOT-01, D-42). Lo incluyen el panel (_campana_panel.html) y la página completa (campana.html).
+Recibe: «alertas» (lista de ItemDeAlerta, todas las activas), «notificaciones» (las 30 más recientes, cada una con «cuando»),
+«sin_leer» (de todas las notificaciones), «pestana» ("alertas" o "notificaciones") y «siguiente» (adónde volver sin JavaScript).
+Las pestañas son enlaces con ?pestana=: sin JavaScript recargan la página; con él, infoponia.js las intercepta y solo muestra
+una lista u otra. Las dos listas están siempre en el HTML; la que no se ve lleva «hidden».{% endcomment %}
+<div class="ptabs" role="tablist">
+  <a href="{% url 'core:campana' %}?pestana=alertas&amp;next={{ siguiente|urlencode }}" data-campana-tab="alertas" role="tab"
+     {% if pestana == "alertas" %}aria-current="true" aria-selected="true"{% else %}aria-selected="false"{% endif %}>Alertas ({{ alertas|length }})</a>
+  <a href="{% url 'core:campana' %}?pestana=notificaciones&amp;next={{ siguiente|urlencode }}" data-campana-tab="notificaciones" role="tab"
+     {% if pestana == "notificaciones" %}aria-current="true" aria-selected="true"{% else %}aria-selected="false"{% endif %}>Notificaciones{% if sin_leer %} ({{ sin_leer }} sin leer){% endif %}</a>
+</div>
+<div class="plist" data-campana-lista="alertas" role="tabpanel"{% if pestana != "alertas" %} hidden{% endif %}>
+  {% for item in alertas %}
+  <a class="acc-item{% if not item.leida %} unread{% endif %}" href="{{ item.url }}">
+    <span class="sev-{{ item.severidad }}">{% icono "warn" 16 %}</span>
+    <div class="t"><b>{{ item.titulo }}</b><span>{{ item.detalle }}</span></div>
+  </a>
+  {% empty %}
+  <div class="acc-item"><div class="t"><span>No hay alertas activas. Las alertas avisan un hecho que requiere atención y siguen activas hasta que se resuelve.</span></div></div>
+  {% endfor %}
+</div>
+<div class="plist" data-campana-lista="notificaciones" role="tabpanel"{% if pestana != "notificaciones" %} hidden{% endif %}>
+  {% for notificacion in notificaciones %}
+  <div class="acc-item{% if not notificacion.leida %} unread{% endif %}">
+    <span style="color:var(--primary)">{% icono "bell" 16 %}</span>
+    <div class="t"><b>{{ notificacion.titulo }}</b><span>{{ notificacion.detalle }}</span></div>
+    <span class="when2">{{ notificacion.cuando }}</span>
+  </div>
+  {% empty %}
+  <div class="acc-item"><div class="t"><span>No tiene notificaciones.</span></div></div>
+  {% endfor %}
+</div>

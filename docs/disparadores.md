@@ -42,17 +42,35 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 ## Cuando exista la primera notificación o alerta
 
-Los tres puntos pasan a la tarea de notificaciones en `core` (NOT-01, D-42). La campana suma las alertas no leídas con
-`Alerta.objects.para(usuario).activas().no_leidas()` (ya existe, MAE-02a) por un punto de extensión de `core`.
+Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alertas no leídas con
+`Alerta.objects.para(usuario).activas().no_leidas()` (ya existe, MAE-02a) por un punto de extensión de `core`
+(`registrar_fuente_de_alertas`). Los dos puntos que siguen nacieron al cerrarla.
 
-1. **Campana y notificaciones del marco.** Se agregan al marco de `core` (D-25). Diseño: `notifPop` en
-   `docs/prototipos/cuentas_y_seguridad.html`; `shell`, `alertas` y `myNotif` en el prototipo de producción.
-2. **Pendientes del Gerente (D-14).** Postcondición d de USR-ALT-USR (aviso de resumen al Gerente nuevo con la cantidad
-   de pendientes) y postcondición c de USR-BAJ-USR (cantidad de pendientes al dar de baja al Gerente). Sin Gerente
-   activo, generar un pendiente no falla y la notificación sin destinatario se omite.
-3. **Avisos a las personas asignadas al invernadero.** Postcondición e de PROD-ALT-INV y postcondición c de PROD-MOD-INV: cada
-   persona asignada recibe una notificación con el invernadero y lo que recibió (la cantidad de órdenes, mantenimientos,
-   contratos y alertas, que sale de `maestros.extensiones.contar_traspaso`). D-38 las dejó sin modelar. Nació en MAE-01b.
+1. ~~**Campana y notificaciones del marco.**~~ Hecho el 20/11/2026 en NOT-01 (`core/extensiones.py`, `core/notificaciones.py`, `core/views.py`,
+   `core/templates/core/_campana*.html` y `campana.html`; el Administrador no la tiene). Texto original: Se agregan al marco de `core` (D-25).
+   Diseño: `notifPop` en `docs/prototipos/cuentas_y_seguridad.html`; `shell`, `alertas` y `myNotif` en el prototipo de producción.
+2. ~~**Pendientes del Gerente (D-14).**~~ Hecho el 20/11/2026 en NOT-01 (`alta_usuario` avisa al Gerente nuevo; la ventana de baja del
+   Gerente muestra el total y el detalle; `registrar_contador_de_pendientes` y `pendientes_del_gerente`). Texto original: Postcondición d de
+   USR-ALT-USR (aviso de resumen al Gerente nuevo con la cantidad de pendientes) y postcondición c de USR-BAJ-USR (cantidad de pendientes
+   al dar de baja al Gerente). Sin Gerente activo, generar un pendiente no falla y la notificación sin destinatario se omite.
+3. ~~**Avisos a las personas asignadas al invernadero.**~~ Hecho el 20/11/2026 en NOT-01 (`alta_invernadero` y `modificar_invernadero` llaman
+   a `notificar_a_varios`; en la modificación, solo a quien queda a cargo, con lo que recibe). Texto original: Postcondición e de
+   PROD-ALT-INV y postcondición c de PROD-MOD-INV: cada persona asignada recibe una notificación con el invernadero y lo que recibió (la
+   cantidad de órdenes, mantenimientos, contratos y alertas, que sale de `maestros.extensiones.contar_traspaso`). D-38 las dejó sin
+   modelar. Nació en MAE-01b.
+4. **Abrir una alerta desde la campana (MAE-02c).** El enlace de cada alerta de la campana lleva a la ficha del invernadero y no llama a
+   `abrir_alerta`: la alerta sigue «no leída» y el punto rojo del Gerente (o del Agrónomo) no se apaga. Cuando exista la pantalla de
+   consulta de alertas (CU-46, MAE-02c), la campana tiene que llevar a ese detalle (que sí llama a `abrir_alerta`), o la
+   `ItemDeAlerta.url` de `maestros.servicios.invernaderos.items_de_campana` tiene que apuntar a él. Va junto con el pendiente de
+   pendientes_CU de la sección de CU-46 (abrir la alerta la marca «leída», regla 7 de 8.18). Nació en NOT-01.
+5. **Lo que espera una resolución del Gerente.** Cada app que cree algo que queda esperando al Gerente (órdenes de compra por aprobar,
+   solicitudes de revisión; D-14) registra su contador en `AppConfig.ready()` con
+   `core.extensiones.registrar_contador_de_pendientes(funcion)`, con `funcion() -> list[tuple[str, int]]` (descripción y cantidad; sin
+   nada pendiente, lista vacía). Así el aviso al Gerente nuevo (`alta_usuario`) y la ventana de baja del Gerente los cuentan sin tocar
+   `core`. Si además quien genera algo y no hay Gerente activo debe avisarle a quien lo genera que quedará pendiente (D-14), lo hace
+   con `core.notificaciones.notificar` y no con `notificar_al_gerente`, que en ese caso no hace nada. Hoy solo `maestros` registra el suyo
+   (alertas activas para el Gerente). Nació en NOT-01.
+
 
 ## Cuando exista Pedido
 

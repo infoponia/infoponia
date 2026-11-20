@@ -1,0 +1,10 @@
+{% comment %}Panel de la campana que trae HTMX (NOT-01, D-42; el «pop» del prototipo con su fondo «scrim»). Va dentro de #campana-panel.
+infoponia.js lo cierra con Esc, con un clic afuera o con un clic en el botón; al cerrarlo manda los ids de «data-ids» a
+core:campana_vista si se vio la pestaña de notificaciones («data-vistas»). Los ids son solo los de las notificaciones
+mostradas (las 30 más recientes). En el marco de celular el CSS lo muestra como hoja inferior.{% endcomment %}
+<div class="scrim" data-campana-cerrar></div>
+<div class="pop" role="dialog" aria-label="Alertas y notificaciones" data-campana-panel
+     data-pestana="{{ pestana }}" data-vistas="{% if pestana == 'notificaciones' %}1{% endif %}"
+     data-ids="{% for notificacion in notificaciones %}{{ notificacion.pk }}{% if not forloop.last %},{% endif %}{% endfor %}">
+  {% include "core/_campana_contenido.html" %}
+</div>

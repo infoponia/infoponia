@@ -40,3 +40,9 @@ frená (L9): no inventes otra forma de avisar.
 `registrar_contador_de_pendientes(funcion)`, con `funcion() -> list[tuple[str, int]]` (descripción y cantidad; sin nada
 pendiente, lista vacía). `pendientes_del_gerente()` (en `core/notificaciones.py`) devuelve `(total, detalle)`: el total y la lista
 de `(descripción, cantidad)` con cantidad mayor que cero. Lo usan USR-ALT-USR (postcondición d) y USR-BAJ-USR (postcondición c).
+
+Los textos aprobados: título «Quedó a cargo de <invernadero>»; detalle «El Gerente le asignó el rol de <rol>. [Recibe: <descripción>: <n>, … | No recibe nada pendiente.]»; «Pendientes que esperan al Gerente» / «Tiene N pendiente(s). <desc>: <n>.» / «No tiene pendientes.»; ventana de baja «Pendientes del Gerente: N (…). Quedan esperando hasta el alta de otro Gerente; la baja no se bloquea por ellos.».
+El Administrador no tiene campana (D-42 decía «todos los roles»).
+estado_de_la_campana y contadores_de_pendientes como funciones de la API.
+El texto se valida (con contenido, recortado) aunque no haya destinatarios.
+El título del ejemplo de la API pasa a «El Gerente le asignó el rol de Agrónomo.».

@@ -24,7 +24,7 @@ from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 
-from core import servicios
+from core import extensiones, servicios
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
     BACKEND_QUE_FALLA,
@@ -46,6 +46,7 @@ from core.models import (
     Agronomo,
     Capataz,
     Gerente,
+    Notificacion,
     RegistroAuditoria,
     Tecnico,
     Transportista,
@@ -692,6 +693,124 @@ class UsrAltUsrServicioTests(TestCase):
             Usuario.objects.filter(pk=cuenta.pk).update(
                 fecha_invitacion=ahora, fecha_contrasena_temporal=ahora
             )
+
+
+    # ---- Postcondición d: aviso de resumen al nuevo Gerente (NOT-01, D-42, D-14) ----
+
+    def _alta_de_gerente(self, contadores):
+        """El Administrador da de alta al Gerente con ``contadores`` como lo único que espera al Gerente; devuelve la cuenta."""
+        administrador = crear_administrador()
+        with mock.patch.object(extensiones, "_CONTADORES_DE_PENDIENTES", contadores):
+            cuenta, _ = servicios.alta_usuario(administrador, **datos_validos(rol=Usuario.Rol.GERENTE))
+        return cuenta
+
+    def test_post_d_notifica_al_nuevo_gerente_el_total_y_el_detalle_de_los_pendientes(self):
+        """USR-ALT-USR postcondición d: al alta de un Gerente, una notificación al nuevo Gerente con la cantidad de
+        pendientes (texto aprobado de NOT-01: título «Pendientes que esperan al Gerente»)."""
+        cuenta = self._alta_de_gerente([lambda: [("Alertas activas para el Gerente", 3)]])
+
+        notificacion = Notificacion.objects.get()
+        self.assertEqual(notificacion.destinatario_id, cuenta.pk)
+        self.assertEqual(notificacion.titulo, "Pendientes que esperan al Gerente")
+        self.assertEqual(notificacion.detalle, "Tiene 3 pendientes. Alertas activas para el Gerente: 3.")
+        self.assertFalse(notificacion.leida)
+
+    def test_post_d_suma_los_pendientes_de_todas_las_fuentes_y_los_detalla(self):
+        """USR-ALT-USR postcondición d y D-42: el total suma todos los contadores registrados y el detalle los nombra."""
+        self._alta_de_gerente(
+            [
+                lambda: [("Alertas activas para el Gerente", 3)],
+                lambda: [("Órdenes de compra por aprobar", 2)],
+            ]
+        )
+
+        self.assertEqual(
+            Notificacion.objects.get().detalle,
+            "Tiene 5 pendientes. Alertas activas para el Gerente: 3. Órdenes de compra por aprobar: 2.",
+        )
+
+    def test_post_d_con_un_solo_pendiente_lo_dice_en_singular(self):
+        """USR-ALT-USR postcondición d: «Tiene 1 pendiente.»."""
+        self._alta_de_gerente([lambda: [("Alertas activas para el Gerente", 1)]])
+
+        self.assertEqual(
+            Notificacion.objects.get().detalle, "Tiene 1 pendiente. Alertas activas para el Gerente: 1."
+        )
+
+    def test_post_d_sin_pendientes_dice_que_no_tiene(self):
+        """D-42: con la lista vacía la suma es 0 y el texto lo dice («No tiene pendientes»); igual se avisa."""
+        cuenta = self._alta_de_gerente([])
+
+        notificacion = Notificacion.objects.get()
+        self.assertEqual(notificacion.destinatario_id, cuenta.pk)
+        self.assertEqual(notificacion.detalle, "No tiene pendientes.")
+
+    def test_post_d_los_contadores_en_cero_cuentan_como_sin_pendientes(self):
+        """D-42: un contador que devuelve cantidad 0 no cuenta ni se nombra."""
+        self._alta_de_gerente([lambda: [("Alertas activas para el Gerente", 0)]])
+
+        self.assertEqual(Notificacion.objects.get().detalle, "No tiene pendientes.")
+
+    def test_post_d_es_una_unica_notificacion_y_solo_para_el_nuevo_gerente(self):
+        """USR-ALT-USR postcondición d: «una única notificación»; el Administrador que hizo el alta no recibe nada."""
+        administrador = crear_administrador()
+        with mock.patch.object(extensiones, "_CONTADORES_DE_PENDIENTES", []):
+            cuenta, _ = servicios.alta_usuario(administrador, **datos_validos(rol=Usuario.Rol.GERENTE))
+
+        self.assertEqual(Notificacion.objects.count(), 1)
+        self.assertFalse(Notificacion.objects.filter(destinatario=administrador).exists())
+        self.assertEqual(Notificacion.objects.get().destinatario_id, cuenta.pk)
+
+    def test_post_d_no_notifica_al_dar_de_alta_otro_rol(self):
+        """USR-ALT-USR postcondición d: «si el rol es Gerente». Un alta de Capataz, Agrónomo, etc. no notifica a nadie."""
+        gerente = crear_gerente()
+
+        for indice, rol in enumerate(
+            (Usuario.Rol.AGRONOMO, Usuario.Rol.CAPATAZ, Usuario.Rol.VENDEDOR, Usuario.Rol.TECNICO)
+        ):
+            with self.subTest(rol=rol):
+                servicios.alta_usuario(gerente, **datos_validos(rol=rol, email=f"persona{indice}@infoponia.com"))
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_d_si_el_alta_se_rechaza_no_queda_ninguna_notificacion(self):
+        """USR-ALT-USR postcondición d y regla de uso 1 de la API: un alta que falla (email repetido) no deja avisos."""
+        administrador = crear_administrador()
+        crear_cuenta(Capataz, "laura@infoponia.com")
+
+        with self.assertRaises(ValidationError):
+            servicios.alta_usuario(administrador, **datos_validos(rol=Usuario.Rol.GERENTE))
+
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_post_d_va_dentro_de_la_transaccion_del_alta(self):
+        """API, regla de uso 1: si falla al notificar, el alta entera se deshace (la cuenta no queda creada)."""
+        administrador = crear_administrador()
+
+        with mock.patch.object(servicios.notificaciones, "notificar", side_effect=RuntimeError("falla")):
+            with self.assertRaises(RuntimeError):
+                servicios.alta_usuario(administrador, **datos_validos(rol=Usuario.Rol.GERENTE))
+
+        self.assertFalse(Usuario.objects.filter(email="laura@infoponia.com").exists())
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA).count(), 0)
+
+    def test_post_d_no_se_audita_el_texto_de_la_notificacion(self):
+        """D-42: el texto del aviso no va al registro de auditoría; el alta sigue con su único registro."""
+        self._alta_de_gerente([lambda: [("Alertas activas para el Gerente", 3)]])
+
+        registros = RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA)
+        self.assertEqual(registros.count(), 1)
+        self.assertNotIn("pendiente", json.dumps(registros.get().detalle).lower())
+
+    def test_post_d_el_alta_de_un_gerente_notifica_aunque_no_haya_otro_gerente(self):
+        """D-14: el aviso va a la cuenta recién creada, que ya es el Gerente activo; el alta no falla ni omite el aviso
+        aunque antes no hubiera Gerente."""
+        self.assertFalse(Gerente.objects.filter(is_active=True).exists())
+
+        cuenta = self._alta_de_gerente([])
+
+        self.assertTrue(Gerente.objects.get(pk=cuenta.pk).is_active)
+        self.assertEqual(Notificacion.objects.count(), 1)
 
 
 class _LectorDeSelect(HTMLParser):

@@ -1,0 +1,21 @@
+{% extends "core/base_con_sesion.html" %}
+{% comment %}La campana como página completa (NOT-01, D-42): es lo que ve quien no tiene JavaScript, porque el botón de la cabecera es
+un enlace a esta pantalla. Las pestañas son enlaces (?pestana=) y «Cerrar» es un formulario POST a core:campana_vista con los ids
+de las notificaciones mostradas, solo si se está viendo esa pestaña, y vuelve a la pantalla de la que se vino («siguiente»).{% endcomment %}
+{% block titulo %}Alertas y notificaciones · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <h1 style="margin-bottom:14px">Alertas y notificaciones</h1>
+  <div class="card seg">
+    <div class="campana-pagina">
+      {% include "core/_campana_contenido.html" %}
+    </div>
+  </div>
+  <form method="post" action="{% url 'core:campana_vista' %}" style="margin-top:14px">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ siguiente }}">
+    {% if pestana == "notificaciones" %}{% for notificacion in notificaciones %}<input type="hidden" name="ids" value="{{ notificacion.pk }}">{% endfor %}{% endif %}
+    <button class="btn btn-primary" type="submit" data-enviando="Cerrando…">Cerrar</button>
+  </form>
+</div>
+{% endblock %}

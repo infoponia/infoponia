@@ -5,6 +5,8 @@
 
 import functools
 
+from urllib.parse import urlsplit
+
 from django.contrib import messages
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_not_required
@@ -12,7 +14,10 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
 from django.conf import settings
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_POST, require_safe
@@ -33,6 +38,7 @@ from core.forms import (
 )
 from core.middleware import permitido_con_contrasena_temporal
 from core.models import Usuario
+from core.notificaciones import de_la_cuenta, marcar_vistas, pendientes_del_gerente
 from core.servicios import (
     ACCESO_INVITACION,
     MENSAJE_FUERA_DEL_GRUPO,
@@ -689,6 +695,11 @@ def _gestionar_cuenta(request, cuenta_id, accion):
     if accion == "baja":
         # Regla 4 de USR-BAJ-USR (D-43): lo que la cuenta tiene asignado y qué pasará con eso. Solo lectura.
         contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
+        # Postcondición c de USR-BAJ-USR (NOT-01, D-42, D-14): si la cuenta es del Gerente, cuántos pendientes quedan
+        # esperando. Es un texto de la ventana, no una notificación. Solo lectura.
+        if cuenta.rol == Usuario.Rol.GERENTE:
+            total, detalle = pendientes_del_gerente()
+            contexto["pendientes"] = {"total": total, "detalle": detalle}
     # D-35: restablecer y reactivar eligen la forma de acceso (invitación o contraseña temporal); la baja no.
     contexto["correo_configurado"] = settings.CORREO_CONFIGURADO
     contexto["acceso"] = ACCESO_INVITACION if settings.CORREO_CONFIGURADO else ""
@@ -841,3 +852,79 @@ def auditoria_registro(request, registro_id):
             "volver": request.GET.urlencode(),
         },
     )
+
+
+# ---- Campana de alertas y notificaciones (NOT-01, D-42) ----
+# Todos los roles con cuenta operativa la tienen; el Administrador no (usuarios.md, «Pantallas»): ``rol_requerido`` le da un
+# 403 y el marco no le muestra el botón. Con HTMX, abrir trae el panel (fragmento) y cerrarlo hace un POST con los ids de las
+# notificaciones mostradas; sin JavaScript, el botón es un enlace a la página completa y «Cerrar» es un formulario común.
+
+ROLES_CON_CAMPANA = tuple(Usuario.Rol)
+# D-42: el panel muestra las 30 más recientes; una pantalla de historial completo no se hace en esta ronda.
+NOTIFICACIONES_EN_LA_CAMPANA = 30
+PESTANAS_DE_LA_CAMPANA = ("alertas", "notificaciones")
+
+
+def _cuando(fecha_hora):
+    """Cómo se ve la hora de una notificación (``when2`` del prototipo): la hora si es de hoy, y si no, día y mes."""
+    local = timezone.localtime(fecha_hora)
+    return local.strftime("%H:%M") if local.date() == timezone.localdate() else local.strftime("%d/%m")
+
+
+def _destino_seguro(request, valor):
+    """Adónde vuelve la campana sin JavaScript: ``valor`` si es una ruta de este sitio que no es la propia campana (evita
+    una redirección abierta y un bucle); si no, el inicio."""
+    if (
+        valor
+        and url_has_allowed_host_and_scheme(valor, allowed_hosts={request.get_host()}, require_https=request.is_secure())
+        and not urlsplit(valor).path.startswith("/campana/")
+    ):
+        return valor
+    return reverse("core:inicio")
+
+
+def _contexto_de_la_campana(request):
+    """Lo que muestran el panel y la página completa: las alertas activas de todas las fuentes, las 30 notificaciones más
+    recientes (con su hora) y cuántas hay sin leer en total. La pestaña es la pedida; sin pedir ninguna, la de alertas si
+    hay y si no, la de notificaciones (``S.ntab||(al.length?'al':'no')`` del prototipo)."""
+    alertas = extensiones.alertas_para(request.user)
+    propias = de_la_cuenta(request.user)
+    notificaciones = list(propias[:NOTIFICACIONES_EN_LA_CAMPANA])
+    for notificacion in notificaciones:
+        notificacion.cuando = _cuando(notificacion.fecha_hora)
+    pestana = request.GET.get("pestana")
+    if pestana not in PESTANAS_DE_LA_CAMPANA:
+        pestana = "alertas" if alertas else "notificaciones"
+    return {
+        "alertas": alertas,
+        "notificaciones": notificaciones,
+        "sin_leer": propias.filter(leida=False).count(),
+        "pestana": pestana,
+        "siguiente": _destino_seguro(request, request.GET.get("next")),
+    }
+
+
+@rol_requerido(*ROLES_CON_CAMPANA)
+@require_safe
+@never_cache
+@vary_on_headers("HX-Request")
+def campana(request):
+    """Panel de alertas y notificaciones (GET). Con HTMX, solo el panel; si no, la página completa (el respaldo sin
+    JavaScript). Solo lee: abrirla no marca nada como leído."""
+    contexto = _contexto_de_la_campana(request)
+    if _es_pedido_htmx(request):
+        return render(request, "core/_campana_panel.html", contexto)
+    return render(request, "core/campana.html", contexto)
+
+
+@rol_requerido(*ROLES_CON_CAMPANA)
+@require_POST
+def campana_vista(request):
+    """Marca como leídas las notificaciones mostradas al cerrar el panel (D-42). Recibe los ids (``ids``) y marca solo las de
+    quien pide: ``marcar_vistas`` ignora las ajenas. Con HTMX devuelve el botón ya actualizado (sin el punto si no queda
+    nada sin leer); sin él, vuelve a la pantalla de la que se vino. No audita (D-42, SEG-14)."""
+    ids = [int(valor) for valor in request.POST.getlist("ids") if valor.isdigit()]
+    marcar_vistas(request.user, ids)
+    if _es_pedido_htmx(request):
+        return render(request, "core/_campana.html")
+    return redirect(_destino_seguro(request, request.POST.get("next")))

@@ -138,3 +138,19 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 | `.mnav` del prototipo | El prototipo la deja siempre oculta (su `display:none` va después de la media query). En el sistema se muestra en menos de 760 px. Corregir el prototipo | Sin fecha |
 | Color de la organización | Las variantes oscura y clara salen de `color-mix()` (D-48, ver arriba); si MAE-04 quiere otro cálculo o validar el contraste del color elegido, se decide ahí | MAE-04 |
 | Revisión visual de UI-01 | No hubo navegador en la sesión: las pantallas de `core` (usuarios, auditoría, Mi perfil) conservan su HTML con los componentes v2 que ya usaban; falta confirmar a mano que ninguna se vea con el aspecto viejo | Revisión a mano de UI-01 |
+
+
+
+## Abiertos desde NOT-01 (20/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| «Todos los roles» (D-42) | D-42 dice que todos los roles ven la campana, pero `docs/casos_de_uso/usuarios.md` («Pantallas») la define para los seis roles operativos y dice que el Administrador no la tiene. Se implementó sin campana para el Administrador (`core:campana` le da 403). Corregir D-42 | Al validar NOT-01 |
+| Textos de los avisos | D-42 y el paso 7 decían «con el texto de D-42» sin traer ninguno. Se usaron los aprobados: «Quedó a cargo de <invernadero>» / «El Gerente le asignó el rol de <rol>. Recibe: <descripción>: <cantidad>, … o No recibe nada pendiente.»; «Pendientes que esperan al Gerente» / «Tiene N pendiente(s). … o No tiene pendientes.»; y el de la ventana de baja del Gerente. Escribirlos en D-42 y en `docs/api/notificaciones.md`, cuyo ejemplo dice «lo asignó como Agrónomo» | Al validar NOT-01 |
+| D-14 en el alta del Gerente | El paso 5 pide que, sin Gerente activo, la notificación se omita y el alta no falle. En `alta_usuario` el destinatario es el Gerente recién creado, que ya es el activo (D-09): ese caso no existe ahí y solo aplica a `notificar_al_gerente` (probado en la API). Corregir el texto del paso 5 | Al validar NOT-01 |
+| Respaldo de severidad (MD-109) | `items_de_campana` toma la severidad del tipo registrado y, si el código ya no está registrado, la que se guardó con la alerta, en vez de fallar y romper la campana de todas las pantallas. D-42 y el paso 6 no lo preveían. Anotarlo en D-42 y en `docs/api/alertas.md` | Al validar NOT-01 |
+| Aviso antes del traspaso | `modificar_invernadero` calcula `_aviso_de_personal` antes de guardar y traspasar (después ya no queda nada en la persona saliente) y solo si hay al menos un rol entrante no nulo; con el cambio confirmado, `contar_traspaso` ahora también se llama, una vez por rol entrante. El paso 7 decía «ya armado por `_aviso_de_personal`» sin precisar cuándo | Al validar NOT-01 |
+| Punto rojo y marca de lectura | El panel marca como leídas, al cerrarse, las 30 notificaciones mostradas solo si se vio la pestaña «Notificaciones» mientras estuvo abierto (el prototipo, solo si esa pestaña estaba a la vista al cerrar). El punto rojo sigue a D-42 (alerta activa no leída o notificación sin leer) y no al prototipo, que lo muestra con cualquier alerta | Revisión a mano de NOT-01 |
+| `test_campana_alertas.py` | `maestros/tests/test_campana_alertas.py` lo piden el paso 6 y «Hecho cuando», pero no figura entre los «Archivos nuevos» de «Límites». Agregarlo | Al validar NOT-01 |
+| Docstring de `no_leidas` | El docstring de `AlertaQuerySet.no_leidas` (`maestros/models.py`) dice «las que cuenta la campana, tarea de notificaciones». No se tocó porque `maestros/models.py` no estaba en «Permitido fuera de la app». Cambiarlo por «las que prenden el punto rojo de la campana, NOT-01 y D-42» | La próxima tarea que toque `maestros/models.py` |
+| Abrir una alerta desde la campana | El enlace de cada alerta lleva a la ficha del invernadero y no llama a `abrir_alerta`: la alerta sigue «no leída» y el punto rojo no se apaga. Está en `docs/disparadores.md` («Cuando exista la primera notificación o alerta», punto 4) | MAE-02c |
