@@ -6,7 +6,9 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
 
 ## Comportamiento
 
-- Antes de editar, proponé un plan y esperá aprobación.
+- Una sola vez por tarea, antes de editar: proponé un plan (los pasos de la tarea y los archivos que tocás) y esperá
+  aprobación. Aprobado el plan, hacé todos los pasos de la tarea de corrido, corriendo las pruebas de cada paso antes de
+  pasar al siguiente. No pidas permiso paso por paso: frená solo en los casos de L7 y L9.
 - Ante cualquier ambigüedad o contradicción con la documentación: detenete y preguntá. No elijas en silencio.
 - Cada regla de negocio implementada cita su fuente en el docstring o en un comentario
   (por ejemplo: `# Regla 9 de 8.13 — modelo de dominio, ronda 20`).
@@ -36,6 +38,9 @@ L7. Si la tarea contradice un caso de uso, el extracto del modelo, una decisión
     frená y preguntá. El prototipo es solo una guía visual: si su lógica difiere del caso
     de uso, manda el caso de uso.
 L8. Las decisiones se citan por su ID («D-36»), sin ruta: el archivo es `docs/decisiones/D-36.md`.
+L9. La documentación de cada tarea está completa por diseño (D-44): trae las reglas, los campos, los textos, las pantallas
+    y los datos de migración que hacen falta. Si te falta algo que la tarea necesita, no lo inventes ni lo deduzcas del
+    código: frená, decí qué falta y en qué archivo tendría que estar. Es un error de documentación y se corrige ahí.
 
 ## Fuentes de verdad (de mayor a menor peso)
 
@@ -45,7 +50,8 @@ L8. Las decisiones se citan por su ID («D-36»), sin ruta: el archivo es `docs/
 4. Casos de uso originales (desactualizados; solo orientativos).
 5. Prototipo: solo guía visual (`docs/prototipos/`).
 
-Los documentos de Drive no se leen: el repo tiene sus copias. Si una copia del repo y lo que sabés de Drive no
+Los documentos de Drive no se leen: el repo tiene sus copias, completas para cada ronda (D-44). Una tarea que nombra un
+caso de uso o una clase sin extracto en el repo es un error de documentación (L9). Si una copia del repo y lo que sabés de Drive no
 coinciden, avisá. Los elementos «Solo prototipo» no se implementan (lista en cada caso de uso y en el `README.md`
 de cada prototipo).
 
@@ -119,11 +125,15 @@ python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag 
 M1. Corré el «Comando de pruebas» de la tarea y mostrá el resultado.
 M2. Completá en el archivo de la tarea «Cierre» (qué se hizo, pruebas, decisiones) y «Verificación a mano»
     (los pasos para el estudiante).
-M3. Proponé, sin aplicarlos:
+M3. Proponé, sin aplicarlos (una sola vez, al cerrar la tarea entera, no por paso):
     - el `docs/estado.md` nuevo;
     - la fila de la tarea en `docs/tareas/README.md` (si queda hecha, se saca);
     - una línea para `docs/historial.md`;
     - la sección de la tarea en `docs/revisiones_pendientes.md`, si hay pasos a mano;
     - si hubo decisión, `docs/decisiones/D-NN.md` y su fila en `docs/decisiones/README.md`;
-    - si creaste modelos, los disparadores que se cumplieron (se tachan) y los que nacen.
+    - si creaste modelos, los disparadores que se cumplieron (se tachan) y los que nacen;
+    - la fila de la tarea en `docs/tareas/ronda_produccion_1.md`, si la tarea pertenece a esa ronda.
 M4. Proponé el mensaje de commit. El commit lo hace el estudiante.
+
+Las reglas M5 (tachar las revisiones a mano hechas) y M6 (el estudiante aprueba cada lote de documentación antes de
+programar) son de las personas; están en `docs/README.md`, «Ciclo de una tarea». Si una tarea te las menciona, ahí están.

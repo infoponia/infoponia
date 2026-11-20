@@ -1,9 +1,14 @@
 # Extractos del modelo de dominio
 
 Un archivo por app (`docs/modelo/<app>.md`) con las clases, los atributos, las asociaciones y las reglas del modelo de
-dominio (ronda vigente, D-07) y los términos del glosario que usan sus tareas. Se arma en claude.ai, al escribir la
-primera tarea que lo necesita, y se amplía con cada tarea nueva («justo a tiempo»). Claude Code no lee Drive: el cotejo
-con pendientes_MD se hace al armar el extracto, no al programar.
+dominio (ronda vigente, D-07) y los términos del glosario que usan las tareas. Se arma en claude.ai **para todas las clases
+que necesita una ronda, antes de programar su primera tarea** (D-44): no se amplía tarea por tarea. Claude Code no lee
+Drive: el cotejo con pendientes_MD y con el glosario se hace al armar el extracto, no al programar.
+
+Cada clase trae, además de lo del modelo, lo que Claude Code necesita para no buscar: el nombre de código de cada
+atributo y su tipo, las restricciones (únicos, obligatorios, rangos), a qué app pertenece la FK (regla A2 de D-37), los
+valores fijos (listas y catálogos) y, si el modelo no los define, el valor que adopta el sistema con su decisión. Lo que
+cambia respecto del diagrama se anota en la tabla «Pendientes de MD» del extracto, como en `maestros.md`.
 
 Cada extracto empieza con este encabezado:
 

@@ -105,3 +105,30 @@ mismo nombre a la vez: el segundo espera en el índice y recibe un `IntegrityErr
 `modificar_invernadero` la fila del Gerente entra en la misma consulta que las cuentas de personal, así que **todas las
 modificaciones del mismo Gerente se serializan** (hoy hay un solo Gerente activo, D-09). La baja y la reactivación no la
 bloquean: se serializan por el invernadero.
+
+## `produccion` (lote 4, D-50)
+
+Orden global de los servicios de `produccion` (siempre `select_for_update(no_key=True)`; el detalle de `inventario` está en `docs/patrones/stock.md`, sección 5):
+
+1. las cuentas (`Usuario`) de quien actúa y de las que se notifican, en una sola consulta y en orden de id;
+2. el **invernadero** (`bloquear_invernadero_activo`) y volver a leerlo;
+2b. la **variedad** (`inventario.servicios.variedades.bloquear_variedad`), también al concretar: la variedad no puede darse de baja ni cambiar de perfil a mitad de camino;
+2c. los **sectores** (`maestros.servicios.sectores.bloquear_sectores`) que toca la operación, en orden de id y **sin repetir** (en una transición: los destino y los de origen del lote juntos);
+3. los insumos que toca (`TipoInsumo` → `Insumo` → `InsumoInvernadero` → `LoteInsumo`, orden de `stock.md`, sección 5);
+4. el **lote** (`Lote`) y, por último, las filas de la operación (orden, ocupaciones, reservas), en orden de id, y **volver a leerlas**.
+
+- Las filas que dicen qué bloquear (los sectores de una orden, sus reservas, las ocupaciones de un lote) se leen **sin bloquear**, se bloquean y se releen. Si cambió algo, `cambio_simultaneo`, sin reintentar.
+- Un lote con **una sola** transición «a realizar» (regla 4 de 8.21) y una orden que se concreta **una sola vez** no tienen restricción de base: los garantiza el bloqueo del lote y de la orden antes de verificar, y lo prueban las pruebas de concurrencia.
+- Toda operación que cree algo que impida la baja de un sector, de una variedad o de un invernadero (un lote, una ocupación, una orden «a realizar») bloquea antes el invernadero, la variedad y los sectores, **antes de crearlo** (contrato de D-40).
+- `cancelar_orden_incluida` corre dentro de la transacción de su llamador: el llamador ya tiene los niveles 1 a 2c; la función toma los que siguen, en este mismo orden.
+- Las notificaciones y las alertas se crean **dentro** de la transacción (D-42), después de todos los bloqueos de arriba.
+- Pruebas de concurrencia mínimas (`@tag("concurrencia")`, `correr_a_la_vez`): dos planificaciones sobre el último agujero y sobre la última unidad de stock; concretar dos veces; concretar contra cancelar; planificar contra la baja del sector o de la variedad; concretar una transición contra una merma que cambia la cantidad del lote.
+
+### Lote 5 (D-51): lo que suman PRD-03 y PRD-04 al orden de `produccion`
+
+- **Merma de un lote** (PRD-03): cuentas → invernadero → variedad del lote → sectores con pérdidas (id) → lote → ocupaciones.
+- **Aplicación de insumos** (PRD-03): cuentas → invernadero → **sectores del alcance** (id; fijan qué lotes tienen plantas ahí) → insumos (`TipoInsumo` → `Insumo` → `InsumoInvernadero` → `LoteInsumo`, id) → **lotes de plantas del alcance** (id; cambia su `costo_acumulado`). No toca ocupaciones, etapas ni plantas.
+- **Poner un sector fuera de servicio** (PRD-04): cuentas → invernadero → **variedades** de los lotes y órdenes afectados (id) → sectores (el de origen, los destino y los de las órdenes a cancelar, id, sin repetir) → insumos de las reservas de esas órdenes → lotes (id) → órdenes, ocupaciones y reservas. El sector de origen se bloquea **antes** de pasarlo a «fuera de servicio».
+- **Registrar evento** (PRD-03): cuentas → invernadero → fila del lote si se eligió.
+- **Efectos de maestros** (vuelta a servicio, baja de sector, baja de invernadero): corren con el invernadero y los sectores ya tomados; sus filas de `FueraDeServicio` se bloquean después, en orden de id.
+- Pruebas de concurrencia que suma el lote 5: dos mermas sobre el mismo lote; merma contra concretar una transición; merma contra poner el sector fuera de servicio; dos aplicaciones sobre el mismo lote de insumo; aplicación contra un ajuste de stock; poner fuera de servicio dos veces el mismo sector.

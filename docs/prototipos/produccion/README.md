@@ -7,10 +7,10 @@ Es un solo archivo de 1.768 líneas. Cada pantalla es una función de JavaScript
 abajo y leé solo esa parte. El CSS (líneas 9 a 561 aproximadamente) no se lee entero: buscá solo las clases que
 necesites. No leas el archivo entero (regla L6).
 
-> **Aviso de estilo.** El prototipo usa un diseño distinto del sistema («Diseño v2»: solo Inter y bordes de 10 px; el
-> sistema usa Inter y DM Mono y bordes de 4 px, en `core/static/core/css/infoponia.css`). Además, sus filtros usan el
-> `<select>` nativo, que D-24 descartó. Hasta que se decida qué estilo manda, tomá del prototipo la estructura y el
-> contenido de cada pantalla, no su estilo.
+> **Estilo (D-47).** Este prototipo es el estilo del sistema («Diseño v2»: solo Inter con cifras tabulares, bordes de 10 px,
+> tarjetas por bloques). La tarea UI-01 pasa sus variables y su marco al sistema. Una sola salvedad: sus filtros usan el
+> `<select>` nativo, que D-24 descartó; se usa el desplegable propio con este aspecto. Qué pantalla va en qué tarea:
+> `docs/tareas/ronda_produccion_1.md`, sección 4.
 
 ## Pantallas
 
