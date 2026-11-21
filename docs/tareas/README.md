@@ -29,6 +29,7 @@ de programar su primera tarea. El plan de la ronda vigente (tareas, orden, casos
 | CON | contabilidad |
 | UI | interfaz (hoja de estilos y marco, en core) |
 | DOC | documentación |
+| DIA | proceso diario (en core; D-56) |
 
 ## Pendientes
 
@@ -38,6 +39,8 @@ de programar su primera tarea. El plan de la ronda vigente (tareas, orden, casos
 | USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
 | MAE-02c | Alerta: consulta (CU-46) y entrada «Alertas» del menú | maestros | pendiente | MAE-02b (hecha, en revisión). Archivo por escribir | — |
+| MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | pendiente | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
+| DIA-01 | Proceso diario: pasos registrados y comando `proceso_diario`, sin cron job (D-56) | core | pendiente | —. Va antes de INV-02, que registra el primer paso | `core/DIA-01-proceso-diario.md` |
 
 ### Ronda «Producción 1» (D-44, D-45)
 
@@ -46,7 +49,7 @@ está en el repo: no se puede programar hasta que llegue su lote de documentaci�
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | pendiente | INV-01, UI-01 | `inventario/INV-02-insumos-del-invernadero-stock-y-vencimientos.md` |
+| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | pendiente | INV-01, UI-01, DIA-01 | `inventario/INV-02-insumos-del-invernadero-stock-y-vencimientos.md` |
 | INV-03 | Variedades, con la creación de su semilla | inventario | pendiente | MAE-03, INV-02, UI-01, NOT-01 | `inventario/INV-03-variedades-y-semillas.md` |
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz | produccion | pendiente | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 (y UI-01) | `produccion/PRD-01-siembra-ordenes-y-bandeja.md` |
 | PRD-02 | Transición: planificar, concretar y cancelar | produccion | pendiente | PRD-01 | `produccion/PRD-02-transicion-de-etapa.md` |

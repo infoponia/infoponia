@@ -72,13 +72,12 @@ e. Si algún insumo con lotes vencidos quedó bajo el mínimo y no tenía alerta
 
 Tarea: **INV-02**. Es un caso de uso del propio Sistema (actor «InfoPonia»): sin pantalla.
 
-- **Cómo corre (decidido el 19/11/2026).** Un comando de Django, `python manage.py revisar_vencimientos` (el nombre es propuesta
-  de esta tarea), que se ejecuta una vez por día como **cron job de Render** (servicio aparte, con el mismo repositorio, las mismas
-  variables de entorno y el comando de arranque `python manage.py revisar_vencimientos`). Render evalúa la agenda en **UTC**: para
-  «de madrugada» en Argentina (UTC−03:00), `0 6 * * *` corre a las 03:00 locales. El comando tiene que terminar solo, porque
-  Render cobra por el tiempo que corre y tiene un mínimo mensual de 1 dólar por cada cron job (verificado en la documentación
-  de Render el 19/11/2026; revisalo antes de crearlo). Crear el cron job en Render es un paso manual, fuera del código, que está
-  en la verificación a mano de INV-02.
+- **Cómo corre (decidido el 19/11/2026; cambiado el 21/11/2026 por D-56).** Es el **paso 10 del proceso diario**: INV-02 lo
+  registra en `core/procesos.py` (DIA-01) y se corre con `python manage.py proceso_diario` (o solo, con
+  `python manage.py revisar_vencimientos`). **Por ahora se corre a mano**, en la máquina local o desde la consola de Render. El cron
+  job se arma uno solo, al final de la implementación (disparador «Cuando se arme el cron único»), y va a ejecutar
+  `proceso_diario`: Render evalúa la agenda en **UTC** (para las 03:00 de Argentina, `0 6 * * *`) y cobra un mínimo mensual de
+  1 dólar por cron job (verificado el 19/11/2026). Por eso el comando tiene que terminar solo.
 - **El comando no tiene lógica.** Llama a `inventario.servicios.vencimientos.revisar_vencimientos(hoy=None)`. Sin `hoy`, usa la
   fecha de `America/Argentina/Buenos_Aires` (regla 1). Con `hoy`, las pruebas simulan cualquier día; el comando acepta
   `--fecha AAAA-MM-DD` solo para correrlo a mano en el servidor.

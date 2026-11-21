@@ -37,6 +37,11 @@ necesites. No leas el archivo entero (regla L6).
 
 Todos los nombres de esta tabla se verificaron contra el archivo el 18/11/2026.
 
+**Archivo aparte (21/11/2026):** `logistica_transportista.html` es la guía visual de MAE-05 (D-55): el bloque «Logística» de la
+ficha del invernadero, agregar y quitar transportista, el transportista sin invernadero en «Personal por asignar», el invernadero en
+la ficha de la cuenta y la baja de una cuenta en ruta. Es chico: se puede leer entero. Funciones: `logistica`, `ventanaAgregar`,
+`ventanaQuitar`, `personalPorAsignar`, `fichaDeCuenta` y `bajaDeCuentaEnRuta`. El selector de pantallas es «solo prototipo».
+
 La pantalla de concretar cosecha no está en este archivo (ver `docs/disparadores.md`, «Cuando exista Cosecha»).
 
 ## Elementos del prototipo que no van en el sistema
