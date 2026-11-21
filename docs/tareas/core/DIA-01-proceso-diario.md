@@ -118,9 +118,57 @@ INV-02).
 Sin migraciones.
 
 1. `python manage.py proceso_diario --listar`: «No hay pasos registrados» (hasta que INV-02 registre el primero).
-2. `python manage.py proceso_diario --fecha 2026-13-01`: error claro por la fecha inválida, sin traza de Python.
+2. `python manage.py proceso_diario --fecha 2026-13-01`: error claro por la fecha inválida, sin traza de Python. Lo mismo
+   con `--fecha 2026-1-5` (sin ceros): se rechaza a propósito. En los dos casos `echo $LASTEXITCODE` da 1.
 3. Cuando INV-02 esté mergeada: `--listar` muestra «10 · revisar_vencimientos · Revisar vencimientos de insumos». Correrlo dos
    veces seguidas no duplica alertas. `--fecha` con un día de dentro de un mes genera las alertas «por vencer» que
    correspondan.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo** (21/11/2026). Sin modelos, sin migraciones, sin dependencias nuevas y sin tocar nada fuera de `core`.
+
+- `core/procesos.py`: `PasoDiario`, `ResumenDePaso` (`detalle` opcional, por defecto `""`), `registrar_paso_diario`,
+  `pasos_diarios` y `correr_proceso_diario(hoy=None, solo=None)`. En el encabezado, la tabla de órdenes de D-56, punto 6.
+  Sigue el estilo de `core/extensiones.py`: lista de módulo (`_PASOS_DIARIOS`) y registro idempotente.
+- `core/management/commands/proceso_diario.py` (con los dos `__init__.py` de `core/management/`): sin lógica propia.
+  Opciones `--fecha`, `--solo` y `--listar`. Código de salida 1 si algún paso falla (lanza `CommandError` al final).
+- Pruebas: `core/tests/test_proceso_diario.py` (15) y `core/tests/test_comando_proceso_diario.py` (10), todas
+  `SimpleTestCase` con pasos falsos: no usan la base. Se escribieron primero las del servicio, se mostró que fallaban contra
+  un esqueleto y el estudiante las revisó antes de implementar.
+
+**Cómo se usa** (PowerShell, con el entorno virtual activo; también está en el docstring del comando):
+
+```
+python manage.py proceso_diario --listar
+python manage.py proceso_diario
+python manage.py proceso_diario --fecha 2026-12-15
+python manage.py proceso_diario --solo revisar_vencimientos
+```
+
+En Render se puede correr a mano desde la «Shell» del web service, sin crear ningún cron job. Todavía no hay pasos
+registrados: el primero (`revisar_vencimientos`, orden 10) lo registra INV-02.
+
+**Pruebas** (M1). Comando de la tarea: 25 pruebas, OK. `test core --keepdb --parallel --exclude-tag concurrencia
+--exclude-tag migracion`: 683 pruebas, OK (sin regresiones). `--listar` sin pasos: «No hay pasos registrados.», código 0.
+`--fecha 2026-13-01` y `--fecha 2026-1-5`: mensaje claro sin traza, código 1. `makemigrations --check --dry-run`: sin
+cambios. `manage.py check`: sin problemas.
+
+**Lo implementado distinto de lo escrito, o que la tarea no decía** (a `docs/temas_abiertos.md`):
+
+1. **Registro idéntico.** La tarea pide `RuntimeError` si el `codigo` se repite con otra función. Se decidió (el estudiante,
+   al aprobar el plan) que solo un registro idéntico (código, nombre, orden y función) es idempotente: el mismo código y la
+   misma función con otro nombre u otro orden también lanzan `RuntimeError`.
+2. **`--fecha` estricta.** `strptime("%Y-%m-%d")` acepta `2026-1-5`; el comando además compara con `fecha.isoformat()`
+   y rechaza todo lo que no sea `AAAA-MM-DD` con ceros.
+3. **Textos de la salida** que la tarea no fija (aprobados con el plan): «Proceso diario del AAAA-MM-DD.» al empezar,
+   «Pasos correctos: N · fallidos: N.» al terminar, «No hay pasos registrados.» (con punto) y las líneas de error de
+   `--fecha` y `--solo`.
+4. **`--listar` y `--fecha`.** La fecha se valida antes que nada: `--listar --fecha 2026-13-01` da error. Sin pasos
+   registrados, `--solo` con cualquier código también dice «No hay pasos registrados.» y termina en 0.
+5. **Una sola lectura de la fecha.** El comando lee `timezone.localdate()` una vez y se la pasa a `correr_proceso_diario`, así
+   el encabezado y los pasos ven el mismo día. `correr_proceso_diario` igual la lee solo si se la llama sin `hoy`.
+6. **`ResumenDePaso`** tiene `detalle=""` por defecto (`defaults=("",)`), para que un paso pueda devolver
+   `ResumenDePaso(procesados, creados, resueltos)`.
+
+**Decisiones:** ninguna nueva. D-56 pasa a «vigente» (validada por el estudiante el 21/11/2026).
