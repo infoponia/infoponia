@@ -1,6 +1,8 @@
 # Modelos de maestros (nivel 3 de D-37) para MAE-01: la geografía de Georef, la dirección (jerarquía multi-tabla,
 # como Usuario y los roles, D-01) y el invernadero con su personal. Decisiones D-04, D-05, D-28, D-37 y D-39.
 # MAE-02a: Alerta (D-38: vive en maestros con una FK al invernadero; los orígenes de las apps altas la apuntan desde su app).
+# MAE-03: TipoEtapa (catálogo fijo), SectorProduccion, Cultivo y, con columnas mínimas, Variedad, Ciclo y EtapaProductiva
+# (docs/modelo/maestros.md; INV-03 completa Variedad).
 
 from django.db import models
 from django.db.models import Q
@@ -216,9 +218,12 @@ class Invernadero(models.Model):
         return False
 
     def tiene_sectores(self):
-        """Falso hasta que exista ``SectorProduccion``: el invernadero muestra la marca «sin sectores: todavía
-        no se puede sembrar» (regla 7 de PROD-ALT-INV)."""
-        return False
+        """Verdadero si el invernadero tiene algún sector activo o fuera de servicio (postcondición b de PROD-ALT-SCT,
+        regla 3 de PROD-CNS-INV): si no, muestra la marca «sin sectores: todavía no se puede sembrar» (regla 7 de
+        PROD-ALT-INV). Los sectores dados de baja no cuentan."""
+        return self.sectores.filter(
+            estado_sector__in=[SectorProduccion.Estado.ACTIVO, SectorProduccion.Estado.FUERA_DE_SERVICIO]
+        ).exists()
 
     def equipo(self):
         """El personal de los cuatro roles para mostrarlo en la lista y en la ficha (``people`` y ``person`` del
@@ -348,3 +353,209 @@ class Alerta(models.Model):
     def __str__(self):
         """La descripción: es el texto que guarda la auditoría al referenciarla (D-36)."""
         return self.descripcion_alerta
+
+
+# ---- MAE-03: tipos de etapa, sectores, cultivos, variedades, ciclos y etapas ----
+
+# Los seis perfiles familiares, lista fija en código (docs/modelo/maestros.md, «Tipo de etapa»; confirmada el 19/11/2026).
+# Los códigos son de MAE-03 (la ficha del modelo da solo los nombres visibles): se registran en «temas abiertos».
+PERFILES_FAMILIARES = (
+    ("hoja_verde", "Hoja verde"),
+    ("pastura", "Pastura"),
+    ("frutos_grandes", "Frutos grandes"),
+    ("frutos_pequenos", "Frutos pequeños"),
+    ("flores", "Flores"),
+    ("hierbas", "Hierbas"),
+)
+CODIGOS_DE_PERFIL = [codigo for codigo, _ in PERFILES_FAMILIARES]
+
+
+class TipoEtapa(models.Model):
+    """Tipo de etapa (MD-52, R092 y R093): catálogo fijo de cinco filas que carga la migración ``0005``; no tiene alta,
+    modificación ni baja. Las reglas se apoyan en ``codigo``, nunca en el nombre. ``perfiles_permitidos`` es la lista
+    de valores de ``Variedad.perfil_familia`` que admite el tipo («permitida» no es «obligatoria»)."""
+
+    # Color fijo de cada tipo en la interfaz (``--e-ger``, ``--e-cre``, ``--e-flo``, ``--e-fru``, ``--e-mad``).
+    CLASES_DE_COLOR = {
+        "germinacion": "ger",
+        "crecimiento": "cre",
+        "floracion": "flo",
+        "fructificacion": "fru",
+        "maduracion": "mad",
+    }
+
+    codigo = models.CharField(max_length=20, unique=True)
+    nombre_etapa = models.CharField("nombre", max_length=20)
+    puesto_global = models.PositiveSmallIntegerField("puesto global", unique=True)
+    perfiles_permitidos = models.JSONField("perfiles permitidos", default=list)
+
+    class Meta:
+        ordering = ["puesto_global"]
+        verbose_name = "Tipo de etapa"
+        verbose_name_plural = "Tipos de etapa"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(puesto_global__gte=1, puesto_global__lte=5), name="tipo_etapa_puesto_1_a_5"
+            ),
+        ]
+
+    def __str__(self):
+        return self.nombre_etapa
+
+    @property
+    def clase_de_color(self):
+        """Sufijo de la clase de color del tipo (``ger``, ``cre``...): se elige por ``codigo``."""
+        return self.CLASES_DE_COLOR.get(self.codigo, "ger")
+
+
+class SectorProduccionQuerySet(models.QuerySet):
+    """QuerySet de sectores con el alcance por usuario en un único lugar (D-28, regla 1 de PROD-CNS-SCT)."""
+
+    def en_alcance_de(self, actor):
+        """Sectores que ``actor`` consulta: los de los invernaderos de su alcance (el Gerente, todos, en solo lectura; el
+        Agrónomo, los de los activos a su cargo). Cualquier otro actor, ninguno."""
+        return self.filter(invernadero__in=Invernadero.objects.en_alcance_de(actor))
+
+
+class SectorProduccion(models.Model):
+    """Sector de producción (PROD-ALT-SCT, PROD-MOD-SCT, PROD-BAJ-SCT, PROD-CNS-SCT; R098 y R092).
+
+    Tres estados (manda el caso de uso sobre el modelo, que nombra dos): «activo», «fuera de servicio» (conserva su
+    capacidad pero no recibe plantas ni órdenes) e «inactivo» (baja lógica). Los agujeros ocupados, comprometidos y
+    libres se calculan, no se guardan (regla 5 de PROD-ALT-SCT). El nombre es único por invernadero sin distinguir
+    mayúsculas, bajas incluidas. Sin ubicación ni densidad (regla 6).
+    """
+
+    class Estado(models.TextChoices):
+        ACTIVO = "activo", "Activo"
+        FUERA_DE_SERVICIO = "fuera_de_servicio", "Fuera de servicio"
+        INACTIVO = "inactivo", "Inactivo"
+
+    # A2 de D-37: las FK se declaran acá, en la app de nivel mayor.
+    invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="sectores")
+    tipo_etapa = models.ForeignKey(TipoEtapa, on_delete=models.PROTECT, related_name="sectores")
+    nombre_sector = models.CharField("nombre", max_length=40, validators=[validar_con_contenido])
+    cant_agujeros_total = models.PositiveIntegerField("agujeros totales")
+    estado_sector = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ACTIVO)
+
+    objects = SectorProduccionQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["nombre_sector"]
+        verbose_name = "Sector de producción"
+        verbose_name_plural = "Sectores de producción"
+        constraints = [
+            # Regla 2 de PROD-ALT-SCT: nombre único por invernadero, sin distinguir mayúsculas.
+            models.UniqueConstraint(Lower("nombre_sector"), "invernadero", name="sector_nombre_unico_por_invernadero"),
+            # Regla 4 de PROD-ALT-SCT: la cantidad es un entero mayor que cero.
+            models.CheckConstraint(condition=Q(cant_agujeros_total__gt=0), name="sector_agujeros_mayor_que_cero"),
+            models.CheckConstraint(
+                condition=Q(estado_sector__in=["activo", "fuera_de_servicio", "inactivo"]), name="sector_estado_valido"
+            ),
+        ]
+
+    def __str__(self):
+        """El nombre: es el texto que guarda la auditoría al referenciarlo (D-36)."""
+        return self.nombre_sector
+
+    @property
+    def activo(self):
+        """True si el sector está activo."""
+        return self.estado_sector == self.Estado.ACTIVO
+
+
+class Cultivo(models.Model):
+    """Cultivo (PROD-ALT-CLT y siguientes; R074): lo comparten todos los invernaderos. Nombre de hasta 40 caracteres
+    (con la variedad de hasta 50, la semilla «Semilla {cultivo} {variedad}» entra en los 100 del insumo), único sin
+    distinguir mayúsculas; el servicio guarda el nombre recortado."""
+
+    class Estado(models.TextChoices):
+        ACTIVO = "activo", "Activo"
+        INACTIVO = "inactivo", "Inactivo"
+
+    nombre_cultivo = models.CharField("nombre", max_length=40, validators=[validar_con_contenido])
+    estado_cultivo = models.CharField(max_length=10, choices=Estado.choices, default=Estado.ACTIVO)
+
+    class Meta:
+        ordering = ["nombre_cultivo"]
+        verbose_name = "Cultivo"
+        verbose_name_plural = "Cultivos"
+        constraints = [
+            # Regla 2 de PROD-ALT-CLT: nombre único entre todos los cultivos, activos o inactivos.
+            models.UniqueConstraint(Lower("nombre_cultivo"), name="cultivo_nombre_unico"),
+            models.CheckConstraint(
+                condition=Q(estado_cultivo__in=["activo", "inactivo"]), name="cultivo_estado_valido"
+            ),
+        ]
+
+    def __str__(self):
+        return self.nombre_cultivo
+
+    @property
+    def activo(self):
+        """True si el cultivo está activo."""
+        return self.estado_cultivo == self.Estado.ACTIVO
+
+
+class Variedad(models.Model):
+    """Variedad de un cultivo, con las columnas mínimas de MAE-03 (contar las activas de un cultivo y calcular qué
+    variedades dejan de poder sembrarse al cambiar el tipo de un sector). INV-03 agrega el resto con una migración
+    propia (docs/modelo/maestros.md, «Variedad, Ciclo y EtapaProductiva»)."""
+
+    class Estado(models.TextChoices):
+        ACTIVO = "activo", "Activo"
+        INACTIVO = "inactivo", "Inactivo"
+
+    cultivo = models.ForeignKey(Cultivo, on_delete=models.PROTECT, related_name="variedades")
+    nombre_variedad = models.CharField("nombre", max_length=50)
+    perfil_familia = models.CharField("perfil familiar", max_length=20, choices=PERFILES_FAMILIARES)
+    estado_variedad = models.CharField(max_length=10, choices=Estado.choices, default=Estado.ACTIVO)
+
+    class Meta:
+        ordering = ["nombre_variedad"]
+        verbose_name = "Variedad"
+        verbose_name_plural = "Variedades"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(estado_variedad__in=["activo", "inactivo"]), name="variedad_estado_valido"
+            ),
+            models.CheckConstraint(condition=Q(perfil_familia__in=CODIGOS_DE_PERFIL), name="variedad_perfil_valido"),
+        ]
+
+    def __str__(self):
+        return f"{self.cultivo} {self.nombre_variedad}"
+
+
+class Ciclo(models.Model):
+    """Ciclo de una variedad (R091, uno a uno, composición): se crea junto con la variedad. La duración completa se
+    deriva de sus etapas y no se guarda (MD-70)."""
+
+    variedad = models.OneToOneField(Variedad, on_delete=models.PROTECT, related_name="ciclo")
+
+    class Meta:
+        verbose_name = "Ciclo"
+        verbose_name_plural = "Ciclos"
+
+    def __str__(self):
+        return f"Ciclo de {self.variedad}"
+
+
+class EtapaProductiva(models.Model):
+    """Etapa de un ciclo (R090 y R093). Una variedad no repite un tipo en su ciclo. Sin estado propio: sigue el de su
+    variedad (decidido el 19/11/2026). ``descripcion_etapa`` no la pide ningún caso de uso: queda vacía."""
+
+    ciclo = models.ForeignKey(Ciclo, on_delete=models.PROTECT, related_name="etapas")
+    tipo_etapa = models.ForeignKey(TipoEtapa, on_delete=models.PROTECT, related_name="etapas")
+    duracion_estimada_dias = models.PositiveIntegerField("duración estimada (días)")
+    descripcion_etapa = models.TextField("descripción", blank=True)
+
+    class Meta:
+        verbose_name = "Etapa productiva"
+        verbose_name_plural = "Etapas productivas"
+        constraints = [
+            models.UniqueConstraint(fields=["ciclo", "tipo_etapa"], name="etapa_un_tipo_por_ciclo"),
+            models.CheckConstraint(condition=Q(duracion_estimada_dias__gt=0), name="etapa_duracion_mayor_que_cero"),
+        ]
+
+    def __str__(self):
+        return f"{self.tipo_etapa} de {self.ciclo}"

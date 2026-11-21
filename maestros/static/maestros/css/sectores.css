@@ -1,0 +1,28 @@
+/* Estilos de las pantallas de sectores (MAE-03), sobre el Diseño v2 (D-47): las tarjetas (.sector), los grupos por etapa
+   (.stage-h, .sgrid), la barra de agujeros (.segbar, .seglegend), la etiqueta de etapa (.etapa) y las pestañas (.tabs) salen de
+   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios: la barra de acciones de la pestaña, el menú «⋯»
+   hecho con <details> (funciona sin JavaScript; sectores.js lo cierra al hacer clic afuera) y las fichas de radio del tipo de
+   etapa (sin JavaScript, la ficha marcada se ve con :has). */
+.sec-barra{display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap}
+.tabs .tab{display:inline-block}
+
+/* Menú «⋯» de cada sector: <details class="kb sec-kb"><summary class="kb-btn">…</summary><div class="menu">…</div></details> */
+.sec-kb > summary{list-style:none;cursor:pointer}
+.sec-kb > summary::-webkit-details-marker{display:none}
+.sec-kb > summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.sec-kb[open] > summary{background:var(--secondary);color:var(--foreground)}
+.menu a{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border-radius:7px;font-size:13.5px;font-weight:500;color:var(--foreground);white-space:nowrap;text-decoration:none}
+.menu a svg{color:var(--muted-foreground)}
+.menu a:hover,.menu a:focus-visible{background:var(--secondary)}
+.menu a.danger,.menu a.danger svg{color:var(--status-danger)}
+
+/* Fichas de radio del tipo de etapa: la entrada queda dentro de la ficha, oculta pero accesible con el teclado. */
+.chips label.chip{position:relative;cursor:pointer}
+.chips label.chip input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.chips label.chip:has(input:checked){background:var(--primary);border-color:var(--primary);color:#fff}
+.chips label.chip:has(input:checked) i{box-shadow:0 0 0 2px #fff}
+.chips label.chip:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+.chips label.chip:has(input:disabled){opacity:.5;cursor:not-allowed}
+.chips label.chip i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.hint .lock{display:inline-flex;align-items:flex-start;gap:6px}
+.sector .inside a{color:inherit}

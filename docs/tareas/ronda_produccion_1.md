@@ -15,7 +15,8 @@ no dependen entre sí pueden hacerse en paralelo.
 | UI-01 | Estilo «Diseño v2» (D-47): hoja de estilos, marco y pantallas ya hechas — **hecha el 20/11/2026** (a la espera de la revisión a mano) | core | — (no es un caso de uso) | — | 1 |
 
 | NOT-01 | Notificaciones y campana (D-42) | core | — (característica del sistema; cierra las postcondiciones de aviso que hoy están sin implementar) | UI-01 | 1 |
-| MAE-03 | Sectores y cultivos, con los tipos de etapa | maestros | PROD-ALT-SCT, PROD-MOD-SCT, PROD-BAJ-SCT, PROD-CNS-SCT, PROD-ALT-CLT, PROD-MOD-CLT, PROD-BAJ-CLT, PROD-CNS-CLT | UI-01, NOT-01 | 1 |
+| MAE-03 | «Cuando exista SectorProduccion» (`Invernadero.tiene_sectores`, pestaña de sectores, postcondición b de PROD-BAJ-INV) — hecha el 20/11/2026 (a la espera de la revisión a mano) |
+
 | MAE-04 | Configuración operativa y perfil de la organización (sin logo) | maestros | ADM-MOD-CFG, ADM-MOD-ORG | UI-01 | 1 |
 | CON-01 | `OrigenDocumento`: el documento de origen común (D-52) | contabilidad | — (estructura del modelo) | — | 5 |
 | INV-01 | Tipos de insumo y catálogo de insumos | inventario | CMP-ALT-TIN, CMP-MOD-TIN, CMP-BAJ-TIN, CMP-CNS-TIN, CMP-ALT-INS, CMP-MOD-INS, CMP-BAJ-INS, CMP-CNS-INS | UI-01, NOT-01, CON-01 | 2 |

@@ -1,0 +1,24 @@
+{% load iconos %}{% comment %}Ventana para crear un cultivo o renombrar uno (PROD-ALT-CLT y PROD-MOD-CLT, MODALS.cultivo del prototipo). Recibe «form»,
+«cultivo» (al renombrar) y «aviso» (AvisoDeRenombre: la cantidad de semillas que cambian de nombre y los invernaderos cuyo
+Agrónomo recibirá una notificación; regla 3 de PROD-MOD-CLT). Informa y no bloquea: sin JavaScript no se puede saber si el nombre
+cambió, así que el aviso se ve siempre al renombrar. Es un formulario común (POST), con «novalidate»: las reglas son del servicio.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">{% if cultivo %}Renombrar cultivo{% else %}Nuevo cultivo{% endif %}</h2>
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+    <form method="post" novalidate action="{% if cultivo %}{% url 'maestros:cultivo_renombrar' cultivo.pk %}{% else %}{% url 'maestros:cultivo_nuevo' %}{% endif %}">
+      {% csrf_token %}
+      {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+      {% if aviso.invernaderos %}
+      <div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>Este cultivo lo usan variedades de otros invernaderos. Si lo renombrás, se notificará a los Agrónomos de {% for invernadero in aviso.invernaderos %}{{ invernadero.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}.</div></div>
+      {% endif %}
+      {% if aviso.cantidad_de_semillas %}
+      <div class="alert alert-info" role="status" style="margin-bottom:12px">{% icono "info" 16 %}<div>Al renombrar el cultivo se actualiza el nombre de {% if aviso.cantidad_de_semillas == 1 %}la semilla de su variedad{% else %}las {{ aviso.cantidad_de_semillas }} semillas de sus variedades{% endif %}. El cambio queda registrado en la auditoría.</div></div>
+      {% endif %}
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Guardando…">{% if cultivo %}Guardar cambios{% else %}Crear cultivo{% endif %}</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:cultivos' %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

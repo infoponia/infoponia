@@ -1,0 +1,26 @@
+{% load iconos %}{% comment %}Ventana de la baja de un cultivo (PROD-BAJ-CLT, MODALS['cult-baja'] del prototipo). Recibe «cultivo» (con «variedades_activas») y, si el
+servicio rechazó la baja, «error». Con variedades activas (precondición c y regla 2) no ofrece confirmar: dice cuántas son y que
+primero se dan de baja con Baja Variedad (la baja no es en cascada). Sin ellas, pide confirmar. Dar de baja es un POST a la misma
+URL; abrirla (GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if cultivo.variedades_activas %}
+    <h2 id="ventana-titulo">No se puede dar de baja el cultivo {{ cultivo.nombre_cultivo }}</h2>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>Tiene {{ cultivo.variedades_activas }} variedad{{ cultivo.variedades_activas|pluralize:",es" }} activa{{ cultivo.variedades_activas|pluralize }}. Primero se dan de baja con Baja Variedad.</div></div>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'maestros:cultivos' %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
+    </div>
+    {% else %}
+    <h2 id="ventana-titulo">¿Dar de baja el cultivo {{ cultivo.nombre_cultivo }}?</h2>
+    <p>Deja de ofrecerse para crear variedades. Conserva su historial y puede reactivarse después.</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'maestros:cultivo_baja' cultivo.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'maestros:cultivos' %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

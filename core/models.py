@@ -638,6 +638,15 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_INVERNADERO = "modificacion_invernadero", "Modificación de invernadero"
         BAJA_INVERNADERO = "baja_invernadero", "Baja de invernadero"
         REACTIVACION_INVERNADERO = "reactivacion_invernadero", "Reactivación de invernadero"
+        # Sector y cultivo (MAE-03, D-36): <acción>_<entidad>.
+        ALTA_SECTOR = "alta_sector", "Alta de sector"
+        MODIFICACION_SECTOR = "modificacion_sector", "Modificación de sector"
+        BAJA_SECTOR = "baja_sector", "Baja de sector"
+        REACTIVACION_SECTOR = "reactivacion_sector", "Reactivación de sector"
+        ALTA_CULTIVO = "alta_cultivo", "Alta de cultivo"
+        MODIFICACION_CULTIVO = "modificacion_cultivo", "Modificación de cultivo"
+        BAJA_CULTIVO = "baja_cultivo", "Baja de cultivo"
+        REACTIVACION_CULTIVO = "reactivacion_cultivo", "Reactivación de cultivo"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -675,11 +684,17 @@ class RegistroAuditoria(models.Model):
         "alertas_creadas": "Alertas creadas",
         "alertas_resueltas": "Alertas resueltas",
         "alertas_traspasadas": "Alertas traspasadas",
+        # Sectores y cultivos (MAE-03): «nombre» y «estado» ya existen.
+        "tipo_etapa": "Tipo de etapa",
+        "cant_agujeros_total": "Agujeros totales",
+        "invernadero": "Invernadero",
+        "semillas_renombradas": "Semillas renombradas",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
         "rol": {**dict(Usuario.Rol.choices), ADMINISTRADOR: "Administrador"},
-        "estado": {"activo": "Activo", "inactivo": "Inactivo"},
+        # MAE-03: «fuera de servicio» es un estado de los sectores (permiso explícito del estudiante, 20/11/2026).
+        "estado": {"activo": "Activo", "inactivo": "Inactivo", "fuera_de_servicio": "Fuera de servicio"},
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
     }
@@ -816,6 +831,14 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_INVERNADERO,
         RegistroAuditoria.Accion.BAJA_INVERNADERO,
         RegistroAuditoria.Accion.REACTIVACION_INVERNADERO,
+        RegistroAuditoria.Accion.ALTA_SECTOR,
+        RegistroAuditoria.Accion.MODIFICACION_SECTOR,
+        RegistroAuditoria.Accion.BAJA_SECTOR,
+        RegistroAuditoria.Accion.REACTIVACION_SECTOR,
+        RegistroAuditoria.Accion.ALTA_CULTIVO,
+        RegistroAuditoria.Accion.MODIFICACION_CULTIVO,
+        RegistroAuditoria.Accion.BAJA_CULTIVO,
+        RegistroAuditoria.Accion.REACTIVACION_CULTIVO,
     }
 )
 

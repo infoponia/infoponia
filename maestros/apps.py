@@ -19,10 +19,14 @@ class MaestrosConfig(AppConfig):
         from core import extensiones
         from core.menu import registrar_entrada
         from core.models import Usuario
-        from maestros.servicios import invernaderos
+        from maestros import extensiones as extensiones_de_maestros
+        from maestros.servicios import invernaderos, sectores
         from maestros.servicios.alertas import registrar_tipos_de_personal
 
         registrar_tipos_de_personal()
+        # MAE-03: al dar de baja un invernadero, sus sectores pasan a inactivos con un log por sector (postcondición f de
+        # PROD-BAJ-INV).
+        extensiones_de_maestros.registrar_efecto_de_baja(sectores.efecto_de_baja_de_invernadero)
 
         extensiones.registrar_efecto_de_baja_de_cuenta(invernaderos.efectos_de_baja_de_cuenta)
         extensiones.registrar_efecto_de_reactivacion_de_cuenta(invernaderos.efectos_de_reactivacion_de_cuenta)

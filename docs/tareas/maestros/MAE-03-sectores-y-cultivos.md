@@ -125,7 +125,8 @@ no se recortan porque PRD-01 los necesita.
 Hay migraciones nuevas: `python manage.py migrate`. Cuentas: Gerente, dos Agrónomos (uno a cargo de un invernadero y otro no),
 Capataz.
 
-1. `migrate` aplica las migraciones de `maestros` (esquema y datos). En `/admin/` hay cinco tipos de etapa con sus perfiles.
+1. `migrate` aplica las migraciones de `maestros` (0004 esquema y 0005 datos) y de `core` (0012). En `/admin/` (solo con
+   `DJANGO_DEBUG=1`, D-30) hay cinco tipos de etapa con sus perfiles.
 2. Con el Agrónomo a cargo: ficha del invernadero → «Sectores»: aparece el aviso «sin sectores». «Agregar sector» con nombre
    repetido (mayúsculas distintas) muestra el error; con total 0 también.
 3. Agregar tres sectores de tipos distintos: se agrupan por etapa con su cantidad de sectores y de agujeros; la marca «sin
@@ -134,15 +135,91 @@ Capataz.
    poder sembrarse» sale con las variedades que cargue a mano en `/admin/`) y «Continuar igual» guarda. Guardar sin cambios no
    crea registro en «Auditoría» (D-28).
 5. Dar de baja un sector: pasa a «Dados de baja», sin acciones salvo «Reactivar». Reactivarlo: vuelve activo.
-6. Con el Agrónomo ajeno y con el Gerente: ven los sectores pero ninguna acción.
+6. Con el Gerente: ve los sectores de cualquier invernadero pero ninguna acción (ni «Agregar sector» ni el menú «⋯»). Con el
+   Agrónomo ajeno (el que no está a cargo): **403** en la ficha y en cada ruta de sectores, porque la regla 1 de PROD-CNS-SCT y
+   D-28 limitan al Agrónomo a los invernaderos activos a su cargo (corregido: el texto anterior decía «ven los sectores sin
+   acciones»).
 7. Dar de baja el invernadero: «Auditoría» muestra un log por sector con la baja. Reactivar el invernadero no reactiva sus sectores
    (regla 6 de PROD-BAJ-INV: los reactiva el Agrónomo con PROD-MOD-SCT).
 8. «Producción» → «Cultivos y variedades» (Agrónomo): alta de «Acelga»; el nombre repetido da error; renombrar a «Acelga común»;
-   dar de baja y reactivar. El Gerente no ve la pestaña y la URL le da 404.
+   dar de baja y reactivar. El Gerente no ve la pestaña y `/produccion/cultivos/` (y las demás rutas de cultivos) le da 404,
+   también con JavaScript (HTMX) y sin él. Con el nombre de un cultivo que usa otro invernadero (cuando exista INV-03) el aviso
+   de renombrar dice a qué invernaderos se notifica; hoy no hay semillas ni invernaderos que lo usen y no aparece.
 9. En `/admin/`, crear una variedad activa del cultivo: la baja del cultivo ahora dice cuántas variedades activas tiene y no deja.
 10. Sin JavaScript, los pasos 3, 4 y 8 funcionan igual (cada ventana es una página).
 11. `python manage.py test maestros --keepdb --tag concurrencia` pasa. Después, una vez, la corrida sin concurrencia: el mixin
     vuelve a cargar los tipos de etapa.
 12. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+Hecha el 20/11/2026, en la rama `feature/mae-03-sectores-y-cultivos`. Los ocho casos de uso están implementados.
+
+**Qué se hizo**
+
+- Modelos (`maestros/models.py`): `TipoEtapa` (catálogo fijo con `codigo`, `puesto_global` y `perfiles_permitidos`),
+  `SectorProduccion`, `Cultivo`, y `Variedad`, `Ciclo` y `EtapaProductiva` con columnas mínimas, con todas sus restricciones de base y
+  claves foráneas protegidas. `Invernadero.tiene_sectores()` ya mira los sectores activos o fuera de servicio.
+- Migraciones nuevas: `maestros/0004_sectores_y_cultivos` (esquema), `maestros/0005_cargar_tipos_de_etapa` (datos, idempotente por
+  `codigo`, con `cargar` y `descargar`) y `core/0012_sector_y_cultivo_acciones_de_auditoria` (solo `choices`). Ninguna migración ya
+  mergeada se tocó.
+- Puntos de extensión (`maestros/extensiones.py`): los de `docs/api/extensiones_de_maestros.md` (sectores, cultivos y
+  `registrar_efecto_de_baja_de_sector`), cada uno con su resultado neutro sin registrantes.
+- Servicios: `maestros/servicios/sectores.py` y `maestros/servicios/cultivos.py`. La baja de un invernadero pasa sus sectores a
+  inactivos con un log `baja_sector` por sector (registrante en `MaestrosConfig.ready()`).
+- Pantallas: pestaña «Sectores» y tarjeta «Capacidad» en la ficha del invernadero, con ventanas de agregar, modificar (con el aviso
+  de cambio de tipo), baja, reactivar y volver a activar; y la pestaña «Cultivos y variedades» de «Producción». Todas con HTMX y con
+  respaldo sin JavaScript (cada ventana es una página).
+- `core/models.py` (permitido): las 8 acciones nuevas en `Accion` y `ACCIONES_DE_NEGOCIO`, `ETIQUETAS` (`tipo_etapa`,
+  `cant_agujeros_total`, `invernadero`, `semillas_renombradas`) y, con permiso explícito del estudiante, `fuera_de_servicio` en
+  `VALORES_VISIBLES["estado"]`.
+
+**Archivos modificados o creados**
+
+- `core`: `models.py`, `migrations/0012_…`.
+- `maestros`: `models.py`, `extensiones.py`, `apps.py`, `admin.py`, `forms.py`, `views.py`, `urls.py`; `migrations/0004_…` y `0005_…`;
+  `servicios/sectores.py` y `servicios/cultivos.py`.
+- Plantillas: `invernaderos/ficha.html` y `invernaderos/lista.html` (modificadas); `sectores/` (`_pestana`, `_tarjeta`, `_capacidad` y
+  cinco ventanas); `cultivos/` (`lista`, `_pestanas_de_produccion`, `_variedades_simples` y dos ventanas).
+- Estáticos: `static/maestros/css/sectores.css`, `static/maestros/css/cultivos.css` y `static/maestros/js/sectores.js`. Los tres se piden
+  con `{% static_v %}` (interfaz.md), que llama a `static()` y funciona igual con `DEBUG` apagado (verificado con
+  `DJANGO_DEBUG=0`); `sectores.js` solo cierra el menú «⋯» (un `<details>`) y no es necesario para usar las pantallas.
+- Pruebas (`maestros/tests/`): `fabricas.py` (modificado) y los archivos nuevos `test_sectores_modelo.py`,
+  `test_extensiones_sectores.py`, `test_prod_alt_sct.py`, `test_prod_mod_sct.py`, `test_prod_baj_sct.py`, `test_prod_cns_sct.py`,
+  `test_sectores_vistas.py`, `test_sectores_concurrencia.py`, `test_prod_alt_clt.py`, `test_prod_mod_clt.py`, `test_prod_baj_clt.py`,
+  `test_prod_cns_clt.py`, `test_cultivos_vistas.py` y `test_cultivos_concurrencia.py`.
+
+**Pruebas (M1, 20/11/2026)**
+
+- `python manage.py test maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 1459 pruebas, OK
+  (también corrida después de la de concurrencia: el mixin `ConDatosDeMaestros` recargó los cinco tipos de etapa).
+- `python manage.py test maestros core --keepdb --tag concurrencia`: 43 pruebas, OK (9 son de MAE-03).
+- `python manage.py test maestros core --keepdb --tag migracion`: 1 prueba, OK.
+- `python manage.py makemigrations --check --dry-run`: «No changes detected». Pruebas de pantallas también OK con
+  `DJANGO_DEBUG=0`.
+- Pruebas nuevas de MAE-03: 368 (modelos 28, extensiones 23, sectores: alta 27, modificación 45, baja 37, consulta 28, vistas 51,
+  concurrencia 4; cultivos: alta 14, modificación 32, baja 14, consulta 19, vistas 41, concurrencia 5).
+- Cada paso de servicios (3 y 5) se hizo con las pruebas escritas primero, vistas fallar y aprobadas por el estudiante. Un detalle: con
+  `--keepdb --parallel`, tras las migraciones nuevas hubo que recrear la base una vez (`--noinput`, sin `--keepdb`).
+
+**Decisiones y diferencias respecto de la documentación** (para `docs/temas_abiertos.md`; nada se corrigió en silencio)
+
+1. Agrónomo ajeno: manda la regla 1 de PROD-CNS-SCT (403), no el texto de la «Verificación a mano» ni del paso 4. Corregido arriba.
+2. `nombre_sector` de hasta 40 caracteres y códigos de perfil `hoja_verde`, `pastura`, `frutos_grandes`, `frutos_pequenos`, `flores` y
+   `hierbas`: la ficha del modelo no los fija. Para pasar a `docs/modelo/maestros.md`.
+3. Texto de la notificación de PROD-MOD-CLT b (el CU no lo fija): título «Cambió el cultivo {anterior}», detalle «{Nombre Apellido}
+   lo renombró a {nuevo}. Sus variedades siguen igual.». Una sola llamada a `notificar_a_varios` (sin el invernadero de cada
+   destinatario, que variaría por cuenta). Se notifica solo a Agrónomos activos de invernaderos activos, sin el actor.
+4. De `docs/api/extensiones_de_maestros.md` («Lote 5») se hizo `registrar_efecto_de_baja_de_sector`; `pasar_a_fuera_de_servicio`
+   queda para PRD-04. `bloquear_sectores` verifica también que el invernadero esté activo (la API no lo decía).
+5. Regla 4 de PROD-MOD-SCT y de PROD-BAJ-SCT: la advertencia se dispara cuando el sector activo es el último de su tipo (como
+   `ultimoAviso` del prototipo), aunque no haya lotes ni variedades afectados; un sector fuera de servicio no la dispara. En la baja,
+   los impedimentos se informan antes que la advertencia.
+6. `variedades_de_cultivos` sin registrante, o para un cultivo que el registrante no trae, usa lo propio de `maestros`
+   («No tiene variedades» o la lista simple de nombres, escapada).
+7. El menú «⋯» es un `<details>` propio de `maestros` (el componente de `core` no existe). «Volver a activar» muestra un texto
+   genérico: la fecha y el motivo de «fuera de servicio» son de PRD-04. «Renombrar» muestra siempre el aviso de semillas y de
+   invernaderos notificados (sin JavaScript no se sabe si el nombre cambió).
+8. Contrato nuevo que conviene documentar en `docs/api/extensiones_de_maestros.md`: quien crea una variedad (INV-03) bloquea el cultivo
+   (`FOR NO KEY UPDATE`) antes de insertarla (cultivo → variedad); `baja_cultivo` cuenta las variedades activas después de bloquear.
+9. Al Gerente, toda ruta de cultivos le da 404 también con método distinto de GET (no 405), para no delatar la ruta.

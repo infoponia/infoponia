@@ -1,0 +1,11 @@
+/* Estilos de «Producción» → «Cultivos y variedades» (MAE-03), sobre el Diseño v2 (D-47): las tarjetas (.card.seg, .card-h), las
+   pestañas (.tabs), los avisos y las ventanas salen de core/static/core/css/infoponia.css. Acá quedan solo los detalles propios:
+   las pestañas de «Producción» como enlaces (cada una es una página y funciona sin JavaScript), la barra de la página y el
+   aspecto de un cultivo dado de baja. */
+a.tab{display:inline-block;text-decoration:none}
+a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.cult-barra{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.cult-off{opacity:.75}
+.cult-off .card-h{background:#f7f8f9}
+.card-h form{display:inline-flex;margin:0}
+.var-simple{list-style:none;margin:0;padding:12px 20px;display:grid;gap:6px;font-size:14px}

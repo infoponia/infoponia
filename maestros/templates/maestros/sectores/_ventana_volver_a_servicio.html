@@ -1,0 +1,17 @@
+{% load iconos %}{% comment %}Ventana para volver a activar un sector fuera de servicio (PROD-MOD-SCT, postcondición b y regla 5; MODALS['sector-activar']
+del prototipo). Sin validaciones: el sector está vacío y sin reservas. La fecha y el motivo de «fuera de servicio» y el cierre del
+período son de PRD-04 (lo hacen sus registrantes de registrar_efecto_de_vuelta_a_servicio). Volver a activar es un POST a la
+misma URL. Recibe «sector» e «invernadero».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">¿Volver a activar {{ sector.nombre_sector }}?</h2>
+    <p>Está fuera de servicio. Al activarlo vuelve a recibir plantas y órdenes, y queda registrado el fin del período que estuvo fuera de servicio.</p>
+    <form method="post" action="{% url 'maestros:sector_volver_a_servicio' invernadero.pk sector.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Activando…">Volver a activar</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

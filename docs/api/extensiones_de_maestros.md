@@ -31,7 +31,7 @@ libres = agujeros_de(sectores)                       # ya con sus propias reserv
 ```
 
 `bloquear_sectores` rechaza un sector que no es del invernadero, uno inactivo o uno fuera de servicio (no recibe plantas ni
-órdenes) con `ValidationError` de código `sector_no_disponible`.
+órdenes) con `ValidationError` de código `sector_no_disponible`. `bloquear_sectores(invernadero_id, ids)` también rechaza un invernadero inactivo (`invernadero_inactivo`).
 
 ## Cultivos
 
@@ -40,7 +40,11 @@ libres = agujeros_de(sectores)                       # ya con sus propias reserv
 | `registrar_semillas_de_cultivo(contar, renombrar)` | `contar(cultivo) -> int` (semillas que cambiarían de nombre); `renombrar(actor, cultivo, nombre_anterior) -> int` (las renombra y escribe su propio log por semilla, acción `modificacion_semilla`, D-36) | `contar_semillas_a_renombrar(cultivo)` y, en `modificar_cultivo`, `renombrar_semillas(...)` (regla 3 de PROD-MOD-CLT) | `inventario` (INV-03) |
 | `registrar_uso_de_cultivo(funcion)` | `funcion(cultivo) -> set[int]`: ids de los invernaderos **activos** que usan alguna variedad del cultivo (con la semilla habilitada o con lotes activos; regla 4 de PROD-MOD-CLT) | `invernaderos_que_usan_el_cultivo(cultivo)` | **Solo `inventario` (INV-03)**: arma el conjunto con la semilla habilitada y con los lotes activos que le informa `produccion` por `registrar_uso_de_variedad` (`docs/api/extensiones_de_inventario.md`). `produccion` no se registra acá (corrección del lote 3) |
 
-| `registrar_variedades_de_cultivo(funcion)` | `funcion(actor, cultivos) -> dict[int, VariedadesDelCultivo]`, con `VariedadesDelCultivo = namedtuple("VariedadesDelCultivo", "cabecera cuerpo")`: dos fragmentos de HTML ya armados (`SafeString`) por id de cultivo, `cabecera` (los botones «+ Variedad» de la tarjeta) y `cuerpo` (la tabla de variedades con su ciclo, semilla, estado y acciones). **Es el único registrante** (una segunda llamada a `registrar_...` lanza `RuntimeError`) | `variedades_de_cultivos(actor, cultivos)`: la página «Cultivos y variedades» pone `cabecera` y `cuerpo` en cada tarjeta. **Sin registrante** (hasta INV-03) usa lo propio de `maestros`: cuerpo con el texto «No tiene variedades» (o la lista simple de nombres si las hay, cargadas a mano) y sin botones | `inventario` (INV-03), porque la semilla y sus invernaderos son de `inventario` y `maestros` no puede importarlo (A1) |
+| `registrar_variedades_de_cultivo(funcion)` | `funcion(actor, cultivos) -> dict[int, VariedadesDelCultivo]`, con `VariedadesDelCultivo = namedtuple("VariedadesDelCultivo", "cabecera cuerpo")`: dos fragmentos de HTML ya armados (`SafeString`) por id de cultivo, `cabecera` (los botones «+ Variedad» de la tarjeta) y `cuerpo` (la tabla de variedades con su ciclo, semilla, estado y acciones). **Es el único registrante** (una segunda llamada a `registrar_...` lanza `RuntimeError`) | `variedades_de_cultivos(actor, cultivos)`: la página «Cultivos y variedades» pone `cabecera` y `cuerpo` en cada tarjeta, y completa con lo propio de `maestros` cualquier cultivo que el registrante no devuelva. **Sin registrante** (hasta INV-03) usa lo propio de `maestros`: cuerpo con el texto «No tiene variedades» (o la lista simple de nombres si las hay, cargadas a mano) y sin botones | `inventario` (INV-03), porque la semilla y sus invernaderos son de `inventario` y `maestros` no puede importarlo (A1) |
+
+## Cultivos: bloqueo (MAE-03)
+
+Quien crea una variedad (INV-03) bloquea la fila del cultivo (`Cultivo.objects.select_for_update(no_key=True)`) **antes** de insertar la variedad: así `baja_cultivo`, que cuenta las variedades activas después de bloquear el cultivo, espera, ve la variedad y se rechaza con `variedades_activas`. `modificar_cultivo` y `reactivar_cultivo` bloquean igual y, recién después, llaman a los registrantes (semillas, en orden de id).
 
 ## Prueba mínima de cada registrante (para quien se registra)
 

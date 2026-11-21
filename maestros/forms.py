@@ -5,6 +5,7 @@
 from django import forms
 from django.urls import reverse_lazy
 
+from maestros.models import TipoEtapa
 from maestros.servicios import geografia
 from maestros.servicios.invernaderos import NOMBRE_DEL_ROL, cuentas_asignables, datos_de_la_direccion
 
@@ -180,3 +181,70 @@ class FormularioInvernadero(forms.Form):
             },
             **{f"{atributo}_id": datos.get(atributo) or None for atributo in NOMBRE_DEL_ROL},
         }
+
+
+# ---- MAE-03: sectores ----
+
+
+class FormularioSector(forms.Form):
+    """Alta o modificación de un sector (PROD-ALT-SCT y PROD-MOD-SCT, ``MODALS['sector-form']`` del prototipo). Solo normaliza
+    lo que se escribe y arma las opciones; las reglas las aplica el servicio (``maestros/servicios/sectores.py``) y la vista
+    pasa sus errores al formulario. El tipo de etapa se elige con fichas de radio (sin JavaScript funcionan igual) y el
+    catálogo sale de ``TipoEtapa`` ya ordenado por ``puesto_global``."""
+
+    nombre = _texto("Nombre", 40, placeholder="Ej. C-3")
+    tipo_etapa = forms.CharField(label="Tipo de etapa", required=False, widget=forms.HiddenInput)
+    cant_agujeros_total = forms.CharField(
+        label="Agujeros totales",
+        required=False,
+        widget=forms.NumberInput(attrs={"class": "field-input", "min": 1, "inputmode": "numeric", "autocomplete": "off"}),
+    )
+
+    def __init__(self, *args, sector=None, **kwargs):
+        if sector is not None and not args and "data" not in kwargs:
+            kwargs.setdefault(
+                "initial",
+                {
+                    "nombre": sector.nombre_sector,
+                    "tipo_etapa": sector.tipo_etapa_id,
+                    "cant_agujeros_total": sector.cant_agujeros_total,
+                },
+            )
+        super().__init__(*args, **kwargs)
+        self.sector = sector
+
+    @property
+    def tipos(self):
+        """Los cinco tipos de etapa para las fichas de radio: ``pk``, ``nombre``, ``color`` (sufijo de ``--e-…``) y si es el
+        elegido."""
+        elegido = str(self["tipo_etapa"].value() or "")
+        return [
+            {"pk": tipo.pk, "nombre": tipo.nombre_etapa, "color": tipo.clase_de_color, "elegido": str(tipo.pk) == elegido}
+            for tipo in TipoEtapa.objects.all()
+        ]
+
+    def datos_del_servicio(self):
+        """Los argumentos de ``alta_sector`` y de ``modificar_sector`` (sin el actor ni los ids) a partir de lo escrito."""
+        datos = self.cleaned_data
+        return {
+            "nombre": datos.get("nombre", ""),
+            "tipo_etapa_id": datos.get("tipo_etapa") or None,
+            "cant_agujeros_total": datos.get("cant_agujeros_total", ""),
+        }
+
+
+class FormularioCultivo(forms.Form):
+    """Nuevo cultivo o renombrar uno (PROD-ALT-CLT y PROD-MOD-CLT, ``MODALS.cultivo`` del prototipo). Solo normaliza lo que se
+    escribe; las reglas (obligatorio, contenido, hasta 40 caracteres, nombre único) las aplica el servicio."""
+
+    nombre = _texto("Nombre del cultivo", 40, placeholder="Ej. Acelga")
+
+    def __init__(self, *args, cultivo=None, **kwargs):
+        if cultivo is not None and not args and "data" not in kwargs:
+            kwargs.setdefault("initial", {"nombre": cultivo.nombre_cultivo})
+        super().__init__(*args, **kwargs)
+        self.cultivo = cultivo
+
+    def datos_del_servicio(self):
+        """Los argumentos de ``alta_cultivo`` y de ``modificar_cultivo`` (sin el actor ni el id) a partir de lo escrito."""
+        return {"nombre": self.cleaned_data.get("nombre", "")}
