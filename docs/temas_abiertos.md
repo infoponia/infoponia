@@ -165,3 +165,10 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **API de `maestros`:** se hizo `registrar_efecto_de_baja_de_sector` y no `pasar_a_fuera_de_servicio` (queda para PRD-04). `bloquear_sectores` verifica también que el invernadero esté activo. `variedades_de_cultivos` usa lo propio de `maestros` también para un cultivo que el registrante no trae.
 - **Interfaz:** el menú «⋯» es un `<details>` propio de `maestros` (no existe el componente en `core`). «Volver a activar» muestra un texto genérico (la fecha y el motivo son de PRD-04). «Renombrar» muestra siempre el aviso de semillas e invernaderos: sin JavaScript no se sabe si el nombre cambió.
 - **Al Gerente, toda ruta de cultivos le da 404, también con otro método HTTP** (no 405), para no delatar la ruta.
+
+## Abiertos desde H2 (20/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| Registrar H2 en el modelo de Drive | Ítem nuevo de pendientes_MD: `OrdenTrabajo.motivoCancelacion` (texto, obligatorio al cancelar, 1 a 300) y `fechaResolucionOrden` también como fecha de cancelación; ya aplicado en `docs/modelo/produccion.md` (Diferencias n.º 17). Pegalo vos: no tengo escritura en Drive | Antes de cerrar la ronda del modelo |
+| Aviso al Vendedor con el motivo (PROD-CNL-ORD, postcondición l) | Fuera de la ronda (D-45). La versión 0.1 del CU no menciona el motivo en ese aviso; ajustarla en Drive (pendientes_CU). Se programa con Cosecha | Cuando exista Cosecha |

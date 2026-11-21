@@ -61,11 +61,11 @@ Bloque: Mantenimiento, alertas y auditoría. Vive en `produccion` (D-46). Orden 
 | (nuevo) `tipo` | `OrdenTrabajo.Tipo` | Discriminador de la herencia. Obligatorio, nunca cambia |
 | `fechaCreacionOrden` | fecha | → `fecha_creacion_orden`. La de hoy al planificar (`auto`, no editable). **Nunca es posterior a hoy** |
 | `fechaProgramadaOrden` | fecha | → `fecha_programada_orden`. Obligatoria. Al planificar, ≥ hoy |
-| `fechaResolucionOrden` | fecha, nula | → `fecha_resolucion_orden`. Nula mientras está «a realizar»; la de hoy al concretarla o cancelarla (sin fechas retroactivas) |
+| `fechaResolucionOrden` | fecha, nula | → `fecha_resolucion_orden`. Nula mientras está «a realizar»; la de hoy al concretarla o cancelarla (sin fechas retroactivas). Vale para los dos desenlaces (concreción y cancelación), como OrdenCompra.fechaResolucion. Para saber si se concretó hay que mirar `estado_orden`, no esta fecha |
 | `descripcionOrden` | texto libre, opcional | → `descripcion_orden`. Hasta 500 caracteres; vacío si no se indicó |
 | `estadoOrden` | `OrdenTrabajo.Estado` | → `estado_orden`. Nace «a realizar». Solo cambia a «concretada» o «cancelada» y no vuelve atrás (regla 14 de 8.12) |
 | `prioridadOrden` | `OrdenTrabajo.Prioridad`, nula | → `prioridad_orden`. Opcional en siembra y transición (MD-73). **Obligatoria en mantenimiento** (ronda 19): la verifica un `CheckConstraint` por `tipo` que agrega IOT-05 (D-53, punto 6) |
-| (nuevo) `motivo_cancelacion` | texto, nulo | Obligatorio al cancelar (regla de PROD-CNL-ORD), hasta 300 caracteres. Solo con estado «cancelada» |
+| (nuevo) `motivo_cancelacion` | texto, nulo | Texto libre, obligatorio al cancelar (paso 5 de PROD-CNL-ORD): de 1 a 300 caracteres, sin espacios al borde. Nulo en toda orden que no está «cancelada». Mismo criterio que OrdenCompra.motivoRechazo (texto libre, obligatorio al resolver con rechazo; el modelo no le fija largo): acá 300, como `motivo_diferencia_siembra` y `motivo_fuera_de_servicio`. Ver «Diferencias», n.º 17 |
 
 ### Asociaciones
 
@@ -469,6 +469,7 @@ Manda el caso de uso (L7) salvo donde se diga otra cosa. Todas están también e
 | 14 | `OrigenDocumento` | D-45 y D-50 (lote 4): no se crea y el asiento usaría una referencia genérica | **Se crea en `contabilidad` y las hijas directas heredan** (D-52). Sin asientos |
 | 15 | Código de la orden | D-50: `OT-{id}` | `OT-{numero}`, con una secuencia propia (D-52 punto 3): los `id` ahora se comparten entre documentos |
 | 16 | Movimientos de un consumo | Tabla de enlace `ConsumoMovimiento` (lote 4) | `MovimientoInsumo.origen`; R040 derivado (D-52 puntos 5 y 6) |
+| 17 | Motivo y fecha de una cancelación | El modelo (ronda 22) no tiene motivo de cancelación y define `fechaResolucionOrden` solo para la concreción; PROD-CNL-ORD (Propuesta 5) pide el atributo y que la fecha valga para los dos desenlaces | Como pide el CU: `motivo_cancelacion` (1 a 300, obligatorio al cancelar) y `fecha_resolucion_orden` también al cancelar. Pendiente de registrar en pendientes_MD (Drive) |
 
 ## Pendientes de MD que la afectan
 
@@ -481,3 +482,4 @@ Manda el caso de uso (L7) salvo donde se diga otra cosa. Todas están también e
 | MD-28, MD-75, MD-76 | Decidido sin aplicar | `AplicacionInsumos`, `ImputacionCosto`, `FueraDeServicio` y `Reubicacion` (lote 5) |
 | MD-49, 50, 53, 54 | Ocupaciones y fecha efectiva de la transición | Implementado (ronda 20) | Ya están en las fichas de arriba |
 | MD-84, 85 | Lotes de insumo y faltante sin lote | Implementado (ronda 22) | `registrar_salida_por_consumo` y `proponer_lotes_fefo` de `inventario` |
+| (sin número) | `OrdenTrabajo.motivoCancelacion` y fecha de resolución también al cancelar | Aprobado el 20/11/2026, sin ítem en pendientes_MD | Columna nula `motivo_cancelacion` con su restricción de la base (ver la ficha) |
