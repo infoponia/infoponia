@@ -42,6 +42,18 @@ Ninguno. Es una estructura del modelo (D-52), no un caso de uso.
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-Hay una migración nueva: `python manage.py migrate`. 1) `migrate` pasa sin errores. 2) En `shell`, `OrigenDocumento()` + `save()` falla con un mensaje claro. 3) Después del merge, verificar en el log de Render que se aplicó la migración.
+Hay una migración nueva: `python manage.py migrate`. Cuenta: no hace falta ninguna (no hay pantallas).
+
+1. `python manage.py migrate` pasa sin errores y aplica `contabilidad.0001_initial`.
+2. `python manage.py makemigrations --check --dry-run` responde «No changes detected».
+3. En `python manage.py shell`: `from contabilidad.models import OrigenDocumento` y `OrigenDocumento(tipo="bitacora").save()` falla con `TypeError` y un mensaje que dice que solo se guardan las hijas directas con `TIPO_DE_ORIGEN`.
+4. En el mismo `shell`: `OrigenDocumento.objects.count()` da 0 (el intento anterior no dejó ninguna fila).
+5. En `/admin/` (solo con `DJANGO_DEBUG=1`) no aparece «Documentos de origen»: el modelo no se registra en el admin, es esperado.
+6. Después del merge: verificar en el log de Render que se aplicó la migración `contabilidad.0001_initial`.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+- **Qué se hizo:** `contabilidad.OrigenDocumento` (`contabilidad/models.py`) con `Tipo` (`orden_de_trabajo`, `bitacora`, `movimiento_de_insumo`) y `tipo` obligatorio y dentro de la lista (`choices`, `max_length=30`). `save()` lanza `TypeError` si la clase no tiene un `TIPO_DE_ORIGEN` válido y, si lo tiene, lo copia en `tipo` (la hija fija el tipo y no cambia). La convención de las hijas directas quedó documentada en un comentario del modelo. Migración `contabilidad/migrations/0001_initial.py`: solo esa tabla, sin datos y sin plan de cuentas. Se actualizó el docstring de `contabilidad/apps.py`. No se tocó `produccion`, `inventario` ni nada fuera de `contabilidad`.
+- **Pruebas:** `contabilidad/tests/test_origen_documento.py`, 9 pruebas: no se guarda uno puro; la hija fija su tipo; la hija no cambia su tipo; la nieta hereda el tipo; tipo fuera de la lista y tipo obligatorio inválidos en `full_clean`; hija con tipo inválido o ausente no se guarda; los `id` se comparten entre hijas; `makemigrations` no deja cambios. Las pruebas de las reglas se mostraron fallando antes de implementar `save()` (6 de 9). Comando de la tarea: 667 pruebas, OK. `check` y `makemigrations --check --dry-run` sin cambios.
+- **Decisiones:** ninguna nueva. Aplica D-52 (puntos 1 y 2), D-37 y D-45. Criterios acordados con el estudiante: `save()` sobrescribe `tipo` con `TIPO_DE_ORIGEN`; una subclase de segundo nivel hereda el atributo y puede guardarse.
+- **Diferencias con la documentación:** (1) `max_length=30` y los nombres visibles de `Tipo` no estaban fijados en la ficha. (2) No hay `CheckConstraint` en la base para `tipo`: la lista se controla con `choices` y con `save()`; cada ronda que sume un tipo ya genera su migración por el cambio de `choices`. (3) `docs/disparadores.md` («Cuando exista contabilidad con asientos», punto 0) dice «CON-01 e INV-02», pero `MovimientoInsumo` lo crea INV-01.
