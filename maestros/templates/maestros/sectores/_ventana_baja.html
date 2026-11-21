@@ -1,0 +1,37 @@
+{% load iconos %}{% comment %}Ventana de la baja de un sector (PROD-BAJ-SCT, MODALS['sector-baja'] del prototipo). Recibe «sector», «invernadero»,
+«impedimentos» (lista de Impedimento: texto y cómo resolverlo; reglas 2 y 3), «avisos» (la advertencia de la regla 4: es el último
+sector activo de su tipo) y, si el servicio rechazó la baja por otro motivo, «error». Con impedimentos no ofrece confirmar: dice
+todo lo que lo impide, cada cosa con cómo resolverla, y «Entendido» (D-30). Sin ellos, pide confirmar; con avisos, la ventana
+es la confirmación de la advertencia (campo oculto advertencia_confirmada). Dar de baja es un POST a la misma URL; abrirla
+(GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if impedimentos %}
+    <h2 id="ventana-titulo">No se puede dar de baja {{ sector.nombre_sector }}</h2>
+    <p>Primero hay que resolver:</p>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>
+      <ul style="margin:0;padding-left:18px">{% for impedimento in impedimentos %}<li>{{ impedimento.texto }} {{ impedimento.como_resolver }}</li>{% endfor %}</ul>
+    </div></div>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
+    </div>
+    {% else %}
+    <h2 id="ventana-titulo">¿Dar de baja {{ sector.nombre_sector }}?</h2>
+    {% if avisos %}
+    <div class="alert alert-warn" role="alert" style="margin-bottom:12px">{% icono "warn" 16 %}<div>
+      <ul style="margin:0;padding-left:18px">{% for aviso in avisos %}<li>{{ aviso.texto }}</li>{% endfor %}</ul>
+    </div></div>
+    {% endif %}
+    <p>El sector deja de contar como capacidad del invernadero y conserva su historial. Podés reactivarlo más adelante.</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'maestros:sector_baja' invernadero.pk sector.pk %}">
+      {% csrf_token %}
+      {% if avisos %}<input type="hidden" name="advertencia_confirmada" value="1">{% endif %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

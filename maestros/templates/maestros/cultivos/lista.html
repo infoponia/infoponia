@@ -1,0 +1,52 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Producción» → «Cultivos y variedades» (PROD-CNS-CLT, cultivosTab del prototipo): una tarjeta por cultivo, los activos primero. De cada
+cultivo: su nombre, su cantidad de variedades activas o «Inactivo» (regla 2) y los botones de «acciones» (D-30). La cabecera (botones
+de variedad) y el cuerpo (la tabla de variedades) los entrega `inventario` (INV-03) por registrar_variedades_de_cultivo; sin ese
+registrante, «No tiene variedades» y sin botones de variedad. Las ventanas abren con HTMX; sin JavaScript, cada enlace lleva a esta
+página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo llega acá (el Gerente recibe 404).{% endcomment %}
+{% block titulo %}Cultivos y variedades · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
+<link rel="stylesheet" href="{% static_v 'maestros/css/cultivos.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Producción</h1></div>
+  {% include "maestros/cultivos/_pestanas_de_produccion.html" with activa="cultivos" %}
+  <div class="cult-barra">
+    <span class="muted sm">Cada variedad tiene su ciclo y su semilla. La duración del ciclo es la suma de sus etapas.</span>
+    <span class="spacer"></span>
+    <a class="btn btn-primary" href="{% url 'maestros:cultivo_nuevo' %}" hx-get="{% url 'maestros:cultivo_nuevo' %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 15 %} Nuevo cultivo</a>
+  </div>
+  <div class="stack">
+    {% for t in tarjetas_de_cultivos %}
+    {% with c=t.cultivo %}
+    <div class="card seg{% if not c.activo %} cult-off{% endif %}">
+      <div class="card-h">
+        <h3>{{ c.nombre_cultivo }}</h3>
+        {% if c.activo %}<span class="muted sm">{{ c.variedades_activas }} variedad{{ c.variedades_activas|pluralize:",es" }} activa{{ c.variedades_activas|pluralize }}</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}
+        <span class="spacer"></span>
+        {% if "modificar" in t.acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'maestros:cultivo_renombrar' c.pk %}" hx-get="{% url 'maestros:cultivo_renombrar' c.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Renombrar el cultivo {{ c.nombre_cultivo }}">{% icono "pencil" 14 %} Renombrar</a>{% endif %}
+        {% if "baja" in t.acciones %}<a class="btn btn-danger btn-sm" href="{% url 'maestros:cultivo_baja' c.pk %}" hx-get="{% url 'maestros:cultivo_baja' c.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Dar de baja el cultivo {{ c.nombre_cultivo }}">{% icono "trash" 14 %} Dar de baja</a>{% endif %}
+        {{ t.cabecera }}
+        {% if "reactivar" in t.acciones %}
+        <form method="post" action="{% url 'maestros:cultivo_reactivar' c.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit" data-enviando="Reactivando…">Reactivar</button></form>
+        {% endif %}
+      </div>
+      {{ t.cuerpo }}
+    </div>
+    {% endwith %}
+    {% empty %}
+    <div class="empty">
+      {% icono "sprout" 28 %}
+      <b>Todavía no hay cultivos</b>
+      <div>Registrá el primero con «Nuevo cultivo»; después se le crean sus variedades.</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}

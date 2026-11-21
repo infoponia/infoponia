@@ -10,7 +10,7 @@
 #     extensiones.registrar_efecto_de_baja(pasar_lotes_a_inactivos)
 #     extensiones.registrar_traspaso(contar_ordenes, traspasar_ordenes)
 #
-# Hay tres puntos:
+# MAE-03 suma los puntos de sectores y cultivos (al final de este archivo). Los de invernadero son tres:
 #   1. Impedimentos de la baja (PROD-BAJ-INV, precondiciones c a f y h).
 #   2. Efectos de la baja (postcondiciones b y c y los logs por sector e insumo de la f).
 #   3. Traspaso por cambio de personal (PROD-MOD-INV, regla 2 y postcondiciones b y c).
@@ -84,3 +84,189 @@ def traspasar(actor, invernadero, rol, saliente, entrante):
     """Traspasa lo del saliente al entrante en ese invernadero (postcondición b de PROD-MOD-INV)."""
     for _, traspasar_uno in list(_TRASPASOS):
         traspasar_uno(actor, invernadero, rol, saliente, entrante)
+
+
+# ---- MAE-03: puntos de extensión de sectores y cultivos (docs/api/extensiones_de_maestros.md) ----
+# Los registran `produccion` (PRD-01 y PRD-04), `inventario` (INV-03) e `iot` en su ``AppConfig.ready()``. Sin registrantes,
+# cada punto da su resultado neutro: 0 agujeros ocupados y comprometidos, ningún impedimento, ningún contenido, ningún aviso,
+# ninguna semilla y ningún invernadero que use el cultivo. Todo corre dentro de la transacción del servicio, después de que
+# este tomó el invernadero y los sectores (o el cultivo); un registrante que bloquee filas propias lo hace después y en orden
+# de id (docs/patrones/bloqueos.md).
+
+# Un elemento de lo que contiene un sector (regla 3 de PROD-CNS-SCT): ``tipo`` es «lote», «orden» o «hardware».
+Contenido = namedtuple("Contenido", "tipo texto cantidad fecha url")
+# Una advertencia del cambio de tipo o de la baja de un sector (regla 4 de PROD-MOD-SCT y de PROD-BAJ-SCT).
+Aviso = namedtuple("Aviso", "texto cantidad")
+# Lo que `inventario` entrega para la tarjeta de un cultivo: ``cabecera`` (botones) y ``cuerpo`` (la tabla), HTML ya armado.
+VariedadesDelCultivo = namedtuple("VariedadesDelCultivo", "cabecera cuerpo")
+
+_AGUJEROS = []
+_IMPEDIMENTOS_DE_SECTOR = []
+_CONTENIDOS = []
+_PERFILES = []
+_AVISOS_DE_CAMBIO_DE_TIPO = []
+_VUELTAS_A_SERVICIO = []
+_EFECTOS_DE_BAJA_DE_SECTOR = []
+_SEMILLAS = []  # pares (contar, renombrar)
+_USOS_DE_CULTIVO = []
+_VARIEDADES = []  # a lo sumo un registrante
+
+
+def registrar_agujeros_de_sector(funcion):
+    """Registra ``funcion(ids) -> dict[int, tuple[int, int]]``: por sector, ``(ocupados, comprometidos)``; lo que no figura es
+    ``(0, 0)``. Lo registra `produccion` (PRD-01)."""
+    _AGUJEROS.append(funcion)
+    return funcion
+
+
+def agujeros_registrados(ids):
+    """``{id: (ocupados, comprometidos)}`` para cada id de ``ids``, sumando todos los registrantes (sin ninguno, todo en 0)."""
+    ids = list(ids)
+    total = {i: (0, 0) for i in ids}
+    for funcion in list(_AGUJEROS):
+        for i, (ocupados, comprometidos) in funcion(ids).items():
+            if i in total:
+                total[i] = (total[i][0] + ocupados, total[i][1] + comprometidos)
+    return total
+
+
+def registrar_impedimento_de_baja_de_sector(funcion):
+    """Registra ``funcion(sector) -> list[Impedimento]`` con los códigos ``agujeros_ocupados``, ``agujeros_comprometidos`` y
+    ``hardware_activo`` (reglas 2 y 3 de PROD-BAJ-SCT). Lo registran `produccion` e `iot`."""
+    _IMPEDIMENTOS_DE_SECTOR.append(funcion)
+    return funcion
+
+
+def impedimentos_registrados_de_sector(sector):
+    """Los impedimentos de todos los registrantes, juntos: no se queda con el primero."""
+    juntos = []
+    for funcion in list(_IMPEDIMENTOS_DE_SECTOR):
+        juntos.extend(funcion(sector))
+    return juntos
+
+
+def registrar_contenido_de_sector(funcion):
+    """Registra ``funcion(sectores) -> dict[int, list[Contenido]]``: lotes, órdenes y hardware de cada sector (regla 3 de
+    PROD-CNS-SCT). Lo registran `produccion` e `iot`."""
+    _CONTENIDOS.append(funcion)
+    return funcion
+
+
+def contenido_registrado(sectores):
+    """``{id: [Contenido, ...]}`` con lo de todos los registrantes (sin ninguno, vacío para cada sector)."""
+    sectores = list(sectores)
+    juntos = {sector.pk: [] for sector in sectores}
+    for funcion in list(_CONTENIDOS):
+        for i, elementos in funcion(sectores).items():
+            if i in juntos:
+                juntos[i].extend(elementos)
+    return juntos
+
+
+def registrar_perfil_de_sector(funcion):
+    """Registra ``funcion(ids) -> dict[int, str | None]``: el perfil familiar de las plantas del sector; ``None`` si está
+    vacío. Lo registra `produccion`."""
+    _PERFILES.append(funcion)
+    return funcion
+
+
+def perfiles_registrados(ids):
+    """``{id: perfil o None}``: el primer perfil que informe algún registrante (sin ninguno, ``None``: sin plantas)."""
+    ids = list(ids)
+    perfiles = {i: None for i in ids}
+    for funcion in list(_PERFILES):
+        for i, perfil in funcion(ids).items():
+            if i in perfiles and perfiles[i] is None:
+                perfiles[i] = perfil
+    return perfiles
+
+
+def registrar_aviso_de_cambio_de_tipo(funcion):
+    """Registra ``funcion(invernadero, tipo_etapa) -> list[Aviso]``: lo que queda sin un sector activo de ese tipo (lotes que
+    deben pasar por esa etapa, siembras a realizar). Lo registra `produccion`."""
+    _AVISOS_DE_CAMBIO_DE_TIPO.append(funcion)
+    return funcion
+
+
+def avisos_registrados_de_cambio_de_tipo(invernadero, tipo_etapa):
+    """Los avisos de todos los registrantes, juntos."""
+    juntos = []
+    for funcion in list(_AVISOS_DE_CAMBIO_DE_TIPO):
+        juntos.extend(funcion(invernadero, tipo_etapa))
+    return juntos
+
+
+def registrar_efecto_de_vuelta_a_servicio(funcion):
+    """Registra ``funcion(actor, sector)``: cierra el registro «Fuera de servicio» abierto con la fecha de hoy y escribe en la
+    bitácora que el sector vuelve a estar activo (postcondición b de PROD-MOD-SCT). Lo registra `produccion` (PRD-04)."""
+    _VUELTAS_A_SERVICIO.append(funcion)
+    return funcion
+
+
+def aplicar_efectos_de_vuelta_a_servicio(actor, sector):
+    """Corre los efectos de todos los registrantes, dentro de la transacción del servicio."""
+    for funcion in list(_VUELTAS_A_SERVICIO):
+        funcion(actor, sector)
+
+
+def registrar_efecto_de_baja_de_sector(funcion):
+    """Registra ``funcion(actor, sector)``: cierra el registro «Fuera de servicio» abierto con la fecha de hoy (postcondición
+    b de PROD-BAJ-SCT). Lo registra `produccion` (PRD-04; D-51, punto 7)."""
+    _EFECTOS_DE_BAJA_DE_SECTOR.append(funcion)
+    return funcion
+
+
+def aplicar_efectos_de_baja_de_sector(actor, sector):
+    """Corre los efectos de todos los registrantes, dentro de la transacción de la baja y con el sector bloqueado."""
+    for funcion in list(_EFECTOS_DE_BAJA_DE_SECTOR):
+        funcion(actor, sector)
+
+
+def registrar_semillas_de_cultivo(contar, renombrar):
+    """Registra ``contar(cultivo) -> int`` (semillas que cambiarían de nombre) y ``renombrar(actor, cultivo,
+    nombre_anterior) -> int`` (las renombra y escribe su propio log por semilla, acción ``modificacion_semilla``, D-36).
+    Lo registra `inventario` (INV-03)."""
+    _SEMILLAS.append((contar, renombrar))
+
+
+def contar_semillas_a_renombrar(cultivo):
+    """Cuántas semillas cambiarían de nombre si se renombra el cultivo (regla 3 de PROD-MOD-CLT); 0 sin registrantes."""
+    return sum(contar(cultivo) for contar, _ in list(_SEMILLAS))
+
+
+def renombrar_semillas(actor, cultivo, nombre_anterior):
+    """Renombra las semillas de las variedades del cultivo y devuelve cuántas (postcondiciones a y d de PROD-MOD-CLT)."""
+    return sum(renombrar(actor, cultivo, nombre_anterior) for _, renombrar in list(_SEMILLAS))
+
+
+def registrar_uso_de_cultivo(funcion):
+    """Registra ``funcion(cultivo) -> set[int]``: ids de los invernaderos **activos** que usan alguna variedad del cultivo
+    (semilla habilitada o lotes activos; regla 4 de PROD-MOD-CLT). Lo registra solo `inventario` (INV-03)."""
+    _USOS_DE_CULTIVO.append(funcion)
+    return funcion
+
+
+def invernaderos_que_usan_el_cultivo(cultivo):
+    """Los ids de los invernaderos que usan el cultivo, de todos los registrantes; vacío sin registrantes."""
+    usan = set()
+    for funcion in list(_USOS_DE_CULTIVO):
+        usan |= set(funcion(cultivo))
+    return usan
+
+
+def registrar_variedades_de_cultivo(funcion):
+    """Registra ``funcion(actor, cultivos) -> dict[int, VariedadesDelCultivo]``: el HTML ya armado (``SafeString``) de la
+    cabecera y del cuerpo de la tarjeta de cada cultivo. **Admite un solo registrante**: una segunda llamada lanza
+    ``RuntimeError``. Lo registra `inventario` (INV-03), porque la semilla y sus invernaderos son de `inventario`."""
+    if _VARIEDADES:
+        raise RuntimeError("registrar_variedades_de_cultivo admite un solo registrante.")
+    _VARIEDADES.append(funcion)
+    return funcion
+
+
+def variedades_registradas(actor, cultivos):
+    """``{id: VariedadesDelCultivo}`` del registrante, o ``None`` si no hay ninguno (la pantalla usa entonces lo propio de
+    `maestros`: «No tiene variedades» y sin botones)."""
+    if not _VARIEDADES:
+        return None
+    return _VARIEDADES[0](actor, list(cultivos))

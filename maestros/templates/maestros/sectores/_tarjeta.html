@@ -1,0 +1,55 @@
+{% load iconos %}{% comment %}Tarjeta de un sector (sectorCard del prototipo; PROD-CNS-SCT, reglas 3, 4 y 6). Recibe «t»: el sector, sus agujeros, su
+perfil (o None: «Sin plantas: acepta cualquier perfil»), su contenido (lotes, órdenes y hardware que entregan `produccion` e
+`iot`; hoy vacío), los porcentajes de la barra y las «acciones» de acciones_permitidas (D-30: lo que no corresponde no se
+muestra). El menú «⋯» es un <details>, que funciona sin JavaScript. Un sector fuera de servicio muestra que cuenta como
+capacidad pero no recibe plantas ni órdenes; uno dado de baja, que no cuenta y conserva su historial. El motivo y la fecha de
+«fuera de servicio» son de PRD-04.{% endcomment %}
+{% with s=t.sector a=t.agujeros %}
+<div class="sector{% if s.estado_sector != 'activo' %} off{% endif %}" style="--c:{% if s.estado_sector == 'inactivo' %}var(--status-neutral){% else %}var(--e-{{ s.tipo_etapa.clase_de_color }}){% endif %}">
+  <div class="top">
+    <span class="nm">{{ s.nombre_sector }}</span>
+    {% if s.estado_sector == "fuera_de_servicio" %}<span class="status-badge status-warn">{% icono "tool" 11 %} Fuera de servicio</span>{% elif s.estado_sector == "inactivo" %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}
+    <span class="spacer"></span>
+    {% if t.acciones %}
+    <details class="kb sec-kb">
+      <summary class="kb-btn" aria-label="Acciones del sector {{ s.nombre_sector }}">{% icono "dots" 18 %}</summary>
+      <div class="menu" role="menu">
+        {% if "modificar" in t.acciones %}<a role="menuitem" href="{% url 'maestros:sector_modificar' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_modificar' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "pencil" 15 %}Modificar</a>{% endif %}
+        {% if "volver_a_servicio" in t.acciones %}<a role="menuitem" href="{% url 'maestros:sector_volver_a_servicio' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_volver_a_servicio' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 15 %}Volver a activar</a>{% endif %}
+        {% if "reactivar" in t.acciones %}<a role="menuitem" href="{% url 'maestros:sector_reactivar' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_reactivar' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 15 %}Reactivar</a>{% endif %}
+        {% if "baja" in t.acciones %}<hr><a class="danger" role="menuitem" href="{% url 'maestros:sector_baja' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_baja' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 15 %}Dar de baja</a>{% endif %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  <div class="perf">
+    {% if s.estado_sector == "inactivo" %}Dado de baja: no cuenta como capacidad. Conserva su historial.
+    {% elif t.perfil %}Perfil familiar: {{ t.perfil }}
+    {% else %}Sin plantas: acepta cualquier perfil{% endif %}
+  </div>
+  {% if s.estado_sector == "fuera_de_servicio" %}
+  <div class="warnline">{% icono "tool" 14 %}<span>Fuera de servicio. No recibe plantas ni órdenes, pero cuenta como capacidad.</span></div>
+  {% endif %}
+  {% if s.estado_sector == "inactivo" %}
+  <div style="height:10px"></div>
+  {% else %}
+  <div class="body">
+    <div class="cap" style="margin:8px 0 10px"><b>{{ a.libres }}</b><span>libres de {{ a.total }} agujeros</span></div>
+    <div class="segbar" role="img" aria-label="{{ a.ocupados }} ocupados y {{ a.comprometidos }} comprometidos de {{ a.total }} agujeros">
+      <span class="oc" style="width:{{ t.porcentaje_ocupados }}%"></span><span class="co" style="width:{{ t.porcentaje_comprometidos }}%"></span>
+    </div>
+    <div class="seglegend"><span><i class="oc"></i>Ocupados <b>{{ a.ocupados }}</b></span><span><i class="co"></i>Comprometidos <b>{{ a.comprometidos }}</b></span></div>
+  </div>
+  {% endif %}
+  {% if t.contenido %}
+  <div class="inside">
+    {% for c in t.contenido %}
+    <div>
+      <span>{% if c.url %}<a href="{{ c.url }}">{{ c.texto }}</a>{% else %}{{ c.texto }}{% endif %}{% if c.fecha %} <span class="muted">· {{ c.fecha|date:"d/m" }}</span>{% endif %}</span>
+      {% if c.cantidad %}<span class="q">{{ c.cantidad }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endwith %}

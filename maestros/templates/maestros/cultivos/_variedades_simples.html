@@ -1,0 +1,8 @@
+{% comment %}Cuerpo de la tarjeta de un cultivo sin el registrante de INV-03 (PROD-CNS-CLT regla 2; docs/api/extensiones_de_maestros.md,
+«Cultivos»): «No tiene variedades» o la lista simple de nombres si las hay (cargadas a mano), con su estado. Recibe «variedades».
+Escapa los nombres (autoescape).{% endcomment %}
+{% if variedades %}
+<ul class="var-simple">{% for variedad in variedades %}<li><b>{{ variedad.nombre_variedad }}</b>{% if variedad.estado_variedad != "activo" %} <span class="status-badge status-neutral">Inactiva</span>{% endif %}</li>{% endfor %}</ul>
+{% else %}
+<div class="muted sm" style="padding:16px 20px">No tiene variedades.</div>
+{% endif %}

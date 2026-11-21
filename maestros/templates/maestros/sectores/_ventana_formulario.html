@@ -1,0 +1,47 @@
+{% load iconos %}{% comment %}Ventana para agregar o modificar un sector (PROD-ALT-SCT y PROD-MOD-SCT, MODALS['sector-form'] del prototipo). Recibe «form»,
+«invernadero» y, al modificar, «sector», «agujeros» y «tipo_bloqueado» (el sector tiene agujeros ocupados o comprometidos: el
+tipo queda bloqueado con su motivo, regla 1 de PROD-MOD-SCT; como un campo deshabilitado no se envía, el tipo va también en un
+campo oculto). Es un formulario común (POST): funciona igual sin JavaScript, donde la ventana es parte de la página. El
+tipo de etapa se elige con fichas de radio. Va con «novalidate»: las reglas son del servicio.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">{% if sector %}Modificar sector {{ sector.nombre_sector }}{% else %}Agregar sector{% endif %}</h2>
+    <p class="muted">{{ invernadero.nombre_invernadero }}{% if sector %} · el invernadero de un sector no se cambia{% endif %}</p>
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+    <form id="form-sector" method="post" novalidate action="{% if sector %}{% url 'maestros:sector_modificar' invernadero.pk sector.pk %}{% else %}{% url 'maestros:sector_nuevo' invernadero.pk %}{% endif %}">
+      {% csrf_token %}
+      {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+
+      <div class="fld">
+        <span class="lbl" id="etiqueta-tipo-etapa">Tipo de etapa<span class="req" aria-hidden="true"> *</span></span>
+        <div class="chips" role="radiogroup" aria-labelledby="etiqueta-tipo-etapa">
+          {% for tipo in form.tipos %}
+          <label class="chip"><input type="radio" name="tipo_etapa" value="{{ tipo.pk }}"{% if tipo.elegido %} checked{% endif %}{% if tipo_bloqueado %} disabled{% endif %}><i style="background:var(--e-{{ tipo.color }})"></i>{{ tipo.nombre }}</label>
+          {% endfor %}
+        </div>
+        {% if tipo_bloqueado %}<input type="hidden" name="tipo_etapa" value="{{ sector.tipo_etapa_id }}">{% endif %}
+        {% for error in form.tipo_etapa.errors %}<div class="err">{{ error }}</div>{% endfor %}
+        {% if tipo_bloqueado %}
+        <div class="hint"><span class="lock">{% icono "lock" 12 %} No se puede cambiar mientras el sector tenga agujeros ocupados ({{ agujeros.ocupados }}) o comprometidos ({{ agujeros.comprometidos }}). Primero debe vaciarse.</span></div>
+        {% elif sector %}
+        <div class="hint">Se puede cambiar porque el sector está vacío y sin reservas.</div>
+        {% endif %}
+      </div>
+
+      {% if sector %}
+        {% if tipo_bloqueado %}
+          {% include "core/usuarios/_campo.html" with campo=form.cant_agujeros_total requerido=True ayuda="Puede subirlo siempre. Para bajarlo, el mínimo ahora son los ocupados más los comprometidos." %}
+        {% else %}
+          {% include "core/usuarios/_campo.html" with campo=form.cant_agujeros_total requerido=True ayuda="Puede subirlo o bajarlo: el sector está vacío." %}
+        {% endif %}
+      {% else %}
+        {% include "core/usuarios/_campo.html" with campo=form.cant_agujeros_total requerido=True ayuda="Una planta ocupa un agujero en todas las etapas." %}
+      {% endif %}
+
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Guardando…">{% if sector %}Guardar cambios{% else %}Agregar sector{% endif %}</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

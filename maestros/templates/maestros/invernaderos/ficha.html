@@ -1,12 +1,14 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}Ficha del invernadero (PROD-CNS-INV, VIEWS.inv del prototipo): ubicación, equipo y el aviso de personal
-faltante (regla 4). Sin capacidad, sectores, lotes, cámara ni bitácora (regla 3: llegan con sus tareas), sin el enlace
+faltante (regla 4). Con la capacidad y la pestaña «Sectores» (MAE-03); sin lotes, cámara ni bitácora (regla 3: llegan con sus tareas), sin el enlace
 «Registrar sistema IoT» (solo prototipo). Las acciones (MAE-01b) son las de «acciones» (maestros.servicios.invernaderos.
 acciones_permitidas, D-30): nadie llega por un botón a un 403. «Dar de baja» abre la ventana con HTMX; sin JavaScript, el
 enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no tiene ventana (ACT['inv-react']).{% endcomment %}
 {% block titulo %}{{ invernadero.nombre_invernadero }} · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
+<link rel="stylesheet" href="{% static_v 'maestros/css/sectores.css' %}">
+<script src="{% static_v 'maestros/js/sectores.js' %}" defer></script>
 {% with direccion=invernadero.direccion.concreta faltan=invernadero.roles_faltantes %}
 <div class="page">
   <a class="back" href="{% url 'maestros:invernaderos' %}">{% icono "back" 15 %} Producción</a>
@@ -56,12 +58,17 @@ enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no
       </div>
     </div>
   </div>
+
+  {# MAE-03: capacidad por tipo de etapa y pestaña «Sectores» (regla 3 de PROD-CNS-INV). PRD-01 suma las pestañas de lotes y bitácora. #}
+  {% include "maestros/sectores/_capacidad.html" %}
+  <div class="tabs" role="tablist"><span class="tab" role="tab" aria-selected="true">Sectores</span></div>
+  {% include "maestros/sectores/_pestana.html" %}
 </div>
 {% endwith %}
 {% endblock %}
 
 {% block ventanas %}
 <div id="ventana-confirmar">
-  {% if ventana == "baja" %}{% include "maestros/invernaderos/_ventana_baja.html" %}{% endif %}
+  {% if ventana == "baja" %}{% include "maestros/invernaderos/_ventana_baja.html" %}{% elif plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
 </div>
 {% endblock %}

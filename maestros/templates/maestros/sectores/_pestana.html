@@ -1,0 +1,35 @@
+{% load iconos %}{% comment %}Pestaña «Sectores» de la ficha del invernadero (PROD-CNS-SCT, sectoresTab del prototipo): los sectores agrupados por tipo
+de etapa, con la cantidad de sectores y de agujeros de cada grupo, y los dados de baja aparte (regla 2). Sin sectores, el
+Sistema lo informa y, al Agrónomo a cargo, le ofrece agregar uno (regla 5). «Agregar sector» abre la ventana con HTMX; sin
+JavaScript, el enlace lleva a la ficha con la ventana abierta. Recibe «grupos_de_sectores» (pares grupo y tarjetas),
+«sectores_dados_de_baja», «hay_sectores» y «puede_agregar_sectores».{% endcomment %}
+{% if not hay_sectores %}
+<div class="empty">
+  {% icono "grid" 28 %}
+  <b>Este invernadero aún no tiene sectores registrados</b>
+  <div>Sin sectores no es posible sembrar. {% if puede_agregar_sectores %}Registrá al menos un sector por cada etapa del ciclo de las variedades que se vayan a producir.{% else %}Los registra el Agrónomo del invernadero.{% endif %}</div>
+  {% if puede_agregar_sectores %}
+  <a class="btn btn-primary" href="{% url 'maestros:sector_nuevo' invernadero.pk %}" hx-get="{% url 'maestros:sector_nuevo' invernadero.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 15 %} Agregar sector</a>
+  {% endif %}
+</div>
+{% else %}
+<div class="sec-barra">
+  <span class="muted sm">Agrupados por etapa.{% if puede_agregar_sectores %} Las acciones de cada sector están en el menú ⋯.{% endif %}</span>
+  <span class="spacer"></span>
+  {% if puede_agregar_sectores %}
+  <a class="btn btn-primary" href="{% url 'maestros:sector_nuevo' invernadero.pk %}" hx-get="{% url 'maestros:sector_nuevo' invernadero.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 15 %} Agregar sector</a>
+  {% endif %}
+</div>
+{% for grupo, tarjetas in grupos_de_sectores %}
+<div class="stage-h">
+  <span class="etapa" style="--c:var(--e-{{ grupo.tipo_etapa.clase_de_color }})"><i></i>{{ grupo.tipo_etapa.nombre_etapa }}</span>
+  <span class="meta">{{ grupo.cantidad_de_sectores }} sector{{ grupo.cantidad_de_sectores|pluralize:",es" }} · {{ grupo.cantidad_de_agujeros }} agujeros</span>
+  <span class="line"></span>
+</div>
+<div class="sgrid">{% for t in tarjetas %}{% include "maestros/sectores/_tarjeta.html" %}{% endfor %}</div>
+{% endfor %}
+{% if sectores_dados_de_baja %}
+<div class="stage-h"><b class="sm muted">Dados de baja</b><span class="line"></span></div>
+<div class="sgrid">{% for t in sectores_dados_de_baja %}{% include "maestros/sectores/_tarjeta.html" %}{% endfor %}</div>
+{% endif %}
+{% endif %}

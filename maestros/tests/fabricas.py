@@ -20,9 +20,15 @@ from maestros.models import (
     Direccion,
     DireccionRural,
     DireccionUrbana,
+    Ciclo,
+    Cultivo,
+    EtapaProductiva,
     Invernadero,
     Localidad,
     Provincia,
+    SectorProduccion,
+    TipoEtapa,
+    Variedad,
 )
 
 
@@ -176,3 +182,112 @@ def crear_alerta(invernadero, tipo_alerta="prueba_evento", para_gerente=True, ag
         agronomo=agronomo,
         **extra,
     )
+
+
+# ---- MAE-03: tipos de etapa, sectores, cultivos, variedades y ciclos ----
+
+
+def asegurar_datos_de_maestros():
+    """Deja cargados y confirmados los cinco tipos de etapa en la base de pruebas. La migración ``0005`` los carga al crear
+    la base, pero un ``TransactionTestCase`` (de core o de las pruebas de concurrencia) vacía todas las tablas al terminar y,
+    con ``--keepdb``, la base queda sin ellos. Si faltan, se vuelven a cargar con la misma función de la migración y se corre
+    ``ANALYZE`` (docs/patrones/datos_de_migracion.md). Hay que llamarla fuera de la transacción de una clase."""
+    if TipoEtapa.objects.count() < 5:
+        importlib.import_module("maestros.migrations.0005_cargar_tipos_de_etapa").cargar(apps, None)
+        with connection.cursor() as cursor:
+            cursor.execute("ANALYZE maestros_tipoetapa")
+
+
+class ConDatosDeMaestros(ConGeoref):
+    """Mixin para las clases que usan los tipos de etapa (y Georef): ``class MisTests(ConDatosDeMaestros, TestCase)``. Asegura
+    los datos en ``setUpClass``, antes de que ``TestCase`` abra la transacción de la clase. Las clases de concurrencia
+    (``TransactionTestCase``) también lo heredan, y dentro de cada prueba llaman a ``asegurar_datos_de_maestros()`` porque
+    el ``flush`` de la prueba anterior vacía las tablas."""
+
+    @classmethod
+    def setUpClass(cls):
+        asegurar_datos_de_maestros()
+        super().setUpClass()
+
+
+def tipo_etapa(codigo="germinacion"):
+    """Un tipo de etapa del catálogo cargado por la migración (por su ``codigo``)."""
+    return TipoEtapa.objects.get(codigo=codigo)
+
+
+def crear_sector(invernadero, nombre="Sector 1", tipo="germinacion", agujeros=100, estado="activo"):
+    """Crea un sector directo en la base (sin pasar por el servicio de alta)."""
+    return SectorProduccion.objects.create(
+        invernadero=invernadero,
+        tipo_etapa=tipo_etapa(tipo),
+        nombre_sector=nombre,
+        cant_agujeros_total=agujeros,
+        estado_sector=estado,
+    )
+
+
+def crear_cultivo(nombre="Lechuga", activo=True):
+    """Crea un cultivo directo en la base."""
+    return Cultivo.objects.create(nombre_cultivo=nombre, estado_cultivo="activo" if activo else "inactivo")
+
+
+def crear_variedad(cultivo, nombre="Crespa", perfil="hoja_verde", activa=True):
+    """Crea una variedad (columnas mínimas de MAE-03) directo en la base."""
+    return Variedad.objects.create(
+        cultivo=cultivo, nombre_variedad=nombre, perfil_familia=perfil, estado_variedad="activo" if activa else "inactivo"
+    )
+
+
+def crear_ciclo(variedad, *codigos):
+    """Crea el ciclo de ``variedad`` con una etapa de 10 días por cada ``codigo`` de tipo de etapa (por defecto, solo
+    germinación y maduración, las dos obligatorias)."""
+    ciclo = Ciclo.objects.create(variedad=variedad)
+    for codigo in codigos or ("germinacion", "maduracion"):
+        EtapaProductiva.objects.create(ciclo=ciclo, tipo_etapa=tipo_etapa(codigo), duracion_estimada_dias=10)
+    return ciclo
+
+
+# ---- MAE-03: auxiliares de las pruebas de sectores y cultivos ----
+
+
+def error_de(llamada):
+    """Ejecuta ``llamada`` y devuelve la ``ValidationError`` que lanza; si no la lanza, la prueba falla."""
+    from django.core.exceptions import ValidationError
+
+    try:
+        llamada()
+    except ValidationError as error:
+        return error
+    raise AssertionError("Se esperaba una ValidationError y no se lanzó ninguna.")
+
+
+def codigos_de(error, campo=None):
+    """Los códigos de una ``ValidationError``; con ``campo``, solo los de ese campo (``NON_FIELD_ERRORS`` para los
+    generales)."""
+    if campo is None:
+        return [e.code for errores in error.error_dict.values() for e in errores]
+    return [e.code for e in error.error_dict.get(campo, [])]
+
+
+def crear_agronomo_con_invernadero(nombre="Invernadero Uno", email="agronomo@infoponia.com"):
+    """Un Agrónomo activo y un invernadero activo a su cargo: ``(agronomo, invernadero)``."""
+    agronomo = crear_agronomo(email=email)
+    return agronomo, crear_invernadero(nombre, agronomo=agronomo)
+
+
+def con_agujeros(ocupados=0, comprometidos=0, **por_sector):
+    """Reemplaza los registrantes de agujeros por uno falso que da ``(ocupados, comprometidos)`` a todos los sectores, salvo
+    los de ``por_sector`` (``s<id>=(ocupados, comprometidos)``)."""
+    from maestros import extensiones
+
+    def falso(ids):
+        return {i: por_sector.get(f"s{i}", (ocupados, comprometidos)) for i in ids}
+
+    return mock.patch.object(extensiones, "_AGUJEROS", [falso])
+
+
+def con_extension(nombre_de_lista, *funciones):
+    """Reemplaza la lista de registrantes ``nombre_de_lista`` de ``maestros.extensiones`` por ``funciones``."""
+    from maestros import extensiones
+
+    return mock.patch.object(extensiones, nombre_de_lista, list(funciones))

@@ -154,3 +154,14 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 | `test_campana_alertas.py` | `maestros/tests/test_campana_alertas.py` lo piden el paso 6 y «Hecho cuando», pero no figura entre los «Archivos nuevos» de «Límites». Agregarlo | Al validar NOT-01 |
 | Docstring de `no_leidas` | El docstring de `AlertaQuerySet.no_leidas` (`maestros/models.py`) dice «las que cuenta la campana, tarea de notificaciones». No se tocó porque `maestros/models.py` no estaba en «Permitido fuera de la app». Cambiarlo por «las que prenden el punto rojo de la campana, NOT-01 y D-42» | La próxima tarea que toque `maestros/models.py` |
 | Abrir una alerta desde la campana | El enlace de cada alerta lleva a la ficha del invernadero y no llama a `abrir_alerta`: la alerta sigue «no leída» y el punto rojo no se apaga. Está en `docs/disparadores.md` («Cuando exista la primera notificación o alerta», punto 4) | MAE-02c |
+
+
+## Abiertos desde MAE-03 (20/11/2026)
+
+- **Agrónomo ajeno:** la «Verificación a mano» y el paso 4 de la tarea decían que ve los sectores sin acciones; manda la regla 1 de PROD-CNS-SCT y D-28: recibe 403. Texto corregido en la tarea.
+- **Modelo (`docs/modelo/maestros.md`):** `nombre_sector` de hasta 40 caracteres y los códigos de perfil `hoja_verde`, `pastura`, `frutos_grandes`, `frutos_pequenos`, `flores` y `hierbas` no estaban fijados. Pasar a la ficha.
+- **Notificación de PROD-MOD-CLT b:** el CU no fija el texto. Título «Cambió el cultivo {anterior}», detalle «{Nombre Apellido} lo renombró a {nuevo}. Sus variedades siguen igual.»; una sola llamada a `notificar_a_varios`, sin el invernadero de cada destinatario (el prototipo lo incluía). Se notifica solo a Agrónomos activos de invernaderos activos, sin el actor. Pasar al CU.
+- **Regla 4 de PROD-MOD-SCT y de PROD-BAJ-SCT:** la advertencia se dispara cuando el sector activo es el último de su tipo (como `ultimoAviso`), aunque no haya lotes ni variedades afectados; un sector fuera de servicio no la dispara. En la baja, los impedimentos van antes que la advertencia. Aclarar en el CU.
+- **API de `maestros`:** se hizo `registrar_efecto_de_baja_de_sector` y no `pasar_a_fuera_de_servicio` (queda para PRD-04). `bloquear_sectores` verifica también que el invernadero esté activo. `variedades_de_cultivos` usa lo propio de `maestros` también para un cultivo que el registrante no trae.
+- **Interfaz:** el menú «⋯» es un `<details>` propio de `maestros` (no existe el componente en `core`). «Volver a activar» muestra un texto genérico (la fecha y el motivo son de PRD-04). «Renombrar» muestra siempre el aviso de semillas e invernaderos: sin JavaScript no se sabe si el nombre cambió.
+- **Al Gerente, toda ruta de cultivos le da 404, también con otro método HTTP** (no 405), para no delatar la ruta.

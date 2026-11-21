@@ -1,0 +1,16 @@
+{% load iconos %}{% comment %}Ventana para reactivar un sector dado de baja (PROD-MOD-SCT, postcondición c; MODALS['sector-activar'] del prototipo). Sin
+validaciones (regla 5): el sector está vacío y sin reservas. Reactivar es un POST a la misma URL; abrirla (GET) no cambia
+nada. Recibe «sector» e «invernadero».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">¿Reactivar {{ sector.nombre_sector }}?</h2>
+    <p>El sector vuelve a contar como capacidad de {{ sector.tipo_etapa.nombre_etapa }} y a recibir plantas y órdenes.</p>
+    <form method="post" action="{% url 'maestros:sector_reactivar' invernadero.pk sector.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Reactivando…">Reactivar</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

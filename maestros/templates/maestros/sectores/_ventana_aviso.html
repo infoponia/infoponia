@@ -1,0 +1,24 @@
+{% load iconos %}{% comment %}Ventana de la regla 4 de PROD-MOD-SCT («m.aviso» de MODALS['sector-form'] del prototipo): el cambio de tipo deja al
+invernadero sin sectores activos del tipo anterior. Advierte sin bloquear: «Volver» reenvía el formulario sin guardar (vuelve
+a la ventana con lo escrito) y «Continuar igual» manda advertencia_confirmada. Lleva los datos del formulario en campos
+ocultos, porque el POST es el mismo. Recibe «avisos» (lista de Aviso: texto y cantidad), «form», «sector» e
+«invernadero».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Antes de cambiar el tipo de {{ sector.nombre_sector }}</h2>
+    <div class="alert alert-warn" role="alert">{% icono "warn" 16 %}<div>
+      <ul style="margin:0;padding-left:18px">{% for aviso in avisos %}<li>{{ aviso.texto }}</li>{% endfor %}</ul>
+    </div></div>
+    <p style="margin-top:12px">Podés continuar igual: el cambio se guarda y los lotes afectados esperan en su etapa actual hasta que haya un sector de {{ sector.tipo_etapa.nombre_etapa }}.</p>
+    <form method="post" action="{% url 'maestros:sector_modificar' invernadero.pk sector.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="nombre" value="{{ form.nombre.value|default_if_none:'' }}">
+      <input type="hidden" name="tipo_etapa" value="{{ form.tipo_etapa.value|default_if_none:'' }}">
+      <input type="hidden" name="cant_agujeros_total" value="{{ form.cant_agujeros_total.value|default_if_none:'' }}">
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" name="volver" value="1" data-foco-inicial data-enviando="Volviendo…">Volver</button>
+        <button class="btn btn-ghost" type="submit" name="advertencia_confirmada" value="1" data-enviando="Guardando…">Continuar igual</button>
+      </div>
+    </form>
+  </div>
+</div>

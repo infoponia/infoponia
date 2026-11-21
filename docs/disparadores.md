@@ -96,10 +96,8 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 
 ## Cuando exista SectorProduccion
 
-1. **Sectores del invernadero.** La marca «sin sectores» (`Invernadero.tiene_sectores`, hoy `False`), la capacidad y la
-   pestaña de sectores de la ficha (regla 3 de PROD-CNS-INV) y la postcondición b de PROD-BAJ-INV (los sectores pasan a
-   inactivos). Nació en MAE-01a. La postcondición b y el log por sector (f) se conectan con `registrar_efecto_de_baja`: el
-   registrante audita su propio log por sector.
+1. ~~**Sectores del invernadero.**~~ Hecho el 20/11/2026 en MAE-03 (`Invernadero.tiene_sectores` mira los sectores activos o fuera de servicio, pestaña «Sectores» y tarjeta «Capacidad» de la ficha, y la baja del invernadero pasa sus sectores a inactivos con un log por sector, por `registrar_efecto_de_baja`). Texto original: la marca «sin sectores» (`Invernadero.tiene_sectores`, hoy `False`), la capacidad y la pestaña de sectores de la ficha (regla 3 de PROD-CNS-INV) y la postcondición b de PROD-BAJ-INV (los sectores pasan a inactivos). Nació en MAE-01a.
+
 
 ## Cuando exista una ocupación de sector, una variedad con semilla o un hardware (registrantes de los puntos de extensión de MAE-03)
 
@@ -121,18 +119,25 @@ que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba s
 4. **Módulo IoT (`iot`) — hecho en la documentación el 20/11/2026, se implementa en IOT-02:** `registrar_impedimento_de_baja_de_sector` con `hardware_activo` (códigos y textos de PROD-BAJ-SCT, regla 3)
    y `registrar_contenido_de_sector` con el hardware.
 
-## Cuando existan `produccion` y `compras` (puntos de extensión de `inventario`, lote 2)
+## Cuando exista una ocupación de sector, una variedad con semilla o un hardware (registrantes de los puntos de extensión de MAE-03)
 
-INV-01 crea los puntos de `docs/api/extensiones_de_inventario.md` **sin registrantes**: sin ellos, no hay reservas ni órdenes que nombrar y no
-hay impedimentos de compras. Cada tarea que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
+MAE-03 creó los puntos de extensión de sectores y cultivos (`docs/api/extensiones_de_maestros.md`) el 20/11/2026 **sin registrantes** (probados con registrantes falsos). Cada tarea que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
 
-1. **PRD-01 (`produccion`):** `registrar_reservas_de_insumo` y `registrar_ordenes_que_reservan` (reservas activas de órdenes de siembra y de transición
-   a realizar). Al reservar usa `bloquear_invernadero_activo` y lee `disponible_para_planificar` **después** de bloquear (`docs/api/stock.md`).
-   Al concretar o cancelar usa `registrar_salida_por_consumo` y `reevaluar_alertas_del_insumo`.
-2. **PRD-03 (`produccion`):** la aplicación de insumos usa `registrar_salida_por_consumo` (con `lote` nulo en el movimiento), `proponer_lotes_fefo` y `reevaluar_alertas_del_insumo`; el Inicio del Agrónomo (PRD-04) cuenta las alertas `inv_insumo_por_vencer` sin función nueva de `inventario`.
-3. **INV-03 (`inventario`):** `registrar_semillas_de_cultivo` y `registrar_uso_de_cultivo` (de `maestros`, ver «Cuando exista SectorProduccion»);
-   además declara los puntos de variedades que se cierran en el apartado siguiente.
-4. **`compras` (ronda futura):** `registrar_impedimento_de_deshabilitacion`, la recepción y `cant_transito_insumo`.
+1. **PRD-01 y PRD-02 (`produccion`):** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
+   (agujeros ocupados y comprometidos, con los lotes y órdenes), `registrar_contenido_de_sector` (lotes y órdenes),
+   `registrar_perfil_de_sector` y `registrar_aviso_de_cambio_de_tipo` (lotes que deben pasar por la etapa y siembras a realizar).
+   Al reservar agujeros (`PRD-01` y `PRD-02`), llamar a `bloquear_sectores`, que ya bloquea el invernadero activo y después los sectores activos, y rechaza con `sector_no_disponible`.
+2. **PRD-04 (`produccion`):** `registrar_efecto_de_vuelta_a_servicio` (cierra el registro «Fuera de servicio» y escribe la bitácora),
+   `registrar_efecto_de_baja_de_sector` (punto nuevo de `maestros`, D-51 punto 7) y `registrar_efecto_de_baja` (cierra los registros abiertos al dar de baja el invernadero; en el lote 4 se había dicho que no registraba nada)
+   y el caso de uso PROD-PNR-FDS, que es el que produce el estado «fuera de servicio». También el Inicio del Agrónomo, como sección registrada
+   con `registrar_seccion_de_inicio` de `core/extensiones.py` (D-43; la alerta de insumos y de merma del prototipo salen de ahí).
+3. **INV-03 (`inventario`):** `registrar_semillas_de_cultivo` (contar y renombrar con su log `modificacion_semilla`) y
+   `registrar_uso_de_cultivo` (la semilla habilitada más los lotes activos que le informa `produccion`, ver el punto siguiente).
+   **Contrato de bloqueo:** quien crea una variedad bloquea el cultivo (`FOR NO KEY UPDATE`) antes de insertarla (`cultivo → variedad`); `baja_cultivo` cuenta las variedades activas después de bloquear.
+   Además agrega a `Variedad` las columnas que faltan (rangos, postcosecha y peso en gramos). `EtapaProductiva` **no** tiene estado
+   (opción A, 19/11/2026): no hay nada que agregar ahí.
+4. **Módulo IoT (`iot`) — hecho en la documentación el 20/11/2026, se implementa en IOT-02:** `registrar_impedimento_de_baja_de_sector` con `hardware_activo` (códigos y textos de PROD-BAJ-SCT, regla 3)
+   y `registrar_contenido_de_sector` con el hardware.
 
 ## Cuando existan lotes, órdenes de trabajo y contratos (puntos de extensión de variedades, lote 3)
 
@@ -282,3 +287,12 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 3. **Cosecha** (ronda futura): suma a la bitácora los tipos `cosecha` e `incumplimiento de cláusula suministrante` (hoy no se ofrecen en el filtro de PROD-CNS-BIT) y la condición 1 de la alerta de plantas comprometidas (`aplicar_merma`).
 4. ~~**Módulo IoT** (en paralelo): decide qué pasa con el hardware de un sector que sale de servicio.~~ **Resuelto el 20/11/2026:** no se toca; sus sensores no generan alertas ambientales mientras el sector esté fuera de servicio (`temas_abiertos.md`). PROD-PNR-FDS no cambia.
 5. **Cámara de producto** (ronda futura): las partidas de cámara de PROD-REG-MRM (extensiones 4a y 10c, causas de cámara) y el movimiento «salida por merma».
+
+
+## Cuando exista el modelo completo de Variedad (INV-03)
+
+1. **Restricciones de `Variedad`.** MAE-03 la creó con columnas mínimas. INV-03 agrega la restricción única `(cultivo, lower(nombre_variedad))`, los rangos y el resto, con una migración propia en `maestros` (`docs/modelo/maestros.md`, «Variedad»).
+
+## Cuando exista PROD-PNR-FDS (PRD-04)
+
+1. **Estado «fuera de servicio».** Ningún caso de uso de MAE-03 lo produce; `maestros` ya lo muestra y ya ofrece «Volver a activar» y «Dar de baja». PRD-04 agrega `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio` (lote 5 de `docs/api/extensiones_de_maestros.md`) y registra `registrar_efecto_de_vuelta_a_servicio` y `registrar_efecto_de_baja_de_sector`. La clave `fuera_de_servicio` ya está en `VALORES_VISIBLES["estado"]`.

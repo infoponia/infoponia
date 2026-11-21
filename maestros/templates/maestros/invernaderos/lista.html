@@ -6,13 +6,15 @@ Inicio del Gerente (regla 5) es de MAE-02.{% endcomment %}
 {% block titulo %}Producción · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
+<link rel="stylesheet" href="{% static_v 'maestros/css/cultivos.css' %}">
 <div class="page">
   <div class="page-h">
     <h1>Producción</h1>
     <span class="spacer"></span>
     {% if es_gerente %}<a class="btn btn-primary" href="{% url 'maestros:invernadero_nuevo' %}">{% icono "plus" 14 %} Nuevo invernadero</a>{% endif %}
   </div>
-  <h2 class="muted" style="font-size:13px;margin-bottom:12px">Invernaderos</h2>
+  {# MAE-03: barra de pestañas de «Producción»: el Agrónomo suma «Cultivos y variedades»; el Gerente no la ve. #}
+  {% include "maestros/cultivos/_pestanas_de_produccion.html" with activa="invernaderos" %}
 
   {# Tarjeta de invernadero (gh del prototipo): cabecera, dirección, aviso de personal y equipo. #}
   <div class="stack tight">
