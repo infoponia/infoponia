@@ -14,14 +14,14 @@ Los servicios están en `produccion/servicios/<entidad>.py`; un caso de uso = un
 | `siembras.concretar_siembra(actor, orden_id, datos) -> Lote` | PROD-CNC-SMB | Capataz de la orden | El lote creado |
 | `transiciones.planificar_transicion(actor, datos) -> TransicionEtapa` | PROD-PNF-TRN | Agrónomo a cargo | La orden |
 | `transiciones.concretar_transicion(actor, orden_id, datos) -> TransicionEtapa` | PROD-CNC-TRN | Capataz de la orden | La orden concretada |
-| `ordenes.cancelar_orden(actor, orden_id, motivo) -> OrdenTrabajo` | PROD-CNL-ORD | Agrónomo a cargo | La orden cancelada |
+| `ordenes.cancelar_orden(actor, orden_id, motivo) -> OrdenTrabajo` | PROD-CNL-ORD | Agrónomo a cargo | La orden cancelada. Guarda `estado_orden`, `fecha_resolucion_orden` (hoy) y `motivo_cancelacion`; avisa al Capataz con el motivo (texto en `cancelar_orden.md`, «Decisiones de aplicación») |
 | `ordenes.cancelar_orden_incluida(actor, orden, motivo, *, avisar=False) -> CancelacionIncluida` | PROD-CNL-ORD como parte de otro CU (PRD-04: PROD-PNR-FDS) | `actor` o `None` (InfoPonia) | Ver abajo |
 
 `datos` son `dataclass` (`DatosDeSiembra`, `DatosDeConcrecionDeSiembra`, `DatosDeTransicion`, `DatosDeConcrecionDeTransicion`), no diccionarios, y se construyen desde el formulario con una función `desde_post`.
 Cada par `resumen_de_…` / `datos_de_…` **no escribe** y devuelve lo que muestra la pantalla (valores propuestos, advertencias, errores por campo).
 
 Todas: reciben al actor, verifican su rol y que siga activo **después de bloquear**, y lanzan `produccion.errores.ErrorDeProduccion(codigo, mensaje, campo=None)` para cualquier rechazo de negocio. Códigos que usan en común con las otras apps: `cambio_simultaneo`, `sin_permiso`, `invernadero_inactivo`.
-Códigos propios: `orden_no_pendiente`, `sin_capataz_activo`, `variedad_incompatible`, `semilla_no_habilitada`, `stock_insuficiente`, `capacidad_insuficiente`, `distribucion_incompleta`, `orden_duplicada`, `fecha_invalida`, `cantidad_invalida`, `causa_obligatoria`, `motivo_obligatorio`, `lote_con_transicion`, `lote_no_trasladable`, `sector_no_elegible`.
+Códigos propios: `orden_no_pendiente`, `sin_capataz_activo`, `variedad_incompatible`, `semilla_no_habilitada`, `stock_insuficiente`, `capacidad_insuficiente`, `distribucion_incompleta`, `orden_duplicada`, `fecha_invalida`, `cantidad_invalida`, `causa_obligatoria`, `motivo_obligatorio`, `motivo_largo`, `lote_con_transicion`, `lote_no_trasladable`, `sector_no_elegible`.
 
 ### `cancelar_orden_incluida`
 
@@ -29,6 +29,7 @@ Para un CU de otra tarea que **incluye** la cancelación de una orden (hoy solo 
 
 - `actor`: quien actúa en el CU que incluye, o `None` si actúa InfoPonia.
 - Cancela solo órdenes «a realizar»; si la orden ya no lo está, lanza `orden_no_pendiente` (el llamador decide).
+- Recibe el motivo ya armado y, si pasa de 300, lo recorta con «…» (el «…» cuenta dentro de los 300; no lanza `motivo_largo`).
 - Devuelve `CancelacionIncluida(orden, reservas, sectores_afectados, alertas_resueltas, notificar_a)`: lo que el llamador necesita para **meter en su único registro de auditoría** (D-36) y a quién notificar (el Capataz, si `avisar=True` y está activo).
 - El llamador ya tiene bloqueados invernadero, variedad y sectores en el orden de `docs/patrones/bloqueos.md`; esta función bloquea lo que le sigue (insumos de las reservas, orden y reservas).
 

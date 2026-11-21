@@ -359,7 +359,7 @@ Reglas de negocio
 
 Lista de tecnología y variaciones de datos
 - 2. El Agrónomo puede filtrar las órdenes por invernadero, por tipo y por rango de fechas programadas.
-- 5. El motivo es texto libre, de hasta 500 caracteres.
+- 5. El motivo es texto libre, de hasta 500 caracteres. (En la ronda son 300: ver «Decisiones de aplicación». Con 300 el aviso al Capataz puede llevar el motivo entero dentro de los 500 del detalle de una notificación, D-42.)
 - 6b. Las cantidades se expresan en plantas, como números enteros.
 - 9. La notificación indica la orden, su tipo, su fecha programada, el motivo y quién la canceló. Se entrega dentro
    del Sistema y puede, además, enviarse por correo electrónico.
@@ -514,6 +514,8 @@ PROD-CNL-ORD está escrito para los cuatro tipos de orden. En la ronda **solo ex
 | Postcondiciones f, g, h, i, j, l | **Fuera de la ronda (D-45)** |
 | PROD-ASG-STK, PROD-ASG-CAM, COM-PNF-ENT, COM-DCD-FLT | **Fuera de la ronda (D-45)** |
 
+Aviso con el motivo: en la ronda solo al Capataz (postcondición k). El aviso al Vendedor (postcondición l) es de cosecha, Fuera de la ronda (D-45); cuando exista Cosecha también llevará el motivo, con el mismo texto de la decisión anterior. La postcondición l de la versión 0.1 no menciona el motivo: falta ajustarla en Drive (ver `docs/temas_abiertos.md`).
+
 ### Qué hace cada parte
 
 | Parte | Código |
@@ -530,11 +532,15 @@ PROD-CNL-ORD está escrito para los cuatro tipos de orden. En la ronda **solo ex
 
 - **Permisos**: el Agrónomo a cargo del invernadero de la orden, aunque la haya planificado InfoPonia (regla 2 de 8.22). El Gerente no cancela (como en el resto de Producción: no tiene estas pantallas).
 - **Bloqueos**: cuentas → invernadero → (variedad, si es siembra) → **sectores** de las ocupaciones (nivel 2c) → insumos de las reservas (`InsumoInvernadero` en orden de id) → fila de la orden y sus reservas. Se leen sin bloquear, se bloquean, se **releen** y se verifica que la orden siga «a realizar» y que las reservas no hayan cambiado (extensión 8a y 8b).
-- **Motivo obligatorio**, hasta 300 caracteres; el prototipo no lo pedía (`orden-cancelar` no tenía motivo ni resumen): manda el CU, hay que agregar ambos.
+- **Motivo obligatorio**, de 1 a 300 caracteres, sin espacios al borde; vacío o solo espacios → `ErrorDeProduccion('motivo_obligatorio')`; más de 300 → `ErrorDeProduccion('motivo_largo', campo='motivo')`. El prototipo no lo pedía (`orden-cancelar` no tenía motivo ni resumen): manda el CU, hay que agregar ambos.
 - **Efectos**: orden → `cancelada`, `fecha_resolucion_orden` = hoy, `motivo_cancelacion`; cada reserva activa → `cancelada` (sin utilizada ni devuelta); las ocupaciones se **conservan** sin lote y con 0 ocupados (la cantidad planificada no cambia, deja de comprometer porque la orden ya no está «a realizar»). No se tocan lotes, cantidades ni etapa (en la transición el lote queda sin transición «a realizar»).
 - **Alertas «stock inconsistente»**: se llama a `reevaluar_alertas_del_insumo` de cada insumo de las reservas canceladas (postcondición c).
 - **Auditoría**: un registro `cancelacion_orden` con la orden, sus reservas, sus sectores (texto «agujeros comprometidos» antes → después) y las alertas resueltas.
-- **Notificación** al Capataz de la orden (si está activo y no es quien actúa), con el motivo, dentro de la transacción.
+- **Notificación**: se arma así y va dentro de la transacción, con `notificar_a_varios([capataz], titulo, detalle, excluir=actor)` (`docs/api/notificaciones.md`); sin Capataz activo no se avisa y la cancelación se registra igual (extensión 9a).
+  - `titulo`: «Orden OT-0007 cancelada» (el código de la orden).
+  - `detalle`: «Motivo: <motivo>. <Siembra | Transición de etapa> del <dd/mm/aaaa> en <invernadero>, cancelada por <nombre y apellido>.»
+  - Regla del largo: el motivo va completo y primero (310 caracteres con «Motivo: » y el punto). Si el detalle pasa de 500, se acorta con «…» primero el nombre de quien cancela y después el del invernadero (peor caso: invernadero de 80 → quedan unos 55 caracteres para el nombre). El motivo no se recorta nunca, y el aviso no puede hacer fallar la cancelación.
+- **Desde otro caso de uso**: `cancelar_orden_incluida` recibe el motivo ya armado por el llamador. PROD-PNR-FDS lo compone («Sector fuera de servicio: <sector>. <motivo>») y puede pasar de 300: la función lo recorta a 300 con «…» (el «…» cuenta dentro de los 300) y no lanza error. El texto completo queda en `FueraDeServicio.motivo_fuera_de_servicio`.
 - **Pantalla**: lista de órdenes «a realizar» agrupadas por invernadero y tipo (solo siembra y transición), el resumen de lo que se libera (reservas y agujeros por sector), el campo de motivo y la confirmación. Prototipo: `ACT['orden-cancelar']` y su vista; sin JavaScript funciona igual.
 - **Interfaces con las otras tareas**: PRD-04 usa `cancelar_orden_incluida`; la cosecha futura agregará sus ramas. Cualquier función nueva que cancele órdenes debe llamar a esta, no duplicar la lógica.
 
