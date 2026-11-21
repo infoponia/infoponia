@@ -12,16 +12,11 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 1. ~~**Roles del invernadero.**~~ Hecho el 19/11/2026 en MAE-01a (FK nulas en `Invernadero`). Las asociaciones del invernadero con su Agrónomo, Capataz, Vendedor y Técnico se agregan
    en la misma tarea que crea `Invernadero` (D-04). Según D-37, son FK declaradas en `Invernadero` (regla
    A2), no campos en los roles de `core`.
-2. **Invernadero del Transportista (R155).** Precondición d, postcondición b y reglas 5 y 7 de USR-ALT-USR;
-   postcondición a de USR-MOD-USR; regla 3 de USR-CNS-USR; regla 1 de USR-GST-PRF. Mientras no exista `Invernadero`, el
-   Transportista se da de alta sin invernadero (`usuarios.md`, «Lo que queda para más adelante»). Según D-37,
-   R155 es una M2M en `Invernadero` (A2). **Pendiente de decidir:** cómo se asigna (MAE-01 lo dejó fuera; sigue abierto). Hay dos opciones: el alta de
-   Transportista de `core` muestra el campo por un punto de extensión (A4), o el Transportista se asigna desde el
-   invernadero, como los otros cuatro roles; la segunda cambia el caso de uso y va a pendientes_CU.
-   La precondición g y la regla 3 de PROD-BAJ-INV (los transportistas inactivos no impiden la baja) se conectan con un
-   registrante de impedimentos de la baja (`maestros/extensiones.py`). D-39 ya decidió que manda el caso de uso: solo los
-   transportistas activos impiden la baja, aunque la regla 4 de 8.4 del modelo diga «sin importar su estado»; falta corregir
-   MD-87 en el modelo, que está en Drive.
+2. **Invernadero del Transportista (R155).** **Decidido el 21/11/2026 (D-55): se asigna desde el invernadero; lo programa
+   MAE-05**, que cierra este punto. Texto original: precondición d, postcondición b y reglas 5 y 7 de USR-ALT-USR; postcondición a de
+   USR-MOD-USR; regla 3 de USR-CNS-USR; regla 1 de USR-GST-PRF; la precondición g y la regla 3 de PROD-BAJ-INV (solo los transportistas
+   activos impiden la baja, D-39). Lo que dependía de que existiera `Invernadero` ya existe; lo que depende de `Entrega` y `Vehiculo`
+   pasa a «Cuando exista Entrega» (puntos 2 y 3).
 3. **Ámbito por invernadero de SEG-13.** `estado.md` lo ubicaba en `core/acceso.py`, pero `core` no puede importar una
    app de negocio (D-23). Va como un punto de extensión de `core` en el que `maestros` registra el ámbito (D-37, regla
    A4). En MAE-01 el alcance vive en `InvernaderoQuerySet.en_alcance_de`; sigue abierto hasta que una pantalla fuera de
@@ -83,6 +78,17 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 1. **Baja de un Transportista.** Postcondición g de USR-BAJ-USR: sus entregas a realizar quedan sin transportista. Regla 4: la baja
    lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
    `core/extensiones.py` (D-43).
+2. **Transportista en ruta o con entregas (D-55, nace en MAE-05).** Reglas 9 y 10 de PROD-MOD-INV y precondición d de USR-BAJ-USR.
+   `comercial` registra:
+   - `maestros.extensiones.registrar_impedimento_de_transportista`, con los códigos `transportista_en_ruta` y
+     `transportista_con_entregas`;
+   - `core.extensiones.registrar_impedimento_de_baja_de_cuenta`, con el código `transportista_en_ruta`.
+   Contrato: `docs/api/extensiones_de_maestros.md`, sección «Transportistas». También la regla de COM-ASG-TRP: una entrega del día
+   cuyo transportista está en ruta no se reasigna.
+3. **Logística de la ficha del invernadero (D-55, nace en MAE-05).** Regla 3 de PROD-CNS-INV: `comercial` registra
+   `maestros.extensiones.registrar_logistica_de_transportista` con el vehículo, la situación (en ruta o no) y las entregas a
+   realizar de cada transportista. Con el registrante, «Logística» muestra las tres columnas de `logistica(inv, ger, true)` del
+   prototipo `docs/prototipos/produccion/logistica_transportista.html`.
 
 ## Cuando exista Cosecha
 
@@ -304,3 +310,12 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 
 1. **Estado «fuera de servicio».** Ningún caso de uso de MAE-03 lo produce; `maestros` ya lo muestra y ya ofrece «Volver a activar» y «Dar de baja». PRD-04 agrega `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio` (lote 5 de `docs/api/extensiones_de_maestros.md`) y registra `registrar_efecto_de_vuelta_a_servicio` y `registrar_efecto_de_baja_de_sector`. La clave `fuera_de_servicio` ya está en `VALORES_VISIBLES["estado"]`.
+
+## Cuando se arme el cron único
+
+1. **Un solo cron job de Render para todo el proceso diario (D-56).** Se crea **al final de la implementación**, cuando estén
+   registrados todos los pasos de `core/procesos.py`. Ejecuta `python manage.py proceso_diario`, con:
+   - el mismo repositorio, la misma rama y las mismas variables de entorno que el web service, incluida la base de Neon;
+   - el mismo comando de compilación;
+   - una agenda antes del inicio de las rutas. La hora se confirma con el Jardín Botánico; Render usa UTC.
+   Antes, revisar el costo (`docs/temas_abiertos.md`). Después, anotar su nombre en `docs/estado.md`. Nace en DIA-01.

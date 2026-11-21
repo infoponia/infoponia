@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InfoPonia · Transportista en el invernadero (MAE-05)</title>
+<style>
+/* Diseño v2: un solo tema claro, una sola familia tipográfica (Inter) con cifras tabulares para que los números
+   alineen sin usar letra de consola. Tarjetas segmentadas por bloques, tablas con más aire y acciones secundarias
+   agrupadas en un menú «Más». Cada tipo de etapa conserva su color fijo. */
+:root{
+  color-scheme:light;
+  --background:#f5f6f8;--foreground:#141a21;--card:#fff;--subtle:#f9fafb;
+  --primary:#1a6b3c;--primary-dark:#145431;--primary-soft:#eaf5ee;--primary-foreground:#fff;
+  --secondary:#eef1f4;--muted:#eef0f3;--muted-foreground:#5f6b78;--faint:#8a94a0;
+  --border:#e3e7ec;--border-strong:#cfd5dc;--radius:10px;--radius-sm:7px;
+  --shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.04);
+  --shadow-pop:0 12px 32px rgba(16,24,40,.14),0 2px 6px rgba(16,24,40,.06);
+  --status-ok:#18784a;--status-warn:#9a5b00;--status-danger:#b42828;--status-neutral:#5a6573;
+  --ok-bg:#e9f6ef;--warn-bg:#fdf3e1;--danger-bg:#fdecec;--neutral-bg:#eef1f4;
+  --e-ger:#4f7cc4;--e-cre:#1f9488;--e-flo:#9a5cb8;--e-fru:#c2577a;--e-mad:#7d8a22;
+  --header-height:56px;--footer-height:34px;--sidebar-width:224px;
+  --font-sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%}
+body{font-family:var(--font-sans);font-size:14px;background:var(--background);color:var(--foreground);line-height:1.55;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01"}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+h1{font-size:22px;font-weight:650;letter-spacing:-.015em;line-height:1.25;text-wrap:balance}
+h2{font-size:17px;font-weight:650;letter-spacing:-.01em;text-wrap:balance}
+h3{font-size:14px;font-weight:600}
+b,strong{font-weight:600}
+.muted{color:var(--muted-foreground)}
+.faint{color:var(--faint)}
+/* Antes era letra de consola; ahora solo cifras tabulares: alinean igual y se leen bien. */
+.mono{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sm{font-size:13px}
+.xs{font-size:12px}
+.right{text-align:right}
+.nowrap{white-space:nowrap}
+.id{display:inline-block;font-size:12px;font-weight:600;color:var(--muted-foreground);background:var(--secondary);border-radius:5px;padding:1px 6px;line-height:1.5;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---- botones ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 15px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:550;border:1px solid transparent;transition:background .12s,border-color .12s,color .12s;min-height:38px;text-decoration:none;white-space:nowrap;line-height:1.2}
+.btn:focus-visible,.chip:focus-visible,.nav-item:focus-visible,.tab:focus-visible,.kpi:focus-visible,.link:focus-visible,.icon-btn:focus-visible,.acct:focus-visible,.kb-btn:focus-visible,.menu button:focus-visible,.opt:focus-visible,.gh:focus-visible,.rowlink:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 1px 2px rgba(20,84,49,.25)}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-ghost{background:#fff;color:var(--primary);border-color:color-mix(in srgb,var(--primary) 55%,#fff)}
+.btn-ghost:hover{background:var(--primary-soft);border-color:var(--primary)}
+.btn-danger{background:#fff;color:var(--status-danger);border-color:color-mix(in srgb,var(--status-danger) 45%,#fff)}
+.btn-danger:hover{background:var(--danger-bg);border-color:var(--status-danger)}
+.btn-text{background:none;border-color:transparent;color:var(--primary);padding-left:10px;padding-right:10px}
+.btn-text:hover{background:var(--primary-soft)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:5px 11px;font-size:13px;min-height:32px}
+.btn-block{width:100%}
+/* En tablas, las acciones de fila no llevan borde hasta que se pasa el mouse: menos ruido. */
+.data-table td .btn-ghost,.data-table td .btn-danger{border-color:transparent;background:transparent}
+.data-table td .btn-ghost:hover{background:var(--primary-soft)}
+.data-table td .btn-danger:hover{background:var(--danger-bg)}
+
+/* Acciones de fila: solo ícono, con texto emergente y etiqueta accesible. */
+.ibtn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted-foreground)}
+.ibtn:hover{background:var(--secondary);color:var(--foreground)}
+.ibtn.danger{color:var(--status-danger)}
+.ibtn.ok{color:var(--primary)}
+.ibtn.ok:hover{background:var(--primary-soft)}
+.ibtn.neutral{color:#3f4a56}
+.ibtn.danger:hover{background:var(--danger-bg)}
+.ibtn[aria-disabled="true"]{opacity:.4;cursor:not-allowed}
+.ibtn[aria-disabled="true"]:hover{background:none}
+.ibtn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+/* Texto emergente: un solo elemento fijo en el body, para que ninguna tarjeta lo recorte. */
+#tip{position:fixed;z-index:200;background:#1f2933;color:#fff;font-size:12.5px;font-weight:500;line-height:1.45;padding:6px 10px;border-radius:6px;max-width:300px;pointer-events:none;box-shadow:0 4px 12px rgba(16,24,40,.18);opacity:0;transition:opacity .12s}
+#tip.on{opacity:1}
+/* ---- campos ---- */
+.field-input{width:100%;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:9px 12px;font-size:14px;background:#fff;outline:none;transition:border-color .12s,box-shadow .12s;min-height:40px}
+textarea.field-input{min-height:80px;resize:vertical;line-height:1.5}
+select.field-input{padding-right:30px}
+.field-input:hover:not(:disabled){border-color:#b9c1ca}
+.field-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,107,60,.14)}
+.field-input.bad{border-color:var(--status-danger)}
+.field-input:disabled{background:var(--muted);color:var(--muted-foreground)}
+.field-input.num{font-variant-numeric:tabular-nums;text-align:right;max-width:190px}
+.fld{margin-bottom:18px;min-width:0}
+.fld label,.lbl{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#2a333d}
+.req{color:var(--status-danger)}
+.err{color:var(--status-danger);font-size:13px;margin-top:6px}
+.hint{color:var(--muted-foreground);font-size:13px;margin-top:6px;line-height:1.5}
+
+/* ---- insignias y avisos ---- */
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:550;padding:2px 9px;border-radius:999px;white-space:nowrap;line-height:1.6;font-variant-numeric:tabular-nums}
+.status-ok{background:var(--ok-bg);color:var(--status-ok)}
+.status-warn{background:var(--warn-bg);color:var(--status-warn)}
+.status-danger{background:var(--danger-bg);color:var(--status-danger)}
+.status-neutral{background:var(--neutral-bg);color:var(--status-neutral)}
+.status-info{background:#e7effb;color:#1d4f9c}
+.alert{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:var(--radius-sm);font-size:13.5px;border:1px solid;line-height:1.55}
+.alert svg{flex-shrink:0;margin-top:2px}
+.alert ul{margin:6px 0 0 18px}
+.alert b{font-weight:600}
+.alert-warn{background:#fffaf0;border-color:#f3dcb0;color:#5e3b00}
+.alert-danger{background:#fff6f6;border-color:#f2c9c9;color:#7a1c1c}
+.alert-ok{background:#f3faf6;border-color:#c5e6d3;color:#134a2c}
+.alert-info{background:#f6f8fa;border-color:var(--border);color:#2d3742}
+
+/* ---- tablas ---- */
+.data-table{width:100%;border-collapse:collapse;font-size:14px}
+.data-table.fixed{table-layout:fixed}
+.data-table th{text-align:left;font-size:12.5px;font-weight:600;color:var(--muted-foreground);padding:11px 16px;background:var(--subtle);border-bottom:1px solid var(--border);white-space:nowrap}
+.data-table td{padding:15px 16px;border-bottom:1px solid var(--border);vertical-align:middle;line-height:1.45}
+.data-table tbody tr:last-child td{border-bottom:none}
+.data-table tbody tr:not(.grp):not(.sub):hover td{background:#fbfcfc}
+.data-table th.right,.data-table td.right{text-align:right}
+.data-table th.center,.data-table td.center{text-align:center}
+.data-table .sub2{display:block;font-size:13px;color:var(--muted-foreground);margin-top:2px}
+.data-table tr.grp td{background:#fff;font-size:13px;font-weight:600;color:var(--foreground);padding:20px 16px 8px;border-bottom:1px solid var(--border)}
+.data-table tr.grp td .n{display:inline-block;margin-left:6px;font-size:12px;font-weight:600;background:var(--secondary);color:var(--muted-foreground);border-radius:999px;padding:0 8px}
+.data-table tr.grp.late td{color:var(--status-danger)}
+.data-table tr.grp.late td .n{background:#fff;color:var(--status-danger)}
+.data-table tr.grp.today td{color:var(--primary)}
+.data-table tr.grp.today td .n{background:#fff;color:var(--primary)}
+.data-table tr.grp td .n{background:#fff}
+.data-table tr.grp:first-child td{padding-top:14px}
+/* Cada grupo de la tabla de órdenes lleva su franja de color y una marca a la izquierda de sus filas. */
+.data-table tr.grp td{padding:11px 16px;border-top:1px solid var(--border)}
+.data-table tr.grp:first-child td{border-top:none}
+.data-table tr.grp.late td{background:#fbe9e9}
+.data-table tr.grp.today td{background:#e4f3ea}
+.data-table tr.grp.next td{background:#eef0f3;color:#46515d}
+.data-table tr.grp.hist td{background:#e9eaed;color:#46515d}
+.data-table tr.r-late td:first-child{box-shadow:inset 4px 0 0 var(--status-danger)}
+.data-table tr.r-today td:first-child{box-shadow:inset 4px 0 0 var(--primary)}
+.data-table tr.r-next td:first-child{box-shadow:inset 4px 0 0 #aeb7c1}
+.data-table tr.r-hist td:first-child{box-shadow:inset 4px 0 0 #d3d8de}
+.data-table tr.sub td{background:var(--subtle);padding:4px 16px 16px 64px}
+.data-table tr.open td{border-bottom-color:transparent}
+.data-table tr.open td,.data-table tr.open:hover td{background:var(--subtle)!important}
+.data-table .ciclo.mini{min-width:0}
+.tablewrap{overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.rowlink{display:inline-flex;align-items:center;gap:4px;color:var(--primary);font-weight:550;font-size:13px;background:none;border:none;padding:6px 8px;border-radius:6px}
+.rowlink:hover{background:var(--primary-soft)}
+.cellmain{display:flex;align-items:center;gap:12px;min-width:0}
+.cellico{width:34px;height:34px;border-radius:9px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.big{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* lotes de insumo dentro de la tabla de existencias */
+.lotlist{display:grid;gap:6px}
+.lotlist .li{display:grid;grid-template-columns:76px 130px 150px minmax(0,1fr) 178px 110px;gap:16px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:13px}
+.lotlist .li .id{justify-self:start}
+.lotlist .li > :last-child{justify-self:end}
+.lotlist .li .st{justify-self:start}
+.lotlist .li .act{display:flex;justify-content:flex-end}
+.lotlist .li .k{display:block;font-size:11.5px;color:var(--faint)}
+.lotlist .none{font-size:13px;color:var(--muted-foreground);padding:6px 0}
+
+/* ---- tarjetas ---- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow)}
+.card-title{font-size:14.5px;font-weight:600;color:var(--foreground);margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title svg{color:var(--muted-foreground)}
+/* Tarjeta segmentada: cabecera separada del cuerpo por una línea. */
+.card.seg{padding:0}
+.card.seg > :first-child{border-radius:calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0}
+.card.seg > :last-child{border-radius:0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);overflow:hidden}
+.card.seg > :only-child{border-radius:calc(var(--radius) - 1px)}
+.card-h{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--subtle);min-height:52px;flex-wrap:wrap}
+.card-h h3{display:flex;align-items:center;gap:8px;font-size:14px}
+.card-h h3 svg{color:var(--muted-foreground)}
+.card-b{padding:18px 20px}
+.card-b.flush{padding:0}
+/* Ficha de datos: cada dato en su celda, con la etiqueta arriba y el valor abajo. */
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(var(--fw,170px),1fr));gap:1px;background:var(--border)}
+.facts > div{background:#fff;padding:14px 20px;min-width:0}
+.facts .k{display:block;font-size:12.5px;color:var(--muted-foreground);margin-bottom:3px}
+.facts .v{display:block;font-size:14.5px;font-weight:550;overflow-wrap:anywhere}
+.facts .v.big{font-size:20px;font-weight:650}
+.facts .d{display:block;font-size:13px;color:var(--muted-foreground);margin-top:2px}
+.facts.plain{background:none;gap:14px 24px}
+.facts.plain > div{padding:0;background:none}
+.split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px}
+.split > .card{display:flex;flex-direction:column}
+.split > .card > .facts{flex:1}
+.stack{display:grid;gap:20px}
+.stack.tight{gap:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 18px}
+.proto{border:1.5px dashed #b5bdc6;border-radius:var(--radius-sm);padding:14px 16px;background:#fafbfb;font-size:13px}
+.proto-title{font-weight:600;font-size:12px;color:var(--muted-foreground);margin-bottom:8px}
+.link{background:none;border:none;color:var(--primary);font-size:inherit;font-weight:550;text-decoration:underline;text-underline-offset:2px;padding:0}
+.link:hover{color:var(--primary-dark)}
+.dl{display:grid;grid-template-columns:160px 1fr;gap:10px 20px;font-size:14px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px}
+.kv > div{min-width:0}
+.kv .full{grid-column:1/-1}
+.kv .k{display:block;font-size:12.5px;color:var(--muted-foreground);margin-bottom:2px}
+.kv .v{display:block;font-size:14px;font-weight:550;overflow-wrap:anywhere}
+.facts.boxed{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.facts.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.facts.two > .full{grid-column:1/-1}
+.dl dt{color:var(--muted-foreground)}
+.dl dd{min-width:0;overflow-wrap:anywhere}
+.divider{height:1px;background:var(--border);margin:18px 0}
+
+/* ---- personas ---- */
+.person{display:flex;align-items:center;gap:12px;min-width:0}
+.person .av{width:36px;height:36px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-size:12px;font-weight:650;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.person .av.none{background:var(--warn-bg);color:var(--status-warn)}
+.person .av.off{background:var(--neutral-bg);color:var(--faint)}
+.person .t{min-width:0}
+.person .t .k{display:block;font-size:12.5px;color:var(--muted-foreground)}
+.person .t .v{display:block;font-weight:550;font-size:14px}
+.people{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;font-size:13.5px}
+.people > div{min-width:0}
+.people .r{display:block;color:var(--muted-foreground);font-size:12.5px;margin-bottom:1px}
+
+/* ---- marco ---- */
+.shell{position:relative;height:100%;display:grid;grid-template-rows:var(--header-height) 1fr var(--footer-height);grid-template-columns:var(--sidebar-width) 1fr;overflow:hidden}
+.shell > header,.shell > footer{grid-column:1/-1}
+.shell.field{max-width:430px;margin:0 auto;grid-template-columns:1fr;border-left:1px solid var(--border);border-right:1px solid var(--border);background:var(--background)}
+header.top{background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 20px;position:relative;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand b{font-size:15.5px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logo{width:32px;height:32px;background:var(--primary);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
+.icon-btn{position:relative;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;color:var(--muted-foreground);display:flex;align-items:center;min-height:38px}
+.icon-btn:hover{background:var(--secondary)}
+.dotn{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--status-danger);border:1.5px solid #fff}
+.acct{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 14px 5px 6px;min-height:44px;flex-shrink:0}
+.acct > svg{margin-left:2px;color:var(--muted-foreground)}
+.acct:hover{background:var(--secondary)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:.02em;flex-shrink:0}
+.acct .who{line-height:1.25;text-align:left;white-space:nowrap}
+.acct .who b{display:block;font-size:13.5px;font-weight:600}
+.acct .who span{font-size:12px;color:var(--muted-foreground)}
+.pop{position:absolute;right:16px;top:calc(var(--header-height) - 2px);width:360px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-pop);z-index:60;overflow:hidden}
+.pop-h{padding:12px 16px;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--muted-foreground);background:var(--subtle)}
+.acc-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:11px 16px;min-height:48px}
+.acc-item:last-child{border-bottom:none}
+.pop .ptabs{display:flex;border-bottom:1px solid var(--border)}
+.pop .ptabs button{flex:1;background:none;border:none;padding:10px 8px;font-size:13px;font-weight:600;color:var(--muted-foreground);border-bottom:2px solid transparent}
+.pop .ptabs button[aria-pressed="true"]{color:var(--primary);border-bottom-color:var(--primary)}
+.pop .plist{max-height:420px;overflow:auto}
+.acc-item.unread{background:var(--primary-soft)}
+.acc-item .when2{font-size:12px;color:var(--faint);white-space:nowrap;align-self:flex-start}
+.bigopt{display:grid;gap:12px}
+.bigopt .opt{padding:18px;align-items:center}
+.bigopt .opt .ico{width:40px;height:40px;border-radius:10px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center;flex:none}
+.acc-item:hover{background:var(--subtle)}
+.acc-item .t{min-width:0;flex:1}
+.acc-item .t b{font-size:13.5px;font-weight:600;display:block}
+.acc-item .t span{font-size:13px;color:var(--muted-foreground);display:block}
+.scrim{position:absolute;inset:0;z-index:50;background:transparent}
+aside.side{background:#fff;border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:3px;overflow:auto}
+.side-label{font-size:12px;font-weight:600;color:var(--faint);padding:4px 12px 8px}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--radius-sm);color:#46515d;font-size:14px;font-weight:500;background:none;border:none;text-align:left;width:100%}
+.nav-item:hover{background:var(--secondary);color:var(--foreground)}
+.nav-item.active{background:var(--primary-soft);color:var(--primary);font-weight:600}
+main.main{overflow:auto;padding:28px 32px 0;min-width:0}
+.field main.main{padding:16px 16px 0}
+footer.bot{display:flex;align-items:center;gap:16px;padding:0 20px;font-size:12px;color:var(--muted-foreground);background:#fff;border-top:1px solid var(--border)}
+footer.bot button{background:none;border:none;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:2px;padding:0}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--status-ok);display:inline-block;margin-right:6px}
+.page{max-width:1120px;margin:0 auto;padding-bottom:32px}
+.page.narrow{max-width:880px}
+.page-h{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.page-h .sub{color:var(--muted-foreground);font-size:14px;flex-basis:100%;margin-top:-6px;line-height:1.5;max-width:none}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted-foreground);font-size:13.5px;font-weight:500;background:none;border:none;padding:4px 6px 4px 2px;margin-bottom:12px;border-radius:6px}
+.back:hover{color:var(--primary);background:var(--primary-soft)}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.filters .field-input{width:auto;min-width:170px}
+.filters label{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:0 12px;min-height:40px;cursor:pointer}
+.filters label:has(input:checked){border-color:var(--primary);background:var(--primary-soft);color:var(--primary)}
+.filters input[type=checkbox]{accent-color:var(--primary)}
+.ov{position:absolute;inset:0;background:rgba(17,24,32,.42);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:540px;padding:26px 28px;max-height:100%;overflow:auto;box-shadow:var(--shadow-pop)}
+.modal.wide{max-width:780px}
+.modal h2{margin-bottom:10px}
+.modal p{font-size:14px;margin-bottom:12px}
+.modal .acts{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+.field .ov{align-items:flex-end;padding:0}
+.field .modal{border-radius:16px 16px 0 0;max-width:none}
+.field .btn{min-height:48px}
+.field .btn-sm{min-height:40px}
+
+/* ---- menú «Más» ---- */
+.kb{position:relative;display:inline-flex}
+.kb-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:32px;min-width:34px;padding:0 8px;border-radius:6px;border:1px solid transparent;background:none;color:var(--muted-foreground)}
+.kb-btn:hover,.kb-btn[aria-expanded="true"]{background:var(--secondary);color:var(--foreground)}
+.menu{position:absolute;right:0;top:calc(100% + 4px);min-width:220px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-pop);z-index:70;padding:5px;text-align:left}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border:none;background:none;border-radius:7px;font-size:13.5px;font-weight:500;color:var(--foreground);white-space:nowrap}
+.menu button svg{color:var(--muted-foreground)}
+.menu button:hover{background:var(--secondary)}
+.menu button.danger{color:var(--status-danger)}
+.menu button.danger svg{color:var(--status-danger)}
+.menu hr{border:none;border-top:1px solid var(--border);margin:5px 4px}
+
+/* ---- avisos breves (D-29) ---- */
+#toasts{position:fixed;top:68px;right:16px;z-index:300;display:grid;gap:8px;width:min(390px,calc(100vw - 24px))}
+.toast{position:relative;display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-pop);padding:13px 13px 15px 18px;font-size:13.5px;overflow:hidden;animation:tin .25s ease-out}
+.toast::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tc)}
+.toast::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--tc);transform-origin:left;animation:tbar 10s linear forwards}
+.toast svg{color:var(--tc);flex-shrink:0;margin-top:2px}
+.toast .x{margin-left:auto;background:none;border:none;color:var(--muted-foreground);padding:0 2px;font-size:17px;line-height:1}
+.toast.out{opacity:0;transform:translateX(20px);transition:opacity .2s,transform .2s}
+@keyframes tin{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes tbar{to{transform:scaleX(0)}}
+@media(prefers-reduced-motion:reduce){.toast{animation:none}.toast::after{animation:none;display:none}.toast.out{transition:none}}
+
+/* ---- pestañas e indicadores ---- */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tab{padding:10px 14px;font-size:14px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted-foreground);white-space:nowrap}
+.tab:hover{color:var(--foreground)}
+.tab[aria-selected="true"]{border-bottom-color:var(--primary);color:var(--primary);font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;text-align:left;display:grid;gap:4px;position:relative;box-shadow:var(--shadow);overflow:hidden}
+button.kpi:hover{border-color:var(--border-strong);box-shadow:0 2px 8px rgba(16,24,40,.07)}
+.kpi .k{font-size:13px;font-weight:500;color:var(--muted-foreground);display:flex;align-items:center;gap:7px}
+.kpi .k::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--border-strong)}
+.kpi .v{font-size:28px;font-weight:650;line-height:1.15;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:16px;font-weight:600;color:var(--muted-foreground);margin-left:2px}
+.kpi .c{font-size:13px;color:var(--muted-foreground)}
+.kpi.warn .k::before{background:var(--status-warn)}
+.kpi.danger .k::before{background:var(--status-danger)}
+.kpi.danger .v{color:var(--status-danger)}
+.kpi.warn .v{color:var(--status-warn)}
+
+/* ---- etapas, capacidad y ciclo ---- */
+.etapa{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:550;padding:2px 10px 2px 8px;border-radius:999px;background:color-mix(in srgb,var(--c) 12%,#fff);color:color-mix(in srgb,var(--c) 60%,#000);white-space:nowrap;line-height:1.6}
+.etapa i{width:8px;height:8px;border-radius:50%;background:var(--c);flex-shrink:0}
+.segbar{display:flex;height:8px;border-radius:999px;background:var(--muted);overflow:hidden;gap:2px}
+.segbar span{display:block;height:100%;border-radius:999px}
+.segbar span[style*="width:0%"]{display:none}
+.segbar .oc{background:var(--c)}
+.segbar .co{background:color-mix(in srgb,var(--c) 38%,#fff)}
+.seglegend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted-foreground);margin-top:9px}
+.seglegend span{display:inline-flex;align-items:center;gap:6px}
+.seglegend b{font-weight:600;color:var(--foreground);font-variant-numeric:tabular-nums}
+.seglegend i{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--muted);border:1px solid var(--border-strong)}
+.seglegend i.oc{background:var(--c);border-color:var(--c)}
+.seglegend i.co{background:color-mix(in srgb,var(--c) 38%,#fff);border-color:color-mix(in srgb,var(--c) 38%,#fff)}
+.seglegend .tot{margin-left:auto}
+.cap{display:flex;align-items:baseline;gap:6px;font-variant-numeric:tabular-nums}
+.cap b{font-size:20px;font-weight:650;letter-spacing:-.01em;color:var(--foreground)}
+.cap span{font-size:13px;color:var(--muted-foreground)}
+.stage-h{display:flex;align-items:center;gap:12px;margin:26px 0 12px}
+.stage-h:first-child{margin-top:0}
+.stage-h .meta{font-size:13px;color:var(--muted-foreground)}
+.stage-h .line{flex:1;height:1px;background:var(--border)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:14px}
+.sector{position:relative;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column}
+.sector::before{content:"";position:absolute;left:-1px;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--c)}
+.sector > .top{display:flex;align-items:center;gap:10px;padding:16px 18px 6px 20px}
+.sector > .top .nm{font-size:16px;font-weight:650}
+.sector > .body{padding:6px 18px 16px 20px}
+.sector .perf{font-size:13px;color:var(--muted-foreground);padding:0 18px 0 20px}
+.sector.off{background:#f7f8f9}
+.sector.plain{display:block;padding:14px 18px 14px 20px;box-shadow:none;background:#f3f5f7;border-color:#c3cbd4}
+.sector.plain.off{opacity:.75}
+.sector.off::before{background:var(--border-strong)}
+.sector .inside{display:grid;border-top:1px solid var(--border)}
+.sector .inside > div{display:flex;gap:10px;align-items:center;padding:10px 18px 10px 20px;font-size:13.5px;border-bottom:1px solid var(--border)}
+.sector .inside > div:last-child{border-bottom:none}
+.sector .inside .q{margin-left:auto;color:var(--muted-foreground);white-space:nowrap;font-variant-numeric:tabular-nums}
+.sector .note{font-size:13px;color:var(--muted-foreground);padding:10px 18px 12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.sector .warnline{margin:4px 18px 10px 20px;font-size:13px;background:var(--warn-bg);color:#6b4100;border-radius:7px;padding:9px 12px;display:flex;gap:8px;align-items:flex-start}
+.sector .warnline svg{flex-shrink:0;margin-top:2px}
+.ciclo{display:flex;height:34px;border-radius:8px;overflow:hidden;background:var(--muted);gap:2px}
+.ciclo span{background:var(--c);color:#fff;font-size:12px;font-weight:600;display:block;line-height:34px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;padding:0 6px}
+.ciclo.mini{height:8px;border-radius:999px;min-width:0;gap:2px;background:none}
+.ciclo.mini span{padding:0;border-radius:999px}
+.ciclo-w{min-width:0}
+.ciclo-l{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:7px;font-size:12.5px;color:var(--muted-foreground);font-variant-numeric:tabular-nums;line-height:1.5}
+.ciclo-l span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.ciclo-l i{width:8px;height:8px;border-radius:50%;background:var(--c);flex-shrink:0}
+.ciclo-l b{font-weight:600;color:var(--foreground)}
+.opt .t .ciclo-l span{display:inline-flex}
+.etapa-row{display:grid;grid-template-columns:44px 1fr 160px;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+.etapa-row:last-child{border-bottom:none}
+.switch{position:relative;width:40px;height:24px;flex-shrink:0}
+.switch input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;margin:0}
+.switch i{position:absolute;inset:0;border-radius:12px;background:#c3cad2;transition:background .12s;pointer-events:none}
+.switch i::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .12s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.switch input:checked + i{background:var(--primary)}
+.switch input:checked + i::after{transform:translateX(16px)}
+.switch input:disabled{cursor:not-allowed}
+.switch input:disabled + i{opacity:.5}
+.switch input:focus-visible + i{outline:2px solid var(--primary);outline-offset:2px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.chips.grid .chip{justify-content:center;text-align:center;min-height:44px;border-radius:10px;padding:8px 10px;width:100%}
+.shell.field .chips.grid{grid-template-columns:1fr 1fr}
+.shell.field .dl{grid-template-columns:1fr!important;gap:2px}
+.shell.field .dl dt{font-size:12.5px;margin-top:10px}
+.shell.field .dl dt:first-child{margin-top:0}
+.shell.field .dl dd{margin-bottom:0;font-weight:500}
+.chip{padding:7px 14px;border-radius:999px;border:1px solid var(--border-strong);background:#fff;color:#2a333d;font-size:13.5px;font-weight:500;min-height:36px;display:inline-flex;align-items:center;gap:6px}
+.chip:hover{border-color:var(--primary);color:var(--primary)}
+.chip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip:disabled{opacity:.5;cursor:not-allowed}
+
+/* Bloque repetido dentro de una tarjeta (insumo, lote, sector): fondo gris y borde marcado; el elegido va en blanco con borde verde. */
+.blk{background:#f3f5f7;border:1px solid #c3cbd4;border-radius:var(--radius);padding:14px 16px}
+.blk.sel{background:#fff;border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+.insrow{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 36px;gap:0 18px;align-items:start}
+.insrow .ibtn{margin-top:26px}
+.lockedval{display:block;padding:9px 0;font-weight:600}
+.lockedval + .hint{margin-top:0}
+/* ---- formularios por secciones ---- */
+.sec{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow)}
+.sec.off{padding:16px 24px;background:#fbfbfc;box-shadow:none}
+.sec.off .sec-h{color:var(--faint)}
+.sec.hl{border:2px solid #d9962b;box-shadow:0 0 0 3px #fdf3e1;overflow:hidden}
+.sec.hl > .sec-h{background:#fdf1d9;margin:-22px -24px 18px;padding:14px 24px;border-bottom:1px solid #f0d49b}
+.sec.hl .sec-num{background:#fff;color:var(--status-warn)}
+.sec-h{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:600;margin-bottom:18px}
+.sec.off .sec-h{margin-bottom:0}
+.sec-num{width:26px;height:26px;border-radius:50%;background:var(--primary-soft);color:var(--primary);font-size:13px;font-weight:650;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec.off .sec-num{background:var(--secondary);color:var(--faint)}
+.footbar{position:sticky;bottom:0;background:var(--background);border-top:1px solid var(--border);padding:14px 0 18px;margin-top:22px;display:flex;gap:10px;flex-wrap:wrap;z-index:5}
+.with-aside{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start}
+.with-aside > aside{position:sticky;top:0;display:grid;gap:14px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.panel h3{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14.5px}
+.panel h3 svg{color:var(--muted-foreground)}
+.panel h3 .tag{margin-left:auto;font-weight:500}
+.checks{list-style:none;display:grid;gap:12px;font-size:13.5px}
+.checks li{display:flex;gap:10px;align-items:flex-start;line-height:1.45}
+.checks svg{flex-shrink:0;margin-top:1px}
+.checks li.ok svg{color:var(--status-ok)}
+.checks li.bad svg{color:var(--status-danger)}
+.checks li.bad{color:var(--status-danger)}
+.ritmo{display:grid;gap:14px}
+.ritmo .r{display:grid;gap:6px;font-size:13px}
+.ritmo .r .t{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ritmo .bar{position:relative;height:8px;border-radius:999px;background:var(--muted);overflow:hidden}
+.ritmo .bar span{position:absolute;left:0;top:0;bottom:0;background:var(--c);border-radius:999px}
+.ritmo .bar.over span{background:var(--status-warn)}
+.ritmo .bar i{position:absolute;top:0;bottom:0;width:2px;background:var(--foreground)}
+.empty{display:grid;justify-items:center;gap:8px;text-align:center;padding:40px 24px;background:#fff;border:1px dashed var(--border-strong);border-radius:var(--radius);color:var(--muted-foreground);font-size:14px}
+.empty svg{color:#aab3bd}
+.empty b{color:var(--foreground);font-size:15px}
+.empty .btn{margin-top:6px}
+.gh{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:0;display:grid;text-align:left;width:100%;box-shadow:var(--shadow);overflow:hidden}
+button.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,24,40,.08)}
+.gh.off{background:#fcfcfd}
+.gh .gh-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 22px 4px}
+.gh .gh-h .nm{font-size:16.5px;font-weight:650}
+.capc{display:grid;justify-items:end;gap:1px;margin-left:auto;text-align:right}
+.capc .sub3{font-size:13px;color:var(--muted-foreground);white-space:nowrap;font-variant-numeric:tabular-nums}
+.gh .gh-a{padding:0 22px 16px;font-size:13.5px;color:var(--muted-foreground)}
+.gh .gh-p{padding:14px 22px;border-top:1px solid var(--border);background:var(--subtle)}
+.gh .gh-c{padding:14px 22px 18px;border-top:1px solid var(--border)}
+.lock{display:inline-flex;align-items:center;gap:5px;color:var(--muted-foreground);font-size:13px}
+.opt{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:13px 15px}
+.opt:hover:not([aria-disabled="true"]){border-color:var(--primary)}
+.opt[aria-pressed="true"]{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 1px var(--primary)}
+.opt[aria-disabled="true"]{cursor:help;background:#fafbfb;border-color:var(--border)}
+.opt[aria-disabled="true"] .t b{color:#505b67}
+.opt .t{flex:1;min-width:0}
+.opt .t b{display:block;font-size:14px}
+.opt .t span{display:block;font-size:13px;color:var(--muted-foreground);line-height:1.5}
+.opt .t b span,.opt .t .row span{display:inline}
+.opt .t .etapa{display:inline-flex}
+.opt .t .row{display:flex}
+.opt .t .ciclo{display:flex}
+.opt .t .ciclo span{display:block}
+.splits{background:var(--subtle);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-top:10px;display:grid;gap:10px}
+.splits .s{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;align-items:center;font-size:13px}
+.tl{list-style:none;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.tl li{display:grid;grid-template-columns:56px 250px 1fr;gap:16px;padding:13px 20px;border-bottom:1px solid var(--border);font-size:14px;align-items:start}
+.tl li:last-child{border-bottom:none}
+.tl .when{color:var(--muted-foreground);font-size:13px;font-variant-numeric:tabular-nums;padding-top:2px}
+.tl .tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.day-h{display:flex;align-items:center;gap:12px;margin:24px 0 8px;font-size:13.5px;font-weight:600;color:var(--foreground)}
+.day-h:first-child{margin-top:0}
+.day-h .rel{font-weight:500;color:var(--muted-foreground);font-size:13px}
+.day-h .line{flex:1;height:1px;background:var(--border)}
+.filters.bit{margin-bottom:6px}
+.filters.bit .field-input{min-width:150px}
+.filters.bit input.q{min-width:230px}
+.lotcard{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.lotcard .lh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 20px 12px}
+.lotcard .lh .nm{font-size:15.5px;font-weight:650}
+.lotcard .lf{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:12px 20px 14px;border-top:1px solid var(--border);font-size:13px;color:var(--muted-foreground)}
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .bar{width:90px;height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
+.meter .bar span{display:block;height:100%;border-radius:999px;background:var(--mc)}
+.recap{border:1px solid color-mix(in srgb,var(--primary) 35%,#fff);background:#fbfdfc}
+.recap .card-title{color:var(--primary)}
+
+/* ---- celular: bandeja del Capataz ---- */
+.grp-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted-foreground);margin:22px 0 10px}
+.grp-h:first-of-type{margin-top:8px}
+.grp-h .n{background:var(--secondary);border-radius:999px;padding:0 8px;font-weight:600;font-size:12px}
+.grp-h.late{color:var(--status-danger)}
+.grp-h.late .n{background:var(--danger-bg)}
+.grp-h.today{color:var(--primary)}
+.grp-h.today .n{background:var(--primary-soft)}
+.ocard{position:relative;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:12px;box-shadow:var(--shadow)}
+.ocard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--border-strong)}
+.ocard.late::before{background:var(--status-danger)}
+.ocard.today::before{background:var(--primary)}
+.ocard .b{padding:14px 16px 14px 18px;display:grid;gap:8px}
+.ocard .ti{display:flex;gap:12px;align-items:center}
+.ocard .ico{width:38px;height:38px;border-radius:10px;background:var(--primary-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary)}
+.ocard .when{display:flex;gap:8px;align-items:center;font-size:13px;flex-wrap:wrap}
+.ocard .btn{border-radius:0;width:100%;border:none;border-top:1px solid var(--border)}
+.ocard .btn-ghost{background:#fff}
+.stepper{display:grid;grid-template-columns:52px 1fr 52px;gap:8px;align-items:center}
+.stepper button{min-height:50px;font-size:22px;border:1px solid var(--border-strong);background:#fff;color:var(--primary);border-radius:10px}
+.stepper button:active{background:var(--primary-soft)}
+.stepper input{min-height:50px;text-align:center;font-variant-numeric:tabular-nums;font-size:18px;font-weight:600;border-radius:10px}
+.steps{display:flex;gap:6px;margin-bottom:10px}
+.steps i{flex:1;height:5px;border-radius:999px;background:var(--border)}
+.steps i.on{background:var(--primary)}
+
+@media(max-width:1000px){
+  .with-aside{grid-template-columns:1fr}
+  .with-aside > aside{position:static}
+  .kpis{grid-template-columns:1fr 1fr}
+  .split{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .shell:not(.field){grid-template-columns:1fr}
+  aside.side{display:none}
+  main.main{padding:18px 16px 0}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .dl{grid-template-columns:1fr;gap:2px}
+  .dl dd{margin-bottom:10px}
+  .people{grid-template-columns:1fr 1fr}
+  .pop{right:8px;left:8px;width:auto}
+  .acct .who{display:none}
+  .tl li{grid-template-columns:1fr;gap:4px}
+  .etapa-row{grid-template-columns:44px 1fr}
+  .etapa-row .dur{grid-column:2}
+  .mnav{display:flex}
+  .sgrid{grid-template-columns:1fr}
+  .lotlist .li{grid-template-columns:1fr 1fr}
+  .lotlist .li .act{justify-content:flex-start}
+  #toasts{top:62px;right:12px}
+}
+.mnav{display:none;gap:6px;overflow-x:auto;margin-bottom:16px}
+@media(min-width:1100px){.tablewrap{overflow:visible}}
+.tablewrap thead tr:first-child th:first-child{border-top-left-radius:9px}
+.tablewrap thead tr:first-child th:last-child{border-top-right-radius:9px}
+.facts.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.facts.three > .full{grid-column:1/-1}
+.shell.field .mnav{display:none}
+.field .kpis{grid-template-columns:1fr 1fr}
+.field .grid2,.field .grid3{grid-template-columns:1fr}
+.field .with-aside,.field .split{grid-template-columns:1fr}
+.field .page-h{margin-bottom:16px}
+.field .card{padding:18px}
+.field .dl{grid-template-columns:120px 1fr;gap:8px 14px}
+.with-aside > aside,.with-aside > div,.panel{min-width:0}
+
+</style></head><body><div id="root"></div><script>
+function ic(n,s){s=s||16;const p={
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',check:'<polyline points="20 6 9 17 4 12"/>',
+  warn:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
+  x:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  chev:'<polyline points="6 9 12 15 18 9"/>',right:'<polyline points="9 6 15 12 9 18"/>',back:'<polyline points="15 18 9 12 15 6"/>',plus:'<path d="M12 5v14M5 12h14"/>',
+  home:'<path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M9 21v-6h6v6"/>',leaf:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10zM2 21c0-3 1.9-5.5 6-7"/>',
+  gear:'<path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.1.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.1.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7V20a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.1-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.1-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',ext:'<path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>',
+  box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  tool:'<path d="M14.7 6.3a4 4 0 0 0 5 5L11 20a2.1 2.1 0 0 1-3-3z"/><path d="M14.7 6.3 17 4l3 3-2.3 2.3"/>',sprout:'<path d="M12 21v-9M12 12c0-4-3-6-7-6 0 4 3 6 7 6zM12 15c0-3 2.5-5 6-5 0 3-2.5 5-6 5z"/>',
+  move:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',cut:'<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/>',
+  drop:'<path d="M12 2.7 6.3 8.4a8 8 0 1 0 11.4 0z"/>',cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  grid:'<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  leafmark:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',minus:'<path d="M5 12h14"/>',dots:'<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',pin:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',wifi:'<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/>',addto:'<path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M12 11v6M9 14h6"/>',off:'<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',pencil:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',ret:'<path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/>'};
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p[n]}</svg>`}
+
+/* ===== Prototipo · Transportista en el invernadero (MAE-05, D-55) =====
+   Guía visual de MAE-05. Manda el caso de uso (docs/casos_de_uso/maestros/invernaderos.md y usuarios.md): si algo difiere, avisá (L7).
+   Cada pantalla es una función; buscala con Grep:
+     logistica(inv, conComercial)  → tarjeta «Logística» de la ficha (regla 3 de PROD-CNS-INV)
+     ventanaAgregar(caso)          → «Agregar transportista» (reglas 8 a 10 de PROD-MOD-INV)
+     ventanaQuitar(caso)           → «Quitar transportista» (reglas 9 y 10 de PROD-MOD-INV)
+     personalPorAsignar()          → sección del Panel de control del Gerente (regla 5 de PROD-CNS-INV)
+     fichaDeCuenta()               → dato «Invernadero» en la ficha de la cuenta y en «Mi perfil» (USR-CNS-USR 3, USR-GST-PRF 1)
+     bajaDeCuentaEnRuta()          → ventana de baja de un Transportista en ruta (USR-BAJ-USR, precondición nueva)
+   «Con comercial» muestra lo que llega por los puntos de extensión que registra `comercial` (vehículo, ruta, entregas). Mientras
+   `comercial` no exista, MAE-05 muestra la versión «Sin comercial»: sin esas columnas y sin esos bloqueos. */
+const _ic=ic;ic=(n,s)=>n==='truck'?`<svg width="${s||16}" height="${s||16}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 4h14v12H1zM15 9h4l3 3v4h-7z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18" cy="18.5" r="2"/></svg>`:_ic(n,s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const badge=(k,t)=>`<span class="status-badge status-${k}">${t}</span>`;
+const alertBox=(k,h)=>`<div class="alert alert-${k}" role="${k==='danger'?'alert':'status'}">${ic(k==='ok'?'check':k==='info'?'info':'warn')}<div>${h}</div></div>`;
+const TRS=[
+ {n:'Diego Ferreyra',est:'activo',inv:'Invernadero Norte',veh:'Camioneta AE123CD',cap:'800 kg',ruta:false,ent:0},
+ {n:'Carla Sosa',est:'activo',inv:'Invernadero Norte',veh:'Furgón AB456KL',cap:'600 kg',ruta:true,ent:3},
+ {n:'Ana Torres',est:'inactivo',inv:'Invernadero Norte',veh:null,ruta:false,ent:0},
+ {n:'Julio Paz',est:'activo',inv:'Invernadero Sur',veh:'Utilitario NKO412',cap:'450 kg',ruta:false,ent:2},
+ {n:'Marcos Vera',est:'activo',inv:'',veh:null,ruta:false,ent:0}];
+
+function logistica(inv,ger,conComercial){const trs=TRS.filter(t=>t.inv===inv);
+ const cols=`<th>Transportista</th>${conComercial?'<th>Vehículo</th><th>Situación</th><th class="right">Entregas a realizar</th>':''}${ger?'<th style="width:90px"></th>':''}`;
+ const row=t=>`<tr><td><b>${esc(t.n)}</b>${t.est==='activo'?'':' '+badge('warn','Inactivo')}</td>${conComercial?`<td>${t.veh?`${t.veh}<span class="sub2">${t.cap}</span>`:badge('warn','Sin vehículo')}</td><td>${t.ruta?badge('info','En ruta'):badge('neutral','En el invernadero')}</td><td class="right">${t.ent}</td>`:''}${ger?`<td class="right"><button class="rowlink" data-ver="quitar-ok">Quitar</button></td>`:''}</tr>`;
+ return `<div class="card seg" style="margin-bottom:20px"><div class="card-h"><h3>${ic('truck')} Logística</h3><span class="spacer"></span>${ger?`<button class="btn btn-primary btn-sm" data-ver="agregar">${ic('plus',15)} Agregar transportista</button>`:''}</div>
+ ${trs.length?`<div class="card-b flush"><table class="data-table"><thead><tr>${cols}</tr></thead><tbody>${trs.map(row).join('')}</tbody></table></div>`:`<div class="card-b muted">El invernadero no tiene transportistas. Puede vender con retiro; las entregas con envío necesitan uno.${ger?' Agregalos con «Agregar transportista».':''}</div>`}</div>`}
+
+function ficha(inv,ger,conComercial){return `<div class="page"><span class="back">${ic('back',15)} Producción</span><div class="page-h"><h1>${inv}</h1>${badge('ok','Activo')}<span class="spacer"></span>${ger?`<span class="btn btn-ghost">${ic('pencil',14)} Modificar</span>`:''}</div>
+ <div class="split" style="margin-bottom:20px"><div class="card seg"><div class="card-h"><h3>${ic('pin',14)} Ubicación</h3></div><div class="card-b muted">(sin cambios)</div></div><div class="card seg"><div class="card-h"><h3>${ic('users',14)} Equipo</h3></div><div class="card-b muted">(sin cambios: Agrónomo, Capataz, Vendedor y Técnico)</div></div></div>
+ ${logistica(inv,ger,conComercial)}
+ <div class="card seg"><div class="card-h"><h3>${ic('grid',14)} Capacidad</h3></div><div class="card-b muted">(sin cambios: capacidad y pestaña «Sectores»)</div></div></div>`}
+
+const OPS=[{n:'Marcos Vera',inv:'',veh:null},{n:'Julio Paz',inv:'Invernadero Sur',veh:'NKO412'}];
+function ventanaAgregar(caso){const sel=caso==='libre'?'Marcos Vera':caso?'Julio Paz':'';const t=OPS.find(o=>o.n===sel);
+ let aviso='';if(caso==='traslado')aviso=alertBox('warn','Julio Paz trabaja para Invernadero Sur. Al confirmar, pasa a Invernadero Norte y deja de trabajar para Invernadero Sur. Se le avisa.');
+ if(caso==='entregas')aviso=alertBox('danger','Julio Paz tiene 2 entregas a realizar en Invernadero Sur. Reasignalas antes de trasladarlo. <a href="#">Ver sus entregas</a>');
+ if(caso==='ruta')aviso=alertBox('danger','Julio Paz está en ruta: el producto de sus entregas de hoy está en su vehículo. Podés trasladarlo cuando finalice la ruta.');
+ const bloq=caso==='entregas'||caso==='ruta',btn=caso==='traslado'?'Confirmar traslado':caso==='libre'?'Agregar':'Agregar';
+ return `<h2>Agregar transportista a Invernadero Norte</h2><p class="muted sm" style="margin-bottom:12px">Se ofrecen los transportistas activos que no trabajan para este invernadero: los que no tienen invernadero y los de otros (se trasladan).</p>
+ <div style="display:grid;gap:8px;margin-bottom:14px">${OPS.map(o=>`<label class="opt" aria-pressed="${o.n===sel}"><input type="radio" name="t" ${o.n===sel?'checked':''}><span class="t"><b>${o.n}</b><span>${o.inv?'Trabaja para '+o.inv:'Sin invernadero'}${o.veh?' · vehículo '+o.veh:' · sin vehículo'}</span></span></label>`).join('')}</div><p class="hint" style="margin:-6px 0 12px">El vehículo de cada uno se muestra solo cuando exista el módulo comercial.</p>
+ ${aviso}<div class="acts"><button class="btn btn-primary" ${!t||bloq?'disabled':''}>${btn}</button><button class="btn btn-ghost">Volver</button></div>`}
+function ventanaQuitar(caso){const t='Carla Sosa';
+ if(caso==='ruta')return `<h2>Quitar a ${t}</h2>${alertBox('danger','Está en ruta: sus entregas de hoy están cargadas en su vehículo y no se pueden reasignar. Podés quitarla cuando finalice la ruta.')}<div class="acts"><button class="btn btn-ghost">Volver</button></div>`;
+ if(caso==='entregas')return `<h2>Quitar a ${t}</h2>${alertBox('danger','Tiene 3 entregas a realizar. Reasignalas a otro transportista antes de quitarla.')}<div class="acts"><a class="btn btn-primary" href="#">Ver sus entregas</a><button class="btn btn-ghost">Volver</button></div>`;
+ return `<h2>Quitar a ${t}</h2><p>Deja de trabajar para Invernadero Norte y queda sin invernadero: no recibe entregas hasta que se la agregue a otro. Se le avisa.</p><p class="muted sm">Aparece en «Personal por asignar» del Panel de control mientras siga sin invernadero.</p><div class="acts"><button class="btn btn-danger">Quitar</button><button class="btn btn-ghost">Volver</button></div>`}
+
+function personalPorAsignar(){const row=(ico,col,b,d,btn)=>`<div class="row" style="padding:14px 20px;border-top:1px solid var(--border)"><span style="color:var(--status-${col});display:flex">${ic(ico)}</span><div style="flex:1;min-width:220px"><b>${b}</b><span class="muted sm" style="display:block">${d}</span></div>${btn}</div>`;
+ return `<div class="page narrow"><div class="card seg"><div class="card-h"><h3>${ic('users')} Personal por asignar</h3><span class="spacer"></span>${badge('warn','2 pendientes')}</div><div>
+ ${row('warn','warn','Invernadero Sur','Falta Capataz',`<span class="btn btn-ghost btn-sm">Asignar</span>`).replace('border-top:1px solid var(--border)','')}
+ ${row('info','info','Marcos Vera','Transportista sin invernadero: no recibe entregas. Es un aviso, no una alerta.',`<span class="btn btn-ghost btn-sm">Asignar</span>`)}
+ </div></div><p class="hint">«Asignar» del transportista lleva a la lista de invernaderos: se elige uno y se lo agrega desde «Logística». Un invernadero sin transportistas no aparece acá (decisión D).</p></div>`}
+
+function fichaDeCuenta(){return `<div class="page narrow"><div class="page-h"><h1>Marcos Vera</h1>${badge('ok','Activo')}</div><div class="card seg"><div class="card-b flush"><div class="facts two">
+ <div><span class="k">Rol</span><span class="v">Transportista</span></div><div><span class="k">Email</span><span class="v">mvera@ejemplo.com</span></div>
+ <div class="full"><span class="k">Invernadero</span><span class="v"><span class="muted">Sin invernadero</span></span><span class="d" style="font-size:13px;color:var(--muted-foreground)">Se asigna desde la ficha del invernadero, en «Logística».</span></div>
+ </div></div></div><p class="hint">Igual en «Mi perfil» del Transportista, sin la nota. Con invernadero: su nombre. Solo lectura. El alta y la modificación de la cuenta no piden invernadero.</p></div>`}
+
+function bajaDeCuentaEnRuta(){return `<h2>Dar de baja a Carla Sosa</h2>${alertBox('danger','Está en ruta: el producto de sus entregas de hoy está en su vehículo. Podés darla de baja cuando finalice la ruta; entonces sus entregas a realizar quedan sin transportista, con su alerta.')}<div class="acts"><button class="btn btn-ghost">Volver</button></div>`}
+
+const PANTALLAS=[
+ ['Ficha · Gerente · sin comercial (lo que entrega MAE-05)',()=>ficha('Invernadero Norte',true,false)],
+ ['Ficha · Gerente · con comercial (cuando exista)',()=>ficha('Invernadero Norte',true,true)],
+ ['Ficha · Agrónomo (solo lectura)',()=>ficha('Invernadero Norte',false,true)],
+ ['Ficha · sin transportistas',()=>ficha('Invernadero Este',true,true)],
+ ['Agregar · nada elegido',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaAgregar('')}</div>`],
+ ['Agregar · sin invernadero',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaAgregar('libre')}</div>`],
+ ['Agregar · traslado',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaAgregar('traslado')}</div>`],
+ ['Agregar · traslado con entregas (con comercial)',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaAgregar('entregas')}</div>`],
+ ['Agregar · traslado en ruta (con comercial)',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaAgregar('ruta')}</div>`],
+ ['Quitar · se puede',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaQuitar('ok')}</div>`],
+ ['Quitar · con entregas (con comercial)',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaQuitar('entregas')}</div>`],
+ ['Quitar · en ruta (con comercial)',()=>`<div class="modal" style="position:static;margin:0 auto">${ventanaQuitar('ruta')}</div>`],
+ ['Panel de control · Personal por asignar',personalPorAsignar],
+ ['Cuenta del Transportista · ficha',fichaDeCuenta],
+ ['Baja de cuenta · Transportista en ruta (con comercial)',()=>`<div class="modal" style="position:static;margin:0 auto">${bajaDeCuentaEnRuta()}</div>`]];
+let cur=0;
+function render(){document.getElementById('root').innerHTML=`<div style="padding:20px 28px;max-width:1200px;margin:0 auto"><div class="proto" style="margin-bottom:18px"><div class="proto-title">Solo prototipo · elegí la pantalla</div><select class="field-input" id="sel" style="max-width:520px">${PANTALLAS.map((p,i)=>`<option value="${i}"${i===cur?' selected':''}>${p[0]}</option>`).join('')}</select></div>${PANTALLAS[cur][1]()}</div>`;
+ document.getElementById('sel').onchange=e=>{cur=+e.target.value;render()};
+ document.querySelectorAll('[data-ver]').forEach(b=>b.onclick=()=>{cur=b.dataset.ver==='agregar'?4:9;render()})}
+render();
+
+</script></body></html>

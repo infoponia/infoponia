@@ -67,3 +67,25 @@ Prueba mínima: pestaña registrada se muestra; sin registrantes no hay pestaña
 - **Función nueva** `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio(sector)`: cambia `estado_sector` a «fuera de servicio» y nada más. **No** audita, **no** valida el rol y **no** bloquea: el llamador (`poner_fuera_de_servicio`, de `produccion`) ya bloqueó el sector con `bloquear_sectores` **antes** de llamarla (después del cambio `bloquear_sectores` ya no lo acepta, porque solo toma activos). Prueba mínima en `maestros`: cambia el estado; con un sector que no está activo lanza `ValueError`.
 - **Punto nuevo** `registrar_efecto_de_baja_de_sector` (tabla de «Sectores»). Prueba mínima en `maestros`: sin registrantes la baja funciona igual; con uno, se llama una vez, dentro de la transacción y con el sector bloqueado; si lanza, no queda nada hecho.
 - Si hace falta tocar más que esto en `maestros`, frená y avisá.
+
+## Transportistas (MAE-05, D-55)
+
+`maestros` guarda a qué invernadero pertenece cada Transportista (`TransportistaInvernadero`). No conoce `Entrega` ni `Vehiculo`,
+que vivirán en `comercial`. Por eso pregunta por estos dos puntos, que declara MAE-05 en `maestros/extensiones.py`. Sin
+registrantes, los dos dan su resultado neutro.
+
+| Registro | Firma de la función registrada | Qué hace `maestros` con ella | Quién se registra |
+|---|---|---|---|
+| `registrar_impedimento_de_transportista(funcion)` | `funcion(transportista) -> list[Impedimento]` (el `namedtuple` ya existente). Códigos: `transportista_en_ruta` y `transportista_con_entregas`. Solo lectura: lo llama `maestros` con la cuenta y los invernaderos ya bloqueados | `impedimentos_de_transportista(transportista)`, todos juntos. Lo usan quitar y trasladar (reglas 9 y 10 de PROD-MOD-INV) y la ventana que los informa. Sin registrantes, lista vacía: no se bloquea nada | `comercial` |
+| `registrar_logistica_de_transportista(funcion)` | `funcion(transportistas) -> dict[int, Logistica]`, con `Logistica = namedtuple("Logistica", "vehiculo en_ruta entregas_a_realizar url_entregas")`. `vehiculo` es un texto («Camioneta AE123CD · 800 kg») o `None` (sin vehículo); `url_entregas` lleva a sus entregas (COM-ASG-TRP). **Admite un solo registrante**: una segunda llamada lanza `RuntimeError` | `logistica_de(transportistas)`: `None` si no hay registrante; si no, el diccionario. Sin registrante, «Logística» muestra solo el nombre y el estado de la cuenta, sin las columnas de vehículo, situación y entregas. Una sola llamada para toda la lista (sin consultas por fila) | `comercial` |
+
+`core` declara también dos puntos para la cuenta, en `core/extensiones.py`, porque `core` no puede importar `maestros` (A1):
+
+| Registro | Firma | Qué hace `core` con ella | Quién se registra |
+|---|---|---|---|
+| `registrar_impedimento_de_baja_de_cuenta(funcion)` | `funcion(cuenta) -> list[ImpedimentoDeCuenta]`, con `ImpedimentoDeCuenta = namedtuple("ImpedimentoDeCuenta", "codigo texto como_resolver")` | `baja_usuario` los junta después de bloquear la cuenta y, si hay alguno, rechaza la baja con esos códigos sin cambiar nada (precondición d de USR-BAJ-USR). La ventana de baja los muestra y no ofrece confirmar. Sin registrantes, ninguno | `comercial` (`transportista_en_ruta`) |
+| `registrar_datos_de_cuenta(funcion)` | `funcion(cuenta) -> list[DatoDeCuenta]`, con `DatoDeCuenta = namedtuple("DatoDeCuenta", "etiqueta valor nota")`; `valor` es texto plano (se escapa); `nota` es opcional | `datos_de_cuenta(cuenta)`: los muestran la ficha de la cuenta (regla 3 de USR-CNS-USR) y «Mi perfil» (regla 1 de USR-GST-PRF, sin la nota). Solo lectura | `maestros` (MAE-05: el «Invernadero» del Transportista) |
+
+Pruebas mínimas: sin registrantes, quitar y trasladar funcionan y «Logística» no muestra las columnas de `comercial`. Con un
+registrante falso, quitar y trasladar se rechazan con su código y no cambian nada. La baja de cuenta con un impedimento falso no
+cambia nada. Una segunda `registrar_logistica_de_transportista` lanza `RuntimeError`.

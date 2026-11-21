@@ -38,9 +38,12 @@ y, para los requisitos de seguridad, `test_seg_<numero>_<que_espera>`.
 Algunas partes dependen de tablas que todavía no existen. Siguen la regla de D-04: se agregan
 cuando se programe la tabla destino, y hasta entonces no se exigen.
 
-- **Invernadero del Transportista (R155):** precondición d, postcondición b y reglas 5 y 7 de
-  USR-ALT-USR; postcondición a de USR-MOD-USR; regla 3 de USR-CNS-USR; regla 1 de USR-GST-PRF.
-  Mientras no exista Invernadero, el Transportista se da de alta sin invernadero.
+- ~~**Invernadero del Transportista (R155)**~~: resuelto por D-55 (21/11/2026). El invernadero del Transportista se asigna
+  desde el invernadero, no desde la cuenta: se eliminan la precondición d y la postcondición b de USR-ALT-USR, y cambian
+  sus reglas 5 y 7, la postcondición a de USR-MOD-USR, la regla 3 de USR-CNS-USR y la regla 1 de USR-GST-PRF (ya
+  aplicado abajo; lo programa MAE-05).
+- **Baja de un Transportista en ruta** (precondición d de USR-BAJ-USR): la programa MAE-05 como punto de extensión de
+  `core`, y la conecta `comercial`, que es donde vive la ruta (D-55).
 - **Efectos de la baja sobre lo asignado:** postcondiciones e, f y g y regla 4 de USR-BAJ-USR
   (alertas por invernadero, pedidos y entregas).
 - **Ingreso con Google:** trabajo futuro; no se implementa en este bloque.
@@ -135,13 +138,13 @@ para que pueda operar en el Sistema.
 a. El actor está identificado en el Sistema con una cuenta activa de Gerente o de Administrador.
 b. No existe otra cuenta con el mismo email.
 c. Si el rol es Gerente, no hay un Gerente activo.
-d. Si el rol es Transportista, existe al menos un invernadero activo. *(Para más adelante.)*
+~~d. Si el rol es Transportista, existe al menos un invernadero activo.~~ *(Eliminada por D-55.)*
 
 **Postcondición:**
 a. Se creó una cuenta en estado «activo», con el rol indicado, nombre, apellido, email y teléfono si
 se indicó. Si se eligió la invitación, la cuenta quedó sin contraseña hasta que la persona la elija;
 si se eligió la contraseña temporal, tiene una generada por el Sistema.
-b. Si el rol es Transportista, la cuenta quedó asociada a su invernadero (R155). *(Para más adelante.)*
+~~b. Si el rol es Transportista, la cuenta quedó asociada a su invernadero (R155).~~ *(Eliminada por D-55.)*
 c. Según la forma de acceso elegida, se envió al email de la cuenta una invitación para que la
 persona elija su contraseña, o el Sistema le informó la contraseña temporal a quien hizo el alta,
 una única vez.
@@ -159,12 +162,11 @@ forma de acceso elegida.
 4. Quien da de alta elige cómo obtiene la persona su primer acceso: una invitación por correo (la
    opción por defecto) o una contraseña temporal generada por el Sistema. Nunca elige la contraseña
    (SEG-04 y SEG-20).
-5. Los invernaderos del Agrónomo, el Vendedor, el Técnico y el Capataz se asignan desde el
-   invernadero, y el vehículo del Transportista desde el vehículo; en el alta solo se indica el
-   invernadero del Transportista. *(Para más adelante.)*
+5. Los invernaderos del Agrónomo, el Vendedor, el Técnico y el Capataz, y el del Transportista, se asignan desde el
+   invernadero (PROD-ALT-INV y PROD-MOD-INV), y el vehículo del Transportista desde el vehículo. El alta no pide
+   invernadero para ningún rol. *(D-55)*
 6. El rol no se modifica después del alta (D-11).
-7. Son obligatorios el nombre, el apellido, el email y el rol; el teléfono es opcional; el invernadero
-   es obligatorio solo para el Transportista *(para más adelante)*.
+7. Son obligatorios el nombre, el apellido, el email y el rol; el teléfono es opcional. *(D-55)*
 8. Si el email pertenece a una cuenta inactiva, no se da de alta otra cuenta: se reactiva esa
    (USR-MOD-USR) y se conserva su historial. Si la persona necesita otro rol, se le da de alta una
    cuenta nueva con otro email o con un alias.
@@ -186,8 +188,8 @@ b. La cuenta a modificar está dentro de su alcance.
 c. Si cambia el email, no existe otra cuenta con el email nuevo.
 
 **Postcondición**, según lo que haya hecho el actor:
-a. Se actualizaron los datos personales indicados: nombre, apellido, email, teléfono y, si es
-Transportista, su invernadero *(para más adelante)*.
+a. Se actualizaron los datos personales indicados: nombre, apellido, email y teléfono. El invernadero del Transportista no
+se modifica acá: se cambia desde el invernadero (D-55).
 b. Si restableció el acceso, la contraseña anterior dejó de servir, se cerraron las sesiones abiertas
 con esa cuenta y la cuenta salió de su grupo de cuentas vinculadas. Además, según lo elegido, se
 envió una invitación al email de la cuenta, o la cuenta tiene una contraseña temporal nueva que se
@@ -225,6 +227,9 @@ que hizo.
 a. El actor está identificado en el Sistema con una cuenta activa de Gerente o de Administrador.
 b. La cuenta está activa y dentro de su alcance.
 c. Si la cuenta es de un Administrador, queda al menos otro Administrador activo.
+d. Si la cuenta es de un Transportista, no está en ruta (MD-118). Si lo está, el Sistema no la da de baja e informa que hay
+   que esperar a que finalice la ruta, porque el producto de sus entregas del día está en su vehículo. *(D-55; se conecta
+   cuando exista `comercial`.)*
 
 **Postcondición:**
 a. La cuenta quedó en estado «inactivo» (baja lógica).
@@ -270,8 +275,8 @@ a. No se producen cambios en el Sistema.
 2. Se filtra por rol y por estado, y se busca por nombre, apellido o email.
 3. Datos visibles de cada cuenta: nombre, apellido, email, teléfono, rol, estado, foto de perfil si
    tiene, si tiene una contraseña temporal sin cambiar y si venció, si tiene una invitación pendiente
-   (la persona todavía no eligió su contraseña) y si venció, el invernadero si es Transportista
-   *(para más adelante)*, y sus cuentas vinculadas en solo lectura. Nunca se muestra una contraseña.
+   (la persona todavía no eligió su contraseña) y si venció, el invernadero si es Transportista (solo para
+   consultar; «Sin invernadero» si no tiene; D-55), y sus cuentas vinculadas en solo lectura. Nunca se muestra una contraseña.
 4. La consulta no se audita (SEG-14).
 
 ## USR-GST-PRF · Gestionar Mi Perfil
@@ -288,7 +293,7 @@ se producen cambios en el Sistema.
 
 **Reglas:**
 1. Datos visibles: nombre, apellido, email, teléfono, rol, estado y foto de perfil de la cuenta con la
-   que opera; el invernadero, si es Transportista *(para más adelante)*; y sus cuentas vinculadas
+   que opera; el invernadero, si es Transportista (solo para consultar; «Sin invernadero» si no tiene; D-55); y sus cuentas vinculadas
    (las cuentas de Administrador no tienen vínculos). Nunca se muestra la contraseña.
 2. La persona no modifica sus datos personales desde el perfil: para corregirlos recurre a quien
    gestiona su cuenta (USR-MOD-USR). El Administrador sí modifica los suyos, porque gestiona su propia

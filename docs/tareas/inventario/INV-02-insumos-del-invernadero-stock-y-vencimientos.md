@@ -2,7 +2,8 @@
 
 Estado: pendiente | App: inventario | Rama: feature/inv-02-existencias-y-stock | Ronda: Producción 1
 
-Depende de: INV-01 (modelos, extensiones y catálogo; y por ella CON-01), UI-01 y NOT-01 (la campana ya muestra alertas). Si alguna no está hecha, frená.
+Depende de: INV-01 (modelos, extensiones y catálogo; y por ella CON-01), UI-01, NOT-01 (la campana ya muestra alertas) y DIA-01 (el
+proceso diario donde se registra la revisión de vencimientos, D-56). Si alguna no está hecha, frená.
 MAE-02a y MAE-02b (alertas y su Inicio) ya están hechas.
 
 Una tarea es un bloque funcional (D-44): se hace de corrido en una sesión y un PR. Aprobado el plan, no pidas permiso
@@ -18,7 +19,7 @@ seis motivos y un recuento por lote; si el tiempo apremia, mirá el final de «P
 | CMP-DSH-IIN | Deshabilitar Insumo en Invernadero | docs/casos_de_uso/inventario/insumo_invernadero.md | Orden de compra y pedidos en curso por punto de extensión (`compras`) |
 | CMP-CNS-IIN | Consultar Existencias de Insumos | docs/casos_de_uso/inventario/insumo_invernadero.md | Es la pestaña «Existencias de insumos» del prototipo |
 | CMP-AJT-STK | Ajustar Stock de Insumo | docs/casos_de_uso/inventario/ajuste_de_stock.md | **Sin asientos contables (D-45)**: las precondiciones c y d, la postcondición e y el asiento del paso 14 no se implementan; el valor del ajuste sí se muestra |
-| CMP-REV-VNC | Revisar Vencimientos de Insumos | docs/casos_de_uso/inventario/vencimientos.md | Comando de Django que corre como cron job de Render |
+| CMP-REV-VNC | Revisar Vencimientos de Insumos | docs/casos_de_uso/inventario/vencimientos.md | Paso 10 del proceso diario (D-56): se corre a mano con `proceso_diario`; el cron job se arma al final |
 
 Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `existencias`, `disponible_para_planificar`, `proponer_lotes_fefo`,
 `registrar_salida_por_consumo`, `reevaluar_alertas_del_insumo` y `habilitar_insumo`.
@@ -27,7 +28,7 @@ Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `ex
 
 - Casos de uso: los tres extractos de la tabla, completos, **incluida la sección «Cómo se aplica en la ronda»** de cada uno
 - Modelo: docs/modelo/inventario.md — las cinco fichas y «Diferencias con el caso de uso»
-- Decisiones: D-05, D-14, D-22, D-27, D-28, D-30, D-32, D-36, D-37, D-40, D-41, D-42, D-44, D-45, D-46, D-47
+- Decisiones: D-05, D-14, D-22, D-27, D-28, D-30, D-32, D-36, D-37, D-40, D-41, D-42, D-44, D-45, D-46, D-47, D-56
 - API: docs/api/stock.md, docs/api/extensiones_de_inventario.md, docs/api/alertas.md, docs/api/notificaciones.md
 - Patrones: docs/patrones/stock.md (todo), docs/patrones/abm.md, docs/patrones/bloqueos.md, docs/patrones/auditoria.md,
   docs/patrones/trabajo_en_paralelo.md
@@ -38,7 +39,7 @@ Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `ex
 - Reglas: .claude/rules/pruebas.md, .claude/rules/interfaz.md
 - Código a leer: lo que dejó INV-01 en `inventario/` (modelos, extensiones, fábricas, servicios de insumos), maestros/extensiones.py,
   maestros/servicios/alertas.py, maestros/servicios/invernaderos.py (`bloquear_invernadero_activo`), core/notificaciones.py y
-  core/extensiones.py (fuentes de alertas de la campana), core/tests/concurrencia.py
+  core/extensiones.py (fuentes de alertas de la campana), core/procesos.py (`registrar_paso_diario`, DIA-01), core/tests/concurrencia.py
 
 ## Límites
 
@@ -47,12 +48,12 @@ Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `ex
   acciones de auditoría (choices)
 - Permitido fuera de la app: `core/models.py` (solo `Accion`, `ETIQUETAS`, `VALORES_VISIBLES` y `ACCIONES_DE_NEGOCIO`:
   `habilitacion_insumo_invernadero`, `modificacion_insumo_invernadero`, `ajuste_stock`, `alerta_de_vencimiento`), su migración,
-  `core/menu.py` (si hace falta), `inventario/apps.py` (para registrar en `maestros`), y los textos de cierre de
+  `core/menu.py` (si hace falta), `inventario/apps.py` (para registrar en `maestros` y el paso diario en `core`), y los textos de cierre de
   `docs/disparadores.md`, `docs/tareas/README.md` y `docs/tareas/ronda_produccion_1.md`
 - Dependencias nuevas: ninguna
 - Fuera de alcance: asientos contables y sus precondiciones (D-45); pedidos, órdenes de compra y recepciones; el consumo de insumos por
   órdenes y aplicaciones (`produccion` llama a `registrar_salida_por_consumo`); las pantallas de alertas y la campana (NOT-01 y MAE-02c);
-  las variedades y su semilla (INV-03); crear el cron job en Render (es manual, ver «Verificación a mano»)
+  las variedades y su semilla (INV-03); **crear un cron job en Render: no se crea ninguno** hasta el final de la implementación (D-56)
 
 ## Pasos (en este orden; corré las pruebas del paso antes de seguir)
 
@@ -90,12 +91,16 @@ Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `ex
    `test_extension_7b_3a_…`), `test_cmp_ajt_stk_alertas.py` (h, i, j y 12b) y `test_cmp_ajt_stk_concurrencia.py` (ajuste contra consumo y
    ajuste contra ajuste, con la etiqueta `concurrencia`; la 14a). Cada una verifica los invariantes de las fábricas.
 7. **Revisión de vencimientos** en `inventario/servicios/vencimientos.py` (`revisar_vencimientos(hoy=None)`) y
-   `inventario/management/commands/revisar_vencimientos.py` (sin lógica; `--fecha` opcional). Según el extracto y su sección «Cómo se
+   `inventario/management/commands/revisar_vencimientos.py` (sin lógica; `--fecha` opcional). **Además, en `InventarioConfig.ready()`,
+   registrá el paso diario** (D-56): `registrar_paso_diario("revisar_vencimientos", "Revisar vencimientos de insumos", 10, paso)`, donde
+   `paso(hoy)` llama a `revisar_vencimientos(hoy)` y devuelve un `ResumenDePaso` (procesados: invernaderos revisados; creados y resueltos:
+   alertas). El comando propio y el paso usan la misma función. Según el extracto y su sección «Cómo se
    aplica»: una transacción por invernadero, idempotente, sin Agrónomo no alerta, el lote que vence resuelve la alerta de «por vencer»,
    regla 11 (bajo el mínimo), un registro de auditoría por alerta creada con `usuario=None`, código de salida distinto de cero si hubo
    una falla. Pruebas: `test_cmp_rev_vnc.py` (una por regla y por postcondición; el borde del día del vencimiento y de los 15 días; correr
    dos veces; un día salteado; cambio de `dias_aviso_vencimiento`; invernadero sin Agrónomo; lote agotado) y `test_comando_revisar_vencimientos.py`
-   (`call_command` con y sin `--fecha`; el código de salida con una falla simulada).
+   (`call_command` con y sin `--fecha`; el código de salida con una falla simulada) y, en `test_paso_diario_vencimientos.py`, que el paso
+   está registrado con el código y el orden de D-56 y que `call_command("proceso_diario", "--solo", "revisar_vencimientos")` lo corre.
 8. **Pantallas.** La pestaña «Existencias de insumos» (primera de «Inventario»; filas desplegables con lotes y sus estados; filtros del
    CU), los modales «Habilitar insumo», «Mínimo y precio» y «Deshabilitar» (con los impedimentos), el botón «Habilitar en un invernadero» en
    el catálogo y en el alta (que INV-01 dejó sin él), el aviso «Cargar stock inicial» y la pantalla «Ajustar stock» (invernadero, insumo,
@@ -104,7 +109,7 @@ Además crea la **API de stock** que usa `produccion` (`docs/api/stock.md`): `ex
    a cargo (403 al resto y a un Agrónomo ajeno). Pruebas: `inventario/tests/test_existencias_vistas.py`, `test_ajuste_vistas.py`
    (permisos, errores por campo, resumen, la advertencia 12b, el aviso 14a, el valor sin asiento) y la entrada del menú.
 9. **Cierre de documentación.** Proponé, sin aplicarlos (M3): cerrar «Cuando exista InsumoInvernadero» en `docs/disparadores.md`; completar «Cuando existan los pedidos de
-   `compras`» (los tres puntos ya existen) y agregar la nota de que el cron job de Render se crea a mano; marcar INV-02 en
+   `compras`» (los tres puntos ya existen); marcar INV-02 en
    `docs/tareas/README.md` y `docs/tareas/ronda_produccion_1.md`. Lo que dice la documentación distinto de lo implementado se propone para
    `docs/temas_abiertos.md`.
 
@@ -120,7 +125,7 @@ antes de partirla.
 - Ninguna operación deja un lote (que no sea el faltante) negativo ni cambia una cantidad sin su movimiento; las fábricas lo verifican en cada
   prueba de servicio.
 - El ajuste no genera asiento ni lo verifica (D-45) y muestra el valor.
-- `revisar_vencimientos` es idempotente y corre con `python manage.py revisar_vencimientos`.
+- `revisar_vencimientos` es idempotente y corre con `python manage.py revisar_vencimientos` y como paso 10 de `python manage.py proceso_diario`.
 - La baja de un invernadero con stock de insumos distinto de cero se rechaza, y la de uno en 0 pasa sus insumos a inactivos.
 - `docs/api/stock.md` coincide con lo implementado (nombres y firmas); si cambió algo, se corrige el documento en la misma tarea.
 - Comando de pruebas:
@@ -150,15 +155,14 @@ otro Agrónomo, Gerente. Datos: un insumo con vencimiento (por ejemplo, «Nutrie
 9. Modificar mínimo y precio: sin cambios no hay registro en «Auditoría»; con cambios, un registro con antes y después (como texto).
 10. Deshabilitar con stock: lista lo que lo impide. Con stock en 0: se deshabilita; volver a habilitar reactiva el mismo registro.
 11. Dar de baja el invernadero con stock de insumos distinto de cero: se rechaza e informa. Con todo en 0: los insumos quedan inactivos.
-12. `python manage.py revisar_vencimientos` en el servidor de desarrollo: genera las alertas «por vencer» (15 días) y «vencido» que correspondan;
-    correrlo de nuevo no duplica nada; `--fecha` con un día futuro simula el paso del tiempo.
+12. `python manage.py proceso_diario --listar` muestra el paso 10. `python manage.py proceso_diario` en el servidor de desarrollo genera las
+    alertas «por vencer» (15 días) y «vencido» que correspondan; correrlo de nuevo no duplica nada; `--fecha` con un día futuro simula el paso
+    del tiempo. `python manage.py revisar_vencimientos` hace lo mismo, solo con ese paso.
 13. Dos ajustes simultáneos sobre el mismo insumo (dos sesiones; si no, la prueba de concurrencia lo cubre): uno lo aplica y el otro ve «los datos
     cambiaron» sin error 500.
 14. Sin JavaScript, los pasos 1 a 5 funcionan igual.
-15. **Render (a mano, una sola vez):** crear un *Cron Job* con el mismo repositorio y rama, las mismas variables de entorno que el web service
-    (incluida la base de Neon), comando de compilación igual al del web service, comando de ejecución `python manage.py revisar_vencimientos` y
-    agenda `0 6 * * *` (03:00 de Argentina, porque Render usa UTC). Costo: Render cobra un mínimo de 1 dólar por mes por cron job; revisarlo antes
-    de crearlo. Después de una corrida, ver en el log el resumen del comando. Anotar el nombre del cron job en `docs/estado.md`.
+15. ~~Crear el cron job en Render~~: **no se crea** (D-56). El cron único se arma al final de la implementación (disparador «Cuando se
+    arme el cron único»).
 16. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)

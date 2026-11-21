@@ -36,7 +36,7 @@ Bloque: Producción, operaciones y trazabilidad. Vive en la app `maestros` (D-37
 | R097 | Vendedor, «abarca» | Invernadero → Vendedor = 1; Vendedor → Invernadero = 0..* | Ídem |
 | R134 | Técnico, «abarca» | Invernadero → Técnico = 1; Técnico → Invernadero = 0..* | Ídem |
 | R096 | Dirección, «tiene» | Invernadero → Dirección = 1; Dirección → Invernadero = 0..1 | Vigente |
-| R155 | Transportista, «pertenece» | Invernadero → Transportista = 0..*; Transportista → Invernadero = 1 | Vigente. Se asigna desde la cuenta del Transportista (regla 6 de PROD-ALT-INV) |
+| R155 | Transportista, «pertenece» | Invernadero → Transportista = 0..*; Transportista → Invernadero = 1 | **Cambia (MD-138, D-55, 21/11/2026):** Transportista → Invernadero = **0..1**. Se asigna desde el invernadero (bloque «Logística», reglas 8 a 11 de PROD-MOD-INV), no desde la cuenta. En el código es la tabla `TransportistaInvernadero` (ver abajo) |
 | R081 | Bitácora, «se realiza en» | Invernadero → Bitácora = 0..*; Bitácora → Invernadero = 1 | Vigente |
 | R133 | DetallePedido, «recibe» | 0..* – 1 | Vigente |
 | R136 | Siembra, «corresponde» | 0..* – 1 | Vigente |
@@ -56,6 +56,23 @@ Sin herencias.
 **Eliminadas:** R041 (MovimientoInsumo–Invernadero) y R071 (Hardware–Invernadero): el invernadero se obtiene por otro
 camino.
 
+### `TransportistaInvernadero` (R155 en el código, D-55, MAE-05)
+
+No es una clase del modelo de dominio: es cómo se guarda R155 en la base de datos. La declara `maestros` porque es la app de
+nivel mayor (regla A2 de D-37).
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `id` | automático | D-06 |
+| `transportista` | `OneToOneField("core.Transportista", on_delete=PROTECT, related_name="invernadero_asignado")` | El 0..1 lo garantiza la base de datos (único) |
+| `invernadero` | `ForeignKey(Invernadero, on_delete=PROTECT, related_name="transportistas_asignados")` | Con índice (la FK lo trae) |
+| `desde` | `DateTimeField` | Cuándo empezó a trabajar para este invernadero: se fija al agregar y al trasladar |
+
+- Para agregar, se crea la fila. Para trasladar, se cambian `invernadero` y `desde`. Para quitar, se borra la fila. El
+  historial queda en la auditoría.
+- La fila **no** se borra cuando se da de baja la cuenta del Transportista: queda como historial (regla 3 de PROD-BAJ-INV). Un
+  Transportista inactivo con fila no impide la baja del invernadero.
+
 ### Reglas que lo tocan
 
 - **Regla nueva (MD-87):** el nombre del invernadero es único, sin distinguir mayúsculas de minúsculas. Es la regla 1
@@ -64,7 +81,7 @@ camino.
   cuando el asignado pasa a inactivo. La del Técnico, solo si el invernadero tiene `SistemaIoT` (R068).
 - **Regla 4 de 8.4, reescrita (MD-87):** la baja se bloquea si el invernadero tiene lotes activos, órdenes a realizar,
   partidas de `StockCosechado` con cantidad disponible, algún `InsumoInvernadero` con stock distinto de 0, cantidad en
-  tránsito u orden de compra aprobada sin recibir, transportistas vinculados (R155, sin importar su estado) o un
+  tránsito u orden de compra aprobada sin recibir, transportistas vinculados (R155; **solo los activos**, D-39 y regla 3 de PROD-BAJ-INV) o un
   `SistemaIoT` activo. Son las precondiciones c a h de PROD-BAJ-INV.
 - **Reglas de 8.22 (MD-60):** cuando el Agrónomo, el Capataz, el Vendedor o el Técnico de un invernadero pasa a
   inactivo, el invernadero lo conserva hasta que el Gerente asigna a otro al modificarlo. Mientras tanto queda para el

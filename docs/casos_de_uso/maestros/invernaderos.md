@@ -1,7 +1,9 @@
 # Casos de uso · maestros · Invernadero
 
 Copia para el repo de los casos PROD-ALT-INV, PROD-MOD-INV, PROD-BAJ-INV y PROD-CNS-INV del documento de Drive
-«CU extendidos», consultados el 18/11/2026. Cotejado con pendientes_CU y con pendientes_MD hasta MD-96.
+«CU extendidos», consultados el 18/11/2026. Cotejado con pendientes_CU y con pendientes_MD hasta MD-96. **Actualizado el
+21/11/2026** con «CU · Transportista en el invernadero (v0.1)» (Drive) y MD-138: el Transportista se asigna desde el
+invernadero (D-55). Lo cambiado lleva la marca *(MAE-05)*.
 
 Si este archivo y el documento de Drive no coinciden, avisá: no elijas en silencio.
 
@@ -27,7 +29,7 @@ Para nombrar las pruebas: las reglas de cada caso de uso están numeradas, así 
 
 ## PROD-ALT-INV · Alta Invernadero
 
-**Actores:** Gerente. **Tipo:** secundario, esencial. **Versión:** 0.1
+**Actores:** Gerente. **Tipo:** secundario, esencial. **Versión:** 0.2
 
 **Objetivo:** registrar un invernadero nuevo con su nombre, su dirección y, si se conoce, su personal, para que el
 Agrónomo pueda registrar sus sectores y empezar a producir.
@@ -41,10 +43,12 @@ b. No existe otro invernadero con el mismo nombre.
 
 a. Se creó un invernadero en estado «activo», con su nombre, sin sectores, sin insumos habilitados y sin sistema IoT.
 b. Se creó su dirección, urbana o rural, con sus datos, ubicada en la localidad elegida.
-c. Si se asignaron, el invernadero quedó asociado a su Agrónomo, su Capataz y su Vendedor (R051, R149 y R097).
+c. Si se asignaron, el invernadero quedó asociado a su Agrónomo, su Capataz y su Vendedor (R051, R149 y R097) y a sus
+   transportistas (R155). *(MAE-05)*
 d. Por cada uno de esos tres roles que quedó sin asignar, quedó para el Gerente una alerta activa «invernadero sin
    {rol} activo».
-e. Cada persona asignada recibió una notificación dentro del Sistema que le avisa que quedó a cargo del invernadero.
+e. Cada persona asignada, incluido cada transportista, recibió una notificación dentro del Sistema que le avisa que quedó a
+   cargo del invernadero o, si es Transportista, que pasó a trabajar para él. *(MAE-05)*
 f. Se creó un log de auditoría con usuario, rol, fecha, hora e identificador del invernadero creado.
 
 **Reglas:**
@@ -61,8 +65,14 @@ f. Se creó un log de auditoría con usuario, rol, fecha, hora e identificador d
    invernaderos.
 5. El Técnico solo hace falta si el invernadero tiene sistema IoT. Como un invernadero nuevo no lo tiene, no genera la
    alerta de Técnico faltante.
-6. Los transportistas no se asignan acá: cada uno se vincula a su invernadero desde su cuenta (USR-ALT-USR y
-   USR-MOD-USR).
+6. Los transportistas son opcionales y pueden ser varios (R155: Invernadero → Transportista = 0..\*). Se ofrecen solo los
+   transportistas activos que no pertenecen a otro invernadero. Un Transportista pertenece a un solo invernadero o a ninguno
+   (Transportista → Invernadero = 0..1); para pasarlo de otro invernadero se usa PROD-MOD-INV sobre el invernadero de
+   destino. Un invernadero sin transportistas no genera alerta: puede vender solo con retiro. *(MAE-05)*
+
+   **Cómo se aplica (MAE-05):** el formulario de alta no cambia. Los transportistas se agregan después del alta, desde el
+   bloque «Logística» de la ficha, que es parte de PROD-MOD-INV (reglas 8 a 11). Así hay un solo lugar para agregarlos, y la
+   postcondición c y la e de este caso se cumplen con «Agregar transportista».
 7. El alta no crea sectores, porque los registra el Agrónomo del invernadero. Mientras no tenga sectores, el
    invernadero muestra la marca «sin sectores: todavía no se puede sembrar».
 8. El sistema IoT se registra en el bloque IoT, no acá.
@@ -71,9 +81,10 @@ f. Se creó un log de auditoría con usuario, rol, fecha, hora e identificador d
 
 ## PROD-MOD-INV · Modificar Invernadero
 
-**Actores:** Gerente. **Tipo:** secundario, esencial. **Versión:** 0.1
+**Actores:** Gerente. **Tipo:** secundario, esencial. **Versión:** 0.2
 
-**Objetivo:** actualizar el nombre, la dirección o el personal de un invernadero, o reactivar uno dado de baja.
+**Objetivo:** actualizar el nombre, la dirección o el personal de un invernadero, incluidos sus transportistas, o reactivar
+uno dado de baja.
 
 **Precondición:**
 
@@ -96,6 +107,10 @@ d. Si dejó un rol sin asignar, quedó para el Gerente una alerta activa «inver
 e. Si reactivó el invernadero, quedó en estado «activo», sus sectores y sus insumos siguieron inactivos, y quedó una
    alerta «invernadero sin {rol} activo» por cada rol sin una persona activa.
 f. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador del invernadero y los cambios.
+g. Si agregó transportistas, quedaron asociados al invernadero (R155); si alguno pertenecía a otro invernadero, dejó de
+   pertenecer a ese (traslado). Si quitó transportistas, quedaron sin invernadero. Cada transportista agregado, trasladado o
+   quitado recibió una notificación dentro del Sistema con el cambio. El log de auditoría de la postcondición f incluye estos
+   cambios. *(MAE-05)*
 
 **Reglas:**
 
@@ -110,6 +125,26 @@ f. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 6. La reactivación no reactiva sus sectores ni sus insumos. Los sectores los reactiva el Agrónomo con PROD-MOD-SCT, y
    los insumos se vuelven a habilitar con Habilitar Insumo en Invernadero.
 7. El sistema IoT no se modifica acá: su estado lo informa el bloque IoT.
+8. Se agrega un transportista eligiéndolo entre los activos: los que no tienen invernadero y los de otros invernaderos (se
+   muestra a cuál pertenecen). Elegir uno de otro invernadero lo traslada, y el Sistema lo informa antes de confirmar.
+   *(MAE-05)*
+9. No se quita ni se traslada a un Transportista que tiene entregas a realizar. El Sistema lo informa con sus entregas y un
+   acceso a COM-ASG-TRP para reasignarlas antes. *(MAE-05)*
+10. No se quita ni se traslada a un Transportista que está en ruta (MD-118), y sus entregas del día tampoco se pueden
+    reasignar mientras lo esté, porque el producto ya está cargado en su vehículo. Hay que esperar a que deje de estar en
+    ruta (al finalizar la ruta o al terminar el día) y reasignar las entregas que no haya cumplido. *(MAE-05)*
+11. El vehículo no se cambia acá: sigue a su transportista (COM-MOD-VEH) y trabaja para el invernadero de él. *(MAE-05)*
+
+**Cómo se aplica (MAE-05):**
+
+- Agregar y quitar transportistas son dos acciones propias del bloque «Logística» de la ficha, cada una con su ventana y su
+  confirmación, no campos del formulario «Modificar». Cada una guarda por separado y deja su log
+  (`modificacion_invernadero`, con el cambio de «transportistas»). En un traslado cambian dos invernaderos, y queda un log en
+  cada uno.
+- Un invernadero inactivo no se modifica (regla 5): no se agregan ni se quitan transportistas.
+- Las reglas 9 y 10 dependen de `Entrega` y `Vehiculo`, que vivirán en `comercial`. Mientras `comercial` no exista, no hay
+  entregas ni rutas, así que no bloquean nada. Se conectan por un punto de extensión (D-55).
+- Un Transportista **inactivo** vinculado se muestra con la marca «Inactivo» y se puede quitar. No se ofrece para agregar.
 
 ---
 
@@ -148,8 +183,8 @@ f. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 2. Si no se cumple alguna de las precondiciones c a h, el Sistema no da de baja el invernadero e informa todo lo que lo
    impide, cada cosa con cómo resolverla: los lotes activos se cosechan o se registra su merma; las órdenes se
    concretan o se cancelan; las partidas en cámara se venden o se registra su merma; el stock se usa o se ajusta a
-   cero; la mercadería en camino se recibe o se cierra la orden de compra; los transportistas activos se vinculan a
-   otro invernadero con USR-MOD-USR; el sistema IoT se da de baja en el bloque IoT.
+   cero; la mercadería en camino se recibe o se cierra la orden de compra; los transportistas activos se trasladan a otro
+   invernadero o se quitan desde «Logística» (PROD-MOD-INV) *(MAE-05)*; el sistema IoT se da de baja en el bloque IoT.
 3. Los transportistas inactivos vinculados no impiden la baja: quedan como historial, igual que el resto del personal.
 4. Un invernadero inactivo no aparece en las planificaciones, en los pedidos, en la asignación de stock ni en el
    reintento diario de las entregas.
@@ -159,7 +194,7 @@ f. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 
 ## PROD-CNS-INV · Consultar Invernadero
 
-**Actores:** Gerente y Agrónomo, cada uno con su alcance (regla 1). **Tipo:** secundario, esencial. **Versión:** 0.2
+**Actores:** Gerente y Agrónomo, cada uno con su alcance (regla 1). **Tipo:** secundario, esencial. **Versión:** 0.3
 
 **Objetivo:** consultar los invernaderos, ver su estado, su capacidad y su personal, y acceder a la ficha de cada uno.
 
@@ -180,10 +215,12 @@ a. No se producen cambios en el Sistema.
    «inactivo» cuando corresponde. Se marcan los invernaderos sin sectores («todavía no se puede sembrar») y los que
    tienen personal por asignar.
 3. En la ficha se ven la ubicación (la dirección, el departamento, la zona urbana o rural y el estado del sistema IoT);
-   el equipo; la capacidad por tipo de etapa (los agujeros, los libres y la cantidad de sectores); y pestañas con los
+   el equipo; debajo del equipo, la lista «Logística» con los transportistas del invernadero, cada uno con su estado y su
+   vehículo (patente, tipo y capacidad) o la marca «sin vehículo» *(MAE-05; el vehículo, cuando exista `comercial`)*; la capacidad por tipo de etapa (los agujeros, los libres y la cantidad de sectores); y pestañas con los
    sectores, los lotes activos, el stock en cámara y la bitácora (PROD-CNS-BIT).
 4. Si al invernadero le falta personal, la ficha lo avisa. Al Gerente le ofrece ir a PROD-MOD-INV para asignarlo.
-5. En su Inicio, el Gerente ve los invernaderos con personal por asignar, con un acceso a PROD-MOD-INV para cada uno.
+5. En su Inicio, el Gerente ve los invernaderos con personal por asignar, con un acceso a PROD-MOD-INV para cada uno, y los
+   transportistas activos sin invernadero, como aviso (no es una alerta), con un acceso para asignarlos. *(MAE-05)*
 6. Desde la ficha, el Agrónomo a cargo inicia los casos de uso de sus sectores y de su bitácora (PROD-REG-EVT,
    PROD-REG-MRM y PROD-REG-APL). El Gerente solo modifica, da de baja o reactiva el invernadero y consulta la bitácora,
    sin registrar.
@@ -201,7 +238,8 @@ Guía visual: `docs/prototipos/produccion/`. Buscá la función con Grep y leé 
 | Ficha del invernadero, con sus pestañas | `VIEWS.inv`, `capInv`, `people`, `person` | PROD-CNS-INV |
 | Alta y modificación | `VIEWS['inv-form']`, `invErrs`, `INIT['inv-form']`, `ACT['inv-save']` | PROD-ALT-INV, PROD-MOD-INV |
 | Baja y reactivación | `MODALS['inv-baja']`, `ACT['inv-baja-ok']`, `ACT['inv-react']` | PROD-BAJ-INV, PROD-MOD-INV |
-| Personal por asignar, en el Inicio del Gerente | `personalCard`, `alertasInv` | PROD-CNS-INV (regla 5) |
+| Personal por asignar, en el Inicio del Gerente | `personalCard`, `alertasInv`; con el transportista sin invernadero, `personalPorAsignar` de `logistica_transportista.html` | PROD-CNS-INV (regla 5) |
+| Bloque «Logística» de la ficha, agregar y quitar transportista (MAE-05) | En `logistica_transportista.html`: `logistica`, `ventanaAgregar`, `ventanaQuitar` | PROD-CNS-INV (regla 3), PROD-MOD-INV (reglas 8 a 11) |
 | Pestaña de cámara (solo lectura) | `camaraTab` | PROD-CNS-INV (regla 3) |
 
 ## Para más adelante
@@ -220,8 +258,9 @@ destino. Cada una está también en `docs/disparadores.md`.
   sistema IoT. Mientras esas clases no existan, cada condición se da por cumplida, y se conecta con un punto de
   extensión (regla A4 de D-37) cuando la app que la tiene se programe.
 - **Capacidad, sectores, lotes y bitácora de la ficha** (regla 3 de PROD-CNS-INV): llegan con sus propias tareas.
-- **Transportistas vinculados** (regla 6 de PROD-ALT-INV, regla 3 de PROD-BAJ-INV): es R155, que está en el disparador
-  «Cuando exista Invernadero».
+- ~~**Transportistas vinculados**~~ (regla 6 de PROD-ALT-INV, regla 3 de PROD-BAJ-INV): los programa MAE-05 (D-55). Siguen para
+  más adelante, hasta que exista `comercial`: las reglas 9 y 10 de PROD-MOD-INV y el vehículo de la regla 3 de PROD-CNS-INV
+  (disparador «Cuando exista Entrega»).
 
 ## Solo prototipo
 
