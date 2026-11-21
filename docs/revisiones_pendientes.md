@@ -177,6 +177,17 @@ Los 10 pasos están en «Verificación a mano» de `docs/tareas/maestros/MAE-04-
 9. Sin JavaScript, los pasos 3 a 5 funcionan igual.
 10. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
+## CON-01 · Tarea CON-01 (`OrigenDocumento`)
+
+Los 6 pasos están en «Verificación a mano» de `docs/tareas/contabilidad/CON-01-origen-documento.md`. Hay una migración nueva: `python manage.py migrate`. No hace falta ninguna cuenta (no hay pantallas).
+
+1. `migrate` aplica `contabilidad` 0001.
+2. `makemigrations --check --dry-run` no detecta cambios.
+3. En `shell`, `OrigenDocumento(tipo="bitacora").save()` falla con `TypeError` y un mensaje claro.
+4. `OrigenDocumento.objects.count()` da 0.
+5. `/admin/` no muestra «Documentos de origen» (esperado).
+6. Después del merge: verificar en el log de Render que se aplicó la migración.
+
 
 ## CFG · Configuración del repositorio
 

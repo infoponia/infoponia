@@ -3,7 +3,7 @@ from django.apps import AppConfig
 
 
 class ContabilidadConfig(AppConfig):
-    """Registra la app `contabilidad`; todavía no tiene modelos ni punto de extensión (D-37, A4)."""
+    """Registra la app `contabilidad`; tiene solo `OrigenDocumento` (D-52) y ningún punto de extensión (D-37, A4)."""
 
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'contabilidad'

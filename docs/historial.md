@@ -249,3 +249,6 @@ Una línea por tarea cerrada, con este formato:
 
 
 - 21/11/2026 · MAE-04 · configuración operativa y perfil de la organización (ADM-MOD-CFG, ADM-MOD-ORG): singletons `ConfiguracionOperativa` (13 parámetros, con la vigencia del enlace de faltante) y `PerfilOrganizacion` (sin logo, D-45), con `singleton` único y `CheckConstraint` por dominio (migraciones `maestros` 0006 y 0007, `core` 0013); servicios `configuracion.py` y `perfil.py` con bloqueo `FOR NO KEY UPDATE`, todo o nada, sin cambios no audita y auditoría con antes y después; identidad de la organización registrada en `ready()` (D-48); pantalla «Configuración» en `/configuracion/` con dos pestañas, HTMX con respaldo sin JavaScript, y entrada del menú del Gerente. 1537 + 48 + 5 pruebas; dos pruebas de `core` ajustadas con permiso (`test_d24…` y el urlconf de prueba).
+
+
+- 21/11/2026 · CON-01 · `contabilidad.OrigenDocumento` (D-52): tabla concreta con `tipo` (`orden_de_trabajo`, `bitacora`, `movimiento_de_insumo`); `save()` lanza `TypeError` si la clase no tiene un `TIPO_DE_ORIGEN` válido y, si lo tiene, lo copia (la hija directa fija el tipo; la nieta lo hereda); convención de las hijas documentada en el modelo · 9 pruebas nuevas en contabilidad (core sin cambios; 667 en el comando de la tarea) · `contabilidad` 0001 · aplica D-52 · rama `feature/con-01-origen-documento`
