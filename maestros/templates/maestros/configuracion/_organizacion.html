@@ -1,0 +1,41 @@
+{% load iconos %}{% comment %}Pestaña «Organización» (ADM-MOD-ORG): los datos de identidad y hasta cuatro colores. SIN el campo del logo (D-45). Recibe «form».
+Las muestras de color usan solo valores ya validados como #RRGGBB (``form.colores``). Con HTMX el formulario se reemplaza a sí mismo
+con los errores por campo; sin JavaScript es un POST común.{% endcomment %}
+<form id="form-organizacion" method="post" novalidate action="{% url 'configuracion:guardar_organizacion' %}"
+      hx-post="{% url 'configuracion:guardar_organizacion' %}" hx-target="this" hx-swap="outerHTML">
+  {% csrf_token %}
+  {% if form.errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>Revisá los campos marcados: no se guardó ningún cambio.</div></div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">Perfil de la organización</div>
+      <p class="muted sm" style="margin:-6px 0 14px">Estos datos aparecen en el encabezado y en los comprobantes. Solo el nombre es obligatorio.</p>
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.nombre_organizacion requerido=True %}
+        {% include "core/usuarios/_campo.html" with campo=form.cuit_organizacion ayuda="Con o sin guiones. Se controla el dígito verificador." %}
+        {% include "core/usuarios/_campo.html" with campo=form.telefono_organizacion %}
+        {% include "core/usuarios/_campo.html" with campo=form.email_organizacion %}
+      </div>
+      {% include "core/usuarios/_campo.html" with campo=form.direccion_organizacion %}
+    </div>
+    <div class="card">
+      <div class="card-title">Identidad visual</div>
+      <p class="muted sm" style="margin:-6px 0 14px">Hasta 4 colores, todos opcionales. El primero es el principal: tiñe botones, enlaces y selecciones de todo el sistema. Si no cargás ninguno, se usa la paleta del sistema.</p>
+      <div class="grid2">
+        {% for campo, muestra in form.colores %}
+        <div class="fld">
+          <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+          <div class="row" style="gap:10px;flex-wrap:nowrap">
+            <span aria-hidden="true" style="width:36px;height:36px;border-radius:8px;border:1px solid var(--border);flex:none;background:{% if muestra %}{{ muestra }}{% else %}repeating-linear-gradient(45deg,#fff 0 6px,#eee 6px 12px){% endif %}"></span>
+            {{ campo }}
+          </div>
+          {% for error in campo.errors %}<div class="err">{{ error }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <div class="footbar">
+    <button class="btn btn-primary" type="submit" data-enviando="Guardando…">Guardar cambios</button>
+    <span class="muted sm" style="align-self:center">Cada cambio queda en la auditoría.</span>
+  </div>
+</form>

@@ -15,12 +15,12 @@ class MaestrosConfig(AppConfig):
         """Registra la entrada «Producción» en el menú de `core`, los cuatro tipos de alerta de personal (MAE-02a) y, en
         ``core.extensiones`` (MAE-02b, D-43), los efectos de la baja y la reactivación de una cuenta con invernaderos a cargo,
         lo que la ventana de baja informa y la sección «Personal por asignar» del Inicio del Gerente; y (NOT-01, D-42) la
-        fuente de alertas de la campana y el contador de pendientes del Gerente."""
+        fuente de alertas de la campana y el contador de pendientes del Gerente; (MAE-04, D-48) la identidad de la organización y la entrada «Configuración»."""
         from core import extensiones
         from core.menu import registrar_entrada
         from core.models import Usuario
         from maestros import extensiones as extensiones_de_maestros
-        from maestros.servicios import invernaderos, sectores
+        from maestros.servicios import invernaderos, perfil, sectores
         from maestros.servicios.alertas import registrar_tipos_de_personal
 
         registrar_tipos_de_personal()
@@ -35,9 +35,14 @@ class MaestrosConfig(AppConfig):
         # NOT-01 (D-42): las alertas de la campana y el contador de pendientes del Gerente.
         extensiones.registrar_fuente_de_alertas(invernaderos.items_de_campana)
         extensiones.registrar_contador_de_pendientes(invernaderos.pendientes_de_alertas)
+        # MAE-04 (D-48): el nombre y el color principal de la organización salen del perfil; ``core`` los consulta sin
+        # conocer a ``maestros`` (regla A1 de D-37).
+        extensiones.registrar_identidad_de_la_organizacion(perfil.identidad)
 
         registrar_entrada(
             ("Producción", "maestros:invernaderos", "leaf"),
             (Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO),
             despues_de="Panel de control",
         )
+        # MAE-04: «Configuración» (parámetros operativos y perfil de la organización), solo del Gerente, al final del menú.
+        registrar_entrada(("Configuración", "configuracion:pantalla", "gear"), (Usuario.Rol.GERENTE,), despues_de="Auditoría")

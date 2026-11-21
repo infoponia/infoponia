@@ -162,6 +162,22 @@ Tarea MAE-03 (maestros y core), a mano. Hay migraciones nuevas: `python manage.p
 12. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 
+## MAE-04 · Tarea MAE-04 (configuración operativa y perfil de la organización)
+
+Los 10 pasos están en «Verificación a mano» de `docs/tareas/maestros/MAE-04-configuracion-y-organizacion.md`. Hay migraciones nuevas: `python manage.py migrate`. Cuentas: Gerente, Agrónomo y Administrador. `/admin/` solo existe con `DJANGO_DEBUG=1`.
+
+1. `migrate` aplica `maestros` 0006 y 0007 y `core` 0013; una fila de cada singleton en `/admin/`.
+2. «Configuración» al final del menú del Gerente; 403 para Agrónomo, Capataz y Administrador.
+3. Errores por campo y todo o nada en «Parámetros operativos»; advertencia del horizonte (10 con pre-reserva 14).
+4. Sin cambios: sin registro en «Auditoría»; dos cambios: un registro con antes y después.
+5. «Organización»: nombre vacío, CUIT, email, colores y color 2 sin el 1.
+6. Color 1 `#2E7D32` tiñe el sistema; borrarlo vuelve a la paleta.
+7. Nombre «Vivero Los Álamos» en el encabezado, el inicio de sesión y un correo.
+8. Dos sesiones del Gerente: gana el último, sin error 500.
+9. Sin JavaScript, los pasos 3 a 5 funcionan igual.
+10. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
+
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que

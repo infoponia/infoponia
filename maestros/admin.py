@@ -107,3 +107,27 @@ class VariedadAdmin(admin.ModelAdmin):
 
     list_display = ("nombre_variedad", "cultivo", "perfil_familia", "estado_variedad")
     list_filter = ("estado_variedad", "cultivo")
+
+
+# MAE-04: los dos singletons se modifican con sus servicios (que validan y auditan), así que el admin solo los muestra.
+from .models import ConfiguracionOperativa, PerfilOrganizacion  # noqa: E402
+
+
+class _SoloLectura(admin.ModelAdmin):
+    """Un registro único: sin alta, edición ni baja desde el admin."""
+
+    def has_add_permission(self, request):
+        """La fila la crea la migración (MD-89)."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Se modifica desde la pantalla «Configuración», con auditoría."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """No se borra."""
+        return False
+
+
+admin.site.register(ConfiguracionOperativa, _SoloLectura)
+admin.site.register(PerfilOrganizacion, _SoloLectura)

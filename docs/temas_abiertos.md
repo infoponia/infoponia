@@ -166,6 +166,14 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **Interfaz:** el menú «⋯» es un `<details>` propio de `maestros` (no existe el componente en `core`). «Volver a activar» muestra un texto genérico (la fecha y el motivo son de PRD-04). «Renombrar» muestra siempre el aviso de semillas e invernaderos: sin JavaScript no se sabe si el nombre cambió.
 - **Al Gerente, toda ruta de cultivos le da 404, también con otro método HTTP** (no 405), para no delatar la ruta.
 
+## Abiertos desde MAE-04 (21/11/2026)
+
+- **Contraste del color principal:** el sistema no valida el contraste; un color muy claro hace ilegible el texto blanco de los botones (ADM-MOD-ORG; fuera de alcance de MAE-04).
+- **Permisos explícitos fuera de «Límites»:** `core/tests/test_usr_ini_ses.py` (solo `test_d24…`, que ahora vacía el punto de extensión de identidad), `core/tests/urls_prueba_acceso.py` (una línea, `path("configuracion/", include("maestros.urls_configuracion"))`) y `config/urls.py` (una línea para `/configuracion/`). Quien agregue otra entrada del menú de `maestros` tiene que sumarla también a ese urlconf de prueba.
+- **Lo implementado distinto de lo escrito:** la entrada del menú se registra con `registrar_entrada` desde `ready()` (al final del menú del Gerente), no en `core/menu.py`; las rutas están en `maestros/urls_configuracion.py` (la tarea no fijaba la URL); la rama real es `feature/mae-04-configuracion-y-organizacion`.
+- **Decisiones de aplicación sin documento:** colores guardados en mayúsculas; error de orden de colores en el color cargado fuera de orden; opcional vacío como nulo en la auditoría; guardar sin cambios confirma igual el aviso; tope de cada parámetro igual al entero de la columna. Pasar a la ficha de `PerfilOrganizacion` y a ADM-MOD-ORG.
+
+
 ## Abiertos desde H2 (20/11/2026)
 
 | Tema | Qué falta | Cuándo |

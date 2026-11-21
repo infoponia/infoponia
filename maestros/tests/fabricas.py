@@ -16,6 +16,7 @@ from maestros import alertas as registro_de_alertas
 from maestros.alertas import Clase, Destinatario, TipoAlerta
 from maestros.models import (
     Alerta,
+    ConfiguracionOperativa,
     Departamento,
     Direccion,
     DireccionRural,
@@ -25,6 +26,7 @@ from maestros.models import (
     EtapaProductiva,
     Invernadero,
     Localidad,
+    PerfilOrganizacion,
     Provincia,
     SectorProduccion,
     TipoEtapa,
@@ -188,7 +190,7 @@ def crear_alerta(invernadero, tipo_alerta="prueba_evento", para_gerente=True, ag
 
 
 def asegurar_datos_de_maestros():
-    """Deja cargados y confirmados los cinco tipos de etapa en la base de pruebas. La migración ``0005`` los carga al crear
+    """Deja cargados y confirmados los cinco tipos de etapa (y, desde MAE-04, la configuración y el perfil) en la base de pruebas. La migración ``0005`` los carga al crear
     la base, pero un ``TransactionTestCase`` (de core o de las pruebas de concurrencia) vacía todas las tablas al terminar y,
     con ``--keepdb``, la base queda sin ellos. Si faltan, se vuelven a cargar con la misma función de la migración y se corre
     ``ANALYZE`` (docs/patrones/datos_de_migracion.md). Hay que llamarla fuera de la transacción de una clase."""
@@ -196,6 +198,11 @@ def asegurar_datos_de_maestros():
         importlib.import_module("maestros.migrations.0005_cargar_tipos_de_etapa").cargar(apps, None)
         with connection.cursor() as cursor:
             cursor.execute("ANALYZE maestros_tipoetapa")
+    # MAE-04: las dos filas únicas (configuración y perfil) también las vacía un ``flush``.
+    if not (ConfiguracionOperativa.objects.exists() and PerfilOrganizacion.objects.exists()):
+        importlib.import_module("maestros.migrations.0007_cargar_configuracion_y_perfil").cargar(apps, None)
+        with connection.cursor() as cursor:
+            cursor.execute("ANALYZE maestros_configuracionoperativa, maestros_perfilorganizacion")
 
 
 class ConDatosDeMaestros(ConGeoref):

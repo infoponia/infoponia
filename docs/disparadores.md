@@ -36,7 +36,7 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 ## Cuando exista PerfilOrganizacion
 
-1. **Nombre y color configurables (MAE-04, D-48) y logo (fuera de la ronda, D-45).** El nombre sale del perfil, por el punto de
+1. ~~**Nombre y color configurables (MAE-04, D-48).**~~ Hecho el 21/11/2026 en MAE-04 (maestros/servicios/perfil.py, registrado en MaestrosConfig.ready()). **Sigue abierto: el logo** (fuera de la ronda, D-45). Texto original: El nombre sale del perfil, por el punto de
    extensión de `core` (D-48); `NOMBRE_ORGANIZACION` (D-25) queda como valor por defecto. El logo deja de ser un ícono fijo cuando el almacenamiento esté resuelto (USR-07, D-20); mientras tanto la
    organización queda sin logo. En el prototipo de producción: `VIEWS.config`, `CFG` y `aplicarMarca`.
 

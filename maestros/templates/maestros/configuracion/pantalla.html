@@ -1,0 +1,15 @@
+{% extends "core/base_con_sesion.html" %}
+{% comment %}«Configuración» del Gerente (ADM-MOD-CFG y ADM-MOD-ORG, VIEWS.config del prototipo). Dos pestañas, que son enlaces (cada una es una
+página y funciona sin JavaScript): «Parámetros operativos» y «Organización». Recibe «pestana» y «form» (y, en los parámetros,
+«advertencias»). Cada pestaña tiene su formulario y su botón «Guardar cambios».{% endcomment %}
+{% block titulo %}Configuración · {{ nombre_organizacion }}{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <div class="page-h"><h1>Configuración</h1></div>
+  <div class="tabs" role="tablist" aria-label="Configuración">
+    <a class="tab" role="tab" href="{% url 'configuracion:pantalla' %}" aria-selected="{% if pestana == 'parametros' %}true{% else %}false{% endif %}">Parámetros operativos</a>
+    <a class="tab" role="tab" href="{% url 'configuracion:pantalla' %}?pestana=organizacion" aria-selected="{% if pestana == 'organizacion' %}true{% else %}false{% endif %}">Organización</a>
+  </div>
+  {% if pestana == 'organizacion' %}{% include "maestros/configuracion/_organizacion.html" %}{% else %}{% include "maestros/configuracion/_parametros.html" %}{% endif %}
+</div>
+{% endblock %}

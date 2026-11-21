@@ -17,7 +17,7 @@ no dependen entre sí pueden hacerse en paralelo.
 | NOT-01 | Notificaciones y campana (D-42) | core | — (característica del sistema; cierra las postcondiciones de aviso que hoy están sin implementar) | UI-01 | 1 |
 | MAE-03 | «Cuando exista SectorProduccion» (`Invernadero.tiene_sectores`, pestaña de sectores, postcondición b de PROD-BAJ-INV) — hecha el 20/11/2026 (a la espera de la revisión a mano) |
 
-| MAE-04 | Configuración operativa y perfil de la organización (sin logo) | maestros | ADM-MOD-CFG, ADM-MOD-ORG | UI-01 | 1 |
+| MAE-04 | Configuración operativa y perfil de la organización (sin logo) — **hecha el 21/11/2026** (a la espera de la revisión a mano) | maestros | ADM-MOD-CFG, ADM-MOD-ORG | UI-01 | 1 |
 | CON-01 | `OrigenDocumento`: el documento de origen común (D-52) | contabilidad | — (estructura del modelo) | — | 5 |
 | INV-01 | Tipos de insumo y catálogo de insumos | inventario | CMP-ALT-TIN, CMP-MOD-TIN, CMP-BAJ-TIN, CMP-CNS-TIN, CMP-ALT-INS, CMP-MOD-INS, CMP-BAJ-INS, CMP-CNS-INS | UI-01, NOT-01, CON-01 | 2 |
 | INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK, CMP-REV-VNC | INV-01, UI-01 | 2 |
@@ -159,7 +159,7 @@ Cada archivo de tarea los trae en «Límites». Salen de `docs/disparadores.md`.
 |---|---|
 | NOT-01 | «Cuando exista la primera notificación o alerta» (campana, pendientes del Gerente, avisos al personal del invernadero) — hecha el 20/11/2026 (a la espera de la revisión a mano) |
 | MAE-03 | «Cuando exista SectorProduccion» (`Invernadero.tiene_sectores`, pestaña de sectores, postcondición b de PROD-BAJ-INV) |
-| MAE-04 | «Cuando exista PerfilOrganizacion» (el nombre configurable; el logo queda afuera, D-45) |
+| MAE-04 | «Cuando exista PerfilOrganizacion» (el nombre y el color configurables; el logo queda afuera, D-45) — hecha el 21/11/2026 (a la espera de la revisión a mano) |
 | INV-02 | «Cuando exista InsumoInvernadero» (postcondición c y precondición f de PROD-BAJ-INV, por `maestros/extensiones.py`) |
 | PRD-01 | «Cuando exista Lote, OrdenTrabajo…» (precondiciones c, d y e de PROD-BAJ-INV y traspaso de órdenes del Capataz) y «Cuando exista un caso de uso que planifique…» (excluir invernaderos inactivos) |
 | PRD-02 | el segundo de esos dos, para las transiciones |

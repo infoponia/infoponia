@@ -601,9 +601,11 @@ class UsrIniSesVistaTests(TestCase):
     @override_settings(NOMBRE_ORGANIZACION="Vivero Los Álamos")
     def test_d24_el_marco_muestra_el_nombre_de_organizacion_configurado(self):
         """D-24 («Jardín Botánico» es dato del prototipo): el nombre del marco sale de la
-        configuración NOMBRE_ORGANIZACION, con y sin sesión."""
-        sin_sesion = self.client.get(reverse("core:iniciar_sesion"))
-        con_sesion = self.entrar(crear_gerente())
+        configuración NOMBRE_ORGANIZACION, con y sin sesión. Sin perfil registrado (``maestros`` sí lo registra, D-48, y su
+        nombre ganaría): se vacía el punto de extensión para probar el valor por defecto."""
+        with mock.patch.object(extensiones, "_IDENTIDAD", []):
+            sin_sesion = self.client.get(reverse("core:iniciar_sesion"))
+            con_sesion = self.entrar(crear_gerente())
 
         for respuesta in (sin_sesion, con_sesion):
             self.assertContains(respuesta, "Vivero Los Álamos")
