@@ -20,7 +20,7 @@ no dependen entre sí pueden hacerse en paralelo.
 | MAE-04 | Configuración operativa y perfil de la organización (sin logo) — **hecha el 21/11/2026** (a la espera de la revisión a mano) | maestros | ADM-MOD-CFG, ADM-MOD-ORG | UI-01 | 1 |
 | CON-01 | `OrigenDocumento`: el documento de origen común (D-52) — **hecha el 21/11/2026** (a la espera de la revisión a mano) | contabilidad |
 | INV-01 | Tipos de insumo y catálogo de insumos — **hecha el 21/11/2026** (a la espera de la revisión a mano) | inventario | CMP-ALT-TIN, CMP-MOD-TIN, CMP-BAJ-TIN, CMP-CNS-TIN, CMP-ALT-INS, CMP-MOD-INS, CMP-BAJ-INS, CMP-CNS-INS | UI-01, NOT-01, CON-01 | 2 |
-| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK, CMP-REV-VNC | INV-01, UI-01 | 2 |
+| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK, CMP-REV-VNC | INV-01, UI-01, DIA-01 (hecha el 21/11/2026) | 2 |
 | INV-03 | Variedades, con la creación de su semilla (los modelos `Variedad`, `Ciclo` y `EtapaProductiva` los crea MAE-03 con columnas mínimas; INV-03 completa las columnas; D-49) | inventario (y migración en maestros) | PROD-ALT-VAR, PROD-MOD-VAR, PROD-BAJ-VAR, PROD-CNS-VAR | MAE-03, INV-02 (que incluye a INV-01), UI-01, NOT-01 | 3 |
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz | produccion | PROD-PNF-SMB, PROD-CNC-SMB, PROD-CNL-ORD (órdenes de siembra) | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 | 4 |
 | PRD-02 | Transición: planificar, concretar y cancelar | produccion | PROD-PNF-TRN, PROD-CNC-TRN, PROD-CNL-ORD (órdenes de transición) | PRD-01 | 4 |

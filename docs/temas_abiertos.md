@@ -179,6 +179,14 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **Lo implementado distinto de lo escrito:** el menú se registra con `registrar_entrada` desde `InventarioConfig.ready()`, no en `core/menu.py`; la tarea pide «filtros» pero el prototipo no los tiene en el catálogo ni en las categorías, así que no se hicieron; la baja de categoría confirma en una ventana (el prototipo usa un aviso directo); la rama real es `feature/inv-01-tipos-de-insumo-y-catalogo`; los textos del prototipo («Ingrese», «Habilítelo») pasan al voseo del sistema.
 - **Decisiones de aplicación sin documento:** las 15 del «Cierre» de la tarea (`tipo_movimiento`, `CheckConstraint` extra de `TipoInsumo`, `isnull=False` explícito, unidades en minúscula en la base, `max_length=30`, claves de `motivo_ajuste`, clave de alertas `insumo:<id>`, lote inicial como `ajuste_positivo`/`carga_inicial`, claves de auditoría, aviso MOD-INS en una llamada, insumo de un invernadero sin Agrónomo no gestionable, bloqueos solo si cambia el valor, baja sobre habilitaciones de invernaderos inactivos, orden de categorías, pantallas). Pasar a la fila de decisiones si el equipo las confirma.
 
+## Abiertos desde DIA-01 (21/11/2026)
+
+- **Lo implementado distinto de lo escrito, o que la tarea no decía:**
+  - Solo un registro idéntico de un paso (código, nombre, orden y función) es idempotente; el mismo código y la misma función con otro nombre u otro orden dan `RuntimeError`. D-56 y la tarea solo nombraban el código con otra función y el orden repetido.
+  - `--fecha` exige `AAAA-MM-DD` con ceros: `strptime` acepta `2026-1-5`, por eso se compara además con `isoformat()`.
+  - Los textos de la salida del comando (encabezado «Proceso diario del AAAA-MM-DD.», cierre «Pasos correctos: N · fallidos: N.», «No hay pasos registrados.») no estaban fijados en D-56. Conviene anotarlos en D-56 si INV-02 o el cron los usan.
+  - La fecha se valida antes que `--listar`: `--listar --fecha 2026-13-01` da error. Sin pasos registrados, `--solo <cualquier código>` dice «No hay pasos registrados.» y termina en 0, en lugar de «código inexistente».
+- **Pendiente para INV-02 y las demás apps:** registrar sus pasos con `registrar_paso_diario` desde su `AppConfig.ready()`. Si registran un orden que ya usa otro paso, `ready()` lanza `RuntimeError` al arrancar: es lo buscado, pero conviene que lo sepan.
 
 ## Abiertos desde H2 (20/11/2026)
 
