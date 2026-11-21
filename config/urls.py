@@ -10,6 +10,8 @@ urlpatterns = [
     path("produccion/", include("maestros.urls")),
     # MAE-04: configuración operativa y perfil de la organización (Gerente).
     path("configuracion/", include("maestros.urls_configuracion")),
+    # INV-01: catálogo de insumos y categorías (Agrónomo).
+    path("inventario/", include("inventario.urls")),
 ]
 
 # SEG-18: con ``ADMIN_DJANGO_HABILITADO`` apagado (producción) no se registra ninguna ruta de /admin/, así que

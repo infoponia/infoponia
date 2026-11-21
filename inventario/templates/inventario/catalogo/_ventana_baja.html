@@ -1,0 +1,27 @@
+{% load iconos %}{% comment %}Ventana de la baja de un insumo (CMP-BAJ-INS, MODALS['ins-baja'] del prototipo). Recibe «insumo», «habilitado_en» (los invernaderos donde se
+deshabilitará), «impedimentos» (lista de ImpedimentoDeBaja: invernadero, texto y cómo resolverlo; regla 2) y, si el servicio rechazó la baja
+por otro motivo, «error». Con impedimentos no ofrece confirmar y los dice todos, por invernadero. Sin ellos, pide confirmar. Dar de baja es
+un POST a la misma URL; abrirla (GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if impedimentos %}
+    <h2 id="ventana-titulo">No se puede dar de baja {{ insumo.nombre_insumo }}</h2>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>Todavía tiene existencias o compromisos:
+      <ul class="inv-impedimentos">{% for i in impedimentos %}<li><b>{{ i.invernadero.nombre_invernadero }}:</b> {{ i.texto }} {{ i.como_resolver }}</li>{% endfor %}</ul></div></div>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'inventario:catalogo' %}" data-cerrar-ventana data-foco-inicial>Entendido</a>
+    </div>
+    {% else %}
+    <h2 id="ventana-titulo">¿Dar de baja {{ insumo.nombre_insumo }}?</h2>
+    <p>Deja de poder pedirse y usarse{% if habilitado_en %}, y se deshabilita en {% for inv in habilitado_en %}{{ inv.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}. Conserva su historial y puede reactivarse después.</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'inventario:insumo_baja' insumo.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'inventario:catalogo' %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

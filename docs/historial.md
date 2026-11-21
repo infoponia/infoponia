@@ -252,3 +252,6 @@ Una línea por tarea cerrada, con este formato:
 
 
 - 21/11/2026 · CON-01 · `contabilidad.OrigenDocumento` (D-52): tabla concreta con `tipo` (`orden_de_trabajo`, `bitacora`, `movimiento_de_insumo`); `save()` lanza `TypeError` si la clase no tiene un `TIPO_DE_ORIGEN` válido y, si lo tiene, lo copia (la hija directa fija el tipo; la nieta lo hereda); convención de las hijas documentada en el modelo · 9 pruebas nuevas en contabilidad (core sin cambios; 667 en el comando de la tarea) · `contabilidad` 0001 · aplica D-52 · rama `feature/con-01-origen-documento`
+
+
+- 21/11/2026 · INV-01 · tipos de insumo y catálogo (CMP-ALT/MOD/BAJ/CNS-TIN y -INS): los cinco modelos de `inventario` con sus restricciones de base (`TipoInsumo`, `Insumo`, `InsumoInvernadero`, `LoteInsumo`, `MovimientoInsumo`, esta última hija de `OrigenDocumento`), unidades fijas, cuatro categorías del sistema por migración de datos, puntos de extensión y cuatro tipos de alerta de stock, nueve acciones de auditoría (`core` 0014), servicios con bloqueos y aviso MOD-INS, y las pantallas «Inventario» → «Catálogo» y «Categorías» (HTMX con respaldo sin JavaScript) con entrada de menú del Agrónomo · 1848 pruebas en inventario, maestros y core (63 de concurrencia y 6 de migración aparte).

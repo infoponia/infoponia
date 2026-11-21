@@ -52,7 +52,7 @@ informa `registrar_ordenes_que_reservan`.
 
 1. Dentro de la transacción de quien llama, con el invernadero y el `InsumoInvernadero` ya bloqueados (ver «Orden de bloqueo»), vuelve a leer los lotes y
    los bloquea en orden de id.
-2. Por cada parte `(lote, cantidad)` descuenta del lote y crea **un** `MovimientoInsumo` de tipo «salida por consumo» sobre ese lote, con `origen = origen_id` (el consumo, D-52) y `fecha` = la fecha recibida (la efectiva de la siembra; hoy si no se pasó) y la hora actual de la operación (D-50 punto 7).
+2. Por cada parte `(lote, cantidad)` descuenta del lote y crea **un** `MovimientoInsumo` de tipo_movimiento «salida por consumo» sobre ese lote, con `origen = origen_id` (el consumo, D-52) y `fecha` = la fecha recibida (la efectiva de la siembra; hoy si no se pasó) y la hora actual de la operación (D-50 punto 7).
 3. Si una parte excede lo disponible del lote, o si lo pedido supera lo que hay en lotes, **no se bloquea** (regla 5 de 8.13): lo que falta
    sale del **faltante sin lote**, que se crea con la primera salida que lo necesita (sin cantidad ingresada, ingreso ni
    vencimiento) y baja su `cantidad_disponible` (negativa). Genera su propio movimiento (también con `origen = origen_id`).

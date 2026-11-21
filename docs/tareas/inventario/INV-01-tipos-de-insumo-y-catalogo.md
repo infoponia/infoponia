@@ -126,28 +126,71 @@ motivo (queda el error en el servicio y se anota); las reglas del servicio, los 
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-Hay migraciones nuevas: `python manage.py migrate`. Cuentas: Agrónomo (con un invernadero a cargo), otro Agrónomo (con otro invernadero),
-Gerente, Capataz y Administrador.
+Hay migraciones nuevas (`core` 0014 e `inventario` 0001 y 0002): `python manage.py migrate`. Cuentas: Agrónomo (con un invernadero a cargo), otro
+Agrónomo (con otro invernadero), Gerente, Capataz y Administrador. Las pantallas están en `/inventario/catalogo/` y `/inventario/categorias/`.
 
-1. `migrate` aplica esquema y datos de `inventario`. En «Categorías» están **cuatro** categorías del sistema (Semillas, Envases,
-   Repuestos de hardware e Infraestructura), con el candado y sin acciones.
-2. El Agrónomo ve «Inventario» en el menú; el Gerente, el Capataz y el Administrador no; la URL les da 403.
-3. Crear la categoría «Limpieza» con consumo directo «Como gasto»; «limpieza » (minúscula, con espacio) da error de nombre duplicado;
-   dejar el consumo directo sin elegir da error en su campo.
-4. Modificarla a «Como costo de los lotes» y renombrarla; luego darla de baja (sin insumos): pasa a inactiva; reactivarla.
-5. Crear el insumo «Detergente» en «Limpieza», unidad «L», sin vencimiento: aparece en el catálogo como activo y «ninguno» en habilitado
-   en; la pantalla avisa que hay que habilitarlo (sin botón hasta INV-02). Con el nombre repetido en otras mayúsculas da error.
-6. La categoría «Semillas» no se ofrece al crear un insumo. Con unidad «unidad» una cantidad con decimales se rechaza (prueba en INV-02);
-   acá se verifica que las ocho unidades se ofrecen con el texto de sus decimales.
-7. Dar de baja la categoría «Limpieza» teniendo «Detergente» activo: no se puede e informa cuántos insumos tiene. Pasarlo a otra
-   categoría (modificar) y volver a probar.
-8. Con otro Agrónomo que use un insumo (desde la consola, hasta que INV-02 permita habilitarlo), el primero no puede modificarlo ni darlo
-   de baja: los botones aparecen deshabilitados con el nombre de quien lo usa. Si lo modifica quien lo usa, el otro Agrónomo recibe la
-   notificación (campana).
-9. Dar de baja un insumo con stock (cargado desde la consola, también uno con stock negativo): informa por invernadero qué lo impide.
-10. En «Auditoría» (Gerente) figuran las altas, modificaciones y bajas con el antes y el después. Guardar sin cambios no deja registro.
+1. `migrate` aplica el esquema y los datos de `inventario`. En «Inventario» → «Categorías» están **cuatro** categorías del sistema (Semillas,
+   Envases, Repuestos de hardware e Infraestructura), con el texto «Del sistema», el candado y ningún botón de modificar ni de baja.
+2. El Agrónomo ve «Inventario» en el menú (después de «Producción»); el Gerente, el Capataz y el Administrador no. La URL `/inventario/catalogo/`
+   les da 403 (y sin sesión lleva al inicio de sesión).
+3. Crear la categoría «Limpieza» con consumo directo «Como gasto» (botón «Nueva categoría»). Crear otra «limpieza » (minúscula, con espacio):
+   error «Ya existe una categoría con ese nombre.» debajo del nombre. Crear una sin elegir el consumo directo: error en ese campo.
+4. Modificar «Limpieza» a «Como costo de los lotes» y renombrarla; luego darla de baja (sin insumos): pasa a «Inactiva»; reactivarla.
+5. Crear el insumo «Detergente» en «Limpieza», unidad «L», sin vencimiento: aparece en el catálogo como «Activo» con «Ninguno» en «Habilitado en»
+   y el aviso dice que hay que habilitarlo (no hay botón hasta INV-02). Repetir el nombre en otras mayúsculas («DETERGENTE»): error en el nombre.
+6. La categoría «Semillas» no se ofrece al crear un insumo. El desplegable de unidad ofrece las ocho unidades con el texto de sus decimales
+   («unidad (solo enteros)», «kg (admite 3 decimales)», etc.). Con la unidad «unidad», rechazar una cantidad con decimales se prueba en INV-02.
+7. Dar de baja la categoría «Limpieza» teniendo «Detergente» activo: la ventana vuelve con el motivo y cuántos insumos tiene. Modificar el
+   insumo a otra categoría y volver a probar.
+8. Con otro Agrónomo que use un insumo (desde la consola, con un `InsumoInvernadero` activo en su invernadero, hasta que INV-02 permita
+   habilitarlo), el primero ve los botones de modificar y de baja deshabilitados y la línea «No disponible: solo lo usa <invernadero>
+   (<Agrónomo>).»; la URL de modificar lo devuelve al catálogo. Si lo modifica quien lo usa, el otro Agrónomo recibe la notificación en la campana
+   («Cambió el insumo …») y la ventana de modificar le avisó antes «También lo usan: …».
+9. Dar de baja un insumo con stock (cargado desde la consola; probar también uno con stock negativo): la ventana informa por invernadero qué lo
+   impide y cómo resolverlo, y no ofrece confirmar. En un insumo con stock, la unidad y «Controla vencimiento» aparecen bloqueados con su motivo.
+10. En «Auditoría» (Gerente) figuran las altas, modificaciones, bajas y reactivaciones con el antes y el después. Guardar sin cambios no deja registro.
 11. Dos Agrónomos modifican a la vez el nombre de la misma categoría a valores distintos: gana el último y no hay error 500.
-12. Sin JavaScript, los pasos 3 a 5 funcionan igual.
-13. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
+12. Sin JavaScript (desactivarlo en el navegador), los pasos 3 a 5 funcionan igual: cada ventana es una página completa con la ventana abierta.
+13. Las fichas de consumo directo (radio) se ven resaltadas al elegirlas (revisión visual; el CSS no se probó en navegador).
+14. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo.** Los ocho casos de uso (CMP-ALT/MOD/BAJ/CNS-TIN y CMP-ALT/MOD/BAJ/CNS-INS) y los cinco modelos de `inventario` (`TipoInsumo`, `Insumo`,
+`InsumoInvernadero`, `LoteInsumo`, `MovimientoInsumo`) con sus restricciones de base; `unidades.py`, `categorias.py`, `servicios/formato.py` y
+`servicios/stock.py` (`hoy`, `stock_actual_de`); los tres puntos de extensión de `docs/api/extensiones_de_inventario.md`; los cuatro tipos de alerta; las
+acciones de auditoría en `core` (migración 0014); los servicios de categorías y de insumos; y, en el paso 6, las pantallas «Inventario» → «Catálogo» y
+«Categorías» (`inventario/urls.py`, `forms.py`, `views.py`, plantillas con HTMX y respaldo sin JavaScript, `inventario/static/inventario/css/inventario.css`),
+la entrada «Inventario» del menú del Agrónomo (registrada en `InventarioConfig.ready()`; `core/menu.py` no se tocó) y `bloqueos_de_modificacion` en
+`servicios/insumos.py` (solo lectura, para mostrar los campos bloqueados con su motivo).
+
+**Permisos usados fuera de «Límites»** (autorizados por el estudiante): una línea `path("inventario/", include("inventario.urls"))` en `config/urls.py` y otra en
+`core/tests/urls_prueba_acceso.py`.
+
+**Pruebas.** `python manage.py test inventario maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 1848 pruebas, OK (también con
+`DJANGO_DEBUG=0`, recreando la base). `--tag concurrencia` sobre los mismos módulos: 63 pruebas, OK. `--tag migracion`: 6 pruebas, OK. `makemigrations --check --dry-run`:
+sin cambios. Las pruebas del paso 6 están en `inventario/tests/test_inventario_catalogo_vistas.py` (28).
+
+**Decisiones de aplicación** (sin documento; se proponen para `docs/temas_abiertos.md`):
+1. `MovimientoInsumo.tipo` se llama `tipo_movimiento`, porque choca con `OrigenDocumento.tipo` (D-52).
+2. `TipoInsumo` agrega `CheckConstraint`: `es_del_sistema` implica activo; las del sistema son uno de los cuatro pares fijos (`codigo`, nombre); `codigo` nulo solo si no es del sistema.
+3. `cantidad_ingresada` (lote común) y `motivo_ajuste` (ajuste) llevan `isnull=False` explícito en su `CheckConstraint`, para evitar huecos con `NULL`.
+4. Unidades en minúscula en la base (`l`, `ml`, `m3`, `m2`; se muestran «L», «mL», «m³», «m²»); `max_length=30` en `codigo` y `tipo_movimiento`; `descripcion_ajuste` es `TextField`; claves de `motivo_ajuste`: `recuento_fisico`, `rotura_o_perdida`, `carga_inicial`, `vencimiento`, `otro`.
+5. Clave de las alertas de stock `insumo:<id>`; `datos.alertas_resueltas` va en el registro `baja_insumo_invernadero`.
+6. El lote inicial se crea con un movimiento `ajuste_positivo` / `carga_inicial` sin origen.
+7. Claves de auditoría: `nombre`, `descripcion`, `categoria`, `unidad_medida`, `controla_vencimiento`, `consumo_directo`, `estado`; `VALORES_VISIBLES` repite los textos de `consumo_directo` en `core` para no importar `inventario`.
+8. El aviso de MOD-INS es una sola llamada a `notificar_a_varios`: título «Cambió el insumo {nombre anterior}», detalle «{Nombre Apellido} modificó sus datos en el catálogo. Revisá si afecta a tus invernaderos.».
+9. Si un insumo lo usa un invernadero sin Agrónomo, nadie puede gestionarlo (`insumo_en_uso_por_otros`, que lista invernaderos y Agrónomos).
+10. Los campos bloqueados de `modificar_insumo` solo fallan si cambia el valor; los bloqueos van en orden invernaderos → categorías → insumo → existencias y un `cambio_simultaneo` no se reintenta.
+11. `baja_insumo` deshabilita toda habilitación activa aunque su invernadero esté inactivo, y para los impedimentos cuenta solo las activas.
+12. `reactivar_tipo_insumo` rechaza las del sistema y las que no están inactivas; `consultar_tipos_de_insumo` ordena activas primero y luego por nombre sin distinguir mayúsculas.
+13. (Paso 6) El alta de un insumo no ofrece «Habilitar» (es de INV-02): el aviso breve dice «Habilitalo en un invernadero para cargarle stock». Las pestañas son enlaces a dos páginas (`/inventario/catalogo/` y `/inventario/categorias/`); `/inventario/` lleva al catálogo hasta que INV-02 ponga «Existencias» primero.
+14. (Paso 6) La baja de una categoría pide confirmar en una ventana (como la de cultivos) en vez del aviso directo del prototipo; con insumos activos el servicio la rechaza y la ventana vuelve con cuántos son.
+15. (Paso 6) Nuevo insumo ofrece las categorías activas salvo Semillas (como el prototipo); modificar ofrece las activas que no son del sistema, más la actual aunque esté inactiva.
+
+**Implementado distinto de lo escrito / pendiente.**
+- La tarea pide «filtros» en las tablas; el prototipo (`catalogoTab`, `tiposTab`) no los tiene, así que no se hicieron. Anotado para `docs/temas_abiertos.md`.
+- La rama real es `feature/inv-01-tipos-de-insumo-y-catalogo` (la tarea dice `feature/inv-01-catalogo-de-insumos`).
+- Los textos del prototipo en voseo formal («Ingrese», «Habilítelo») se pasaron al voseo del resto del sistema.
+- Las fichas de consumo directo usan `<label class="opt">` con radio y CSS propio (`:has`), porque el prototipo usa botones con JavaScript; no se verificó a ojo en navegador.
+- `docs/modelo/inventario.md` y otros documentos dicen `tipo` para el movimiento: ver decisión 1 y la propuesta de M3.

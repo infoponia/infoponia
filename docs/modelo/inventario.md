@@ -180,7 +180,7 @@ movimiento de ese lote (regla 1 de 8.19). Una operación que toca varios lotes g
 | `idMovimientoInsumo` | — | El `id` automático |
 | `fecha` | fecha y hora | → `fecha`. La fecha de la operación con la hora actual. En una salida por consumo de siembra, la fecha es la **efectiva** de la siembra (que puede ser anterior a hoy; D-50 punto 7) |
 | `cantidad` | cantidad > 0 | → `cantidad`. Siempre positiva: el sentido lo da el tipo |
-| `tipo` | ingreso por recepción / salida por consumo / ajuste positivo / ajuste negativo / salida por corrección entre lotes / entrada por corrección entre lotes | → `tipo` (`TextChoices`). En esta ronda se crean los cuatro últimos y «salida por consumo»; el ingreso por recepción lo crea `compras` |
+| `tipo_movimiento` | ingreso por recepción / salida por consumo / ajuste positivo / ajuste negativo / salida por corrección entre lotes / entrada por corrección entre lotes | `tipo_movimiento` (`TextChoices`; no se llama `tipo` porque choca con `OrigenDocumento.tipo`, D-52). En esta ronda se crean los cuatro últimos y «salida por consumo»; el ingreso por recepción lo crea `compras` |
 | `motivoAjuste` | recuento físico / rotura o pérdida / carga inicial / vencimiento / otro | → `motivo_ajuste`. Solo en ajustes. **La corrección entre lotes no es un motivo guardado**: se guarda con sus dos tipos propios, aunque la pantalla la ofrece como un motivo más |
 | `descripcionAjuste` | texto libre | → `descripcion_ajuste`. Solo en ajustes; obligatoria si el motivo es «otro» |
 
@@ -203,8 +203,8 @@ Herencias: **hereda de `OrigenDocumento`** (`contabilidad`, D-52): se implementa
   ninguna cambia la existencia ni afecta al faltante sin lote como origen.
 - **Regla 3 de 8.19:** sin origen si y solo si es de ajuste o salida por corrección. (Con asientos, además: origina asiento si y solo si es de ajuste.)
 - **Regla 4 de 8.19:** los ajustes se registran sobre un lote.
-- **Restricciones de la base:** `cantidad > 0`; el dominio de `tipo`; `motivo_ajuste` no nulo si y solo si `tipo` es ajuste positivo o negativo;
-  `descripcion_ajuste` no vacía si `motivo_ajuste = otro`; `origen` nulo si y solo si `tipo` es ajuste positivo, ajuste negativo o salida por corrección entre lotes (regla 3 de 8.19).
+- **Restricciones de la base:** `cantidad > 0`; el dominio de `tipo_movimiento`; `motivo_ajuste` no nulo si y solo si `tipo_movimiento` es ajuste positivo o negativo;
+  `descripcion_ajuste` no vacía si `motivo_ajuste = otro`; `origen` nulo si y solo si `tipo_movimiento` es ajuste positivo , ajuste negativo o salida por corrección entre lotes (regla 3 de 8.19).
   Que el origen de una entrada por corrección sea la salida de la misma cantidad lo verifica el servicio; que el de una salida por consumo sea un consumo, lo garantiza `produccion` (no lo puede nombrar `inventario`, A1).
 
 ---

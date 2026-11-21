@@ -1,0 +1,26 @@
+{% load iconos %}{% comment %}Ventana para crear una categoría o modificar una (CMP-ALT-TIN y CMP-MOD-TIN, MODALS['cat-form'] del prototipo). Recibe «form» y «tipo» (al
+modificar). El consumo directo se elige con tres fichas de radio (funcionan sin JavaScript). Es un formulario común (POST), con «novalidate»:
+las reglas son del servicio.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">{% if tipo %}Modificar categoría{% else %}Nueva categoría{% endif %}</h2>
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+    <form method="post" novalidate action="{% if tipo %}{% url 'inventario:categoria_modificar' tipo.pk %}{% else %}{% url 'inventario:categoria_nueva' %}{% endif %}">
+      {% csrf_token %}
+      {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+      <div class="fld">
+        <span class="lbl" id="consumo-etiqueta">Consumo directo<span class="req" aria-hidden="true"> *</span></span>
+        <div class="stack tight" role="radiogroup" aria-labelledby="consumo-etiqueta">
+          {% for valor, titulo, ayuda, elegida in form.opciones_de_consumo %}
+          <label class="opt"><input type="radio" name="consumo_directo" value="{{ valor }}"{% if elegida %} checked{% endif %}><span class="t"><b>{{ titulo }}</b><span>{{ ayuda }}</span></span></label>
+          {% endfor %}
+        </div>
+        {% for error in form.consumo_directo.errors %}<div class="err">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Guardando…">{% if tipo %}Guardar cambios{% else %}Crear categoría{% endif %}</button>
+        <a class="btn btn-ghost" href="{% url 'inventario:categorias' %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,6 @@
+{% comment %}Barra de pestañas de la página «Inventario» (VIEWS.insumos del prototipo): «Catálogo» y «Categorías». INV-02 suma «Existencias de
+insumos» como primera. Recibe «activa» («catalogo» o «categorias»). Son enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
+<div class="tabs" role="tablist" aria-label="Inventario">
+  <a class="tab" role="tab" href="{% url 'inventario:catalogo' %}" aria-selected="{% if activa == 'catalogo' %}true{% else %}false{% endif %}">Catálogo</a>
+  <a class="tab" role="tab" href="{% url 'inventario:categorias' %}" aria-selected="{% if activa == 'categorias' %}true{% else %}false{% endif %}">Categorías</a>
+</div>

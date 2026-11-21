@@ -1,0 +1,17 @@
+/* Estilos de «Inventario» (INV-01), sobre el Diseño v2 (D-47): tablas, avisos, pestañas y ventanas salen de
+   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios: las pestañas como enlaces (cada una es una página y
+   funciona sin JavaScript), la barra de la página y el aspecto de una fila dada de baja. */
+a.tab{display:inline-block;text-decoration:none}
+a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.inv-barra{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.inv-off td{color:var(--muted-foreground)}
+.inv-acciones{display:inline-flex;gap:4px;align-items:center;justify-content:flex-end}
+.inv-acciones form{display:inline-flex;margin:0}
+.inv-porque{display:block;font-size:12.5px;color:var(--muted-foreground);margin-top:2px;text-align:right}
+.inv-impedimentos{margin:8px 0 0;padding-left:18px;display:grid;gap:6px;font-size:14px}
+.inv-impedimentos b{font-weight:600}
+/* Fichas de consumo directo (radio): la ficha elegida se resalta como un .opt[aria-pressed="true"]; funcionan sin JavaScript. */
+label.opt{cursor:pointer}
+label.opt input[type=radio]{accent-color:var(--primary);margin:3px 0 0;flex:none}
+label.opt:has(input:checked){border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 1px var(--primary)}
+label.opt:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}

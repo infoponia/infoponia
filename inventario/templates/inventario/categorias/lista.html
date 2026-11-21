@@ -1,0 +1,53 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Inventario» → «Categorías» (CMP-CNS-TIN, tiposTab del prototipo): una fila por categoría, las activas primero. De cada una: su nombre
+(con el candado si es del sistema), su consumo directo, su cantidad de insumos (activos e inactivos) y su estado. Los botones salen de
+«acciones» (D-30): las categorías del sistema no tienen ninguno (solo el candado). Las ventanas abren con HTMX; sin JavaScript, cada
+enlace lleva a esta página con la ventana abierta («plantilla_de_ventana»). Son las cuatro del sistema (Semillas, Envases, Repuestos de
+hardware e Infraestructura): manda el caso de uso, el prototipo nombra tres (L7). Solo el Agrónomo llega acá.{% endcomment %}
+{% block titulo %}Categorías de insumos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
+<div class="page">
+  <div class="page-h">
+    <h1>Inventario</h1>
+    <span class="spacer"></span>
+    <a class="btn btn-primary" href="{% url 'inventario:categoria_nueva' %}" hx-get="{% url 'inventario:categoria_nueva' %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 14 %} Nueva categoría</a>
+  </div>
+  {% include "inventario/_pestanas.html" with activa="categorias" %}
+  <div class="tablewrap">
+    <table class="data-table fixed" style="min-width:760px">
+      <colgroup><col><col style="width:200px"><col style="width:100px"><col style="width:110px"><col style="width:170px"></colgroup>
+      <thead><tr><th>Categoría</th><th>Consumo directo</th><th class="right">Insumos</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+      {% with t=f.tipo %}
+      <tr{% if not t.activo %} class="inv-off"{% endif %}>
+        <td><b>{{ t.nombre_tipo_insumo }}</b>{% if t.es_del_sistema %} <span class="lock">{% icono "lock" 12 %} Del sistema</span>{% endif %}</td>
+        <td><span class="status-badge {% if t.consumo_directo == 'no_admite' %}status-neutral{% else %}status-ok{% endif %}">{{ t.get_consumo_directo_display }}</span></td>
+        <td class="right mono">{{ t.cantidad_de_insumos }}</td>
+        <td>{% if t.activo %}<span class="status-badge status-ok">Activa</span>{% else %}<span class="status-badge status-neutral">Inactiva</span>{% endif %}</td>
+        <td class="right nowrap">
+          <span class="inv-acciones">
+          {% if t.es_del_sistema %}<span class="ibtn" role="img" aria-disabled="true" aria-label="Categoría del sistema: no se modifica" title="Categoría del sistema: no se modifica">{% icono "lock" 16 %}</span>{% endif %}
+          {% if "modificar" in f.acciones %}<a class="ibtn neutral" href="{% url 'inventario:categoria_modificar' t.pk %}" hx-get="{% url 'inventario:categoria_modificar' t.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Modificar la categoría {{ t.nombre_tipo_insumo }}" title="Modificar la categoría {{ t.nombre_tipo_insumo }}">{% icono "pencil" 16 %}</a>{% endif %}
+          {% if "baja" in f.acciones %}<a class="ibtn danger" href="{% url 'inventario:categoria_baja' t.pk %}" hx-get="{% url 'inventario:categoria_baja' t.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Dar de baja la categoría {{ t.nombre_tipo_insumo }}" title="Dar de baja la categoría {{ t.nombre_tipo_insumo }}">{% icono "trash" 16 %}</a>{% endif %}
+          {% if "reactivar" in f.acciones %}
+          <form method="post" action="{% url 'inventario:categoria_reactivar' t.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit" data-enviando="Reactivando…">Reactivar</button></form>
+          {% endif %}
+          </span>
+        </td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="hint" style="margin-top:10px">Las categorías del sistema (Semillas, Envases, Repuestos de hardware e Infraestructura) no se renombran ni se dan de baja, porque las reglas de siembra, entrega, mantenimiento e instalaciones dependen de ellas. «Consumo directo» indica si los insumos de la categoría se pueden registrar sin una orden de trabajo, con «Registrar aplicación de insumos», y a dónde va su costo.</p>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}
