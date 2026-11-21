@@ -650,6 +650,16 @@ class RegistroAuditoria(models.Model):
         # Configuración operativa y perfil de la organización (MAE-04, D-36): son registros únicos, solo se modifican.
         MODIFICACION_CONFIGURACION = "modificacion_configuracion", "Modificación de la configuración operativa"
         MODIFICACION_PERFIL = "modificacion_perfil", "Modificación del perfil de la organización"
+        # Inventario (INV-01, D-36): categorías de insumos, insumos del catálogo y su baja en cada invernadero.
+        ALTA_TIPO_INSUMO = "alta_tipo_insumo", "Alta de categoría de insumos"
+        MODIFICACION_TIPO_INSUMO = "modificacion_tipo_insumo", "Modificación de categoría de insumos"
+        BAJA_TIPO_INSUMO = "baja_tipo_insumo", "Baja de categoría de insumos"
+        REACTIVACION_TIPO_INSUMO = "reactivacion_tipo_insumo", "Reactivación de categoría de insumos"
+        ALTA_INSUMO = "alta_insumo", "Alta de insumo"
+        MODIFICACION_INSUMO = "modificacion_insumo", "Modificación de insumo"
+        BAJA_INSUMO = "baja_insumo", "Baja de insumo"
+        REACTIVACION_INSUMO = "reactivacion_insumo", "Reactivación de insumo"
+        BAJA_INSUMO_INVERNADERO = "baja_insumo_invernadero", "Baja de insumo en un invernadero"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -692,6 +702,12 @@ class RegistroAuditoria(models.Model):
         "cant_agujeros_total": "Agujeros totales",
         "invernadero": "Invernadero",
         "semillas_renombradas": "Semillas renombradas",
+        # Inventario (INV-01): el orden es el de la pantalla. «nombre» y «estado» ya existen; «categoria» es una referencia.
+        "descripcion": "Descripción",
+        "categoria": "Categoría",
+        "unidad_medida": "Unidad de medida",
+        "controla_vencimiento": "Controla vencimiento",
+        "consumo_directo": "Consumo directo",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -724,6 +740,22 @@ class RegistroAuditoria(models.Model):
         "estado": {"activo": "Activo", "inactivo": "Inactivo", "fuera_de_servicio": "Fuera de servicio"},
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
+        # INV-01: `core` no importa `inventario` (A1 de D-37), así que las listas cerradas se repiten acá.
+        "consumo_directo": {
+            "no_admite": "No admite",
+            "como_gasto": "Como gasto",
+            "como_costo_de_los_lotes": "Como costo de los lotes",
+        },
+        "unidad_medida": {
+            "unidad": "unidad",
+            "kg": "kg",
+            "g": "g",
+            "l": "L",
+            "ml": "mL",
+            "m3": "m³",
+            "m": "m",
+            "m2": "m²",
+        },
     }
     SIN_VALOR = "—"
 
@@ -868,6 +900,15 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_CULTIVO,
         RegistroAuditoria.Accion.MODIFICACION_CONFIGURACION,
         RegistroAuditoria.Accion.MODIFICACION_PERFIL,
+        RegistroAuditoria.Accion.ALTA_TIPO_INSUMO,
+        RegistroAuditoria.Accion.MODIFICACION_TIPO_INSUMO,
+        RegistroAuditoria.Accion.BAJA_TIPO_INSUMO,
+        RegistroAuditoria.Accion.REACTIVACION_TIPO_INSUMO,
+        RegistroAuditoria.Accion.ALTA_INSUMO,
+        RegistroAuditoria.Accion.MODIFICACION_INSUMO,
+        RegistroAuditoria.Accion.BAJA_INSUMO,
+        RegistroAuditoria.Accion.REACTIVACION_INSUMO,
+        RegistroAuditoria.Accion.BAJA_INSUMO_INVERNADERO,
     }
 )
 

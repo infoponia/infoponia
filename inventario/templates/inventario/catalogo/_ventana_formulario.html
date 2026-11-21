@@ -1,0 +1,47 @@
+{% load iconos %}{% comment %}Ventana para crear un insumo o modificar uno (CMP-ALT-INS y CMP-MOD-INS, MODALS['insumo-form'] del prototipo). Recibe «form»,
+«insumo» (al modificar), «a_avisar» (los invernaderos cuyo Agrónomo recibirá el aviso, regla 5 de CMP-MOD-INS) y «bloqueos» ({campo: motivo}
+de la regla 3: ese campo se muestra con su valor y su motivo, sin poder cambiarlo). Informa y no bloquea. Es un formulario común (POST), con
+«novalidate»: las reglas son del servicio.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">{% if insumo %}Modificar insumo{% else %}Nuevo insumo{% endif %}</h2>
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+    {% if a_avisar %}
+    <div class="alert alert-info" role="status" style="margin-bottom:12px">{% icono "info" 16 %}<div>También lo usan: {% for i in a_avisar %}{{ i.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}. Se les notificará el cambio.</div></div>
+    {% endif %}
+    <form method="post" novalidate action="{% if insumo %}{% url 'inventario:insumo_modificar' insumo.pk %}{% else %}{% url 'inventario:insumo_nuevo' %}{% endif %}">
+      {% csrf_token %}
+      {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+      {% include "core/usuarios/_campo.html" with campo=form.descripcion %}
+      <div class="grid2">
+        {% if bloqueos.categoria %}
+        <div class="fld"><span class="lbl">Categoría</span><b class="lockedval">{{ insumo.tipo_insumo.nombre_tipo_insumo }}</b><div class="hint"><span class="lock">{% icono "lock" 12 %} {{ bloqueos.categoria }}</span></div>{% for error in form.categoria.errors %}<div class="err">{{ error }}</div>{% endfor %}</div>
+        {% else %}
+        {% if insumo %}{% include "core/usuarios/_campo.html" with campo=form.categoria requerido=True ayuda="Las categorías del sistema no se ofrecen: un insumo no entra ni sale de ellas." %}
+        {% else %}{% include "core/usuarios/_campo.html" with campo=form.categoria requerido=True %}{% endif %}
+        {% endif %}
+        {% if bloqueos.unidad %}
+        <div class="fld"><span class="lbl">Unidad de medida</span><b class="lockedval">{{ insumo.get_unidad_medida_insumo_display }}</b><div class="hint"><span class="lock">{% icono "lock" 12 %} {{ bloqueos.unidad }}</span></div>{% for error in form.unidad.errors %}<div class="err">{{ error }}</div>{% endfor %}</div>
+        {% else %}
+        {% include "core/usuarios/_campo.html" with campo=form.unidad requerido=True ayuda="La unidad en la que se usa. Si se compra por presentación (una tira de 6 m, una bolsa de 100 L), la equivalencia se carga al registrar la compra." %}
+        {% endif %}
+      </div>
+      <div class="fld">
+        <div class="row" style="align-items:flex-start;gap:12px;margin-bottom:6px">
+          <label class="switch">{% if bloqueos.controla_vencimiento %}<input type="checkbox" disabled{% if insumo.controla_vencimiento %} checked{% endif %}>{% else %}{{ form.controla_vencimiento }}{% endif %}<i></i></label>
+          <div>
+            <b style="font-size:13px"><label for="{{ form.controla_vencimiento.id_for_label }}">Controla vencimiento</label></b>
+            <div class="hint" style="margin-top:2px">{% if bloqueos.controla_vencimiento %}<span class="lock">{% icono "lock" 12 %} {{ bloqueos.controla_vencimiento }}</span>{% else %}Si está activo, cada vez que entra stock se pide la fecha de vencimiento del lote, y el Sistema avisa antes de que venza. Activalo en lo que se degrada; dejalo apagado en envases, repuestos y herramientas.{% endif %}</div>
+            {% for error in form.controla_vencimiento.errors %}<div class="err">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+      </div>
+      {% if insumo %}<div class="hint">El cambio queda registrado en la auditoría.</div>
+      {% else %}<div class="alert alert-info" role="status" style="margin-bottom:12px">{% icono "info" 16 %}<div>Las semillas no se cargan acá: se crean solas al dar de alta una variedad.</div></div>{% endif %}
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Guardando…">{% if insumo %}Guardar cambios{% else %}Crear insumo{% endif %}</button>
+        <a class="btn btn-ghost" href="{% url 'inventario:catalogo' %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

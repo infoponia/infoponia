@@ -34,4 +34,6 @@ urlpatterns = [
     path("produccion/", include("maestros.urls")),
     # MAE-04: el menú del Gerente tiene también «Configuración» (maestros la registra en ready()).
     path("configuracion/", include("maestros.urls_configuracion")),
+    # INV-01: el menú del Agrónomo tiene también «Inventario» (inventario la registra en ready()).
+    path("inventario/", include("inventario.urls")),
 ]

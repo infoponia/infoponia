@@ -173,6 +173,12 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **Lo implementado distinto de lo escrito:** la entrada del menú se registra con `registrar_entrada` desde `ready()` (al final del menú del Gerente), no en `core/menu.py`; las rutas están en `maestros/urls_configuracion.py` (la tarea no fijaba la URL); la rama real es `feature/mae-04-configuracion-y-organizacion`.
 - **Decisiones de aplicación sin documento:** colores guardados en mayúsculas; error de orden de colores en el color cargado fuera de orden; opcional vacío como nulo en la auditoría; guardar sin cambios confirma igual el aviso; tope de cada parámetro igual al entero de la columna. Pasar a la ficha de `PerfilOrganizacion` y a ADM-MOD-ORG.
 
+## Abiertos desde INV-01 (21/11/2026)
+
+- **Permisos explícitos fuera de «Límites»:** una línea `path("inventario/", include("inventario.urls"))` en `config/urls.py` y otra en `core/tests/urls_prueba_acceso.py`.
+- **Lo implementado distinto de lo escrito:** el menú se registra con `registrar_entrada` desde `InventarioConfig.ready()`, no en `core/menu.py`; la tarea pide «filtros» pero el prototipo no los tiene en el catálogo ni en las categorías, así que no se hicieron; la baja de categoría confirma en una ventana (el prototipo usa un aviso directo); la rama real es `feature/inv-01-tipos-de-insumo-y-catalogo`; los textos del prototipo («Ingrese», «Habilítelo») pasan al voseo del sistema.
+- **Decisiones de aplicación sin documento:** las 15 del «Cierre» de la tarea (`tipo_movimiento`, `CheckConstraint` extra de `TipoInsumo`, `isnull=False` explícito, unidades en minúscula en la base, `max_length=30`, claves de `motivo_ajuste`, clave de alertas `insumo:<id>`, lote inicial como `ajuste_positivo`/`carga_inicial`, claves de auditoría, aviso MOD-INS en una llamada, insumo de un invernadero sin Agrónomo no gestionable, bloqueos solo si cambia el valor, baja sobre habilitaciones de invernaderos inactivos, orden de categorías, pantallas). Pasar a la fila de decisiones si el equipo las confirma.
+
 
 ## Abiertos desde H2 (20/11/2026)
 

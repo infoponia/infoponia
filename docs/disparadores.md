@@ -164,10 +164,18 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista InsumoInvernadero
 
-(INV-01 crea el modelo; INV-02 conecta lo de abajo.)
+(INV-01 creó el modelo el 21/11/2026; INV-02 conecta lo de abajo.)
 
 1. **Insumos del invernadero.** Postcondición c y precondición f de PROD-BAJ-INV. Nació en MAE-01a. La c (y el log por insumo
    de la f) se conecta con `registrar_efecto_de_baja`; la f, con `registrar_impedimento_de_baja`.
+
+## Cuando se programe INV-02 (catálogo)
+
+1. **Botón y pestaña.** El catálogo agrega «Habilitar en un invernadero» (regla 7 de CMP-ALT-INS y regla 4 de CMP-CNS-INS) y la pestaña «Existencias de insumos» como primera; `/inventario/` pasa a redirigir a ella (hoy va al catálogo). Nació en INV-01.
+
+## Cuando exista Variedad y Semilla (INV-03)
+
+1. **Semillas en el catálogo.** `es_semilla` ya marca las filas «Viene del alta de la variedad»; INV-03 las enlaza con su variedad y mantiene su alta, modificación y baja. Nació en INV-01.
 
 ## Cuando exista Lote, OrdenTrabajo o StockCosechado
 
@@ -253,7 +261,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista contabilidad con asientos (D-45)
 
-0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52, CON-01 e INV-02): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
+0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
    ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
    ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).
 
