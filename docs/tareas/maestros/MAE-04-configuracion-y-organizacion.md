@@ -1,6 +1,6 @@
 # MAE-04 · Configuración operativa y perfil de la organización (sin logo)
 
-Estado: pendiente | App: maestros | Rama: feature/mae-04-configuracion | Ronda: Producción 1
+Estado: hecha (a la espera de la revisión a mano) | App: maestros | Rama: feature/mae-04-configuracion | Ronda: Producción 1
 
 Depende de: UI-01 (estilo y la identidad de la organización en `core/extensiones.py`). Si no está hecha, frená.
 
@@ -93,9 +93,10 @@ no se recortan.
 
 Hay migraciones nuevas: `python manage.py migrate`. Cuentas: Gerente, Agrónomo, Administrador.
 
-1. `migrate` aplica esquema y datos de `maestros`. En `/admin/` hay una sola fila de cada singleton con los valores iniciales
-   de la ficha.
-2. El Gerente ve «Configuración» en el menú; el Agrónomo, el Capataz y el Administrador no; la URL les da 403.
+1. `migrate` aplica las migraciones de `maestros` (0006 esquema y 0007 datos) y de `core` (0013). En `/admin/` (solo existe con
+   `DJANGO_DEBUG=1`) hay una sola fila de cada singleton con los valores iniciales de la ficha, sin botón de alta, edición ni baja.
+2. El Gerente ve «Configuración» al final del menú (solo esa entrada queda marcada en su pantalla, `/configuracion/`); el Agrónomo, el
+   Capataz y el Administrador no la ven; la URL les da 403 y, sin sesión, lleva al inicio de sesión.
 3. «Parámetros operativos»: vaciar un campo, poner 0 en merma (mínimo 1), 101 (máximo 100), una anticipación del suministro mayor
    que la pre-reserva: cada error sale en su campo y no se guarda ninguno (todo o nada). Poner el horizonte en 10 con la
    pre-reserva en 14: advertencia, y se puede guardar.
@@ -108,7 +109,41 @@ Hay migraciones nuevas: `python manage.py migrate`. Cuentas: Gerente, Agrónomo,
 7. Cambiar el nombre a «Vivero Los Álamos»: lo muestran el encabezado, la pantalla de inicio de sesión (en otra ventana) y un
    correo de invitación o de recuperación (en la consola o en el cuerpo del correo, según el entorno).
 8. Dos Gerentes (dos sesiones; si no hay dos, la prueba de concurrencia lo cubre): gana el último y no hay error 500.
-9. Sin JavaScript, los pasos 3 a 5 funcionan igual.
+9. Sin JavaScript, los pasos 3 a 5 funcionan igual (cada pestaña es una página y el guardado es un POST con redirección). Con JavaScript,
+   guardar con errores no recarga la página y guardar bien la recarga mostrando «Se guardó la configuración.».
 10. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo.** Dos singletons en `maestros` (`ConfiguracionOperativa` con 13 parámetros y `PerfilOrganizacion` sin logo), con
+`singleton` único, `CheckConstraint` por dominio y valores iniciales como `default`. Migraciones nuevas: `maestros` 0006 (esquema) y 0007
+(`cargar_configuracion_y_perfil`, con `get_or_create` por `singleton=1`: no pisa lo que el Gerente cambió) y `core` 0013 (las acciones
+`modificacion_configuracion` y `modificacion_perfil`, también en `ACCIONES_DE_NEGOCIO` y con sus etiquetas en `ETIQUETAS`).
+Servicios `maestros/servicios/configuracion.py` y `perfil.py` (Gerente activo, fila bloqueada con `FOR NO KEY UPDATE` y releída, todo o nada
+con un error por campo, sin cambios no escribe ni audita, auditoría con antes y después; regla 4 como error de campo y regla 5 como
+advertencia). La identidad se registra en `MaestrosConfig.ready()` (D-48). Pantalla «Configuración» en `/configuracion/` con dos
+pestañas, HTMX con respaldo sin JavaScript, y la entrada del menú del Gerente.
+
+**Pruebas.** Nuevas: `test_singletons_modelo.py`, `test_adm_mod_cfg.py`, `test_adm_mod_org.py` (con concurrencia),
+`test_identidad_organizacion.py` y `test_configuracion_vistas.py`. Resultados del 21/11/2026: `maestros core` en paralelo sin concurrencia
+ni migración, 1537 pruebas OK; `--tag concurrencia`, 48 OK; `--tag migracion`, 5 OK; `makemigrations --check --dry-run`, sin cambios.
+Se ajustaron dos pruebas existentes de `core` (ver «Permisos explícitos»); ninguna se debilitó.
+
+**Permisos explícitos fuera de «Límites»** (dados por el estudiante durante la tarea):
+- `core/tests/test_usr_ini_ses.py`: solo `test_d24_el_marco_muestra_el_nombre_de_organizacion_configurado`, que ahora vacía el punto de
+  extensión (`mock.patch.object(extensiones, "_IDENTIDAD", [])`) para probar el valor por defecto; con el perfil registrado, el perfil gana (D-48).
+- `core/tests/urls_prueba_acceso.py`: una línea, `path("configuracion/", include("maestros.urls_configuracion"))`, porque el menú del
+  Gerente ahora resuelve «Configuración» también en ese urlconf de prueba.
+- `config/urls.py`: una línea para `/configuracion/` (la tarea no fijaba la URL; así el menú marca activa solo «Configuración»).
+
+**Distinto de lo escrito.**
+- La entrada del menú se registra con `core.menu.registrar_entrada` desde `MaestrosConfig.ready()` (regla A4); `core/menu.py` no se tocó.
+  Va al final del menú del Gerente (después de «Auditoría»).
+- Rutas en `maestros/urls_configuracion.py` (namespace `configuracion`), no en `maestros/urls.py`.
+- La rama real es `feature/mae-04-configuracion-y-organizacion` (el encabezado decía `…-configuracion`).
+- Decisiones de aplicación que ningún documento fijaba: los colores se guardan en mayúsculas; el error de orden va en el color cargado
+  fuera de orden («Cargá primero el color N.»); mensajes con voseo; en la auditoría un opcional vacío va como nulo; guardar sin cambios
+  confirma igual «Se guardó la configuración.»; los valores tienen como tope el entero de la columna.
+- Las pestañas se guardan con `HX-Redirect` (204) para que el color nuevo rija desde la recarga.
+
+**Decisiones.** Ninguna decisión nueva (D-48 aplicada). Sin pendientes de código.

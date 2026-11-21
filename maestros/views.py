@@ -1,3 +1,4 @@
+# MAE-04 suma la pantalla «Configuración» (al final del archivo).
 # MAE-03 suma la pestaña «Sectores» de la ficha, con la capacidad, y las ventanas de los sectores (al final del archivo).
 # Vistas de maestros para MAE-01: lista y ficha de invernaderos (PROD-CNS-INV), alta (PROD-ALT-INV), modificación y
 # reactivación (PROD-MOD-INV), baja (PROD-BAJ-INV) y los fragmentos HTMX de las listas encadenadas de Georef. Las vistas
@@ -5,17 +6,26 @@
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.http import Http404, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
 from core.models import Usuario
-from maestros.forms import FormularioCultivo, FormularioInvernadero, FormularioSector
+from maestros.forms import (
+    FormularioConfiguracion,
+    FormularioCultivo,
+    FormularioInvernadero,
+    FormularioPerfil,
+    FormularioSector,
+)
 from maestros.models import SectorProduccion
+from maestros.servicios import configuracion as api_configuracion
 from maestros.servicios import cultivos as api_cultivos
+from maestros.servicios import perfil as api_perfil
 from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import (
     FaltaConfirmarPersonal,
@@ -614,3 +624,116 @@ def cultivo_reactivar(request, cultivo_id):
     else:
         messages.success(request, f"El cultivo {cultivo.nombre_cultivo} está activo de nuevo.")
     return redirect("maestros:cultivos")
+
+
+# ---- MAE-04: «Configuración» del Gerente (ADM-MOD-CFG y ADM-MOD-ORG; VIEWS.config del prototipo) ----
+# Dos pestañas, cada una con su formulario y su botón «Guardar cambios». Con HTMX el formulario se guarda sin recargar y, si
+# hay errores, vuelve el formulario con ellos (por campo); si sale bien, ``HX-Redirect`` recarga la página para que el color
+# nuevo rija desde esa carga (D-48) y se vea el aviso. Sin JavaScript es un POST común con redirección. Las vistas de lectura
+# no se auditan (SEG-14). Solo el Gerente llega acá: otros roles, 403; sin sesión, inicio de sesión.
+
+PESTANA_PARAMETROS = "parametros"
+PESTANA_ORGANIZACION = "organizacion"
+MENSAJE_GUARDADO = "Se guardó la configuración."
+
+
+def _es_htmx(request):
+    """True si el pedido lo hizo HTMX (``HX-Request``)."""
+    return request.headers.get("HX-Request") == "true"
+
+
+def _advertencias_de_lo_escrito(form, configuracion):
+    """Las advertencias de la regla 5 para lo que la persona escribió (o, donde no es un entero, lo guardado)."""
+    valores = {}
+    for campo in ("dias_horizonte_cosecha", "dias_pre_reserva_suministro"):
+        escrito = str(form.data.get(campo, "")).strip() if form.is_bound else ""
+        valores[campo] = int(escrito) if escrito.isdigit() else getattr(configuracion, campo)
+    return api_configuracion.advertencias_de(valores)
+
+
+def _contexto_de_configuracion(pestana, form_parametros=None, form_perfil=None):
+    """Lo que dibuja la pantalla: la pestaña activa, su formulario (los valores guardados si no viene uno con errores) y,
+    en los parámetros, la advertencia de la regla 5 junto al formulario."""
+    contexto = {"pestana": pestana}
+    if pestana == PESTANA_ORGANIZACION:
+        contexto["form"] = form_perfil or FormularioPerfil(perfil=api_perfil.obtener())
+    else:
+        configuracion = api_configuracion.obtener()
+        form = form_parametros or FormularioConfiguracion(configuracion=configuracion)
+        contexto["form"] = form
+        contexto["advertencias"] = _advertencias_de_lo_escrito(form, configuracion)
+    return contexto
+
+
+def _pasar_errores_de_campo(form, error):
+    """Pasa los errores de un ``ValidationError`` del servicio al formulario, cada uno en su campo."""
+    for campo, errores in error.error_dict.items():
+        for e in errores:
+            form.add_error(campo if campo in form.fields else None, e)
+
+
+@rol_requerido(GERENTE)
+@require_safe
+def configuracion(request):
+    """Pantalla «Configuración» (ADM-MOD-CFG y ADM-MOD-ORG): «Parámetros operativos» por defecto y «Organización» con
+    ``?pestana=organizacion``. Muestra los valores actuales (regla 1 de los dos casos de uso)."""
+    pestana = PESTANA_ORGANIZACION if request.GET.get("pestana") == PESTANA_ORGANIZACION else PESTANA_PARAMETROS
+    return render(request, "maestros/configuracion/pantalla.html", _contexto_de_configuracion(pestana))
+
+
+def _guardar(request, pestana, formulario, servicio, plantilla_fragmento):
+    """Lo común de las dos pestañas: valida con el servicio (todo o nada), y si sale bien avisa y recarga la pantalla; si no,
+    muestra los errores por campo (el fragmento con HTMX, la página entera sin JavaScript)."""
+    form = formulario(request.POST)
+    form.is_valid()  # los campos son de texto libre; las reglas son del servicio
+    try:
+        servicio(request.user, **form.datos_del_servicio())
+    except ValidationError as error:
+        _pasar_errores_de_campo(form, error)
+    else:
+        messages.success(request, MENSAJE_GUARDADO)
+        destino = reverse("configuracion:pantalla") + (f"?pestana={pestana}" if pestana != PESTANA_PARAMETROS else "")
+        if _es_htmx(request):
+            respuesta = HttpResponse(status=204)
+            respuesta["HX-Redirect"] = destino
+            return respuesta
+        return redirect(destino)
+    contexto = _contexto_de_configuracion(
+        pestana,
+        form_parametros=form if pestana == PESTANA_PARAMETROS else None,
+        form_perfil=form if pestana == PESTANA_ORGANIZACION else None,
+    )
+    if _es_htmx(request):
+        return render(request, plantilla_fragmento, contexto)
+    return render(request, "maestros/configuracion/pantalla.html", contexto)
+
+
+@rol_requerido(GERENTE)
+@require_POST
+@never_cache
+@vary_on_headers("HX-Request")
+def configuracion_guardar_parametros(request):
+    """Guarda la pestaña «Parámetros operativos» (ADM-MOD-CFG): todo o nada, con la advertencia de la regla 5 junto al
+    formulario."""
+    return _guardar(
+        request,
+        PESTANA_PARAMETROS,
+        FormularioConfiguracion,
+        lambda actor, **datos: api_configuracion.modificar_configuracion(actor, **datos),
+        "maestros/configuracion/_parametros.html",
+    )
+
+
+@rol_requerido(GERENTE)
+@require_POST
+@never_cache
+@vary_on_headers("HX-Request")
+def configuracion_guardar_organizacion(request):
+    """Guarda la pestaña «Organización» (ADM-MOD-ORG): todo o nada. Sin el campo del logo (D-45)."""
+    return _guardar(
+        request,
+        PESTANA_ORGANIZACION,
+        FormularioPerfil,
+        lambda actor, **datos: api_perfil.modificar_perfil(actor, **datos),
+        "maestros/configuracion/_organizacion.html",
+    )

@@ -46,7 +46,7 @@ está en el repo: no se puede programar hasta que llegue su lote de documentaci�
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| MAE-04 | Configuración operativa y perfil de la organización (sin logo) | maestros | pendiente | UI-01 | `maestros/MAE-04-configuracion-y-organizacion.md` |
+
 | CON-01 | `OrigenDocumento`: el documento de origen común (D-52) | contabilidad | pendiente | — | `contabilidad/CON-01-origen-documento.md` |
 | INV-01 | Tipos de insumo y catálogo de insumos (y los modelos de todo `inventario`) | inventario | pendiente | UI-01, NOT-01, CON-01 | `inventario/INV-01-tipos-de-insumo-y-catalogo.md` |
 | INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | pendiente | INV-01, UI-01 | `inventario/INV-02-insumos-del-invernadero-stock-y-vencimientos.md` |

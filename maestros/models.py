@@ -3,6 +3,7 @@
 # MAE-02a: Alerta (D-38: vive en maestros con una FK al invernadero; los orígenes de las apps altas la apuntan desde su app).
 # MAE-03: TipoEtapa (catálogo fijo), SectorProduccion, Cultivo y, con columnas mínimas, Variedad, Ciclo y EtapaProductiva
 # (docs/modelo/maestros.md; INV-03 completa Variedad).
+# MAE-04: ConfiguracionOperativa y PerfilOrganizacion, dos singletons (MD-89) sin alta ni baja.
 
 from django.db import models
 from django.db.models import Q
@@ -559,3 +560,97 @@ class EtapaProductiva(models.Model):
 
     def __str__(self):
         return f"{self.tipo_etapa} de {self.ciclo}"
+
+
+# ---- MAE-04: singletons (MD-89). Una sola fila cada uno, creada por migración; la unicidad la garantiza la base ----
+
+# (campo, etiqueta, valor inicial, mínimo, máximo o None). Dominios de la regla 3 de ADM-MOD-CFG; valores iniciales de la
+# regla 2 (MD-89 y MD-93). Los usan los CheckConstraint del modelo y las pruebas; el servicio tiene sus propios mensajes.
+PARAMETROS_DE_CONFIGURACION = [
+    ("porc_merma_maxima", "Merma máxima tolerada por lote", 15, 1, 100),
+    ("dias_horizonte_cosecha", "Horizonte de planificación de cosecha", 30, 1, None),
+    ("dias_aviso_vencimiento", "Aviso de vencimiento de insumos", 15, 1, None),
+    ("dias_pre_reserva_suministro", "Pre-reserva de suministros", 14, 1, None),
+    ("dias_anticipacion_cosecha_compra_venta", "Anticipación de cosecha: compra-venta", 1, 0, None),
+    ("dias_anticipacion_cosecha_suministro", "Anticipación de cosecha: suministro", 3, 0, None),
+    ("dias_vigencia_enlace_confirmacion", "Vigencia del enlace de confirmación", 3, 1, None),
+    ("dias_vigencia_enlace_faltante", "Vigencia del enlace de decisión ante un faltante", 2, 1, None),
+    ("dias_limite_cotizacion", "Días límite para cotizar", 3, 1, None),
+    ("dias_validez_cotizacion", "Validez de las cotizaciones", 7, 1, None),
+    ("porc_tolerancia_cobertura_pedido", "Tolerancia de cobertura del pedido", 0, 0, 100),
+    ("cant_maxima_entregas_diarias", "Máximo de entregas diarias por transportista", 10, 1, None),
+    ("cant_max_ciudades_distintas_diarias", "Máximo de localidades distintas por día", 3, 1, None),
+]
+
+
+def _restricciones_de_dominio():
+    """Un ``CheckConstraint`` por parámetro con su dominio (regla 3 de ADM-MOD-CFG), para que la base lo garantice."""
+    restricciones = []
+    for campo, _, _, minimo, maximo in PARAMETROS_DE_CONFIGURACION:
+        condicion = Q(**{f"{campo}__gte": minimo})
+        if maximo is not None:
+            condicion &= Q(**{f"{campo}__lte": maximo})
+        restricciones.append(models.CheckConstraint(condition=condicion, name=f"configuracion_{campo}_en_dominio"))
+    return restricciones
+
+
+class ConfiguracionOperativa(models.Model):
+    """Parámetros que rigen la operación (ADM-MOD-CFG). Singleton: ``singleton`` vale siempre 1 y es único, así que la
+    base no admite una segunda fila. R001 (quién la establece) no se guarda: lo registra la auditoría (D-36). Quien use un
+    parámetro lo lee con ``maestros.servicios.configuracion.obtener()`` en cada uso (regla 7)."""
+
+    singleton = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    porc_merma_maxima = models.IntegerField("merma máxima tolerada por lote (%)", default=15)
+    dias_horizonte_cosecha = models.IntegerField("horizonte de planificación de cosecha (días)", default=30)
+    dias_aviso_vencimiento = models.IntegerField("aviso de vencimiento de insumos (días antes)", default=15)
+    dias_pre_reserva_suministro = models.IntegerField("pre-reserva de suministros (días)", default=14)
+    dias_anticipacion_cosecha_compra_venta = models.IntegerField(
+        "anticipación de cosecha: compra-venta (días)", default=1
+    )
+    dias_anticipacion_cosecha_suministro = models.IntegerField(
+        "anticipación de cosecha: suministro (días)", default=3
+    )
+    dias_vigencia_enlace_confirmacion = models.IntegerField("vigencia del enlace de confirmación (días)", default=3)
+    dias_vigencia_enlace_faltante = models.IntegerField(
+        "vigencia del enlace de decisión ante un faltante (días)", default=2
+    )
+    dias_limite_cotizacion = models.IntegerField("días límite para cotizar", default=3)
+    dias_validez_cotizacion = models.IntegerField("validez de las cotizaciones (días)", default=7)
+    porc_tolerancia_cobertura_pedido = models.IntegerField("tolerancia de cobertura del pedido (%)", default=0)
+    cant_maxima_entregas_diarias = models.IntegerField("máximo de entregas diarias por transportista", default=10)
+    cant_max_ciudades_distintas_diarias = models.IntegerField("máximo de localidades distintas por día", default=3)
+
+    class Meta:
+        verbose_name = "Configuración operativa"
+        verbose_name_plural = "Configuración operativa"
+        constraints = [
+            models.CheckConstraint(condition=Q(singleton=1), name="configuracion_singleton_es_1"),
+            *_restricciones_de_dominio(),
+        ]
+
+    def __str__(self):
+        return "Configuración operativa"
+
+
+class PerfilOrganizacion(models.Model):
+    """Identidad de la organización (ADM-MOD-ORG, D-48). Singleton como ``ConfiguracionOperativa``. Sin logo (D-45). Los
+    colores van en orden: el primero es el principal y tiñe el sistema."""
+
+    singleton = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    nombre_organizacion = models.CharField("nombre", max_length=120)
+    cuit_organizacion = models.CharField("CUIT", max_length=11, blank=True, default="")
+    telefono_organizacion = models.CharField("teléfono", max_length=25, blank=True, default="")
+    email_organizacion = models.CharField("email", max_length=254, blank=True, default="")
+    direccion_organizacion = models.CharField("dirección", max_length=200, blank=True, default="")
+    color_primario = models.CharField("color 1 (principal)", max_length=7, blank=True, default="")
+    color_secundario = models.CharField("color 2", max_length=7, blank=True, default="")
+    color_terciario = models.CharField("color 3", max_length=7, blank=True, default="")
+    color_cuaternario = models.CharField("color 4", max_length=7, blank=True, default="")
+
+    class Meta:
+        verbose_name = "Perfil de la organización"
+        verbose_name_plural = "Perfil de la organización"
+        constraints = [models.CheckConstraint(condition=Q(singleton=1), name="perfil_singleton_es_1")]
+
+    def __str__(self):
+        return self.nombre_organizacion

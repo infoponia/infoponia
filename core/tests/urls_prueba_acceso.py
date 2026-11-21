@@ -32,4 +32,6 @@ urlpatterns = [
     path("prueba/mensajes/", vista_con_mensajes, name="prueba_mensajes"),
     path("", include("core.urls")),
     path("produccion/", include("maestros.urls")),
+    # MAE-04: el menú del Gerente tiene también «Configuración» (maestros la registra en ready()).
+    path("configuracion/", include("maestros.urls_configuracion")),
 ]

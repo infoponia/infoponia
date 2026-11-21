@@ -2,11 +2,14 @@
 # se escribe y arma las listas; todas las reglas las aplica el servicio (maestros/servicios/invernaderos.py), y la
 # vista pasa sus errores al formulario. Provincia, departamento y localidad son listas encadenadas de Georef (regla 3).
 
+import re
+
 from django import forms
 from django.urls import reverse_lazy
 
-from maestros.models import TipoEtapa
+from maestros.models import PARAMETROS_DE_CONFIGURACION, TipoEtapa
 from maestros.servicios import geografia
+from maestros.servicios import perfil as perfil_servicio
 from maestros.servicios.invernaderos import NOMBRE_DEL_ROL, cuentas_asignables, datos_de_la_direccion
 
 SELECCIONAR = [("", "Seleccionar…")]
@@ -248,3 +251,99 @@ class FormularioCultivo(forms.Form):
     def datos_del_servicio(self):
         """Los argumentos de ``alta_cultivo`` y de ``modificar_cultivo`` (sin el actor ni el id) a partir de lo escrito."""
         return {"nombre": self.cleaned_data.get("nombre", "")}
+
+
+# ---- MAE-04: pantalla «Configuración» (VIEWS.config y CFG del prototipo) ----
+
+# (grupo, [(campo, unidad, ayuda)]). Los grupos, las unidades y las ayudas salen de ``CFG`` del prototipo; el parámetro de la
+# vigencia del enlace de faltante lo agrega MAE-04 al grupo «Comercial» (el caso de uso lo tiene y el prototipo no).
+GRUPOS_DE_PARAMETROS = [
+    ("Producción", [
+        ("porc_merma_maxima", "%", "Al superarla, se alerta al Agrónomo y al Gerente. El descarte por selección no cuenta."),
+        ("dias_horizonte_cosecha", "días", ""),
+    ]),
+    ("Insumos", [
+        ("dias_aviso_vencimiento", "días antes",
+         "Con esta anticipación se alerta al Agrónomo de cada lote de insumo que está por vencer."),
+    ]),
+    ("Comercial", [
+        ("dias_pre_reserva_suministro", "días", ""),
+        ("dias_anticipacion_cosecha_compra_venta", "días", ""),
+        ("dias_anticipacion_cosecha_suministro", "días", "No puede superar la pre-reserva de suministros."),
+        ("dias_vigencia_enlace_confirmacion", "días", ""),
+        ("dias_vigencia_enlace_faltante", "días", ""),
+    ]),
+    ("Compras", [
+        ("dias_limite_cotizacion", "días", ""),
+        ("dias_validez_cotizacion", "días", ""),
+        ("porc_tolerancia_cobertura_pedido", "%", ""),
+    ]),
+    ("Entregas", [
+        ("cant_maxima_entregas_diarias", "entregas", ""),
+        ("cant_max_ciudades_distintas_diarias", "localidades", ""),
+    ]),
+]
+
+
+class FormularioConfiguracion(forms.Form):
+    """Pestaña «Parámetros operativos» (ADM-MOD-CFG): un campo numérico por parámetro. Solo normaliza lo que se escribe; los
+    dominios y las reglas 4 y 5 son del servicio (``maestros/servicios/configuracion.py``), que devuelve los errores por campo."""
+
+    def __init__(self, *args, configuracion=None, **kwargs):
+        if configuracion is not None and not args and "data" not in kwargs:
+            kwargs.setdefault("initial", {c: getattr(configuracion, c) for c, *_ in PARAMETROS_DE_CONFIGURACION})
+        super().__init__(*args, **kwargs)
+        etiquetas = {campo: etiqueta for campo, etiqueta, *_ in PARAMETROS_DE_CONFIGURACION}
+        for grupo, parametros in GRUPOS_DE_PARAMETROS:
+            for campo, unidad, _ in parametros:
+                self.fields[campo] = forms.CharField(
+                    label=f"{etiquetas[campo]} ({unidad})",
+                    required=False,
+                    widget=forms.NumberInput(
+                        attrs={"class": "field-input num", "inputmode": "numeric", "autocomplete": "off"}
+                    ),
+                )
+
+    @property
+    def grupos(self):
+        """``[(título, [(campo, ayuda)])]`` para dibujar una tarjeta por grupo."""
+        return [(g, [(self[campo], ayuda) for campo, _, ayuda in ps]) for g, ps in GRUPOS_DE_PARAMETROS]
+
+    def datos_del_servicio(self):
+        """Los argumentos de ``modificar_configuracion`` (sin el actor): todos los parámetros, tal como se escribieron."""
+        return {campo: self.cleaned_data.get(campo, "") for campo, *_ in PARAMETROS_DE_CONFIGURACION}
+
+
+class FormularioPerfil(forms.Form):
+    """Pestaña «Organización» (ADM-MOD-ORG): los datos y hasta cuatro colores. Sin logo (D-45). Las reglas son del servicio
+    (``maestros/servicios/perfil.py``)."""
+
+    nombre_organizacion = _texto("Nombre", 120)
+    cuit_organizacion = _texto("CUIT", 20)
+    telefono_organizacion = _texto("Teléfono", 25)
+    email_organizacion = _texto("Email", 254)
+    direccion_organizacion = _texto("Dirección", 200)
+    color_primario = _texto("Color 1 (principal)", 7, placeholder="Sin color · Ej. #1A6B3C")
+    color_secundario = _texto("Color 2", 7, placeholder="Sin color · Ej. #1A6B3C")
+    color_terciario = _texto("Color 3", 7, placeholder="Sin color · Ej. #1A6B3C")
+    color_cuaternario = _texto("Color 4", 7, placeholder="Sin color · Ej. #1A6B3C")
+
+    def __init__(self, *args, perfil=None, **kwargs):
+        if perfil is not None and not args and "data" not in kwargs:
+            kwargs.setdefault("initial", {campo: getattr(perfil, campo) for campo in perfil_servicio.CAMPOS})
+        super().__init__(*args, **kwargs)
+
+    @property
+    def colores(self):
+        """Los cuatro colores como ``(campo, muestra)``: ``muestra`` es el color escrito si es ``#RRGGBB`` válido (el único
+        valor que va a un ``style``) y vacío si no."""
+        resultado = []
+        for nombre in perfil_servicio.CAMPOS_DE_COLOR:
+            campo = self[nombre]
+            valor = str(campo.value() or "").strip()
+            resultado.append((campo, valor if re.fullmatch(r"#[0-9a-fA-F]{6}", valor) else ""))
+        return resultado
+
+    def datos_del_servicio(self):
+        """Los argumentos de ``modificar_perfil`` (sin el actor): todos los datos, tal como se escribieron."""
+        return {campo: self.cleaned_data.get(campo, "") for campo in perfil_servicio.CAMPOS}

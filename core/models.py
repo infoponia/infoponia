@@ -647,6 +647,9 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_CULTIVO = "modificacion_cultivo", "Modificación de cultivo"
         BAJA_CULTIVO = "baja_cultivo", "Baja de cultivo"
         REACTIVACION_CULTIVO = "reactivacion_cultivo", "Reactivación de cultivo"
+        # Configuración operativa y perfil de la organización (MAE-04, D-36): son registros únicos, solo se modifican.
+        MODIFICACION_CONFIGURACION = "modificacion_configuracion", "Modificación de la configuración operativa"
+        MODIFICACION_PERFIL = "modificacion_perfil", "Modificación del perfil de la organización"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -689,6 +692,30 @@ class RegistroAuditoria(models.Model):
         "cant_agujeros_total": "Agujeros totales",
         "invernadero": "Invernadero",
         "semillas_renombradas": "Semillas renombradas",
+        # Configuración operativa (MAE-04): el orden es el de la pantalla.
+        "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
+        "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
+        "dias_aviso_vencimiento": "Aviso de vencimiento de insumos (días antes)",
+        "dias_pre_reserva_suministro": "Pre-reserva de suministros (días)",
+        "dias_anticipacion_cosecha_compra_venta": "Anticipación de cosecha: compra-venta (días)",
+        "dias_anticipacion_cosecha_suministro": "Anticipación de cosecha: suministro (días)",
+        "dias_vigencia_enlace_confirmacion": "Vigencia del enlace de confirmación (días)",
+        "dias_vigencia_enlace_faltante": "Vigencia del enlace de decisión ante un faltante (días)",
+        "dias_limite_cotizacion": "Días límite para cotizar",
+        "dias_validez_cotizacion": "Validez de las cotizaciones (días)",
+        "porc_tolerancia_cobertura_pedido": "Tolerancia de cobertura del pedido (%)",
+        "cant_maxima_entregas_diarias": "Máximo de entregas diarias por transportista",
+        "cant_max_ciudades_distintas_diarias": "Máximo de localidades distintas por día",
+        # Perfil de la organización (MAE-04).
+        "nombre_organizacion": "Nombre de la organización",
+        "cuit_organizacion": "CUIT",
+        "telefono_organizacion": "Teléfono de la organización",
+        "email_organizacion": "Email de la organización",
+        "direccion_organizacion": "Dirección de la organización",
+        "color_primario": "Color 1 (principal)",
+        "color_secundario": "Color 2",
+        "color_terciario": "Color 3",
+        "color_cuaternario": "Color 4",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -839,6 +866,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_CULTIVO,
         RegistroAuditoria.Accion.BAJA_CULTIVO,
         RegistroAuditoria.Accion.REACTIVACION_CULTIVO,
+        RegistroAuditoria.Accion.MODIFICACION_CONFIGURACION,
+        RegistroAuditoria.Accion.MODIFICACION_PERFIL,
     }
 )
 
