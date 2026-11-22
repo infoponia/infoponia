@@ -203,7 +203,7 @@ como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porq
 
 MAE-03 creó los puntos de extensión de sectores y cultivos (`docs/api/extensiones_de_maestros.md`) el 20/11/2026 **sin registrantes** (probados con registrantes falsos). Cada tarea que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
 
-1. **PRD-01 y PRD-02 (`produccion`):** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
+1. **PRD-01 y PRD-02 (`produccion`) — PRD-01 hecho el 22/11/2026 (los cinco puntos, con lotes y siembras); PRD-02 suma las transiciones:** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
    (agujeros ocupados y comprometidos, con los lotes y órdenes), `registrar_contenido_de_sector` (lotes y órdenes),
    `registrar_perfil_de_sector` y `registrar_aviso_de_cambio_de_tipo` (lotes que deben pasar por la etapa y siembras a realizar).
    Al reservar agujeros (`PRD-01` y `PRD-02`), llamar a `bloquear_sectores`, que ya bloquea el invernadero activo y después los sectores activos, y rechaza con `sector_no_disponible`.
@@ -221,7 +221,7 @@ INV-03 crea los tres puntos de variedades de `docs/api/extensiones_de_inventario
 ninguna variedad tiene lotes, órdenes ni contratos, y todas pueden modificarse y darse de baja sin impedimentos. Cada tarea que crea lo
 que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
 
-1. **PRD-01 (`produccion`):** `registrar_uso_de_variedad` (lotes de la variedad, lotes activos por invernadero, órdenes de siembra y de
+1. ~~**PRD-01 (`produccion`):**~~ Hecho el 22/11/2026 en PRD-01 (las órdenes de transición las suma PRD-02 en `uso_de_variedad`). Texto original: `registrar_uso_de_variedad` (lotes de la variedad, lotes activos por invernadero, órdenes de siembra y de
    transición a realizar), `registrar_variedades_presentes` (variedades de lotes activos y de órdenes de siembra a realizar por
    invernadero: la misma definición del «umbral efectivo» de PROD-PNF-SMB) y `registrar_impedimento_de_baja_de_variedad` con los códigos
    `lotes_activos` y `ordenes_a_realizar`. PRD-01 también llama a `inventario.servicios.variedades` (`docs/api/variedades.md`) para
@@ -233,7 +233,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista PRD-01 (lotes y órdenes reales de variedades) — nace con INV-03 (22/11/2026)
 
-1. Las pruebas de INV-03 usan registrantes falsos de `registrar_uso_de_variedad`, `registrar_variedades_presentes` y `registrar_impedimento_de_baja_de_variedad`. PRD-01 agrega una prueba de punta a punta con los reales (modificar, dar de baja y advertencia de rangos con lotes verdaderos).
+1. ~~**Prueba de punta a punta con los registrantes reales.**~~ Hecho el 22/11/2026 en PRD-01 (`produccion/tests/test_registrantes_de_inventario.py`: baja, perfil, umbral efectivo y stock libre con lotes y órdenes verdaderos). Texto original: Las pruebas de INV-03 usan registrantes falsos de `registrar_uso_de_variedad`, `registrar_variedades_presentes` y `registrar_impedimento_de_baja_de_variedad`. PRD-01 agrega una prueba de punta a punta con los reales (modificar, dar de baja y advertencia de rangos con lotes verdaderos).
 2. Decidir si `reactivar_variedad` debe reevaluar las alertas de las existencias que quedaron activas (hoy solo lo hace la baja).
 
 
@@ -295,6 +295,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    ficha (la pestaña de lotes la registra PRD-01 con `registrar_pestana_de_invernadero`, ver `docs/api/extensiones_de_maestros.md`; la de cámara queda fuera, D-45). Se conectan por el punto de extensión `maestros/extensiones.py` (D-37, regla A4), creado en MAE-01b. Se registra con
    `registrar_impedimento_de_baja` en `AppConfig.ready()`. Todo caso de uso que cree algo que impide la baja llama a
    `bloquear_invernadero_activo` antes de crearlo (contrato de D-40 y de `docs/patrones/bloqueos.md`). Nació en MAE-01a.
+   **Hecho el 22/11/2026 en PRD-01:** los impedimentos `lotes_activos` y `ordenes_a_realizar` (de todos los tipos de orden, D-64 punto 12) y la
+   pestaña «Lotes activos». Sigue abierto lo de la cámara (`partidas_en_camara`, COM-04).
    **COM-02 (lote C2):** las cosechas «a realizar» impiden la baja (las cuenta el registrante de PRD-01 si cuenta por `OrdenTrabajo`; si no,
    COM-02 las suma) y PROD-ASG-STK bloquea los invernaderos antes de crearlas. Las partidas en cámara y su pestaña: COM-04.
    **Planificado (lote C4):** COM-04 registra la pestaña «Cámara» (desde `comercial`, porque muestra lo reservado) y el impedimento
@@ -356,6 +358,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    las alertas activas (hecho en MAE-02a, directo en `modificar_invernadero`, no por registrante) y, si el saliente sigue activo, se cancelan sus pedidos sin orden de compra con destino a ese
    invernadero y se avisa a los proveedores invitados. `contar` alimenta el aviso de la regla 2 y la notificación de la
    postcondición c. Bloquean sus filas después del invernadero y en orden de id. Nació en MAE-01b.
+   **Hecho el 22/11/2026 en PRD-01 (el Capataz):** `produccion` registra el suyo, filtra por `TIPOS_DE_PRODUCCION` y devuelve las instancias tocadas,
+   que quedan entre los afectados de `modificacion_invernadero` (D-81: `traspasar` ahora devuelve lo que tocó). Siguen los de COM-02, COM-03 e IOT-07.
    **COM-02 (lote C2)** suma las cosechas al traspaso del Capataz (por `ordenes_del_capataz`, D-53) y registra el del Vendedor con la regla de
    D-60 (compra-ventas); COM-03 (lote C3) suma los suministros vigentes con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
    **IOT-07 (lote I4)** registra el del Técnico: pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
@@ -364,7 +368,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 
 1. **Invernaderos inactivos (regla 4 de PROD-BAJ-INV).** «Un invernadero inactivo no aparece en las planificaciones, en los
    pedidos, en la asignación de stock ni en el reintento diario de las entregas»: cada app que lo programe excluye los
-   invernaderos inactivos. Hoy no hay ninguno. Nació en MAE-01b.
+invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un invernadero inactivo y la bandeja lo excluye; hecho el 22/11/2026). Nació en MAE-01b.
    **Asignación de stock: COM-02 (lote C2)**, en `stock_maduro` (invernaderos considerados = solo activos). Planificaciones y reintento de
    entregas: COM-03 y COM-05 (**planificado en el lote C5a:** COM-05a, en la planificación inmediata y en el paso 50).
 
@@ -444,6 +448,16 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 ## ~~Cuando exista el modelo completo de Variedad (INV-03)~~ (cerrado el 22/11/2026, INV-03)
 
 1. **Restricciones de `Variedad`.** MAE-03 la creó con columnas mínimas. INV-03 agrega la restricción única `(cultivo, lower(nombre_variedad))`, los rangos y el resto, con una migración propia en `maestros` (`docs/modelo/maestros.md`, «Variedad»).
+
+## Cuando exista TransicionEtapa (PRD-02) — nace con PRD-01 (22/11/2026)
+
+1. **Fechas de etapas posteriores a la primera.** `lotes.fecha_de_entrada_a_la_etapa` devuelve `None` fuera de la primera etapa, y
+   `fecha_de_entrada_a_maduracion` y `fecha_maxima_de_cosecha` siempre `None` (reglas 2, 3 y 5 de 8.20 y 8.21): PRD-02 las completa con la
+   transición concretada. Con ellas se completan `lotes_activos_de` y `fecha_estimada_de_fin_de_etapa`.
+2. **Dónde suma `TransicionEtapa`.** PRD-02 la agrega a `_HIJAS_CON_CAPATAZ` de `produccion/servicios/ordenes.py` (bandeja, `ordenes_del_capataz`,
+   traspaso del Capataz, asignaciones de cuenta y cancelación), al conteo de órdenes de `registrantes.uso_de_variedad` y a los registrantes de
+   sectores (ocupaciones y avisos de cambio de tipo). `cancelar_orden` ya acepta `transicion` (`TIPOS_QUE_CANCELA_PRODUCCION`).
+3. **Prueba pendiente.** «Cancelar contra planificar otra transición del mismo lote» (`test_cancelar_concurrencia.py`).
 
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 

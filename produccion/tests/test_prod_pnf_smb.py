@@ -270,6 +270,14 @@ class PlanificarSiembraTests(Base):
         insumos_invernadero.habilitar_insumo(self.e.agronomo, nueva.semilla.pk, self.e.invernadero.pk, "0", "2.00")
         self.assertEqual(self.rechazo(variedad_id=nueva.pk).codigo, "stock_insuficiente")
 
+    def test_ext_8b_el_error_lleva_la_semilla_y_el_invernadero_para_enlazar_a_habilitarla(self):
+        """Extensión 8b: `semilla_no_habilitada` trae en `datos` el id de la semilla y el del invernadero, para que la pantalla enlace a
+        CMP-HAB-IIN con ambos ya elegidos. Los demás rechazos no traen datos."""
+        nueva, _ = variedad_con_stock(self.e, "Nueva", habilitar=False)
+        error = self.rechazo(variedad_id=nueva.pk)
+        self.assertEqual(error.datos, {"semilla_id": nueva.semilla.pk, "invernadero_id": self.e.invernadero.pk})
+        self.assertEqual(self.rechazo(cantidad=100000).datos, {})
+
     def test_ext_8c_stock_libre_justo_pasa_y_uno_menos_se_rechaza(self):
         """Extensión 8c y regla «Stock libre»: con 50 semillas libres se planifican 50; con 49 no (`stock_insuficiente`, campo cantidad)."""
         justo = invernadero_con_produccion(nombre="Justo", sufijo="2", stock_de_semillas=50)

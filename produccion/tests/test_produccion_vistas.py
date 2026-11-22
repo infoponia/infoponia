@@ -214,6 +214,18 @@ class NuevaSiembraTests(Base):
         self.assertIn("Confirmar planificación", html)
         self.assertEqual((OrdenTrabajo.objects.count(), ReservaInsumo.objects.count(), Notificacion.objects.count()), (0, 0, 0))
 
+    def test_ext_8b_la_semilla_sin_habilitar_enlaza_a_habilitarla_con_el_insumo_y_el_invernadero_elegidos(self):
+        """PROD-PNF-SMB extensión 8b: el aviso enlaza a CMP-HAB-IIN con `?insumo=<semilla>&invernadero=<invernadero>` (no a la lista de
+        existencias, donde la semilla no se encontraba), con y sin HTMX (respaldo sin JavaScript)."""
+        nueva, _ = variedad_con_stock(self.e, "Nueva", habilitar=False)
+        enlace = f"{reverse('inventario:habilitar')}?insumo={nueva.semilla.pk}&invernadero={self.e.invernadero.pk}"
+        datos = {**self.datos_de_siembra(variedad=nueva.pk), "accion": "calcular"}
+        for extra in ({}, HX):
+            respuesta = self.client.post(self.url, datos, **extra)
+            self.assertContains(respuesta, "no está habilitada en este invernadero")
+            self.assertContains(respuesta, f'href="{enlace}"')
+            self.assertContains(respuesta, "Habilitar la semilla")
+
     def test_confirmar_planifica_y_va_a_la_lista_con_un_aviso(self):
         calculo = self.client.post(self.url, {**self.datos_de_siembra(), "accion": "calcular"}).content.decode()
         firma = calculo.split('name="firma" value="')[1].split('"')[0]

@@ -20,7 +20,7 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la vari
             <option value="">{% if invernadero_id %}Seleccionar…{% else %}Elegí primero el invernadero{% endif %}</option>
             {% for v in ofrecido.variedades %}<option value="{{ v.variedad_id }}"{% if v.variedad_id == variedad_id %} selected{% endif %}{% if not v.compatible or v.motivo %} disabled{% endif %}>{{ v.nombre }} · {{ v.perfil|perfil_legible }} · ciclo de {{ v.duracion_dias }} días · {% if v.stock_libre is None %}semilla sin habilitar{% else %}semilla libre: {{ v.stock_libre|cantidad }}{% endif %}{% if not v.compatible %} — no compatible: {% for c in v.conflictos %}{{ c.texto }}{% if not forloop.last %}; {% endif %}{% endfor %}{% elif v.motivo %} — {{ v.motivo }}{% endif %}</option>{% endfor %}
           </select>
-          {% if errores.variedad %}<div class="err">{{ errores.variedad }}{% if "no está habilitada" in errores.variedad %} <a href="{% url 'inventario:existencias' %}">Habilitar la semilla en «Existencias de insumos»</a>.{% endif %}</div>{% endif %}</div>
+          {% if errores.variedad %}<div class="err">{{ errores.variedad }}{% if para_habilitar %} <a href="{% url 'inventario:habilitar' %}?insumo={{ para_habilitar.semilla_id }}&invernadero={{ para_habilitar.invernadero_id }}">Habilitar la semilla en este invernadero</a>.{% endif %}</div>{% endif %}</div>
       </div>
       <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
     </div>

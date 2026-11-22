@@ -107,6 +107,12 @@ def _errores_por_campo(error):
     return {error.campo or "general": error.mensaje}
 
 
+def _para_habilitar_la_semilla(error):
+    """Extensión 8b de PROD-PNF-SMB: si el rechazo es `semilla_no_habilitada`, los ids con que la plantilla enlaza a CMP-HAB-IIN
+    («Habilitar insumo», `?insumo=&invernadero=`); si no, `None`."""
+    return error.datos if error.codigo == "semilla_no_habilitada" else None
+
+
 @rol_requerido(AGRONOMO, GERENTE)
 @never_cache
 @vary_on_headers("HX-Request")
@@ -136,6 +142,7 @@ def nueva_siembra(request):
         "variedad_id": variedad_id,
         "prioridades": formularios.PRIORIDADES,
         "errores": errores_de_carga,
+        "para_habilitar": None,
         "resumen": None,
         "firma": "",
         "activa": "ordenes",
@@ -157,6 +164,7 @@ def nueva_siembra(request):
                 contexto["firma"] = firma
             except ErrorDeProduccion as error:
                 contexto["errores"] = _errores_por_campo(error)
+                contexto["para_habilitar"] = _para_habilitar_la_semilla(error)
     plantilla = "produccion/_nueva_siembra_formulario.html" if _en_vivo(request) else "produccion/nueva_siembra.html"
     return render(request, plantilla, contexto)
 

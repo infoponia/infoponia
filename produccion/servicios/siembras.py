@@ -91,9 +91,9 @@ Plan = namedtuple(
 # ---- Errores y traducciones ----
 
 
-def _error(codigo, mensaje, campo=None):
+def _error(codigo, mensaje, campo=None, datos=None):
     """Un `ErrorDeProduccion` (docs/api/produccion.md, sección 1)."""
-    return ErrorDeProduccion(codigo, mensaje, campo)
+    return ErrorDeProduccion(codigo, mensaje, campo, datos)
 
 
 def _plural(cantidad, singular, plural):
@@ -289,6 +289,8 @@ def _semilla_habilitada(invernadero, variedad):
             "semilla_no_habilitada",
             f"La semilla de {variedad} no está habilitada en este invernadero. Habilitala para poder planificar la siembra.",
             "variedad",
+            # Extensión 8b: la pantalla enlaza a CMP-HAB-IIN con la semilla y el invernadero ya elegidos.
+            datos={"semilla_id": semilla.pk, "invernadero_id": invernadero.pk},
         )
     return semilla, existencia
 
