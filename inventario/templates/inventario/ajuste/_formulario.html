@@ -1,0 +1,173 @@
+{% load iconos formato_inventario %}{% comment %}El formulario de «Ajustar stock de insumo» (CMP-AJT-STK): lo que HTMX reemplaza dentro de #ajuste-vivo en cada cambio (ver «_vivo.html»).{% endcomment %}
+<form id="ajuste-form" method="post" action="{% url 'inventario:ajuste' %}" novalidate>
+  {% csrf_token %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">¿Qué insumo y por qué?</div>
+      <div class="grid3">
+        <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change">
+            <option value="">Seleccionar…</option>
+            {% for g in invernaderos %}<option value="{{ g.pk }}"{% if invernadero and invernadero.pk == g.pk %} selected{% endif %}>{{ g.nombre_invernadero }}</option>{% endfor %}
+          </select></div>
+        <div class="fld"><label for="insumo">Insumo<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="insumo" name="insumo" data-desplegable hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change"{% if not invernadero %} disabled{% endif %}>
+            <option value="">{% if invernadero %}Seleccionar…{% else %}Elegí primero el invernadero{% endif %}</option>
+            {% for h in habilitados %}<option value="{{ h.insumo_id }}"{% if existencia and existencia.pk == h.pk %} selected{% endif %}>{{ h.insumo.nombre_insumo }}</option>{% endfor %}
+          </select>
+          {% if invernadero and not habilitados %}<div class="hint">Este invernadero no tiene insumos habilitados. Habilitá uno en «Existencias de insumos».</div>{% endif %}</div>
+        <div class="fld"><label for="motivo">Motivo<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="motivo" name="motivo" data-desplegable hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change"{% if not existencia %} disabled{% endif %}>
+            <option value="">Seleccionar…</option>
+            {% for codigo, nombre in motivos %}<option value="{{ codigo }}"{% if motivo == codigo %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+          </select></div>
+      </div>
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+    </div>
+
+    {% if existencia %}
+    <div class="card">
+      <div class="card-title">Stock actual de {{ situacion.insumo.nombre_insumo }} en {{ invernadero.nombre_invernadero }}</div>
+      <p class="sm" style="margin-bottom:10px"><b class="mono">{{ situacion.stock_actual|cant:unidad }}</b> en total · precio de referencia {{ situacion.precio|pesos }} por {{ unidad|unidad_de }}</p>
+      <div class="lotlist">
+        {% for lc in situacion.lotes %}
+        <div class="li inv-lote">
+          <span class="id">{% if lc.lote.es_faltante_sin_lote %}Sin lote{% else %}Lote {{ lc.lote.pk }}{% endif %}</span>
+          <span><span class="k">Disponible</span><b class="mono"{% if lc.lote.cantidad_disponible < 0 %} style="color:var(--status-danger)"{% endif %}>{{ lc.lote.cantidad_disponible|num:unidad }}</b> {{ unidad|unidad_de }}</span>
+          <span><span class="k">Vence</span>{% if lc.lote.fecha_vencimiento %}{{ lc.lote.fecha_vencimiento|fecha }}{% else %}—{% endif %}</span>
+          <span class="st">{{ lc|estado_del_lote }}</span>
+        </div>
+        {% empty %}
+        <div class="none">Todavía no tiene lotes.</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if existencia and motivo %}
+    <div class="card">
+      <div class="card-title">Datos del ajuste</div>
+      {% if desactualizado %}<div class="alert alert-warn" role="alert" style="margin-bottom:14px">{% icono "info" 16 %}<div><b>Los datos cambiaron mientras tanto.</b> Otra operación movió el stock de este insumo antes de que confirmaras: no se cambió nada. Revisá los valores vigentes y volvé a confirmar.</div></div>{% endif %}
+      {% if cambio_la_firma %}<div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>Cambiaste datos después de ver el resumen: revisá el resumen actualizado antes de confirmar.</div></div>{% endif %}
+      {% for mensaje in errores_generales %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+
+      {% if motivo == "carga_inicial" %}
+        <p class="muted sm" style="margin:-6px 0 12px">Para cargar lo que el invernadero ya tenía antes de usar el sistema.{% if situacion.controla_vencimiento %} Si las existencias tienen distintas fechas de vencimiento, registrá una carga por cada fecha.{% endif %}</p>
+        {% include "inventario/ajuste/_alta.html" %}
+        {% include "inventario/ajuste/_campo.html" with nombre="descripcion" etiqueta="Descripción (opcional)" valor=valores|dato:"descripcion" error=errores|dato:"descripcion" %}
+
+      {% elif motivo == "recuento_fisico" %}
+        <p class="muted sm" style="margin:-6px 0 12px">Contá lo que hay en el depósito, lote por lote, y anotá solo los lotes que difieren de lo registrado. Lo que encuentres sin lote registrado se carga como un lote nuevo.</p>
+        {% if situacion.faltante %}<div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "info" 16 %}<div>Hay un faltante sin lote de {{ situacion.faltante.cantidad_disponible|cant:unidad }} (se consumió más de lo registrado). El recuento lo deja en cero.</div></div>{% endif %}
+        <div class="stack tight">
+          {% for lc in lotes_recuento %}{% with texto=lc.lote.pk|stringformat:"s" %}{% with clave="contado_"|add:texto %}
+          <div class="inv-contado">
+            <div><b class="mono">Lote {{ lc.lote.pk }}</b><span class="sub2">{% if lc.lote.fecha_vencimiento %}vence {{ lc.lote.fecha_vencimiento|fecha }}{% else %}sin vencimiento{% endif %} · registrado {{ lc.lote.cantidad_disponible|cant:unidad }}</span></div>
+            {% include "inventario/ajuste/_campo.html" with nombre=clave etiqueta="Cantidad contada" valor=valores|dato:clave error=errores|dato:clave unidad=unidad|unidad_de %}
+          </div>
+          {% endwith %}{% endwith %}{% endfor %}
+        </div>
+        {% if errores.contados %}<div class="err">{{ errores.contados }}</div>{% endif %}
+        <div class="divider"></div>
+        <div class="card-title" style="font-size:14px">Lotes nuevos (lo que hay y no está registrado)</div>
+        <input type="hidden" name="nuevos_n" value="{{ nuevos_n }}">
+        {% for n in filas_nuevas %}{% with texto=n|stringformat:"s" %}{% with c="nuevo_"|add:texto|add:"_cantidad" v="nuevo_"|add:texto|add:"_vencimiento" %}
+        <div class="grid2">
+          {% include "inventario/ajuste/_campo.html" with nombre=c etiqueta="Cantidad del lote nuevo" valor=valores|dato:c error=errores|dato:c unidad=unidad|unidad_de %}
+          {% if situacion.controla_vencimiento %}{% include "inventario/ajuste/_campo.html" with nombre=v etiqueta="Vencimiento" tipo="date" valor=valores|dato:v error=errores|dato:v ayuda="La que figura en el envase." %}{% endif %}
+        </div>
+        {% endwith %}{% endwith %}{% endfor %}
+        <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="agregar_lote" hx-post="{% url 'inventario:ajuste' %}" hx-vals='{"accion": "agregar_lote"}' data-enviando="Agregando…">{% icono "plus" 14 %} Agregar lote nuevo</button>
+        <div style="margin-top:14px">{% include "inventario/ajuste/_campo.html" with nombre="descripcion" etiqueta="Descripción (opcional)" valor=valores|dato:"descripcion" error=errores|dato:"descripcion" %}</div>
+
+      {% elif motivo == "rotura_o_perdida" %}
+        <div class="grid2">
+          <div class="fld"><label for="lote_id">Lote afectado<span class="req" aria-hidden="true"> *</span></label>
+            <select class="field-input" id="lote_id" name="lote_id" data-desplegable><option value="">Seleccionar…</option>
+              {% for lc in lotes_con_stock %}<option value="{{ lc.lote.pk }}"{% if valores.lote_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>Lote {{ lc.lote.pk }} · disponible {{ lc.lote.cantidad_disponible|cant:unidad }}{% if lc.lote.fecha_vencimiento %} · vence {{ lc.lote.fecha_vencimiento|fecha }}{% endif %}</option>{% endfor %}
+            </select>{% if errores.lote %}<div class="err">{{ errores.lote }}</div>{% endif %}</div>
+          {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad a descontar" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
+        </div>
+        {% include "inventario/ajuste/_campo.html" with nombre="descripcion" etiqueta="Descripción (opcional)" valor=valores|dato:"descripcion" error=errores|dato:"descripcion" %}
+
+      {% elif motivo == "vencimiento" %}
+        {% if lotes_vencidos %}
+        <p class="muted sm" style="margin:-6px 0 12px">Marcá los lotes vencidos que vas a dar de baja. Se descuenta todo lo que les queda.</p>
+        <div class="stack tight">
+          {% for lc in lotes_vencidos %}
+          <label class="row inv-marca"><input type="checkbox" name="lotes" value="{{ lc.lote.pk }}"{% if lc.lote.pk|stringformat:"s" in marcados %} checked{% endif %}><span class="mono">Lote {{ lc.lote.pk }}</span><span>{{ lc.lote.cantidad_disponible|cant:unidad }} · venció el {{ lc.lote.fecha_vencimiento|fecha }} ({{ lc|estado_del_lote }})</span></label>
+          {% endfor %}
+        </div>
+        {% if errores.lotes %}<div class="err">{{ errores.lotes }}</div>{% endif %}
+        {% else %}
+        <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este insumo no tiene lotes vencidos en este invernadero.</div></div>
+        {% endif %}
+
+      {% elif motivo == "correccion_entre_lotes" %}
+        <p class="muted sm" style="margin:-6px 0 12px">Para cuando el recuento muestra que se usó otro lote del que quedó registrado. No cambia el stock total.</p>
+        <div class="grid3">
+          <div class="fld"><label for="origen_id">Sale del lote<span class="req" aria-hidden="true"> *</span></label>
+            <select class="field-input" id="origen_id" name="origen_id" data-desplegable><option value="">Seleccionar…</option>
+              {% for lc in lotes_con_stock %}<option value="{{ lc.lote.pk }}"{% if valores.origen_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>Lote {{ lc.lote.pk }} · {{ lc.lote.cantidad_disponible|cant:unidad }}</option>{% endfor %}
+            </select>{% if errores.origen %}<div class="err">{{ errores.origen }}</div>{% endif %}</div>
+          <div class="fld"><label for="destino_id">Pasa al lote<span class="req" aria-hidden="true"> *</span></label>
+            <select class="field-input" id="destino_id" name="destino_id" data-desplegable><option value="">Seleccionar…</option>
+              {% for lc in lotes_destino %}<option value="{{ lc.lote.pk }}"{% if valores.destino_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>{% if lc.lote.es_faltante_sin_lote %}Sin lote (faltante {{ lc.lote.cantidad_disponible|cant:unidad }}){% else %}Lote {{ lc.lote.pk }} · {{ lc.lote.cantidad_disponible|cant:unidad }}{% endif %}</option>{% endfor %}
+            </select>{% if errores.destino %}<div class="err">{{ errores.destino }}</div>{% endif %}</div>
+          {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
+        </div>
+
+      {% elif motivo == "otro" %}
+        <div class="fld"><span class="lbl">El ajuste<span class="req" aria-hidden="true"> *</span></span>
+          <div class="row">
+            <label class="row inv-marca"><input type="radio" name="sentido" value="suma" hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change"{% if valores.sentido == "suma" %} checked{% endif %}> Suma stock</label>
+            <label class="row inv-marca"><input type="radio" name="sentido" value="resta" hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change"{% if valores.sentido == "resta" %} checked{% endif %}> Resta stock</label>
+          </div>{% if errores.sentido %}<div class="err">{{ errores.sentido }}</div>{% endif %}</div>
+        {% if valores.sentido == "suma" %}
+          {% include "inventario/ajuste/_alta.html" %}
+        {% elif valores.sentido == "resta" %}
+        <div class="grid2">
+          <div class="fld"><label for="lote_id">Lote<span class="req" aria-hidden="true"> *</span></label>
+            <select class="field-input" id="lote_id" name="lote_id" data-desplegable><option value="">Seleccionar…</option>
+              {% for lc in lotes_con_stock %}<option value="{{ lc.lote.pk }}"{% if valores.lote_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>Lote {{ lc.lote.pk }} · disponible {{ lc.lote.cantidad_disponible|cant:unidad }}</option>{% endfor %}
+            </select>{% if errores.lote %}<div class="err">{{ errores.lote }}</div>{% endif %}</div>
+          {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad a descontar" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
+        </div>
+        {% endif %}
+        <div class="fld"><label for="descripcion">Descripción<span class="req" aria-hidden="true"> *</span></label>
+          <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="300" placeholder="Contá qué pasó">{{ valores.descripcion }}</textarea>
+          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+      {% endif %}
+    </div>
+
+    {% if resumen %}
+    <div class="card recap">
+      <div class="card-title">Qué se va a registrar</div>
+      <dl class="dl">
+        {% if resumen.lotes %}<dt>Lotes que cambian</dt><dd><ul class="inv-lista">
+          {% for c in resumen.lotes %}<li><b class="mono">Lote {{ c.lote.pk }}</b>: {{ c.registrada|num:unidad }} → <b class="mono">{{ c.contada|num:unidad }}</b> {{ unidad|unidad_de }} ({% if c.diferencia > 0 %}+{% endif %}{{ c.diferencia|num:unidad }})</li>{% endfor %}</ul></dd>{% endif %}
+        {% if resumen.lotes_nuevos %}<dt>Lotes nuevos</dt><dd><ul class="inv-lista">
+          {% for n in resumen.lotes_nuevos %}<li>{{ n.cantidad|cant:unidad }}{% if n.vencimiento %} · vence {{ n.vencimiento|fecha }}{% else %} · sin vencimiento{% endif %}</li>{% endfor %}</ul></dd>{% endif %}
+        {% if resumen.faltante_a_cero %}<dt>Faltante sin lote</dt><dd>Queda en cero: faltaban {{ resumen.faltante_a_cero|cant:unidad }}.</dd>{% endif %}
+        <dt>Stock</dt><dd><span class="mono">{{ resumen.stock_antes|num:unidad }} → <b>{{ resumen.stock_despues|num:unidad }}</b></span> {{ unidad|unidad_de }}</dd>
+        <dt>Valor del ajuste</dt><dd>{% if resumen.con_valor %}<b class="mono">{% if resumen.valor > 0 %}+ {% endif %}{{ resumen.valor|pesos }}</b> <span class="muted">({% if resumen.diferencia > 0 %}+{% endif %}{{ resumen.diferencia|num:unidad }} {{ unidad|unidad_de }} × {{ situacion.precio|pesos }}, precio de referencia)</span>{% else %}Sin valor: el stock total no cambia.{% endif %}
+          <span class="sub2">Solo informativo: el ajuste no genera asiento contable.</span></dd>
+      </dl>
+      {% if resumen.advertencia %}
+      <div class="alert alert-warn" role="alert" style="margin-top:14px">{% icono "info" 16 %}<div><b>Con este ajuste el stock no cubre lo reservado.</b> El stock sin lotes vencidos quedaría en {{ resumen.advertencia.stock_vigente|cant:unidad }} y las órdenes a realizar tienen reservado {{ resumen.advertencia.reservado|cant:unidad }}.
+        {% if resumen.advertencia.ordenes %}Quedan sin cobertura:<ul class="inv-lista">{% for o in resumen.advertencia.ordenes %}<li>{{ o.texto }}</li>{% endfor %}</ul>{% endif %}
+        Podés confirmar igual: el Sistema crea la alerta «stock inconsistente» para que lo resuelvas.</div></div>
+      {% endif %}
+      <input type="hidden" name="huella" value="{{ huella }}">
+      <input type="hidden" name="firma" value="{{ firma }}">
+    </div>
+    {% endif %}
+
+    <div class="row">
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar ajuste</button>{% endif %}
+      <button class="btn {% if resumen %}btn-ghost{% else %}btn-primary{% endif %}" type="submit" name="accion" value="calcular" hx-post="{% url 'inventario:ajuste' %}" hx-vals='{"accion": "calcular"}' data-enviando="Calculando…">Ver resumen</button>
+      <a class="btn btn-ghost" href="{% url 'inventario:existencias' %}">Cancelar</a>
+    </div>
+    {% endif %}
+  </div>
+</form>

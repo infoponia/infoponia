@@ -1,0 +1,8 @@
+{% load iconos formato_inventario %}{% comment %}El bloque de «Ajustar stock de insumo» (CMP-AJT-STK). #ajuste-vivo recibe el formulario que devuelve HTMX (``_formulario.html``), sin mover el scroll
+(``show:none``). Solo dos cosas lo piden: cambiar un selector (invernadero, insumo, motivo, sentido), que redibuja los campos que dependen de él sin validar ni calcular, y los botones
+«Ver resumen» y «Agregar lote nuevo», que mandan su «accion». No hay refresco al escribir: validar y calcular es solo con «Ver resumen» y «Confirmar ajuste» (este envía el formulario completo).
+Sin JavaScript, cada botón es un POST común con su «accion»: «actualizar» (pasos 1 a 3), «agregar_lote», «calcular» y «confirmar» (paso 14). El servicio manda en las reglas: acá solo
+se muestran sus errores por campo, el resumen del paso 12, la advertencia 12b y el aviso 14a. El valor del ajuste se muestra sin asiento (D-45).{% endcomment %}
+<div id="ajuste-vivo" hx-target="#ajuste-vivo" hx-swap="innerHTML show:none">
+{% include "inventario/ajuste/_formulario.html" %}
+</div>

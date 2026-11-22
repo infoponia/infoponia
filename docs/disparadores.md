@@ -168,16 +168,16 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    PROD-ALT-INV) y la precondición h de PROD-BAJ-INV. Nació en MAE-01a. La precondición h se conecta con
    `registrar_impedimento_de_baja`.
 
-## Cuando exista InsumoInvernadero
+~~Cuando exista InsumoInvernadero~~ (cerrado el 21/11/2026, INV-02)
 
-(INV-01 creó el modelo el 21/11/2026; INV-02 conecta lo de abajo.)
+(INV-01 creó el modelo; INV-02 conectó lo de abajo.)
 
-1. **Insumos del invernadero.** Postcondición c y precondición f de PROD-BAJ-INV. Nació en MAE-01a. La c (y el log por insumo
-   de la f) se conecta con `registrar_efecto_de_baja`; la f, con `registrar_impedimento_de_baja`.
+1. ~~**Insumos del invernadero.** Postcondición c y precondición f de PROD-BAJ-INV. Nació en MAE-01a. La c (y el log por insumo
+   de la f) se conecta con `registrar_efecto_de_baja`; la f, con `registrar_impedimento_de_baja`.~~ Hecho en INV-02: `InventarioConfig.ready()` registra los dos ganchos.
 
-## Cuando se programe INV-02 (catálogo)
+## ~~Cuando se programe INV-02 (catálogo)~~ (cerrado el 21/11/2026, INV-02)
 
-1. **Botón y pestaña.** El catálogo agrega «Habilitar en un invernadero» (regla 7 de CMP-ALT-INS y regla 4 de CMP-CNS-INS) y la pestaña «Existencias de insumos» como primera; `/inventario/` pasa a redirigir a ella (hoy va al catálogo). Nació en INV-01.
+1. ~~**Botón y pestaña.** El catálogo agrega «Habilitar en un invernadero» (regla 7 de CMP-ALT-INS y regla 4 de CMP-CNS-INS) y la pestaña «Existencias de insumos» como primera; `/inventario/` pasa a redirigir a ella (hoy va al catálogo). Nació en INV-01.~~ Hecho en INV-02.
 
 ## Cuando exista Variedad y Semilla (INV-03)
 
@@ -289,10 +289,12 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    solo la escribirá `compras`. `compras` se enchufa a `inventario` por dos vías ya documentadas (`docs/api/extensiones_de_inventario.md`):
    el punto `registrar_impedimento_de_deshabilitacion` (orden de compra aprobada sin recibir, pedido en curso: los usan CMP-DSH-IIN, CMP-BAJ-INS y
    la baja del invernadero) y los servicios de stock (`docs/api/stock.md`) para la **recepción**.
+   INV-02 ya dejó conectado el punto: CMP-DSH-IIN, CMP-BAJ-INS y la baja del invernadero llaman a `registrar_impedimento_de_deshabilitacion` (`compras` solo registra su función). Su `cant_transito_insumo` ya cuenta en «bajo el mínimo» y se muestra en las existencias.
 2. **Recepción y faltante sin lote.** Por la regla 4 de 8.23 la recepción cancela primero el faltante sin lote y crea un lote nuevo por partida
    (y por fecha de vencimiento); hoy solo lo regulariza un recuento físico (`docs/modelo/inventario.md`, «Diferencias con el caso de uso»). Al
    escribir la recepción hay que verificar que resuelva la alerta «stock inconsistente» y la de «bajo el mínimo» (tema abierto de CMP-AJT-STK), y
    que agregue el vínculo `OneToOne` desde su tabla a `MovimientoInsumo` (A2).
+   La recepción debe llamar a `alertas_de_stock.reevaluar_alertas_del_insumo(iin_id)` (INV-02 no crea ninguna función de entrada por recepción).
 
 ## Cuando exista `produccion` completa (lote 5)
 

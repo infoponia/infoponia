@@ -135,6 +135,10 @@ antes de partirla.
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
+Rutas: `/inventario/` lleva a «Existencias de insumos» (`/inventario/existencias/`); el ajuste está en `/inventario/ajuste/` (se abre desde «Ajustar» de cada
+fila, desde «Cargar stock inicial» y desde «Dar de baja» en un lote vencido). El paso 14 (sin JavaScript) se prueba desactivando JavaScript en el navegador:
+los selectores usan el botón «Continuar» y cada cambio se envía con «Ver resumen».
+
 Hay posibles migraciones de `core`: `python manage.py migrate`. Cuentas: Agrónomo con un invernadero a cargo (con lotes y alertas visibles),
 otro Agrónomo, Gerente. Datos: un insumo con vencimiento (por ejemplo, «Nutriente A», L), otro sin vencimiento (por ejemplo, «Bolsas», unidad).
 
@@ -160,9 +164,65 @@ otro Agrónomo, Gerente. Datos: un insumo con vencimiento (por ejemplo, «Nutrie
     del tiempo. `python manage.py revisar_vencimientos` hace lo mismo, solo con ese paso.
 13. Dos ajustes simultáneos sobre el mismo insumo (dos sesiones; si no, la prueba de concurrencia lo cubre): uno lo aplica y el otro ve «los datos
     cambiaron» sin error 500.
-14. Sin JavaScript, los pasos 1 a 5 funcionan igual.
+14. Sin JavaScript, los pasos 1 a 5 funcionan igual. Con JavaScript: escribí cantidades y la descripción sin que aparezcan errores ni el resumen ni se mueva el scroll; al cambiar un selector solo cambian los campos; «Ver resumen» muestra errores y resumen sin saltar al principio.
 15. ~~Crear el cron job en Render~~: **no se crea** (D-56). El cron único se arma al final de la implementación (disparador «Cuando se
     arme el cron único»).
-16. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
+16. Catálogo: en cada insumo activo (menos las semillas) está «Habilitar en un invernadero»; abre la ventana con el insumo ya elegido. Crear un insumo nuevo
+    muestra, además del aviso breve, un cuadro con ese mismo botón.
+17. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo.** Los seis casos de uso (CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK y CMP-REV-VNC), la API de stock de `produccion` y las
+pantallas, en nueve pasos, sin modelos ni migraciones de `inventario` y con la migración `core` 0015 (cuatro acciones de auditoría).
+
+- `inventario/servicios/stock.py` y `alertas_de_stock.py`: lectura (`existencias`, `disponible_para_planificar`, `proponer_lotes_fefo`, `ordenes_sin_cobertura`) y
+  `reevaluar_alertas_del_insumo`; `registrar_salida_por_consumo` (paso 5).
+- `insumos_invernadero.py`: habilitar, modificar, deshabilitar, `consultar_existencias`, `habilitados`, `acciones_permitidas` y los dos ganchos de la baja del
+  invernadero (registrados en `InventarioConfig.ready()`).
+- `ajustes.py`: `situacion_del_insumo`, `calcular_ajuste` y `confirmar_ajuste` (seis motivos, recuento por lote, huella, `AjusteDesactualizado`).
+- `vencimientos.py` y el comando `revisar_vencimientos` (`--fecha`): una transacción por invernadero; también es el paso 10 del proceso diario.
+- Pantallas: `views_existencias.py` y `views_ajuste.py` (módulos nuevos, ver decisión 8), plantillas en `templates/inventario/existencias/` y `ajuste/`, filtros
+  en `templatetags/formato_inventario.py` y estilos en `inventario.css`.
+
+**Pruebas** (resultado del cierre): `inventario maestros core` sin concurrencia ni migración, 2329 pruebas en verde; concurrencia de `inventario`, 37 en verde;
+migración de `inventario` y de `core`, 1 y 1 en verde; `makemigrations --check --dry-run` sin cambios y `manage.py check` sin problemas. De esas, son de INV-02:
+paso 7, 58 (revisión, comando y paso diario) y paso 8, 74 (`test_existencias_vistas.py` 33 y `test_ajuste_vistas.py` 41). Se cambiaron dos pruebas de INV-01 que la
+propia tarea desactualiza (el inicio ahora va a las existencias y el alta redirige con `?recien=`).
+
+**No verificado en un navegador:** las pantallas se probaron con el cliente de Django (HTML y contexto); no se las vio en pantalla ni se probó el HTMX en vivo. Es
+lo primero que hay que mirar en la «Verificación a mano» (pasos 1 a 5 y 14).
+
+**Decisiones y desvíos** (propuestos para `docs/temas_abiertos.md`; ninguno cambia una decisión vigente):
+
+1. Rama: la tarea dice `feature/inv-02-existencias-y-stock`; se usó `feature/inv-02-insumos-del-invernadero-stock-y-vencimientos` (el nombre del archivo).
+2. Prefijo de las pruebas por extensión: la tarea y el extracto del CU piden `test_extension_<paso>_...`; `.claude/rules/pruebas.md` pide `test_ext_<id>_...`.
+3. `reevaluar_alertas_del_insumo(iin_id, hoy=None)` recibe el id (como `docs/api/stock.md`), no el objeto (como `docs/patrones/stock.md`).
+4. `insumos_invernadero.py`: la validación va después de los bloqueos (invernadero, insumo, existencia); `habilitar_insumo` siempre reevalúa alertas;
+   `invernadero_inactivo` precede a `PermissionDenied` en el filtro de existencias; `marca` mide el stock vigente `< 0`; los ganchos de la baja filtran
+   `reservas_activas` (lo informa `produccion`), iteran por id y auditan con el actor de la baja.
+5. `registrar_salida_por_consumo`: `ValueError` ante datos inválidos, consolida lotes repetidos en un movimiento, crea o incrementa el faltante si el consumo supera lo
+   disponible (regla 5 de 8.13), no toca un faltante previo si los lotes alcanzan y no audita.
+6. `ajustes.py`: el recuento lista todos los lotes; rechaza subir un lote vencido; topa el faltante como destino de una corrección; la huella incluye los lotes
+   involucrados y las reservas activas; omite `cambios` en la auditoría si el stock neto no cambia (D-36); redondeo mitad hacia arriba; permite ajustar una
+   semilla dada de baja con existencia activa; `ordenes_sin_cobertura` acepta `vigente=`.
+7. `vencimientos.py`: revisa existencias activas de invernaderos activos sin mirar si el insumo del catálogo está activo; sin Agrónomo activo no alerta (manda el CU
+   sobre D-41); resuelve alertas de lotes agotados aunque no queden otros; audita con `usuario=None` una vez por alerta creada (la «por vencer» resuelta al vencer
+   va en el mismo registro; las resoluciones solas no auditan); el paso diario lanza el error recién al terminar de revisar todos los invernaderos; el comando importa
+   `_leer_fecha` de `proceso_diario` (función privada de `core`) en vez de repetirla; `registrar_paso_diario` ya es idempotente, así que no lleva guarda propia.
+8. Pantallas: las vistas están en `views_existencias.py` y `views_ajuste.py` (la tarea habla de `views.py`; se separaron para que `views.py` no siga creciendo). El
+   plan de la sesión nombraba `invernaderos_a_cargo` e `insumos_habilitables`; no existían: se usa `Invernadero.objects.en_alcance_de` y `habilitados`. Las semillas
+   no se ofrecen en «Habilitar insumo» (nacen con su variedad, INV-03). Un Agrónomo ajeno recibe 403 antes de cualquier aviso (D-28), aunque `acciones_permitidas`
+   ya le negaría la acción. El alta de insumo redirige con `?recien=<id>` para mostrar el botón «Habilitar en un invernadero» en el aviso; el aviso «Cargar stock
+   inicial» tras habilitar también va por `?recien=` y no dentro de la ventana, como en el prototipo (`m.listo`), porque la ventana termina con un redirect común.
+9. Ajuste en pantalla — **cambio de criterio sobre el paso 8** («la pantalla se actualiza tras cada dato»), pedido en la revisión a mano (21/11/2026): el refresco al
+   escribir hacía validar en pantalla mientras se cargaban los datos y movía el scroll. Ahora HTMX solo actúa en tres casos, siempre con `hx-swap="innerHTML show:none"`
+   (no mueve el scroll) y sin `hx-select` (el fragmento es el formulario entero, así «Ver resumen» actualiza a la vez los errores por campo y «Qué se va a registrar»):
+   (a) cambiar un selector (invernadero, insumo, motivo o sentido) redibuja los campos que dependen de él, sin validar ni calcular y sin errores; (b) «Ver resumen»
+   (`accion=calcular`) valida y calcula; (c) «Agregar lote nuevo» suma una fila. No hay disparador por `input` ni por `change` de campos numéricos, fecha o descripción.
+   «Confirmar ajuste» es un envío común (`accion=confirmar`) y es lo único que escribe. Abrir la pantalla con GET (enlace «Dar de baja») sigue calculando el resumen sin
+   marcar errores. El respaldo sin JavaScript no cambió. Se agregó una «firma» (hash de lo calculado) para no confirmar un dato cambiado después de
+   ver el resumen (posible sin JavaScript). Al confirmar con éxito se vuelve a las existencias con un aviso breve, en lugar de la pantalla «Ajuste registrado» del
+   prototipo. La advertencia 12b y el aviso 14a (que recalcula con lo vigente) se muestran dentro de la pantalla.
+10. Documentación: la tarea dice que de «Cuando existan los pedidos de `compras`» «los tres puntos ya existen»; la sección tiene dos.
+11. `docs/api/stock.md`: se agregó `vigente=` a `ordenes_sin_cobertura` y el detalle de `registrar_salida_por_consumo` (decisión 5).

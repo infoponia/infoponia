@@ -1,0 +1,7 @@
+{% load formato_inventario %}{% comment %}Los dos datos de un lote que entra (extensión 7a de CMP-AJT-STK): cantidad y, si el insumo controla vencimiento, la fecha. Lo usan la carga inicial y «Otro» que suma.{% endcomment %}
+<div class="grid2">
+  {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
+  {% if situacion.controla_vencimiento %}{% include "inventario/ajuste/_campo.html" with nombre="vencimiento" etiqueta="Fecha de vencimiento" requerido=True tipo="date" valor=valores|dato:"vencimiento" error=errores|dato:"vencimiento" ayuda="La que figura en el envase." %}
+  {% else %}<div class="fld"><span class="lbl">Vencimiento</span><span class="muted sm" style="display:block;padding:8px 0">Este insumo no controla vencimiento.</span></div>{% endif %}
+</div>
+<div class="hint">Se crea un lote de insumo nuevo con esta cantidad.</div>

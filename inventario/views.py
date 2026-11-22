@@ -12,6 +12,7 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
@@ -21,6 +22,7 @@ from core.models import Usuario
 from inventario import forms
 from inventario.servicios import insumos as api_insumos
 from inventario.servicios import tipos_de_insumo as api_tipos
+from maestros.models import Invernadero
 
 AGRONOMO = Usuario.Rol.AGRONOMO
 
@@ -60,7 +62,11 @@ def _contexto_del_catalogo(request, **extra):
                 "quienes": [] if puede or not acciones else api_insumos.quienes_lo_usan(insumo.pk),
             }
         )
-    return {"filas": filas, "pestana": "catalogo", **extra}
+    # Recién creado (CMP-ALT-INS, regla 7): el aviso ofrece «Habilitar en un invernadero» (INV-02). Solo un insumo activo que no sea semilla.
+    recien = None
+    if request.GET.get("recien", "").isdigit():
+        recien = next((f["insumo"] for f in filas if f["insumo"].pk == int(request.GET["recien"]) and f["insumo"].activo and not f["insumo"].es_semilla), None)
+    return {"filas": filas, "pestana": "catalogo", "recien": recien, "puede_habilitar": Invernadero.objects.en_alcance_de(request.user).exists(), **extra}
 
 
 def _ventana_de_insumo(request, plantilla, **contexto):
@@ -85,7 +91,7 @@ def catalogo(request):
 @vary_on_headers("HX-Request")
 def insumo_nuevo(request):
     """Nuevo insumo (CMP-ALT-INS, ``MODALS['insumo-form']`` del prototipo). Cualquier Agrónomo activo. Habilitarlo en un invernadero
-    (regla 7) lo agrega INV-02: por ahora el aviso dice que falta habilitarlo."""
+    (regla 7): el aviso de la pantalla siguiente ofrece «Habilitar en un invernadero» (INV-02)."""
     categorias = forms.categorias_para_el_alta()
     if request.method == "POST":
         form = forms.FormularioInsumo(request.POST, categorias=categorias)
@@ -96,7 +102,7 @@ def insumo_nuevo(request):
             _pasar_errores(form, error)
         else:
             messages.success(request, f"Insumo creado: {nuevo.nombre_insumo}. Habilitalo en un invernadero para cargarle stock.")
-            return redirect("inventario:catalogo")
+            return redirect(f"{reverse('inventario:catalogo')}?recien={nuevo.pk}")
     else:
         form = forms.FormularioInsumo(categorias=categorias)
     return _ventana_de_insumo(request, PLANTILLA_DE_INSUMO, form=form, insumo=None, a_avisar=[], bloqueos={})

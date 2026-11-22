@@ -188,6 +188,21 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
   - La fecha se valida antes que `--listar`: `--listar --fecha 2026-13-01` da error. Sin pasos registrados, `--solo <cualquier código>` dice «No hay pasos registrados.» y termina en 0, en lugar de «código inexistente».
 - **Pendiente para INV-02 y las demás apps:** registrar sus pasos con `registrar_paso_diario` desde su `AppConfig.ready()`. Si registran un orden que ya usa otro paso, `ready()` lanza `RuntimeError` al arrancar: es lo buscado, pero conviene que lo sepan.
 
+## Abiertos desde INV-02 (21/11/2026)
+
+- **Lo implementado distinto de lo escrito, o que la tarea no decía** (detalle en el «Cierre» del archivo de la tarea):
+  - Rama distinta de la de la tarea; prefijo de pruebas de extensión: la tarea pide `test_extension_...` y `.claude/rules/pruebas.md` pide `test_ext_...`.
+  - `reevaluar_alertas_del_insumo` recibe el id (`docs/api/stock.md`), no el objeto (`docs/patrones/stock.md`): unificar el patrón.
+  - Servicios de `InsumoInvernadero`: validación después de los bloqueos; `habilitar_insumo` siempre reevalúa; los ganchos de la baja filtran `reservas_activas` y auditan con el actor de la baja.
+  - `registrar_salida_por_consumo`: `ValueError` ante datos inválidos, consolida lotes repetidos, crea o incrementa el faltante y no audita.
+  - Ajuste: recuento de todos los lotes, no se sube un lote vencido, tope del faltante como destino, huella con lotes y reservas, sin `cambios` si el stock neto no cambia, redondeo mitad hacia arriba, se puede ajustar la existencia activa de una semilla dada de baja.
+  - Vencimientos: sin Agrónomo activo no se alerta (manda el CU sobre D-41); audita con `usuario=None` por alerta creada; el paso diario lanza el error al terminar; el comando importa `_leer_fecha` de `proceso_diario`.
+- **Cambio de criterio en el paso 8 de INV-02 (revisión a mano, 21/11/2026):** la tarea decía «la pantalla se actualiza tras cada dato». Ahora el ajuste valida y calcula solo con «Ver resumen» y «Confirmar ajuste»; los selectores redibujan sin validar. Corregir la frase del paso 8 de la tarea y, si hay un caso de uso con ese texto, también ahí.
+  - Dos pruebas de INV-01 cambiadas (redirect del inicio de `/inventario/` y del alta de insumo).
+  - La tarea dice que de «Cuando existan los pedidos de `compras`» «los tres puntos ya existen»: la sección tiene dos.
+- **Para decidir:** si D-41 (sin Agrónomo, la alerta va al Gerente) debe corregirse o si la revisión de vencimientos es la excepción que fija el CU.
+- **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
+
 ## Abiertos desde H2 (20/11/2026)
 
 | Tema | Qué falta | Cuándo |

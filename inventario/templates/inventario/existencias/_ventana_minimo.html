@@ -1,0 +1,21 @@
+{% load iconos %}{% comment %}Ventana «Mínimo y precio» (CMP-MOD-IIN, MODALS['ex-form'] del prototipo). Recibe «form», «iin» (la existencia) y «unidad». Sin cambios, el
+servicio no escribe ni audita (D-28). Formulario común (POST) con «novalidate».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">{{ iin.insumo.nombre_insumo }} en {{ iin.invernadero.nombre_invernadero }}</h2>
+    <p class="muted">Datos propios de este invernadero. La unidad es {{ unidad }}.</p>
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+    <form method="post" novalidate action="{% url 'inventario:existencia_modificar' iin.pk %}">
+      {% csrf_token %}
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.cant_min requerido=True ayuda="Por debajo de este valor se genera la alerta de stock bajo." %}
+        {% include "core/usuarios/_campo.html" with campo=form.referencia_precio requerido=True ayuda="Rige para los consumos y ajustes desde ahora; lo ya registrado no cambia." %}
+      </div>
+      <div class="hint">El cambio queda registrado en la auditoría.</div>
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Guardando…">Guardar cambios</button>
+        <a class="btn btn-ghost" href="{% url 'inventario:existencias' %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>

@@ -85,9 +85,9 @@ class AccesoAInventarioVistaTests(VistasDeInventarioBase):
             respuesta = self.client.get(reverse("core:inicio"), follow=True)
             self.assertNotContains(respuesta, 'href="/inventario/catalogo/"')
 
-    def test_flujo_principal_el_inicio_de_inventario_lleva_al_catalogo(self):
-        """El inicio de /inventario/ lleva al catálogo (INV-02 pondrá primero «Existencias»)."""
-        self.assertRedirects(self.client.get(reverse("inventario:inicio")), self.catalogo)
+    def test_flujo_principal_el_inicio_de_inventario_lleva_a_las_existencias(self):
+        """Paso 8 de INV-02: «Existencias de insumos» es la primera pestaña y /inventario/ lleva a ella (antes llevaba al catálogo, INV-01)."""
+        self.assertRedirects(self.client.get(reverse("inventario:inicio")), reverse("inventario:existencias"))
 
     def test_flujo_principal_las_vistas_de_lectura_no_auditan(self):
         """SEG-14: consultar el catálogo y las categorías no deja registro de auditoría."""
@@ -236,9 +236,11 @@ class CatalogoVistaTests(VistasDeInventarioBase):
     def test_flujo_principal_alta_de_insumo_crea_activo_y_avisa_que_hay_que_habilitarlo(self):
         """CMP-ALT-INS y paso 5 de la verificación: el insumo aparece activo y el aviso pide habilitarlo en un invernadero."""
         respuesta = self.client.post(reverse("inventario:insumo_nuevo"), self.datos(), follow=True)
-        self.assertRedirects(respuesta, self.catalogo)
-        self.assertContains(respuesta, "Insumo creado: Detergente. Habilitalo en un invernadero")
         creado = Insumo.objects.get(nombre_insumo="Detergente")
+        # Paso 8 de INV-02: el catálogo vuelve con ``?recien=`` y el aviso suma el botón «Habilitar en un invernadero».
+        self.assertRedirects(respuesta, f"{self.catalogo}?recien={creado.pk}")
+        self.assertContains(respuesta, "Insumo creado: Detergente. Habilitalo en un invernadero")
+        self.assertContains(respuesta, "Habilitar en un invernadero")
         self.assertEqual((creado.estado_insumo, creado.unidad_medida_insumo, creado.controla_vencimiento), ("activo", "l", False))
 
     def test_regla_2_alta_ins_errores_por_campo(self):
