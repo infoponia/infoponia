@@ -29,6 +29,8 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
       <dt>Teléfono</dt><dd>{% if cuenta.telefono %}{{ cuenta.telefono }}{% else %}<span class="muted">—</span>{% endif %}</dd>
       <dt>Rol</dt><dd>{{ cuenta|rol_visible }}</dd>
       <dt>Estado</dt><dd>{% if cuenta.is_active %}Activo{% else %}Inactivo{% endif %}</dd>
+      {# MAE-05 (D-55): datos de solo lectura que registran las apps (el invernadero del Transportista), con su nota. #}
+      {% for dato in datos_de_cuenta %}<dt>{{ dato.etiqueta }}</dt><dd>{{ dato.valor }}{% if dato.nota %} <span class="muted">{{ dato.nota }}</span>{% endif %}</dd>{% endfor %}
       <dt>Contraseña</dt>
       <dd>
         {% if cuenta.tiene_invitacion_pendiente %}

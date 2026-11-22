@@ -1,0 +1,47 @@
+{% load iconos %}{% comment %}Tarjeta «Logística» de la ficha del invernadero (regla 3 de PROD-CNS-INV y reglas 8 a 11 de PROD-MOD-INV, MAE-05, D-55;
+``logistica`` del prototipo logistica_transportista.html, versión «sin comercial»). Recibe «invernadero», «transportistas» (una
+lista de ``{"cuenta", "logistica"}``; ``logistica`` es ``None`` si no hay registrante de `comercial`), «con_logistica» (si hay
+registrante: entonces se muestran el vehículo, la situación y las entregas a realizar) y «acciones» (D-30: «Agregar
+transportista» y «Quitar» solo con ``"modificar" in acciones``, así que un invernadero inactivo y el Agrónomo no ven botones).
+Cada botón es un enlace común (sin JavaScript lleva a la ficha con la ventana abierta) y con HTMX inserta la ventana.{% endcomment %}
+{% with puede=acciones %}
+<div class="card seg" style="margin-bottom:20px">
+  <div class="card-h">
+    <h3>{% icono "truck" 14 %} Logística</h3>
+    <span class="spacer"></span>
+    {% if "modificar" in puede %}
+    <a class="btn btn-primary btn-sm" href="{% url 'maestros:transportista_agregar' invernadero.pk %}"
+       hx-get="{% url 'maestros:transportista_agregar' invernadero.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 15 %} Agregar transportista</a>
+    {% endif %}
+  </div>
+  {% if transportistas %}
+  <div class="card-b flush">
+    <table class="data-table">
+      <thead><tr>
+        <th>Transportista</th>
+        {% if con_logistica %}<th>Vehículo</th><th>Situación</th><th class="right">Entregas a realizar</th>{% endif %}
+        {% if "modificar" in puede %}<th style="width:90px"></th>{% endif %}
+      </tr></thead>
+      <tbody>
+      {% for fila in transportistas %}
+      <tr>
+        <td><b>{{ fila.cuenta.get_full_name|default:fila.cuenta.email }}</b>{% if not fila.cuenta.is_active %} <span class="status-badge status-warn">Inactivo</span>{% endif %}</td>
+        {% if con_logistica %}
+        <td>{% if fila.logistica.vehiculo %}{{ fila.logistica.vehiculo }}{% else %}<span class="status-badge status-warn">Sin vehículo</span>{% endif %}</td>
+        <td>{% if fila.logistica.en_ruta %}<span class="status-badge status-info">En ruta</span>{% else %}<span class="status-badge status-neutral">En el invernadero</span>{% endif %}</td>
+        <td class="right">{{ fila.logistica.entregas_a_realizar }}</td>
+        {% endif %}
+        {% if "modificar" in puede %}
+        <td class="right"><a class="rowlink" href="{% url 'maestros:transportista_quitar' invernadero.pk fila.cuenta.pk %}"
+           hx-get="{% url 'maestros:transportista_quitar' invernadero.pk fila.cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Quitar</a></td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-b muted">El invernadero no tiene transportistas. Puede vender con retiro; las entregas con envío necesitan uno.{% if "modificar" in puede %} Agregalos con «Agregar transportista».{% endif %}</div>
+  {% endif %}
+</div>
+{% endwith %}

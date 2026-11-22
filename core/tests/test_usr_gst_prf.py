@@ -3,10 +3,14 @@
 # la tarea 07 y las cuentas vinculadas (regla 3, USR-VNC-CTA) de la 06b. El cambio de contraseña desde el perfil
 # se prueba en test_usr_cmb_ctr.py. Cada prueba arma sus propios datos.
 
+from unittest import mock
+
 from django.test import TestCase
 from django.urls import reverse
 
-from core.models import Agronomo, RegistroAuditoria
+from core import extensiones
+from core.extensiones import DatoDeCuenta
+from core.models import Agronomo, RegistroAuditoria, Transportista
 from core.tests.fabricas import crear_administrador, crear_capataz, crear_cuenta, crear_gerente
 
 
@@ -144,3 +148,54 @@ class UsrGstPrfVistaTests(TestCase):
                 self.assertContains(respuesta, f'href="{reverse("core:mi_perfil")}"')
                 self.assertContains(respuesta, "Mi perfil</a>")
                 self.assertNotContains(respuesta, "Mi perfil y contraseña")
+
+
+class UsrGstPrfDatosDeCuentaTests(TestCase):
+    """Regla 1 de USR-GST-PRF (MAE-05, D-55): Mi perfil muestra los datos de solo lectura que registran las apps por
+    ``core.extensiones.registrar_datos_de_cuenta`` (el «Invernadero» del Transportista), SIN la nota."""
+
+    def con(self, *funciones):
+        """Reemplaza los registrantes de datos de cuenta por ``funciones``."""
+        return mock.patch.object(extensiones, "_DATOS_DE_CUENTA", list(funciones))
+
+    def test_regla_1_mi_perfil_muestra_el_dato_sin_la_nota(self):
+        """USR-GST-PRF regla 1 y ``fichaDeCuenta``: «Igual en Mi perfil del Transportista, sin la nota»."""
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+        dato = DatoDeCuenta("Invernadero", "Norte", "Se asigna desde la ficha del invernadero, en “Logística”.")
+        self.client.force_login(cuenta)
+
+        with self.con(lambda c: [dato]):
+            respuesta = self.client.get(reverse("core:mi_perfil"))
+
+        self.assertContains(respuesta, "Invernadero")
+        self.assertContains(respuesta, "Norte")
+        self.assertNotContains(respuesta, "Se asigna desde la ficha del invernadero")
+
+    def test_regla_1_los_registrantes_reciben_la_cuenta_con_la_que_se_opera(self):
+        """Contrato: ``funcion(cuenta)`` con la cuenta de la sesión."""
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(cuenta)
+        recibidas = []
+
+        with self.con(lambda c: recibidas.append(c.pk) or []):
+            self.client.get(reverse("core:mi_perfil"))
+
+        self.assertEqual(recibidas, [cuenta.pk])
+
+    def test_regla_1_sin_registrantes_mi_perfil_no_muestra_el_dato(self):
+        """Sin registrantes, Mi perfil queda como antes."""
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(cuenta)
+
+        with self.con():
+            respuesta = self.client.get(reverse("core:mi_perfil"))
+
+        self.assertNotContains(respuesta, "Sin invernadero")
+
+    def test_regla_1_el_dato_se_muestra_tambien_en_el_marco_angosto_del_transportista(self):
+        """Interfaz (D-25): el Transportista usa el marco angosto; Mi perfil sigue mostrando el dato."""
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(cuenta)
+        with self.con(lambda c: [DatoDeCuenta("Invernadero", "Sin invernadero", "")]):
+            respuesta = self.client.get(reverse("core:mi_perfil"))
+        self.assertContains(respuesta, "Sin invernadero")

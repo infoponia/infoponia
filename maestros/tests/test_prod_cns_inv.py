@@ -29,6 +29,8 @@ from maestros.tests.fabricas import (
     crear_invernadero,
     crear_tecnico,
     crear_vendedor,
+    asignar_transportista,
+    crear_transportista,
 )
 
 
@@ -427,7 +429,7 @@ class ProdCnsInvVistaTests(ConGeoref, TestCase):
         respuesta = self.client.get(reverse("core:inicio"))
 
         self.assertContains(respuesta, "Personal por asignar")
-        self.assertContains(respuesta, "2 invernaderos")
+        self.assertContains(respuesta, "2 pendientes")
         self.assertContains(respuesta, "Falta Agrónomo · Falta Capataz · Falta Vendedor")
         self.assertContains(respuesta, "Capataz inactivo (Nombre Apellido)")
         self.assertContains(respuesta, f'href="{reverse("maestros:invernadero_modificar", args=[sur.pk])}"')
@@ -449,6 +451,110 @@ class ProdCnsInvVistaTests(ConGeoref, TestCase):
         self.assertNotContains(sin_invernaderos, "Personal por asignar")
         self.assertContains(con_uno_completo, "Todos los invernaderos activos tienen su personal asignado.")
         self.assertNotContains(con_uno_completo, "Personal por asignar")
+
+    # ---- MAE-05 (D-55, punto 6): el transportista sin invernadero en «Personal por asignar» ----
+
+    def test_regla_5_el_transportista_activo_sin_invernadero_aparece_como_aviso_con_asignar(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: el Inicio del Gerente lista a los transportistas activos sin invernadero, como
+        aviso (no es una alerta), con un acceso para asignarlos que lleva a la lista de invernaderos."""
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, "Personal por asignar")
+        self.assertContains(respuesta, "Marcos Vera")
+        self.assertContains(respuesta, "Transportista sin invernadero: no recibe entregas.")
+        self.assertContains(respuesta, f'href="{reverse("maestros:invernaderos")}"')
+
+    def test_regla_5_el_transportista_inactivo_no_aparece(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: solo los activos."""
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera", activo=False)
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertNotContains(respuesta, "Marcos Vera")
+        self.assertNotContains(respuesta, "Transportista sin invernadero")
+
+    def test_regla_5_el_transportista_con_invernadero_no_aparece(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: quien ya trabaja para un invernadero no es un pendiente."""
+        asignar_transportista(
+            crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera"),
+            crear_invernadero("Norte", agronomo=self.agronomo, capataz=crear_capataz_activo(), vendedor=crear_vendedor()),
+        )
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertNotContains(respuesta, "Marcos Vera")
+        self.assertNotContains(respuesta, "Transportista sin invernadero")
+
+    def test_regla_5_el_contador_suma_invernaderos_y_transportistas(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: la cabecera dice «N pendientes»: invernaderos más transportistas."""
+        crear_invernadero("Sur")
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera")
+        crear_transportista("carla@infoponia.com", nombre="Carla", apellido="Sosa")
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, "3 pendientes")
+
+    def test_regla_5_los_transportistas_van_por_apellido_y_nombre(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: orden por apellido y nombre, sin distinguir mayúsculas."""
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="vera")
+        crear_transportista("carla@infoponia.com", nombre="Carla", apellido="Sosa")
+        crear_transportista("ana@infoponia.com", nombre="Ana", apellido="Álvarez")
+        seccion = invernaderos.seccion_de_inicio(self.gerente)
+
+        self.assertEqual(
+            [t.get_full_name() for t in seccion.contexto["transportistas_sin_invernadero"]],
+            ["Ana Álvarez", "Carla Sosa", "Marcos vera"],
+        )
+
+    def test_regla_5_un_invernadero_sin_transportistas_no_aparece(self):
+        """PROD-CNS-INV regla 5 y decisión D de D-55: un invernadero con todo el personal pero sin transportistas no genera
+        aviso (puede vender con retiro): el Inicio dice que todo está asignado."""
+        crear_invernadero(
+            "Completo", agronomo=self.agronomo, capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, "Todos los invernaderos activos tienen su personal asignado.")
+        self.assertNotContains(respuesta, "pendiente")
+
+    def test_regla_5_con_un_transportista_sin_invernadero_no_dice_que_esta_todo_asignado(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: el mensaje de todo asignado solo va si no hay ni invernaderos ni transportistas
+        por asignar."""
+        crear_invernadero(
+            "Completo", agronomo=self.agronomo, capataz=crear_capataz_activo(), vendedor=crear_vendedor()
+        )
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertNotContains(respuesta, "Todos los invernaderos activos tienen su personal asignado.")
+        self.assertContains(respuesta, "1 pendiente")
+
+    def test_regla_5_sin_invernaderos_activos_el_transportista_sigue_apareciendo(self):
+        """PROD-CNS-INV regla 5 *(MAE-05)*: el aviso del transportista no depende de que haya invernaderos activos."""
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(self.gerente)
+
+        respuesta = self.client.get(reverse("core:inicio"))
+
+        self.assertContains(respuesta, "Marcos Vera")
+
+    def test_regla_5_el_inicio_del_agronomo_no_muestra_a_los_transportistas(self):
+        """PROD-CNS-INV regla 5: la sección es solo del Gerente, también para los transportistas."""
+        crear_transportista("marcos@infoponia.com", nombre="Marcos", apellido="Vera")
+        self.client.force_login(self.agronomo)
+
+        self.assertNotContains(self.client.get(reverse("core:inicio")), "Marcos Vera")
 
     def test_regla_5_el_inicio_del_agronomo_no_muestra_la_seccion(self):
         """PROD-CNS-INV regla 5: la sección es solo del Gerente. Control: con el mismo invernadero, el Gerente la ve."""

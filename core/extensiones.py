@@ -171,3 +171,46 @@ def contadores_de_pendientes():
     for funcion in list(_CONTADORES_DE_PENDIENTES):
         juntos.extend(funcion())
     return juntos
+
+
+# ---- La cuenta del Transportista (MAE-05, D-55) ----
+# Dos puntos más, aparte de los de D-43: ``core`` no puede importar `maestros` ni `comercial` (regla A1 de D-37). Contrato en
+# docs/api/extensiones_de_maestros.md, «Transportistas».
+#   - ``registrar_impedimento_de_baja_de_cuenta``: lo que impide dar de baja una cuenta (precondición d de USR-BAJ-USR: el
+#     Transportista en ruta). Lo registra `comercial`. ``baja_usuario`` lo pide después de bloquear la cuenta.
+#   - ``registrar_datos_de_cuenta``: datos de solo lectura de la cuenta (el «Invernadero» del Transportista, USR-CNS-USR 3 y
+#     USR-GST-PRF 1). Lo registra `maestros`.
+
+# Un impedimento de la baja de una cuenta: un código estable, qué pasa y cómo resolverlo.
+ImpedimentoDeCuenta = namedtuple("ImpedimentoDeCuenta", "codigo texto como_resolver")
+# Un dato de una cuenta para mostrar: ``valor`` es texto plano (la plantilla lo escapa); ``nota`` es opcional ("" si no hay).
+DatoDeCuenta = namedtuple("DatoDeCuenta", "etiqueta valor nota")
+
+_IMPEDIMENTOS_DE_BAJA_DE_CUENTA = []
+_DATOS_DE_CUENTA = []
+
+
+def registrar_impedimento_de_baja_de_cuenta(funcion):
+    """Registra ``funcion(cuenta) -> list[ImpedimentoDeCuenta]``. Solo lectura. Idempotente."""
+    return _registrar(_IMPEDIMENTOS_DE_BAJA_DE_CUENTA, funcion)
+
+
+def impedimentos_de_baja_de_cuenta(cuenta):
+    """Los impedimentos de todos los registrantes, juntos y en el orden de registro (sin registrantes, lista vacía)."""
+    juntos = []
+    for funcion in list(_IMPEDIMENTOS_DE_BAJA_DE_CUENTA):
+        juntos.extend(funcion(cuenta))
+    return juntos
+
+
+def registrar_datos_de_cuenta(funcion):
+    """Registra ``funcion(cuenta) -> list[DatoDeCuenta]``. Solo lectura. Idempotente."""
+    return _registrar(_DATOS_DE_CUENTA, funcion)
+
+
+def datos_de_cuenta(cuenta):
+    """Los datos de todos los registrantes, juntos y en el orden de registro (sin registrantes, lista vacía)."""
+    datos = []
+    for funcion in list(_DATOS_DE_CUENTA):
+        datos.extend(funcion(cuenta))
+    return datos

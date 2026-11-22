@@ -2,8 +2,9 @@
 {% comment %}Nuevo usuario del Gerente o Alta de Gerente del Administrador (USR-ALT-USR, vAlta del
 prototipo; D-16). El formulario va con «novalidate»: el teléfono se valida al confirmar, no mientras se
 escribe. Con «gerente_activo» (regla 2, D-30) no se muestra el formulario: solo el aviso, con «Ver a
-<nombre>» y «Volver a Cuentas», para no completar datos que no se pueden guardar. Sin el campo de
-invernadero del Transportista (para más adelante). La forma de primer acceso (invitación por correo o contraseña
+<nombre>» y «Volver a Cuentas», para no completar datos que no se pueden guardar. El alta no
+pide invernadero para ningún rol (regla 5 de USR-ALT-USR, D-55): el del Transportista se asigna desde «Logística», en
+la ficha del invernadero. La forma de primer acceso (invitación por correo o contraseña
 temporal, regla 4, D-35) se elige con _forma_de_acceso.html.{% endcomment %}
 {% block titulo %}{% if es_administrador %}Alta de Gerente{% else %}Nuevo usuario{% endif %} · InfoPonia{% endblock %}
 {% block contenido %}

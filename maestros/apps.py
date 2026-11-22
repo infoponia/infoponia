@@ -20,7 +20,7 @@ class MaestrosConfig(AppConfig):
         from core.menu import registrar_entrada
         from core.models import Usuario
         from maestros import extensiones as extensiones_de_maestros
-        from maestros.servicios import invernaderos, perfil, sectores
+        from maestros.servicios import invernaderos, perfil, sectores, transportistas
         from maestros.servicios.alertas import registrar_tipos_de_personal
 
         registrar_tipos_de_personal()
@@ -32,6 +32,9 @@ class MaestrosConfig(AppConfig):
         extensiones.registrar_efecto_de_reactivacion_de_cuenta(invernaderos.efectos_de_reactivacion_de_cuenta)
         extensiones.registrar_asignaciones_de_cuenta(invernaderos.asignaciones_de_cuenta)
         extensiones.registrar_seccion_de_inicio(invernaderos.seccion_de_inicio)
+        # MAE-05 (D-55): el «Invernadero» del Transportista, solo para consultar en la ficha de la cuenta y en «Mi perfil».
+        # ``registrar_datos_de_cuenta`` es idempotente (``ready()`` puede correr más de una vez): no duplica el registro.
+        extensiones.registrar_datos_de_cuenta(transportistas.datos_de_cuenta)
         # NOT-01 (D-42): las alertas de la campana y el contador de pendientes del Gerente.
         extensiones.registrar_fuente_de_alertas(invernaderos.items_de_campana)
         extensiones.registrar_contador_de_pendientes(invernaderos.pendientes_de_alertas)

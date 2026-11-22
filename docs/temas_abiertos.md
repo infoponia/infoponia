@@ -203,6 +203,16 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **Para decidir:** si D-41 (sin Agrónomo, la alerta va al Gerente) debe corregirse o si la revisión de vencimientos es la excepción que fija el CU.
 - **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
 
+## Abiertos desde MAE-05 (21/11/2026)
+
+- **Fuera de «Permitido fuera de la app», con permiso expreso del estudiante:** el ícono `truck` en `core/templatetags/iconos.py` (una línea, copiada de `logistica_transportista.html`).
+- **«Transportistas» sin etiqueta en la auditoría.** `RegistroAuditoria.ETIQUETAS` (`core/models.py`, fuera de lo permitido) no tiene la clave `transportistas`: el detalle de `modificacion_invernadero` se ve con la clave tal cual. Sumarla en una tarea chica de `core`.
+- **Cuenta reactivada de un Transportista con fila en un invernadero inactivo (D-55, punto 8).** Queda activo en un invernadero inactivo: no se puede quitar (regla 5 de PROD-MOD-INV), pero sí trasladar. Ningún documento lo cubre; decidir si el invernadero inactivo debe dejar quitarlo.
+- **Interpretaciones sin texto en la tarea:** el origen de un traslado se bloquea con `select_for_update(no_key=True, of=("self",))` y puede estar inactivo; `candidatos` devuelve `Candidato(transportista, invernadero)` y ordena en la base (`Lower(...)`, con collation); un id que no es de un Transportista da 404; quitar a un inactivo también notifica; sin elegir a nadie la ventana dice «Elegí un transportista.»; el texto del impedimento va en singular y plural («Tiene 1 transportista activo» / «Tiene N transportistas activos»), no con «(s)»; el contador de «Personal por asignar» dice «1 pendiente».
+- **Sin traducción de `IntegrityError`.** La restricción única es un respaldo: el bloqueo de la cuenta la hace inalcanzable y la tarea no da un código para ella.
+- **La ventana «Agregar» no resalta el candidato elegido.** Usa radios nativos dentro de `label.opt`; el prototipo marca la opción con `aria-pressed`, que hoy no se actualiza sin JavaScript.
+- **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
+
 ## Abiertos desde H2 (20/11/2026)
 
 | Tema | Qué falta | Cuándo |

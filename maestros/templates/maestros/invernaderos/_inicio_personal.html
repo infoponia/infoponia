@@ -1,15 +1,19 @@
 {% load iconos %}{% comment %}«Personal por asignar» del Inicio del Gerente (regla 5 de PROD-CNS-INV; ``personalCard`` y ``alertasInv`` del
-prototipo, sin la tarjeta «Solo prototipo»). Se incluye desde core/inicio.html por core.extensiones (D-43). Recibe
-«datos»: «filas» (cada una con «invernadero» y «detalle») y «hay_activos». Cada fila lleva un enlace común a «Modificar»
-(sin HTMX: funciona sin JavaScript) y solo aparecen invernaderos activos, así que el enlace nunca lleva a una redirección
-(D-30). Sin filas, avisa que todo está asignado, pero solo si hay algún invernadero activo.{% endcomment %}
+prototipo, sin la tarjeta «Solo prototipo»; con el transportista sin invernadero, ``personalPorAsignar`` de
+logistica_transportista.html, MAE-05, D-55). Se incluye desde core/inicio.html por core.extensiones (D-43). Recibe
+«datos»: «filas» (cada una con «invernadero» y «detalle»), «transportistas_sin_invernadero» (cuentas activas sin invernadero:
+un aviso, no una alerta), «pendientes» (invernaderos más transportistas) y «hay_activos». Cada fila de invernadero lleva un
+enlace común a «Modificar» (sin HTMX: funciona sin JavaScript) y solo aparecen invernaderos activos, así que el enlace nunca
+lleva a una redirección (D-30). «Asignar» de un transportista lleva a la lista de invernaderos: se elige uno y se lo agrega
+desde «Logística». Un invernadero sin transportistas no aparece (decisión D de D-55). Sin ninguna de las dos cosas, avisa que
+todo está asignado, pero solo si hay algún invernadero activo.{% endcomment %}
 <div class="page narrow" style="margin-top:16px">
-  {% if datos.filas %}
+  {% if datos.filas or datos.transportistas_sin_invernadero %}
   <div class="card seg">
     <div class="card-h">
       <h3>{% icono "users" 16 %} Personal por asignar</h3>
       <span class="spacer"></span>
-      <span class="status-badge status-warn">{{ datos.filas|length }} invernadero{{ datos.filas|length|pluralize:"s" }}</span>
+      <span class="status-badge status-warn">{{ datos.pendientes }} pendiente{{ datos.pendientes|pluralize:"s" }}</span>
     </div>
     <div class="card-b flush">
       {% for fila in datos.filas %}
@@ -17,6 +21,13 @@ prototipo, sin la tarjeta «Solo prototipo»). Se incluye desde core/inicio.html
         <span style="color:var(--status-warn);display:flex">{% icono "warn" 16 %}</span>
         <div style="flex:1;min-width:200px"><b>{{ fila.invernadero.nombre_invernadero }}</b><span class="muted" style="display:block;font-size:13px">{{ fila.detalle }}</span></div>
         <a class="btn btn-ghost btn-sm" href="{% url 'maestros:invernadero_modificar' fila.invernadero.pk %}">Asignar</a>
+      </div>
+      {% endfor %}
+      {% for transportista in datos.transportistas_sin_invernadero %}
+      <div class="row" style="padding:14px 20px;{% if datos.filas or not forloop.first %}border-top:1px solid var(--border){% endif %}">
+        <span style="color:var(--status-info);display:flex">{% icono "info" 16 %}</span>
+        <div style="flex:1;min-width:200px"><b>{{ transportista.get_full_name|default:transportista.email }}</b><span class="muted" style="display:block;font-size:13px">Transportista sin invernadero: no recibe entregas.</span></div>
+        <a class="btn btn-ghost btn-sm" href="{% url 'maestros:invernaderos' %}">Asignar</a>
       </div>
       {% endfor %}
     </div>

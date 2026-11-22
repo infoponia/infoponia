@@ -1029,6 +1029,19 @@ def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=No
     return _resultado_acceso(cuenta, acceso, temporal, construir_url)
 
 
+def impedimentos_de_baja(actor, cuenta_id):
+    """Precondición d de USR-BAJ-USR (MAE-05, D-55): los impedimentos de dar de baja la cuenta (el Transportista en ruta,
+    MD-118), para la ventana de confirmación: una lista de ``ImpedimentoDeCuenta`` (``codigo``, ``texto``, ``como_resolver``) de
+    todos los registrantes de ``core.extensiones.registrar_impedimento_de_baja_de_cuenta``. Sin registrantes, lista vacía.
+
+    Solo lectura: no bloquea, no cambia nada y no audita; ``baja_usuario`` los vuelve a verificar con la cuenta bloqueada. Mismo
+    alcance que ``obtener_cuenta`` (Gerente o Administrador activos, SEG-13): una cuenta fuera del alcance da
+    ``PermissionDenied`` y un id inexistente, ``Http404``.
+    """
+    cuenta = obtener_cuenta(actor, cuenta_id)
+    return extensiones.impedimentos_de_baja_de_cuenta(cuenta)
+
+
 def baja_usuario(actor, cuenta_id):
     """USR-BAJ-USR: da de baja lógica una cuenta activa (la deja inactiva, sin borrarla).
 
@@ -1055,6 +1068,10 @@ def baja_usuario(actor, cuenta_id):
       invernaderos → alertas (D-40). Los afectados y los ``datos`` que suma van a la auditoría. La regla 4 informa lo
       asignado en la ventana (``core.extensiones.asignaciones_de_cuenta``).
 
+    - Precondición d (MAE-05, D-55): ``core.extensiones.impedimentos_de_baja_de_cuenta`` (lo registra `comercial`: el
+      Transportista en ruta). Con alguno, ``ValidationError`` con un error por impedimento (su código y su texto) y no cambia
+      nada. La ventana los muestra con ``impedimentos_de_baja`` y no ofrece confirmar.
+
     - Postcondición c y regla 3 (NOT-01, D-42): los pendientes del Gerente que quedan esperando los muestra la ventana de baja
       (``core.views._gestionar_cuenta``, con ``notificaciones.pendientes_del_gerente``); no es una notificación y la baja
       no se bloquea por ellos.
@@ -1070,6 +1087,13 @@ def baja_usuario(actor, cuenta_id):
             raise ValidationError(
                 "No se puede dar de baja: es el último Administrador activo.",
                 code="ultimo_administrador",
+            )
+        # Precondición d (MAE-05, D-55): con la cuenta ya bloqueada y ANTES de cambiarle el estado, se piden los impedimentos
+        # (el Transportista en ruta, que registra `comercial`). Se informan todos, cada uno con su código, y no cambia nada.
+        impedimentos = extensiones.impedimentos_de_baja_de_cuenta(cuenta)
+        if impedimentos:
+            raise ValidationError(
+                [ValidationError(f"{i.texto} {i.como_resolver}", code=i.codigo) for i in impedimentos]
             )
         cuenta.is_active = False
         cuenta.save(update_fields=["is_active"])

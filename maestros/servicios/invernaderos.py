@@ -20,6 +20,7 @@ from core.models import (
     Capataz,
     RegistroAuditoria,
     Tecnico,
+    Transportista,
     Usuario,
     Vendedor,
     referencia,
@@ -816,7 +817,34 @@ def impedimentos_para_baja(actor, invernadero_id):
     invernadero = _obtener_para_baja(invernadero_id)
     if not invernadero.activo:
         raise _error_general(MENSAJE_YA_INACTIVO, "invernadero_inactivo")
-    return extensiones.impedimentos_de_baja(invernadero)
+    return _impedimentos_de_baja(invernadero)
+
+
+def _impedimento_de_transportistas(invernadero):
+    """Precondición g y reglas 2 y 3 de PROD-BAJ-INV (MAE-05, D-55): los transportistas ACTIVOS vinculados impiden la baja;
+    los inactivos quedan como historial (D-39) y no cuentan. Devuelve una lista con un solo impedimento (código
+    ``transportistas_activos``) o vacía. Es propio de `maestros` (lee ``TransportistaInvernadero``) y no un registrante: así
+    no depende de que otra app lo registre. Una sola consulta; en la baja se llama con el invernadero ya bloqueado."""
+    activos = [t for t in invernadero.transportistas() if t.is_active]
+    if not activos:
+        return []
+    nombres = ", ".join(t.get_full_name() or t.email for t in activos)
+    cantidad = (
+        "1 transportista activo" if len(activos) == 1 else f"{len(activos)} transportistas activos"
+    )
+    return [
+        extensiones.Impedimento(
+            "transportistas_activos",
+            f"Tiene {cantidad}: {nombres}.",
+            "Trasladalos a otro invernadero o quitalos desde “Logística”.",
+        )
+    ]
+
+
+def _impedimentos_de_baja(invernadero):
+    """Todos los impedimentos de la baja, juntos (regla 2): los de los registrantes de ``maestros.extensiones`` y el propio de
+    los transportistas activos. No se queda con el primero."""
+    return [*extensiones.impedimentos_de_baja(invernadero), *_impedimento_de_transportistas(invernadero)]
 
 
 def baja_invernadero(actor, invernadero_id):
@@ -827,7 +855,8 @@ def baja_invernadero(actor, invernadero_id):
     - Precondiciones c a f y h y regla 2: los registrantes de ``maestros.extensiones.impedimentos_de_baja`` (lotes,
       órdenes, partidas, insumos, sistema IoT) declaran lo que impide la baja; se informan TODOS, cada uno con cómo
       resolverlo, y no se cambia nada. Mientras no haya ninguna app registrada, se dan por cumplidas. La precondición
-      g (transportistas activos, regla 3) espera a R155.
+      g (transportistas activos, regla 3, D-39) la verifica este mismo servicio con el invernadero ya bloqueado
+      (MAE-05, D-55): ``transportistas_activos``, junto con los de los registrantes.
     - Postcondición a: queda «inactivo». Postcondición d y regla 1: el personal, la dirección y el nombre se conservan.
     - Postcondiciones b y c: los efectos (sectores e insumos pasan a inactivos) los aplican los registrantes de
       ``maestros.extensiones.aplicar_efectos_de_baja``, que auditan sus propios logs por sector e insumo (f).
@@ -843,7 +872,7 @@ def baja_invernadero(actor, invernadero_id):
         if not invernadero.activo:
             raise _error_general(MENSAJE_YA_INACTIVO, "invernadero_inactivo")
         api_alertas.bloquear_alertas_activas(invernadero.pk)  # D-40: las alertas, antes que las filas de las apps altas
-        impedimentos = extensiones.impedimentos_de_baja(invernadero)
+        impedimentos = _impedimentos_de_baja(invernadero)
         if impedimentos:
             raise ValidationError(
                 {
@@ -1024,10 +1053,24 @@ def invernaderos_con_personal_por_asignar(actor):
     return [(i, faltantes) for i in invernaderos if (faltantes := i.roles_faltantes())]
 
 
+def transportistas_sin_invernadero(actor):
+    """Regla 5 de PROD-CNS-INV (MAE-05, D-55, punto 6): los Transportistas ACTIVOS que no trabajan para ningún invernadero, por
+    apellido y nombre (sin distinguir mayúsculas, en la base). Es un aviso y no una alerta. Un invernadero sin transportistas
+    no aparece (decisión D de D-55). Precondición: Gerente activo (``PermissionDenied``). No audita (regla 7, SEG-14)."""
+    _exigir_gerente(actor, "consultar")
+    return list(
+        Transportista.objects.filter(is_active=True, invernadero_asignado__isnull=True).order_by(
+            Lower("last_name"), Lower("first_name"), "pk"
+        )
+    )
+
+
 def seccion_de_inicio(usuario):
     """Regla 5 de PROD-CNS-INV: la sección «Personal por asignar» del Inicio, para un Gerente activo; ``None`` para
     cualquier otro. El contexto trae ``filas`` (cada una con el ``invernadero`` y su ``detalle``: «Falta Capataz · Vendedor
-    inactivo (Nombre)») y ``hay_activos`` (para decir que todo está asignado solo si hay algún invernadero activo)."""
+    inactivo (Nombre)»), ``transportistas_sin_invernadero`` (MAE-05: los activos sin fila, como aviso), ``pendientes`` (los
+    invernaderos más esos transportistas) y ``hay_activos`` (para decir que todo está asignado solo si hay algún invernadero
+    activo)."""
     if usuario is None or not usuario.is_active or rol_de(usuario) != Usuario.Rol.GERENTE:
         return None
     filas = []
@@ -1040,8 +1083,17 @@ def seccion_de_inicio(usuario):
                 persona = getattr(invernadero, atributo)
                 partes.append(f"{nombre} inactivo ({persona.get_full_name() or persona.email})")
         filas.append({"invernadero": invernadero, "detalle": " · ".join(partes)})
+    sin_invernadero = transportistas_sin_invernadero(usuario)
     hay_activos = bool(filas) or Invernadero.objects.filter(estado_invernadero=Invernadero.Estado.ACTIVO).exists()
-    return SeccionDeInicio(PLANTILLA_DE_INICIO, {"filas": filas, "hay_activos": hay_activos})
+    return SeccionDeInicio(
+        PLANTILLA_DE_INICIO,
+        {
+            "filas": filas,
+            "transportistas_sin_invernadero": sin_invernadero,
+            "pendientes": len(filas) + len(sin_invernadero),
+            "hay_activos": hay_activos,
+        },
+    )
 
 
 # ---- NOT-01 (D-42): lo que `maestros` le da a la campana de `core` ----

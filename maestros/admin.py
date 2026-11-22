@@ -110,7 +110,7 @@ class VariedadAdmin(admin.ModelAdmin):
 
 
 # MAE-04: los dos singletons se modifican con sus servicios (que validan y auditan), así que el admin solo los muestra.
-from .models import ConfiguracionOperativa, PerfilOrganizacion  # noqa: E402
+from .models import ConfiguracionOperativa, PerfilOrganizacion, TransportistaInvernadero  # noqa: E402
 
 
 class _SoloLectura(admin.ModelAdmin):
@@ -131,3 +131,6 @@ class _SoloLectura(admin.ModelAdmin):
 
 admin.site.register(ConfiguracionOperativa, _SoloLectura)
 admin.site.register(PerfilOrganizacion, _SoloLectura)
+# MAE-05: la fila la crean, trasladan y borran los servicios de maestros/servicios/transportistas.py (con bloqueos,
+# notificación y auditoría); el admin solo la muestra.
+admin.site.register(TransportistaInvernadero, _SoloLectura)

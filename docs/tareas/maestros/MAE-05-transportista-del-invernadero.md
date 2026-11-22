@@ -1,6 +1,6 @@
 # MAE-05 · Transportista del invernadero: «Logística», agregar, trasladar y quitar
 
-Estado: pendiente | App: maestros (y dos puntos de extensión en core) | Rama: feature/mae-05-transportista-del-invernadero | Ronda: —
+Estado: hecha (en revisión a mano) | App: maestros (y dos puntos de extensión en core) | Rama: feature/mae-05-transportista-del-invernadero | Ronda: —
 (corrección previa al módulo comercial)
 
 Depende de: MAE-01b (invernadero), MAE-02b (Inicio del Gerente y puntos de `core/extensiones.py`) y NOT-01 (notificaciones). Las tres
@@ -235,7 +235,7 @@ Se puede dejar para una tarea chica aparte, anotada como disparador, el paso 7 (
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-Hay una migración nueva: `python manage.py migrate`. Cuentas: Gerente, un Agrónomo a cargo de un invernadero y tres Transportistas
+Hay una migración nueva (`maestros` 0008): `python manage.py migrate`. Cuentas: Gerente, un Agrónomo a cargo de un invernadero y tres Transportistas
 (uno lo vas a dar de baja). Dos invernaderos activos: «Norte» y «Sur».
 
 1. Panel de control del Gerente: los tres Transportistas aparecen en «Personal por asignar» como «Transportista sin
@@ -256,4 +256,44 @@ Hay una migración nueva: `python manage.py migrate`. Cuentas: Gerente, un Agró
    concurrencia: uno lo agrega y el otro ve el motivo, sin error 500.
 10. Después del merge: verificar en el log de Render que se aplicó la migración nueva.
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+**Qué se hizo** (21/11/2026, rama `feature/mae-05-transportista-del-invernadero`; D-55 validada por el estudiante antes de empezar):
+
+- **Modelo (paso 1).** `maestros.TransportistaInvernadero` (OneToOne a `core.Transportista` y FK a `Invernadero`, las dos `PROTECT`;
+  `desde` sin valor por defecto), `Invernadero.transportistas()` (una consulta, por apellido y nombre sin distinguir mayúsculas),
+  admin de solo lectura y la migración `maestros/0008_transportista_invernadero.py` (solo esquema; ninguna en `core`).
+- **Puntos de extensión (paso 2).** En `maestros/extensiones.py`: `Logistica`, `registrar_impedimento_de_transportista`,
+  `impedimentos_de_transportista`, `registrar_logistica_de_transportista` (un solo registrante) y `logistica_de`. En
+  `core/extensiones.py`: `ImpedimentoDeCuenta`, `DatoDeCuenta` y sus cuatro funciones, idempotentes.
+- **Servicios (paso 3)**, en `maestros/servicios/transportistas.py`: `candidatos`, `agregar_transportista` (con
+  `FaltaConfirmarTraslado.origen`), `quitar_transportista`, `impedimentos_para_quitar` y `datos_de_cuenta`. Orden de bloqueos (todos
+  `FOR NO KEY UPDATE`): quien actúa sigue activo → la fila `Usuario` del Transportista (después se verifican el rol y `is_active`) →
+  los invernaderos en orden de id (el destino con `bloquear_invernadero_activo`; el origen con `of=("self",)`, sin exigir que esté
+  activo) → se relee la fila. Un `modificacion_invernadero` por invernadero que cambió (dos en un traslado), con
+  `cambios.transportistas` antes y después; notificación con los textos de la tarea.
+- **Baja del invernadero (paso 4).** `transportistas_activos` es un impedimento propio de `maestros` (no un registrante), que se suma
+  a los de los registrantes en `impedimentos_para_baja` y `baja_invernadero`, con el invernadero ya bloqueado. «Tiene 1 transportista
+  activo: …» / «Tiene N transportistas activos: …». Los inactivos no cuentan (D-39).
+- **Personal por asignar (paso 5).** `transportistas_sin_invernadero` y `pendientes` en `seccion_de_inicio`; fila con ícono `info`;
+  «N pendiente(s)»; el mensaje de todo asignado solo sin ninguna de las dos cosas.
+- **Ficha (paso 6).** Tarjeta «Logística» entre «Ubicación y Equipo» y «Capacidad», dos ventanas con HTMX y respaldo sin JavaScript,
+  vistas `transportista_agregar` y `transportista_quitar`, y el ícono `truck` en `core/templatetags/iconos.py` (con permiso explícito:
+  ese archivo no figuraba en «Permitido fuera de la app»).
+- **Cuenta (paso 7).** `baja_usuario` pide `impedimentos_de_baja_de_cuenta` con la cuenta bloqueada y antes de cambiar nada;
+  `core.servicios.impedimentos_de_baja(actor, cuenta_id)` (con el alcance de `obtener_cuenta`); la ficha de la cuenta (con la nota) y
+  «Mi perfil» (sin la nota) muestran `datos_de_cuenta`; la ventana de baja lista los impedimentos y no ofrece confirmar;
+  `MaestrosConfig.ready()` registra `datos_de_cuenta`; comentario de `alta.html` corregido.
+
+**Pruebas.** 151 nuevas (145 sin concurrencia y 6 de concurrencia). `maestros core` sin concurrencia pasa a 1707, todas en verde. Una
+prueba existente cambió por la tarea: `test_prod_cns_inv.py`, «2 invernaderos» → «2 pendientes» (el contador de la cabecera ahora suma
+invernaderos y transportistas). Concurrencia de `maestros`: 38 en verde (6 nuevas: dos agregados del mismo Transportista, con y sin
+traslado confirmado; agregar contra la baja del invernadero de destino en los dos órdenes; agregar contra la baja de la cuenta; quitar
+y agregar a la vez); la de `baja_usuario` de `core`, 2 en verde. `makemigrations --check` y `manage.py check`, sin cambios ni
+problemas. Con la migración nueva hubo que recrear la base de pruebas una vez (sin `--keepdb`).
+
+**Decisiones.** Ninguna nueva: se aplica D-55 (propuesta validada por el estudiante; pasa a «vigente» al mergear) con D-22, D-30,
+D-36, D-37, D-39, D-40 y D-42. Interpretaciones que conviene registrar en `docs/temas_abiertos.md` (ver «Abiertos desde MAE-05»):
+`select_for_update(no_key=True, of=("self",))` en el origen de un traslado; `Candidato(transportista, invernadero)`; el orden de
+`candidatos` lo hace la base (`Lower(...)`); un id que no es de un Transportista da 404; quitar en un invernadero inactivo se rechaza
+(regla 5) pero se puede sacar a un Transportista de un invernadero inactivo al trasladarlo.

@@ -10,7 +10,7 @@ from django.apps import apps
 from django.db import connection
 from django.utils import timezone
 
-from core.models import Agronomo, Capataz, Tecnico, Vendedor
+from core.models import Agronomo, Capataz, Tecnico, Transportista, Vendedor
 from core.tests.fabricas import crear_cuenta
 from maestros import alertas as registro_de_alertas
 from maestros.alertas import Clase, Destinatario, TipoAlerta
@@ -30,6 +30,7 @@ from maestros.models import (
     Provincia,
     SectorProduccion,
     TipoEtapa,
+    TransportistaInvernadero,
     Variedad,
 )
 
@@ -84,6 +85,18 @@ def crear_vendedor(email="vendedor@infoponia.com", **extra):
 def crear_tecnico(email="tecnico@infoponia.com", **extra):
     """Un Técnico activo."""
     return crear_cuenta(Tecnico, email=email, **extra)
+
+
+def crear_transportista(email="transportista@infoponia.com", **extra):
+    """Un Transportista activo (sin invernadero)."""
+    return crear_cuenta(Transportista, email=email, **extra)
+
+
+def asignar_transportista(transportista, invernadero):
+    """Vincula ``transportista`` a ``invernadero`` directo en la base (MAE-05), sin pasar por el servicio."""
+    return TransportistaInvernadero.objects.create(
+        transportista=transportista, invernadero=invernadero, desde=timezone.now()
+    )
 
 
 def datos_alta(tipo="urbana", **extra):
