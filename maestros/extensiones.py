@@ -68,7 +68,8 @@ def registrar_traspaso(contar, traspasar):
     """Registra ``contar(invernadero, rol, saliente, entrante) -> list[(descripcion, cantidad)]`` y
     ``traspasar(actor, invernadero, rol, saliente, entrante)``. ``rol`` es el atributo del invernadero (``"capataz"``);
     ``saliente`` y ``entrante`` son cuentas de la clase del rol, o ``None`` (rol sin responsable, o rol vacío).
-    ``contar`` no cambia nada; ``traspasar`` pasa lo del saliente al entrante en ese invernadero (MD-60)."""
+    ``contar`` no cambia nada; ``traspasar`` pasa lo del saliente al entrante en ese invernadero (MD-60) y devuelve la lista de
+    instancias que tocó (o ``None``) para que quede en la auditoría (PRD-01)."""
     _TRASPASOS.append((contar, traspasar))
 
 
@@ -81,9 +82,13 @@ def contar_traspaso(invernadero, rol, saliente, entrante):
 
 
 def traspasar(actor, invernadero, rol, saliente, entrante):
-    """Traspasa lo del saliente al entrante en ese invernadero (postcondición b de PROD-MOD-INV)."""
+    """Traspasa lo del saliente al entrante en ese invernadero (postcondición b de PROD-MOD-INV) y devuelve las instancias que
+    tocaron los registrantes, juntas (PRD-01, D-36 y D-60 punto 4): ``modificar_invernadero`` las suma a los afectados de su único
+    registro de auditoría. Cada ``traspasar`` devuelve una lista de instancias o ``None`` (el contrato anterior: nada)."""
+    afectados = []
     for _, traspasar_uno in list(_TRASPASOS):
-        traspasar_uno(actor, invernadero, rol, saliente, entrante)
+        afectados.extend(traspasar_uno(actor, invernadero, rol, saliente, entrante) or [])
+    return afectados
 
 
 # ---- MAE-03: puntos de extensión de sectores y cultivos (docs/api/extensiones_de_maestros.md) ----
@@ -270,6 +275,36 @@ def variedades_registradas(actor, cultivos):
     if not _VARIEDADES:
         return None
     return _VARIEDADES[0](actor, list(cultivos))
+
+
+# ---- PRD-01: pestañas de la ficha del invernadero (docs/api/extensiones_de_maestros.md, «Pestañas de la ficha del invernadero») ----
+# `maestros` no puede armar «Lotes activos» (regla A1: los lotes son de `produccion`): la app alta registra la pestaña. Sin
+# registrantes, la ficha no tiene pestañas extra.
+
+# Una pestaña lista para mostrar: ``html`` es el fragmento ya armado y escapado por quien la registra (``SafeString``).
+PestanaDeInvernadero = namedtuple("PestanaDeInvernadero", "clave titulo html")
+
+_PESTANAS = []  # ternas (clave, titulo, funcion), en orden de registro
+
+
+def registrar_pestana_de_invernadero(clave, titulo, funcion):
+    """Registra ``funcion(actor, invernadero) -> SafeString | None``: el HTML ya armado y escapado de la pestaña ``clave`` («Lotes
+    activos»); ``None`` si el actor no la ve. Una ``clave`` repetida lanza ``RuntimeError``. La registra `produccion` (y,
+    después, `iot`)."""
+    if any(registrada == clave for registrada, _, _ in _PESTANAS):
+        raise RuntimeError(f"La pestaña «{clave}» ya está registrada.")
+    _PESTANAS.append((clave, titulo, funcion))
+
+
+def pestanas_de_invernadero(actor, invernadero):
+    """Las pestañas registradas que ``actor`` ve, **en orden de registro**, como ``PestanaDeInvernadero``; las que devuelven
+    ``None`` no figuran. Sin registrantes, lista vacía. La ficha las muestra después de las propias."""
+    pestanas = []
+    for clave, titulo, funcion in list(_PESTANAS):
+        html = funcion(actor, invernadero)
+        if html is not None:
+            pestanas.append(PestanaDeInvernadero(clave, titulo, html))
+    return pestanas
 
 
 # ---- MAE-05: puntos de extensión de los transportistas (D-55; docs/api/extensiones_de_maestros.md, «Transportistas») ----

@@ -115,16 +115,15 @@ def _volver(request):
 def habilitar(request):
     """«Habilitar insumo en un invernadero» (CMP-HAB-IIN, ``MODALS.habilitar`` del prototipo). Con ``?insumo=`` (desde el catálogo) o
     ``?invernadero=`` el campo ya viene elegido y no se cambia. Al terminar, la pestaña ofrece «Cargar stock inicial» (el stock arranca en
-    cero). La lista general no ofrece semillas (nacen con su variedad, INV-03); la semilla activa que llega ya elegida (``?insumo=`` desde «Qué sigue»
-    de la variedad) sí se habilita."""
+    cero). La lista ofrece todos los insumos activos, **semillas incluidas** (regla 2 de CMP-HAB-IIN y regla 3 de CMP-CNS-INS); un insumo
+    inactivo no se habilita. (Antes las semillas solo se podían habilitar desde «Qué sigue» de la variedad.)"""
     invernaderos = list(Invernadero.objects.en_alcance_de(request.user).order_by("nombre_invernadero", "id"))
     todos = [i for i in api_insumos.consultar_insumos(request.user) if i.activo]
-    insumos = [i for i in todos if not i.es_semilla]
+    insumos = todos
     datos = request.POST if request.method == "POST" else request.GET
-    # INV-03 (paso 8): la lista general sigue sin semillas (nacen con su variedad), pero la semilla activa que llega ya elegida
-    # (``?insumo=`` desde «Qué sigue» de la variedad, o el campo oculto al enviar) sí se puede habilitar.
+    # ``?insumo=`` (desde el catálogo, «Qué sigue» de la variedad o el aviso de PRD-01) deja el insumo ya elegido.
     fijo_insumo = next((i for i in todos if i.pk == _entero(datos.get("insumo"))), None) if datos.get("insumo") else None
-    habilitables = insumos + ([fijo_insumo] if fijo_insumo is not None and fijo_insumo.es_semilla else [])
+    habilitables = insumos
     fijo_invernadero = next((g for g in invernaderos if g.pk == _entero(datos.get("invernadero"))), None) if datos.get("invernadero") else None
     if request.method == "POST":
         form = forms.FormularioExistencia(request.POST, insumos=insumos, invernaderos=invernaderos)

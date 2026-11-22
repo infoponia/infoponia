@@ -1,0 +1,35 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Producción y órdenes» (PRD-01, `VIEWS.prod` y `ordenesTab` del prototipo): página completa. Recibe «filas» (FilaDeOrden), «invernaderos», «tipos» (solo los de
+producción, D-67 punto 1), «estados», «filtros» y «es_gerente». El filtro es un formulario GET que funciona sin JavaScript; con HTMX cada selector reemplaza solo la tabla
+(sin validar nada: es una consulta). El Gerente la ve en solo lectura, sin «Nueva siembra».{% endcomment %}
+{% block titulo %}Producción y órdenes · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page">
+  <div class="page-h">
+    <h1>Producción</h1>
+    {% if not es_gerente %}<span class="spacer"></span><a class="btn btn-primary" href="{% url 'produccion:nueva_siembra' %}">{% icono "plus" 15 %} Nueva siembra</a>{% endif %}
+  </div>
+  {% include "maestros/cultivos/_pestanas_de_produccion.html" %}
+  <form class="card" style="margin:12px 0" method="get" action="{% url 'produccion:ordenes' %}" aria-label="Filtros de órdenes">
+    <div class="card-b grid3">
+      <div class="fld"><label for="f-invernadero">Invernadero</label>
+        <select class="field-input" id="f-invernadero" name="invernadero" data-desplegable hx-get="{% url 'produccion:ordenes' %}" hx-trigger="change" hx-include="closest form" hx-target="#tabla-de-ordenes" hx-swap="innerHTML show:none">
+          <option value="">Todos los invernaderos</option>
+          {% for i in invernaderos %}<option value="{{ i.pk }}"{% if filtros.invernadero == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+        </select></div>
+      <div class="fld"><label for="f-tipo">Tipo</label>
+        <select class="field-input" id="f-tipo" name="tipo" data-desplegable hx-get="{% url 'produccion:ordenes' %}" hx-trigger="change" hx-include="closest form" hx-target="#tabla-de-ordenes" hx-swap="innerHTML show:none">
+          <option value="">Todos los tipos</option>
+          {% for valor, texto in tipos %}<option value="{{ valor }}"{% if filtros.tipo == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+        </select></div>
+      <div class="fld"><label for="f-estado">Estado</label>
+        <select class="field-input" id="f-estado" name="estado" data-desplegable hx-get="{% url 'produccion:ordenes' %}" hx-trigger="change" hx-include="closest form" hx-target="#tabla-de-ordenes" hx-swap="innerHTML show:none">
+          <option value="">Todos los estados</option>
+          {% for valor, texto in estados %}<option value="{{ valor }}"{% if filtros.estado == valor %} selected{% endif %}>{{ texto|capfirst }}</option>{% endfor %}
+        </select></div>
+    </div>
+    <noscript><div class="card-b"><button class="btn btn-ghost btn-sm" type="submit">Filtrar</button></div></noscript>
+  </form>
+  <div id="tabla-de-ordenes">{% include "produccion/_tabla_de_ordenes.html" %}</div>
+</div>
+{% endblock %}

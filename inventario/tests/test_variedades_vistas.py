@@ -302,14 +302,15 @@ class AltaDeVariedadTests(VistasDeVariedadesBase):
         self.client.force_login(sin)
         self.assertNotContains(self.client.get(self.url("variedad_creada")), "Habilitar la semilla")
 
-    def test_habilitar_acepta_la_semilla_fijada_pero_la_lista_general_no_la_ofrece(self):
-        """INV-03 paso 8: la ventana de CMP-HAB-IIN abre con la semilla elegida; sin ella, la lista general sigue sin semillas (INV-02)."""
+    def test_habilitar_acepta_la_semilla_fijada_y_la_lista_general_tambien_la_ofrece(self):
+        """INV-03 paso 8: la ventana de CMP-HAB-IIN abre con la semilla elegida; sin ella, la lista general también la ofrece
+        (CMP-HAB-IIN regla 2: «se incluyen las semillas»; corrige el desvío de INV-02)."""
         semilla = self.semilla()
         fijada = self.client.get(reverse("inventario:habilitar"), {"insumo": semilla.pk}, **HX)
         self.assertContains(fijada, semilla.nombre_insumo)
         self.assertContains(fijada, f'name="insumo" value="{semilla.pk}"')
         general = self.client.get(reverse("inventario:habilitar"), **HX)
-        self.assertNotContains(general, semilla.nombre_insumo)
+        self.assertContains(general, semilla.nombre_insumo)
         enviada = self.client.post(
             reverse("inventario:habilitar"),
             {"insumo": semilla.pk, "invernadero": self.norte.pk, "cant_min": "10", "referencia_precio": "5"},

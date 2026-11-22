@@ -1,0 +1,71 @@
+# Pruebas de concurrencia de PROD-CNL-ORD (PRD-01, paso 7; docs/patrones/bloqueos.md, sección `produccion`): cancelar contra concretar y
+# cancelar dos veces. Dos hilos, dos conexiones, el orden fijado con ``primera`` (core/tests/concurrencia.py); son ``TransactionTestCase``
+# (el ``flush`` vacía los tipos de etapa, las categorías y Georef: cada prueba arma su invernadero con geografía propia y asegura los
+# datos en ``setUp``). Garantías mínimas del CU: «solo se cancelan órdenes a realizar; una orden concretada o cancelada nunca cambia de
+# estado, aun cuando se cancela y se concreta al mismo tiempo».
+# «Cancelar contra planificar otra transición del mismo lote» es de PRD-02 (la transición no existe todavía).
+
+from decimal import Decimal
+
+from django.test import TransactionTestCase, tag
+
+from core.models import RegistroAuditoria
+from core.tests.concurrencia import correr_a_la_vez
+from inventario.models import LoteInsumo
+from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario, perezoso
+from maestros.tests.fabricas import asegurar_datos_de_maestros
+from produccion.models import Lote, OrdenTrabajo, ReservaInsumo
+from produccion.tests.fabricas import codigos_del_rechazo, invernadero_con_produccion, orden_de_siembra, separar
+
+ordenes = perezoso("produccion.servicios.ordenes")
+siembras = perezoso("produccion.servicios.siembras")
+
+
+@tag("concurrencia")
+class CancelarOrdenConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """Bloqueos de `cancelar_orden`: cuentas → invernadero → variedad → sectores → insumos → la orden y sus reservas."""
+
+    def setUp(self):
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        self.e = invernadero_con_produccion(geografia_propia=True)
+        self.orden = orden_de_siembra(self.e, plantines=50)
+
+    def cancelar(self):
+        return lambda: ordenes.cancelar_orden(self.e.agronomo, self.orden.pk, "Se cambiaron los planes")
+
+    def concretar(self):
+        return lambda: siembras.concretar_siembra(self.e.capataz, self.orden.pk, siembras.DatosDeConcrecion())
+
+    def test_garantia_concretar_primero_la_cancelacion_espera_y_ve_la_orden_concretada(self):
+        """Extensión 8a: la cancelación espera a la concreción (los dos toman antes el invernadero), relee la orden «concretada» y se
+        rechaza con `orden_no_pendiente`. La orden NO pasa de «concretada» a «cancelada»; queda su lote y su stock descontado."""
+        resultados = correr_a_la_vez(self.concretar(), self.cancelar(), primera="a")
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
+        self.assertEqual(codigos_del_rechazo(rechazos[0]), ["orden_no_pendiente"])
+        self.assertEqual(OrdenTrabajo.objects.get(pk=self.orden.pk).estado_orden, "concretada")
+        self.assertEqual(Lote.objects.count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="cancelacion_orden").count(), 0)
+
+    def test_garantia_cancelar_primero_la_concrecion_espera_y_ve_la_orden_cancelada(self):
+        """Extensión 19a de PROD-CNC-SMB: si la cancelación confirma primero, la concreción relee la orden «cancelada» y se rechaza con
+        `orden_no_pendiente` y el estado actual. No hay lote ni descuento de stock."""
+        resultados = correr_a_la_vez(self.cancelar(), self.concretar(), primera="a")
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
+        self.assertEqual(codigos_del_rechazo(rechazos[0]), ["orden_no_pendiente"])
+        self.assertIn("cancelada", rechazos[0].mensaje)
+        self.assertEqual(OrdenTrabajo.objects.get(pk=self.orden.pk).estado_orden, "cancelada")
+        self.assertEqual(Lote.objects.count(), 0)
+        self.assertEqual(LoteInsumo.objects.get(pk=self.e.lote_de_semillas.pk).cantidad_disponible, Decimal("1000"))
+        self.assertEqual(ReservaInsumo.objects.get(orden=self.orden).estado, "cancelada")
+
+    def test_garantia_cancelar_dos_veces_la_segunda_se_rechaza_y_queda_un_solo_registro(self):
+        """Dos cancelaciones simultáneas de la misma orden: la segunda espera, ve la orden ya «cancelada» y se rechaza con
+        `orden_no_pendiente`. Un solo registro de auditoría y un solo aviso."""
+        resultados = correr_a_la_vez(self.cancelar(), self.cancelar(), primera="a")
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
+        self.assertEqual(codigos_del_rechazo(rechazos[0]), ["orden_no_pendiente"])
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="cancelacion_orden").count(), 1)

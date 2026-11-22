@@ -43,7 +43,7 @@ página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo lle
             {% if f.puede %}<a class="ibtn danger" href="{% url 'inventario:insumo_baja' i.pk %}" hx-get="{% url 'inventario:insumo_baja' i.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Dar de baja {{ i.nombre_insumo }}" title="Dar de baja {{ i.nombre_insumo }}">{% icono "trash" 16 %}</a>
             {% else %}<span class="ibtn danger" role="img" aria-disabled="true" aria-label="Dar de baja {{ i.nombre_insumo }}: no disponible">{% icono "trash" 16 %}</span>{% endif %}
           {% endif %}
-          {% if puede_habilitar and i.activo and not i.es_semilla %}
+          {% if puede_habilitar and i.activo %}
             <a class="btn btn-ghost btn-sm" href="{% url 'inventario:habilitar' %}?insumo={{ i.pk }}" hx-get="{% url 'inventario:habilitar' %}?insumo={{ i.pk }}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Habilitar en un invernadero</a>
           {% endif %}
           {% if "reactivar" in f.acciones %}

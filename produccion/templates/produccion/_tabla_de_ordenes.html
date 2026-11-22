@@ -1,0 +1,24 @@
+{% load iconos %}{% comment %}La tabla de «Producción y órdenes» (lo que HTMX reemplaza al filtrar). Recibe «filas» (FilaDeOrden, ya ordenadas: primero las «a realizar»). Todo se escapa. Sin filas, el estado vacío.{% endcomment %}
+{% if filas %}
+<div class="card"><div class="card-b flush">
+  <table class="data-table">
+    <thead><tr><th>Orden</th><th>Tipo</th><th>Invernadero</th><th>Qué</th><th>Fecha</th><th>Prioridad</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+    {% for f in filas %}
+    <tr>
+      <td class="mono"><b>{{ f.codigo }}</b></td>
+      <td>{{ f.tipo_texto }}</td>
+      <td>{{ f.invernadero }}</td>
+      <td>{{ f.resumen|default:"—" }}</td>
+      <td>{{ f.fecha_programada_orden|date:"d/m/Y" }}</td>
+      <td>{% if f.prioridad_orden %}{{ f.prioridad_orden|capfirst }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td><span class="status-badge {% if f.estado_orden == 'a_realizar' %}status-info{% elif f.estado_orden == 'concretada' %}status-ok{% else %}status-warn{% endif %}">{% if f.estado_orden == 'a_realizar' %}a realizar{% else %}{{ f.estado_orden }}{% endif %}</span></td>
+      <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'produccion:orden' f.orden_id %}">Ver</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% else %}
+<div class="empty">{% icono "box" 28 %}<b>No hay órdenes con esos filtros</b><span>Probá con otros filtros o planificá una siembra nueva.</span></div>
+{% endif %}

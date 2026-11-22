@@ -82,7 +82,20 @@ def _contexto_de_la_ficha(request, invernadero, **extra):
         "url_de_registro_iot": None if invernadero.estado_iot() else extensiones.url_de_registro_iot(request.user, invernadero),
         **_logistica(invernadero),
         **_pestana_de_sectores(request, invernadero),
+        **_pestanas_registradas(request, invernadero),
         **extra,
+    }
+
+
+def _pestanas_registradas(request, invernadero):
+    """Las pestañas que registraron otras apps (PRD-01: «Lotes activos»; ``docs/api/extensiones_de_maestros.md``) y la elegida con
+    ``?pestana=<clave>``: sin elegir, o con una clave que no existe o que el actor no ve, queda «Sectores». Cada pestaña es un
+    enlace, así que funciona sin JavaScript."""
+    pestanas = extensiones.pestanas_de_invernadero(request.user, invernadero)
+    clave = request.GET.get("pestana")
+    return {
+        "pestanas_registradas": pestanas,
+        "pestana_elegida": next((p for p in pestanas if p.clave == clave), None),
     }
 
 

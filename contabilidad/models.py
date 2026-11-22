@@ -47,7 +47,7 @@ class OrigenDocumento(models.Model):
         `OrigenDocumento` solo; la hija directa fija su `tipo`.
         """
         tipo = type(self).TIPO_DE_ORIGEN
-        if tipo not in self.Tipo.values:
+        if tipo not in OrigenDocumento.Tipo.values:  # no `self.Tipo`: una hija (OrdenTrabajo) puede declarar su propio `Tipo`
             raise TypeError(
                 f"{type(self).__name__} no puede guardarse: OrigenDocumento es abstracto en el dominio y solo "
                 "se guardan sus hijas directas, que declaran TIPO_DE_ORIGEN con un valor de OrigenDocumento.Tipo."

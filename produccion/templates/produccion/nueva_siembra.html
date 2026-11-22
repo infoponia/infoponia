@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Nueva siembra» (PRD-01, PROD-PNF-SMB, `VIEWS.siembra`): página completa. El bloque que cambia con el invernadero y la variedad es «_nueva_siembra_formulario.html» (HTMX lo reemplaza dentro de #siembra-vivo,
+sin mover el scroll ni validar; sin JavaScript, cada botón es un POST común con su «accion»). Solo el Agrónomo a cargo llega acá; el Gerente, 404.{% endcomment %}
+{% block titulo %}Nueva siembra · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <div class="page-h"><h1>Nueva siembra</h1><div class="sub">Elegí el invernadero y la variedad, indicá cuántos plantines y para cuándo, y repartilos por sector. Antes de confirmar vas a ver un resumen.</div></div>
+  <div id="siembra-vivo" hx-target="#siembra-vivo" hx-swap="innerHTML show:none">{% include "produccion/_nueva_siembra_formulario.html" %}</div>
+</div>
+{% endblock %}

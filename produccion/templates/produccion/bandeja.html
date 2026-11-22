@@ -1,0 +1,19 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}La bandeja del Capataz (PRD-01, `VIEWS.bandeja`): sus órdenes «a realizar» de invernaderos activos, por fecha programada, prioridad e id, en «vencidas», «hoy» y «próximas». Marco angosto de celular
+(D-25). Recibe «bandeja» (Bandeja: vencidas, hoy, proximas; listas de FilaDeOrden). Cada orden lleva a su detalle y, si es una siembra, a «Concretar siembra».{% endcomment %}
+{% block titulo %}Mis órdenes · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <div class="page-h"><h1>Mis órdenes</h1></div>
+  {% if bandeja.vencidas or bandeja.hoy or bandeja.proximas %}
+    {% if bandeja.vencidas %}<h2 class="sm" style="margin:14px 0 6px;color:var(--status-danger)">Vencidas</h2>
+      {% for f in bandeja.vencidas %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}{% endif %}
+    {% if bandeja.hoy %}<h2 class="sm" style="margin:14px 0 6px">Para hoy</h2>
+      {% for f in bandeja.hoy %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}{% endif %}
+    {% if bandeja.proximas %}<h2 class="sm muted" style="margin:14px 0 6px">Próximas</h2>
+      {% for f in bandeja.proximas %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}{% endif %}
+  {% else %}
+    <div class="empty">{% icono "check" 28 %}<b>No tenés órdenes pendientes</b><span>Cuando el Agrónomo planifique una siembra, te va a llegar un aviso.</span></div>
+  {% endif %}
+</div>
+{% endblock %}

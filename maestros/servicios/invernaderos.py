@@ -742,8 +742,9 @@ def modificar_invernadero(
         sincronizadas = api_alertas.sincronizar_alertas_de_personal(invernadero)
 
         # Postcondición b y regla 3: el traspaso (punto de extensión), con el invernadero ya guardado.
+        traspasados = []  # PRD-01: lo que tocan los registrantes queda entre los afectados del registro (D-36, D-60 punto 4)
         for atributo, (saliente, entrante) in cambiados.items():
-            extensiones.traspasar(actor, invernadero, atributo, saliente, entrante)
+            traspasados.extend(extensiones.traspasar(actor, invernadero, atributo, saliente, entrante))
 
         # Postcondición c (NOT-01, D-42): un aviso por persona entrante, con su rol y lo que recibe; nunca el actor. El título lleva
         # el nombre ya guardado (puede haber cambiado en esta misma modificación). No se audita.
@@ -761,6 +762,9 @@ def modificar_invernadero(
             for cuenta in (saliente, entrante):
                 if cuenta is not None and all(cuenta.pk != otra.pk for otra in afectados[1:]):
                     afectados.append(cuenta)
+        for objeto in traspasados:
+            if all((type(objeto), objeto.pk) != (type(otro), otro.pk) for otro in afectados):
+                afectados.append(objeto)
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.MODIFICACION_INVERNADERO,

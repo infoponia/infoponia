@@ -233,8 +233,9 @@ class HabilitarVistaTests(ExistenciasBase):
         self.assertContains(pagina, "Habilitar insumo en un invernadero")
         self.assertContains(pagina, "Existencias de insumos")
 
-    def test_flujo_principal_la_lista_de_insumos_no_ofrece_semillas_ni_inactivos_y_la_de_invernaderos_solo_los_propios(self):
-        """Las semillas nacen con su variedad (INV-03); no se habilita un insumo inactivo; solo los invernaderos a cargo."""
+    def test_regla_2_la_lista_de_insumos_ofrece_las_semillas_activas_pero_no_los_inactivos_y_la_de_invernaderos_solo_los_propios(self):
+        """CMP-HAB-IIN regla 2: se elige entre los insumos activos del catálogo, **incluidas las semillas**; no se habilita un insumo
+        inactivo; solo los invernaderos a cargo. (Corrige el desvío de INV-02, que las excluía.)"""
         from inventario.categorias import SEMILLAS
         from inventario.tests.fabricas import categoria_del_sistema
 
@@ -244,7 +245,7 @@ class HabilitarVistaTests(ExistenciasBase):
         form = self.client.get(self.ruta).context["form"]
         insumos = [texto for valor, texto in form.fields["insumo"].widget.choices if valor]
         invernaderos = [texto for valor, texto in form.fields["invernadero"].widget.choices if valor]
-        self.assertEqual(sorted(insumos), ["Bolsas", "Nutriente A"])
+        self.assertEqual(sorted(insumos), ["Bolsas", "Nutriente A", "Semilla de lechuga"])
         self.assertEqual(invernaderos, ["Invernadero Uno"])
 
     def test_flujo_principal_desde_el_catalogo_el_insumo_viene_elegido_y_no_se_cambia(self):
@@ -316,6 +317,37 @@ class HabilitarVistaTests(ExistenciasBase):
         """Paso 8 de INV-02: el catálogo muestra «Habilitar en un invernadero» en los insumos activos (no en las semillas)."""
         respuesta = self.client.get(reverse("inventario:catalogo"))
         self.assertContains(respuesta, f"{self.ruta}?insumo={self.nutriente.pk}")
+
+
+    def test_regla_3_cns_ins_el_catalogo_ofrece_habilitar_tambien_en_las_semillas_activas(self):
+        """CMP-CNS-INS regla 3: desde cada insumo activo, el Agrónomo puede habilitarlo en un invernadero, **incluidas las semillas**."""
+        from inventario.categorias import SEMILLAS
+        from inventario.tests.fabricas import categoria_del_sistema
+
+        semilla = insumo("Semilla de lechuga", tipo=categoria_del_sistema(SEMILLAS))
+        respuesta = self.client.get(reverse("inventario:catalogo"))
+        self.assertContains(respuesta, f"{self.ruta}?insumo={semilla.pk}")
+
+    def test_regla_3_cns_ins_el_catalogo_no_ofrece_habilitar_una_semilla_inactiva(self):
+        """CMP-CNS-INS regla 3: un insumo inactivo no se habilita (tampoco la semilla de una variedad dada de baja)."""
+        from inventario.categorias import SEMILLAS
+        from inventario.tests.fabricas import categoria_del_sistema
+
+        semilla = insumo("Semilla vieja", tipo=categoria_del_sistema(SEMILLAS), activo=False)
+        respuesta = self.client.get(reverse("inventario:catalogo"))
+        self.assertNotContains(respuesta, f"{self.ruta}?insumo={semilla.pk}")
+
+    def test_regla_2_habilitar_sin_parametros_habilita_una_semilla_elegida_en_la_lista(self):
+        """CMP-HAB-IIN regla 2: sin `?insumo=`, la semilla elegida en el desplegable se habilita en el invernadero."""
+        from inventario.categorias import SEMILLAS
+        from inventario.tests.fabricas import categoria_del_sistema
+
+        semilla = insumo("Semilla de lechuga", tipo=categoria_del_sistema(SEMILLAS))
+        respuesta = self.client.post(
+            self.ruta, {"insumo": semilla.pk, "invernadero": self.invernadero.pk, "cant_min": "0", "referencia_precio": "5"}
+        )
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertTrue(InsumoInvernadero.objects.filter(insumo=semilla, invernadero=self.invernadero).exists())
 
 
 class MinimoYPrecioVistaTests(ExistenciasBase):
