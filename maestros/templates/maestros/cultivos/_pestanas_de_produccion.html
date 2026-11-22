@@ -1,7 +1,8 @@
 {% comment %}Barra de pestañas de la página «Producción» (VIEWS.prod del prototipo). El Agrónomo tiene «Invernaderos» y «Cultivos y variedades»
-(PRD-01 agrega después «Órdenes de trabajo»); el Gerente solo «Invernaderos»: no ve cultivos (regla 4 de PROD-CNS-CLT).
-Recibe «activa» («invernaderos» o «cultivos») y «es_gerente». Son enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
+y, desde PRD-01, «Órdenes de trabajo» (lista de `produccion`, también para el Gerente en solo lectura); el Gerente no ve cultivos (regla 4 de PROD-CNS-CLT).
+Recibe «activa» («ordenes», «invernaderos» o «cultivos») y «es_gerente». Son enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
 <div class="tabs" role="tablist" aria-label="Producción">
+  <a class="tab" role="tab" href="{% url 'produccion:ordenes' %}" aria-selected="{% if activa == 'ordenes' %}true{% else %}false{% endif %}">Órdenes de trabajo</a>
   <a class="tab" role="tab" href="{% url 'maestros:invernaderos' %}" aria-selected="{% if activa == 'invernaderos' %}true{% else %}false{% endif %}">Invernaderos</a>
   {% if not es_gerente %}<a class="tab" role="tab" href="{% url 'maestros:cultivos' %}" aria-selected="{% if activa == 'cultivos' %}true{% else %}false{% endif %}">Cultivos y variedades</a>{% endif %}
 </div>

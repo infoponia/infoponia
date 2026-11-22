@@ -18,6 +18,14 @@ def _sector(pk):
 class ExtensionesDeSectoresTests(SimpleTestCase):
     """Los siete puntos de sectores."""
 
+    def setUp(self):
+        """«Sin registrantes» de verdad: `produccion` (PRD-01) ya registra los suyos en `ready()` y consultaría la base, que una
+        `SimpleTestCase` no tiene. Cada prueba que necesita registrantes los pone con ``mock.patch.object``."""
+        for nombre in ("_AGUJEROS", "_IMPEDIMENTOS_DE_SECTOR", "_CONTENIDOS", "_PERFILES", "_AVISOS_DE_CAMBIO_DE_TIPO"):
+            parche = mock.patch.object(extensiones, nombre, [])
+            parche.start()
+            self.addCleanup(parche.stop)
+
     def test_ext_agujeros_sin_registrantes_da_cero_ocupados_y_comprometidos(self):
         """API, «Sectores»: sin registrantes, (0, 0) para cada sector."""
         self.assertEqual(extensiones.agujeros_registrados([1, 2]), {1: (0, 0), 2: (0, 0)})

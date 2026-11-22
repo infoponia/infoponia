@@ -1,0 +1,102 @@
+{% load iconos produccion %}{% comment %}El formulario de «Nueva siembra» (PROD-PNF-SMB): lo que HTMX reemplaza dentro de #siembra-vivo. Recibe «ofrecido» (DatosDePlanificacion: invernaderos, variedades, sectores,
+insumos_adicionales), «valores» (lo escrito), «invernadero_id», «variedad_id», «prioridades», «errores» ({campo: mensaje}), «resumen» (ResumenDePlanificacion o None), «firma» y «cambio_la_firma».
+Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la variedad solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con
+«Ver resumen» y «Confirmar planificación». No hay refresco al escribir. Todo se escapa. Los errores van debajo de su campo; lo que no tiene campo, arriba.{% endcomment %}
+<form id="siembra-form" method="post" action="{% url 'produccion:nueva_siembra' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">¿Dónde y qué?</div>
+      <div class="grid2">
+        <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'produccion:nueva_siembra' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change">
+            <option value="">Seleccionar…</option>
+            {% for i in ofrecido.invernaderos %}<option value="{{ i.invernadero_id }}"{% if i.invernadero_id == invernadero_id %} selected{% endif %}{% if i.motivo %} disabled{% endif %}>{{ i.nombre }}{% if i.motivo %} — {{ i.motivo }}{% endif %}</option>{% endfor %}
+          </select>
+          {% if not ofrecido.invernaderos %}<div class="hint">No tenés invernaderos activos a tu cargo.</div>{% endif %}</div>
+        <div class="fld"><label for="variedad">Variedad<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="variedad" name="variedad" data-desplegable hx-post="{% url 'produccion:nueva_siembra' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change"{% if not invernadero_id %} disabled{% endif %}>
+            <option value="">{% if invernadero_id %}Seleccionar…{% else %}Elegí primero el invernadero{% endif %}</option>
+            {% for v in ofrecido.variedades %}<option value="{{ v.variedad_id }}"{% if v.variedad_id == variedad_id %} selected{% endif %}{% if not v.compatible or v.motivo %} disabled{% endif %}>{{ v.nombre }} · {{ v.perfil|perfil_legible }} · ciclo de {{ v.duracion_dias }} días · {% if v.stock_libre is None %}semilla sin habilitar{% else %}semilla libre: {{ v.stock_libre|cantidad }}{% endif %}{% if not v.compatible %} — no compatible: {% for c in v.conflictos %}{{ c.texto }}{% if not forloop.last %}; {% endif %}{% endfor %}{% elif v.motivo %} — {{ v.motivo }}{% endif %}</option>{% endfor %}
+          </select>
+          {% if errores.variedad %}<div class="err">{{ errores.variedad }}{% if "no está habilitada" in errores.variedad %} <a href="{% url 'inventario:existencias' %}">Habilitar la semilla en «Existencias de insumos»</a>.{% endif %}</div>{% endif %}</div>
+      </div>
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+    </div>
+
+    {% if invernadero_id and variedad_id %}
+    <div class="card">
+      <div class="card-title">Cuántos y para cuándo</div>
+      <div class="grid3">
+        <div class="fld"><label for="cantidad">Plantines<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="cantidad" name="cantidad" type="number" min="1" step="1" inputmode="numeric" value="{{ valores.cantidad }}"{% if errores.cantidad %} aria-invalid="true"{% endif %}>
+          {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% endif %}</div>
+        <div class="fld"><label for="fecha_programada">Fecha programada<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="fecha_programada" name="fecha_programada" type="date" value="{{ valores.fecha_programada }}"{% if errores.fecha_programada %} aria-invalid="true"{% endif %}>
+          {% if errores.fecha_programada %}<div class="err">{{ errores.fecha_programada }}</div>{% endif %}</div>
+        <div class="fld"><label for="prioridad">Prioridad</label>
+          <select class="field-input" id="prioridad" name="prioridad" data-desplegable>
+            {% for valor, texto in prioridades %}<option value="{{ valor }}"{% if valores.prioridad == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+          </select>
+          {% if errores.prioridad %}<div class="err">{{ errores.prioridad }}</div>{% endif %}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Distribución por sector de germinación</div>
+      {% if ofrecido.sectores %}
+      <p class="sm muted" style="margin-bottom:8px">Indicá cuántos plantines van en cada sector. La suma tiene que dar la cantidad total.</p>
+      <div class="grid2">
+        {% for s in ofrecido.sectores %}
+        <div class="fld"><label for="sector_{{ s.sector_id }}">{{ s.nombre }} <span class="muted">(libres: {{ s.libres }})</span></label>
+          <input class="field-input" id="sector_{{ s.sector_id }}" name="sector_{{ s.sector_id }}" type="number" min="0" step="1" inputmode="numeric" value="{% campo valores 'sector' s.sector_id %}"></div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="hint">Esta variedad no tiene sectores de germinación compatibles con lugar libre en el invernadero.</div>{% endif %}
+      {% if errores.distribucion %}<div class="err">{{ errores.distribucion }}</div>{% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Insumos adicionales (opcional)</div>
+      {% if ofrecido.insumos_adicionales %}
+      <div class="grid2">
+        {% for i in ofrecido.insumos_adicionales %}
+        <div class="fld"><label for="insumo_{{ i.existencia_id }}">{{ i.nombre }} <span class="muted">(stock libre: {{ i.stock_libre|cantidad }} {{ i.unidad }})</span></label>
+          <input class="field-input" id="insumo_{{ i.existencia_id }}" name="insumo_{{ i.existencia_id }}" type="text" inputmode="decimal" autocomplete="off" value="{% campo valores 'insumo' i.existencia_id %}"></div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="hint">El invernadero no tiene insumos adicionales habilitados. Se reserva solo la semilla.</div>{% endif %}
+      {% if errores.insumos_adicionales %}<div class="err">{{ errores.insumos_adicionales }}</div>{% endif %}
+      <div class="fld" style="margin-top:10px"><label for="descripcion">Descripción (opcional)</label>
+        <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="600">{{ valores.descripcion }}</textarea>
+        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+    </div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la orden">
+      <div class="card-title">Resumen de la orden</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <dl class="kv">
+        <div><dt>Invernadero</dt><dd>{{ resumen.invernadero.nombre_invernadero }}</dd></div>
+        <div><dt>Variedad</dt><dd>{{ resumen.variedad }}</dd></div>
+        <div><dt>Plantines</dt><dd>{{ resumen.cantidad }}</dd></div>
+        <div><dt>Fecha programada</dt><dd>{{ resumen.fecha_programada|date:"d/m/Y" }}</dd></div>
+        <div><dt>Cosecha estimada</dt><dd>{{ resumen.fecha_estimada_de_cosecha|date:"d/m/Y" }}</dd></div>
+        <div><dt>Prioridad</dt><dd>{{ resumen.prioridad|default:"Sin prioridad"|capfirst }}</dd></div>
+        <div><dt>Capataz</dt><dd>{{ resumen.capataz.get_full_name|default:resumen.capataz.email }}</dd></div>
+      </dl>
+      <p class="sm" style="margin-top:8px"><b>Distribución:</b> {% for sector, n in resumen.distribucion %}{{ sector.nombre_sector }}: {{ n }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      <p class="sm"><b>Insumos a reservar:</b> {% for r in resumen.reservas %}{{ r.nombre }}: {{ r.cantidad|cantidad }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      <input type="hidden" name="firma" value="{{ firma }}">
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…">Ver resumen</button>
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Planificando…">Confirmar planificación</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'produccion:ordenes' %}">Cancelar</a>
+    </div>
+    {% endif %}
+  </div>
+</form>

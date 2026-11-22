@@ -63,3 +63,8 @@ decisión, manda la decisión: avisá.
   `docs/casos_de_uso/usuarios.md`, sección «Pantallas».
 - Los elementos «Solo prototipo» no se implementan (lista en el `README.md` de cada prototipo y en cada caso de uso).
 - Del prototipo de producción se toma la estructura, el contenido y el estilo (D-47); la lógica la manda el caso de uso.
+
+## Validaciones e interacción HTMX (desde INV-02)
+- Prohibido disparar validaciones ni recálculos mientras el usuario tipea (nada de `hx-trigger="input delay:..."` ni `change` validando campos numéricos, de texto o fechas).
+- Las validaciones y resúmenes corren únicamente al presionar botones de acción («Ver resumen», «Confirmar», etc.).
+- Si un selector redibuja campos dependientes por HTMX, debe hacerlo sin validar, usando `hx-swap="innerHTML show:none"` para no mover el scroll ni robar el foco, manteniendo siempre el respaldo funcional sin JavaScript.

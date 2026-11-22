@@ -16,6 +16,8 @@ urlpatterns = [
     path("alertas/", include("maestros.urls_alertas")),
     # INV-01: catálogo de insumos y categorías (Agrónomo).
     path("inventario/", include("inventario.urls")),
+    # PRD-01: órdenes de siembra, bandeja del Capataz y lotes. Rutas bajo /produccion/ordenes/ (no chocan con las de maestros).
+    path("produccion/", include("produccion.urls")),
 ]
 
 # SEG-18: con ``ADMIN_DJANGO_HABILITADO`` apagado (producción) no se registra ninguna ruta de /admin/, así que

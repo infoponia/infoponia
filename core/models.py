@@ -671,6 +671,12 @@ class RegistroAuditoria(models.Model):
         BAJA_VARIEDAD = "baja_variedad", "Baja de variedad"
         REACTIVACION_VARIEDAD = "reactivacion_variedad", "Reactivación de variedad"
         MODIFICACION_SEMILLA = "modificacion_semilla", "Modificación de semilla"
+        # Siembra y cancelación de órdenes (PRD-01, D-36). Las de transición, merma, aplicación, evento y fuera de servicio las
+        # crean PRD-02 a PRD-04. El traspaso de órdenes al Capataz nuevo NO tiene acción propia: sus afectados van en
+        # ``modificacion_invernadero`` (un registro por caso de uso).
+        PLANIFICACION_SIEMBRA = "planificacion_siembra", "Planificación de siembra"
+        CONCRECION_SIEMBRA = "concrecion_siembra", "Concreción de siembra"
+        CANCELACION_ORDEN = "cancelacion_orden", "Cancelación de orden de trabajo"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -745,6 +751,29 @@ class RegistroAuditoria(models.Model):
         "duracion_post_cosecha": "Duración postcosecha (días)",
         "peso_promedio_planta": "Peso promedio por planta (g)",
         "nombre_semilla": "Nombre de la semilla",
+        # Órdenes de siembra y su cancelación (PRD-01, D-36 y D-50 punto 4): cantidades y fechas van como texto. «Agujeros
+        # comprometidos» y «agujeros ocupados» son los cambios de cada sector (antes → después, como texto). «invernadero»,
+        # «capataz», «estado», «lotes», «movimientos» y «alertas_resueltas» ya existen.
+        "variedad": "Variedad",
+        "cant_plantines_siembra": "Plantines planificados",
+        "cantidad_sembrada": "Plantines sembrados",
+        "fecha_programada_orden": "Fecha programada",
+        "fecha_siembra": "Fecha de siembra",
+        "prioridad_orden": "Prioridad",
+        "descripcion_orden": "Descripción de la orden",
+        "motivo_cancelacion": "Motivo de la cancelación",
+        "motivo_diferencia_siembra": "Motivo de la diferencia",
+        "agujeros_comprometidos": "Agujeros comprometidos",
+        "agujeros_ocupados": "Agujeros ocupados",
+        "orden": "Orden",
+        "lote": "Lote",
+        "ocupaciones": "Ocupaciones",
+        "reservas": "Reservas",
+        "sectores": "Sectores",
+        "insumos_invernadero": "Insumos del invernadero",
+        "lotes_de_insumo": "Lotes de insumo",
+        "consumos": "Consumos",
+        "bitacoras": "Registros de bitácora",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -777,6 +806,8 @@ class RegistroAuditoria(models.Model):
         "estado": {"activo": "Activo", "inactivo": "Inactivo", "fuera_de_servicio": "Fuera de servicio"},
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
+        # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
+        "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
         # INV-01: `core` no importa `inventario` (A1 de D-37), así que las listas cerradas se repiten acá.
         "consumo_directo": {
             "no_admite": "No admite",
@@ -972,6 +1003,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_VARIEDAD,
         RegistroAuditoria.Accion.MODIFICACION_SEMILLA,
         RegistroAuditoria.Accion.ALERTA_DE_VENCIMIENTO,
+        RegistroAuditoria.Accion.PLANIFICACION_SIEMBRA,
+        RegistroAuditoria.Accion.CONCRECION_SIEMBRA,
+        RegistroAuditoria.Accion.CANCELACION_ORDEN,
     }
 )
 

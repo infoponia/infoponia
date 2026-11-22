@@ -64,8 +64,12 @@ enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no
 
   {# MAE-03: capacidad por tipo de etapa y pestaña «Sectores» (regla 3 de PROD-CNS-INV). PRD-01 suma las pestañas de lotes y bitácora. #}
   {% include "maestros/sectores/_capacidad.html" %}
-  <div class="tabs" role="tablist"><span class="tab" role="tab" aria-selected="true">Sectores</span></div>
-  {% include "maestros/sectores/_pestana.html" %}
+  {# PRD-01: las pestañas que registran otras apps (docs/api/extensiones_de_maestros.md) son enlaces ``?pestana=<clave>``: sin JavaScript. #}
+  <div class="tabs" role="tablist" aria-label="Detalle del invernadero">
+    <a class="tab" role="tab" href="{% url 'maestros:invernadero' invernadero.pk %}" aria-selected="{% if not pestana_elegida %}true{% else %}false{% endif %}">Sectores</a>
+    {% for pestana in pestanas_registradas %}<a class="tab" role="tab" href="?pestana={{ pestana.clave }}" aria-selected="{% if pestana_elegida and pestana_elegida.clave == pestana.clave %}true{% else %}false{% endif %}">{{ pestana.titulo }}</a>{% endfor %}
+  </div>
+  {% if pestana_elegida %}{{ pestana_elegida.html }}{% else %}{% include "maestros/sectores/_pestana.html" %}{% endif %}
 </div>
 {% endwith %}
 {% endblock %}
