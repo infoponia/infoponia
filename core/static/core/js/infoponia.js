@@ -345,8 +345,19 @@
   document.addEventListener("htmx:beforeRequest", function (e) {
     var form = formularioDelPedido(e);
     if (!form) return;
-    var estado = empezar(form, e.detail.elt);
-    if (estado) deshabilitar(form, estado);
+    // Un pedido que solo vuelve a dibujar el formulario sin guardarlo («Agregar acción», «Quitar», el cambio de un combo) lleva
+    // ``data-sin-envio-en-curso`` en su elemento: no cuenta como envío y no deshabilita el botón de guardar (D-29).
+    var elemento = e.detail.elt;
+    if (elemento.closest && elemento.closest("[data-sin-envio-en-curso]")) return;
+    var estado = empezar(form, elemento);
+    if (!estado) return;
+    deshabilitar(form, estado);
+    // El fin del pedido se escucha TAMBIÉN en el propio elemento: si la respuesta reemplaza el bloque donde estaba (por ejemplo, el
+    // botón «Guardar» dentro de lo que se vuelve a dibujar), el elemento queda fuera del documento y ``htmx:afterRequest`` ya no
+    // burbujea hasta ``document``: el botón seguiría deshabilitado hasta el límite de espera. En el elemento el evento sí llega.
+    elemento.addEventListener("htmx:afterRequest", function () {
+      terminar(form);
+    }, { once: true });
   });
   document.addEventListener("htmx:afterRequest", function (e) {
     var form = formularioDelPedido(e);

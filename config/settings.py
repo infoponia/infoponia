@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'maestros',      # nivel 3
     'inventario',    # nivel 4
     'produccion',    # nivel 5
+    'iot',           # nivel 7
 ]
 
 # D-01 a D-03: modelo de usuario propio (email en vez de username, roles con herencia

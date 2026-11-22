@@ -671,12 +671,18 @@ class RegistroAuditoria(models.Model):
         BAJA_VARIEDAD = "baja_variedad", "Baja de variedad"
         REACTIVACION_VARIEDAD = "reactivacion_variedad", "Reactivación de variedad"
         MODIFICACION_SEMILLA = "modificacion_semilla", "Modificación de semilla"
+
         # Siembra y cancelación de órdenes (PRD-01, D-36). Las de transición, merma, aplicación, evento y fuera de servicio las
         # crean PRD-02 a PRD-04. El traspaso de órdenes al Capataz nuevo NO tiene acción propia: sus afectados van en
         # ``modificacion_invernadero`` (un registro por caso de uso).
         PLANIFICACION_SIEMBRA = "planificacion_siembra", "Planificación de siembra"
         CONCRECION_SIEMBRA = "concrecion_siembra", "Concreción de siembra"
         CANCELACION_ORDEN = "cancelacion_orden", "Cancelación de orden de trabajo"
+        # Tipos de actuador del IoT (IOT-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
+        ALTA_TIPO_ACTUADOR = "alta_tipo_actuador", "Alta de tipo de actuador"
+        MODIFICACION_TIPO_ACTUADOR = "modificacion_tipo_actuador", "Modificación de tipo de actuador"
+        REACTIVACION_TIPO_ACTUADOR = "reactivacion_tipo_actuador", "Reactivación de tipo de actuador"
+        BAJA_TIPO_ACTUADOR = "baja_tipo_actuador", "Baja de tipo de actuador"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -774,6 +780,12 @@ class RegistroAuditoria(models.Model):
         "lotes_de_insumo": "Lotes de insumo",
         "consumos": "Consumos",
         "bitacoras": "Registros de bitácora",
+        # Tipos de actuador (IOT-01): listas de referencias a sus acciones en los datos del caso de uso («nombre» y «estado» ya existen).
+        "tiempo_minimo_entre_comandos": "Tiempo mínimo entre comandos (s)",
+        "acciones_creadas": "Acciones creadas",
+        "acciones_modificadas": "Acciones modificadas",
+        "acciones_desactivadas": "Acciones desactivadas",
+        "acciones_borradas": "Acciones borradas",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -1006,6 +1018,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_SIEMBRA,
         RegistroAuditoria.Accion.CONCRECION_SIEMBRA,
         RegistroAuditoria.Accion.CANCELACION_ORDEN,
+        RegistroAuditoria.Accion.ALTA_TIPO_ACTUADOR,
+        RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
+        RegistroAuditoria.Accion.REACTIVACION_TIPO_ACTUADOR,
+        RegistroAuditoria.Accion.BAJA_TIPO_ACTUADOR,
     }
 )
 

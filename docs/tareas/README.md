@@ -85,7 +85,6 @@ por el estudiante el 21/11/2026). Cada tarea espera a las de producción que nec
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| IOT-01 | App `iot`, modelos, catálogo, tipos de actuador y parámetros IoT | iot (y migración en maestros) | pendiente | MAE-03, MAE-04, INV-01 mergeadas | `iot/IOT-01-app-modelos-y-tipos-de-actuador.md` |
 | IOT-02 | Sistema IoT y hardware | iot (y punto de extensión en maestros) | pendiente | IOT-01 | `iot/IOT-02-sistema-iot-y-hardware.md` |
 | IOT-03 | API del nodo I: token, lecturas, estados, modo y anuncio | iot | pendiente | IOT-02, INV-03 | `iot/IOT-03-api-del-nodo-lecturas.md` |
 | IOT-04 | Revisión periódica, panel de monitoreo y configuración IoT | iot (y la configuración de maestros) | pendiente | IOT-03, USR-10, MAE-02d, MAE-04 | `iot/IOT-04-revision-panel-y-configuracion.md` |

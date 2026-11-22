@@ -36,7 +36,9 @@ decisión, manda la decisión: avisá.
 - Botón secundario (`.btn-ghost`): borde y texto en el verde primario sobre blanco. Todos los botones muestran el foco
   con Tab (`:focus-visible`). Los botones que son enlaces no se subrayan (D-29).
 - Envíos en curso (D-29): `infoponia.js` deshabilita el botón de todo formulario POST y muestra el verbo de la acción.
-  El verbo va en `data-enviando` («Guardando…» por defecto); no hace falta código propio en cada pantalla.
+  El verbo va en `data-enviando` («Guardando…» por defecto); no hace falta código propio en cada pantalla. Un pedido de HTMX que solo
+  vuelve a dibujar el formulario sin guardarlo (agregar o quitar una fila, un combo que cambia otros campos) lleva `data-sin-envio-en-curso`
+  en su elemento y no deshabilita el botón de guardar (D-29, actualizada el 22/11/2026).
 - Errores de HTMX (D-29): ya los resuelve `base.html` (límite de 30 s y dos avisos de error). No se agregan manejadores
   propios.
 

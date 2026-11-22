@@ -17,6 +17,7 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
   modelos ya mergeados sin permiso explícito. Lo que la tarea permite tocar fuera de su app está en
   «Permitido fuera de la app».
 - No hagas commits, push ni operaciones de Git que modifiquen el historial. Los commits los hacen los estudiantes.
+- Antes de borrar datos o tablas, frená y preguntá. Vale también para la base local y para los datos de prueba. Cuenta como borrar: `DROP`, `DELETE` o `TRUNCATE` a mano, `flush`, `migrate <app> zero`, `--fake` seguido de un borrado, borrar el archivo o la base de datos, y descartar la base de `--keepdb`. Contame qué se pierde, por qué hace falta y qué alternativa hay, y esperá mi respuesta. Si una migración no se puede deshacer, no la arregles tocando las tablas: avisame.
 - Nunca listes ni leas `.venv/`.
 - Verificá versiones y comandos actuales antes de recomendarlos; no recomiendes de memoria.
 

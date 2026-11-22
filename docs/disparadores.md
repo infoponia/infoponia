@@ -253,8 +253,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 
 1. **Tipos de actuador** (`docs/casos_de_uso/iot/tipos_de_actuador.md`).
    - IOT-02: el aviso de equipos afectados (regla 6 de IOT-MOD-TAC), la compatibilidad sobre actuadores reales (regla 9) y el conteo de la
-     baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados.
-   - IOT-05: `acciones_en_uso(tipo)` y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).
+     baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados. Al crear un actuador, llamar antes a `bloquear_tipo_activo(tipo_id)` (`iot/servicios/tipos_actuador.py`; contrato de D-40).
+   - IOT-05: `acciones_en_uso(tipo)` (devuelve `dict[int, list[UsoDeAccion]]`: por id de acción, sus usos con código `RGL-n` o `CMD-n` y valor) y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).
    - IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.
 2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). IOT-06: desactivar, activar y dar de baja; IOT-07:
    `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
@@ -320,7 +320,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 1. **Origen de la alerta (restricción C5).** Cada app declara el enlace desde su propia app (`OneToOneField` a `Alerta`, o una tabla de
    enlace para Hardware, R052), en la misma transacción que la alerta; el `origen` de su `TipoAlerta` dice cuál. Contrato en
    `docs/api/alertas.md`, sección 4. Mostrar el origen en una pantalla va por un punto de extensión. Nació en MAE-02a.
-   **IoT:** una sola tabla `AlertaIot` para R052 y R053 (D-72); la crea IOT-01.
+   **IoT:** una sola tabla `AlertaIot` para R052 y R053 (D-72). ~~Hecho el 22/11/2026 en IOT-01 (la tabla `AlertaIot` y sus restricciones).~~ Falta que cada alerta del IoT cree su vínculo en la misma transacción: IOT-03 en adelante.
 
 ## Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)
 

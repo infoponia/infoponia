@@ -1,0 +1,39 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Formulario de un tipo de actuador (IOT-ALT-TAC e IOT-MOD-TAC, rama «tac-form» de «tipos» en el prototipo). Recibe «tipo» (nulo en el alta),
+«datos», «filas», «catalogo», «errores» (por campo), «general» y «aviso_de_equipos» (regla 6 de IOT-MOD-TAC). Es una página: las acciones
+(«Agregar acción», «Quitar» y el cambio de comando) mandan el formulario a esta URL, que lo vuelve a dibujar sin guardar; con HTMX solo cambia el
+bloque «#acciones» y sin JavaScript se recarga la página. «novalidate»: las reglas son del servicio.{% endcomment %}
+{% block titulo %}{% if tipo %}Modificar tipo de actuador{% else %}Nuevo tipo de actuador{% endif %} · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'iot:tipos' %}">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>{% if tipo %}Modificar tipo de actuador{% else %}Nuevo tipo de actuador{% endif %}</h1></div>
+  <div class="card"><div class="card-b">
+    {% for mensaje in general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+    {% if aviso_de_equipos %}<div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>{{ aviso_de_equipos }}</div></div>{% endif %}
+    <form method="post" novalidate action="{% if tipo %}{% url 'iot:tipo_modificar' tipo.pk %}{% else %}{% url 'iot:tipo_nuevo' %}{% endif %}">
+      {% csrf_token %}
+      <div class="grid2">
+        <div class="fld">
+          <label for="nombre">Nombre del tipo<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="nombre" name="nombre" value="{{ datos.nombre|default_if_none:'' }}" maxlength="80" placeholder="Ej.: Extractor de aire" data-foco-inicial>
+          {% for e in errores.nombre %}<div class="err">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="fld">
+          <label for="tiempo_minimo">Tiempo mínimo entre comandos (segundos)<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="tiempo_minimo" name="tiempo_minimo" inputmode="numeric" value="{{ datos.tiempo_minimo|default_if_none:'' }}">
+          {% for e in errores.tiempo_minimo %}<div class="err">{{ e }}</div>{% endfor %}
+          <div class="hint">Protege el equipo de cambios demasiado seguidos. Las reglas de actuación no emiten antes de este tiempo; un comando manual lo advierte.</div>
+        </div>
+      </div>
+      <div class="lbl">Acciones que admite <span class="req" aria-hidden="true">*</span></div>
+      <div id="acciones">{% include "iot/tipos/_acciones.html" %}</div>
+      <div class="acts" style="margin-top:20px">
+        <button class="btn btn-primary" type="submit" data-enviando="Guardando…">{% if tipo %}Guardar cambios{% else %}Crear tipo{% endif %}</button>
+        <a class="btn btn-ghost" href="{% url 'iot:tipos' %}">Cancelar</a>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+{% load iconos %}{% comment %}Ventana de la baja de un tipo de actuador (IOT-BAJ-TAC, ventana «tbaj» del prototipo). Recibe «tipo», «impedimento» (el texto de la regla 2
+si hay equipos que no están dados de baja: entonces no ofrece confirmar) y, si el servicio rechazó la baja, «error». Sin equipos pide confirmar.
+Dar de baja es un POST a la misma URL; abrirla (GET) no cambia nada. La baja es lógica: el tipo conserva sus acciones y se reactiva después.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if impedimento %}
+    <h2 id="ventana-titulo">No se puede dar de baja {{ tipo.nombre_actuador }}</h2>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ impedimento }}</div></div>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'iot:tipos' %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
+    </div>
+    {% else %}
+    <h2 id="ventana-titulo">¿Dar de baja {{ tipo.nombre_actuador }}?</h2>
+    <p>El tipo deja de estar disponible para nuevos equipos. Conserva sus acciones y su historial, y puede reactivarse después.</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'iot:tipo_baja' tipo.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:tipos' %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

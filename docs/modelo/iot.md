@@ -108,7 +108,7 @@ Bloque IoT. Común a toda la organización: lo administra **solo el Gerente** (M
 | `nombreAccion` | texto | → `nombre_accion`. Hasta 40 caracteres. Único dentro del tipo entre las **activas**. Una acción quitada **sin** comandos en su historial se borra (IOT-MOD-TAC, postcondición a): es la única baja física de una fila de negocio, junto con la retención de la telemetría |
 | (nuevo) `comando` | FK a `ComandoCatalogo`, `PROTECT` | Obligatorio. Dos acciones **activas** del mismo tipo no usan el mismo comando |
 | `requiereValor` | — | **No se guarda**: es `comando.lleva_valor` (MD-103) |
-| `unidadValor` | lista de `UNIDADES_POR_COMANDO[comando]`, nula | → `unidad_valor`. Obligatoria si el comando lleva valor; nula si no |
+| `unidadValor` | lista de `UNIDADES_POR_COMANDO[comando]`, nula | → `unidad_valor`. Hasta 5 caracteres. Obligatoria si el comando lleva valor; nula si no |
 | (nuevo) `valorMinimo`, `valorMaximo` | enteros, nulos | → `valor_minimo`, `valor_maximo`. Obligatorios si el comando lleva valor (y entonces mínimo < máximo); nulos si no |
 | (nuevo) `estadoAccion` | `activa` / `inactiva` | → `estado`. Una acción quitada con comandos en su historial queda inactiva (IOT-MOD-TAC) |
 
@@ -121,7 +121,7 @@ Bloque IoT. Común a toda la organización: lo administra **solo el Gerente** (M
 
 Restricciones de la base: `CheckConstraint` «unidad, mínimo y máximo, los tres nulos o los tres no nulos, con mínimo < máximo» (que
 coincidan con `lleva_valor` lo controla el servicio: está en otra tabla). Índices únicos parciales `(tipo_actuador, Lower(nombre_accion))`
-y `(tipo_actuador, comando)`, los dos con `estado = activa`.
+y `(tipo_actuador, comando)`, los dos con `estado = activa`. `CheckConstraint` `accion_rango_segun_unidad` (D-80): con unidad «%», mínimo ≥ 0 y máximo ≤ 100; con «rpm», «L/min» o «cm», mínimo ≥ 0; «°» sin límite fijo; y la unidad es una de las cuatro (más la nula).
 
 ---
 
@@ -198,7 +198,7 @@ Solo `temperatura`, `humedad` e `intensidad_luz` admiten reglas de actuación (M
 |---|---|---|
 | `descripcionActuador` | texto, opcional | → `descripcion_actuador`. Hasta 300 |
 | `idActuador` | — | Es el `id` |
-| (nuevo) estado informado | texto, nulo | → `estado_informado` (`encendido`, `apagado`, `abierto`, `cerrado`, `nivel:<n>`, `posicion:<n>`; ver el catálogo) y `estado_informado_en`. Nulo = «desconocido» |
+| (nuevo) estado informado | texto, nulo | → `estado_informado`, hasta 30 caracteres (`encendido`, `apagado`, `abierto`, `cerrado`, `nivel:<n>`, `posicion:<n>`; ver el catálogo) y `estado_informado_en`. Nulo = «desconocido» |
 | (diseño) `cambiado_en_invernadero` | booleano | Verdadero si el último estado informado no lo explica un comando de InfoPonia ejecutado sobre él |
 | (nuevo) compatibilidad | `compatible` / `incompatible` / `sin_verificar` | → `compatibilidad`. Inicial `sin_verificar` |
 
@@ -229,7 +229,7 @@ Lo que el nodo anunció (IOT-ENT-INF, extensión 1c). Cada anuncio **reemplaza**
 | `fechaTelemetria` + `horaTelemetria` | — | → `medida_en`. La de medición que informó el nodo o, si no vino, la de recepción (extensión 3e) |
 | `valorMedido` | `Decimal(9,2)`, nulo | → `valor_medido`. Nulo solo en el nivel de la solución |
 | (nuevo) `estadoNivelMedido` | `normal` / `bajo`, nulo | → `estado_nivel_medido`. Solo en el nivel |
-| `unidadMedidaTelemetria` | texto, nulo | → `unidad_medida_telemetria`. La del sensor al recibirla; nula en el nivel |
+| `unidadMedidaTelemetria` | texto, nulo | → `unidad_medida_telemetria`. Hasta 10 caracteres. La del sensor al recibirla; nula en el nivel |
 | (nuevo) marca de validez | booleano, nulo | → `valida`. Nula en el nivel. Se guarda: no cambia si después cambia la calibración |
 
 | ID | Con | Cardinalidad | En el código |

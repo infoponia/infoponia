@@ -101,7 +101,9 @@ IOT-03. La desactivación, la activación y las bajas son de IOT-06.
    lo logra, el otro recibe 8a, sin 500).
 4. **Servicios del hardware**, en `iot/servicios/hardware.py` y `iot/servicios/compatibilidad.py`:
    - `alta_hardware(actor, sistema_id, datos)`, `modificar_hardware(actor, equipo_id, datos)`, `volver_a_activar(actor, equipo_id)` y
-     `reactivar_hardware(actor, equipo_id)`;
+     `reactivar_hardware(actor, equipo_id)`. Al crear un **actuador** (y al cambiarle el tipo), antes de insertarlo, llamá en la misma transacción a
+     `iot.servicios.tipos_actuador.bloquear_tipo_activo(tipo_id)` (contrato de D-40, como `bloquear_invernadero_activo`): el `INSERT` solo toma
+     `FOR KEY SHARE`, que no frena la baja del tipo (IOT-BAJ-TAC); con el bloqueo, la baja espera, ve el equipo y se rechaza;
    - lectura: `buscar_equipos(actor, sistema, filtros)`, `ficha_del_equipo(actor, equipo_id)`, `acciones_permitidas(actor, equipo)`,
      `identificadores_anunciados_libres(sistema)`;
    - `recalcular_compatibilidad(actuadores)` (la única que calcula la compatibilidad; también la llaman `modificar_tipo_actuador`, que deja de

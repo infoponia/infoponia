@@ -754,4 +754,8 @@ class CnsAlrVistaTests(ConGeoref, TestCase):
             with self.subTest(rol=rol):
                 textos = [texto for texto, _, _ in menu_de(rol)]
                 self.assertEqual(textos.count("Alertas"), 1)
-        self.assertEqual([t for t, _, _ in menu_de(Usuario.Rol.GERENTE)][:3], ["Panel de control", "Producción", "Alertas"])
+        # Orden relativo (cambio de IOT-01): «Panel de control» va primero y «Producción» antes que «Alertas». No fija los tres
+        # primeros, porque cualquier módulo que se registre justo después de «Producción» (como «IoT») se lo cambiaría.
+        textos_del_gerente = [t for t, _, _ in menu_de(Usuario.Rol.GERENTE)]
+        self.assertEqual(textos_del_gerente[0], "Panel de control")
+        self.assertLess(textos_del_gerente.index("Producción"), textos_del_gerente.index("Alertas"))
