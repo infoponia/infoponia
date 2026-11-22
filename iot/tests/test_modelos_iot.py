@@ -91,6 +91,44 @@ class TipoActuadorYAccionTests(fabricas.ConCatalogoIot, ViolaLaBase, TestCase):
                     )
                 )
 
+    def test_d80_el_rango_segun_la_unidad_lo_garantiza_la_base(self):
+        """D-80: «%» de 0 a 100; «rpm», «L/min» y «cm» con mínimo 0 o más; «°» sin límite fijo; una unidad que no es de la lista, no."""
+        tipo = fabricas.tipo_actuador(acciones=[])
+        posicion = fabricas.comando_del_catalogo("FIJAR_POSICION")
+        nivel = fabricas.comando_del_catalogo("FIJAR_NIVEL")
+        for comando, unidad, minimo, maximo in (
+            (nivel, "%", 0, 100),
+            (posicion, "%", 5, 50),
+            (nivel, "rpm", 0, 99999),
+            (nivel, "L/min", 0, 10),
+            (posicion, "cm", 0, 300),
+            (posicion, "°", -180, 540),
+        ):
+            with self.subTest(unidad=unidad, minimo=minimo, maximo=maximo):
+                accion = Accion.objects.create(tipo_actuador=tipo, nombre_accion=f"{unidad} {minimo}", comando=comando, unidad_valor=unidad, valor_minimo=minimo, valor_maximo=maximo, estado="inactiva")
+                self.assertIsNotNone(accion.pk)
+        for comando, unidad, minimo, maximo in (
+            (nivel, "%", -1, 50),
+            (nivel, "%", 0, 101),
+            (posicion, "%", -10, 200),
+            (nivel, "rpm", -1, 50),
+            (nivel, "L/min", -5, 5),
+            (posicion, "cm", -1, 10),
+            (posicion, "pct", 0, 100),
+        ):
+            with self.subTest(unidad=unidad, minimo=minimo, maximo=maximo):
+                self.viola(
+                    lambda: Accion.objects.create(
+                        tipo_actuador=tipo, nombre_accion="Fuera", comando=comando, unidad_valor=unidad, valor_minimo=minimo, valor_maximo=maximo
+                    )
+                )
+
+    def test_d80_los_seis_tipos_iniciales_cumplen_la_regla(self):
+        """D-80: los seis tipos iniciales (todos de 0 a 100 %) cumplen la restricción nueva."""
+        for accion in Accion.objects.filter(comando__lleva_valor=True):
+            with self.subTest(accion=accion.nombre_accion, tipo=accion.tipo_actuador.nombre_actuador):
+                self.assertEqual((accion.unidad_valor, accion.valor_minimo, accion.valor_maximo), ("%", 0, 100))
+
     def test_regla_3_el_nombre_de_la_accion_es_unico_en_el_tipo_entre_las_activas(self):
         """IOT-ALT-TAC regla 3: dos acciones activas del mismo tipo no tienen el mismo nombre (sin distinguir mayúsculas); una
         inactiva no cuenta, y el mismo nombre en otro tipo vale."""

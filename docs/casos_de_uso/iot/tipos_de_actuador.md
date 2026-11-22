@@ -50,7 +50,7 @@ b. Se creó un log de auditoría con usuario, rol, fecha, hora e identificador d
 
 3. Un tipo tiene al menos una acción (R059). Los nombres de las acciones son únicos dentro del tipo, y dos acciones del mismo tipo no usan el mismo comando.
 
-4. Si el comando de la acción lleva un valor, su unidad, su mínimo y su máximo son obligatorios; la unidad se elige de la lista cerrada del comando (regla 10), no se escribe; el mínimo y el máximo son números enteros, con el mínimo menor que el máximo; por ejemplo, de 0 a 100 % para fijar una posición. Todo valor que se aplique con esa acción, en una regla de actuación o en un comando, es un número entero dentro de ese rango. Si el comando no lleva valor, la acción no tiene unidad ni rango.
+4. Si el comando de la acción lleva un valor, su unidad, su mínimo y su máximo son obligatorios; la unidad se elige de la lista cerrada del comando (regla 10), no se escribe; el mínimo y el máximo son números enteros, con el mínimo menor que el máximo; por ejemplo, de 0 a 100 % para fijar una posición. Todo valor que se aplique con esa acción, en una regla de actuación o en un comando, es un número entero dentro de ese rango. Si el comando no lleva valor, la acción no tiene unidad ni rango. El rango depende de la unidad (D-80): con «%», el mínimo y el máximo van de 0 a 100; con «rpm», «L/min» y «cm», el mínimo es 0 o más y no hay tope; con «°» no hay límite fijo.
 
 5. En la puesta en marcha se precarga un catálogo inicial de tipos, todos con un tiempo mínimo entre comandos de 60 segundos: ventilador (encender, apagar y fijar velocidad de 0 a 100 %), bomba (encender y apagar), luminaria (encender y apagar), calefactor (encender y apagar), ventana (abrir, cerrar y fijar posición de 0 a 100 %) y media sombra (abrir, cerrar y fijar posición de 0 a 100 %).
 
@@ -222,7 +222,8 @@ equipos que todavía no existen (está también en `docs/disparadores.md`). Mode
   nombre, que respalda la base.
 - **Auditoría (D-36).** Un registro por caso de uso: `alta_tipo_actuador`, `modificacion_tipo_actuador`, `reactivacion_tipo_actuador` y
   `baja_tipo_actuador`. Afectados: el tipo y cada acción creada, modificada, desactivada o borrada (la borrada, como `referencia()` tomada
-  antes de borrar). En `cambios`, el nombre y el tiempo mínimo con «antes» y «después»; en `datos`, las listas `acciones_creadas`,
+  antes de borrar). En `cambios`, el nombre y el tiempo mínimo con «antes» y «después» y, de cada acción modificada, un cambio por cada dato que cambió
+  (nombre, comando, unidad, mínimo y máximo; la clave dice qué cambió y de qué acción, con su nombre anterior: «Comando de la acción «Apagar»»); en `datos`, las listas `acciones_creadas`,
   `acciones_modificadas`, `acciones_desactivadas` y `acciones_borradas`.
 
 ## Pantallas

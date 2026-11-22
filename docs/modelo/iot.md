@@ -121,7 +121,7 @@ Bloque IoT. Común a toda la organización: lo administra **solo el Gerente** (M
 
 Restricciones de la base: `CheckConstraint` «unidad, mínimo y máximo, los tres nulos o los tres no nulos, con mínimo < máximo» (que
 coincidan con `lleva_valor` lo controla el servicio: está en otra tabla). Índices únicos parciales `(tipo_actuador, Lower(nombre_accion))`
-y `(tipo_actuador, comando)`, los dos con `estado = activa`.
+y `(tipo_actuador, comando)`, los dos con `estado = activa`. `CheckConstraint` `accion_rango_segun_unidad` (D-80): con unidad «%», mínimo ≥ 0 y máximo ≤ 100; con «rpm», «L/min» o «cm», mínimo ≥ 0; «°» sin límite fijo; y la unidad es una de las cuatro (más la nula).
 
 ---
 

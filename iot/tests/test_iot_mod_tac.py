@@ -14,6 +14,7 @@ from unittest import mock
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied
 from django.http import Http404
 from django.test import TestCase
+from django.urls import reverse
 
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_capataz, crear_gerente
@@ -155,12 +156,21 @@ class IotModTacServicioTests(fabricas.ConCatalogoIot, TestCase):
         self.assertEqual(set(tipo.acciones.values_list("pk", flat=True)) & {self.encender.pk, self.apagar.pk, self.fijar.pk}, {self.encender.pk, self.apagar.pk, self.fijar.pk})
 
     def test_regla_3_se_amplia_el_rango_de_una_accion_sin_restricciones(self):
-        """IOT-MOD-TAC regla 3: ampliar el rango no se rechaza, ni siquiera con la acción en uso."""
+        """IOT-MOD-TAC regla 3: ampliar el rango no se rechaza, ni siquiera con la acción en uso. (Con «rpm», que no tiene tope: D-80.)"""
+        tipo = fabricas.tipo_actuador("Con rpm", acciones=[("Fijar velocidad", "FIJAR_NIVEL", 100, 200, "rpm")])
+        accion_en_uso = tipo.acciones.get()
+        datos = self.cambiar(datos_de(tipo), "Fijar velocidad", minimo="0", maximo="3000")
+        with self.uso(accion_en_uso, valor=150):
+            self.modificar(datos, tipo=tipo)
+        accion_en_uso.refresh_from_db()
+        self.assertEqual((accion_en_uso.valor_minimo, accion_en_uso.valor_maximo), (0, 3000))
+
+    def test_d80_al_modificar_el_rango_sigue_la_regla_de_su_unidad(self):
+        """D-80: ampliar un rango en «%» más allá de 0 a 100 se rechaza; en la modificación rige la misma regla que en el alta."""
         datos = self.cambiar(datos_de(self.tipo), "Fijar velocidad", minimo="-10", maximo="200")
-        with self.uso(self.fijar, valor=50):
-            self.modificar(datos)
+        self.assertEqual(self.errores(datos), ["rango_fuera_de_unidad"])
         self.fijar.refresh_from_db()
-        self.assertEqual((self.fijar.valor_minimo, self.fijar.valor_maximo), (-10, 200))
+        self.assertEqual((self.fijar.valor_minimo, self.fijar.valor_maximo), (0, 100))
 
     def test_regla_3_se_cambia_la_unidad_y_el_comando_de_una_accion_que_no_esta_en_uso_ni_tiene_historial(self):
         """IOT-MOD-TAC regla 4 (a contrario): sin uso ni historial, el comando y la unidad se pueden cambiar."""
@@ -185,11 +195,13 @@ class IotModTacServicioTests(fabricas.ConCatalogoIot, TestCase):
 
     def test_regla_3_una_accion_con_historial_se_puede_renombrar_y_ampliar(self):
         """IOT-MOD-TAC regla 4: una acción con comandos en su historial no cambia su comando ni su unidad, pero sí el nombre y el rango."""
-        datos = self.cambiar(datos_de(self.tipo), "Fijar velocidad", nombre="Velocidad", minimo="0", maximo="150")
-        with self.con_historial(self.fijar):
-            self.modificar(datos)
-        self.fijar.refresh_from_db()
-        self.assertEqual((self.fijar.nombre_accion, self.fijar.valor_maximo), ("Velocidad", 150))
+        tipo = fabricas.tipo_actuador("Con rpm", acciones=[("Fijar velocidad", "FIJAR_NIVEL", 0, 100, "rpm")])
+        fijar = tipo.acciones.get()
+        datos = self.cambiar(datos_de(tipo), "Fijar velocidad", nombre="Velocidad", minimo="0", maximo="150")
+        with self.con_historial(fijar):
+            self.modificar(datos, tipo=tipo)
+        fijar.refresh_from_db()
+        self.assertEqual((fijar.nombre_accion, fijar.valor_maximo), ("Velocidad", 150))
 
     # ---- regla 5: al menos una acción activa ----
 
@@ -384,7 +396,7 @@ class IotModTacServicioTests(fabricas.ConCatalogoIot, TestCase):
         """IOT-MOD-TAC postcondición d y «Cómo se aplica», «Auditoría»: nombre y tiempo con antes y después; las listas de acciones en ``datos``."""
         datos = datos_de(self.tipo)
         datos.nombre, datos.tiempo_minimo = "Extractor 2", "45"
-        self.cambiar(datos, "Fijar velocidad", maximo="120")
+        self.cambiar(datos, "Fijar velocidad", minimo="10")  # (un máximo de 120 con «%» lo rechaza D-80)
         datos.acciones = [a for a in datos.acciones if a.nombre != "Apagar"]
         datos.acciones.append(accion("Girar", "ABRIR"))
         with self.con_historial(self.encender):  # «Encender» se queda; solo cuenta el historial de las que se quitan
@@ -419,6 +431,47 @@ class IotModTacServicioTests(fabricas.ConCatalogoIot, TestCase):
         self.assertEqual(detalle["datos"]["acciones_desactivadas"], [{"id": self.apagar.pk, "texto": "Apagar"}])
         self.assertNotIn("acciones_borradas", detalle["datos"])
         self.assertNotIn("cambios", detalle)
+
+    def test_post_d_una_accion_modificada_deja_el_antes_y_el_despues_de_cada_cambio(self):
+        """IOT-MOD-TAC postcondición d (reescrita) y D-36: de cada acción modificada, el antes y el después de su nombre, su comando, su
+        unidad y su rango, uno por uno, con el nombre de la acción en la clave; lo que no cambió no figura."""
+        datos = self.cambiar(datos_de(self.tipo), "Apagar", nombre="Parar", comando="CERRAR")
+        self.cambiar(datos, "Fijar velocidad", minimo="10", maximo="90", unidad="rpm")
+        self.modificar(datos)
+
+        cambios = RegistroAuditoria.objects.get(accion=MODIFICACION).detalle["cambios"]
+        self.assertEqual(cambios["Nombre de la acción «Apagar»"], {"antes": "Apagar", "despues": "Parar"})
+        self.assertEqual(cambios["Comando de la acción «Apagar»"], {"antes": "APAGAR", "despues": "CERRAR"})
+        self.assertEqual(cambios["Valor mínimo de la acción «Fijar velocidad»"], {"antes": 0, "despues": 10})
+        self.assertEqual(cambios["Valor máximo de la acción «Fijar velocidad»"], {"antes": 100, "despues": 90})
+        self.assertEqual(cambios["Unidad de la acción «Fijar velocidad»"], {"antes": "%", "despues": "rpm"})
+        self.assertEqual(len(cambios), 5)  # nada de lo que no cambió (ni el tipo, ni «Encender», ni el nombre de «Fijar velocidad»)
+
+    def test_post_d_la_pantalla_de_auditoria_muestra_los_cambios_de_las_acciones(self):
+        """IOT-MOD-TAC postcondición d y D-36 («Detalle»): las filas Campo / Antes / Después y la página del registro muestran el antes y
+        el después de cada cambio de cada acción modificada."""
+        datos = self.cambiar(datos_de(self.tipo), "Apagar", nombre="Parar", comando="CERRAR")
+        self.cambiar(datos, "Fijar velocidad", minimo="10")
+        self.modificar(datos)
+        registro = RegistroAuditoria.objects.get(accion=MODIFICACION)
+
+        filas = {campo: (antes, despues) for campo, antes, despues in registro.filas_de_cambios()}
+        self.assertEqual(filas["Nombre de la acción «Apagar»"], ("Apagar", "Parar"))
+        self.assertEqual(filas["Comando de la acción «Apagar»"], ("APAGAR", "CERRAR"))
+        self.assertEqual(filas["Valor mínimo de la acción «Fijar velocidad»"], ("0", "10"))
+
+        self.client.force_login(self.gerente)
+        pagina = self.client.get(reverse("core:auditoria_registro", args=[registro.pk])).content.decode()
+        for texto in ("Comando de la acción «Apagar»", "APAGAR", "CERRAR", "Nombre de la acción «Apagar»", "Parar", "Valor mínimo de la acción «Fijar velocidad»"):
+            self.assertIn(texto, pagina)
+
+    def test_post_d_renombrar_solo_el_tipo_no_inventa_cambios_de_acciones(self):
+        """D-36: sin cambios en las acciones, el detalle no trae claves de acciones."""
+        datos = datos_de(self.tipo)
+        datos.nombre = "Extractor 2"
+        self.modificar(datos)
+        cambios = RegistroAuditoria.objects.get(accion=MODIFICACION).detalle["cambios"]
+        self.assertEqual(list(cambios), ["nombre"])
 
     def test_post_d_una_modificacion_rechazada_no_cambia_nada_ni_audita(self):
         """D-22: una modificación que falla no deja cambios a medias ni un registro."""

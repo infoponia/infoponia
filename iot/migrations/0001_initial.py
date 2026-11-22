@@ -397,6 +397,11 @@ class Migration(migrations.Migration):
             model_name='accion',
             constraint=models.CheckConstraint(condition=models.Q(('estado__in', ['activa', 'inactiva'])), name='accion_estado_valido'),
         ),
+        # D-80: el rango de una acción según su unidad (en esta migración inicial porque IOT-01 todavía no está mergeada).
+        migrations.AddConstraint(
+            model_name='accion',
+            constraint=models.CheckConstraint(condition=models.Q(('unidad_valor__isnull', True), ('unidad_valor', '°'), models.Q(('unidad_valor', '%'), ('valor_maximo__lte', 100), ('valor_minimo__gte', 0)), models.Q(('unidad_valor__in', ['rpm', 'L/min', 'cm']), ('valor_minimo__gte', 0)), _connector='OR'), name='accion_rango_segun_unidad'),
+        ),
         migrations.AddIndex(
             model_name='comando',
             index=models.Index(fields=['actuador', 'emitido_en'], name='comando_actuador_emitido'),

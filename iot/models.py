@@ -180,6 +180,17 @@ class Accion(models.Model):
                 name="accion_comando_unico_por_tipo_activa",
             ),
             models.CheckConstraint(condition=Q(estado__in=["activa", "inactiva"]), name="accion_estado_valido"),
+            # D-80: el rango según la unidad. «%» de 0 a 100; «rpm», «L/min» y «cm» con mínimo 0 o más; «°» sin límite fijo. Una unidad que no
+            # es de la lista cerrada (regla 10) tampoco pasa.
+            models.CheckConstraint(
+                condition=(
+                    Q(unidad_valor__isnull=True)
+                    | Q(unidad_valor="°")
+                    | Q(unidad_valor="%", valor_minimo__gte=0, valor_maximo__lte=100)
+                    | Q(unidad_valor__in=["rpm", "L/min", "cm"], valor_minimo__gte=0)
+                ),
+                name="accion_rango_segun_unidad",
+            ),
         ]
 
     def __str__(self):

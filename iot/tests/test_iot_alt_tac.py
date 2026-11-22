@@ -193,9 +193,49 @@ class IotAltTacServicioTests(fabricas.ConCatalogoIot, TestCase):
 
     def test_regla_4_el_rango_puede_ser_negativo_y_viene_como_texto_del_formulario(self):
         """IOT-ALT-TAC regla 4: enteros; el formulario los manda como texto."""
-        tipo = self.alta(datos_de_tipo("X", 60, [accion("Fijar", "FIJAR_NIVEL", "-10", " 50 ", "%")]))
+        tipo = self.alta(datos_de_tipo("X", 60, [accion("Fijar", "FIJAR_POSICION", "-10", " 50 ", "°")]))
         fijar = tipo.acciones.get()
         self.assertEqual((fijar.valor_minimo, fijar.valor_maximo), (-10, 50))
+
+    # ---- regla 4 con D-80: el rango según la unidad ----
+
+    def test_d80_con_unidad_porcentaje_el_rango_va_de_0_a_100(self):
+        """D-80 y regla 4 de IOT-ALT-TAC: «%» admite de 0 a 100 (los extremos valen)."""
+        for minimo, maximo in ((0, 100), (10, 90), (0, 1)):
+            with self.subTest(minimo=minimo, maximo=maximo):
+                self.alta(datos_de_tipo(f"Porcentaje {minimo}-{maximo}", 60, [accion("Nivel", "FIJAR_NIVEL", minimo, maximo, "%")]))
+
+    def test_d80_con_unidad_porcentaje_un_rango_fuera_de_0_a_100_se_rechaza(self):
+        """D-80: con «%», un mínimo menor que 0 o un máximo mayor que 100 se rechaza con el texto del rango, en los dos comandos con valor."""
+        for comando in ("FIJAR_NIVEL", "FIJAR_POSICION"):
+            for minimo, maximo in ((-1, 50), (0, 101), (-5, 150)):
+                with self.subTest(comando=comando, minimo=minimo, maximo=maximo):
+                    error = error_de(lambda: self.alta(datos_de_tipo("X", 60, [accion("Nivel", comando, minimo, maximo, "%")])))
+                    self.assertEqual(codigos_de(error, "acciones"), ["rango_fuera_de_unidad"])
+                    self.assertEqual([e.message for e in error.error_dict["acciones"]], ["“Nivel” necesita un rango dentro de 0 a 100 %."])
+
+    def test_d80_con_rpm_litros_por_minuto_y_centimetros_el_minimo_no_es_negativo(self):
+        """D-80: «rpm», «L/min» y «cm» no tienen tope pero el mínimo es 0 o más."""
+        for comando, unidad in (("FIJAR_NIVEL", "rpm"), ("FIJAR_NIVEL", "L/min"), ("FIJAR_POSICION", "cm")):
+            with self.subTest(unidad=unidad):
+                self.alta(datos_de_tipo(f"Sin tope {unidad}", 60, [accion("Fijar", comando, 0, 5000, unidad)]))
+                error = error_de(lambda: self.alta(datos_de_tipo(f"Negativo {unidad}", 60, [accion("Fijar", comando, -1, 50, unidad)])))
+                self.assertEqual(codigos_de(error, "acciones"), ["rango_fuera_de_unidad"])
+                self.assertEqual([e.message for e in error.error_dict["acciones"]], ["“Fijar” necesita un mínimo de 0 o más."])
+
+    def test_d80_con_grados_no_hay_limite_fijo(self):
+        """D-80: «°» admite cualquier rango entero (el nodo sabe qué mide: p. ej. de -90 a 270)."""
+        tipo = self.alta(datos_de_tipo("Giratorio", 60, [accion("Girar", "FIJAR_POSICION", -90, 270, "°")]))
+        self.assertEqual((tipo.acciones.get().valor_minimo, tipo.acciones.get().valor_maximo), (-90, 270))
+
+    def test_d80_el_error_del_rango_llega_junto_con_los_demas(self):
+        """D-80 y docs/patrones/abm.md: se informa con los errores de las otras acciones, no de a uno."""
+        error = error_de(
+            lambda: self.alta(
+                datos_de_tipo("X", 60, [accion("Nivel", "FIJAR_NIVEL", -1, 50, "%"), accion("", "ENCENDER")])
+            )
+        )
+        self.assertEqual(sorted(e.code for e in error.error_dict["acciones"]), ["accion_sin_nombre", "rango_fuera_de_unidad"])
 
     def test_regla_4_un_comando_con_valor_necesita_unidad(self):
         """IOT-ALT-TAC regla 4 y mensaje del prototipo."""

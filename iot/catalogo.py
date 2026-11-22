@@ -16,6 +16,12 @@ UNIDADES_POR_COMANDO = {
     ],
 }
 
+# D-80 (regla 4 de IOT-ALT-TAC): el rango de una acción depende de su unidad. «%» va de 0 a 100; «rpm», «L/min» y «cm» no tienen tope pero
+# su mínimo es 0 o más; «°» no tiene límite fijo.
+UNIDAD_PORCENTAJE = "%"
+RANGO_DEL_PORCENTAJE = (0, 100)
+UNIDADES_CON_MINIMO_CERO = ("rpm", "L/min", "cm")
+
 # docs/modelo/iot.md, «Catálogo de capacidades»: el estado que deja cada comando en el actuador (extensión 6c de IOT-EMT-CMD,
 # «ya está en ese estado»). Los comandos con valor dejan ``nivel:<n>`` o ``posicion:<n>``: el ``{valor}`` se completa con
 # ``estado_que_deja``. El contrato de la API fija los mismos textos.

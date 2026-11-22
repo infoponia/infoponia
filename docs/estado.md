@@ -21,7 +21,7 @@ Actualizado: 22/11/2026, tras implementar IOT-01 y con el lote C7 de «Comercial
 
 - UX: 8 · USR-08: 5 · USR-08b: 6 · AUD-01: 6 · CFG: 1 · MAE-02b: 14 · UI-01: 6 · NOT-01: 7
 - MAE-03: 12 · MAE-04: 10 · CON-01: 6 · DIA-01: 3 · MAE-02c: 12 (sin migraciones)
-- Con migración (el último paso, tras el despliegue): INV-01: 14 · INV-02: 16 · MAE-05: 10 · INV-03: 14 (antes de `migrate`, borrar las variedades cargadas a mano) · IOT-01: 8
+- Con migración (el último paso, tras el despliegue): INV-01: 14 · INV-02: 16 · MAE-05: 10 · INV-03: 14 (antes de `migrate`, borrar las variedades cargadas a mano) · IOT-01: 11
 
 ## Esperas y bloqueos
 

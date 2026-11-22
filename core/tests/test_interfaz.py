@@ -461,6 +461,16 @@ class EnviosEnCursoTests(TestCase):
         self.assertContains(sin_sesion, etiqueta)
         self.assertContains(con_sesion, etiqueta)
 
+    def test_d29_infoponia_js_rehabilita_el_boton_aunque_el_fragmento_reemplace_al_elemento_del_pedido(self):
+        """D-29 (corrección de IOT-01): si la respuesta de HTMX reemplaza el elemento que hizo el pedido, ``htmx:afterRequest`` ya no
+        burbujea hasta ``document`` y el botón de envío quedaba deshabilitado hasta el límite de 30 s. El fin del pedido se escucha
+        también en el propio elemento. Y un pedido que solo redibuja el formulario lo marca con ``data-sin-envio-en-curso``. El
+        comportamiento es JavaScript y se verifica a mano; acá, que el código esté."""
+        with open("core/static/core/js/infoponia.js", encoding="utf-8") as archivo:
+            codigo = archivo.read()
+        self.assertIn('elemento.addEventListener("htmx:afterRequest"', codigo)
+        self.assertIn("data-sin-envio-en-curso", codigo)
+
     def test_d29_el_indicador_gira_y_con_reducir_movimiento_queda_quieto(self):
         """D-29: el indicador de envío en curso es un anillo con un tramo de color que gira; con
         prefers-reduced-motion no se anima. El bloque de «reducir movimiento» va después de la regla base: con la

@@ -22,7 +22,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404
 
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
-from iot.catalogo import UNIDADES_POR_COMANDO
+from iot.catalogo import RANGO_DEL_PORCENTAJE, UNIDAD_PORCENTAJE, UNIDADES_CON_MINIMO_CERO, UNIDADES_POR_COMANDO
 from iot.models import Accion, Actuador, Capacidad, ComandoCatalogo, TipoActuador
 from maestros.models import Invernadero
 from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general, _tiene_contenido
@@ -177,6 +177,13 @@ def _validar(datos):
                 continue
             if unidad not in [valor for valor, _ in UNIDADES_POR_COMANDO[comando.codigo]]:
                 avisar(f"La unidad de “{nombre_accion}” no es válida para el comando {comando.codigo}.", "unidad_invalida")
+                continue
+            # D-80: el rango según la unidad.
+            if unidad == UNIDAD_PORCENTAJE and not (RANGO_DEL_PORCENTAJE[0] <= minimo and maximo <= RANGO_DEL_PORCENTAJE[1]):
+                avisar(f"“{nombre_accion}” necesita un rango dentro de {RANGO_DEL_PORCENTAJE[0]} a {RANGO_DEL_PORCENTAJE[1]} %.", "rango_fuera_de_unidad")
+                continue
+            if unidad in UNIDADES_CON_MINIMO_CERO and minimo < 0:
+                avisar(f"“{nombre_accion}” necesita un mínimo de 0 o más.", "rango_fuera_de_unidad")
                 continue
         filas.append(_Fila(dato.id, nombre_accion, comando, minimo, maximo, unidad))
     errores["acciones"] = [ValidationError(texto, code=codigo) for texto, codigo in mensajes]
@@ -370,6 +377,25 @@ def _en_texto(usos):
     return ", ".join(uso.codigo for uso in usos)
 
 
+def _cambios_de_acciones(modificadas):
+    """El detalle de auditoría (D-36) de las acciones modificadas, ``{clave: {"antes", "despues"}}``, un cambio por cada dato que cambió
+    (nombre, comando, unidad, mínimo y máximo). La clave dice qué cambió y de qué acción (con su nombre anterior), por ejemplo
+    «Comando de la acción «Apagar»»: ``ETIQUETAS`` no tiene claves por acción y una clave desconocida se muestra tal cual."""
+    cambios = {}
+    for original, fila in modificadas:
+        pares = (
+            ("Nombre", original.nombre_accion, fila.nombre),
+            ("Comando", original.comando.codigo, fila.comando.codigo),
+            ("Unidad", original.unidad_valor, fila.unidad),
+            ("Valor mínimo", original.valor_minimo, fila.minimo),
+            ("Valor máximo", original.valor_maximo, fila.maximo),
+        )
+        for etiqueta, antes, despues in pares:
+            if antes != despues:
+                cambios[f"{etiqueta} de la acción «{original.nombre_accion}»"] = {"antes": antes, "despues": despues}
+    return cambios
+
+
 def modificar_tipo_actuador(actor, tipo_id, datos):
     """IOT-MOD-TAC: cambia el nombre, el tiempo mínimo y las acciones de un tipo y lo devuelve.
 
@@ -381,7 +407,8 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
     - Regla 8 y postcondición a: una acción quitada con historial queda inactiva; sin historial, se borra.
     - Postcondición c: la compatibilidad de los actuadores del tipo se recalcula. **Se completa en IOT-02.**
     - D-28: sin cambios no se escribe ni se audita. Postcondición d y D-36: un registro ``modificacion_tipo_actuador`` con los cambios
-      del tipo (nombre y tiempo, antes y después) y las listas de acciones creadas, modificadas, desactivadas y borradas.
+      del tipo (nombre y tiempo, antes y después), el antes y el después de cada dato que cambió en cada acción modificada y las listas de
+      acciones creadas, modificadas, desactivadas y borradas.
     - Bloqueos: el tipo y sus acciones activas (orden de id), releídos. Dos modificaciones a la vez: gana la última, salvo el nombre.
     """
     _exigir_gerente(actor)
@@ -450,6 +477,7 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
             raise ValidationError({"acciones": impedimentos})
 
         creadas_filas = [f for f in filas if f.id is None]
+        cambios_de_acciones = _cambios_de_acciones(modificadas)  # antes de escribir: ``original`` todavía tiene lo anterior
         cambios = {}
         if nombre != tipo.nombre_actuador:
             cambios["nombre"] = {"antes": tipo.nombre_actuador, "despues": nombre}
@@ -498,8 +526,8 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
         if referencias_de_borradas:
             datos_del_registro["acciones_borradas"] = referencias_de_borradas
         detalle = {}
-        if cambios:
-            detalle["cambios"] = cambios
+        if cambios or cambios_de_acciones:
+            detalle["cambios"] = cambios | cambios_de_acciones
         if datos_del_registro:
             detalle["datos"] = datos_del_registro
         RegistroAuditoria.objects.registrar(

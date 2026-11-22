@@ -343,6 +343,37 @@ class IotAltTacVistaTests(TiposVistasBase):
         for texto in ('<optgroup label="Encendido">', '<optgroup label="Nivel">', '<optgroup label="Posición">', "FIJAR_NIVEL (con valor)"):
             self.assertContains(respuesta, texto)
 
+    def test_el_fragmento_de_las_filas_trae_los_select_sin_armar(self):
+        """Combos duplicados: el servidor entrega cada ``<select data-desplegable>`` crudo, sin el combo ya armado (``.dd``, ``dd-oculto``,
+        ``data-dd-listo``); lo arma ``desplegable.js`` en el navegador, una sola vez, cuando HTMX termina de insertar el fragmento."""
+        datos = self.post_del_tipo("A", "60", [{"nombre": "Uno", "comando": "ENCENDER"}])
+        respuesta = self.client.post(self.url_nuevo, datos | {"agregar": "1"}, **HX)
+        self.assertContains(respuesta, "data-desplegable", count=2)  # un comando por fila
+        for armado in ('class="dd"', "dd-oculto", "data-dd-listo", "dd-boton"):
+            self.assertNotContains(respuesta, armado)
+
+    def test_los_pedidos_que_solo_redibujan_el_formulario_no_deshabilitan_el_boton_de_guardar(self):
+        """D-29 (``data-sin-envio-en-curso``): «Agregar acción», «Quitar» y el cambio de comando solo vuelven a dibujar el formulario, sin
+        guardarlo: llevan el atributo y no deshabilitan «Crear tipo». El botón de guardar, en cambio, no lo lleva (D-29 sigue vigente)."""
+        datos = self.post_del_tipo("A", "60", [{"nombre": "Uno", "comando": "ENCENDER"}])
+        html = self.client.post(self.url_nuevo, datos | {"agregar": "1"}, **HX).content.decode()
+        pedidos = re.findall(r"<(?:select|button)[^>]*hx-post[^>]*>", html)
+        self.assertEqual(len(pedidos), 2 * 2 + 1)  # por fila: el combo y «Quitar»; y un «Agregar acción»
+        self.assertTrue(all("data-sin-envio-en-curso" in pedido for pedido in pedidos))
+        pagina = self.client.get(self.url_nuevo).content.decode()
+        guardar = re.search(r"<button[^>]*>\s*Crear tipo\s*</button>", pagina).group(0)
+        self.assertNotIn("data-sin-envio-en-curso", guardar)
+        self.assertNotIn("hx-post", guardar)
+
+    def test_el_desplegable_se_arma_cuando_htmx_termina_de_asentar_el_fragmento(self):
+        """Combos duplicados (causa): al reemplazar un bloque, HTMX vuelve a poner los atributos del servidor en los elementos con el mismo
+        ``id`` DESPUÉS de ``htmx:afterSwap`` (fase «settle») y le sacaba ``dd-oculto`` al ``<select>``: se veía el nativo bajo el combo. El
+        combo se arma en ``htmx:afterSettle``. (Verificado a mano y en un navegador sin cabeza con HTMX 2.0.11.)"""
+        with open("core/static/core/js/desplegable.js", encoding="utf-8") as archivo:
+            codigo = archivo.read()
+        self.assertIn('addEventListener("htmx:afterSettle"', codigo)
+        self.assertNotIn('addEventListener("htmx:afterSwap"', codigo)
+
     def test_el_formulario_usa_desplegables_propios_con_respaldo_nativo(self):
         """.claude/rules/interfaz.md: los desplegables llevan ``data-desplegable`` (sin JavaScript queda el ``select`` nativo)."""
         self.assertContains(self.client.get(self.url_nuevo), "data-desplegable")
