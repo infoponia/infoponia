@@ -272,3 +272,127 @@ def abrir_alerta(actor, alerta_id):
             estado_lectura_alerta=Alerta.Lectura.LEIDA
         )
         return Alerta.objects.get(pk=alerta_id)
+
+# ---- MAE-02c (CU-46): consulta de alertas (docs/casos_de_uso/maestros/alertas.md, R1 a R6; docs/api/alertas.md, sección 5).
+# Solo lectura: no bloquean, no auditan (SEG-14) y no cambian la lectura de nadie. CU-41 (panel de IoT) las reutiliza. ----
+
+FiltrosDeAlertas = namedtuple("FiltrosDeAlertas", "invernaderos tipos")
+
+# R4: más urgente arriba. Una severidad desconocida va al final.
+_ORDEN_DE_SEVERIDAD = {
+    Alerta.Severidad.CRITICA: 0,
+    Alerta.Severidad.ADVERTENCIA: 1,
+    Alerta.Severidad.INFORMATIVA: 2,
+}
+
+
+def severidad_efectiva(alerta):
+    """La severidad con que se muestra ``alerta``: la del tipo registrado (MD-109: la define el tipo) y, si el código ya no
+    está registrado, la que se guardó con la alerta. Es la misma regla que usa la campana (``items_de_campana``): una alerta
+    vieja no rompe la pantalla."""
+    try:
+        return str(tipo_de_alerta(alerta.tipo_alerta).severidad)
+    except ValueError:
+        return str(alerta.nivel_severidad)
+
+
+def _nombre_del_codigo(codigo):
+    """El nombre del tipo registrado con ese ``codigo``; si ya no está registrado, el propio código (decidido al aprobar
+    el plan de MAE-02c: no se inventa un texto y sirve para filtrar)."""
+    try:
+        return tipo_de_alerta(codigo).nombre
+    except ValueError:
+        return codigo
+
+
+def nombre_de_tipo(alerta):
+    """El nombre con que se muestra el tipo de ``alerta`` (R6); ver ``_nombre_del_codigo``."""
+    return _nombre_del_codigo(alerta.tipo_alerta)
+
+
+def _sin_filtro(valor):
+    """Un filtro del formulario GET vacío (``None`` o ``""``) es como no filtrar."""
+    return valor is None or valor == ""
+
+
+def consultar_alertas(actor, *, invernadero_id=None, tipo=None):
+    """CU-46: las alertas ACTIVAS que ``actor`` recibe, más urgentes primero (R2 a R5). Devuelve una lista de ``Alerta`` con
+    ``severidad`` y ``nombre_tipo`` ya calculados, y con el invernadero cargado: una sola consulta para toda la lista.
+
+    - R2 y D-28: el alcance vive en ``Alerta.objects.para`` (un rol que no recibe alertas, una cuenta inactiva o ``None``
+      reciben una lista vacía; la vista corta con 403 antes).
+    - R3: solo ``activas()``. No se filtra por el estado del invernadero: R3 habla del estado de la alerta.
+    - R5: ``invernadero_id`` y ``tipo`` (el código) filtran; vacíos, no filtran. Uno que no figura entre las alertas del actor
+      da una lista vacía, sin error y sin revelar si existe.
+    - R4: crítica, advertencia, informativa; dentro de cada nivel, la más reciente primero y, con fechas iguales, la de id
+      mayor. La severidad sale del tipo registrado, o de la guardada si ya no lo está (MD-109); el orden por severidad se
+      hace en Python (``sort`` es estable) sobre el orden de fecha de la consulta."""
+    consulta = Alerta.objects.para(actor).activas().select_related("invernadero")
+    if not _sin_filtro(invernadero_id):
+        consulta = consulta.filter(invernadero_id=invernadero_id)
+    if not _sin_filtro(tipo):
+        consulta = consulta.filter(tipo_alerta=tipo)
+    alertas = list(consulta.order_by("-fecha_hora_alerta", "-id"))
+    for alerta in alertas:
+        alerta.severidad = severidad_efectiva(alerta)
+        alerta.nombre_tipo = nombre_de_tipo(alerta)
+    alertas.sort(key=lambda alerta: _ORDEN_DE_SEVERIDAD.get(alerta.severidad, len(_ORDEN_DE_SEVERIDAD)))
+    return alertas
+
+
+def filtros_de_alertas(actor):
+    """R5: las opciones de los dos filtros: los invernaderos y los tipos de las alertas ACTIVAS de ``actor`` (no todos los
+    invernaderos ni todos los tipos). Devuelve ``FiltrosDeAlertas(invernaderos, tipos)``: ``[(id, nombre)]`` por nombre y
+    ``[(código, nombre)]`` por nombre. Dos consultas con ``distinct`` sobre columnas sueltas, sin cargar las alertas; el
+    ``order_by()`` previo quita el ``Meta.ordering`` de ``Alerta``, que si no se sumaría al ``SELECT DISTINCT``."""
+    base = Alerta.objects.para(actor).activas().order_by()
+    invernaderos = sorted(
+        base.values_list("invernadero_id", "invernadero__nombre_invernadero").distinct(),
+        key=lambda opcion: (opcion[1].lower(), opcion[0]),
+    )
+    tipos = sorted(
+        ((codigo, _nombre_del_codigo(codigo)) for codigo in base.values_list("tipo_alerta", flat=True).distinct()),
+        key=lambda opcion: (opcion[1].lower(), opcion[0]),
+    )
+    return FiltrosDeAlertas(invernaderos, tipos)
+
+
+# ---- MAE-02c, paso 2: el detalle de una alerta (R6 y R7). ----
+
+DetalleDeAlerta = namedtuple("DetalleDeAlerta", "alerta nombre_tipo severidad era_nueva destinatarios invernadero_visible")
+
+
+def detalle_de_alerta(actor, alerta_id):
+    """CU-46, R6 y R7: abre la alerta ``alerta_id`` para ``actor`` y devuelve lo que muestra el detalle (``DetalleDeAlerta``).
+
+    - R7 (regla 7 de 8.18; propuesta A de MAE-02c): llama a ``abrir_alerta``, que marca «leída» la alerta de un destinatario sin
+      tocar ``estado_alerta`` ni auditar (SEG-14). ``Http404`` si no existe y ``PermissionDenied`` si ``actor`` no la recibe
+      (D-28; ``abrir_alerta`` lo decide antes de cambiar nada).
+    - Decisión 3 de MAE-02c: también abre una alerta ya resuelta que el actor recibe (llega por un enlace viejo); el detalle la
+      muestra como resuelta. Supuesto de la tarea: CU-46 no dice nada de esto.
+    - ``era_nueva``: la lectura ANTES de abrirla, para mostrar «Nueva» solo en esta visita.
+    - ``destinatarios``: textos, el Gerente primero. Salen de la propia alerta (``para_gerente`` y ``agronomo``, R007 y R049) y
+      no del invernadero: si el invernadero cambió de Agrónomo después, la alerta nombra a quien la recibió.
+    - ``invernadero_visible``: si el actor tiene acceso a la ficha del invernadero (``Invernadero.objects.en_alcance_de``);
+      decide si se muestra «Ver invernadero» (D-30: ningún enlace lleva a un 403).
+    - No muestra el origen de la alerta (R6): sus apps todavía no existen (``docs/disparadores.md``)."""
+    with transaction.atomic():
+        alerta = Alerta.objects.select_related("invernadero", "agronomo").filter(pk=alerta_id).first()
+        if alerta is None:
+            raise Http404("No existe esa alerta.")
+        era_nueva = alerta.estado_lectura_alerta == Alerta.Lectura.NO_LEIDA
+        abierta = abrir_alerta(actor, alerta_id)
+        alerta.estado_lectura_alerta = abierta.estado_lectura_alerta
+        destinatarios = []
+        if alerta.para_gerente:
+            destinatarios.append("Gerente")
+        if alerta.agronomo_id:
+            destinatarios.append(f"Agrónomo: {alerta.agronomo.get_full_name() or alerta.agronomo.email}")
+        return DetalleDeAlerta(
+            alerta=alerta,
+            nombre_tipo=nombre_de_tipo(alerta),
+            severidad=severidad_efectiva(alerta),
+            era_nueva=era_nueva,
+            destinatarios=destinatarios,
+            invernadero_visible=Invernadero.objects.en_alcance_de(actor).filter(pk=alerta.invernadero_id).exists(),
+        )

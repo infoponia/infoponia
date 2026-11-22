@@ -52,7 +52,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    PROD-ALT-INV y postcondición c de PROD-MOD-INV: cada persona asignada recibe una notificación con el invernadero y lo que recibió (la
    cantidad de órdenes, mantenimientos, contratos y alertas, que sale de `maestros.extensiones.contar_traspaso`). D-38 las dejó sin
    modelar. Nació en MAE-01b.
-4. **Abrir una alerta desde la campana (MAE-02c).** El enlace de cada alerta de la campana lleva a la ficha del invernadero y no llama a
+4. ~~**Abrir una alerta desde la campana (MAE-02c).**~~ Hecho el 22/11/2026 en MAE-02c (`items_de_campana` apunta a `/alertas/<id>/`, que llama a `abrir_alerta`). Texto original: El enlace de cada alerta de la campana lleva a la ficha del invernadero y no llama a
    `abrir_alerta`: la alerta sigue «no leída» y el punto rojo del Gerente (o del Agrónomo) no se apaga. Cuando exista la pantalla de
    consulta de alertas (CU-46, MAE-02c), la campana tiene que llevar a ese detalle (que sí llama a `abrir_alerta`), o la
    `ItemDeAlerta.url` de `maestros.servicios.invernaderos.items_de_campana` tiene que apuntar a él. Va junto con el pendiente de
@@ -79,9 +79,9 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    `core/extensiones.py` (D-43).
 2. **Transportista en ruta o con entregas (D-55, nace en MAE-05).** Reglas 9 y 10 de PROD-MOD-INV y precondición d de USR-BAJ-USR.
    `comercial` registra:
-   - `maestros.extensiones.registrar_impedimento_de_transportista`, con los códigos `transportista_en_ruta` y
+- `maestros.extensiones.registrar_impedimento_de_transportista`, con los códigos `transportista_en_ruta` y
      `transportista_con_entregas`;
-   - `core.extensiones.registrar_impedimento_de_baja_de_cuenta`, con el código `transportista_en_ruta`.
+- `core.extensiones.registrar_impedimento_de_baja_de_cuenta`, con el código `transportista_en_ruta`.
    Contrato: `docs/api/extensiones_de_maestros.md`, sección «Transportistas». También la regla de COM-ASG-TRP: una entrega del día
    cuyo transportista está en ruta no se reasigna.
 3. **Logística de la ficha del invernadero (D-55, nace en MAE-05).** Regla 3 de PROD-CNS-INV: `comercial` registra
@@ -211,12 +211,16 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)
 
-1. **Consulta de alertas (CU-46).** MAE-02b dejó afuera la pantalla (paso 4): pasa a MAE-02c (`docs/tareas/maestros/MAE-02c-alerta-consulta.md`; extracto en `docs/casos_de_uso/maestros/alertas.md`). Incluye la entrada «Alertas» del menú
+1. ~~**Consulta de alertas (CU-46).**~~ Hecho el 22/11/2026 en MAE-02c (`consultar_alertas`, `filtros_de_alertas` y `detalle_de_alerta` en `docs/api/alertas.md`, sección 5). Texto original: MAE-02b dejó afuera la pantalla (paso 4): pasa a MAE-02c (`docs/tareas/maestros/MAE-02c-alerta-consulta.md`; extracto en `docs/casos_de_uso/maestros/alertas.md`). Incluye la entrada «Alertas» del menú
    (desde `MaestrosConfig.ready()`), el alcance `Alerta.objects.para(usuario)`, solo las activas, filtros por invernadero y tipo, el
    detalle que llama a `abrir_alerta` (ya existe), que funcione sin JavaScript (HTMX solo reemplaza la tabla) y que viva en `maestros`.
    **Pendiente para pendientes_CU:** abrir la alerta la marca «leída» (regla 7 de 8.18) y choca con la postcondición de CU-46 («no se
    produjeron cambios en el sistema»). CU-41 reutiliza la consulta: `docs/api/alertas.md` todavía no nombra esa función. Nació en
    MAE-02a.
+2. **Contador de no leídas en la entrada «Alertas» del menú.** MAE-02c dejó la entrada sin contador: `core.menu.registrar_entrada` solo
+   admite `(texto, url, ícono)`. Para sumarlo hay que ampliarla (por ejemplo, con `contador=funcion(usuario)`), calcularlo en
+   `core/context_processors.py` y mostrarlo en `core/templates/core/base_con_sesion.html`; el valor lo da
+   `Alerta.objects.para(usuario).activas().no_leidas().count()`. Hoy lo avisa el punto rojo de la campana. Nació en MAE-02c.
 
 ## Cuando una app necesite sumar algo al Inicio, a la ventana de baja o a la reactivación de una cuenta
 
@@ -316,7 +320,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 1. **Un solo cron job de Render para todo el proceso diario (D-56).** Se crea **al final de la implementación**, cuando estén
    registrados todos los pasos de `core/procesos.py`. Ejecuta `python manage.py proceso_diario`, con:
-   - el mismo repositorio, la misma rama y las mismas variables de entorno que el web service, incluida la base de Neon;
-   - el mismo comando de compilación;
-   - una agenda antes del inicio de las rutas. La hora se confirma con el Jardín Botánico; Render usa UTC.
+- el mismo repositorio, la misma rama y las mismas variables de entorno que el web service, incluida la base de Neon;
+- el mismo comando de compilación;
+- una agenda antes del inicio de las rutas. La hora se confirma con el Jardín Botánico; Render usa UTC.
    Antes, revisar el costo (`docs/temas_abiertos.md`). Después, anotar su nombre en `docs/estado.md`. Nace en DIA-01.

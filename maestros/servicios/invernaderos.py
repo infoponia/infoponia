@@ -27,7 +27,6 @@ from core.models import (
     rol_de,
 )
 from maestros import extensiones
-from maestros.alertas import tipo_de_alerta
 from maestros.models import Alerta, Direccion, DireccionRural, DireccionUrbana, Invernadero, Localidad
 from maestros.servicios import alertas as api_alertas
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
@@ -1107,24 +1106,22 @@ def items_de_campana(usuario):
     """Fuente de alertas de la campana (D-42): las alertas ACTIVAS que ``usuario`` recibe (``Alerta.objects.para``: el Gerente
     las suyas, el Agrónomo las de sus invernaderos, cualquier otro ninguna), leídas o no, como ``ItemDeAlerta``.
 
-    - ``severidad``: la del tipo registrado (``maestros.alertas.tipo_de_alerta``); si el código ya no está registrado, la que se
-      guardó con la alerta (MD-109), para que una alerta vieja no rompa la campana de toda la pantalla.
+    - ``severidad``: la del tipo registrado; si el código ya no está registrado, la que se guardó con la alerta (MD-109), para
+      que una alerta vieja no rompa la campana de toda la pantalla. Es la misma regla de la pantalla de consulta
+      (``api_alertas.severidad_efectiva``, MAE-02c).
     - ``titulo``: la descripción de la alerta («Invernadero sin Capataz activo»); ``detalle``: el nombre del invernadero.
-    - ``url``: la ficha del invernadero. ``leida``: según ``estado_lectura_alerta`` (regla 7 de 8.18).
+    - ``url``: el detalle de la alerta (``/alertas/<id>/``, MAE-02c, CU-46): abrirla desde la campana llama a ``abrir_alerta``,
+      la marca «leída» y apaga el punto rojo (antes llevaba a la ficha del invernadero y no la marcaba). ``leida``: según ``estado_lectura_alerta`` (regla 7 de 8.18).
     El orden es el de ``Alerta`` (la más reciente primero): ``core`` ordena por severidad y lo conserva dentro de cada nivel.
     """
     items = []
     for alerta in Alerta.objects.para(usuario).activas().select_related("invernadero"):
-        try:
-            severidad = tipo_de_alerta(alerta.tipo_alerta).severidad
-        except ValueError:
-            severidad = alerta.nivel_severidad
         items.append(
             ItemDeAlerta(
-                severidad=str(severidad),
+                severidad=api_alertas.severidad_efectiva(alerta),
                 titulo=alerta.descripcion_alerta,
                 detalle=alerta.invernadero.nombre_invernadero,
-                url=reverse("maestros:invernadero", args=[alerta.invernadero_id]),
+                url=reverse("alertas:detalle", args=[alerta.pk]),
                 leida=alerta.estado_lectura_alerta == Alerta.Lectura.LEIDA,
             )
         )

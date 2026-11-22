@@ -10,6 +10,7 @@ Todo está en tres lugares:
 | Tipos de alerta (`TipoAlerta`, `registrar_tipo_de_alerta`, `tipo_de_alerta`, `codigos_con_destinatario`) | `maestros/alertas.py` |
 | Crear, asegurar y resolver alertas | `maestros/servicios/alertas.py` |
 | Consultar con alcance (`Alerta.objects.para(usuario)`, `.activas()`, `.no_leidas()`) | `maestros/models.py` |
+| Consultar y abrir (listado con filtros, detalle y `ItemDeAlerta` de la campana) | `maestros/servicios/alertas.py` (`consultar_alertas`, `filtros_de_alertas`, `detalle_de_alerta`) |
 
 `maestros` es de nivel 3: **no conoce tu app**. Vos te registrás en tu `AppConfig.ready()` (regla A4 de D-37) y llamás a esta API.
 
@@ -161,9 +162,21 @@ Alerta.objects.para(usuario).activas().no_leidas()   # lo que cuenta la campana
 ```
 
 El Gerente activo recibe las `para_gerente`; el Agrónomo activo, las suyas; cualquier otro rol (o una cuenta inactiva, o `None`),
-ninguna. `abrir_alerta(actor, alerta_id)` (MAE-02b) marca «leída» la que abre un destinatario. La pantalla de consulta de
-alertas (CU-46) la hace MAE-02c (`docs/tareas/maestros/MAE-02c-alerta-consulta.md`); que abrir la alerta la marque «leída» choca con su
-postcondición («no se produjeron cambios en el sistema»): pendiente para pendientes_CU.
+ninguna. `abrir_alerta(actor, alerta_id)` (MAE-02b) marca «leída» la que abre un destinatario.
+
+Para listar o mostrar alertas (CU-46, MAE-02c; el panel de IoT, CU-41, las reutiliza) usá estas funciones de
+`maestros.servicios.alertas` y no armes la consulta a mano. Son solo lectura: no bloquean, no auditan y no cambian la lectura.
+
+| Función | Qué hace |
+|---|---|
+| `consultar_alertas(actor, *, invernadero_id=None, tipo=None) -> list[Alerta]` | Las alertas **activas** de `actor` (`para(actor).activas()`), filtradas por invernadero y por tipo (el código; vacío o `None` no filtra), de la más urgente a la menos (crítica, advertencia, informativa) y, dentro de cada nivel, de la más reciente a la más antigua (con fechas iguales, la de id mayor). Cada alerta trae `severidad` y `nombre_tipo` ya calculados y el invernadero cargado: una sola consulta. Un filtro que no coincide da `[]`, sin error. No filtra por el estado del invernadero. |
+| `filtros_de_alertas(actor) -> FiltrosDeAlertas(invernaderos, tipos)` | Las opciones de los filtros: `[(id, nombre)]` y `[(código, nombre)]` de las alertas activas de `actor`. Dos consultas, sin cargar las alertas. |
+| `detalle_de_alerta(actor, alerta_id) -> DetalleDeAlerta` | Llama a `abrir_alerta` y devuelve `alerta`, `nombre_tipo`, `severidad`, `era_nueva` (la lectura de antes), `destinatarios` (textos, el Gerente primero) e `invernadero_visible`. Abre también una alerta resuelta que `actor` recibe. `Http404` / `PermissionDenied` como `abrir_alerta`. |
+| `severidad_efectiva(alerta)`, `nombre_de_tipo(alerta)` | La severidad del tipo registrado y su nombre; si el código ya no está registrado, la severidad guardada y el propio código (MD-109). Las usan también la campana y las pantallas. |
+
+Las pantallas están en `/alertas/` (`alertas:lista`) y `/alertas/<id>/` (`alertas:detalle`); la campana enlaza al detalle, que es
+quien marca «leída». Abrir el detalle es lo único que cambia algo: el listado y los filtros no (postcondición de CU-46,
+propuesta A de MAE-02c).
 
 ## 6. Auditoría (D-36, D6 de MAE-02)
 

@@ -135,13 +135,14 @@ a 3 no se recortan.
 No hay migraciones: el despliegue de Render no cambia la base. Cuentas: un Gerente, dos Agrónomos (uno a cargo de «Sur» y otro de
 «Norte»), un Capataz y un Administrador activos, y los invernaderos «Sur» y «Norte».
 
-1. Como Gerente, dá de baja a un Capataz que esté a cargo de «Sur»: se crea la alerta «Invernadero sin Capataz activo». En el menú,
-   «Alertas» muestra el contador en 1.
+1. Como Gerente, dá de baja a un Capataz que esté a cargo de «Sur»: se crea la alerta «Invernadero sin Capataz activo». La campana
+   muestra el punto rojo (la entrada «Alertas» del menú no lleva contador).
 2. Entrá en «Alertas»: la lista muestra esa alerta, con su severidad, el invernadero «Sur» y un punto de «no leída». Seguís sin ver
    nada marcado como leído (el listado no cambia nada).
 3. Filtrá por «Norte»: «Ninguna alerta activa coincide con el filtro.». Filtrá por «Sur» y por el tipo: vuelve a aparecer.
 4. Abrí la alerta: el detalle muestra todo (tipo, severidad, descripción, invernadero, fecha y hora, activa, a quién le llegó). Volvé
-   a la lista: el punto de «no leída» desapareció y el contador del menú bajó a 0. La alerta sigue activa.
+   a la lista: el punto de «no leída» desapareció y el punto rojo de la campana se apagó (si no hay otra alerta ni
+   notificación sin leer). La alerta sigue activa.
 5. Reactivá la cuenta del Capataz: la alerta pasa a resuelta y sale de la lista. Entrá otra vez al detalle por la URL guardada: se
    abre y dice «Resuelta».
 6. Con el Agrónomo de «Sur»: «Alertas» muestra solo las suyas (con un Capataz de «Sur» dado de baja, ninguna: las de personal van al
@@ -157,5 +158,37 @@ No hay migraciones: el despliegue de Render no cambia la base. Cuentas: un Geren
 
 ## Cierre
 
-(Lo completa Claude Code al terminar la tarea: qué se hizo, archivos tocados, pruebas con su resultado, decisiones y diferencias
-respecto de la documentación, para `docs/temas_abiertos.md`; nada se corrige en silencio.)
+Hecha el 22/11/2026 en la rama `feature/mae-02c-alerta-consulta`. Sin migraciones, sin modelos y sin dependencias nuevas.
+
+**Qué se hizo**
+
+- Servicios (`maestros/servicios/alertas.py`): `severidad_efectiva`, `nombre_de_tipo`, `consultar_alertas(actor, *, invernadero_id=None, tipo=None)`, `filtros_de_alertas(actor)` (`FiltrosDeAlertas`) y `detalle_de_alerta(actor, alerta_id)` (`DetalleDeAlerta`). Con las pruebas primero y una pausa de revisión por cada paso de servicios.
+- Pantallas: `/alertas/` (listado con filtros GET y, con HTMX, solo la tabla) y `/alertas/<id>/` (detalle, que llama a `abrir_alerta`). Rutas en `maestros/urls_alertas.py` (`app_name = "alertas"`). Plantillas en `maestros/templates/maestros/alertas/` y una regla de CSS en `maestros/static/maestros/css/alertas.css`.
+- Entrada «Alertas» del menú del Gerente y del Agrónomo, registrada en `MaestrosConfig.ready()` después de «Producción».
+- La campana: `items_de_campana` apunta a `/alertas/<id>/` y usa `severidad_efectiva` (paso 4).
+
+**Pruebas:** 59 nuevas en `maestros/tests/test_cns_alr.py` (37 de `CnsAlrServicioTests` y 22 de `CnsAlrVistaTests`) y 1 de punta a punta en `maestros/tests/test_campana_alertas.py`. `maestros core` sin concurrencia: 1767 pruebas, OK (eran 1707 tras MAE-05). Concurrencia de `maestros core`: 54, OK. `makemigrations --check --dry-run`: sin cambios. `manage.py check`: sin problemas.
+
+**Decisiones aprobadas al planificar (22/11/2026)**
+
+- Las tres decisiones previas, tal como estaban escritas (propuesta A, solo Gerente y Agrónomo, el detalle abre también una resuelta).
+- Rutas en `/alertas/`, con un URLconf propio.
+- La entrada del menú, sin contador.
+- Un tipo que ya no está registrado se muestra con su código como nombre.
+
+**Cambio de comportamiento pedido por la tarea (paso 4):** la campana lleva al detalle y no a la ficha del invernadero. Se ajustaron dos pruebas de `test_campana_alertas.py`: `test_d42_devuelve_las_activas_con_titulo_detalle_url_y_severidad` (la `url`) y la que verifica el enlace en la campana, que además se renombró a `test_d42_el_gerente_ve_en_alertas_la_de_sin_capataz_con_su_severidad_y_el_enlace_al_detalle`.
+
+**Diferencias con lo escrito (para `docs/temas_abiertos.md`)**
+
+1. **Dos líneas fuera de «Permitido fuera de la app».** `config/urls.py` (`path("alertas/", ...)`, aprobada al planificar) y `core/tests/urls_prueba_acceso.py` (la misma línea; sin ella fallan dos pruebas de `core` que arman el marco con ese URLconf, como ya pasó con MAE-04 e INV-01).
+2. **La entrada «Alertas» no tiene contador.** La tarea lo pedía, pero el menú de `core` solo admite `(texto, url, ícono)`. Lo que falta leer lo avisa el punto rojo de la campana. Los pasos 1 y 4 de «Verificación a mano» se ajustaron. Si se quiere el contador, hay que ampliar `core.menu.registrar_entrada`, el procesador de contexto y la plantilla del marco.
+3. **Nombre de un tipo no registrado:** la tarea no decía qué mostrar. Se muestra el código guardado (en la columna, el filtro y el detalle). La severidad sale de la guardada (MD-109).
+4. **Una regla de CSS nueva** (`.alerta-punto`, el punto de «no leída» de la fila). No hay clase equivalente: `.dotn` es el de la campana y está posicionado en absoluto.
+5. **Alertas de un invernadero inactivo:** la consulta no filtra por el estado del invernadero (R3 solo habla del estado de la alerta; `para` tampoco). Una alerta activa de un invernadero dado de baja figura en el listado del Gerente y del Agrónomo. El detalle de esa alerta no muestra «Ver invernadero» al Agrónomo, porque la ficha de un invernadero inactivo no está en su alcance (D-30). Decidir si una baja de invernadero debería sacarlas del listado.
+6. **El detalle solo responde a GET** (HEAD da 405) y no se guarda en la caché del navegador, porque abrirlo cambia la lectura. La tarea no lo decía.
+7. **Filtros inválidos:** un `invernadero` no numérico, negativo, cero o que no cabe en la base da una lista vacía con el mensaje del filtro, sin error (`?invernadero=abc`).
+8. **R4 y el prototipo:** el extracto atribuye «la más reciente primero» al prototipo, pero `alertas()` del prototipo conserva el orden previo dentro de cada nivel. Se implementó lo que dice R4 (más reciente primero; con fechas iguales, la de id mayor).
+9. **Import sin uso:** se quitó `tipo_de_alerta` de `maestros/servicios/invernaderos.py` (la severidad la da ahora `severidad_efectiva`).
+10. **Sigue pendiente** el docstring de `AlertaQuerySet.no_leidas` (fila «Docstring de `no_leidas`» de temas abiertos): esta tarea no tocó `maestros/models.py`.
+11. **Pendiente de Drive:** la postcondición de CU-46 (propuesta A) y el origen de la alerta (R6, para cuando existan Hardware, Telemetría, Merma y SolicitudRevisión). No tengo escritura en Drive.
+12. **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).

@@ -1,0 +1,29 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Alertas» (CU-46): el listado de las alertas activas del Gerente o del Agrónomo, filtrable por invernadero y por tipo (R5). No hay
+prototipo de esta pantalla: sigue el estilo de Diseño v2 (D-47) y el patrón de filtros de «Auditoría». Los filtros son un formulario GET:
+sin JavaScript, el botón «Filtrar» recarga la página; con HTMX, el filtro reemplaza solo la tabla y actualiza la URL (R8). Solo lectura:
+listar no marca nada como leído.{% endcomment %}
+{% block titulo %}Alertas · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'maestros/css/alertas.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Alertas</h1></div>
+  <p class="muted" style="margin-bottom:14px">Avisos de hechos que requieren atención. Siguen activas hasta que se resuelve el hecho que las originó.</p>
+
+  <form class="filters" method="get" action="{% url 'alertas:lista' %}" aria-label="Filtros de alertas"
+        hx-get="{% url 'alertas:lista' %}" hx-target="#tabla-alertas" hx-push-url="true" hx-trigger="change, submit">
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero">
+      <option value="">Todos los invernaderos</option>
+      {% for id, nombre in filtros.invernaderos %}<option value="{{ id }}"{% if f_invernadero == id|stringformat:"d" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="tipo" data-desplegable aria-label="Tipo de alerta">
+      <option value="">Todos los tipos</option>
+      {% for codigo, nombre in filtros.tipos %}<option value="{{ codigo }}"{% if f_tipo == codigo %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-ghost btn-sm" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="link" href="{% url 'alertas:lista' %}">Quitar filtros</a>{% endif %}
+  </form>
+
+  <div id="tabla-alertas">{% include "maestros/alertas/_tabla.html" %}</div>
+</div>
+{% endblock %}

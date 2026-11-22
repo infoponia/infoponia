@@ -153,8 +153,21 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 | Punto rojo y marca de lectura | El panel marca como leídas, al cerrarse, las 30 notificaciones mostradas solo si se vio la pestaña «Notificaciones» mientras estuvo abierto (el prototipo, solo si esa pestaña estaba a la vista al cerrar). El punto rojo sigue a D-42 (alerta activa no leída o notificación sin leer) y no al prototipo, que lo muestra con cualquier alerta | Revisión a mano de NOT-01 |
 | `test_campana_alertas.py` | `maestros/tests/test_campana_alertas.py` lo piden el paso 6 y «Hecho cuando», pero no figura entre los «Archivos nuevos» de «Límites». Agregarlo | Al validar NOT-01 |
 | Docstring de `no_leidas` | El docstring de `AlertaQuerySet.no_leidas` (`maestros/models.py`) dice «las que cuenta la campana, tarea de notificaciones». No se tocó porque `maestros/models.py` no estaba en «Permitido fuera de la app». Cambiarlo por «las que prenden el punto rojo de la campana, NOT-01 y D-42» | La próxima tarea que toque `maestros/models.py` |
-| Abrir una alerta desde la campana | El enlace de cada alerta lleva a la ficha del invernadero y no llama a `abrir_alerta`: la alerta sigue «no leída» y el punto rojo no se apaga. Está en `docs/disparadores.md` («Cuando exista la primera notificación o alerta», punto 4) | MAE-02c |
+| Abrir una alerta desde la campana | El enlace de cada alerta lleva a la ficha del invernadero y no llama a `abrir_alerta`: la alerta sigue «no leída» y el punto rojo no se apaga. Está en `docs/disparadores.md` («Cuando exista la primera notificación o alerta», punto 4) | ~~MAE-02c~~ Hecho el 22/11/2026 |
 
+## Abiertos desde MAE-02c (22/11/2026)
+
+- **Fuera de «Permitido fuera de la app»:** `config/urls.py` (`path("alertas/", ...)`, aprobada al planificar) y `core/tests/urls_prueba_acceso.py` (la misma línea; sin ella fallan dos pruebas de `core` que arman el marco con ese URLconf, como con MAE-04 e INV-01). Agregar ambos a «Permitido fuera de la app» de la tarea.
+- **La entrada «Alertas» no tiene contador.** La tarea lo pedía y `core.menu` no lo admite. Corregir el texto de la tarea o decidir ampliar el menú (disparador nuevo en `docs/disparadores.md`).
+- **Nombre de un tipo no registrado.** La tarea no decía qué mostrar: se muestra el código guardado (columna, filtro y detalle). La severidad sale de la guardada (MD-109). Anotarlo en el extracto y en `docs/api/alertas.md`.
+- **Una regla de CSS nueva** (`.alerta-punto`, en `maestros/static/maestros/css/alertas.css`): no hay una clase equivalente para un punto dentro de una fila.
+- **Alertas de un invernadero inactivo.** La consulta no filtra por el estado del invernadero (R3 habla del estado de la alerta; `para` tampoco): figuran en el listado. Al Agrónomo, el detalle no le ofrece «Ver invernadero» (esa ficha no está en su alcance). Decidir si una baja de invernadero debería sacarlas del listado.
+- **El detalle solo responde a GET** (HEAD da 405) y no se cachea, porque abrirlo cambia la lectura. Escribirlo en R7 del extracto.
+- **Filtros inválidos:** un `invernadero` no numérico, negativo, cero o fuera de rango da una lista vacía con el mensaje del filtro, sin error.
+- **R4 y el prototipo.** El extracto atribuye «la más reciente primero» a `alertas()` del prototipo, pero este conserva el orden previo dentro de cada nivel. Se implementó lo que dice R4.
+- **Sigue pendiente** el docstring de `AlertaQuerySet.no_leidas` (esta tarea no tocó `maestros/models.py`).
+- **Pendientes de Drive** (no tengo escritura): la postcondición de CU-46 con la propuesta A, «Solo cambia el estado de lectura de la alerta que el usuario abre; el listado y la búsqueda no cambian nada» (pendientes_CU), y el origen de la alerta (R6) cuando existan Hardware, Telemetría, Merma y SolicitudRevisión.
+- **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
 
 ## Abiertos desde MAE-03 (20/11/2026)
 
