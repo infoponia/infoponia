@@ -48,8 +48,6 @@ está en el repo: no se puede programar hasta que llegue su lote de documentaci�
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| INV-03 | Variedades, con la creación de su semilla | inventario | hecha (PR #48, 22/11/2026; revisión a mano pendiente) | MAE-03, INV-02, UI-01, NOT-01 | `inventario/INV-03-variedades-y-semillas.md` |
-| PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz (y los tipos de orden futuros, D-67) | produccion | pendiente | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 (y UI-01) | `produccion/PRD-01-siembra-ordenes-y-bandeja.md` |
 | PRD-02 | Transición: planificar, concretar y cancelar | produccion | pendiente | PRD-01 | `produccion/PRD-02-transicion-de-etapa.md` |
 | PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora | produccion | pendiente | PRD-02 | `produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md` |
 | PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | pendiente | PRD-03 | `produccion/PRD-04-sector-fuera-de-servicio-e-inicio.md` |

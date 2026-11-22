@@ -1,6 +1,6 @@
 # PRD-01 · Siembra: planificar, concretar, cancelar orden y bandeja del Capataz
 
-Estado: pendiente | App: produccion (con puntos de extensión en maestros, inventario y core) | Rama: feature/prd-01-siembra-ordenes-y-bandeja | Ronda: Producción 1
+EEstado: hecha (22/11/2026; revisión a mano pendiente) | App: produccion (con puntos de extensión en maestros, inventario y core) | Rama: feature/prd-01-siembra-ordenes-y-bandeja | Ronda: Producción 1
 
 Depende de: PRD-00 (las apps), **CON-01** (`contabilidad.OrigenDocumento`, D-52), MAE-03 (sectores, cultivos y los puntos de extensión de maestros), MAE-04 (configuración: `porc_merma_maxima`), INV-02 (`stock`, `habilitar_insumo`, existencias), INV-03 (variedades, ciclo y semilla),
 NOT-01 (notificaciones) y UI-01 (estilo). Si alguna no está hecha y mergeada, frená. INV-02 debe haber dejado `registrar_salida_por_consumo(iin_id, partes, *, origen_id, fecha=None)` con `origen_id` obligatorio (D-52) y `fecha` opcional (si no está, es la corrección de `docs/api/stock.md` y de INV-02, paso 5: avisá antes de seguir).
@@ -112,12 +112,12 @@ Si el tiempo apremia, lo último que se recorta es: el panel «Ritmo sostenible�
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-Hay migraciones nuevas: `python manage.py migrate` (en `produccion` y `core`). Cuentas: Gerente, dos Agrónomos (cada uno con un invernadero a cargo), dos Capataces (uno por invernadero). Hace falta un invernadero con un Capataz activo, un sector por tipo de etapa, una variedad con ciclo y semilla **habilitada y con stock** en un lote vigente,
+Hay migraciones nuevas: `python manage.py migrate` (`core` 0018 y `produccion` 0001, esta última con la secuencia `produccion_orden_numero_seq`). Las pantallas no se vieron en un navegador. Cuentas: Gerente, dos Agrónomos (cada uno con un invernadero a cargo), dos Capataces (uno por invernadero). Hace falta un invernadero con un Capataz activo, un sector por tipo de etapa, una variedad con ciclo y semilla **habilitada y con stock** en un lote vigente,
 y otra variedad de otro perfil familiar.
 
-1. `migrate` pasa sin errores. «Producción» aparece en el menú del Agrónomo y «Mis órdenes» en el del Capataz; el Gerente solo ve la lista.
-2. «Nueva siembra»: sin completar nada, cada paso marca lo que falta. Un invernadero sin Capataz activo aparece deshabilitado con su motivo. Con una variedad de otro perfil familiar y un lote activo, la variedad aparece como no compatible y dice con qué conflicta.
-3. Con datos válidos, la distribución por sector no deja pasar más que la capacidad libre; el resumen muestra la fecha estimada de cosecha, la distribución y las reservas. Confirmar crea la orden `OT-000N`; el Capataz recibe la notificación (campana). «Auditoría» (Gerente) tiene **un** registro `planificacion_siembra`.
+1. `migrate` pasa sin errores. «Producción» aparece en el menú del Agrónomo y «Mis órdenes» en Inicio y en el enlace «Ver todas» del Capataz (que no tiene menú lateral); el Gerente solo ve la lista y el detalle, en solo lectura.
+2. «Nueva siembra»: sin completar nada, cada paso marca lo que falta. Un invernadero sin Capataz activo aparece deshabilitado con su motivo. Con una variedad de otro perfil familiar y un lote activo, la variedad aparece como no compatible y dice con qué conflicta. **Segundo Agrónomo:** entrá con el Agrónomo B (otro invernadero) y elegí una variedad que creó el Agrónomo A y cuya semilla B no habilitó: aparece como «semilla sin habilitar»; con datos válidos, «Ver resumen» marca el error en la variedad y ofrece el enlace «Habilitar la semilla en este invernadero».
+3. Con datos válidos, la distribución por sector no deja pasar más que la capacidad libre; el resumen muestra la fecha estimada de cosecha, la distribución y las reservas. Confirmar crea la orden `OT-000N`; el Capataz recibe la notificación (campana). «Auditoría» (Gerente) tiene **un** registro `planificacion_siembra`. **Con el Agrónomo B:** el enlace del paso 2 abre «Habilitar insumo» con esa semilla y su invernadero **ya elegidos**; al habilitarla (mínimo y precio) aparece en «Existencias de insumos» con el aviso «Cargar stock inicial». En «Inventario» → «Catálogo», las semillas activas también tienen «Habilitar en un invernadero» (las inactivas, no), y en «Habilitar insumo» (desde «Existencias de insumos», sin parámetros) el desplegable las incluye. Sin stock cargado, volver a «Nueva siembra» da el error de stock insuficiente; con stock cargado por un ajuste, la planificación sigue.
 4. En «Existencias de insumos», el stock libre de la semilla bajó en lo reservado y el stock actual no cambió. En «Sectores», los agujeros comprometidos subieron.
 5. Planificar la misma orden otra vez: el rechazo de duplicado nombra la orden existente. Planificar más plantines que semillas libres: error de stock. Con la fecha de ayer: error.
 6. Como Capataz: la bandeja muestra la orden en el grupo que corresponde. «Concretar siembra» en el celular (o con el navegador angosto): se propone la fecha de hoy y las cantidades planificadas; con menos plantines que los planificados pide el motivo (opcional); con 0 total, error.
@@ -127,6 +127,44 @@ y otra variedad de otro perfil familiar.
 10. Intentar dar de baja el sector, la variedad o el invernadero con lotes: la baja lista los impedimentos. Cambiar el Capataz del invernadero (`modificar_invernadero`) con una orden «a realizar»: pasa al nuevo y queda en auditoría.
 11. Dos Agrónomos (o dos pestañas) planifican a la vez sobre la última semilla: una gana y la otra ve el error, sin 500.
 12. Sin JavaScript, los pasos 2, 3, 6, 7 y 9 funcionan igual.
-13. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
+13. Ficha del invernadero: la pestaña «Lotes activos» lista el lote con su etapa y su costo (Agrónomo y Gerente); «Órdenes de trabajo» lista las órdenes del invernadero en solo lectura. Con una entrega o un mantenimiento sueltos creados desde la consola, no aparecen en «Producción» ni en la bandeja.
+14. El panel «Ritmo sostenible» no existe (recortado, paso 9): no hay que buscarlo.
+15. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas (el último paso).
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo.** Los diez pasos, salvo el 9 (recortado, ver abajo). Fecha: 22/11/2026.
+
+- `produccion` tiene sus siete modelos (`OrdenTrabajo`, `ReservaInsumo`, `Siembra`, `OcupacionSector`, `Lote`, `Bitacora`, `Consumo`) en una sola migración `0001_initial` (depende de `contabilidad.0001_initial` y de `inventario`), con la secuencia `produccion_orden_numero_seq` creada por `RunSQL` y su reversa. `OrdenTrabajo.Tipo` nace con los cinco valores y `Bitacora.TipoEvento` con sus tres (`siembra`, `transicion`, `merma`).
+- `core`: tres acciones de auditoría (`planificacion_siembra`, `concrecion_siembra`, `cancelacion_orden`), con su migración `0018` regenerada encima de `0017_iot_acciones_de_auditoria`.
+- Servicios: `costos.py`, `lotes.py`, `ordenes.py` (lecturas), `siembras.py` (planificar y concretar), `consumos.py`, `bloqueos.py` y `registrantes.py` (todos los puntos de extensión de `maestros`, `inventario` y `core`, registrados en `ProduccionConfig.ready()`).
+- Pantallas bajo `/produccion/` (Diseño v2, HTMX con respaldo sin JavaScript): lista y detalle de órdenes, «Nueva siembra», bandeja del Capataz, «Concretar siembra», «Cancelar orden», pestañas «Lotes activos» y «Órdenes de trabajo» de la ficha del invernadero y sección de la bandeja en el Inicio del Capataz.
+- Los seis puntos de «Tipos de orden futuros» están hechos y probados con órdenes sueltas de `entrega`, `mantenimiento` y `cosecha`.
+
+**Pruebas.**
+- Comando de la tarea, con `contabilidad` sumada: `produccion maestros inventario core contabilidad`, sin concurrencia ni migración: **3182 pruebas, OK**, con `--keepdb --parallel` (después de recrear la base de pruebas una vez; ver abajo).
+- `produccion` solo: 274 sin concurrencia + 13 de concurrencia (`test_siembras_concurrencia.py` y `test_cancelar_concurrencia.py`), OK. `--tag migracion` en `produccion`: 0 pruebas (no hay ninguna con esa etiqueta).
+- `makemigrations --check --dry-run`: sin cambios. `manage.py check`: sin problemas.
+- Después de las migraciones nuevas (`core` 0018, `produccion` 0001), `--parallel --keepdb` falló con «cannot pickle 'traceback' object» hasta recrear la base de pruebas una vez (sin `--keepdb`, con `--noinput`); sin paralelo, la misma suite ya daba 3177 OK. Recreada la base, el comando oficial da 3177 OK.
+- Ajustadas pruebas viejas para que no asuman que no hay registrantes (ahora `produccion` los registra): dos de `inventario/tests/test_stock_lectura.py` (aíslan `_RESERVAS` con `mock.patch.object`) y la clase de `maestros/tests/test_extensiones_sectores.py` (`setUp` que aísla los cinco puntos de sectores). Pruebas nuevas en `maestros/tests/test_extensiones_pestanas_y_traspaso.py` y `core/tests/test_auditoria_produccion.py`.
+- Sin prueba: «precio de referencia vacío» (`InsumoInvernadero.referencia_precio` es obligatorio y `> 0` desde INV-01). «Concretar contra cancelar» está en `test_cancelar_concurrencia.py`; «cancelar contra planificar otra transición» queda para PRD-02.
+
+**Decisiones y diferencias con la documentación** (se anotan en `docs/temas_abiertos.md`):
+- **`tipo_orden` en lugar de `tipo` en `OrdenTrabajo`**, para no pisar `OrigenDocumento.tipo`. Hay que corregir COM-02, COM-05a y IOT-07, que dicen `tipo`. (D-81, aprobada el 22/11/2026.)
+- **`contabilidad/models.py:50`** (1 línea): `OrigenDocumento.save()` usa `OrigenDocumento.Tipo` y no `self.Tipo`, porque la hija define su propio `Tipo` y lo tapaba.
+- **Contrato de `traspasar`** (`maestros/extensiones.py` y `maestros/servicios/invernaderos.py`): devuelve las instancias tocadas, que se suman a los afectados del registro `modificacion_invernadero` (D-36, D-60 punto 4).
+- Cuatro códigos de error nuevos: `insumo_no_elegible`, `prioridad_invalida`, `descripcion_larga` y `variedad_inactiva`.
+- Las fechas de entrada en etapas posteriores a la primera devuelven `None` hasta PRD-02 (falta `TransicionEtapa`).
+- `ordenes_cancelables` filtra por `TIPOS_DE_PRODUCCION` y `TIPOS_QUE_CANCELA_PRODUCCION` (excluye cosechas, que se cancelan por `comercial.cancelar_cosecha`, D-64).
+- **Hueco en `inventario`:** `registrar_salida_por_consumo` no permite mandar un consumo entero al «faltante sin lote» cuando la existencia no tiene ningún lote (no pasa en el flujo normal).
+- **Semillas en «Habilitar insumo» (desvío de INV-02, corregido en esta tarea con permiso explícito del estudiante, 22/11/2026):** INV-02 había sacado las semillas de la lista de «Habilitar insumo» y del botón del Catálogo (solo se habilitaban desde «Qué sigue» de la variedad), contra la regla 2 de CMP-HAB-IIN y la regla 3 de CMP-CNS-INS («incluidas las semillas»). Con eso, un segundo Agrónomo no podía habilitar la semilla de una variedad ya creada y la extensión 8b de PROD-PNF-SMB quedaba sin salida. Cambios: `inventario/views_existencias.py` (la lista ofrece todos los insumos activos), `inventario/templates/inventario/catalogo/lista.html` (el botón también en semillas activas), `produccion/errores.py` (`ErrorDeProduccion.datos`), `siembras.py` (`semilla_no_habilitada` lleva `semilla_id` e `invernadero_id`), `produccion/views.py` y `_nueva_siembra_formulario.html` (el enlace va a `inventario:habilitar?insumo=<semilla>&invernadero=<invernadero>`). Pruebas: dos de INV-02/INV-03 cambiadas (afirmaban la exclusión) y cinco nuevas (3182 en el comando de la tarea; `inventario` + `produccion` concurrencia: 61 OK).
+- Tocados fuera de `produccion/`: `maestros/extensiones.py`, `maestros/servicios/invernaderos.py`, `maestros/views.py`, `maestros/templates/maestros/invernaderos/ficha.html`, `maestros/templates/maestros/cultivos/_pestanas_de_produccion.html`, `contabilidad/models.py`, `core/models.py` y su migración, `config/urls.py` y las pruebas viejas indicadas arriba.
+- Queda abierto de INV-03: si `reactivar_variedad` debe reevaluar las alertas de stock (no se resolvió en esta tarea).
+
+**Paso 9 (recortado).** El panel «Ritmo sostenible» no se hizo: no está en ningún caso de uso y la tarea lo daba por recortable. Queda anotado en `docs/temas_abiertos.md` para que el equipo decida si se retoma.
+
+**Pantallas: lo que se corrigió del prototipo** (D-61):
+- El Capataz no tiene menú lateral: llega a «Mis órdenes» desde Inicio y desde el enlace «Ver todas».
+- El Gerente ve la lista y el detalle en solo lectura (el prototipo no lo contemplaba).
+- «Cancelar orden» suma el motivo y un resumen de lo que se libera.
+- «Concretar siembra» permite elegir los lotes de insumo (extensión 17b), que el prototipo no tenía.

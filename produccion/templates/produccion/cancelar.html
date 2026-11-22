@@ -1,0 +1,22 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos produccion %}
+{% comment %}«Cancelar orden» (PRD-01, PROD-CNL-ORD, `ACT['orden-cancelar']`): el resumen de lo que libera, el motivo obligatorio (hasta 300 caracteres) y la confirmación. Es una página y un
+POST: funciona sin JavaScript. Recibe «resumen» (ResumenDeCancelacion: orden, reservas, sectores), «motivo» y «errores» ({campo: mensaje}). Un error está debajo de su campo, no es un aviso.{% endcomment %}
+{% block titulo %}Cancelar orden · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:orden' resumen.orden.pk %}">{% icono "chev" 14 %} Orden {{ resumen.orden.codigo }}</a>
+  <div class="page-h"><h1>Cancelar la orden <span class="mono">{{ resumen.orden.codigo }}</span></h1><div class="sub">{{ resumen.orden.invernadero.nombre_invernadero }} · para el {{ resumen.orden.fecha_programada_orden|date:"d/m/Y" }}</div></div>
+  <div class="card" style="margin-bottom:12px"><div class="card-h"><h3>Lo que libera la cancelación</h3></div><div class="card-b">
+    {% if resumen.reservas %}<p class="sm"><b>Reservas de insumo que se cancelan</b></p><ul>{% for r in resumen.reservas %}<li>{{ r.nombre }}: <span class="mono">{{ r.cantidad|cantidad }}</span></li>{% endfor %}</ul>{% else %}<p class="muted sm">No tiene reservas de insumo.</p>{% endif %}
+    {% if resumen.sectores %}<p class="sm" style="margin-top:10px"><b>Agujeros que se liberan</b></p><ul>{% for sector, agujeros in resumen.sectores %}<li>{{ sector.nombre_sector }}: <span class="mono">{{ agujeros }}</span></li>{% endfor %}</ul>{% endif %}
+  </div></div>
+  <form method="post" action="{% url 'produccion:cancelar' resumen.orden.pk %}" novalidate>
+    {% csrf_token %}
+    {% if errores.general %}<div class="err" role="alert" style="margin-bottom:8px">{{ errores.general }}</div>{% endif %}
+    <div class="fld"><label for="motivo">Motivo de la cancelación<span class="req" aria-hidden="true"> *</span></label>
+      <textarea class="field-input" id="motivo" name="motivo" rows="3" maxlength="400" aria-describedby="motivo-ayuda"{% if errores.motivo %} aria-invalid="true"{% endif %}>{{ motivo }}</textarea>
+      {% if errores.motivo %}<div class="err">{{ errores.motivo }}</div>{% else %}<div class="hint" id="motivo-ayuda">Hasta 300 caracteres. El Capataz lo recibe en el aviso.</div>{% endif %}</div>
+    <div style="margin-top:14px;display:flex;gap:8px"><button class="btn btn-primary" type="submit" data-enviando="Cancelando…">Confirmar cancelación</button><a class="btn btn-ghost" href="{% url 'produccion:orden' resumen.orden.pk %}">Volver sin cancelar</a></div>
+  </form>
+</div>
+{% endblock %}

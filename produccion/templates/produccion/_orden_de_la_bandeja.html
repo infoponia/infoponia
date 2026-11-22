@@ -1,0 +1,12 @@
+{% comment %}Una orden de la bandeja del Capataz y de su sección del Inicio. Recibe «f» (FilaDeOrden). Todo se escapa. Una siembra lleva a «Concretar siembra»; el resto de los tipos, solo al detalle.{% endcomment %}
+<div class="card" style="margin-bottom:8px;padding:12px 14px">
+  <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+    <span><b class="mono">{{ f.codigo }}</b> · {{ f.tipo_texto }}</span>
+    <span class="muted sm">{{ f.fecha_programada_orden|date:"d/m/Y" }}{% if f.prioridad_orden == 'alta' %} · <b>prioridad alta</b>{% endif %}</span>
+  </div>
+  <div class="sm muted">{{ f.invernadero }}{% if f.resumen %} · {{ f.resumen }}{% endif %}</div>
+  <div style="margin-top:8px;display:flex;gap:8px">
+    {% if f.tipo_orden == 'siembra' %}<a class="btn btn-primary btn-sm" href="{% url 'produccion:concretar' f.orden_id %}">Concretar siembra</a>{% endif %}
+    <a class="btn btn-ghost btn-sm" href="{% url 'produccion:orden' f.orden_id %}">Ver</a>
+  </div>
+</div>

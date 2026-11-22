@@ -671,6 +671,13 @@ class RegistroAuditoria(models.Model):
         BAJA_VARIEDAD = "baja_variedad", "Baja de variedad"
         REACTIVACION_VARIEDAD = "reactivacion_variedad", "Reactivación de variedad"
         MODIFICACION_SEMILLA = "modificacion_semilla", "Modificación de semilla"
+
+        # Siembra y cancelación de órdenes (PRD-01, D-36). Las de transición, merma, aplicación, evento y fuera de servicio las
+        # crean PRD-02 a PRD-04. El traspaso de órdenes al Capataz nuevo NO tiene acción propia: sus afectados van en
+        # ``modificacion_invernadero`` (un registro por caso de uso).
+        PLANIFICACION_SIEMBRA = "planificacion_siembra", "Planificación de siembra"
+        CONCRECION_SIEMBRA = "concrecion_siembra", "Concreción de siembra"
+        CANCELACION_ORDEN = "cancelacion_orden", "Cancelación de orden de trabajo"
         # Tipos de actuador del IoT (IOT-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_TIPO_ACTUADOR = "alta_tipo_actuador", "Alta de tipo de actuador"
         MODIFICACION_TIPO_ACTUADOR = "modificacion_tipo_actuador", "Modificación de tipo de actuador"
@@ -750,6 +757,29 @@ class RegistroAuditoria(models.Model):
         "duracion_post_cosecha": "Duración postcosecha (días)",
         "peso_promedio_planta": "Peso promedio por planta (g)",
         "nombre_semilla": "Nombre de la semilla",
+        # Órdenes de siembra y su cancelación (PRD-01, D-36 y D-50 punto 4): cantidades y fechas van como texto. «Agujeros
+        # comprometidos» y «agujeros ocupados» son los cambios de cada sector (antes → después, como texto). «invernadero»,
+        # «capataz», «estado», «lotes», «movimientos» y «alertas_resueltas» ya existen.
+        "variedad": "Variedad",
+        "cant_plantines_siembra": "Plantines planificados",
+        "cantidad_sembrada": "Plantines sembrados",
+        "fecha_programada_orden": "Fecha programada",
+        "fecha_siembra": "Fecha de siembra",
+        "prioridad_orden": "Prioridad",
+        "descripcion_orden": "Descripción de la orden",
+        "motivo_cancelacion": "Motivo de la cancelación",
+        "motivo_diferencia_siembra": "Motivo de la diferencia",
+        "agujeros_comprometidos": "Agujeros comprometidos",
+        "agujeros_ocupados": "Agujeros ocupados",
+        "orden": "Orden",
+        "lote": "Lote",
+        "ocupaciones": "Ocupaciones",
+        "reservas": "Reservas",
+        "sectores": "Sectores",
+        "insumos_invernadero": "Insumos del invernadero",
+        "lotes_de_insumo": "Lotes de insumo",
+        "consumos": "Consumos",
+        "bitacoras": "Registros de bitácora",
         # Tipos de actuador (IOT-01): listas de referencias a sus acciones en los datos del caso de uso («nombre» y «estado» ya existen).
         "tiempo_minimo_entre_comandos": "Tiempo mínimo entre comandos (s)",
         "acciones_creadas": "Acciones creadas",
@@ -788,6 +818,8 @@ class RegistroAuditoria(models.Model):
         "estado": {"activo": "Activo", "inactivo": "Inactivo", "fuera_de_servicio": "Fuera de servicio"},
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
+        # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
+        "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
         # INV-01: `core` no importa `inventario` (A1 de D-37), así que las listas cerradas se repiten acá.
         "consumo_directo": {
             "no_admite": "No admite",
@@ -983,6 +1015,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_VARIEDAD,
         RegistroAuditoria.Accion.MODIFICACION_SEMILLA,
         RegistroAuditoria.Accion.ALERTA_DE_VENCIMIENTO,
+        RegistroAuditoria.Accion.PLANIFICACION_SIEMBRA,
+        RegistroAuditoria.Accion.CONCRECION_SIEMBRA,
+        RegistroAuditoria.Accion.CANCELACION_ORDEN,
         RegistroAuditoria.Accion.ALTA_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.REACTIVACION_TIPO_ACTUADOR,

@@ -1,0 +1,43 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos produccion %}
+{% comment %}La ventana de detalle de una orden (PRD-01, `MODALS.orden` del prototipo), como página (cada ventana es una página, D-47). Recibe «detalle» (DetalleDeOrden:
+orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar). Ningún botón lleva a un 403 (D-30): solo se muestran las acciones que la cuenta puede hacer.{% endcomment %}
+{% block titulo %}Orden {{ detalle.orden.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+{% with orden=detalle.orden hija=detalle.hija %}
+<div class="page narrow">
+  <a class="back" href="{% if request.user.rol == 'capataz' %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "chev" 14 %} {% if request.user.rol == 'capataz' %}Mis órdenes{% else %}Órdenes de trabajo{% endif %}</a>
+  <div class="page-h"><h1><span class="mono">{{ orden.codigo }}</span> · {{ hija.variedad|default:"Orden de trabajo" }}</h1><div class="sub">{{ detalle.invernadero.nombre_invernadero }} · {{ orden.get_tipo_orden_display }} · {{ orden.get_estado_orden_display }}</div></div>
+  <div class="card"><div class="card-b">
+    <dl class="kv">
+      <div><dt>Fecha programada</dt><dd>{{ orden.fecha_programada_orden|date:"d/m/Y" }}</dd></div>
+      <div><dt>Creada</dt><dd>{{ orden.fecha_creacion_orden|date:"d/m/Y" }}</dd></div>
+      {% if hija %}<div><dt>Plantines planificados</dt><dd>{{ hija.cant_plantines_siembra }}</dd></div>
+      <div><dt>Capataz</dt><dd>{{ hija.capataz.get_full_name|default:hija.capataz.email }}</dd></div>
+      <div><dt>Planificó</dt><dd>{% if hija.agronomo %}{{ hija.agronomo.get_full_name|default:hija.agronomo.email }}{% else %}InfoPonia{% endif %}</dd></div>{% endif %}
+      <div><dt>Prioridad</dt><dd>{{ orden.prioridad_orden|default:"—"|capfirst }}</dd></div>
+      {% if orden.fecha_resolucion_orden %}<div><dt>Resuelta</dt><dd>{{ orden.fecha_resolucion_orden|date:"d/m/Y" }}</dd></div>{% endif %}
+      {% if hija.fecha_siembra %}<div><dt>Fecha de siembra</dt><dd>{{ hija.fecha_siembra|date:"d/m/Y" }}</dd></div>{% endif %}
+    </dl>
+    {% if orden.descripcion_orden %}<p class="sm" style="margin-top:10px">{{ orden.descripcion_orden }}</p>{% endif %}
+    {% if orden.motivo_cancelacion %}<p class="sm" style="margin-top:10px"><b>Motivo de la cancelación:</b> {{ orden.motivo_cancelacion }}</p>{% endif %}
+    {% if hija.motivo_diferencia_siembra %}<p class="sm" style="margin-top:10px"><b>Motivo de la diferencia:</b> {{ hija.motivo_diferencia_siembra }}</p>{% endif %}
+  </div></div>
+  {% if detalle.ocupaciones %}
+  <div class="card" style="margin-top:12px"><div class="card-h"><h3>Distribución por sector</h3></div><div class="card-b flush">
+    <table class="data-table"><thead><tr><th>Sector</th><th class="right">Planificados</th><th class="right">Ocupados</th></tr></thead><tbody>
+    {% for o in detalle.ocupaciones %}<tr><td>{{ o.sector.nombre_sector }}</td><td class="right mono">{{ o.cant_agujeros_planificados }}</td><td class="right mono">{{ o.cant_agujeros_ocupados }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  {% endif %}
+  {% if detalle.reservas %}
+  <div class="card" style="margin-top:12px"><div class="card-h"><h3>Insumos reservados</h3></div><div class="card-b flush">
+    <table class="data-table"><thead><tr><th>Insumo</th><th class="right">Reservado</th><th class="right">Utilizado</th><th class="right">Devuelto</th><th>Estado</th></tr></thead><tbody>
+    {% for r in detalle.reservas %}<tr><td>{{ r.insumo_invernadero.insumo.nombre_insumo }}</td><td class="right mono">{{ r.cantidad_reservada|cantidad }}</td><td class="right mono">{{ r.cantidad_utilizada|cantidad }}</td><td class="right mono">{{ r.cantidad_devuelta|cantidad }}</td><td>{{ r.get_estado_display }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  {% endif %}
+  <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+    {% if detalle.puede_concretar %}<a class="btn btn-primary" href="{% url 'produccion:concretar' orden.pk %}">Concretar siembra</a>{% endif %}
+    {% if detalle.puede_cancelar %}<a class="btn btn-ghost" href="{% url 'produccion:cancelar' orden.pk %}">Cancelar orden</a>{% endif %}
+  </div>
+</div>
+{% endwith %}
+{% endblock %}

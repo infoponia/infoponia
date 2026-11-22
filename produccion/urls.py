@@ -1,0 +1,17 @@
+# Rutas de `produccion` (PRD-01), bajo `/produccion/`. Las de la lista y el detalle de órdenes empiezan con `ordenes/` y las del Capataz,
+# con `bandeja/`: no chocan con las de `maestros` (`/produccion/<id>/...`, `/produccion/cultivos/...`) ni con las de
+# `inventario.urls_variedades`.
+from django.urls import path
+
+from produccion import views
+
+app_name = "produccion"
+
+urlpatterns = [
+    path("ordenes/", views.lista, name="ordenes"),
+    path("ordenes/nueva-siembra/", views.nueva_siembra, name="nueva_siembra"),
+    path("ordenes/<int:orden_id>/", views.orden, name="orden"),
+    path("ordenes/<int:orden_id>/cancelar/", views.cancelar, name="cancelar"),
+    path("bandeja/", views.bandeja, name="bandeja"),
+    path("bandeja/<int:orden_id>/concretar/", views.concretar, name="concretar"),
+]

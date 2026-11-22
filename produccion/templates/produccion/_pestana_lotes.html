@@ -1,0 +1,28 @@
+{% comment %}Pestaña «Lotes activos» de la ficha del invernadero (`lotesTab` del prototipo; PRD-01). Recibe «lotes», una lista de FilaDeLote
+(`produccion.servicios.lotes.lotes_activos_de`). Todo se escapa: los nombres de variedad vienen de la base. Solo lectura.{% endcomment %}
+{% if lotes %}
+<div class="card" style="margin-top:12px">
+  <div class="card-b flush">
+    <table class="data-table">
+      <thead><tr>
+        <th>Lote</th><th>Variedad</th><th>Etapa</th><th class="right">Plantas</th><th class="right">Costo por planta</th><th>Entró a la etapa</th><th>Fin estimado</th>
+      </tr></thead>
+      <tbody>
+      {% for lote in lotes %}
+      <tr>
+        <td class="mono"><b>{{ lote.codigo }}</b></td>
+        <td>{{ lote.variedad_nombre }}</td>
+        <td>{{ lote.etapa_nombre }}</td>
+        <td class="right mono">{{ lote.cantidad_actual }} <span class="muted">de {{ lote.cantidad_inicial }}</span></td>
+        <td class="right mono">{% if lote.costo_por_planta is not None %}${{ lote.costo_por_planta }}{% else %}—{% endif %}</td>
+        <td>{{ lote.fecha_de_entrada|date:"d/m/Y"|default:"—" }}</td>
+        <td>{{ lote.fecha_estimada_de_fin|date:"d/m/Y"|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty" style="margin-top:12px"><b>Sin lotes activos</b><span>Cuando el Capataz concrete una siembra, el lote aparece acá.</span></div>
+{% endif %}

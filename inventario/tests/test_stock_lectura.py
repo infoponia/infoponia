@@ -9,9 +9,11 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 
+from inventario import extensiones
 from inventario.extensiones import OrdenQueReserva
 from inventario.tests.fabricas import (
     ConDatosDeInventario,
@@ -256,7 +258,8 @@ class StockLecturaTests(ConDatosDeInventario, TestCase):
             lote(iin, 3)
             lote(iin, 2)
             ids.append(iin.pk)
-        with self.assertNumQueries(2):
+        # Sin registrante de reservas (el real de `produccion`, PRD-01, suma su propia consulta): lotes + existencias.
+        with mock.patch.object(extensiones, "_RESERVAS", []), self.assertNumQueries(2):
             resultado = stock.existencias(ids, HOY)
         self.assertEqual(len(resultado), 6)
 
@@ -267,7 +270,8 @@ class StockLecturaTests(ConDatosDeInventario, TestCase):
             iin = existencia(insumo(f"P {n}", unidad="l"), self.invernadero)
             lote(iin, 3)
             ids.append(iin.pk)
-        with self.assertNumQueries(2):
+        # Sin registrante de reservas (el real de `produccion`, PRD-01, suma su propia consulta): lotes + existencias.
+        with mock.patch.object(extensiones, "_RESERVAS", []), self.assertNumQueries(2):
             stock.disponible_para_planificar(ids, HOY)
 
     def test_regla_stock_1_existencias_de_una_lista_vacia_es_un_diccionario_vacio(self):
