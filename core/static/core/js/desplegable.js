@@ -226,8 +226,10 @@
   }
 
   iniciarTodos();
-  // Pantallas que HTMX agrega después de la carga.
-  document.addEventListener("htmx:afterSwap", function (e) {
+  // Pantallas que HTMX agrega después de la carga. Se arma en «afterSettle» y no en «afterSwap»: al reemplazar un bloque, HTMX
+  // vuelve a poner los atributos del servidor (clase, tabindex...) en los elementos con el MISMO id DESPUÉS de «afterSwap»
+  // (fase «settle»). Con «afterSwap», esa fase le sacaba «dd-oculto» al <select> y se veía el nativo debajo del combo.
+  document.addEventListener("htmx:afterSettle", function (e) {
     iniciarTodos(e.target);
   });
 })();

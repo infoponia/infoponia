@@ -1,0 +1,77 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«IoT» → «Tipos de actuador» (IOT-CNS-TAC, «tipos» del prototipo): la lista de todos los tipos, activos e inactivos, y debajo el
+catálogo de capacidades en solo lectura. Cada fila muestra el código TAC-NN, el nombre, las acciones activas (con su rango, su comando y la marca
+«En uso»), el tiempo mínimo, la cantidad de equipos y el estado. Los botones salen de «acciones» (D-30): el Gerente modifica y da de baja un tipo
+activo y reactiva uno inactivo; el Agrónomo solo consulta y no ve botones. La baja abre una ventana con HTMX; sin JavaScript, cada enlace lleva a
+esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
+{% block titulo %}Tipos de actuador · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<div class="page">
+  <div class="page-h">
+    <h1>IoT</h1>
+    <span class="spacer"></span>
+    {% if es_gerente %}<a class="btn btn-primary" href="{% url 'iot:tipo_nuevo' %}">{% icono "plus" 14 %} Nuevo tipo</a>{% endif %}
+  </div>
+  {% include "iot/tipos/_marco.html" %}
+  <p class="muted sm tac-intro">Definen qué acciones admite cada clase de equipo y con qué comando del catálogo se ejecutan. Son de toda la organización: un cambio afecta a los equipos de todos los invernaderos.</p>
+  {% if not es_gerente %}
+  <div class="alert alert-info" style="margin-bottom:14px">{% icono "info" 16 %}<div>Los tipos de actuador los administra el Gerente porque son comunes a toda la organización: un cambio afecta a los equipos de todos los invernaderos. Podés consultarlos; si necesitás un tipo nuevo o un cambio, pedíselo.</div></div>
+  {% endif %}
+  <div class="stack">
+    <div class="tablewrap">
+      <table class="data-table">
+        <caption class="sr-only">Tipos de actuador</caption>
+        <thead><tr><th>Código</th><th>Tipo</th><th>Acciones</th><th>Tiempo mínimo</th><th>Equipos</th><th>Estado</th>{% if es_gerente %}<th><span class="sr-only">Acciones</span></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for fila in filas %}{% with t=fila.tipo %}
+          <tr{% if t.estado == "inactivo" %} class="tac-off"{% endif %}>
+            <td><span class="id">{{ t.codigo }}</span></td>
+            <td><b>{{ t.nombre_actuador }}</b></td>
+            <td>
+              <div class="accchips">
+                {% for a in t.acciones_activas %}
+                <span class="accchip">{{ a.nombre_accion }}{% if a.requiere_valor %} <small>{{ a.valor_minimo }} a {{ a.valor_maximo }} {{ a.unidad_valor }}</small>{% endif %} <small class="code">{{ a.comando.codigo }}</small>{% if a.en_uso %} <span class="status-badge status-info">En uso</span>{% endif %}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td>{{ t.tiempo_minimo_entre_comandos }} s</td>
+            <td>{{ t.cantidad_equipos }}</td>
+            <td>{% if t.estado == "activo" %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+            {% if es_gerente %}
+            <td class="right tac-acciones">
+              {% if "modificar" in fila.acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:tipo_modificar' t.pk %}" aria-label="Modificar el tipo {{ t.nombre_actuador }}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+              {% if "baja" in fila.acciones %}<a class="btn btn-danger btn-sm" href="{% url 'iot:tipo_baja' t.pk %}" hx-get="{% url 'iot:tipo_baja' t.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Dar de baja el tipo {{ t.nombre_actuador }}">{% icono "trash" 14 %} Dar de baja</a>{% endif %}
+              {% if "reactivar" in fila.acciones %}
+              <form method="post" action="{% url 'iot:tipo_reactivar' t.pk %}" class="tac-en-linea">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit" data-enviando="Reactivando…" aria-label="Reactivar el tipo {{ t.nombre_actuador }}">{% icono "ret" 14 %} Reactivar</button></form>
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+          {% endwith %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>{% icono "lock" 16 %} Catálogo de capacidades</h3><span class="spacer"></span><span class="xs muted">Forma parte del contrato de la API con el nodo · no se edita</span></div>
+      <table class="data-table">
+        <thead><tr><th>Capacidad</th><th>Comandos</th></tr></thead>
+        <tbody>
+          {% for grupo in catalogo %}
+          <tr>
+            <td><b>{{ grupo.capacidad.nombre }}</b></td>
+            <td><div class="accchips">{% for x in grupo.comandos %}<span class="accchip code">{{ x.comando.codigo }}{% if x.comando.lleva_valor %} <small>con valor</small>{% endif %}</span>{% endfor %}</div></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}

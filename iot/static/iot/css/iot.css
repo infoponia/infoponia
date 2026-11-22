@@ -1,0 +1,21 @@
+/* Estilos propios de las pantallas de `iot` (IOT-01, tipos de actuador). Solo lo que la hoja del sistema no trae; los colores y radios
+   son las variables de Diseño v2 (D-47): ninguna pantalla define su propia paleta. Copiado en lo esencial de las clases del prototipo
+   (docs/prototipos/iot/iot.html: .ctxbar, .accchips, .accchip, .accl1, .accl2). */
+.ctxbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.ctxbar .lbl{font-size:13px;font-weight:600;margin:0}
+.ctxbar .field-input{width:auto;min-width:220px}
+.tac-intro{margin:0 0 14px}
+.accchips{display:flex;flex-wrap:wrap;gap:6px}
+.accchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:var(--radius);padding:3px 9px;font-size:12.5px;background:var(--card)}
+.accchip small{color:var(--muted-foreground);font-size:11.5px}
+.accchip .code,.accchip.code{font-family:var(--font-sans);font-variant-numeric:tabular-nums;letter-spacing:.2px}
+.tac-off{opacity:.7}
+.tac-acciones{white-space:nowrap}
+.tac-en-linea{display:inline}
+.tac-fila{border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.tac-l1{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.tac-l2{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:10px;margin-top:10px}
+.tac-error{margin-bottom:8px}
+.tac-botones{display:flex;gap:8px;flex-wrap:wrap}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (max-width:760px){.tac-l1,.tac-l2{grid-template-columns:1fr}.tac-quitar{justify-self:start}}

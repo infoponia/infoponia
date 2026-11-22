@@ -40,4 +40,6 @@ urlpatterns = [
     path("alertas/", include("maestros.urls_alertas")),
     # INV-01: el menú del Agrónomo tiene también «Inventario» (inventario la registra en ready()).
     path("inventario/", include("inventario.urls")),
+    # IOT-01: el menú del Gerente y del Agrónomo tiene también «IoT» (iot la registra en ready()).
+    path("iot/", include("iot.urls")),
 ]

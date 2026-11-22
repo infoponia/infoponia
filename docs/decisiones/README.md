@@ -13,7 +13,7 @@ está en `docs/historial.md`, `docs/revisiones_pendientes.md`, `docs/temas_abier
 
 ## Formato de una decisión nueva
 
-Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-80**; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
+Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-81**; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
 
 ```
 ## D-NN — Título
@@ -116,3 +116,4 @@ iot, contabilidad.
 | D-77 | Contrato del nodo v1, comandos: retiro de todos los disponibles, resultado por comando, repetidos como «ya_resuelto» y memoria de 24 h | iot | vigente | `GET comandos` (todos los disponibles, vacío en modo local, cuenta como comunicación) y `POST comandos/<id>/resultado` (`ejecutado`, `fallo`, `rechazado`); repetido o resuelto: 200 `ya_resuelto`; inexistente: 404; el nodo recuerda 24 h y consulta cada 5 s | programás o probás el retiro o el resultado de comandos, o el flujo de comandos de Node-RED |
 | D-78 | Cómo IOT-05 e IOT-06 aplican los comandos y las reglas donde los casos de uso no lo dicen | iot | vigente | Intento vencido y «sin señal» por la comunicación anterior; un registro de bitácora por hecho; «lo explica un comando»; rechazo frente al anuncio; cancelable; tiempo mínimo desde el último ejecutado; máquina de estados de una regla y actuador ocupado; textos; bloqueos; resultado de un comando nunca entregado = 404 | programás comandos, su retiro o su resultado, o las reglas de actuación |
 | D-79 | La orden de mantenimiento automática en el código: dónde se cancela, quién, textos y lo que ve el Técnico | iot, producción | vigente (puntos 1 a 4); a validar (5 a 9) | Solo desde la ficha del equipo, con el alcance del IoT (excepción a PROD-CNL-ORD); sufijos de la alerta «comando fallido» con el código de la orden; aviso y sección «Mantenimientos a realizar» en el Inicio del Técnico; largo de 200 con el sufijo entero; avisos solo con la cuenta activa; regla 8 con «Cancelarla» marcada; traspaso de todas las órdenes a realizar del invernadero y asignaciones de la cuenta | programás la orden de mantenimiento, su cancelación, el traspaso del Técnico o su Inicio |
+| D-80 | El rango de una acción de actuador depende de su unidad | iot | vigente | «%» de 0 a 100; «rpm», «L/min» y «cm» con mínimo 0 o más; «°» sin límite fijo; lo respalda un `CheckConstraint` de `Accion` (IOT-01, revisión a mano) |
