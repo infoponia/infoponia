@@ -1,0 +1,18 @@
+{% load iconos %}{% comment %}Los avisos de «antes de guardar» del alta de un equipo (reglas 12 y 14 de IOT-ALT-HDW; ``compat`` y ``rebaja`` del prototipo). Si el identificador era de un equipo dado de baja, lo advierte y
+ofrece «Reactivar» (conserva su historial); registrar uno nuevo queda para un aparato de reemplazo. Para un actuador, dice si el nodo anunció el equipo y si soporta todas las acciones del tipo elegido:
+«Compatible», o la lista de las que no (una incompatibilidad se advierte y no impide el alta). Es el fragmento que HTMX reemplaza al cambiar el identificador; también va dentro del formulario.{% endcomment %}
+<div id="avisos">
+  {% if avisos.baja %}
+  <div class="alert alert-info" style="margin-bottom:14px" role="status">{% icono "info" 16 %}<div>Este identificador era de <b>{{ avisos.baja.identificador_equipo }}</b>, dado de baja el {{ avisos.baja.fecha_baja|date:"d/m/Y" }}. Si es el mismo aparato, reactivalo para conservar su historial. Registrá uno nuevo solo si es un reemplazo, que empieza su propio historial.
+    <div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="{% url 'iot:hardware_reactivar' avisos.baja.pk %}">Reactivar {{ avisos.baja.identificador_equipo }}</a></div></div></div>
+  {% endif %}
+  {% if avisos.compatibilidad %}
+    {% if avisos.compatibilidad.estado == "sin_verificar" %}
+    <div class="alert alert-info" style="margin-bottom:14px" role="status">{% icono "info" 16 %}<div>El nodo no anunció este equipo: la compatibilidad queda <b>sin verificar</b>.</div></div>
+    {% elif avisos.compatibilidad.estado == "incompatible" %}
+    <div class="alert alert-warn" style="margin-bottom:14px" role="status">{% icono "warn" 16 %}<div>El nodo no anunció el comando de: <b>{% for a in avisos.compatibilidad.acciones_incompatibles %}{{ a.nombre_accion }}{% if not forloop.last %}, {% endif %}{% endfor %}</b>. Podés guardarlo igual; esas acciones no se ofrecerán y se generará la alerta «Configuración incompatible».</div></div>
+    {% else %}
+    <div class="alert alert-ok" style="margin-bottom:14px" role="status">{% icono "check" 16 %}<div>Compatible: el nodo soporta todas las acciones del tipo.</div></div>
+    {% endif %}
+  {% endif %}
+</div>

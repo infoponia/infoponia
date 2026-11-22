@@ -1,0 +1,127 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Registrar y modificar un equipo (IOT-ALT-HDW, IOT-MOD-HDW; ``hw-form`` del prototipo). Al registrar pide el tipo de equipo (sensor o actuador), la variable o el tipo de actuador, el identificador (con la lista de los
+que anunció el nodo y todavía no están registrados), el modelo, la serie, la calibración, la fecha de instalación, el insumo y el sector; al modificar, no cambia el tipo de equipo, ni la fecha ni el insumo, y muestra
+deshabilitado, con su motivo, lo que no se puede cambiar (la variable con lecturas, el tipo con reglas o comandos, el identificador de un equipo que ya reportó: reglas 3 y 4 de IOT-MOD-HDW). El cambio del tipo de equipo, de la variable
+o del tipo de actuador manda el formulario a esta URL con «refrescar», que lo vuelve a dibujar SIN guardar: con HTMX solo cambia «#formulario»; sin JavaScript se recarga la página. «novalidate»: las reglas son del servicio.
+Recibe «equipo» (nulo al registrar), «datos», «errores» (por campo), «general», «avisos», «bloqueados», «sectores», «insumos», «tipos», «variables» y «libres».{% endcomment %}
+{% block titulo %}{% if equipo %}Modificar hardware{% else %}Registrar hardware{% endif %} · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page narrow">
+  <a class="back" href="{% if equipo %}{% url 'iot:hardware_ficha' equipo.pk %}{% else %}{% url 'iot:hardware' %}?invernadero={{ elegido.pk }}{% endif %}">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>{% if equipo %}Modificar hardware{% else %}Registrar hardware{% endif %}</h1></div>
+  <p class="muted" style="margin-bottom:14px">{{ elegido.nombre_invernadero }}</p>
+  <div id="formulario"><div class="card"><div class="card-b">
+    {% for mensaje in general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+    <form method="post" novalidate action="{{ request.get_full_path }}">
+      {% csrf_token %}
+      {% if not equipo %}
+      <div class="fld">
+        <label for="clase">Tipo de equipo<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="clase" name="clase" data-desplegable data-sin-envio-en-curso hx-post="{{ request.get_full_path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-trigger="change" hx-target="#formulario" hx-select="#formulario" hx-swap="outerHTML">
+          <option value="">Seleccioná el tipo de equipo</option>
+          <option value="sensor"{% if datos.clase == "sensor" %} selected{% endif %}>Sensor</option>
+          <option value="actuador"{% if datos.clase == "actuador" %} selected{% endif %}>Actuador</option>
+        </select>
+        {% for e in errores.clase %}<div class="err">{{ e }}</div>{% endfor %}
+        <noscript><button class="btn btn-ghost btn-sm" type="submit" name="refrescar" value="1" style="margin-top:6px">Actualizar el formulario</button></noscript>
+      </div>
+      {% endif %}
+
+      {% if datos.clase == "sensor" %}
+      <div class="fld">
+        <label for="variable">Variable que mide<span class="req" aria-hidden="true"> *</span></label>
+        {% if bloqueados.variable %}
+        <input class="field-input" id="variable" value="{{ equipo.get_tipo_variable_sensor_display }}" disabled><input type="hidden" name="variable" value="{{ datos.variable }}">
+        <div class="hint">No se puede cambiar: el sensor ya tiene lecturas.</div>
+        {% else %}
+        <select class="field-input" id="variable" name="variable" data-desplegable data-sin-envio-en-curso hx-post="{{ request.get_full_path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-trigger="change" hx-target="#formulario" hx-select="#formulario" hx-swap="outerHTML">
+          <option value="">Seleccioná la variable</option>
+          {% for valor, etiqueta in variables %}<option value="{{ valor }}"{% if datos.variable == valor %} selected{% endif %}>{{ etiqueta }}{% if valor == "nivel_solucion" %} (normal o bajo){% endif %}</option>{% endfor %}
+        </select>
+        {% for e in errores.variable %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">El fotoperíodo no es un sensor: InfoPonia lo calcula con los sensores de intensidad lumínica.</div>
+        {% endif %}
+      </div>
+      {% elif datos.clase == "actuador" %}
+      <div class="fld">
+        <label for="tipo_actuador">Tipo de actuador<span class="req" aria-hidden="true"> *</span></label>
+        {% if bloqueados.tipo_actuador %}
+        <input class="field-input" id="tipo_actuador" value="{{ equipo.tipo_actuador.nombre_actuador }}" disabled><input type="hidden" name="tipo_actuador" value="{{ datos.tipo_actuador_id }}">
+        <div class="hint">No se puede cambiar: ya tiene comandos o reglas de actuación. Para otro tipo, se da de baja y se registra uno nuevo.</div>
+        {% else %}
+        <select class="field-input" id="tipo_actuador" name="tipo_actuador" data-desplegable data-sin-envio-en-curso hx-post="{{ request.get_full_path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-trigger="change" hx-target="#formulario" hx-select="#formulario" hx-swap="outerHTML">
+          <option value="">Seleccioná el tipo de actuador</option>
+          {% for t in tipos %}<option value="{{ t.pk }}"{% if datos.tipo_actuador_id|stringformat:"s" == t.pk|stringformat:"s" %} selected{% endif %}>{{ t.nombre_actuador }}</option>{% endfor %}
+        </select>
+        {% for e in errores.tipo_actuador %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">{% if equipo %}Se puede cambiar porque todavía no tiene comandos ni reglas. {% endif %}Si falta el tipo que necesitás, pedíselo al Gerente: los tipos son comunes a toda la organización.</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div class="fld">
+        <label for="identificador">Identificador del equipo<span class="req" aria-hidden="true"> *</span></label>
+        {% if bloqueados.identificador %}
+        <input class="field-input" id="identificador" value="{{ datos.identificador }}" disabled><input type="hidden" name="identificador" value="{{ datos.identificador }}">
+        <div class="hint">Ya reportó: identifica su historial y no se puede corregir.</div>
+        {% else %}
+        <input class="field-input" id="identificador" name="identificador" value="{{ datos.identificador }}" maxlength="80" autocomplete="off"{% if libres and not equipo %} list="anunciados"{% endif %}
+          {% if not equipo %}hx-get="{% url 'iot:hardware_avisos' %}?invernadero={{ elegido.pk }}" hx-include="[name='clase'],[name='identificador'],[name='tipo_actuador']" hx-trigger="change" hx-target="#avisos" hx-select="#avisos" hx-swap="outerHTML"{% endif %}>
+        {% if libres and not equipo %}<datalist id="anunciados">{% for l in libres %}<option value="{{ l.identificador }}"{% if l.era_de %} label="Era de {{ l.era_de.identificador_equipo }}, dado de baja"{% endif %}></option>{% endfor %}</datalist>{% endif %}
+        {% for e in errores.identificador %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">{% if desde_alerta %}Tomado de la alerta «Dispositivo no registrado». {% endif %}Es el nombre con el que el nodo llama al equipo (un tópico, un número de serie…). Hasta 64 caracteres sin espacios: letras, números, - _ . /{% if libres and not equipo %} · El nodo anunció {{ libres|length }} sin registrar: elegilo de la lista.{% endif %}</div>
+        {% endif %}
+      </div>
+      {% include "iot/hardware/_avisos.html" %}
+
+      <div class="grid2">
+        <div class="fld"><label for="modelo">Modelo<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="modelo" name="modelo" value="{{ datos.modelo }}" maxlength="80" placeholder="Ej.: DHT22">{% for e in errores.modelo %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        <div class="fld"><label for="numero_serie">Número de serie</label><input class="field-input" id="numero_serie" name="numero_serie" value="{{ datos.numero_serie }}" maxlength="80">{% for e in errores.numero_serie %}<div class="err">{{ e }}</div>{% endfor %}<div class="hint">Opcional. Dato físico del aparato; puede repetirse si un aparato mide dos variables.</div></div>
+      </div>
+
+      {% if datos.clase == "sensor" %}
+      <div class="fld"><label for="nombre_sensor">Nombre</label><input class="field-input" id="nombre_sensor" name="nombre_sensor" value="{{ datos.nombre_sensor }}" maxlength="80">{% for e in errores.nombre_sensor %}<div class="err">{{ e }}</div>{% endfor %}<div class="hint">Opcional. Ayuda a reconocerlo en las listas.</div></div>
+      {% if datos.variable and datos.variable != "nivel_solucion" %}
+      <div class="grid2">
+        <div class="fld"><label for="calibracion_min">Calibración: mínimo{% if unidad %} ({{ unidad }}){% endif %}<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="calibracion_min" name="calibracion_min" inputmode="decimal" value="{{ datos.calibracion_min }}">{% for e in errores.calibracion_min %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        <div class="fld"><label for="calibracion_max">Calibración: máximo{% if unidad %} ({{ unidad }}){% endif %}<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="calibracion_max" name="calibracion_max" inputmode="decimal" value="{{ datos.calibracion_max }}">{% for e in errores.calibracion_max %}<div class="err">{{ e }}</div>{% endfor %}<div class="hint">Valores que el sensor puede medir. Fuera de ellos, la lectura es inválida.</div></div>
+      </div>
+      {% endif %}
+      {% elif datos.clase == "actuador" %}
+      <div class="fld"><label for="descripcion">Descripción</label><input class="field-input" id="descripcion" name="descripcion" value="{{ datos.descripcion }}" maxlength="300">{% for e in errores.descripcion %}<div class="err">{{ e }}</div>{% endfor %}<div class="hint">Opcional.</div></div>
+      {% endif %}
+
+      {% if not equipo %}
+      <div class="grid2">
+        <div class="fld"><label for="fecha_instalacion">Fecha de instalación<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="fecha_instalacion" name="fecha_instalacion" type="date" max="{{ hoy }}" value="{{ datos.fecha_instalacion|default_if_none:'' }}">{% for e in errores.fecha_instalacion %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        <div class="fld">
+          <label for="insumo">Insumo<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="insumo" name="insumo" data-desplegable>
+            <option value="">Seleccioná el insumo</option>
+            {% for i in insumos %}<option value="{{ i.pk }}"{% if datos.insumo_id|stringformat:"s" == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_insumo }}</option>{% endfor %}
+          </select>
+          {% for e in errores.insumo %}<div class="err">{{ e }}</div>{% endfor %}
+          <div class="hint">Repuestos de hardware.</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="fld">
+        <label for="sector">Sector</label>
+        <select class="field-input" id="sector" name="sector" data-desplegable>
+          <option value="">General (todo el invernadero)</option>
+          {% for s in sectores %}<option value="{{ s.pk }}"{% if datos.sector_id|stringformat:"s" == s.pk|stringformat:"s" %} selected{% endif %}>{{ s.nombre_sector }}{% if s.estado_sector == "fuera_de_servicio" %} (fuera de servicio){% endif %}</option>{% endfor %}
+        </select>
+        {% for e in errores.sector %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+
+      <div class="acts" style="margin-top:6px">
+        <button class="btn btn-primary" type="submit" data-enviando="Guardando…">{% if equipo %}Guardar cambios{% else %}Registrar hardware{% endif %}</button>
+        <a class="btn btn-ghost" href="{% if equipo %}{% url 'iot:hardware_ficha' equipo.pk %}{% else %}{% url 'iot:hardware' %}?invernadero={{ elegido.pk }}{% endif %}">Cancelar</a>
+      </div>
+    </form>
+  </div></div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Registrar Sistema IoT, paso 6 (IOT-REG-SIS): el resumen que se confirma antes de registrar: el invernadero, los datos del nodo, el rango de la solución si se
+indicó, el aviso de que se generará un token que se muestra una sola vez y, si no hay Técnico activo, el aviso completo de la extensión 6b. «Cambiar datos» vuelve al paso 5
+sin perder lo escrito; «Registrar y generar token» confirma (paso 8). Los datos viajan en campos ocultos del mismo formulario.{% endcomment %}
+{% block titulo %}Revisar · Registrar sistema IoT · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Revisá el registro</h1></div>
+  <div class="card resumen"><div class="card-b">
+    <dl>
+      <dt>Invernadero</dt><dd>{{ resumen.invernadero.nombre_invernadero }}</dd>
+      <dt>Nodo central</dt><dd>{{ resumen.nombre }}</dd>
+      <dt>Modelo</dt><dd>{{ resumen.modelo }}</dd>
+      <dt>Número de serie</dt><dd>{% if resumen.numero_serie %}{{ resumen.numero_serie }}{% else %}—{% endif %}</dd>
+      <dt>Fecha de instalación</dt><dd>{{ resumen.fecha_instalacion|date:"d/m/Y" }}</dd>
+      <dt>Insumo</dt><dd>{{ resumen.insumo.nombre_insumo }}</dd>
+      <dt>Temperatura de la solución</dt><dd>{% if resumen.temp_min is not None %}{{ resumen.temp_min }} a {{ resumen.temp_max }} °C{% else %}Sin rango{% endif %}</dd>
+    </dl>
+    {% if resumen.tuvo_sistema_dado_de_baja %}<div class="alert alert-info" style="margin-bottom:10px">{% icono "info" 16 %}<div>El sistema anterior queda como historial y se registra uno nuevo, con un nodo central nuevo.</div></div>{% endif %}
+    <div class="alert alert-info" style="margin-bottom:10px">{% icono "lock" 16 %}<div>Se generará un token que se muestra <b>una sola vez</b>, junto con la dirección de la API y la guía de integración del nodo. La conectividad quedará «sin señal» hasta la primera comunicación del nodo.</div></div>
+    {% if resumen.sin_tecnico %}<div class="alert alert-warn" style="margin-bottom:10px">{% icono "warn" 16 %}<div>Se generará para el Gerente la alerta «invernadero sin Técnico activo». Nadie podrá concretar los mantenimientos del hardware hasta que se asigne uno.</div></div>{% endif %}
+    <form method="post" action="{% url 'iot:sistema_registrar' %}">
+      {% csrf_token %}
+      <input type="hidden" name="invernadero" value="{{ elegible.invernadero.pk }}">
+      <input type="hidden" name="nombre" value="{{ datos.nombre }}">
+      <input type="hidden" name="modelo" value="{{ datos.modelo }}">
+      <input type="hidden" name="numero_serie" value="{{ datos.numero_serie }}">
+      <input type="hidden" name="fecha_instalacion" value="{{ datos.fecha_instalacion|default_if_none:'' }}">
+      <input type="hidden" name="insumo" value="{{ datos.insumo_id|default_if_none:'' }}">
+      <input type="hidden" name="temp_min" value="{{ datos.temp_min }}">
+      <input type="hidden" name="temp_max" value="{{ datos.temp_max }}">
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" name="confirmar" value="1" data-enviando="Registrando…">Registrar y generar token</button>
+        <button class="btn btn-ghost" type="submit" name="editar" value="1">Cambiar datos</button>
+        <a class="btn btn-ghost" href="{% url 'iot:sistema' %}?invernadero={{ elegible.invernadero.pk }}">Cancelar</a>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

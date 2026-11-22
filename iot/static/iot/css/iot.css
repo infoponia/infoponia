@@ -19,3 +19,18 @@
 .tac-botones{display:flex;gap:8px;flex-wrap:wrap}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (max-width:760px){.tac-l1,.tac-l2{grid-template-columns:1fr}.tac-quitar{justify-self:start}}
+
+/* IOT-02: sistema IoT y hardware */
+.tokenbox{font-family:var(--font-sans);font-variant-numeric:tabular-nums;background:var(--secondary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;overflow-wrap:anywhere;font-size:14px;margin-bottom:12px;user-select:all}
+.btn.disabled,.btn[aria-disabled="true"]{opacity:.5;pointer-events:none}
+.sec-h{font-size:15px;font-weight:650;margin:18px 0 8px}
+.sec-h:first-child{margin-top:0}
+.vacio{text-align:center;padding:40px 20px}
+.vacio h3{margin:10px 0 4px}
+.hw-fila-off{opacity:.75}
+.en-linea{display:inline}
+.rango{display:flex;gap:6px;align-items:center}
+.resumen dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 18px;margin:0 0 14px}
+.resumen dt{color:var(--muted-foreground);font-size:13px}
+.resumen dd{margin:0;font-weight:550;overflow-wrap:anywhere}
+@media (max-width:760px){.resumen dl{grid-template-columns:1fr}}

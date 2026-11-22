@@ -7,9 +7,11 @@ import importlib
 import itertools
 from datetime import date, datetime, timedelta, timezone as zona
 from decimal import Decimal
+from unittest import mock
 
 from django.apps import apps
 from django.db import connection
+from django.utils import timezone
 
 from inventario.categorias import REPUESTOS_DE_HARDWARE
 from inventario.models import Insumo
@@ -208,3 +210,124 @@ def datos_de(tipo):
         for a in tipo.acciones.filter(estado="activa").select_related("comando").order_by("id")
     ]
     return datos_de_tipo(tipo.nombre_actuador, tipo.tiempo_minimo_entre_comandos, acciones)
+
+
+# ---- sistema IoT (IOT-02, paso 3) ----
+
+
+def con_iot_registrado():
+    """``mock.patch`` que deja, mientras dura, un registrante falso de ``maestros.extensiones.registrar_estado_iot`` que lee los
+    sistemas directo de la base (sin URLs): así ``Invernadero.tiene_sistema_iot()`` es verdadero con un sistema activo o desconectado
+    y ``sincronizar_alertas_de_personal`` crea la alerta del Técnico. Las pruebas de los servicios lo usan para no depender de los
+    registrantes reales de ``iot`` (que prueba ``test_registrantes_maestros.py``). Uso: ``self.enterContext(con_iot_registrado())``."""
+    from maestros import extensiones
+    from maestros.extensiones import EstadoIot
+
+    def estados(ids):
+        sistemas = SistemaIoT.objects.filter(invernadero_id__in=ids).exclude(estado_sistema="inactivo")
+        return {s.invernadero_id: EstadoIot(s.estado_sistema, "/iot/sistema/") for s in sistemas}
+
+    return mock.patch.object(extensiones, "_ESTADO_IOT", [(estados, lambda actor, invernadero: None)])
+
+
+def datos_de_sistema(invernadero, insumo=None, **extra):
+    """Los datos del formulario de un sistema (``DatosDeSistema``) del ``invernadero``, válidos: nombre, modelo, fecha de instalación
+    de ayer y un insumo de «Repuestos de hardware» (uno nuevo si no se pasa ``insumo``). ``extra`` pisa cualquier campo (por ejemplo
+    ``temp_min="10"``)."""
+    from iot.servicios.sistemas import DatosDeSistema
+
+    datos = {
+        "invernadero_id": invernadero.pk,
+        "nombre": "Raspberry del galpón",
+        "modelo": "Raspberry Pi 4",
+        "numero_serie": "",
+        "fecha_instalacion": timezone.localdate() - timedelta(days=1),
+        "insumo_id": (insumo or insumo_de_hardware()).pk,
+        "temp_min": "",
+        "temp_max": "",
+    }
+    return DatosDeSistema(**(datos | extra))
+
+
+def datos_de_sistema_guardado(sistema_iot, **extra):
+    """El formulario de modificación de un sistema guardado, sin ningún cambio (nombre, modelo, serie y rango del nodo). Las pruebas de
+    modificación parten de acá y cambian lo que quieren probar."""
+    nodo = NodoCentral.objects.get(sistema=sistema_iot)
+    datos = {
+        "nombre": nodo.nombre_nodo,
+        "modelo": nodo.modelo_hardware,
+        "numero_serie": nodo.numero_serie,
+        "temp_min": "" if sistema_iot.temp_solucion_min is None else str(sistema_iot.temp_solucion_min),
+        "temp_max": "" if sistema_iot.temp_solucion_max is None else str(sistema_iot.temp_solucion_max),
+    }
+    return datos_de_sistema(sistema_iot.invernadero, **(datos | extra))
+
+
+# ---- hardware (IOT-02, paso 4) ----
+
+
+def datos_de_equipo(clase="sensor", **extra):
+    """Los datos del formulario de un equipo (``DatosDeEquipo``), válidos: un sensor de temperatura con calibración 0 a 50 o un actuador
+    de un tipo nuevo (con «Encender» y «Apagar»), con fecha de ayer y un insumo de «Repuestos de hardware» nuevo. ``extra`` pisa cualquier campo."""
+    from iot.servicios.hardware import DatosDeEquipo
+
+    datos = {
+        "clase": clase,
+        "identificador": "norte/sectorA/temperatura" if clase == "sensor" else "norte/sectorA/ventilador",
+        "modelo": "DHT22" if clase == "sensor" else "Relé 4 canales",
+        "numero_serie": "",
+        "fecha_instalacion": timezone.localdate() - timedelta(days=1),
+        "insumo_id": insumo_de_hardware().pk,
+        "sector_id": None,
+    }
+    if clase == "sensor":
+        datos |= {"variable": "temperatura", "nombre_sensor": "", "calibracion_min": "0", "calibracion_max": "50"}
+    else:
+        datos |= {"tipo_actuador_id": tipo_actuador().pk, "descripcion": ""}
+    return DatosDeEquipo(**(datos | extra))
+
+
+def datos_de_equipo_guardado(equipo, **extra):
+    """El formulario de un sensor o actuador guardado, sin ningún cambio. Las pruebas de modificación parten de acá y cambian lo que
+    quieren probar. La fecha y el insumo no se editan (se ignoran al modificar)."""
+    datos = {
+        "identificador": equipo.identificador_equipo,
+        "modelo": equipo.modelo_hardware,
+        "numero_serie": equipo.numero_serie,
+        "fecha_instalacion": equipo.fecha_instalacion,
+        "insumo_id": equipo.insumo_id,
+        "sector_id": equipo.sector_id,
+    }
+    if equipo.clase == "sensor":
+        datos |= {
+            "variable": equipo.tipo_variable_sensor,
+            "nombre_sensor": equipo.nombre_sensor,
+            "calibracion_min": "" if equipo.valor_calibracion_min is None else str(equipo.valor_calibracion_min),
+            "calibracion_max": "" if equipo.valor_calibracion_max is None else str(equipo.valor_calibracion_max),
+        }
+    else:
+        datos |= {"tipo_actuador_id": equipo.tipo_actuador_id, "descripcion": equipo.descripcion_actuador}
+    clase_del_formulario = extra.pop("clase", equipo.clase)  # el formulario puede mandar otra clase: el servicio la ignora
+    formulario = datos_de_equipo(equipo.clase, **(datos | extra))
+    formulario.clase = clase_del_formulario
+    return formulario
+
+
+def equipo_anunciado(sistema_iot, identificador, comandos=("ENCENDER", "APAGAR"), clase="actuador"):
+    """Un ``EquipoAnunciado`` del sistema: lo que el nodo anunció (IOT-ENT-INF, extensión 1c), con los códigos de ``comandos`` del catálogo
+    (vacío en un sensor). Lo escribe la API de IOT-03; hasta entonces lo crean las pruebas con esta fábrica."""
+    from iot.models import EquipoAnunciado
+
+    anunciado = EquipoAnunciado.objects.create(sistema=sistema_iot, identificador_equipo=identificador, clase=clase)
+    anunciado.comandos.set(ComandoCatalogo.objects.filter(codigo__in=comandos if clase == "actuador" else ()))
+    return anunciado
+
+
+def regla(sensor_que_mide, actuador_que_actua, accion=None, condicion="supera_maximo", **extra):
+    """Una regla de actuación activa del sensor sobre el actuador, con una acción del tipo del actuador (la primera activa por defecto)."""
+    from iot.models import ReglaActuacion
+
+    accion = accion or actuador_que_actua.tipo_actuador.acciones.filter(estado="activa").order_by("id").first()
+    return ReglaActuacion.objects.create(
+        sensor=sensor_que_mide, actuador=actuador_que_actua, accion=accion, condicion=condicion, **extra
+    )

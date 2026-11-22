@@ -1,6 +1,6 @@
 # IOT-02 · Sistema IoT y hardware
 
-Estado: pendiente | App: iot (y un punto de extensión en maestros) | Rama: feature/iot-02-sistema-iot-y-hardware | Ronda: IoT 1
+Estado: hecha, a la espera de la revisión a mano | App: iot (y un punto de extensión en maestros) | Rama: feature/iot-02-sistema-iot-y-hardware | Ronda: IoT 1
 
 Depende de: **IOT-01** (el esquema, `iot/alcance.py` y las fábricas), **MAE-02b** (`sincronizar_alertas_de_personal` con el Técnico) y
 **NOT-01** (avisos). MAE-02b y NOT-01 están hechas. Si IOT-01 no está mergeada, frená. **No depende de ninguna tarea de producción ni de
@@ -189,6 +189,61 @@ invernadero sin Agrónomo. Un insumo activo de «Repuestos de hardware».
 7. Intentar dar de baja el invernadero: lo impide con «Tiene el sistema IoT…».
 8. Con el Gerente, en el invernadero del Agrónomo: ve todo en solo lectura con el aviso; en el invernadero sin Agrónomo, puede registrar.
 9. Sin JavaScript, los pasos 2, 4, 5 y 6 funcionan igual: cada ventana es una página.
-10. Después del merge: verificar en el log de Render que se aplicó la migración nueva.
+10. Hardware · «Ver ficha» del sensor: identificador, tipo, sector, «Sin confirmar», modelo, insumo y calibración; «Última lectura» dice «—». Con el Agrónomo, «Modificar»; con el
+    Gerente en el invernadero con Agrónomo, ningún botón.
+11. Un equipo que todavía no reportó: «Modificar» deja corregir el identificador. Si hay lecturas (se pueden crear a mano en la base), el campo sale deshabilitado con «Ya reportó…».
+12. Dar de baja un equipo a mano en la base (`estado_hardware = inactivo`): su ficha ofrece «Reactivar». Si hay otro equipo con su identificador, la ventana dice «No se puede reactivar…».
+    Con uno `fuera_de_servicio`, la ficha ofrece «Volver a activar».
+13. «Hardware · Registrar hardware» con `?identificador=norte/algo` en la URL: el campo trae el identificador con «Tomado de la alerta «Dispositivo no registrado».».
+14. Como Gerente, en «Tipos de actuador», modificar las acciones de un tipo con un actuador: si el nodo anunció equipos, la compatibilidad y la alerta «Configuración incompatible» se actualizan.
+15. Después del merge: verificar en el log de Render que se aplicó la migración nueva.
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+**Qué se hizo.** Los siete pasos, en orden:
+1. `maestros`: punto de extensión `registrar_estado_iot` / `estados_iot` / `url_de_registro_iot` (`maestros/extensiones.py`); `Invernadero.estado_iot()` y `tiene_sistema_iot()`; la ficha y la lista
+   del invernadero muestran «Activo», «Desconectado» o «Sin registrar» con el enlace, y «Con IoT» (una sola llamada para toda la lista).
+2. `core/enlaces.py` (`nuevo_token`, `resumen_de`) con sus pruebas. Migración `core/0018_iot_sistema_y_hardware_acciones` (solo `choices`); ninguna en `iot` ni en `maestros`.
+3. `iot/servicios/sistemas.py` (registrar con resumen, modificar, regenerar el token, lectura, conectividad y acciones) y `iot/validadores.py`.
+4. `iot/servicios/hardware.py` (alta, modificación, volver a activar, reactivar y consulta) y `iot/servicios/compatibilidad.py` (la única que calcula la compatibilidad); `modificar_tipo_actuador` ya
+   la llama (se sacó el `TODO` de IOT-01).
+5. `IotConfig.ready()` registra los cuatro puntos de `maestros` (con guarda contra el doble registro).
+6. Vistas (`views_sistema.py`, `views_hardware.py`, `contexto.py`), plantillas, pestañas «Hardware», «Sistema IoT» y «Tipos de actuador»; `/iot/` redirige a «Sistema IoT».
+7. Documentación propuesta (M3), sin aplicar.
+
+**Pruebas.** `python manage.py test --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` (todas las apps): 3498 pruebas, todas en verde (`iot maestros core` solo: 2377).
+`python manage.py test iot --keepdb --tag concurrencia`: 17 en verde (dos altas con el mismo identificador, dos registros en el mismo invernadero, reactivar contra un alta, la baja de un tipo contra el alta de un actuador,
+dos regeneraciones, y dos `test_d81_…` de la modificación de un tipo a la vez que el alta o el cambio de tipo de un actuador). `makemigrations --check`: sin cambios pendientes. Las de servicios se escribieron antes y se revisaron en rojo.
+Las dos `test_d81_…` de `test_hardware_concurrencia.py` fuerzan el cruce con `detener_antes_de=(api_alertas, "bloquear_invernadero_para_alertas")`; con el orden invertido fallan con `DeadlockDetected` (comprobado).
+
+**Decisiones.** D-81 (propuesta): el orden de bloqueos del hardware es tipo, invernadero, sistema y equipo (ver «Diferencias»). Se usó D-80 sin cambios.
+
+**Diferencias con lo escrito (se corrigen en `hardware.md`, `sistema_iot.md` y D-81, M3; no se corrigieron en silencio).**
+- **Orden de bloqueos del hardware** (`hardware.md`, «Bloqueos»: el invernadero, el sistema y, si cambia el tipo, el tipo): se bloquea el tipo ANTES que el invernadero. Si no, el alta de un actuador (invernadero y
+  después tipo) e IOT-MOD-TAC (tipo y después los invernaderos de sus actuadores, al recalcular la compatibilidad) se cruzan y la base aborta una (500). Prueba: `test_hardware_concurrencia.py`, `test_d81_…` (con barrera; fallan con el orden inverso).
+- **Reactivar un actuador cuyo tipo está dado de baja** (la regla 9 de IOT-MOD-HDW no lo contempla): se rechaza con `tipo_inactivo`; si no, quedaría un actuador activo de un tipo inactivo y se rompería la
+  precondición c de IOT-BAJ-TAC.
+- **`maestros` más allá del cuerpo de `tiene_sistema_iot()`:** se agregó `Invernadero.estado_iot()`, `precargar_estado_iot` en `maestros/servicios/invernaderos.py` y un cambio en `maestros/views.py` para que la lista
+  y la ficha hagan UNA llamada al registrante (el contrato pide que no haya consultas por fila).
+- **Pruebas existentes que cambiaron** (la tarea decía que ninguna de `maestros`): `iot/tests/test_tipos_actuador_vistas.py` (el destino de `/iot/`, que la tarea manda cambiar) y, con la aprobación del estudiante,
+  `test_ext_impedimentos_de_sector_sin_registrantes_no_hay_ninguno` y `test_ext_contenido_sin_registrantes_esta_vacio` de `maestros/tests/test_extensiones_sectores.py`: asumían que ninguna app registraba los puntos de sector
+  y usan un sector falso sin base; ahora `iot` los registra y las dos pruebas aíslan la lista con `mock.patch.object`. Siguen probando el neutro «sin registrantes».
+- `docs/casos_de_uso/iot/sistema_iot.md` cita una sección «Token» de `enlace_del_cliente.md` que no existe: la correcta es «1. Piezas».
+- El texto «Ya lo usa {equipo} en este sistema IoT.» usa el nombre del prototipo (`hwName`: «Temperatura», o el tipo del actuador), que el caso de uso no define.
+
+**Pantallas: lo que se corrigió del prototipo (D-61).**
+- *Registrar el sistema:* el prototipo registraba en una sola pantalla; se hizo en tres (elegir invernadero, datos con «Revisar», confirmación) como pide el caso de uso (pasos 2 y 6). El aviso de la extensión 6b va
+  completo en el resumen.
+- *Token:* el prototipo lo muestra en una ventana sobre la ficha; acá es una página que es la respuesta al POST (sin redirigir, con `no-store`), con «Copiar» y la casilla «Ya guardé el token» como mejora de JavaScript
+  (sin él, «Cerrar» siempre funciona). Además ofrece «Registrar hardware» después de registrar (paso 9).
+- *Guía del nodo:* el botón del prototipo solo mostraba un aviso; es un enlace a `URL_GUIA_DEL_NODO`. *Fecha máxima:* la de hoy, no la fija del prototipo.
+- *Barra de contexto:* el prototipo usa un `<select>` nativo; se usa el desplegable propio (D-24), que envía el formulario GET al cambiar, con el botón «Ver» como respaldo sin JavaScript.
+- *Hardware, formulario:* se agregó el «Nombre» del sensor (opcional); la variable se puede cambiar si no hay lecturas; lo que no se puede cambiar se ve deshabilitado con su motivo. El cambio del tipo de equipo, de la
+  variable o del tipo de actuador vuelve a dibujar el formulario sin guardar (con HTMX solo el bloque; sin JavaScript, la página).
+- *Hardware, avisos de «antes de guardar»* (identificador de un equipo dado de baja con «Reactivar»; compatibilidad con lo que anunció el nodo): con HTMX llegan al cambiar el identificador; sin JavaScript aparecen al
+  volver a dibujar el formulario y, si el actuador queda incompatible, en el aviso de después de guardar.
+- *Volver a activar y reactivar:* ventanas con HTMX y respaldo sin JavaScript (la ficha con la ventana). Las órdenes de mantenimiento de la regla 8 las completa IOT-07.
+- *Lista de equipos:* se agregaron el nodo central arriba (regla 2 de CNS), los estados vacíos, la búsqueda por serie y variable y el aviso de los anunciados sin registrar, solo para quien opera.
+- *Ficha:* se agregaron las alertas activas del equipo (regla 6 de CNS); las lecturas, las reglas, los comandos y las órdenes no se muestran todavía (D-25).
+
+**Lo que queda para otras tareas (ya está en `docs/disparadores.md`).** Lecturas y anuncios reales (IOT-03), comandos (IOT-05), reglas y la baja de equipos y del sistema (IOT-06), órdenes de mantenimiento (IOT-07).

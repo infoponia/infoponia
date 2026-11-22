@@ -1,0 +1,59 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Registrar y modificar el nodo central del Sistema IoT (IOT-REG-SIS paso 5, IOT-MOD-SIS reglas 2 y 7; ``sys-form`` del prototipo). Al registrar pide también la
+fecha de instalación y el insumo; al modificar, no (regla 2: solo el nombre, el modelo, el número de serie y el rango de la solución) y ofrece regenerar el token. El botón
+«Revisar» lleva al resumen (paso 6): ahí se confirma. Sin JavaScript, funciona igual: es un formulario común (``novalidate``: las reglas son del servicio). Recibe «elegible»
+(al registrar), «datos», «errores» (por campo), «general», «insumos», «hoy», «modificar» y «sistema».{% endcomment %}
+{% block titulo %}{% if modificar %}Modificar sistema IoT{% else %}Registrar sistema IoT{% endif %} · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% if modificar %}{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}{% else %}{% url 'iot:sistema_registrar' %}{% endif %}">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>{% if modificar %}Modificar Sistema IoT{% else %}Registrar Sistema IoT{% endif %}</h1></div>
+  {% if not modificar %}<p class="muted" style="margin-bottom:14px">{{ elegible.invernadero.nombre_invernadero }} · {% if elegible.tecnico %}Técnico: {{ elegible.tecnico.get_full_name|default:elegible.tecnico.email }}{% else %}sin Técnico{% endif %}</p>
+  {% if elegible.tuvo_sistema %}<div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>El sistema anterior queda como historial y se registra uno nuevo, con un nodo central nuevo. Los equipos se registran de nuevo y pueden usar los mismos identificadores que los del sistema anterior.</div></div>{% endif %}{% endif %}
+  <div class="card"><div class="card-b">
+    {% for mensaje in general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+    <form method="post" novalidate action="{% if modificar %}{% url 'iot:sistema_modificar' sistema.pk %}{% else %}{% url 'iot:sistema_registrar' %}{% endif %}">
+      {% csrf_token %}
+      {% if not modificar %}<input type="hidden" name="invernadero" value="{{ elegible.invernadero.pk }}">{% endif %}
+      <h3 class="sec-h">Nodo central</h3>
+      <div class="grid2">
+        <div class="fld"><label for="nombre">Nombre<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="nombre" name="nombre" value="{{ datos.nombre }}" maxlength="80" placeholder="Ej.: Raspberry del galpón" data-foco-inicial>{% for e in errores.nombre %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        <div class="fld"><label for="modelo">Modelo<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="modelo" name="modelo" value="{{ datos.modelo }}" maxlength="80" placeholder="Ej.: Raspberry Pi 4">{% for e in errores.modelo %}<div class="err">{{ e }}</div>{% endfor %}</div>
+      </div>
+      <div class="grid2">
+        <div class="fld"><label for="numero_serie">Número de serie</label><input class="field-input" id="numero_serie" name="numero_serie" value="{{ datos.numero_serie }}" maxlength="80">{% for e in errores.numero_serie %}<div class="err">{{ e }}</div>{% endfor %}<div class="hint">Opcional. Dato físico del aparato: el nodo se identifica ante InfoPonia con su token.</div></div>
+        {% if not modificar %}<div class="fld"><label for="fecha_instalacion">Fecha de instalación<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="fecha_instalacion" name="fecha_instalacion" type="date" max="{{ hoy }}" value="{{ datos.fecha_instalacion|default_if_none:'' }}">{% for e in errores.fecha_instalacion %}<div class="err">{{ e }}</div>{% endfor %}</div>{% endif %}
+      </div>
+      {% if not modificar %}
+      <div class="fld">
+        <label for="insumo">Insumo<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="insumo" name="insumo" data-desplegable>
+          <option value="">Seleccioná el insumo</option>
+          {% for i in insumos %}<option value="{{ i.pk }}"{% if datos.insumo_id|stringformat:"s" == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_insumo }}</option>{% endfor %}
+        </select>
+        {% for e in errores.insumo %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">Repuestos de hardware.</div>
+      </div>
+      {% endif %}
+      <h3 class="sec-h">Temperatura de la solución nutritiva</h3>
+      <p class="hint" style="margin:-4px 0 10px">Opcional. Depende de lo que se cultiva en este invernadero; sin rango, las lecturas se muestran sin comparar.</p>
+      <div class="grid2">
+        <div class="fld"><label for="temp_min">Mínimo (°C)</label><input class="field-input" id="temp_min" name="temp_min" inputmode="decimal" value="{{ datos.temp_min }}">{% for e in errores.temp_solucion_min %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        <div class="fld"><label for="temp_max">Máximo (°C)</label><input class="field-input" id="temp_max" name="temp_max" inputmode="decimal" value="{{ datos.temp_max }}">{% for e in errores.temp_solucion_max %}<div class="err">{{ e }}</div>{% endfor %}</div>
+      </div>
+      {% if modificar %}
+      <div class="fld"><span class="lbl">Token de acceso</span><p class="sm muted" style="margin-bottom:8px">Se guarda solo como resumen criptográfico, por eso no se puede volver a mostrar.</p><a class="btn btn-danger btn-sm" href="{% url 'iot:sistema_regenerar_token' sistema.pk %}">{% icono "lock" 14 %} Regenerar token</a></div>
+      {% else %}
+      <div class="alert alert-info">{% icono "lock" 16 %}<div>Al registrar se genera el token del nodo y se muestra <b>una sola vez</b>, junto con la dirección de la API y la guía de integración del nodo.</div></div>
+      {% if not elegible.tecnico %}<div class="alert alert-warn" style="margin-top:10px">{% icono "warn" 16 %}<div>El invernadero no tiene Técnico activo: se generará para el Gerente la alerta «invernadero sin Técnico activo».</div></div>{% endif %}
+      {% endif %}
+      <div class="acts" style="margin-top:18px">
+        {% if modificar %}<button class="btn btn-primary" type="submit" data-enviando="Guardando…">Guardar cambios</button>
+        {% else %}<button class="btn btn-primary" type="submit" name="revisar" value="1" data-enviando="Revisando…">Revisar</button>{% endif %}
+        <a class="btn btn-ghost" href="{% if modificar %}{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}{% else %}{% url 'iot:sistema' %}?invernadero={{ elegible.invernadero.pk }}{% endif %}">Cancelar</a>
+      </div>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

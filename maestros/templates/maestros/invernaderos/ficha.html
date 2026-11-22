@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}Ficha del invernadero (PROD-CNS-INV, VIEWS.inv del prototipo): ubicación, equipo y el aviso de personal
-faltante (regla 4). Con la capacidad y la pestaña «Sectores» (MAE-03); sin lotes, cámara ni bitácora (regla 3: llegan con sus tareas), sin el enlace
-«Registrar sistema IoT» (solo prototipo). Las acciones (MAE-01b) son las de «acciones» (maestros.servicios.invernaderos.
+faltante (regla 4). Con la capacidad y la pestaña «Sectores» (MAE-03); sin lotes, cámara ni bitácora (regla 3: llegan con sus tareas), con el estado del IoT y, a quien lo opera, el enlace
+«Registrar sistema IoT» (IOT-02). Las acciones (MAE-01b) son las de «acciones» (maestros.servicios.invernaderos.
 acciones_permitidas, D-30): nadie llega por un botón a un 403. «Dar de baja» abre la ventana con HTMX; sin JavaScript, el
 enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no tiene ventana (ACT['inv-react']).{% endcomment %}
 {% block titulo %}{{ invernadero.nombre_invernadero }} · InfoPonia{% endblock %}
@@ -46,7 +46,10 @@ enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no
           <div><span class="k">Localidad</span><span class="v">{{ invernadero.direccion.localidad.nombre_localidad }}, {{ invernadero.direccion.localidad.departamento.provincia }}</span></div>
           <div><span class="k">Departamento</span><span class="v">{{ invernadero.direccion.localidad.departamento.nombre_departamento }}</span></div>
           <div><span class="k">Zona</span><span class="v">{% if direccion.ZONA == "rural" %}Rural{% else %}Urbana{% endif %}</span></div>
-          <div><span class="k">Sistema IoT</span><span class="v">{% if invernadero.tiene_sistema_iot %}Registrado{% else %}<span class="muted">Sin registrar</span>{% endif %}</span></div>
+          {# IOT-02 (docs/api/extensiones_de_maestros.md, «Estado del IoT del invernadero»): «Activo» o «Desconectado» con el enlace a la pestaña «Sistema IoT»; «Sin registrar» con «Registrar sistema IoT» solo para quien opera el IoT. #}
+          {% with iot=invernadero.estado_iot %}
+          <div><span class="k">Sistema IoT</span><span class="v">{% if iot %}<a href="{{ iot.url }}">{% if iot.estado == "desconectado" %}Desconectado{% else %}Activo{% endif %}</a>{% else %}<span class="muted">Sin registrar</span>{% if url_de_registro_iot %} · <a href="{{ url_de_registro_iot }}">Registrar sistema IoT</a>{% endif %}{% endif %}</span></div>
+          {% endwith %}
           {% if direccion.ZONA == "urbana" and direccion.referencias %}<div class="full"><span class="k">Referencias</span><span class="v">{{ direccion.referencias }}</span></div>{% endif %}
         </div>
       </div>

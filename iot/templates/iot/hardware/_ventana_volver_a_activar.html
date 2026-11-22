@@ -1,0 +1,16 @@
+{% load iconos %}{% comment %}Ventana de volver a activar un equipo fuera de servicio (IOT-MOD-HDW postcondición b y reglas 7 y 8; ventana ``react`` del prototipo). El equipo vuelve a estar activo y puede recibir
+comandos; sus alertas de falla se resuelven. Las órdenes de mantenimiento a realizar que lo incluyen, con «Cancelarla» o «Mantenerla» por cada una, las suma IOT-07 (``ordenes``, vacío hasta entonces).
+Abrirla (GET) no cambia nada; volver a activar es un POST.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Volver a activar {{ nombre }} {{ equipo.identificador_equipo }}</h2>
+    <p>El equipo vuelve a estar activo y puede recibir comandos. Su alerta de falla se resuelve.</p>
+    <form method="post" action="{% url 'iot:hardware_volver_a_activar' equipo.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-ghost" type="submit" data-enviando="Activando…">Volver a activar</button>
+      </div>
+    </form>
+  </div>
+</div>

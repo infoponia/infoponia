@@ -33,8 +33,9 @@ class ExtensionesDeSectoresTests(SimpleTestCase):
             self.assertEqual(extensiones.agujeros_registrados([1]), {1: (0, 0)})
 
     def test_ext_impedimentos_de_sector_sin_registrantes_no_hay_ninguno(self):
-        """API: sin registrantes, ningún impedimento."""
-        self.assertEqual(extensiones.impedimentos_registrados_de_sector(_sector(1)), [])
+        """API: sin registrantes, ningún impedimento. Desde IOT-02 `iot` registra el suyo: la prueba lo aísla para seguir probando el neutro."""
+        with mock.patch.object(extensiones, "_IMPEDIMENTOS_DE_SECTOR", []):
+            self.assertEqual(extensiones.impedimentos_registrados_de_sector(_sector(1)), [])
 
     def test_ext_impedimentos_de_sector_se_juntan_los_de_todos(self):
         """Reglas 2 y 3 de PROD-BAJ-SCT: se informan todos, sin quedarse con el primero."""
@@ -44,8 +45,9 @@ class ExtensionesDeSectoresTests(SimpleTestCase):
             self.assertEqual(extensiones.impedimentos_registrados_de_sector(_sector(1)), [a, b])
 
     def test_ext_contenido_sin_registrantes_esta_vacio(self):
-        """API: sin registrantes, ningún contenido por sector."""
-        self.assertEqual(extensiones.contenido_registrado([_sector(1)]), {1: []})
+        """API: sin registrantes, ningún contenido por sector. Desde IOT-02 `iot` registra el suyo: la prueba lo aísla para seguir probando el neutro."""
+        with mock.patch.object(extensiones, "_CONTENIDOS", []):
+            self.assertEqual(extensiones.contenido_registrado([_sector(1)]), {1: []})
 
     def test_ext_contenido_junta_lotes_y_hardware_de_distintos_registrantes(self):
         """Regla 3 de PROD-CNS-SCT: lo de `produccion` y lo de `iot` aparece junto."""

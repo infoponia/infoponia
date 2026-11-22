@@ -1,0 +1,60 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«IoT» → «Hardware» (IOT-CNS-HDW; ``hardware`` del prototipo): arriba, el nodo central (estado, conectividad, modo y última comunicación, regla 2); el aviso de los identificadores que el
+nodo anunció y todavía no están registrados (regla 14 de IOT-ALT-HDW); los filtros (tipo, estado, sector y búsqueda, regla 5) y la tabla de equipos, sensores y después actuadores, también los dados de
+baja. Los filtros son un formulario GET: sin JavaScript, «Filtrar» recarga la página; con HTMX, reemplazan solo la tabla y actualizan la URL. «Registrar hardware» solo lo ve quien opera el IoT del invernadero
+(D-30). Lo que depende de lecturas y alertas («En rango», la última lectura) lo completan IOT-03 e IOT-04.{% endcomment %}
+{% block titulo %}Hardware · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page">
+  <div class="page-h">
+    <h1>IoT</h1>
+    <span class="spacer"></span>
+    {% if opera and sistema %}<a class="btn btn-primary" href="{% url 'iot:hardware_nuevo' %}?invernadero={{ elegido.pk }}">{% icono "plus" 14 %} Registrar hardware</a>{% endif %}
+  </div>
+  {% include "iot/_marco_invernadero.html" %}
+  {% if not elegido %}
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para mostrar</h3><p class="muted">Cuando haya un invernadero a tu alcance, vas a ver acá sus sensores y actuadores.</p></div></div>
+  {% elif not sistema %}
+  <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Este invernadero no tiene Sistema IoT. Registrá el sistema antes de cargar equipos. <a href="{% url 'iot:sistema' %}?invernadero={{ elegido.pk }}">Ir a Sistema IoT</a></div></div>
+  {% else %}
+  <p class="muted" style="margin-bottom:14px">Sensores y actuadores del invernadero, identificados como los nombra el nodo central.</p>
+  <div class="card" style="margin-bottom:14px">
+    <div class="facts">
+      <div><span class="k">Nodo central</span><span class="v">{{ nodo.nombre_nodo }}</span></div>
+      <div><span class="k">Estado</span><span class="v">{% if sistema.estado_sistema == "activo" %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-warn">Desconectado</span>{% endif %}</span></div>
+      <div><span class="k">Conectividad</span><span class="v">{% if conectividad.estado == "en_linea" %}<span class="status-badge status-ok">En línea</span>{% else %}<span class="status-badge status-danger">Sin señal</span>{% endif %}</span><span class="d">{{ conectividad.texto }}</span></div>
+      <div><span class="k">Modo</span><span class="v">{% if nodo.modo == "local" %}<span class="status-badge status-warn">Local</span>{% else %}<span class="status-badge status-ok">Remoto</span>{% endif %}</span></div>
+    </div>
+  </div>
+  {% if libres %}
+  <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>El nodo anunció {{ libres|length }} equipo{{ libres|length|pluralize }} que todavía no {{ libres|length|pluralize:"está,están" }} registrado{{ libres|length|pluralize }}: <b>{% for l in libres %}{{ l.identificador }}{% if not forloop.last %}, {% endif %}{% endfor %}</b>. Registralos para empezar a aceptar sus mensajes.</div></div>
+  {% endif %}
+  <form class="filters" method="get" action="{% url 'iot:hardware' %}" aria-label="Filtros de equipos"
+        hx-get="{% url 'iot:hardware' %}" hx-target="#tabla-de-equipos" hx-push-url="true" hx-trigger="change, submit, keyup changed delay:300ms from:input[name=q]">
+    <input type="hidden" name="invernadero" value="{{ elegido.pk }}">
+    <input class="field-input q" type="search" name="q" value="{{ filtros.q }}" placeholder="Buscar por identificador o equipo" aria-label="Buscar">
+    <select class="field-input" name="tipo" data-desplegable aria-label="Tipo">
+      <option value="">Todos los tipos</option>
+      <option value="sensor"{% if filtros.tipo == "sensor" %} selected{% endif %}>Sensores</option>
+      <option value="actuador"{% if filtros.tipo == "actuador" %} selected{% endif %}>Actuadores</option>
+    </select>
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="">Todos los estados</option>
+      <option value="activo"{% if filtros.estado == "activo" %} selected{% endif %}>Activo</option>
+      <option value="fuera_de_servicio"{% if filtros.estado == "fuera_de_servicio" %} selected{% endif %}>Fuera de servicio</option>
+      <option value="inactivo"{% if filtros.estado == "inactivo" %} selected{% endif %}>Dado de baja</option>
+    </select>
+    <select class="field-input" name="sector" data-desplegable aria-label="Sector">
+      <option value="">Todos los sectores</option>
+      {% for s in sectores %}<option value="{{ s.pk }}"{% if filtros.sector == s.pk|stringformat:"d" %} selected{% endif %}>{{ s.nombre_sector }}</option>{% endfor %}
+      <option value="_"{% if filtros.sector == "_" %} selected{% endif %}>General</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="link" href="{% url 'iot:hardware' %}?invernadero={{ elegido.pk }}">Quitar filtros</a>{% endif %}
+  </form>
+  <div id="tabla-de-equipos">{% include "iot/hardware/_tabla.html" %}</div>
+  {% endif %}
+</div>
+{% endblock %}

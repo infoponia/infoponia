@@ -14,6 +14,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from core.models import Agronomo, Capataz, Tecnico, Transportista, Usuario, Vendedor, rol_de
+from maestros import extensiones
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
 
 
@@ -216,10 +217,19 @@ class Invernadero(models.Model):
         """True si el invernadero está activo."""
         return self.estado_invernadero == self.Estado.ACTIVO
 
+    def estado_iot(self):
+        """El ``EstadoIot`` del sistema IoT no dado de baja del invernadero, o ``None`` si no tiene (IOT-02; punto de extensión
+        ``maestros.extensiones.registrar_estado_iot``, A4 de D-37). Si la vista ya lo precargó con ``precargar_estado_iot``
+        (una sola llamada para toda la lista), usa eso; si no, pregunta por este invernadero. El valor precargado vale solo para la
+        instancia de esa vista: los servicios releen el invernadero y no lo heredan."""
+        if hasattr(self, "_estado_iot"):
+            return self._estado_iot
+        return extensiones.estados_iot([self.pk]).get(self.pk)
+
     def tiene_sistema_iot(self):
-        """Falso hasta que exista ``SistemaIoT`` (nivel 7): lo conecta el bloque IoT por un punto de extensión
-        (A4 de D-37). Mientras tanto, el Técnico no hace falta (regla 5 de PROD-ALT-INV)."""
-        return False
+        """Verdadero si el invernadero tiene un sistema IoT activo o desconectado (IOT-02). Sin sistema, el Técnico no hace falta
+        (regla 5 de PROD-ALT-INV, regla 3 de 8.22)."""
+        return self.estado_iot() is not None
 
     def tiene_sectores(self):
         """Verdadero si el invernadero tiene algún sector activo o fuera de servicio (postcondición b de PROD-ALT-SCT,

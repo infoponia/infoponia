@@ -39,6 +39,7 @@ from maestros.servicios.invernaderos import (
     impedimentos_para_baja,
     modificar_invernadero,
     obtener_invernadero,
+    precargar_estado_iot,
     reactivar_invernadero,
 )
 
@@ -54,7 +55,8 @@ def invernaderos(request):
     return render(
         request,
         "maestros/invernaderos/lista.html",
-        {"invernaderos": consultar_invernaderos(request.user), "es_gerente": request.user.rol == GERENTE},
+        # IOT-02: «Con IoT» y el Técnico de cada tarjeta salen de UNA llamada a ``estados_iot`` para toda la lista.
+        {"invernaderos": precargar_estado_iot(consultar_invernaderos(request.user)), "es_gerente": request.user.rol == GERENTE},
     )
 
 
@@ -71,10 +73,13 @@ def invernadero(request, invernadero_id):
 def _contexto_de_la_ficha(request, invernadero, **extra):
     """Lo que necesita la ficha: el invernadero, si quien mira es el Gerente, las acciones que le corresponden y la
     tarjeta «Logística» (MAE-05)."""
+    precargar_estado_iot([invernadero])  # IOT-02: una sola llamada; ``equipo()`` y ``roles_faltantes()`` lo reutilizan
     return {
         "invernadero": invernadero,
         "es_gerente": request.user.rol == GERENTE,
         "acciones": acciones_permitidas(request.user, invernadero),
+        # IOT-02: el enlace «Registrar sistema IoT», solo para quien opera el IoT de este invernadero (D-30: ningún botón lleva a un 403).
+        "url_de_registro_iot": None if invernadero.estado_iot() else extensiones.url_de_registro_iot(request.user, invernadero),
         **_logistica(invernadero),
         **_pestana_de_sectores(request, invernadero),
         **extra,

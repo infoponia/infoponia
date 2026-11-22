@@ -430,6 +430,17 @@ def obtener_invernadero(actor, invernadero_id):
     return invernadero
 
 
+def precargar_estado_iot(invernaderos):
+    """IOT-02: deja en cada invernadero de ``invernaderos`` su ``EstadoIot`` (o ``None``) con UNA sola llamada al punto de extensión
+    (``maestros.extensiones.estados_iot``), para que ``tiene_sistema_iot()``, ``equipo()`` y ``roles_faltantes()`` no pregunten
+    una vez por invernadero. Lo llaman la lista y la ficha, que leen sin escribir. Devuelve la misma lista."""
+    invernaderos = list(invernaderos)
+    estados = extensiones.estados_iot([invernadero.pk for invernadero in invernaderos])
+    for invernadero in invernaderos:
+        invernadero._estado_iot = estados.get(invernadero.pk)
+    return invernaderos
+
+
 def cuentas_asignables(atributo):
     """Regla 4 de PROD-ALT-INV: las cuentas activas del rol ``atributo`` (``agronomo``, ``capataz``, ``vendedor`` o
     ``tecnico``) que se ofrecen en el formulario, por apellido y nombre."""
