@@ -162,7 +162,7 @@ Alerta.objects.para(usuario).activas().no_leidas()   # lo que cuenta la campana
 
 El Gerente activo recibe las `para_gerente`; el Agrónomo activo, las suyas; cualquier otro rol (o una cuenta inactiva, o `None`),
 ninguna. `abrir_alerta(actor, alerta_id)` (MAE-02b) marca «leída» la que abre un destinatario. La pantalla de consulta de
-alertas (CU-46) queda para otra tarea (`docs/disparadores.md`); que abrir la alerta la marque «leída» choca con su
+alertas (CU-46) la hace MAE-02c (`docs/tareas/maestros/MAE-02c-alerta-consulta.md`); que abrir la alerta la marque «leída» choca con su
 postcondición («no se produjeron cambios en el sistema»): pendiente para pendientes_CU.
 
 ## 6. Auditoría (D-36, D6 de MAE-02)

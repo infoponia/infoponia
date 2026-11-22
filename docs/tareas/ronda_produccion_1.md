@@ -28,7 +28,7 @@ no dependen entre sí pueden hacerse en paralelo.
 | PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | PROD-PNR-FDS | PRD-03 | 5 |
 
 Ya hechas o en curso fuera de la ronda: MAE-01 y MAE-01b (invernadero), MAE-02a (alerta, hecha), MAE-02b (baja y
-reactivación de cuenta, Inicio del Gerente y `abrir_alerta`, mergeada el 19/11/2026) y MAE-02c (consulta de alertas, CU-46, pendiente).
+reactivación de cuenta, Inicio del Gerente y `abrir_alerta`, mergeada el 19/11/2026) y MAE-02c (consulta de alertas, CU-46, pendiente; archivo `docs/tareas/maestros/MAE-02c-alerta-consulta.md`).
 
 ## 2. Orden y paralelismo
 
@@ -51,7 +51,7 @@ las demás tareas no dependen de ella, pero sus pantallas sí: no se arma una pa
   (usa su API para la notificación de PROD-MOD-CLT b); sus pasos de sectores pueden empezar antes.
 - **Sugerencia de reparto en dos carriles** (lo deciden ustedes): un carril con UI-01 y NOT-01 (`core`), y otro con INV-01 →
   INV-02 (app nueva, sin choques) y después MAE-03 e INV-03. MAE-02b ya está mergeada con el estilo anterior: UI-01
-  la adapta. MAE-02c (consulta de alertas, en `maestros`) usará el estilo que esté vigente cuando se haga; si se hace en paralelo con MAE-03, MAE-04
+  la adapta. MAE-02c (consulta de alertas, en `maestros`) usa el estilo «Diseño v2» de UI-01 (ya mergeada) y no depende de la ronda; si se hace en paralelo con MAE-03, MAE-04
   o INV-01, seguí `docs/patrones/trabajo_en_paralelo.md` (migraciones y `maestros/apps.py`).
 - **Las cuatro de producción son una cadena** (cada una usa lo que crea la anterior): no se pueden repartir en paralelo.
 - Cuando se llegue a PRD-01, las tareas de arriba tienen que estar hechas y mergeadas.
@@ -145,6 +145,7 @@ Un lote se programa recién cuando está entregado y validado por completo. **De
 | Stock en tránsito | Columna `cant_transito_insumo` en 0; la escribirá `compras`. Sin punto de extensión propio | 2 |
 | Dónde van los servicios de variedades | **D-49 (vigente, validada el 19/11/2026)**: servicios y pantallas en `inventario`, tablas en `maestros`, `Semilla(Insumo)` con FK uno a uno; las variedades de cada tarjeta de cultivo por el punto `registrar_variedades_de_cultivo` | 3 |
 | Puntos de extensión de variedades | `registrar_uso_de_variedad`, `registrar_variedades_presentes` y `registrar_impedimento_de_baja_de_variedad`, declarados por INV-03 y registrados por PRD-01 y `comercial` (`docs/api/extensiones_de_inventario.md`). `registrar_uso_de_cultivo` queda solo en `inventario` | 3 |
+| Umbral efectivo (**decidido el 21/11/2026**) | Una sola función en `inventario`: `umbral_efectivo(invernadero_ids)` y `variables_incompatibles(umbral, rangos)` (`docs/api/variedades.md`, «Umbral efectivo»). La implementa INV-03 y la usan PRD-01 (Planificar Siembra) y el módulo IoT. Lo pide IOT-ENT-INF («una sola función del dominio, sin duplicarla») | 3 y 4 |
 | Largos de nombre | Cultivo hasta 40 y variedad hasta 50 caracteres (los CU no los fijan), para que el nombre de la semilla entre en los 100 del insumo | 3 |
 | Semilla de una variedad dada de baja | La baja deja inactiva la semilla pero conserva sus existencias activas (regla 3 de PROD-BAJ-VAR), para poder descartar el stock con un ajuste; el CU manda sobre la regla 3 de 8.4 (`modelo/inventario.md`, «Diferencias», fila 6) | 3 |
 | Precondición f de PROD-BAJ-VAR (contratos) | No se verifica hasta que `comercial` registre su impedimento; anotado en `docs/temas_abiertos.md` | 3 |

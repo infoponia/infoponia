@@ -211,7 +211,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)
 
-1. **Consulta de alertas (CU-46).** MAE-02b dejó afuera la pantalla (paso 4): pasa a MAE-02c. Incluye la entrada «Alertas» del menú
+1. **Consulta de alertas (CU-46).** MAE-02b dejó afuera la pantalla (paso 4): pasa a MAE-02c (`docs/tareas/maestros/MAE-02c-alerta-consulta.md`; extracto en `docs/casos_de_uso/maestros/alertas.md`). Incluye la entrada «Alertas» del menú
    (desde `MaestrosConfig.ready()`), el alcance `Alerta.objects.para(usuario)`, solo las activas, filtros por invernadero y tipo, el
    detalle que llama a `abrir_alerta` (ya existe), que funcione sin JavaScript (HTMX solo reemplaza la tabla) y que viva en `maestros`.
    **Pendiente para pendientes_CU:** abrir la alerta la marca «leída» (regla 7 de 8.18) y choca con la postcondición de CU-46 («no se

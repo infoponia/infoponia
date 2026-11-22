@@ -191,7 +191,7 @@ MAE-03; los servicios, las pantallas de variedades y `Semilla` son de `inventari
 | Órdenes de trabajo a realizar de la variedad | MOD regla 4; BAJ precondición e | Por `registrar_uso_de_variedad` y `registrar_impedimento_de_baja_de_variedad` (código `ordenes_a_realizar`). Sin registrante: ninguna |
 | Variedades presentes en un invernadero (para la advertencia de rangos) | MOD regla 5 | Por `registrar_variedades_presentes`. Sin registrante: nunca hay advertencia |
 | Contratos vigentes o abiertos con un detalle de la variedad | BAJ precondición f | Por `registrar_impedimento_de_baja_de_variedad` (código `contratos_abiertos`, lo registra `comercial`). **Hasta entonces la precondición f no se verifica** (no hay contratos): es un hueco conocido de la ronda, anotado en `docs/temas_abiertos.md` |
-| Alerta de rangos y umbral efectivo de un invernadero | MOD regla 5, parte final («las alertas de ese invernadero se calculan con el rango nuevo») | No hay nada que hacer en INV-03: las alertas de IoT leen la variedad vigente cuando se calculan (módulo IoT, fuera de la ronda) |
+| Alerta de rangos y umbral efectivo de un invernadero | MOD regla 5, parte final («las alertas de ese invernadero se calculan con el rango nuevo») | INV-03 implementa `umbral_efectivo` y `variables_incompatibles` (sección «Umbral efectivo» de `docs/api/variedades.md`, agregadas el 21/11/2026). Las alertas de IoT llaman a `umbral_efectivo`, que se calcula en cada llamada con los rangos vigentes (módulo IoT, fuera de la ronda) |
 | Habilitar la semilla en un invernadero | ALT regla 9 | La pantalla final ofrece el botón que abre CMP-HAB-IIN (INV-02, `habilitar_insumo`). Por eso INV-03 **depende de INV-02** |
 
 ### Decisiones de aplicación (donde el caso de uso no baja al detalle)
