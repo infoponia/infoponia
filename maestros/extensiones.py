@@ -353,3 +353,41 @@ def logistica_de(transportistas):
     if not _LOGISTICA:
         return None
     return _LOGISTICA[0](list(transportistas))
+
+
+# ---- IOT-02: estado del IoT del invernadero (docs/api/extensiones_de_maestros.md, «Estado del IoT del invernadero») ----
+# `maestros` muestra en la ficha («Ubicación») y en la lista («Con IoT») si el invernadero tiene sistema IoT, y lo usa en la alerta
+# del Técnico (regla 3 de 8.22) y en el campo del Técnico del alta (regla 5 de PROD-ALT-INV). No puede importar `iot` (A1): `iot`
+# se registra desde `IotConfig.ready()`. Sin registrante, todo queda como antes de IOT-02: ningún estado y ningún enlace.
+
+# Lo que `iot` informa de un invernadero con sistema NO dado de baja: ``estado`` es «activo» o «desconectado»; ``url`` lleva a la
+# pestaña «Sistema IoT» de ese invernadero.
+EstadoIot = namedtuple("EstadoIot", "estado url")
+
+_ESTADO_IOT = []  # a lo sumo un registrante: la lista guarda el par (estados, url_de_registro)
+
+
+def registrar_estado_iot(estados, url_de_registro):
+    """Registra ``estados(invernadero_ids) -> dict[int, EstadoIot]`` (solo los invernaderos con un sistema no dado de baja) y
+    ``url_de_registro(actor, invernadero) -> str | None`` (el enlace «Registrar sistema IoT», o ``None`` si el actor no opera el
+    IoT de ese invernadero). **Admite un solo registrante**: una segunda llamada lanza ``RuntimeError``. Lo registra `iot`."""
+    if _ESTADO_IOT:
+        raise RuntimeError("registrar_estado_iot admite un solo registrante.")
+    _ESTADO_IOT.append((estados, url_de_registro))
+
+
+def estados_iot(ids):
+    """``{id: EstadoIot}`` de los invernaderos de ``ids`` con un sistema IoT no dado de baja. Una sola llamada para toda la lista
+    (sin consultas por fila). Sin registrante, o sin ids, vacío."""
+    ids = list(ids)
+    if not _ESTADO_IOT or not ids:
+        return {}
+    return _ESTADO_IOT[0][0](ids)
+
+
+def url_de_registro_iot(actor, invernadero):
+    """El enlace «Registrar sistema IoT» para ``actor`` en ``invernadero``, o ``None`` si no opera el IoT de ese invernadero (ningún
+    botón lleva a un 403, D-30) o no hay registrante."""
+    if not _ESTADO_IOT:
+        return None
+    return _ESTADO_IOT[0][1](actor, invernadero)

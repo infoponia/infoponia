@@ -8,7 +8,7 @@
 # ``bloquear_invernadero_activo``, D-40): el ``INSERT`` solo toma ``FOR KEY SHARE``, que no choca con el de la baja.
 #
 # «Se completa en IOT-NN»: ``acciones_en_uso`` (IOT-05 y IOT-06), ``acciones_con_historial`` (IOT-05) y la compatibilidad de los
-# actuadores del tipo (``recalcular_compatibilidad``, IOT-02).
+# actuadores del tipo (``recalcular_compatibilidad``, ya completo desde IOT-02).
 
 import re
 from dataclasses import dataclass, field
@@ -24,6 +24,7 @@ from django.shortcuts import get_object_or_404
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from iot.catalogo import RANGO_DEL_PORCENTAJE, UNIDAD_PORCENTAJE, UNIDADES_CON_MINIMO_CERO, UNIDADES_POR_COMANDO
 from iot.models import Accion, Actuador, Capacidad, ComandoCatalogo, TipoActuador
+from iot.servicios.compatibilidad import recalcular_compatibilidad
 from maestros.models import Invernadero
 from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general, _tiene_contenido
 
@@ -405,7 +406,7 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
       achica solo si ningún valor de esos usos queda afuera; una con historial (``acciones_con_historial``) no cambia su comando ni su
       unidad. Todos los impedimentos llegan juntos.
     - Regla 8 y postcondición a: una acción quitada con historial queda inactiva; sin historial, se borra.
-    - Postcondición c: la compatibilidad de los actuadores del tipo se recalcula. **Se completa en IOT-02.**
+    - Postcondición c: la compatibilidad de los actuadores del tipo se recalcula (``recalcular_compatibilidad``, IOT-02).
     - D-28: sin cambios no se escribe ni se audita. Postcondición d y D-36: un registro ``modificacion_tipo_actuador`` con los cambios
       del tipo (nombre y tiempo, antes y después), el antes y el después de cada dato que cambió en cada acción modificada y las listas de
       acciones creadas, modificadas, desactivadas y borradas.
@@ -510,9 +511,14 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
             original.save(update_fields=["nombre_accion", "comando", "unidad_valor", "valor_minimo", "valor_maximo", "estado"])
         creadas = _crear_acciones(tipo, creadas_filas)
 
-        # TODO IOT-02: recalcular_compatibilidad(actuadores del tipo) (iot/servicios/compatibilidad.py); postcondición c de IOT-MOD-TAC.
-        # Hoy la lista está vacía: el tipo todavía no tiene actuadores que recalcular.
-        actuadores_a_recalcular = []  # noqa: F841
+        # Postcondición c y regla 9 de IOT-MOD-TAC (IOT-02): se recalcula la compatibilidad de los actuadores del tipo que no están dados de baja. La función
+        # ordena por invernadero y los bloquea uno por uno DESPUÉS del tipo (D-82), así no se cruza con el alta de un actuador de este tipo.
+        actuadores = list(
+            Actuador.objects.filter(tipo_actuador=tipo).exclude(estado_hardware="inactivo").select_related("sistema").order_by("pk")
+        )
+        alertas_de_compatibilidad = [
+            a for r in recalcular_compatibilidad(actuadores) for a in (r.alerta_creada, r.alerta_resuelta) if a is not None
+        ]
 
         datos_del_registro = {
             clave: [referencia(a) for a in lista]
@@ -533,7 +539,7 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
-            afectados=[tipo, *creadas, *[o for o, _ in modificadas], *desactivadas, *borradas],
+            afectados=[tipo, *creadas, *[o for o, _ in modificadas], *desactivadas, *borradas, *alertas_de_compatibilidad],
             detalle=detalle,
         )
     return tipo

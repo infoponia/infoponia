@@ -683,6 +683,13 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_TIPO_ACTUADOR = "modificacion_tipo_actuador", "Modificación de tipo de actuador"
         REACTIVACION_TIPO_ACTUADOR = "reactivacion_tipo_actuador", "Reactivación de tipo de actuador"
         BAJA_TIPO_ACTUADOR = "baja_tipo_actuador", "Baja de tipo de actuador"
+        # Sistema IoT y hardware (IOT-02, D-36). Nunca llevan el token ni su resumen (D-70). La baja y la desactivación son de IOT-06.
+        ALTA_SISTEMA_IOT = "alta_sistema_iot", "Alta de sistema IoT"
+        MODIFICACION_SISTEMA_IOT = "modificacion_sistema_iot", "Modificación de sistema IoT"
+        REGENERACION_TOKEN_IOT = "regeneracion_token_iot", "Regeneración del token del nodo"
+        ALTA_HARDWARE = "alta_hardware", "Alta de hardware"
+        MODIFICACION_HARDWARE = "modificacion_hardware", "Modificación de hardware"
+        REACTIVACION_HARDWARE = "reactivacion_hardware", "Reactivación de hardware"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -782,6 +789,26 @@ class RegistroAuditoria(models.Model):
         "bitacoras": "Registros de bitácora",
         # Tipos de actuador (IOT-01): listas de referencias a sus acciones en los datos del caso de uso («nombre» y «estado» ya existen).
         "tiempo_minimo_entre_comandos": "Tiempo mínimo entre comandos (s)",
+        # Sistema IoT (IOT-02): el nodo central y el rango de la solución. «invernadero» ya existe.
+        "nodo": "Nodo central",
+        "nombre_nodo": "Nombre del nodo",
+        "numero_serie": "Número de serie",
+        "temp_solucion_min": "Temperatura mínima de la solución (°C)",
+        "temp_solucion_max": "Temperatura máxima de la solución (°C)",
+        "rango_de_la_solucion": "Rango de temperatura de la solución",
+        # Hardware (IOT-02): sensores y actuadores. «estado», «insumo» y «invernadero» ya existen.
+        "clase": "Tipo de equipo",
+        "identificador_equipo": "Identificador del equipo",
+        "tipo_variable_sensor": "Variable que mide",
+        "nombre_sensor": "Nombre del sensor",
+        "tipo_actuador": "Tipo de actuador",
+        "descripcion_actuador": "Descripción del actuador",
+        "modelo_hardware": "Modelo",
+        "fecha_instalacion": "Fecha de instalación",
+        "sector": "Sector",
+        "valor_calibracion_min": "Calibración mínima",
+        "valor_calibracion_max": "Calibración máxima",
+        "desde": "Estaba",
         "acciones_creadas": "Acciones creadas",
         "acciones_modificadas": "Acciones modificadas",
         "acciones_desactivadas": "Acciones desactivadas",
@@ -817,6 +844,9 @@ class RegistroAuditoria(models.Model):
         # MAE-03: «fuera de servicio» es un estado de los sectores (permiso explícito del estudiante, 20/11/2026).
         "estado": {"activo": "Activo", "inactivo": "Inactivo", "fuera_de_servicio": "Fuera de servicio"},
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
+        # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
+        "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
+        "clase": {"sensor": "Sensor", "actuador": "Actuador"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
         # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
         "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
@@ -1022,6 +1052,12 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.REACTIVACION_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.BAJA_TIPO_ACTUADOR,
+        RegistroAuditoria.Accion.ALTA_SISTEMA_IOT,
+        RegistroAuditoria.Accion.MODIFICACION_SISTEMA_IOT,
+        RegistroAuditoria.Accion.REGENERACION_TOKEN_IOT,
+        RegistroAuditoria.Accion.ALTA_HARDWARE,
+        RegistroAuditoria.Accion.MODIFICACION_HARDWARE,
+        RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
     }
 )
 

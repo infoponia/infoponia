@@ -1,0 +1,65 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«IoT» → «Sistema IoT» (IOT-CNS-HDW regla 2 y «Para los cinco»; ``sistema`` del prototipo): la ficha del nodo central del invernadero elegido (estado,
+conectividad, modo, modelo, serie, rango de la solución, último anuncio, dirección de la API y guía) o «no tiene Sistema IoT» con «Registrar sistema IoT»
+a quien lo opera. Los botones salen de «acciones» (D-30): modificar y regenerar el token; la desactivación, la activación y la baja las suma IOT-06. El
+token no se muestra nunca: la base guarda solo su resumen. La ventana de regenerar se abre con HTMX; sin JavaScript, el enlace lleva a esta página con
+la ventana abierta («plantilla_de_ventana»).{% endcomment %}
+{% block titulo %}Sistema IoT · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page">
+  <div class="page-h"><h1>IoT</h1></div>
+  {% include "iot/_marco_invernadero.html" %}
+  {% if not elegido %}
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para mostrar</h3><p class="muted">Cuando haya un invernadero a tu alcance, vas a poder ver acá su sistema IoT.</p></div></div>
+  {% elif not sistema %}
+  <div class="card"><div class="card-b vacio">
+    {% icono "router" 32 %}
+    <h3>{{ elegido.nombre_invernadero }} no tiene Sistema IoT</h3>
+    {% if opera and hay_insumos %}
+    <p class="muted">Registrá el nodo central para empezar a recibir lecturas.</p>
+    <a class="btn btn-primary" href="{% url 'iot:sistema_registrar' %}?invernadero={{ elegido.pk }}">{% icono "plus" 14 %} Registrar sistema IoT</a>
+    {% elif opera %}
+    <p class="muted">Primero registrá en Compras e Inventario el insumo del nodo, en la categoría «Repuestos de hardware».</p>
+    {% if request.user.rol == "agronomo" %}<a class="btn btn-ghost" href="{% url 'inventario:insumo_nuevo' %}">{% icono "plus" 14 %} Registrar el insumo</a>{% endif %}
+    {% else %}
+    <p class="muted">Lo registra quien opera el IoT de este invernadero.</p>
+    {% endif %}
+  </div></div>
+  {% else %}
+  <div class="card">
+    <div class="card-h">
+      <h3>{% icono "router" 16 %} {{ nodo.nombre_nodo }}</h3><span class="spacer"></span>
+      {% if "modificar" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_modificar' sistema.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+      {% if "regenerar_token" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_regenerar_token' sistema.pk %}" hx-get="{% url 'iot:sistema_regenerar_token' sistema.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "lock" 14 %} Regenerar token</a>{% endif %}
+    </div>
+    <div class="facts">
+      <div><span class="k">Estado</span><span class="v">{% if sistema.estado_sistema == "activo" %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-warn">Desconectado</span>{% endif %}</span></div>
+      <div><span class="k">Conectividad</span><span class="v">{% if conectividad.estado == "en_linea" %}<span class="status-badge status-ok">En línea</span>{% else %}<span class="status-badge status-danger">Sin señal</span>{% endif %}</span><span class="d">{{ conectividad.texto }}</span></div>
+      <div><span class="k">Modo</span><span class="v">{% if nodo.modo == "local" %}<span class="status-badge status-warn">Local</span>{% else %}<span class="status-badge status-ok">Remoto</span>{% endif %}</span><span class="d">Lo informa el nodo</span></div>
+      <div><span class="k">Token de acceso</span><span class="v">Generado el {{ sistema.token_generado_en|date:"d/m/Y" }}</span><span class="d">Se guarda solo como resumen: no se puede volver a mostrar</span></div>
+    </div>
+    <div class="facts">
+      <div><span class="k">Modelo</span><span class="v">{{ nodo.modelo_hardware }}</span></div>
+      <div><span class="k">Número de serie</span><span class="v">{% if nodo.numero_serie %}{{ nodo.numero_serie }}{% else %}—{% endif %}</span></div>
+      <div><span class="k">Temperatura de la solución</span><span class="v">{% if sistema.temp_solucion_min is not None %}{{ sistema.temp_solucion_min }} a {{ sistema.temp_solucion_max }} °C{% else %}Sin rango{% endif %}</span></div>
+      <div><span class="k">Último anuncio de equipos</span><span class="v">{% if anuncio %}{{ anuncio.anunciado_en|date:"d/m/Y H:i" }} · {{ anuncio.cantidad }} equipos{% else %}El nodo no anuncia equipos{% endif %}</span><span class="d">{% if anuncio %}{% if anuncio.sin_registrar %}{{ anuncio.sin_registrar }} sin registrar{% else %}Todos registrados{% endif %}{% else %}Compatibilidad sin verificar{% endif %}</span></div>
+    </div>
+    <div class="card-b" style="border-top:1px solid var(--border)">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div><span class="xs muted" style="display:block">Dirección de la API (solo HTTPS)</span><b>{{ url_de_la_api }}</b></div>
+        <span class="spacer"></span>
+        <a class="btn btn-ghost btn-sm" href="{{ url_de_la_guia }}" target="_blank" rel="noopener noreferrer">{% icono "ext" 14 %} Guía de integración del nodo</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}

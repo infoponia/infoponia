@@ -1,0 +1,16 @@
+{% load iconos %}{% comment %}Ventana de regenerar el token (IOT-MOD-SIS reglas 3 y 4; ventana ``regen`` del prototipo). Advierte que el token actual deja de funcionar de inmediato,
+que el nodo dejará de comunicarse hasta que se le cargue el nuevo (su conectividad pasa a «sin señal») y que el nuevo se muestra una sola vez. Abrirla (GET) no cambia nada;
+regenerar es un POST.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Regenerar token</h2>
+    <p>El token actual <b>deja de funcionar de inmediato</b> y el nodo dejará de comunicarse hasta que le cargues el nuevo; mientras tanto su conectividad pasará a «sin señal». El token nuevo se muestra una sola vez.</p>
+    <form method="post" action="{% url 'iot:sistema_regenerar_token' sistema.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Regenerando…">Regenerar token</button>
+      </div>
+    </form>
+  </div>
+</div>

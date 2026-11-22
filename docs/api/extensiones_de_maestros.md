@@ -109,6 +109,13 @@ Los otros dos registrantes de IOT-02 usan puntos que ya existen:
 
 Cambios permitidos en `maestros` (y nada más): el registro y la función `estados_iot` en `maestros/extensiones.py`; el cuerpo de
 `Invernadero.tiene_sistema_iot()`; en la ficha y en la lista, mostrar el estado con `estados_iot` (una consulta para toda la lista). Si
-hace falta tocar más, frená y avisá. Prueba mínima en `maestros` (registrante falso con `mock.patch.object`): sin registrante,
+hace falta tocar más, frená y avisá.
+
+**Lo que se implementó en IOT-02 (con su razón).** Además de lo anterior: `Invernadero.estado_iot()` (el estado del invernadero, que `tiene_sistema_iot()` y las
+pantallas reutilizan), `precargar_estado_iot` en `maestros/servicios/invernaderos.py` y una llamada a ella en `maestros/views.py` (la lista y la ficha). La razón: `roles_faltantes()`,
+`equipo()` y la plantilla preguntan por el IoT de cada invernadero, y sin precarga cada pregunta sería una llamada al registrante por fila; con ella, **una sola llamada
+al registrante por lista o por ficha**, que deja el estado en cada instancia (si no está cargado, `estado_iot()` consulta). La vista de la lista le pasa a la plantilla una lista en vez de un queryset.
+
+Prueba mínima en `maestros` (registrante falso con `mock.patch.object`): sin registrante,
 `tiene_sistema_iot()` es `False` y la ficha dice «Sin registrar» sin enlace; con uno, la ficha muestra el estado y el enlace; la lista
 no hace una consulta por fila; una segunda llamada a `registrar_estado_iot` lanza `RuntimeError`.

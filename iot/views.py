@@ -33,8 +33,8 @@ def _es_htmx(request):
 
 @rol_requerido(GERENTE, AGRONOMO)
 def inicio(request):
-    """``/iot/``: hasta IOT-02 lleva a «Tipos de actuador» (IOT-02 lo cambia por «Sistema IoT»; IOT-04, por «Monitoreo»)."""
-    return redirect("iot:tipos")
+    """``/iot/``: lleva a «Sistema IoT» (IOT-02; IOT-04 lo cambia por «Monitoreo»)."""
+    return redirect("iot:sistema")
 
 
 # ---- consulta (IOT-CNS-TAC) ----

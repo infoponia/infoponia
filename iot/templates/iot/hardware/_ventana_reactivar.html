@@ -1,0 +1,23 @@
+{% load iconos %}{% comment %}Ventana de reactivar un equipo dado de baja (IOT-MOD-HDW postcondición c y reglas 9 y 10; ventana ``rebaja`` del prototipo). El equipo vuelve a estar activo con su historial; si es un
+actuador, su compatibilidad se vuelve a calcular con el último anuncio del nodo y, si algún comando no se anunció, lo advierte (no impide reactivar). Si no se puede (otro equipo usa su identificador, su
+sistema o su tipo están dados de baja), lo dice y no ofrece confirmar. Abrirla (GET) no cambia nada; reactivar es un POST.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Reactivar {{ nombre }} {{ equipo.identificador_equipo }}</h2>
+    {% if impedimento %}
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "warn" 16 %}<div>{{ impedimento }}</div></div>
+    <div class="acts"><a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a></div>
+    {% else %}
+    <p>El equipo vuelve a estar activo con su historial.{% if equipo.clase == "actuador" %} Su compatibilidad se vuelve a calcular con el último anuncio del nodo.{% endif %}</p>
+    {% if compatibilidad and compatibilidad.estado == "incompatible" %}<div class="alert alert-warn" style="margin-bottom:10px">{% icono "warn" 16 %}<div>El nodo no anunció el comando de: <b>{% for a in compatibilidad.acciones_incompatibles %}{{ a.nombre_accion }}{% if not forloop.last %}, {% endif %}{% endfor %}</b>. Podés reactivarlo igual; esas acciones no se ofrecerán.</div></div>{% endif %}
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'iot:hardware_reactivar' equipo.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-ghost" type="submit" data-enviando="Reactivando…">Reactivar</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

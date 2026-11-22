@@ -1,0 +1,57 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}La ficha de un equipo (IOT-CNS-HDW regla 6; ``hw-ficha`` del prototipo): identificador, tipo, sector, situación, modelo, número de serie, fecha de instalación e insumo; de un sensor, su
+calibración; de un actuador, el estado que informó el nodo, la compatibilidad y el tiempo mínimo entre comandos; y sus alertas activas. Los botones salen de «acciones» (D-30): modificar, volver a
+activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (las lecturas, el historial de comandos, las reglas y las órdenes de mantenimiento) no se muestra; lo suman IOT-03 a IOT-07.
+Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
+{% block titulo %}{{ nombre }} {{ equipo.identificador_equipo }} · Hardware · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page">
+  <a class="back" href="{% url 'iot:hardware' %}?invernadero={{ elegido.pk }}">{% icono "back" 14 %} Volver al listado</a>
+  <div class="page-h">
+    <h1>{{ nombre }}</h1>
+    {% if equipo.estado_hardware == "activo" %}<span class="status-badge status-ok">Activo</span>{% elif equipo.estado_hardware == "fuera_de_servicio" %}<span class="status-badge status-danger">Fuera de servicio</span>{% else %}<span class="status-badge status-neutral">Dado de baja</span>{% endif %}
+    <span class="spacer"></span>
+    {% if "modificar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:hardware_modificar' equipo.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+    {% if "volver_a_activar" in acciones %}<a class="btn btn-primary" href="{% url 'iot:hardware_volver_a_activar' equipo.pk %}" hx-get="{% url 'iot:hardware_volver_a_activar' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Volver a activar</a>{% endif %}
+    {% if "reactivar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:hardware_reactivar' equipo.pk %}" hx-get="{% url 'iot:hardware_reactivar' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 14 %} Reactivar</a>{% endif %}
+  </div>
+  {% include "iot/_marco_invernadero.html" %}
+  {% for a in alertas %}<div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div><b>{{ a.descripcion_alerta }}</b></div></div>{% endfor %}
+  <div class="card">
+    <div class="facts">
+      <div><span class="k">Identificador</span><span class="v">{{ equipo.identificador_equipo }}</span><span class="d">{% if equipo.ultimo_mensaje_en %}Último mensaje: {{ equipo.ultimo_mensaje_en|date:"d/m/Y H:i" }}{% else %}Sin confirmar: nunca reportó{% endif %}</span></div>
+      <div><span class="k">Tipo</span><span class="v">{% if equipo.clase == "sensor" %}Sensor · {{ equipo.get_tipo_variable_sensor_display }}{% else %}Actuador · {{ equipo.tipo_actuador.nombre_actuador }}{% endif %}</span></div>
+      <div><span class="k">Sector</span><span class="v">{% if equipo.sector %}{{ equipo.sector.nombre_sector }}{% else %}General{% endif %}</span></div>
+      <div><span class="k">Situación</span><span class="v"><span class="status-badge {% if situacion.clave == 'operativo' %}status-ok{% elif situacion.clave == 'baja' %}status-neutral{% elif situacion.clave == 'comando_pendiente' %}status-info{% elif situacion.clave == 'fuera_de_servicio' %}status-danger{% else %}status-warn{% endif %}">{{ situacion.texto }}</span></span></div>
+    </div>
+    <div class="facts">
+      <div><span class="k">Modelo</span><span class="v">{{ equipo.modelo_hardware }}</span></div>
+      <div><span class="k">Número de serie</span><span class="v">{% if equipo.numero_serie %}{{ equipo.numero_serie }}{% else %}—{% endif %}</span></div>
+      <div><span class="k">Instalación</span><span class="v">{{ equipo.fecha_instalacion|date:"d/m/Y" }}</span></div>
+      <div><span class="k">Insumo</span><span class="v">{{ equipo.insumo.nombre_insumo }}</span></div>
+    </div>
+    {% if equipo.clase == "sensor" %}
+    <div class="facts">
+      <div><span class="k">Nombre</span><span class="v">{% if equipo.nombre_sensor %}{{ equipo.nombre_sensor }}{% else %}—{% endif %}</span></div>
+      <div><span class="k">Calibración</span><span class="v">{% if equipo.valor_calibracion_min is not None %}{{ equipo.valor_calibracion_min }} a {{ equipo.valor_calibracion_max }} {{ equipo.unidad_medida }}{% else %}No aplica{% endif %}</span></div>
+      <div><span class="k">Última lectura</span><span class="v">—</span></div>
+    </div>
+    {% else %}
+    <div class="facts">
+      <div><span class="k">Estado informado por el nodo</span><span class="v">{% if equipo.estado_informado %}{{ equipo.estado_informado }}{% else %}<span class="muted">Desconocido</span>{% endif %}</span>{% if not equipo.estado_informado %}<span class="d">El nodo todavía no informó su estado</span>{% elif equipo.cambiado_en_invernadero %}<span class="d">Cambiado en el invernadero</span>{% endif %}</div>
+      <div><span class="k">Compatibilidad con el nodo</span><span class="v">{% if equipo.compatibilidad == "compatible" %}<span class="status-badge status-ok">Compatible</span>{% elif equipo.compatibilidad == "incompatible" %}<span class="status-badge status-warn">Incompatible</span>{% else %}<span class="status-badge status-neutral">Sin verificar</span>{% endif %}</span>{% if equipo.compatibilidad == "incompatible" %}<span class="d">No soporta: {% for a in equipo.acciones_incompatibles.all %}{{ a.nombre_accion }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}</div>
+      <div><span class="k">Tiempo mínimo entre comandos</span><span class="v">{{ equipo.tipo_actuador.tiempo_minimo_entre_comandos }} s</span></div>
+      <div><span class="k">Descripción</span><span class="v">{% if equipo.descripcion_actuador %}{{ equipo.descripcion_actuador }}{% else %}—{% endif %}</span></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}
