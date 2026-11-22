@@ -17,7 +17,16 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
   modelos ya mergeados sin permiso explícito. Lo que la tarea permite tocar fuera de su app está en
   «Permitido fuera de la app».
 - No hagas commits, push ni operaciones de Git que modifiquen el historial. Los commits los hacen los estudiantes.
-- Antes de borrar datos o tablas, frená y preguntá. Vale también para la base local y para los datos de prueba. Cuenta como borrar: `DROP`, `DELETE` o `TRUNCATE` a mano, `flush`, `migrate <app> zero`, `--fake` seguido de un borrado, borrar el archivo o la base de datos, y descartar la base de `--keepdb`. Contame qué se pierde, por qué hace falta y qué alternativa hay, y esperá mi respuesta. Si una migración no se puede deshacer, no la arregles tocando las tablas: avisame.
+- Antes de borrar datos o tablas, frená y preguntá. Vale también para la base local y para los datos de prueba. Cuenta como borrar: `DROP`, `DELETE` o `TRUNCATE` a mano, `flush`, `migrate <app> zero`, `--fake` seguido de un borrado, borrar el archivo o la base de datos, y descartar la base de `--keepdb`. Contame qué se pierde, por qué hace falta y qué alternativa hay, y esperá mi respuesta. Si una migración no se puede deshacer, no la arregles tocando las tablas: avisame. (Salvo lo previsto en «Datos para la verificación a mano».)
+- **Datos para la verificación a mano.** Antes de pedirle al estudiante que verifique una tarea a mano, dejá la base local cargada con todo lo que esa verificación necesita, en cada estado que haya que probar (por ejemplo, con y sin sistema IoT, con y sin Técnico, un tipo dado de baja). El estudiante no carga datos a mano.
+
+  Excepción a la regla de no borrar: para esto podés limpiar los datos de negocio de la base local sin preguntar. Se borran filas, nunca tablas ni migraciones. No toques al Administrador (ni su usuario ni su contraseña). La auditoría es inmutable (D-22): si hace falta limpiarla, frená y preguntá.
+
+  Solo la base local. La carga se hace con un comando propio, manage.py cargar_datos_de_verificacion, idempotente, que cada tarea amplía. Si todavía no existe, lo crea la primera tarea que lo necesite, con pruebas de que se niega a correr si DEBUG está apagado, si la base no es localhost o si hay variables de Render, y de que no toca al Administrador.
+
+  Cuentas: el correo es <rol>@prueba<N>.local (N = 1, 2… si hay más de una del mismo rol). La contraseña es la de quien trabaja y está en su CLAUDE.local.md, que no se versiona. Si no está, preguntá. Nunca escribas una contraseña en un archivo versionado: el repo es público.
+
+  En el «Cierre», listá qué datos quedaron cargados y con qué cuentas.
 - Nunca listes ni leas `.venv/`.
 - Verificá versiones y comandos actuales antes de recomendarlos; no recomiendes de memoria.
 
