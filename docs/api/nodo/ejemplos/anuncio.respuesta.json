@@ -1,0 +1,23 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "resultado": "aceptado",
+  "equipos": 8,
+  "actuadores": [
+    {
+      "identificador": "norte/sectorA/ventana",
+      "compatibilidad": "incompatible",
+      "acciones_incompatibles": [
+        "Fijar posición"
+      ]
+    },
+    {
+      "identificador": "norte/sectorA/ventilador",
+      "compatibilidad": "compatible",
+      "acciones_incompatibles": []
+    }
+  ],
+  "sin_registrar": [
+    "norte/sectorB/co2"
+  ]
+}

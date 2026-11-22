@@ -1,0 +1,7 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "error": "mensaje_mal_formado",
+  "detalle": "resultado: tiene que ser «ejecutado», «fallo» o «rechazado».",
+  "campo": "resultado"
+}

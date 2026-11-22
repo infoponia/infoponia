@@ -42,7 +42,7 @@ ficha del invernadero, agregar y quitar transportista, el transportista sin inve
 la ficha de la cuenta y la baja de una cuenta en ruta. Es chico: se puede leer entero. Funciones: `logistica`, `ventanaAgregar`,
 `ventanaQuitar`, `personalPorAsignar`, `fichaDeCuenta` y `bajaDeCuentaEnRuta`. El selector de pantallas es «solo prototipo».
 
-La pantalla de concretar cosecha no está en este archivo (ver `docs/disparadores.md`, «Cuando exista Cosecha»).
+La pantalla de concretar cosecha no está en este archivo: está en el prototipo comercial, `docs/prototipos/comercial/` (`VIEWS.capcsc`).
 
 ## Elementos del prototipo que no van en el sistema
 

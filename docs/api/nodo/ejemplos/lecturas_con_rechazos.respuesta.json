@@ -1,0 +1,91 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "aceptadas": 3,
+  "duplicadas": 1,
+  "rechazadas": 8,
+  "resultados": [
+    {
+      "indice": 0,
+      "identificador": "norte/sectorA/temperatura",
+      "resultado": "aceptada",
+      "valida": false,
+      "atrasada": false
+    },
+    {
+      "indice": 1,
+      "identificador": "norte/sectorA/humedad",
+      "resultado": "aceptada",
+      "valida": true,
+      "atrasada": true
+    },
+    {
+      "indice": 2,
+      "identificador": "norte/sectorB/co2",
+      "resultado": "rechazada",
+      "motivo": "equipo_no_registrado",
+      "detalle": "«norte/sectorB/co2» no es un equipo registrado de este sistema IoT."
+    },
+    {
+      "indice": 3,
+      "identificador": "norte/sectorA/temp-vieja",
+      "resultado": "rechazada",
+      "motivo": "equipo_dado_de_baja",
+      "detalle": "«norte/sectorA/temp-vieja» era de un equipo dado de baja de este sistema IoT."
+    },
+    {
+      "indice": 4,
+      "identificador": "norte/sectorA/ventilador",
+      "resultado": "rechazada",
+      "motivo": "no_es_sensor",
+      "detalle": "«norte/sectorA/ventilador» es un actuador: las lecturas son solo de sensores."
+    },
+    {
+      "indice": 5,
+      "identificador": "norte/sectorA/luz",
+      "resultado": "rechazada",
+      "motivo": "fecha_futura",
+      "detalle": "La fecha 2026-11-21T14:20:00-03:00 es más de 5 minutos posterior a la hora de InfoPonia."
+    },
+    {
+      "indice": 6,
+      "identificador": "norte/sectorA/temperatura",
+      "resultado": "rechazada",
+      "motivo": "fecha_invalida",
+      "detalle": "«2026-11-21T14:04:30» no es una fecha ISO 8601 con zona horaria."
+    },
+    {
+      "indice": 7,
+      "identificador": "norte/tanque1/nivel",
+      "resultado": "rechazada",
+      "motivo": "valor_invalido",
+      "detalle": "El nivel de la solución solo admite «normal» o «bajo»."
+    },
+    {
+      "indice": 8,
+      "identificador": "norte/sectorA/humedad",
+      "resultado": "rechazada",
+      "motivo": "valor_invalido",
+      "detalle": "El valor tiene que ser un número."
+    },
+    {
+      "indice": 9,
+      "identificador": "norte/sectorA/temperatura",
+      "resultado": "rechazada",
+      "motivo": "mal_formada",
+      "detalle": "No tiene la forma del contrato: el campo «medido_en» no existe."
+    },
+    {
+      "indice": 10,
+      "identificador": "norte/tanque1/temp-solucion",
+      "resultado": "aceptada",
+      "valida": true,
+      "atrasada": false
+    },
+    {
+      "indice": 11,
+      "identificador": "norte/sectorA/humedad",
+      "resultado": "duplicada"
+    }
+  ]
+}

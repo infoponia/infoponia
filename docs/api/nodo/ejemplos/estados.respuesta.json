@@ -1,0 +1,49 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "aceptados": 4,
+  "rechazados": 3,
+  "resultados": [
+    {
+      "indice": 0,
+      "identificador": "norte/sectorA/ventilador",
+      "resultado": "aceptado"
+    },
+    {
+      "indice": 1,
+      "identificador": "norte/sectorA/ventana",
+      "resultado": "aceptado"
+    },
+    {
+      "indice": 2,
+      "identificador": "norte/sectorA/humedad",
+      "resultado": "aceptado"
+    },
+    {
+      "indice": 3,
+      "identificador": "norte/sectorA/luz",
+      "resultado": "aceptado"
+    },
+    {
+      "indice": 4,
+      "identificador": "norte/sectorA/temp-vieja",
+      "resultado": "rechazado",
+      "motivo": "equipo_dado_de_baja",
+      "detalle": "«norte/sectorA/temp-vieja» era de un equipo dado de baja de este sistema IoT."
+    },
+    {
+      "indice": 5,
+      "identificador": "norte/sectorA/temperatura",
+      "resultado": "rechazado",
+      "motivo": "estado_invalido",
+      "detalle": "«encendido» es un estado de actuador y «norte/sectorA/temperatura» es un sensor."
+    },
+    {
+      "indice": 6,
+      "identificador": "norte/sectorA/ventilador",
+      "resultado": "rechazado",
+      "motivo": "estado_invalido",
+      "detalle": "«girando» no es un estado del contrato."
+    }
+  ]
+}

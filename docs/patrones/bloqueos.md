@@ -132,3 +132,96 @@ Orden global de los servicios de `produccion` (siempre `select_for_update(no_key
 - **Registrar evento** (PRD-03): cuentas → invernadero → fila del lote si se eligió.
 - **Efectos de maestros** (vuelta a servicio, baja de sector, baja de invernadero): corren con el invernadero y los sectores ya tomados; sus filas de `FueraDeServicio` se bloquean después, en orden de id.
 - Pruebas de concurrencia que suma el lote 5: dos mermas sobre el mismo lote; merma contra concretar una transición; merma contra poner el sector fuera de servicio; dos aplicaciones sobre el mismo lote de insumo; aplicación contra un ajuste de stock; poner fuera de servicio dos veces el mismo sector.
+
+## `comercial` (COM-02, D-59)
+
+Orden de las operaciones que reservan stock (compra-venta, suministro, cosecha, cámara). El detalle, con el porqué, está en
+`docs/patrones/stock_maduro.md`, sección 3:
+
+1. las cuentas (quien actúa, el Vendedor responsable y las que se notifican), en una consulta y en orden de id;
+2. los **invernaderos considerados** (`bloquear_invernadero_activo`), en orden de id, y releer su Vendedor y su Capataz;
+2b. el **cliente** (si la operación tiene uno), y releer su estado y, en un envío, su dirección;
+3. las **variedades** (`bloquear_variedad`), en orden de id;
+4. los **lotes candidatos** y después las **partidas candidatas**, cada grupo en orden de id;
+5. las filas de la operación (contrato, detalles, reservas, líneas, cosechas), nuevas o releídas.
+
+- Es compatible con el de `produccion`: una merma (invernadero → variedad → sectores → lote) y una venta (invernadero → variedad → lote) toman
+  lo común en el mismo sentido.
+- El traspaso de contratos al Vendedor nuevo (D-60) corre dentro de `modificar_invernadero`: bloquea los contratos **después** del invernadero
+  (contrato de `maestros/extensiones.py`). Una venta nueva de ese invernadero espera al invernadero, así que no queda una venta del Vendedor
+  anterior creada en medio del traspaso.
+- ABM de clientes y vehículos (COM-01): cuentas → la fila del cliente o del vehículo. No toman invernaderos.
+
+- Suministros (COM-03): la pre-reserva de un período y una modificación con detalles nuevos siguen el orden de arriba y bloquean el
+  `Suministro` en el paso 5, antes que sus detalles. Una modificación sin detalles nuevos (sin asignación) bloquea solo las cuentas y el
+  `Suministro`: no toma invernaderos ni lotes, así que no puede cruzarse con una pre-reserva.
+
+- Cosecha y cámara (COM-04, D-64): el mismo orden, con los **sectores** entre las variedades y los lotes (como la merma de `produccion`):
+  cuentas → invernaderos → cliente → variedades → **sectores** (los de las ocupaciones de los lotes, en orden de id) → lotes → partidas →
+  contrato → detalles → **cosecha** (`OrdenTrabajo`) → reservas → líneas → **enlace del cliente** (`EnlaceCliente`, D-65), siempre al final. Así se ordenan PROD-PNF-CSC,
+  PROD-MOD-CSC, PROD-CNC-CSC (con su merma y su encadenamiento), la cancelación de una cosecha, la merma en cámara, PROD-VNC-CAM, PROD-ASG-CAM y
+  COM-DCD-FLT. Cada uno lee sin bloquear qué filas va a tocar, las bloquea en este orden, las **relee** y verifica que no cambiaron (las
+  extensiones 13b y 13c de PROD-CNC-CSC, 10a y 10b de PROD-MOD-CSC, 8a y 8b de PROD-CNL-ORD, 6a y 6b de COM-DCD-FLT).
+- Una cosecha que se concreta y otra operación sobre su reserva (cancelarla, modificarla, rechazar el detalle) se ponen en fila en la
+  **fila de la cosecha** (`OrdenTrabajo`), que todas bloquean antes que su reserva.
+
+- Entregas y envasado (COM-05a1 y COM-05a2, D-66 punto 11; COM-05b, D-67). **El semáforo es el invernadero de origen**: toda operación que crea, cambia o cancela una
+  entrega o su envasado lo toma antes (`bloquear_invernadero_activo`), y como un transportista es de un solo invernadero (MD-138), quedan
+  en fila las planificaciones, las asignaciones y el inicio de ruta del mismo transportista.
+  - **Planificar una entrega** (COM-PNF-ENT, un invernadero de origen por transacción): cuentas (el Vendedor del contrato, el Agrónomo del
+    invernadero y **todos los transportistas del invernadero**, en una consulta y en orden de id; se releen su estado y su invernadero) →
+    el invernadero → el cliente → el **contrato** → sus detalles → sus **reservas** (releer que sigan «lista para entrega» y sin línea en una
+    entrega no cancelada: 8b) → las **entregas** del contrato con las que podría agruparse (en orden de id) y sus reservas de insumo (para
+    ver si tienen envasado). Con todo releído, se eligen el transportista y el agrupamiento (8a ya no puede pasar: nadie más cambia ese día
+    del transportista sin el invernadero).
+  - **Planificar el envasado** (PROD-PNF-ENV): la cuenta del Agrónomo → el invernadero → los `InsumoInvernadero` de los envases (en orden
+    de id) y sus lotes (`docs/patrones/stock.md`, sección 5) → la **entrega** (`OrdenTrabajo`) → sus reservas de insumo, releídas (10a, 10c).
+  - **Cancelar una entrega** (dentro de PROD-VNC-CAM, la merma en cámara, COM-CNL-CVT o COM-RSV-SUM): el caso de uso base ya tomó el
+    invernadero y sus filas; después de las reservas de stock toma la **entrega**, y `cancelar_orden_incluida` sus insumos y sus reservas de
+    insumo. Ese orden interno (reservas de stock → entrega → insumos) es distinto del del envasado (insumos → entrega), pero no se cruzan:
+    los dos tomaron antes el mismo invernadero.
+  - **Baja de la cuenta de un Transportista** (`registrar_efecto_de_baja_de_cuenta`): la cuenta ya está bloqueada por `baja_usuario`; el
+    efecto toma los invernaderos de sus entregas «a realizar» (en orden de id) y después las entregas.
+  - **Asignar un transportista** (COM-ASG-TRP, COM-05b): cuentas (el actor, el Vendedor del contrato, el transportista nuevo y el actual, en
+    una consulta y en orden de id; se releen su estado y el invernadero del nuevo) → el **invernadero de origen** → la **entrega**
+    (`OrdenTrabajo`). Con el invernadero tomado se vuelven a calcular los candidatos (8b): nadie más puede cambiar ese día del transportista.
+    No toma reservas ni insumos (el contenido de la entrega no cambia).
+  - **Cancelar una compra-venta** (COM-CNL-CVT, COM-05b): el orden de «Cosecha y cámara» con las entregas después de las reservas: cuentas (el
+    actor, el Vendedor, los Capataces y Agrónomos de las cosechas, los transportistas de las entregas) → los **invernaderos** de las reservas y
+    de las entregas (`bloquear_invernadero_para_alertas`, en orden de id: activo o no, como COM-DCD-FLT, D-64 punto 12) → el cliente → las
+    variedades → los sectores → los lotes → las partidas → la venta → sus detalles → las **cosechas** → las reservas y sus líneas → las
+    **entregas** (y, por `cancelar_orden_incluida`, sus insumos y reservas de insumo) → el **enlace**. Se cruza bien con la concreción de una
+    cosecha (la fila de la cosecha), con la planificación y el inicio de ruta (el invernadero) y con la decisión del cliente (la venta y el
+    enlace).
+  - **Iniciar y finalizar la ruta, y el intento fallido** (COM-INI-RUT, COM-FIN-RUT y 4a de COM-CNC-ENT; COM-06a, D-66 punto 11): la cuenta
+    del Transportista (y, en el intento fallido, la del Vendedor) → el **invernadero** de su `TransportistaInvernadero` (el de origen de sus
+    entregas) → el **vehículo** (inicio y fin) → las **entregas** de la ruta, releídas (o la entrega del intento). El inicio toma el invernadero
+    **antes** de cambiar el vehículo: así COM-ASG-TRP, PROD-PNF-ENV, COM-CNL-CVT y COM-PNF-ENT, que toman el mismo invernadero, ven bien si una
+    entrega está en curso.
+  - **Concretar una entrega** (COM-CNC-ENT, COM-06a): cuentas (el actor, el Vendedor del contrato, el Agrónomo del invernadero de origen) →
+    el **invernadero de origen** → las **variedades** → los **lotes** de origen → las **partidas** de origen → el **contrato** → sus
+    **detalles** → la **entrega** (`OrdenTrabajo`) → sus líneas y sus **reservas de stock** con sus `DetalleReserva` → los
+    `InsumoInvernadero` de los envases (reservados y declarados, en orden de id) y sus lotes → las **reservas de insumo**; desde COM-06b, al
+    final, el **enlace** que crea. Es el orden de «Cosecha y cámara» con la entrega y los envases al final, como «Cancelar una compra-venta».
+    Las funciones de núcleo de `produccion` (`docs/api/produccion.md`, sección 10) no bloquean nada más. Se cruza bien con COM-ASG-TRP y con
+    el envasado (el invernadero), con PROD-VNC-CAM y la merma en cámara (el invernadero y la partida) y con COM-CNL-CVT (el invernadero y el
+    contrato).
+  - **Confirmar una entrega** (COM-CNF-ENT, COM-06b): la cuenta del Vendedor → el **invernadero de origen** (`bloquear_invernadero_para_alertas`)
+    → la **entrega** → el **enlace** (`docs/patrones/enlace_del_cliente.md`, sección 5). **Atender una entrega no reconocida** (COM-ATN-ENR):
+    las cuentas → el invernadero (`bloquear_invernadero_para_alertas`) → la entrega → la `AlertaComercial`.
+
+- Solicitudes y resolución del suministro (COM-07a y COM-07b, D-69 punto 11).
+  - **Resolver o anular una solicitud** (COM-EVL-DSC, COM-RSV-QJA y COM-ANL-SRV, COM-07a): las cuentas (el Gerente y el Vendedor del contrato)
+    → el **invernadero de origen** de la entrega (`bloquear_invernadero_para_alertas`: activo o no; escribe la bitácora y resuelve la alerta)
+    → el **suministro** (el contador de incumplimientos: dos aceptaciones del mismo contrato quedan en fila) → la **entrega** (el cobro de
+    COM-08 la bloquea también, así no se cobra mientras se registra la aceptación) → la **solicitud** (y su hija) → su `AlertaComercial`. Va
+    en el mismo sentido que la concreción (invernadero → contrato → entrega): no se cruzan. Dos solicitudes de entregas de invernaderos
+    distintos del mismo contrato toman cada una su invernadero y después el mismo suministro: tampoco se cruzan.
+  - **Resolver un suministro** (COM-RSV-SUM, COM-07b): el orden de «Cancelar una compra-venta» con el **suministro** en lugar de la venta:
+    cuentas (el Vendedor, los Capataces y los Agrónomos, los transportistas de las entregas) → los **invernaderos** de las reservas y de las
+    entregas (`bloquear_invernadero_para_alertas`, en orden de id) → el cliente → las variedades → los sectores → los lotes → las partidas →
+    el **suministro** → sus detalles → las **cosechas** → las reservas y sus líneas → las **entregas** (y, por `cancelar_orden_incluida`, sus
+    insumos y reservas de insumo). Sin enlaces. Se cruza bien con la concreción de una cosecha (la fila de la cosecha), con la planificación,
+    el inicio de ruta y la concreción de una entrega (el invernadero), con la pre-reserva (el invernadero y el suministro) y con una
+    aceptación o una anulación del mismo contrato (el invernadero y el suministro). Lo que la lectura previa no vio y aparece al bloquear
+    (una fila de otro invernadero) obliga a repetir una vez (6a de COM-RSV-SUM; `docs/casos_de_uso/comercial/resolucion.md`).

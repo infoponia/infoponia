@@ -1,6 +1,6 @@
 # Casos de uso · produccion · Merma
 
-Copia para el repo del caso PROD-REG-MRM (versión 0.5) del documento de Drive «CU extendidos», consultado el 20/11/2026. El código va en la app `produccion`.
+Copia para el repo del caso PROD-REG-MRM (versión 0.5) del documento de Drive «CU extendidos», consultado el 20/11/2026. El código de la merma de un lote en pie va en la app `produccion`; **la de una partida en cámara (desde COM-04), en `comercial`** (D-59, A3: recorta reservas). Ver «Cómo se aplica en la ronda «Comercial 1»» al final.
 Cotejado con pendientes_CU y con pendientes_MD hasta MD-96 y con el glosario del 15/11/2026. Se quitaron las marcas ⛔ y los `**` sueltos del export de Drive y se corrigió la numeración. No cambió ninguna regla.
 
 Si este archivo y el documento de Drive no coinciden, avisá: no elijas en silencio.
@@ -11,7 +11,7 @@ Para nombrar las pruebas: las reglas de cada caso de uso están numeradas, así 
 
 | Código | Caso de uso | Actores | Archivo de pruebas |
 |---|---|---|---|
-| PROD-REG-MRM | Registrar Merma | Capataz, Agrónomo | `produccion/tests/test_prod_reg_mrm.py` |
+| PROD-REG-MRM | Registrar Merma | Capataz, Agrónomo | `produccion/tests/test_prod_reg_mrm.py`; en cámara: `comercial/tests/test_prod_reg_mrm_camara.py` |
 
 ---
 
@@ -330,3 +330,69 @@ Sin JavaScript funciona igual.
 ### Pruebas
 
 `produccion/tests/test_prod_reg_mrm.py` (una por regla y por postcondición a, b, c, k, l, m, n, o; un sector, varios sectores, cero total, más que lo ocupado, sin causa, «descarte por selección» no suma, lote que llega a cero queda finalizado con costo 0, umbral cruzado una sola vez, con el porcentaje en 0, condición 2 con una transición ajena «a realizar», actor sin ámbito), `test_merma_concurrencia.py` (`@tag("concurrencia")`: dos mermas simultáneas sobre el mismo lote nunca lo dejan negativo; merma contra concretar transición; merma contra poner el sector fuera de servicio) y las de núcleo ya escritas en PRD-02.
+
+## Cómo se aplica en la ronda «Comercial 1»: la partida en cámara (COM-04; D-57, D-59, D-64)
+
+Lo de «Producción 1» (lote en pie) **no cambia**, salvo dos cosas del núcleo (`docs/api/produccion.md`, sección 8): `aplicar_merma` registra el
+movimiento «salida por merma» del lote (postcondición d; disparador «Cuando exista `produccion` completa», punto 5) y `merma_acumulada` cuenta
+solo las mermas con etapa (regla «Merma acumulada»: las de cámara no suman). COM-04 programa lo que la sección anterior dejó «Lo que NO se hace
+en la ronda (D-45)»: extensiones 4a, 4a.4a, 4a.4b y 10c; postcondiciones f, g, h y j; las causas «daño en cámara» y «vencimiento en cámara»
+(esta, solo para InfoPonia: PROD-VNC-CAM); la extensión 4b con «merma en cámara». Sigue **fuera de esta ronda · contabilidad** (D-57): la
+postcondición i (asiento) y las precondiciones c y d. «Daño en la entrega» es de COM-06.
+
+### Qué hace cada parte
+
+| Parte | Código |
+|---|---|
+| Núcleo de la partida | `produccion/servicios/camara.py`: `aplicar_merma_de_partida` (f, g, h) |
+| Registrar merma en cámara | `comercial/servicios/merma_camara.py`: `partidas_con_merma_posible(actor, invernadero_id)`, `resumen_de_merma_en_camara(actor, datos)`, `registrar_merma_en_camara(actor, datos)` (10c, j) |
+| Recorte y faltante | `docs/patrones/stock_maduro.md`, sección 8 (`orden_de_recorte`, el camino de faltante) |
+
+### Decisiones de aplicación
+
+- **Entrada:** la pantalla «Registrar merma» de PRD-03 ofrece en el paso 4 «Pérdida en cámara» (extensión 4a) con la URL de
+  `entradas_de_comercial(usuario).merma_en_camara` (D-64 punto 11), con el invernadero ya elegido; sin registrante, la opción no aparece. La
+  pestaña «Cámara» de la ficha del invernadero suma el botón «Registrar merma en cámara» para el Capataz asignado y el Agrónomo a cargo (D-61).
+  4b: un invernadero sin lotes activos pero con partidas disponibles ofrece la merma en cámara.
+- **Quién y dónde:** los mismos que la merma de un lote (precondición b: el Capataz en sus invernaderos, el Agrónomo en los suyos), sobre
+  partidas «disponibles».
+- **Paso 4a:** las partidas disponibles del invernadero, con variedad, lote de origen (`L-12`), fecha límite, cantidad disponible y **stock
+  libre**. Cantidad válida: entero entre 1 y la disponible (4a.4a: `cantidad_invalida` con la disponible). **Causa obligatoria** (4a.4b):
+  «Daño en cámara» y las de lote en pie **sin** «Descarte por selección»; nunca «Vencimiento en cámara». Descripción opcional (hasta 500).
+- **Resumen (paso 9):** partida, variedad, cantidad perdida, causa, la disponible que queda y, si la pérdida supera el stock libre, la
+  advertencia con **qué contratos pierden producto** y cuánto (en el orden del recorte) y que se intentará volver a cubrir.
+- **Registro (paso 10), en una transacción:**
+  1. bloqueos (se leen antes, sin bloquear, los contratos con líneas en la partida): las cuentas (quien actúa, el Agrónomo, los Vendedores de
+     esos contratos) → el invernadero de la partida y los considerados de esos contratos, en orden de id → la variedad → lotes y partidas
+     candidatos (con esta) → los contratos, detalles, reservas y líneas, y sus enlaces;
+  2. relectura: 10d (`cambio_simultaneo` con la disponible vigente; vuelve a 4a.3);
+  3. **10c, si la cantidad supera el stock libre:** el recorte (`orden_de_recorte`) hasta que lo reservado en reservas «activas» o «lista para
+     entrega» iguale la disponible nueva; reservas con cubierto 0, «liberada»; por cada detalle o período afectado, lo recortado de ese
+     detalle por el camino de la sección 8 del patrón (`asignar` si se puede cubrir; si no, directo al camino de faltante; un detalle
+     confirmado, D-64 punto 13);
+  4. `camara.aplicar_merma_de_partida` (f, g, h), con el actor como responsable;
+  5. si la partida quedó «agotada», `resolver_aviso_de_partida` (la alerta «partida por vencer», `camara.md`);
+  6. con recorte (10c.6, regla 2 de 8.9): la alerta `comercial_merma_camara_reservada` para el Agrónomo (enlazada a la merma por
+     `AlertaDeMerma`) y la notificación al Vendedor de cada contrato afectado. El caso de uso dice «notifica al Agrónomo y al Vendedor»; la
+     regla 2 de 8.9 dice que al Agrónomo le llega una **alerta**: se aplica la regla (las alertas van al Gerente o al Agrónomo, regla 1 de 8.9);
+  7. `on_commit`: los correos del camino de faltante.
+- **Postcondiciones k y l** no se dan en una merma en cámara: la merma acumulada no cuenta las de cámara (k) y las plantas comprometidas son del
+  lote en pie (l).
+- **Auditoría (n):** el mismo `registro_merma`, con la partida, el movimiento, la merma, las líneas recortadas, las reservas liberadas, lo de
+  `asignar`, el camino de faltante y las alertas.
+
+### Pantallas
+
+La de PRD-03 (`VIEWS.merma` del prototipo de producción) con la opción nueva, y la página de `comercial` para la cámara (no está en el
+prototipo comercial: se arma con el mismo esquema de la merma, D-61): invernadero → partida → cantidad, causa y descripción → resumen →
+confirmar. Sin JavaScript funciona igual.
+
+### Pruebas
+
+`comercial/tests/test_prod_reg_mrm_camara.py` (una por postcondición f, g, h, j y por extensión 4a, 4a.4a, 4a.4b, 4b, 10c, 10d; dentro del stock
+libre no recorta; recorte en el orden de la regla con compra-venta y suministro, fechas distintas y empate por la más reciente; reserva con
+líneas de lote y de cámara que sigue viva con la línea en 0; detalle pendiente, confirmado (cubierto con otra partida, y sin stock: vuelve a pendiente con enlace) y período; vuelve a cubrir con otra partida y con un
+lote (cosecha nueva); la partida que se agota resuelve «partida por vencer»; «Vencimiento en cámara» y «Descarte por selección» no se
+ofrecen), las de núcleo en `produccion/tests/test_camara_nucleo.py`, y en `produccion/tests/test_prod_reg_mrm.py` las nuevas del movimiento
+«salida por merma» y de `merma_acumulada` sin las de cámara. Concurrencia (`@tag("concurrencia")`): una merma en cámara contra PROD-ASG-CAM de la
+misma partida; contra la decisión del cliente que usa esas reservas; dos mermas de la misma partida nunca la dejan negativa.

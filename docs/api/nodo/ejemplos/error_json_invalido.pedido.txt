@@ -1,0 +1,1 @@
+{"lecturas": [ {"identificador": "norte/sectorA/temperatura", "valor": NaN} ]}

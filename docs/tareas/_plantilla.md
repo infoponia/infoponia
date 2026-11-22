@@ -19,7 +19,7 @@ paso por paso. Si algo que necesitás no está en «Leer», frená (L9).
 - Modelo: docs/modelo/<app>.md — <clases>
 - Decisiones: D-NN, D-NN
 - Patrones: docs/patrones/<patrón>.md
-- Pantallas: docs/prototipos/<carpeta>/ — <funciones> (solo guía visual)
+- Pantallas: docs/prototipos/<carpeta>/ — <funciones> (referencia, D-61: corregí y completá lo que haga falta)
 - Reglas: .claude/rules/pruebas.md, .claude/rules/interfaz.md
 
 ## Límites
@@ -49,3 +49,8 @@ Si el tiempo apremia, lo último que se recorta es: <paso> (se anota como dispar
 ## Verificación a mano (la completa Claude Code al cerrar)
 
 ## Cierre (la completa Claude Code al cerrar)
+
+<!-- Al cerrar, Claude Code suma, si corrigió o completó pantallas (D-61):
+### Pantallas: lo que se corrigió del prototipo
+| Pantalla (función del prototipo) | Qué tenía | Qué se hizo | Por qué (paso o regla) |
+-->

@@ -6,8 +6,9 @@ tarea (`docs/tareas/`) o disparador (`docs/disparadores.md`), se saca de acá y 
 Copiados sin cambios de `docs/estado.md`, «Temas abiertos», el 18/11/2026. Actualizado el 19/11/2026 (lote 0 de la ronda
 «Producción 1»).
 
-- Lista cerrada de los casos de uso del 80% y orden de implementación. La primera ronda ya tiene su plan
-  (`docs/tareas/ronda_produccion_1.md`); falta el de las rondas siguientes (cosecha, comercial, compras, IoT).
+- Lista cerrada de los casos de uso del 80% y orden de implementación. Tienen plan «Producción 1»
+  (`docs/tareas/ronda_produccion_1.md`) y «Comercial 1», con cosecha (`docs/tareas/ronda_comercial_1.md`, 21/11/2026); faltan el del
+  IoT (en lotes aparte) y los de compras y contabilidad.
 - Ingreso con Google: trabajo futuro, fuera de este bloque.
 - Hacer configurables por `.env` el host, el puerto, el nombre y el usuario de la base local.
 - Integrar el logo de InfoPonia: favicon y marca en el inicio de sesión. Cuándo: cuando esté el logo definitivo.
@@ -115,17 +116,31 @@ Copiados sin cambios de `docs/estado.md`, «Temas abiertos», el 18/11/2026. Act
 
 ## Abiertos desde la preparación del IoT (20/11/2026)
 
-Lo que el módulo `iot` necesita de lo ya documentado y lo que el estudiante decidió el 20/11/2026. Las tareas y los extractos del IoT se
-agregan en los lotes de documentación del IoT; **hasta entonces estos temas son el registro** (ninguno está aplicado).
+Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante decidió el 20 y el 21/11/2026. **Desde el lote IoT 0
+(21/11/2026) todos tienen dónde aplicarse**: quedan acá como registro y se tachan cuando la tarea que los aplica se mergea.
 
 | Tema | Qué se decidió | Dónde se aplica |
 |---|---|---|
-| El IoT no puede ir en paralelo con producción | Sus tareas se hacen **después** de PRD-04 y de USR-10 (D-54); el orden entre el estudiante y su compañero lo fija el plan `docs/tareas/ronda_iot_1.md` (lote IoT 1) | Lote IoT 1 |
-| Neon Free (100 horas de cómputo por mes y suspensión al llegar al límite, verificado el 20/11/2026) | La revisión periódica del IoT corre cada 5 minutos y el nodo no consulta con una frecuencia que mantenga la base despierta todo el día; política de uso a documentar. No se paga un plan | Decisión nueva en el lote IoT 1 |
-| La revisión periódica genera la alerta y envía el correo de las críticas | Un retraso de hasta 5 minutos no es crítico. El correo sale fuera de la transacción con `core.correo.enviar_correo` (D-54) | IOT-03 |
-| Ficha del nodo y API | Node-RED como nodo de referencia; API `/api/iot/v1/` dentro de InfoPonia, con vistas que devuelven JSON (sin dependencias nuevas) y token guardado como resumen | Lote IoT 3 |
-| Cambios permitidos en otras apps | Cada tarea del IoT los lista (`core`: acciones de auditoría; `maestros`: punto de extensión de `tiene_sistema_iot` y parámetros de `ConfiguracionOperativa`; `produccion`: valor `mantenimiento` y la restricción de prioridad; `inventario`: R072 y el consumo de repuestos) | Cada tarea IOT-NN |
-| Pendientes de MD del IoT | MD-98 a MD-113 están «decididos sin aplicar» en Drive; el modelo del IoT los adopta cuando se escriba `docs/modelo/iot.md` | Lote IoT 1 |
+| El IoT y la producción | El IoT va en paralelo con «Comercial 1» y cada tarea espera solo a las de producción que necesita; **IOT-01 e IOT-02 van en paralelo con «Producción 1»** (estudiante, 21/11/2026) | `docs/tareas/ronda_iot_1.md`, sección 2 |
+| Neon Free (100 horas de cómputo por mes y suspensión al llegar al límite, verificado el 20/11/2026) | Revisión periódica con un comando a mano mientras se desarrolla; cron job al final, encendido solo para presentar. No se paga un plan | D-71; IOT-04 |
+| La revisión periódica genera la alerta y envía el correo de las críticas | Un retraso de hasta 5 minutos no es crítico. El correo sale fuera de la transacción con `core.correo.enviar_correo` (D-54) | D-71; IOT-04 |
+| Ficha del nodo y API | Node-RED como nodo de referencia; API `/api/iot/v1/` dentro de InfoPonia, con vistas que devuelven JSON (sin dependencias nuevas) y token guardado como resumen | D-70; contrato v1 en `docs/api/nodo/` (lote I2a, D-74) |
+| Cambios permitidos en otras apps | `core`: acciones de auditoría y `core/enlaces.py` si no existe; `maestros`: punto de extensión del estado del IoT, los 14 parámetros y la sección «Módulo IoT» de la pantalla de configuración (IOT-04); `produccion`: el valor `comando` de `Bitacora.TipoEvento` (IOT-05), y la restricción de la prioridad del mantenimiento (IOT-07; el valor `mantenimiento` lo crea PRD-01, D-67 punto 1); `inventario`: solo lectura (R072 y `umbral_efectivo`) | `ronda_iot_1.md`, sección 5; «Permitido fuera de la app» de cada tarea |
+| Pendientes de MD del IoT | MD-98 a MD-113 aplicados en el extracto | `docs/modelo/iot.md` |
+| Ronda 23 en el documento del modelo | «Copia de modelo_dominio» todavía no tiene la sección 8.24 ni las fichas nuevas; el repo ya las usa | Cuando se aplique la ronda 23 en Drive (sin fecha) |
+| Textos de los casos de uso que hay que corregir en «CU extendidos» | IOT-REG-SIS («Temas abiertos»: cita `docs/api_nodo.md` y el simulador); IOT-ENT-INF (regla «Alertas», extensiones 1a, \*b y 5g) e IOT-RSV-CMD (4b.3): el correo sale por la revisión periódica (D-71) | Con los extractos: lote I1 (REG-SIS), I2a (ENT-INF: **ya corregido en `entregar_informacion.md`**, falta pasarlo a Drive) e I3 (RSV-CMD: **ya corregido en `resolver_comando.md`**, falta pasarlo a Drive) |
+| Pendientes de Drive fuera del repo | DCU con el paquete IoT; caso 21 de pendientes_CU; correcciones de CU-90 y CU-92 de la «Documentación para la IA» | Sin fecha (no frenan a Claude Code) |
+| Interpretaciones de IOT-ENT-INF en el código (lote I2a) | Siete puntos que el caso de uso no resuelve: «cambiado en el invernadero» inicial, histéresis en un umbral angosto, variable del umbral vacía, resolución al quedarse sin umbral, identificador mal formado, reglas de los estados y sector fuera de servicio | D-75 (**validada el 22/11/2026**; falta pasarla a «CU extendidos») |
+| HTTPS detrás del proxy de Render | La dirección de la API que muestra IOT-02 sale de `request.build_absolute_uri`: si Django no sabe que Render terminó el HTTPS (`SECURE_PROXY_SSL_HEADER`), la muestra con `http://` | Verificación a mano 11 de IOT-03; si falla, USR-09 |
+| Reglas nuevas de la revisión, del panel y de la configuración IoT (lote I2b) | Inactividad, «no registrado» sin mensajes, resúmenes, fotoperíodo, retención, correo y refresco; reglas 2b a 7b de ADM-MOD-CFG | D-76 (**validada el 22/11/2026**; falta pasarla a «CU extendidos», en IOT-ENT-INF y en ADM-MOD-CFG) |
+| Correo de una alerta crítica sin enlace | El comando de la revisión no conoce la dirección del sitio (no hay una variable de configuración): el correo dice «entrá a InfoPonia, menú «Alertas»» (D-76, punto 7) | Si se agrega una variable con la dirección pública (por ejemplo con USR-09) |
+| Revisión que corre poco | Con el cron apagado fuera de las presentaciones (D-71), la primera corrida después de mucho tiempo resume y calcula todo lo pendiente antes de borrar (D-76, puntos 4 a 6): puede tardar más. Medirlo en la primera presentación | Al armar el cron (disparador «Cuando se arme el cron único») |
+| Interpretaciones de comandos y reglas (lote I3) | Doce puntos que IOT-EMT-CMD, IOT-RSV-CMD, IOT-CNL-CMD y las reglas no fijan | D-78 (**validada el 22/11/2026**; falta pasarla a «CU extendidos») |
+| MAE-02c en dos versiones | La PR #46 trajo una MAE-02c sin el enlace de D-62; los lotes tenían otra con él. Se unieron en los documentos (decisión del estudiante, 22/11/2026), pero **la PR #47 programó la versión de `main`**, sin el punto de enlaces, sin la ruta que abre y redirige y con un solo `tipo` en `consultar_alertas` | ~~Al aprobar MAE-02c~~ **Lo que falta va en MAE-02d** (lote C5a; D-62, tercera enmienda, a validar). COM-03 e IOT-04 dependen de ella |
+| Contador de pedidos con varios procesos | La caché local cuenta por proceso de gunicorn (D-70, punto 5): con más de un proceso, el límite real se multiplica | Si cambia el despliegue (sin fecha) |
+| La orden de mantenimiento automática (lote I4) | Se cancela solo desde la ficha, con el alcance del IoT; sufijos de la alerta; aviso y sección del Inicio para el Técnico (estudiante, 22/11/2026). Claude sumó cinco puntos: el largo de la alerta, los avisos solo con la cuenta activa, sus textos, «Cancelarla» marcada al volver a activar, y el traspaso y las asignaciones de la cuenta | D-79 (puntos 1 a 4 vigentes; **5 a 9, a validar**); IOT-07 |
+| Textos y permisos que hay que pasar a «CU extendidos» (lote I4) | IOT-RSV-CMD: los textos de la alerta en 4b.4a y 4b.4b (D-79, punto 3). PROD-CNL-ORD: el mantenimiento del IoT lo cancela quien tiene el alcance del IoT, también el Gerente sin Agrónomo activo (D-79, punto 2), y su tema abierto «Alerta que originó un mantenimiento» queda respondido por D-73 (punto 4) | En Drive (no frena a Claude Code) |
+| ~~`produccion` frente al tipo `mantenimiento`~~ | ~~IOT-07 supone que `cancelar_orden_incluida` acepta una orden sin reservas ni sectores de cualquier tipo, y que la bandeja y las listas de órdenes filtran por tipo~~ | **Resuelto en la documentación (lote C5b, D-67 punto 1):** lo hace y lo prueba PRD-01 («Tipos de orden futuros» de su «Límites»), que además crea el valor `mantenimiento`. Se tacha del todo cuando PRD-01 se mergee |
 
 
 ## Abiertos desde UI-01 (20/11/2026)
@@ -226,6 +241,34 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **La ventana «Agregar» no resalta el candidato elegido.** Usa radios nativos dentro de `label.opt`; el prototipo marca la opción con `aria-pressed`, que hoy no se actualiza sin JavaScript.
 - **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
 
+## Abiertos desde el lote C6 de «Comercial 1» (22/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| ~~D-68, puntos 5 a 9~~ | Los propuso Claude en el lote C6 (los puntos 1 a 4 los validó el estudiante antes de escribir). Los más discutibles: guardar `SolicitudRevision.entrega` aunque el modelo la deduzca (punto 5); la tabla `IntentoFallido`, que el modelo no tiene (punto 6); `cant_perdida` y `cant_devuelta` en la línea (punto 7); la vigencia calculada del enlace de confirmación (punto 8) | **Validados el 22/11/2026** |
+| Estado de paso entre COM-06a y COM-06b | Las entregas de suministro concretadas en ese lapso reciben el comprobante sin enlace y quedan «no confirmado» para siempre (COM-06b no les crea enlace). No rompe datos | Programar COM-06b enseguida de COM-06a |
+| COM-04a suma lo de `produccion` de las entregas | Decisión del estudiante (D-68, punto 3): COM-04a, ya escrita y validada en el C5b, suma la sección 10 de `docs/api/produccion.md`. Si COM-04a ya se hubiera programado, lo haría COM-06a con otra migración de `produccion` | Al programar COM-04a |
+| Exceso de envases: la utilizada real | Con la opción A, `ReservaInsumo.cantidad_utilizada` guarda la utilizada **topeada** en la reservada; la real queda en el consumo (que la incluye) y en la auditoría. Una consulta futura de «utilizado por orden» tiene que leer el consumo, no la reserva | Al escribir una consulta de envases |
+| Aviso a «quien registra los asientos manuales» | COM-ATN-ENR (postcondición b) lo pide; ese rol es de la ronda de contabilidad. Hasta entonces se avisa a los Gerentes activos y al Vendedor | Ronda de contabilidad |
+| Planificada de una línea concretada | Después de concretar, la planificada se lee como `entregada + perdida + devuelta` (las reservas de un detalle rechazado quedan «liberadas» y ya no la dan). Lo que COM-05a1 calcula de las reservas vale solo «a realizar» | Ya resuelto en el código (D-68, punto 7) |
+| Correo del intento fallido al cliente | COM-CNC-ENT 4a dice «notifica al cliente»: se hace por correo, con el resultado en `estado_aviso_cliente` y el reintento del paso 50 (como los demás correos de la entrega) | — |
+| Pendientes de Drive del lote C6 | pendientes_CU: nada nuevo de los casos de uso (los cambios son del código). pendientes_MD: proponer que el modelo registre los intentos fallidos (D-68, punto 6; tema abierto de COM-RSV-QJA). MD-132, MD-136 y MD-137 ya están en «MD · Cambios… (comercial)» | Al pegar en Drive |
+
+## Abiertos desde el lote C7 de «Comercial 1» (22/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| D-69, puntos 9 a 17 | Los propuso Claude con el lote (los puntos 1 a 8 los validó el estudiante antes de escribir). Los más discutibles: guardar lo descontado y lo reintegrado en la solicitud (punto 9); la copia de la resolución en `Anulacion` (punto 10); el disparo de COM-RSV-SUM con `on_commit` en el mismo pedido (punto 13); la severidad `CRITICA` de «suministro resuelto» (punto 14) | Al validar el lote C7 |
+| Estado de paso entre COM-07a y COM-07b | Una aceptación que supera los tolerados deja el contrato «vigente» con más incumplimientos que los tolerados; el paso 33 de COM-07b lo resuelve en su primera ejecución. Mientras tanto, la pre-reserva y la planificación siguen actuando sobre ese contrato (lo que creen, COM-RSV-SUM lo deshace). No rompe datos | Programar COM-07b enseguida de COM-07a |
+| Notificaciones sin enlace (D-42) | La regla 6 de COM-CNS-SRV pide abrir la ficha desde la notificación; hoy la notificación nombra la solicitud y la pestaña la busca por número (D-69, punto 16). El Gerente tiene la alerta, que sí tiene enlace | Cuando las notificaciones tengan enlace |
+| Recordatorio de solicitudes pendientes | Temas abiertos de COM-EVL-DSC y de COM-RSV-QJA: no hay plazo ni recordatorio; mientras tanto, el contador de la pestaña y el grupo del panel | Al decidirlo con el Jardín Botánico |
+| Quién ejecuta el reintegro | «El reintegro se considera hecho al aceptar» (los dos casos de uso): nadie recibe un aviso para hacerlo. Hoy queda en la ficha (monto y medio) y en el comprobante | Al decidirlo con el Jardín Botánico; la ronda de contabilidad |
+| La alerta «período sin cobertura completa» al resolver un contrato | COM-RSV-SUM no lo dice; COM-07b la resuelve (regla 7 de 8.18). Anotarlo en pendientes_CU | Al pegar en Drive |
+| Un registro de auditoría por COM-RSV-SUM | La postcondición m pide que las cancelaciones de PROD-CNL-ORD dejen «sus propios logs»; el código deja uno solo con todo lo afectado (como COM-CNL-CVT, D-36). Anotarlo en pendientes_CU | Al pegar en Drive |
+| `avisar_agronomo` en las dos cancelaciones incluidas | Argumento nuevo de COM-07b (por omisión `True`): el Agrónomo recibe una sola notificación por invernadero en una resolución (situación 9 de COM-RSV-SUM) | Al programar COM-07b |
+| El extracto de COM-RSV-SUM | El plan decía `comercial/suministro.md`; va en `comercial/resolucion.md` porque `suministro.md` ya pasa de mil líneas y COM-07b no necesita leer COM-PCT-SUM ni COM-MOD-SUM. `suministro.md` remite al nuevo | — |
+| Pendientes de Drive del lote C7 | pendientes_CU: COM-EVL-DSC v0.3 con la extensión 6d (MD-115) y «Lo sigue: COM-ANL-SRV»; COM-ANL-SRV v0.2 con la alerta (D-69 punto 4), los bloqueos 2a y 2c (punto 5) y la bitácora (punto 6); COM-CNS-SRV, regla 6 (punto 16); COM-RSV-SUM, las dos filas de arriba. pendientes_MD: el tipo de bitácora «anulación de una resolución»; que MD-115 diga que el descuento y el reintegro se registran en la solicitud | Al pegar en Drive |
+
 ## Abiertos desde INV-03 (22/11/2026)
 
 - **Lo implementado distinto de lo escrito, o que la tarea no decía** (detalle en el «Cierre» del archivo de la tarea):
@@ -251,4 +294,81 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 | Registrar H2 en el modelo de Drive | Ítem nuevo de pendientes_MD: `OrdenTrabajo.motivoCancelacion` (texto, obligatorio al cancelar, 1 a 300) y `fechaResolucionOrden` también como fecha de cancelación; ya aplicado en `docs/modelo/produccion.md` (Diferencias n.º 17). Pegalo vos: no tengo escritura en Drive | Antes de cerrar la ronda del modelo |
 | Aviso al Vendedor con el motivo (PROD-CNL-ORD, postcondición l) | Fuera de la ronda (D-45). La versión 0.1 del CU no menciona el motivo en ese aviso; ajustarla en Drive (pendientes_CU). Se programa con Cosecha | Cuando exista Cosecha |
 
+## Abiertos desde la planificación de «Comercial 1» (21/11/2026, lotes C0 y C1)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| Dónde viven los servicios de cosecha y cámara (P5 de TEC) | D-37 ya ubica los modelos (`Cosecha` y `StockCosechado` en `produccion`, `ReservaStock` en `comercial`). Falta registrar que los casos de uso que tocan reservas viven en `comercial` (regla A3) y resolver que D-56 ubica el paso 20 («vencer partidas en cámara») en `produccion`, aunque PROD-VNC-CAM toca reservas. Detalle en `docs/tareas/ronda_comercial_1.md`, sección 8 | ~~Lote C2~~ **Resuelto en el lote C2: D-59** (vigente) |
+| Enlace de una alerta en la campana | `items_de_campana` (`maestros`) lleva toda alerta a la ficha del invernadero, y `Origen` (C5) solo tiene cuatro valores. Comercial necesita llevar a su pantalla y orígenes nuevos (MD-122, MD-133, MD-134). Coordinar con el IoT y con MAE-02c | ~~Lote C3~~ **Resuelto en el lote C3: D-62** (vigente) |
+| Cambio de Vendedor de un invernadero | Al asignar otro Vendedor, sus contratos vigentes o abiertos pasan al nuevo (regla 3 de 8.22). Si el saliente conserva otros invernaderos, pendientes_CU (caso 22, MD-46) dice que el Gerente decide contrato por contrato; un suministro puede tomar stock de varios invernaderos del Vendedor. Falta decidir si se hace en la ventana de PROD-MOD-INV (`maestros`, por punto de extensión) o con un caso de uso propio | ~~Lote C2~~ **Resuelto en el lote C2: D-60** (vigente; cambia la regla 8 de 8.21, a corregir en pendientes_MD) |
+| PCU, sección 5, en Drive | Dice que antes de comercial va una ronda de contabilidad; D-57 (con PCU 16) dice que no. Corregirlo en pendientes_CU (lo pega el estudiante) | Al pegar PCU |
+| Vehículo de un Transportista dado de baja | Ningún caso de uso dice qué pasa con el vehículo cuando se da de baja la cuenta de su transportista: COM-01 lo deja asignado (se ve con la marca «Inactivo» y se puede quitar en COM-MOD-VEH), y Planificar Entrega no lo toma porque el transportista está inactivo. Decidir si la baja de la cuenta debe liberar el vehículo | Lote C5 (COM-05), con la baja de un Transportista |
+| Ícono `truck` y MAE-05 | El bloque «Logística» del prototipo de MAE-05 usa el ícono `truck`, que no está en `core/templatetags/iconos.py`, y MAE-05 no tiene ese archivo en «Permitido fuera de la app». COM-01 lo agrega si falta | Al programar MAE-05 |
+| Ficha del vehículo | El prototipo no la tiene; COM-01 la arma con el estilo de la ficha del cliente (COM-CNS-VEH, regla 2) | Revisión a mano de COM-01 |
+
+## Abiertos desde el lote C2 de «Comercial 1» (21/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| Correo a quien no tiene cuenta | `core.correo.enviar_correo` (USR-10) espera una cuenta (`.pk`, `.email`). El comprobante de COM-REG-CVT va a un cliente, que no tiene cuenta: COM-02 le pasa un `Destinatario` de `comercial`, y el registro de una falla dice «cuenta N» con el id del cliente. Si molesta, una función hermana en `core` que reciba solo la dirección (decisión aparte) | Cuando lo usen COM-03 o COM-04 (enlaces al cliente) |
+| Comprobante sin reintento automático | La extensión 16a de COM-REG-CVT pide reintentar; no hay cola de envíos. COM-02 guarda el estado y ofrece «Reenviar comprobante» a mano | Si se agrega una cola (fuera del alcance de USR-10) |
+| Notificaciones de PROD-ASG-STK | El caso de uso las envía después de confirmar y las reintenta (paso 10, 10a); en el código van dentro de la transacción (D-42), sin reintento. Ya es la regla de todo el sistema («Notificaciones», lote 4) | Al pegar PCU: anotarlo en el caso de uso |
+| Alerta de PROD-ASG-STK 5a | El caso de uso pide una alerta propia en una transacción aparte. Se usa la `sin_capataz` de `maestros` (D-41), que ya existe mientras falte el Capataz. Corregir el caso de uso en su próxima versión | Al pegar PCU |
+| Recálculo por concurrencia (8a de PROD-ASG-STK) | Con los bloqueos de `docs/patrones/stock_maduro.md` no hace falta: el cálculo ya se hace sobre el stock vigente. Quitar la extensión en la próxima versión del caso de uso | Al pegar PCU |
+| Una venta de varios invernaderos | Tema abierto de PROD-ASG-STK: con la regla 7 de 8.6 un detalle puede tomar stock de varios invernaderos (una cosecha y una entrega por cada uno). Observarlo en el uso real | Revisión a mano de COM-02 y COM-05 |
+
+## Abiertos desde el lote C3 de «Comercial 1» (21/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| Meses del ajuste de un detalle **agregado** al modificar | COM-MOD-SUM cuenta los meses «desde la primera entrega del detalle nuevo»; no distingue el sucesor del agregado con 5b. Se aplica a los dos (`fecha_base_ajuste`, `suministro.md`) | ~~Validación del lote C3~~ **Validado por el estudiante el 21/11/2026** |
+| Detalle que se queda sin períodos al acortar la duración | Ningún caso de uso lo dice: COM-03 lo pasa a «finalizado» con su último período como fecha de fin | ~~Validación del lote C3; anotarlo en COM-MOD-SUM al pegar PCU~~ **Validado por el estudiante el 21/11/2026** |
+| Contrato con todo finalizado | COM-MOD-SUM no dice qué pasa con el estado del contrato al terminar todos sus detalles: COM-03 lo finaliza si no queda ningún período pendiente; si queda, lo hace COM-06 al concretar el último (disparador «Cuando exista Entrega», punto 5) | Al pegar PCU |
+| Detalle finalizado con un período de la ventana que pierde su reserva | Si se cancela la cosecha de un período de un detalle ya finalizado (terminado por COM-MOD-SUM), la pre-reserva no lo vuelve a tomar (solo toma detalles vigentes, PROD-PRR-SUM). Lo trata PROD-CNL-ORD (qué hace con lo no cubierto) | ~~COM-04~~ **Propuesta en D-64, punto 8 (lote C4):** el período con fecha ≤ `fecha_fin_detalle` de un detalle finalizado todavía se debe; la pre-reserva y la cámara lo vuelven a tomar. **Validado el 21/11/2026** |
+| Numeración de COM-MOD-SUM | En el documento de Drive los pasos 7 a 12 se numeran otra vez desde 1; las extensiones los citan como 7 a 12. La copia del repo los numera 7 a 12 | Al pegar PCU (corregir el documento) |
+| Reintentos de correo y notificaciones en suministros | COM-PCT-SUM 15a, COM-MOD-SUM 11a y PROD-PRR-SUM 5a piden reintentar: no hay cola. Se resuelve igual que en COM-02 («Reenviar comprobante» a mano; notificaciones dentro de la transacción) | Si se agrega una cola |
+| Invernadero de la alerta de período | D-63, punto 3: el de la primera reserva del período o el activo de menor id del Vendedor. Ver en el uso real si conviene otra regla | Revisión a mano de COM-03 |
+| Calendario en el comprobante | La variación 15a pide «calendario de entregas»; un contrato largo puede tener cientos de fechas. El comprobante muestra primera y última fecha, cantidad de entregas y tramos de precio | ~~Validación del lote C3~~ **Validado por el estudiante el 21/11/2026** |
+| COM-RSC-SUM y COM-ANL-RSC en Drive | Los dos casos de uso nuevos están solo en el repo (`suministro.md`). Pasarlos a Drive con la tabla de casos de uso, la propuesta MD-140 y el glosario (texto en el LEEME del lote) | Al pegar PCU y pendientes_MD |
+| Plazo de la rescisión | Se conservan los períodos de la ventana de pre-reserva (14 días con la configuración actual). Confirmar con el Jardín Botánico (tema abierto de COM-RSC-SUM) | Revisión a mano de COM-03 |
+
+## Abiertos desde el lote C4 de «Comercial 1» (21/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| Detalle confirmado que pierde producto de cámara | ~~Ningún caso de uso lo trata~~ **Decidido por el estudiante el 21/11/2026 (opción b, D-64 punto 13):** se intenta cubrir y, si no alcanza, el detalle vuelve a pendiente y el cliente decide de nuevo | Al pegar PCU (PROD-REG-MRM y PROD-VNC-CAM) |
+| Orden de la bandeja del Capataz | PROD-CNC-CSC (paso 2) ordena por prioridad y después por fecha; la bandeja de PRD-01, por fecha, prioridad e id, en grupos «Vencidas», «Hoy», «Próximas». COM-04 usa la de la bandeja (una sola para todas las órdenes) | **Validado por el estudiante el 21/11/2026**; falta pegarlo en Drive |
+| Numeración de PROD-MOD-CSC y PROD-VNC-CAM en Drive | Los pasos que siguen a la repetición se numeran otra vez desde 1; las extensiones los citan con la numeración seguida. Las copias del repo los numeran seguido | **Validado por el estudiante el 21/11/2026**; falta pegarlo en Drive |
+| Asignación de cámara «en segundo plano» | PROD-ASG-CAM pide segundo plano y reintento; no hay cola: corre con `on_commit` en el mismo pedido y la recupera el paso diario 25 (D-64 punto 9) | Si se agrega una cola de tareas |
+| Cosechas vencidas sin concretar | Los dos casos de uso de la cosecha lo dejan abierto; la bandeja y la lista las muestran en «Vencidas», sin aviso automático | Con el Jardín Botánico |
+| Merma en cámara: ¿alerta o notificación al Agrónomo? | La extensión 10c de PROD-REG-MRM dice «notifica»; la regla 2 de 8.9, «alerta». COM-04 usa la alerta `comercial_merma_camara_reservada` (D-64 punto 10) | **Validado por el estudiante el 21/11/2026**; falta pegarlo en Drive |
+| Correo del enlace que no sale | **Validado el 21/11/2026.** D-65 punto 6: el Vendedor puede decidir por el cliente si el envío falla (suma a la extensión 1a de COM-DCD-FLT). No hay reenvío | Al pegar PCU (COM-DCD-FLT); el reenvío, mejora futura |
+| Partidas cerradas en la pestaña «Cámara» | Se muestran las agotadas y vencidas de los últimos 30 días (para que la tabla no crezca); el caso de uso no lo fija | Revisión a mano de COM-04 |
+
+## Abiertos desde el lote C5a de «Comercial 1» (22/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| ~~D-66 y la tercera enmienda de D-62~~ | ~~Las propuso Claude en el lote C5a. Las más discutibles: el corte de COM-05 (punto 1), el agrupamiento de una compra-venta (punto 7) y la restricción de `ReservaInsumo` (punto 8); en D-62, que la campana pase por `alertas:ir` solo con el enlace de una app (punto 3)~~ | **Validadas el 22/11/2026** |
+| ~~Riesgo con PRD-01: las entregas son órdenes~~ | ~~COM-05a supone que la lista de órdenes, las cancelables y la bandeja de PRD-01 excluyen `tipo = entrega`, que `cancelar_orden` la rechaza, que `cancelar_orden_incluida` acepta una orden sin sectores ni Capataz y que el registrante de reservas de insumo cuenta todas las órdenes~~ | **Resuelto en la documentación (lote C5b, D-67 punto 1):** los seis puntos están en PRD-01 con sus pruebas; COM-05a1 y COM-05a2 ya no lo completan. Se tacha del todo cuando PRD-01 se mergee |
+| La campana y `alertas:ir` | MAE-02c (PR #47) dejó la campana yendo al detalle. MAE-02d suma `alertas:ir` solo para las alertas con enlace de una app (D-62, tercera enmienda, punto 3) | Al programar MAE-02d |
+| Acceso al envasado «desde la notificación» | PROD-PNF-ENV (1a y un requisito especial) pide un acceso directo desde la notificación de COM-PNF-ENT; las notificaciones no tienen enlace (D-42). El texto dice dónde está | pendientes_CU (PROD-PNF-ENV); o ampliar `core.notificaciones` con un enlace (cambio de D-42) |
+| Entre COM-05a y COM-05b (desde el C5b: entre COM-05a1 y COM-05b) | Mergeada COM-05a y no COM-05b, un transportista con entregas no se puede quitar ni trasladar (`transportista_con_entregas`) y todavía no hay «Asignar transportista»; tampoco se concretan (COM-06). No rompe nada: es un estado de paso | Programar COM-05b enseguida de COM-05a |
+| ~~Exceso de envases al concretar~~ | ~~La regla 21 de 8.8 admite usar más envases que los reservados; PRD-01 tiene restricciones que lo impiden~~ | **Cerrado en el lote C6 (D-68, punto 2, opción A, 22/11/2026):** las restricciones no cambian; el exceso va en el consumo del envase |
+| ~~Números de decisión de «Comercial 1»~~ | ~~Quedan D-67 a D-69 para los lotes C5b a C8~~ ~~El C5b usó D-67: quedan D-68 y D-69 para C6 a C8~~ ~~El C6 usó D-68: queda D-69 para C7 y C8~~ | **Cerrado el 22/11/2026:** el C7 usó D-69; el C8 empieza en **D-80** (`docs/decisiones/README.md`) |
+| ~~D-66, punto 3: los datos copiados en `Entrega`~~ | `contrato`, `modalidad_entrega` y `direccion_destino` se guardan en la entrega aunque se deducen de sus detalles. Preocupación del estudiante: que no coincidan. Respuesta del 22/11/2026: las tres son claves que apuntan a las mismas filas (no copian valores), se escriben una sola vez al crear la entrega y su fuente no cambia (una compra-venta no se modifica; COM-MOD-SUM no cambia la dirección de un detalle: crea un sucesor con la misma, MD-131). Propuesta de refuerzo: una sola función las escribe, el servicio rechaza un detalle de otro contrato, modalidad o dirección, y `verificar_invariantes_de_entregas` lo revisa en cada prueba que escribe. La otra opción es no guardarlas y calcularlas desde los detalles | **Cerrado el 22/11/2026: opción A** (guardarlas con los refuerzos; D-66, punto 3) |
+| Pendientes de Drive del lote C5a | pendientes_CU: COM-PNF-ENT (D-66 punto 7; la postcondición n de PCU 8 ya está decidida) y PROD-PNF-ENV (1a). «CU extendidos»: la tercera enmienda de D-62 no toca casos de uso. pendientes_MD: nada nuevo (lo del modelo es del código, `docs/modelo/comercial.md`, «Pendientes de MD») | Al pegar en Drive |
+
+## Abiertos desde el lote C5b de «Comercial 1» (22/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| ~~D-67~~ | ~~La propuso Claude en el lote C5b. Las más discutibles: crear en PRD-01 los cinco valores del tipo y probar con órdenes sueltas (punto 1d); `cancelar_orden` también rechaza la cosecha (punto 1b); los nombres COM-05a1 y COM-05a2 (punto 2); cancelar los detalles confirmados sin entregar (punto 4)~~ | **Validada el 22/11/2026** |
+| ~~La cosecha en `TIPOS_DE_PRODUCCION` desde PRD-01~~ | ~~Lo pidió así el estudiante (lista final con las tres), pero COM-02 oculta las cosechas hasta COM-04a: queda un `exclude` temporal en COM-02 (D-67, punto 1e). La otra opción es que PRD-01 deje la constante con siembra y transición y que COM-04a sume la cosecha (sin `exclude`)~~ | **Cerrado el 22/11/2026:** queda como está (la constante con las tres y el `exclude` temporal de COM-02), por el traspaso del Capataz (D-67, alternativas) |
+| Estados de paso entre las partes | Entre COM-03a y COM-03b, un suministro reserva solo los períodos de la ventana (no hay pre-reserva diaria). Entre COM-04a y COM-04b, lo que entra a la cámara no se asigna solo (el paso 25 lo recupera después). Entre COM-04a y COM-04c, una venta «pendiente de decisión del cliente» no tiene enlace ni pantalla para decidir. Entre COM-05a1 y COM-05a2, las entregas no tienen envasado ni aparecen en el panel ni en las fichas. Ninguno rompe datos | Programar cada parte enseguida de la anterior |
+| COM-CNL-CVT: los detalles «confirmados» | El caso de uso dice que no se cancelan porque están «ya entregados»; en el sistema un detalle se confirma también al aceptar un faltante, antes de entregarse. Se cancelan los confirmados sin línea en una entrega concretada (D-67, punto 4) | **Validado el 22/11/2026.** Falta pegarlo en pendientes_CU (COM-CNL-CVT, regla «Detalles afectados») |
+| COM-CNL-CVT: la descripción con «otro» | El caso de uso la deja opcional siempre; con «otro» sin descripción el motivo no dice nada. Sugerencia: obligatoria con «otro», como en la rescisión (COM-RSC-SUM) | pendientes_CU (decide el estudiante) |
+| COM-CNL-CVT con entregas concretadas | La extensión 6a cobra lo entregado con `PagoCliente` (desde el lote C6 lo crea COM-06a, D-68 punto 4; el cobro de 6a sigue en COM-08); antes de COM-06 no puede darse. COM-05b rechaza `venta_con_entregas_concretadas` y COM-06 y COM-08 lo completan (`docs/disparadores.md`, «Cuando exista Entrega», punto 9). Entre COM-06 y COM-08 una venta de varios invernaderos con una entrega concretada no se puede cancelar | Al escribir C6 y C8 |
+| ~~«La cancelación de entregas en PROD-CNL-ORD» del pedido del lote C5b~~ | ~~La «Cancelación de una entrega» ya la trajo el lote C5a (COM-05a1). Se interpretó como la inclusión desde COM-CNL-CVT (cosechas y entregas de la venta, con el aviso al cliente por el comprobante): sección nueva de `cancelar_orden.md`~~ | **Cerrado el 22/11/2026:** el estudiante confirma que está cubierto (sección «la compra-venta cancelada» de `cancelar_orden.md`) |
+| Pendientes de Drive del lote C5b | pendientes_CU: COM-CNL-CVT (los dos de arriba); COM-ASG-TRP: la regla de «Transportista en el invernadero» ya está aplicada en el extracto (igual a 3a). pendientes_MD: nada nuevo (MD-130 ya está; las restricciones son del código) | Al pegar en Drive |
 

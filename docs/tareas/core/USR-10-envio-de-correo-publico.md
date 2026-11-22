@@ -2,7 +2,7 @@
 
 Estado: pendiente | App: core | Rama: feature/usr-10-envio-de-correo-publico | Ronda: IoT (se hace después de «Producción 1»)
 
-Depende de: — (no necesita nada de la ronda de producción; se puede hacer en cualquier momento antes de IOT-03)
+Depende de: — (no necesita nada de la ronda de producción; se puede hacer en cualquier momento antes de COM-02 y de IOT-04, que manda los correos del IoT; D-71)
 
 Una tarea es un bloque funcional (D-44): se hace de corrido en una sesión y un PR. Aprobado el plan, no pidas permiso
 paso por paso. Si algo que necesitás no está en «Leer», frená (L9). Es una tarea **chica**: una refactorización sin cambio de comportamiento.

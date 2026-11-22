@@ -23,10 +23,12 @@ docs/
 ├── revisiones_pendientes.md      listas completas de verificación a mano. Solo si el estudiante lo pide
 ├── temas_abiertos.md             temas sin tarea ni disparador. Al planificar
 ├── disparadores.md               «cuando exista X, hay que hacer Y». Cuando la tarea crea modelos
-├── api/                          contratos entre apps: alertas, notificaciones, puntos de extensión de maestros y de inventario, stock y variedades
+├── api/                          contratos entre apps: alertas, notificaciones, puntos de extensión de maestros, de inventario y de producción, stock, variedades, producción y direcciones; `nodo/`, el contrato con el nodo central del IoT (v1: guía, mensajes, errores, ejemplos y el flujo de Node-RED; lote I2a)
 ├── tareas/
 │   ├── README.md                 índice de tareas pendientes de todas las apps. Al elegir la próxima
 │   ├── ronda_produccion_1.md     plan completo de la ronda: tareas, orden, casos de uso, pantallas y lotes de documentación
+│   ├── ronda_comercial_1.md      ídem, ronda «Comercial 1» (con cosecha; en paralelo con el IoT)
+│   ├── ronda_iot_1.md            ídem, ronda «IoT 1» (D-70 a D-79; IOT-01 e IOT-02 en paralelo con producción)
 │   ├── _plantilla.md             plantilla de una tarea (un bloque funcional, con pasos)
 │   └── <app>/<ID>-<nombre>.md    la orden de trabajo. Primero, al empezar
 ├── decisiones/
@@ -39,7 +41,9 @@ docs/
 │   ├── trabajo_en_paralelo.md    dos personas en el mismo repo: ramas, migraciones, conflictos y documentos compartidos
 │   ├── abm.md                    cómo se hace un ABM (lote 1; sale de MAE-01 y MAE-02a)
 │   ├── stock.md                  stock libre, reservas, FEFO y «faltante sin lote» (lote 2)
-│   └── costo_del_lote.md         costo acumulado y costo por planta sin asientos (lote 4, D-50)
+│   ├── costo_del_lote.md         costo acumulado y costo por planta sin asientos (lote 4, D-50)
+│   ├── stock_maduro.md           stock maduro, reservas, períodos, cosecha, cámara y faltantes (comercial, D-59, D-64)
+│   └── enlace_del_cliente.md     el enlace de un solo uso que recibe un cliente sin cuenta (D-65)
 ├── casos_de_uso/
 │   ├── _plantilla.md             encabezado y secciones de un extracto
 │   ├── usuarios.md, auditoria.md (quedan donde están)
@@ -49,9 +53,16 @@ docs/
 │   └── <app>.md                  extracto del modelo y del glosario. Los que cite la tarea
 └── prototipos/
     ├── cuentas_y_seguridad.html  (queda donde está: D-24 lo nombra con esta ruta)
-    └── produccion/
-        ├── README.md             qué función arma cada pantalla y qué es «solo prototipo»
-        └── datos_maestros_y_produccion.html
+    ├── produccion/
+    │   ├── README.md             qué función arma cada pantalla y qué es «solo prototipo»
+    │   ├── datos_maestros_y_produccion.html
+    │   └── logistica_transportista.html   (MAE-05, D-55)
+    ├── comercial/
+    │   ├── README.md             ídem, con la línea de cada sobrescritura (ronda «Comercial 1»)
+    │   └── comercial_y_cosecha.html
+    └── iot/
+        ├── README.md             ídem, con la línea de cada función (ronda «IoT 1»)
+        └── iot.html              el prototipo del IoT v8.5
 ```
 
 Fuera de `docs/`, el esquema también cambia `CLAUDE.md`, `.claude/rules/pruebas.md`, `.claude/rules/interfaz.md` y
@@ -60,7 +71,7 @@ Fuera de `docs/`, el esquema también cambia `CLAUDE.md`, `.claude/rules/pruebas
 ## Ciclo de una tarea
 
 1. **Documentar la ronda** (una persona, o Claude en claude.ai), por lotes pero con el plan completo desde el primero: el plan
-   de la ronda (`tareas/ronda_produccion_1.md`), los archivos de tarea en `tareas/<app>/` con la plantilla, los extractos
+   de la ronda (`tareas/ronda_<nombre>.md`, por ejemplo `ronda_produccion_1.md`), los archivos de tarea en `tareas/<app>/` con la plantilla, los extractos
    que nombran en «Leer» (`casos_de_uso/<app>/`, `modelo/<app>.md`), los patrones y los disparadores. El estudiante aprueba
    cada lote antes de programarlo (**M6**) y las tareas figuran en `tareas/README.md`.
 2. **Planificar y programar** (Claude Code): lee `estado.md`, la tarea y solo lo que ella lista. Un plan por tarea, aprobado

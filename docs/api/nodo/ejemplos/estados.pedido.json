@@ -1,0 +1,33 @@
+{
+  "estados": [
+    {
+      "identificador": "norte/sectorA/ventilador",
+      "estado": "encendido",
+      "informado_en": "2026-11-21T14:02:10-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/ventana",
+      "estado": "posicion:40"
+    },
+    {
+      "identificador": "norte/sectorA/humedad",
+      "estado": "en_falla"
+    },
+    {
+      "identificador": "norte/sectorA/luz",
+      "estado": "en_linea"
+    },
+    {
+      "identificador": "norte/sectorA/temp-vieja",
+      "estado": "desconectado"
+    },
+    {
+      "identificador": "norte/sectorA/temperatura",
+      "estado": "encendido"
+    },
+    {
+      "identificador": "norte/sectorA/ventilador",
+      "estado": "girando"
+    }
+  ]
+}

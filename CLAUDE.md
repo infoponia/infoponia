@@ -36,8 +36,11 @@ L5. Si la tarea no cubre un tema, buscalo en `docs/decisiones/README.md` y avis�
 L6. No leas `docs/historial.md`, `docs/revisiones_pendientes.md` ni un prototipo entero,
     salvo que el estudiante lo pida.
 L7. Si la tarea contradice un caso de uso, el extracto del modelo, una decisión o el código,
-    frená y preguntá. El prototipo es solo una guía visual: si su lógica difiere del caso
-    de uso, manda el caso de uso.
+    frená y preguntá. El prototipo es una referencia, no una especificación (D-61): si su lógica difiere
+    del caso de uso, manda el caso de uso; si a una pantalla le falta algo que el caso de uso necesita o
+    algo está mal como interfaz, corregila y completala vos, sin frenar, y anotalo en el «Cierre». Frená
+    solo si la corrección necesita una regla, un permiso, un cálculo o una columna que no están en las
+    fuentes de más peso.
 L8. Las decisiones se citan por su ID («D-36»), sin ruta: el archivo es `docs/decisiones/D-36.md`.
 L9. La documentación de cada tarea está completa por diseño (D-44): trae las reglas, los campos, los textos, las pantallas
     y los datos de migración que hacen falta. Si te falta algo que la tarea necesita, no lo inventes ni lo deduzcas del
@@ -49,7 +52,7 @@ L9. La documentación de cada tarea está completa por diseño (D-44): trae las 
 2. Modelo de dominio (ronda 20, D-07) y glosario: extractos en `docs/modelo/`.
 3. Casos de uso extendidos y pendientes: extractos en `docs/casos_de_uso/`.
 4. Casos de uso originales (desactualizados; solo orientativos).
-5. Prototipo: solo guía visual (`docs/prototipos/`).
+5. Prototipo: referencia de estructura, contenido y estilo, que puede tener errores o faltantes (`docs/prototipos/`, D-61).
 
 Los documentos de Drive no se leen: el repo tiene sus copias, completas para cada ronda (D-44). Una tarea que nombra un
 caso de uso o una clase sin extracto en el repo es un error de documentación (L9). Si una copia del repo y lo que sabés de Drive no
@@ -124,8 +127,8 @@ python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag 
 ## Al terminar cada tarea
 
 M1. Corré el «Comando de pruebas» de la tarea y mostrá el resultado.
-M2. Completá en el archivo de la tarea «Cierre» (qué se hizo, pruebas, decisiones) y «Verificación a mano»
-    (los pasos para el estudiante).
+M2. Completá en el archivo de la tarea «Cierre» (qué se hizo, pruebas, decisiones y, si hubo, «Pantallas: lo que
+    se corrigió del prototipo», D-61) y «Verificación a mano» (los pasos para el estudiante).
 M3. Proponé, sin aplicarlos (una sola vez, al cerrar la tarea entera, no por paso):
     - el `docs/estado.md` nuevo;
     - la fila de la tarea en `docs/tareas/README.md` (si queda hecha, se saca);
@@ -133,7 +136,7 @@ M3. Proponé, sin aplicarlos (una sola vez, al cerrar la tarea entera, no por pa
     - la sección de la tarea en `docs/revisiones_pendientes.md`, si hay pasos a mano;
     - si hubo decisión, `docs/decisiones/D-NN.md` y su fila en `docs/decisiones/README.md`;
     - si creaste modelos, los disparadores que se cumplieron (se tachan) y los que nacen;
-    - la fila de la tarea en `docs/tareas/ronda_produccion_1.md`, si la tarea pertenece a esa ronda;
+    - la fila de la tarea en el plan de su ronda (`docs/tareas/ronda_<nombre>.md`), si pertenece a una;
     - lo que implementaste distinto de lo escrito, para `docs/temas_abiertos.md` (no lo corrijas en silencio).
 M4. Proponé el mensaje de commit. El commit lo hace el estudiante.
 

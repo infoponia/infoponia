@@ -1,18 +1,21 @@
 # Estado — InfoPonia
 
-Actualizado: 22/11/2026, tras implementar INV-03 (variedades y semillas). Se reescribe al cerrar cada tarea y no pasa de 2 KB: lo hecho va a `docs/historial.md`.
+Actualizado: 22/11/2026, tras implementar INV-03 y con el lote C7 de «Comercial 1». Se reescribe al cerrar cada tarea y no pasa de 2 KB: lo hecho va a `docs/historial.md`.
 
 ## En curso
 
-- UI-01 y NOT-01 mergeadas; MAE-03, MAE-04, CON-01, INV-01, DIA-01, INV-02, MAE-05, MAE-02c e INV-03 en su rama, esperando revisión a mano.
-- Lote 5, D-52, D-55 y D-56 validados (21/11/2026).
+- Mergeadas: UI-01 y NOT-01; MAE-03, MAE-04, CON-01, INV-01, DIA-01, INV-02, MAE-05 (PR #45), MAE-02c (#47) e INV-03 (#48), con la revisión a mano pendiente.
+- «Comercial 1»: C0 a C6 validados (D-57 a D-68); C7 a validar (D-69). Sigue C8 (decisiones desde D-80).
+  COM-03 a COM-07 partidas (D-67 a D-69): COM-03a/b, COM-04a/b/c, COM-05a1/a2, COM-06a/b, COM-07a/b. IoT: I0 validado; I1 a I4 a validar.
 
 ## Siguiente
 
-- Ronda «Producción 1»: PRD-01 a PRD-04 (INV-03 ya está hecha). Cada una se programa cuando su lote de documentación está en el repo (plan en `docs/tareas/ronda_produccion_1.md`).
-- USR-10 (correo público, D-54): antes de IOT-03.
-- IoT y comercial: en paralelo entre sí, después de lo que necesiten de «Producción 1». USR-09 y AUD-02, sin fecha; ver `docs/temas_abiertos.md`.
-- Proceso diario: a mano con `python manage.py proceso_diario`; el cron job, uno solo, al final (D-56).
+- MAE-02d (lo que le faltó a MAE-02c de D-62): antes de COM-03b y de IOT-04.
+- Ronda «Producción 1»: PRD-01 a PRD-04 (INV-03 ya está hecha; plan en `docs/tareas/ronda_produccion_1.md`). PRD-01 deja hechos los tipos
+  de orden futuros (D-67, punto 1).
+- USR-10 (correo público, D-54): antes de COM-02 y de IOT-04.
+- Comercial (`ronda_comercial_1.md`; sigue C8) e IoT (`ronda_iot_1.md`) en paralelo. USR-09 y AUD-02, sin fecha.
+- Procesos: a mano (`proceso_diario`, D-56; `revision_iot`, D-71); los cron jobs, al final.
 
 ## Revisiones a mano pendientes (en `docs/revisiones_pendientes.md`)
 

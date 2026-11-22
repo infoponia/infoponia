@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InfoPonia IoT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+<style>
+/* Mismo sistema visual que el prototipo de producción v2: tema claro, Inter, verde InfoPonia, estados semánticos aparte del acento. */
+:root{color-scheme:light;
+--background:#f5f6f8;--foreground:#141a21;--card:#fff;--subtle:#f9fafb;
+--primary:#1a6b3c;--primary-dark:#145431;--primary-soft:#eaf5ee;
+--secondary:#eef1f4;--muted:#eef0f3;--muted-foreground:#5f6b78;--faint:#8a94a0;
+--border:#e3e7ec;--border-strong:#cfd5dc;--radius:10px;--radius-sm:7px;
+--shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.04);
+--shadow-pop:0 12px 32px rgba(16,24,40,.14),0 2px 6px rgba(16,24,40,.06);
+--status-ok:#18784a;--status-warn:#9a5b00;--status-danger:#b42828;--status-neutral:#5a6573;
+--ok-bg:#e9f6ef;--warn-bg:#fdf3e1;--danger-bg:#fdecec;--neutral-bg:#eef1f4;
+--font-sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%}
+body{font-family:var(--font-sans);font-size:14px;background:var(--background);color:var(--foreground);line-height:1.55;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+h1{font-size:22px;font-weight:650;letter-spacing:-.015em;line-height:1.25;text-wrap:balance}
+h3{font-size:14px;font-weight:600}
+b,strong{font-weight:600}
+.muted{color:var(--muted-foreground)}.faint{color:var(--faint)}.sm{font-size:13px}.xs{font-size:12px}.right{text-align:right}.nowrap{white-space:nowrap}
+.id{display:inline-block;font-size:12px;font-weight:600;color:var(--muted-foreground);background:var(--secondary);border-radius:5px;padding:1px 6px;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 15px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:550;border:1px solid transparent;min-height:38px;white-space:nowrap;line-height:1.2;transition:background .12s}
+.btn:focus-visible,.chip:focus-visible,.nav-item:focus-visible,.link:focus-visible,.kb-btn:focus-visible,.menu button:focus-visible,.back:focus-visible,.rowlink:focus-visible,.tab:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}.btn-primary:hover{background:var(--primary-dark)}
+.btn-ghost{background:#fff;color:var(--primary);border-color:color-mix(in srgb,var(--primary) 55%,#fff)}.btn-ghost:hover{background:var(--primary-soft)}
+.btn-danger{background:#fff;color:var(--status-danger);border-color:color-mix(in srgb,var(--status-danger) 45%,#fff)}.btn-danger:hover{background:var(--danger-bg)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:5px 11px;font-size:13px;min-height:32px}
+.field-input{width:100%;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:9px 12px;background:#fff;outline:none;min-height:40px}
+.field-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,107,60,.14)}
+.field-input.bad{border-color:var(--status-danger)}
+.field-input:disabled{background:var(--muted);color:var(--muted-foreground)}
+.field-input.num{max-width:150px;text-align:right}
+.fld{margin-bottom:18px;min-width:0}.fld label,.lbl{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#2a333d}
+.req{color:var(--status-danger)}.err{color:var(--status-danger);font-size:13px;margin-top:6px}.hint{color:var(--muted-foreground);font-size:13px;margin-top:6px}
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:550;padding:2px 9px;border-radius:999px;white-space:nowrap;line-height:1.6}
+.status-ok{background:var(--ok-bg);color:var(--status-ok)}.status-warn{background:var(--warn-bg);color:var(--status-warn)}
+.status-danger{background:var(--danger-bg);color:var(--status-danger)}.status-neutral{background:var(--neutral-bg);color:var(--status-neutral)}
+.status-info{background:#e7effb;color:#1d4f9c}
+.alert{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-radius:var(--radius-sm);font-size:13.5px;border:1px solid;line-height:1.55}
+.alert svg{flex-shrink:0;margin-top:2px}.alert ul{margin:6px 0 0 18px}
+.alert-warn{background:#fffaf0;border-color:#f3dcb0;color:#5e3b00}.alert-danger{background:#fff6f6;border-color:#f2c9c9;color:#7a1c1c}
+.alert-ok{background:#f3faf6;border-color:#c5e6d3;color:#134a2c}.alert-info{background:#f6f8fa;border-color:var(--border);color:#2d3742}
+.tablewrap{overflow-x:auto;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.data-table{width:100%;border-collapse:collapse;font-size:14px}
+.data-table th{text-align:left;font-size:12.5px;font-weight:600;color:var(--muted-foreground);padding:11px 16px;background:var(--subtle);border-bottom:1px solid var(--border);white-space:nowrap}
+.data-table td{padding:13px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+.data-table tbody tr:last-child td{border-bottom:none}
+.data-table tr.sub td{background:var(--subtle);padding:8px 16px 14px 28px;font-size:13px}
+.data-table .sub2{display:block;font-size:13px;color:var(--muted-foreground)}
+.rowlink{display:inline-flex;align-items:center;gap:4px;color:var(--primary);font-weight:550;font-size:13px;background:none;border:none;padding:6px 8px;border-radius:6px}
+.rowlink:hover{background:var(--primary-soft)}.rowlink:disabled{opacity:.4;cursor:not-allowed}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-h{display:flex;align-items:center;gap:10px;padding:13px 20px;border-bottom:1px solid var(--border);background:var(--subtle);min-height:50px;flex-wrap:wrap}
+.card-h h3{display:flex;align-items:center;gap:8px}.card-h h3 svg{color:var(--muted-foreground)}
+.card-b{padding:18px 20px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;background:var(--border)}
+.facts>div{background:#fff;padding:13px 20px;min-width:0}
+.facts .k{display:block;font-size:12.5px;color:var(--muted-foreground);margin-bottom:3px}
+.facts .v{display:block;font-size:14.5px;font-weight:550;overflow-wrap:anywhere}
+.facts .d{display:block;font-size:13px;color:var(--muted-foreground);margin-top:2px}
+.stack{display:grid;gap:18px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.spacer{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.proto{border:1.5px dashed #b5bdc6;border-radius:var(--radius-sm);padding:12px 14px;background:#fafbfb;font-size:13px}
+.proto-title{font-weight:600;font-size:12px;color:var(--muted-foreground);margin-bottom:8px}
+.link{background:none;border:none;color:var(--primary);font-weight:550;text-decoration:underline;text-underline-offset:2px;padding:0}
+.shell{position:relative;height:100%;display:grid;grid-template-rows:56px 1fr 34px;grid-template-columns:224px minmax(0,1fr);overflow:hidden}
+.shell>header,.shell>footer{grid-column:1/-1}
+header.top{background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 20px}
+.brand{display:flex;align-items:center;gap:10px}.brand b{font-size:15.5px;font-weight:650}
+.logo{width:32px;height:32px;background:var(--primary);border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff}
+.rolesel{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted-foreground)}
+.rolesel select{width:auto;min-height:36px}
+aside.side{background:#fff;border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:3px;overflow:auto}
+.side-label{font-size:11.5px;font-weight:600;color:var(--faint);padding:4px 12px 8px;letter-spacing:.06em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:var(--radius-sm);color:#46515d;font-weight:500;background:none;border:none;text-align:left;width:100%}
+.nav-item:hover{background:var(--secondary)}.nav-item.active{background:var(--primary-soft);color:var(--primary);font-weight:600}
+.nav-item.off{opacity:.5;cursor:default}.nav-item.off:hover{background:none}
+main.main{overflow:auto;padding:26px 32px 0;min-width:0}
+footer.bot{display:flex;align-items:center;gap:16px;padding:0 20px;font-size:12px;color:var(--muted-foreground);background:#fff;border-top:1px solid var(--border)}
+.page{max-width:1360px;margin:0 auto;padding-bottom:32px}.page.narrow{max-width:980px}
+.page-h{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.page-h .sub{color:var(--muted-foreground);flex-basis:100%;margin-top:-6px}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted-foreground);font-weight:500;background:none;border:none;padding:4px 6px 4px 2px;margin-bottom:12px;border-radius:6px}
+.back:hover{color:var(--primary);background:var(--primary-soft)}
+.ctx{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.ctx .field-input{width:auto;min-width:210px}
+.ov{position:absolute;inset:0;background:rgba(17,24,32,.42);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:540px;padding:24px 26px;max-height:100%;overflow:auto;box-shadow:var(--shadow-pop)}
+.modal h3{font-size:17px;margin-bottom:10px}.modal p{margin-bottom:12px}.modal .acts{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.kb{position:relative;display:inline-flex}
+.kb-btn{display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0 8px;border-radius:6px;border:1px solid transparent;background:none;color:var(--muted-foreground)}
+.kb-btn:hover{background:var(--secondary)}
+.menu{position:absolute;right:0;top:calc(100% + 4px);min-width:230px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-pop);z-index:70;padding:5px}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 11px;border:none;background:none;border-radius:7px;font-weight:500;white-space:nowrap;text-align:left}
+.menu button:hover{background:var(--secondary)}.menu button.danger{color:var(--status-danger)}
+#toasts{position:fixed;top:66px;right:16px;z-index:300;display:grid;gap:8px;width:min(380px,calc(100vw - 24px))}
+.toast{display:flex;gap:10px;background:#fff;border:1px solid var(--border);border-left:4px solid var(--tc);border-radius:10px;box-shadow:var(--shadow-pop);padding:12px 14px;font-size:13.5px}
+.toast svg{color:var(--tc);flex-shrink:0;margin-top:2px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;box-shadow:var(--shadow)}
+.kpi .k{font-size:13px;color:var(--muted-foreground)}.kpi .v{font-size:26px;font-weight:650;letter-spacing:-.02em}.kpi .v small{font-size:15px;color:var(--muted-foreground)}
+.kpi.danger .v{color:var(--status-danger)}.kpi.warn .v{color:var(--status-warn)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.sens{background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.sens.muted-card{background:#f7f8f9}.sens.muted-card .big{color:var(--faint)}
+.sens .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.big{font-size:26px;font-weight:650;letter-spacing:-.02em}.big small{font-size:14px;color:var(--muted-foreground);font-weight:500;margin-left:3px}
+.spark{width:100%;height:84px;display:block}
+.chip{padding:7px 14px;border-radius:999px;border:1px solid var(--border-strong);background:#fff;font-weight:500;min-height:36px;display:inline-flex;align-items:center;gap:6px}
+.chip:hover{border-color:var(--primary);color:var(--primary)}.chip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.sentence{font-size:15px;line-height:1.7}.sentence b{background:var(--primary-soft);color:var(--primary-dark);padding:1px 7px;border-radius:6px}
+.blk{background:#f3f5f7;border:1px solid #c3cbd4;border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.accrow{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end}
+.bar{height:8px;border-radius:999px;background:var(--muted);position:relative;overflow:hidden}.bar i{position:absolute;inset:0 auto 0 0;background:var(--primary)}
+.tokenbox{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;background:#f3f5f7;border:1px solid var(--border-strong);border-radius:8px;padding:10px 12px;overflow-wrap:anywhere;margin-bottom:10px}
+@media(max-width:860px){.stackrows tr{display:block;padding:12px 16px;border-bottom:1px solid var(--border)}.stackrows td{display:block;padding:2px 0;border:none;width:auto!important}.stackrows td.right{text-align:left;padding-top:8px}.stackrows thead{display:none}.stackrows tr.sv td:first-child{box-shadow:none}header.top{padding:0 12px}.brand .status-badge{display:none}.rolesel select{max-width:170px}.page{min-width:0}.shell{grid-template-columns:minmax(0,1fr)}aside.side{display:none}main.main{padding:18px 16px 0}.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.accrow{grid-template-columns:1fr 1fr}.rolesel span{display:none}.chips.one{flex-wrap:wrap}.sgrid{grid-template-columns:minmax(0,1fr)}}
+
+/* Pestañas del módulo (mismo recurso que las barras de las pantallas de producción) */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto;scrollbar-width:thin}
+.tab{background:none;border:none;border-bottom:2px solid transparent;padding:10px 14px;margin-bottom:-1px;font-weight:550;color:var(--muted-foreground);white-space:nowrap;font-size:14px}
+.tab:hover{color:var(--foreground)}.tab[aria-current="page"]{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+/* Filtros con combos, como en el resto del sistema */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.filters .field-input{width:auto;min-width:170px}.filters .field-input.q{min-width:260px}
+/* Alertas con severidad */
+.sv td:first-child{box-shadow:inset 4px 0 0 var(--sc,#c3cbd4)}
+.sv-alta{--sc:var(--status-danger)}.sv-alta td{background:#fffafa}.sv-media{--sc:#d99a2b}.sv-baja{--sc:#6b95d6}
+/* Sensores agrupados por variable */
+.grp+.grp{margin-top:22px}
+.grp-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}.grp-h b{font-size:14.5px}
+.umb{background:var(--primary-soft);color:var(--primary-dark);padding:2px 11px;border-radius:999px;font-size:12.5px;font-weight:550}
+.sgrid{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}
+.sens{gap:6px;padding:14px 16px}
+.sens .sh{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-height:26px}
+.sens .sh .xs{white-space:nowrap}
+.spark{height:auto;aspect-ratio:360/96}
+.spark.empty{display:flex;align-items:center;justify-content:center;background:var(--subtle);border:1px dashed var(--border-strong);border-radius:8px;color:var(--muted-foreground);font-size:13px;aspect-ratio:auto;height:96px}
+.card-h select.field-input{width:auto;min-height:34px;padding:5px 30px 5px 10px}
+/* Variedades como etiquetas */
+.vchips{display:flex;flex-wrap:wrap;gap:8px}
+.vchip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--subtle);border-radius:999px;padding:4px 13px 4px 10px;font-size:13px}
+.vchip .dot{width:8px;height:8px;border-radius:50%;background:var(--primary)}.vchip .dot.next{background:#6b95d6}
+.tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.accchips{display:flex;flex-wrap:wrap;gap:6px}
+.accchip{display:inline-flex;gap:6px;align-items:center;background:var(--secondary);border-radius:999px;padding:2px 11px;font-size:13px;white-space:nowrap}.accchip small{color:var(--muted-foreground);font-size:12px}
+.chips.one{flex-wrap:nowrap}
+/* Barra de contexto (invernadero) */
+.ctxbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px 16px;margin-bottom:14px}
+.ctxbar .lbl{margin:0;white-space:nowrap}.ctxbar select{width:auto;min-width:250px;font-weight:600}
+/* Grupos de sensores plegables */
+.gcard{border:1px solid var(--border-strong);border-radius:var(--radius);overflow:hidden;background:#fff}.gcard+.gcard{margin-top:16px}
+.gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;background:#e9efeb;border:none;padding:11px 16px;text-align:left;color:var(--foreground)}.gh:hover{background:#e1e9e4}
+.gh b{font-size:14.5px}.gh svg{color:var(--muted-foreground)}.gcard.open .gh{border-bottom:1px solid var(--border-strong)}
+.gb{padding:16px;background:#f6f8f9}
+.accchip{background:#d9e0e7}.accchip small{color:#46515d}
+.accl1{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:end}.accl2{display:grid;grid-template-columns:repeat(3,minmax(0,200px));gap:12px;margin-top:12px}
+.chk{display:inline-flex;align-items:center;gap:8px;min-height:40px;font-size:13.5px;font-weight:550;cursor:pointer}.chk input{accent-color:var(--primary);width:16px;height:16px}
+@media(max-width:860px){.accl1{grid-template-columns:minmax(0,1fr) auto}.accl2{grid-template-columns:1fr}}
+.accl1 label.xs,.accl2 label{display:block;margin-bottom:4px}
+.sech{font-size:13.5px;font-weight:650;margin:6px 0 12px;padding-top:6px;color:#2a333d}.sech:first-child{margin-top:0;padding-top:0}
+.fotline{display:flex;align-items:center;gap:8px;border-top:1px dashed var(--border);padding-top:8px;margin-top:2px;font-size:13px;color:#2d3742}.fotline svg{color:var(--muted-foreground)}
+.spark.nivel{height:auto;min-height:64px;font-weight:550}.spark.nivel.bad{background:#fff6f6;border-color:#f2c9c9;color:var(--status-danger)}
+.warn-t{color:var(--status-warn)!important;display:flex!important;align-items:center;gap:4px}
+.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#46515d}.accchip .code{margin-left:2px;opacity:.8}
+.blist{margin:0 0 12px 18px;font-size:14px;line-height:1.9}.blist .id{margin:0 4px}
+.accl1{grid-template-columns:minmax(0,1fr) minmax(0,220px) auto}
+
+/* v8.2 · Más contraste: fondo de página tintado, cuadros blancos con borde y sombra más marcados, encabezados y avisos con color */
+:root{--background:#e6ebef;--border:#cbd3db;--border-strong:#b4bec9;--subtle:#edf2ef;
+--shadow:0 1px 2px rgba(16,24,40,.10),0 2px 6px rgba(16,24,40,.06)}
+.card,.tablewrap,.kpi,.ctxbar,.gcard,.sens{border-color:var(--border-strong)}
+.card-h{background:#e4ece7;border-bottom-color:var(--border-strong)}
+.data-table th{background:#e4ece7;border-bottom-color:var(--border-strong);color:#3f4a56}
+.data-table tr.sub td{background:#eef3f0}
+.kpi{border-top:3px solid var(--primary)}.kpi.danger{border-top-color:var(--status-danger)}.kpi.warn{border-top-color:#d99a2b}
+.ctxbar{background:#f4f8f5;border-left:4px solid var(--primary)}
+.facts{background:var(--border-strong)}
+.facts>div{background:#f7faf8}
+.blk{background:#e9eef2;border-color:#aeb9c5}
+.tokenbox{background:#e9eef2;border-color:#aeb9c5}
+.alert-info{background:#e8f0fb;border-color:#a9c2e6;color:#1f3558}
+.alert-warn{background:#fff4dc;border-color:#e8c98a}.alert-danger{background:#fde8e8;border-color:#eaa9a9}.alert-ok{background:#e5f4ec;border-color:#a3d4b9}
+.sv-alta td{background:#fff1f1}
+.sens.muted-card{background:#eef1f4}
+.proto{background:#f1f4f6;border-color:#9aa6b2}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toasts" aria-live="polite"></div>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const P={
+activity:'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',send:'<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+cpu:'<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>',
+router:'<rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 18h.01M10 18h.01M15 10v4M17.8 7.2a4 4 0 0 0-5.6 0M20.7 4.3a8 8 0 0 0-11.4 0"/>',
+wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/>',
+settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',check:'<path d="M20 6 9 17l-5-5"/>',
+alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
+wifi:'<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/>',wifioff:'<path d="M2 2l20 20M8.5 16a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 5.2-2.7M12 20h.01"/>',
+key:'<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3M16 7l3 3"/>',trash:'<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+edit:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',refresh:'<path d="M21 12a9 9 0 0 1-15.5 6.3L3 16M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M3 21v-5h5"/>',
+clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',back:'<path d="m15 18-6-6 6-6"/>',
+power:'<path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/>',lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',eye:'<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',db:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.7-4 3-9 3s-9-1.3-9-3M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/>',filter:'<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',chevd:'<path d="m6 9 6 6 6-6"/>',chevr:'<path d="m9 18 6-6-6-6"/>',leaf:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10zM2 21c0-3 1.9-5.4 5.4-6.6"/>'};
+const ic=(n,s=16)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]||''}</svg>`;
+const bd=(k,t)=>`<span class="status-badge status-${k}">${t}</span>`;
+
+P.mail='<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>';P.download='<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>';P.drop='<path d="M12 2.7 6.3 8.4a8 8 0 1 0 11.4 0z"/>';
+/* ===== Datos de ejemplo =====
+   Norte imita la instalación de Marinelli et al. (Node-RED: equipos nombrados por tópico).
+   Sur y Este usan números de serie como identificador: el formato lo decide quien configura el nodo. */
+const VARS={
+ temperatura:{n:'Temperatura',u:'°C',d:1,rules:1,cmp:'umbral',cal:[-40,80]},
+ humedad:{n:'Humedad relativa',u:'% HR',d:0,rules:1,cmp:'umbral',cal:[0,100]},
+ luz:{n:'Intensidad lumínica',u:'lux',d:0,rules:1,cmp:'umbral',cal:[0,65000]},
+ tsol:{n:'Temperatura de la solución',u:'°C',d:1,cmp:'rango',cal:[-10,85]},
+ nivel:{n:'Nivel de la solución',u:'',bin:1,cmp:'nivel'}};
+/* Variables del umbral efectivo (salen de las variedades). El fotoperíodo no es un sensor: se calcula. */
+const UVARS={temperatura:{n:'Temperatura',u:'°C',d:1},humedad:{n:'Humedad relativa',u:'% HR',d:0},luz:{n:'Intensidad lumínica',u:'lux',d:0},fotoperiodo:{n:'Fotoperíodo',u:'h',d:1}};
+/* Catálogo de capacidades: contrato de la API con el nodo. No tiene ABM. */
+const CAPS=[{k:'encendido',n:'Encendido',cmds:[['ENCENDER',0],['APAGAR',0]]},{k:'nivel',n:'Nivel',cmds:[['FIJAR_NIVEL',1]]},{k:'posicion',n:'Posición',cmds:[['ABRIR',0],['CERRAR',0],['FIJAR_POSICION',1]]}];
+const CMDV={};CAPS.forEach(c=>c.cmds.forEach(x=>CMDV[x[0]]={cap:c.n,val:!!x[1]}));
+const CMDST={ENCENDER:'Encendido',APAGAR:'Apagado',ABRIR:'Abierta',CERRAR:'Cerrada'};
+const INSUMOS=['Sensor DHT22','Sonda DS18B20','Sensor de nivel con flotante','Sensor de luz BH1750','Módulo relé 10 A','Servomotor MG996R','Raspberry Pi 4','Placa NodeMCU ESP8266','Controlador PWM para motor'];
+const INVS={
+ norte:{n:'Invernadero Norte',agr:'Laura Benítez',tec:'Ramón Acosta',sectores:['Sector A','Sector B'],off:['Sector B']},
+ sur:{n:'Invernadero Sur',agr:'Laura Benítez',tec:'Ramón Acosta',sectores:['Sector A'],off:[]},
+ este:{n:'Invernadero Este',agr:null,tec:null,sectores:['Sector A'],off:[]},
+ oeste:{n:'Invernadero Oeste',agr:'Laura Benítez',tec:'Ramón Acosta',sectores:['Sector A'],off:[]}};
+const DB={
+ sistemas:{
+  norte:{estado:'activo',conn:'en línea',nom:'Raspberry del galpón norte',modelo:'Raspberry Pi 4 con Node-RED',serial:'RPI-4F21A9',last:'hace 20 s',at:'14:09',token:'Generado el 12/10/2026',modo:'remoto',anuncio:{at:'13:58',n:12,ids:['norte/sectorA/temperatura','norte/sectorA/humedad','norte/sectorB/humedad','norte/sectorA/luz','norte/sectorB/temperatura','norte/tanque1/temperatura','norte/tanque1/nivel','norte/sectorA/ventilador','norte/sectorA/bomba','norte/sectorA/mediasombra','norte/sectorA/ventana','norte/sectorA/co2']},rsol:{min:18,max:24}},
+  sur:{estado:'activo',conn:'sin señal',nom:'Nodo sur',modelo:'Gateway industrial GW-200',serial:'GW-7B30C2',last:'hace 14 min',at:'13:56',token:'Generado el 02/09/2026',modo:'remoto',anuncio:null,rsol:null},
+  este:{estado:'activo',conn:'en línea',nom:'Nodo este',modelo:'Raspberry Pi 3',serial:'',last:'hace 35 s',at:'14:09',token:'Generado el 21/10/2026',modo:'remoto',anuncio:null,rsol:null}},
+ hw:[
+  {id:'HW-01',inv:'norte',tipo:'sensor',var:'temperatura',ident:'norte/sectorA/temperatura',serial:'DHT22-0457',modelo:'DHT22',insumo:'Sensor DHT22',inst:'03/03/2026',cal:[-40,80],sector:'Sector A',estado:'activo',rep:true,v:28.4,st:'ok',seed:1,base:24,amp:3},
+  {id:'HW-02',inv:'norte',tipo:'sensor',var:'humedad',ident:'norte/sectorA/humedad',serial:'DHT22-0457',modelo:'DHT22',insumo:'Sensor DHT22',inst:'03/03/2026',cal:[0,100],sector:'Sector A',estado:'activo',rep:true,v:66,st:'ok',seed:2,base:67,amp:6},
+  {id:'HW-03',inv:'norte',tipo:'sensor',var:'luz',ident:'norte/sectorA/luz',serial:'',modelo:'BH1750',insumo:'Sensor de luz BH1750',inst:'10/04/2026',cal:[0,65000],sector:'Sector A',estado:'activo',rep:true,v:21400,st:'ok',seed:3,base:0,amp:0,fot:{v:13.2,inc:false}},
+  {id:'HW-04',inv:'norte',tipo:'sensor',var:'humedad',ident:'norte/sectorB/humedad',serial:'DHT22-0612',modelo:'DHT22',insumo:'Sensor DHT22',inst:'03/03/2026',cal:[0,100],sector:'Sector B',estado:'baja',fbaja:'10/11/2026',rep:true,v:71,st:'ok',seed:4,base:70,amp:4},
+  {id:'HW-05',inv:'norte',tipo:'sensor',var:'temperatura',ident:'norte/sectorB/temperatura',serial:'DHT22-0612',modelo:'DHT22',insumo:'Sensor DHT22',inst:'03/03/2026',cal:[-40,80],sector:'Sector B',estado:'activo',rep:true,v:22.1,st:'ok',seed:5,base:22,amp:2},
+  {id:'HW-06',inv:'norte',tipo:'sensor',var:'tsol',ident:'norte/tanque1/temperatura',serial:'',modelo:'DS18B20',insumo:'Sonda DS18B20',inst:'03/03/2026',cal:[-10,85],sector:'Sector A',estado:'activo',rep:true,v:23.1,st:'ok',seed:6,base:21.5,amp:1.2},
+  {id:'HW-07',inv:'norte',tipo:'sensor',var:'nivel',ident:'norte/tanque1/nivel',serial:'',modelo:'Flotante magnético',insumo:'Sensor de nivel con flotante',inst:'03/03/2026',cal:null,sector:'Sector A',estado:'activo',rep:true,v:'bajo',desde:'13:41',st:'ok'},
+  {id:'HW-11',inv:'norte',tipo:'actuador',tipoAct:'TAC-01',ident:'norte/sectorA/ventilador',serial:'',modelo:'Ventilador 12 V con control PWM',insumo:'Controlador PWM para motor',inst:'03/03/2026',sector:'Sector A',estado:'activo',rep:true,st:'ok',est:{s:'APAGADO',txt:'Apagado',at:'13:40'},compat:'compatible',inc:[],lastSec:1700},
+  {id:'HW-12',inv:'norte',tipo:'actuador',tipoAct:'TAC-02',ident:'norte/sectorA/bomba',serial:'',modelo:'Bomba sumergible 40 W',insumo:'Módulo relé 10 A',inst:'03/03/2026',sector:'Sector A',estado:'activo',rep:true,st:'ok',est:{s:'ENCENDIDO',txt:'Encendida',at:'14:09'},compat:'compatible',inc:[],lastSec:25},
+  {id:'HW-13',inv:'norte',tipo:'actuador',tipoAct:'TAC-03',ident:'norte/sectorA/mediasombra',serial:'',modelo:'Motor de persiana',insumo:'Servomotor MG996R',inst:'12/03/2026',sector:'Sector A',estado:'fuera de servicio',rep:true,st:'ok',est:{s:'ABIERTA',txt:'Abierta',at:'12:58'},compat:'compatible',inc:[],lastSec:4000},
+  {id:'HW-14',inv:'norte',tipo:'actuador',tipoAct:'TAC-04',ident:'norte/sectorA/luminaria',serial:'',modelo:'Panel LED 100 W',insumo:'Módulo relé 10 A',inst:'15/11/2026',sector:'Sector A',estado:'activo',rep:false,st:'sinconfirmar',est:null,compat:'sin verificar',inc:[],lastSec:null},
+  {id:'HW-15',inv:'norte',tipo:'actuador',tipoAct:'TAC-06',ident:'norte/sectorA/ventana',serial:'',modelo:'Servo de ventana cenital',insumo:'Servomotor MG996R',inst:'12/03/2026',sector:'Sector A',estado:'activo',rep:true,st:'ok',est:{s:'CERRADA',txt:'Cerrada',at:'07:15',local:true},compat:'incompatible',inc:['Fijar posición'],lastSec:24000},
+  {id:'HW-21',inv:'sur',tipo:'sensor',var:'temperatura',ident:'TS-3001',serial:'TS-3001',modelo:'SHT31',insumo:'Sensor DHT22',inst:'20/08/2026',cal:[-40,125],sector:'Sector A',estado:'activo',rep:true,v:24.0,st:'ok',seed:7,base:23,amp:2},
+  {id:'HW-22',inv:'sur',tipo:'sensor',var:'humedad',ident:'HS-3002',serial:'HS-3002',modelo:'SHT31',insumo:'Sensor DHT22',inst:'20/08/2026',cal:[0,100],sector:'Sector A',estado:'activo',rep:true,v:70,st:'ok',seed:8,base:70,amp:4},
+  {id:'HW-31',inv:'sur',tipo:'actuador',tipoAct:'TAC-01',ident:'AV-4001',serial:'AV-4001',modelo:'Ventilador axial',insumo:'Módulo relé 10 A',inst:'20/08/2026',sector:'Sector A',estado:'activo',rep:true,st:'ok',est:{s:'APAGADO',txt:'Apagado',at:'13:20'},compat:'sin verificar',inc:[],lastSec:3000},
+  {id:'HW-41',inv:'este',tipo:'sensor',var:'temperatura',ident:'ESP-5001-T',serial:'',modelo:'DHT22',insumo:'Sensor DHT22',inst:'01/10/2026',cal:[-40,80],sector:'Sector A',estado:'activo',rep:true,v:21.5,st:'ok',seed:11,base:21,amp:2},
+  {id:'HW-42',inv:'este',tipo:'sensor',var:'humedad',ident:'ESP-5001-H',serial:'',modelo:'DHT22',insumo:'Sensor DHT22',inst:'01/10/2026',cal:[0,100],sector:'Sector A',estado:'activo',rep:true,v:62,st:'sinactividad',seed:12,base:62,amp:3},
+  {id:'HW-51',inv:'este',tipo:'actuador',tipoAct:'TAC-01',ident:'ESP-6001',serial:'',modelo:'Ventilador axial',insumo:'Módulo relé 10 A',inst:'01/10/2026',sector:'Sector A',estado:'activo',rep:true,st:'ok',est:{s:'ENCENDIDO',txt:'Encendido',at:'09:12'},compat:'sin verificar',inc:[],lastSec:18000}],
+ umb:{
+  norte:{temperatura:{min:18,max:26,minBy:'Albahaca',maxBy:'Rúcula'},humedad:{min:60,max:75,minBy:'Lechuga crespa',maxBy:'Albahaca'},luz:{min:12000,max:30000,minBy:'Albahaca',maxBy:'Rúcula'},fotoperiodo:{min:12,max:14,minBy:'Lechuga crespa',maxBy:'Rúcula'},
+   fuentes:[{v:'Lechuga crespa',ref:'Lote L-2026-014',est:'activo'},{v:'Rúcula',ref:'Lote L-2026-017',est:'activo'},{v:'Albahaca',ref:'Siembra S-088',est:'a realizar'}]},
+  sur:{temperatura:{min:16,max:28,minBy:'Lechuga crespa',maxBy:'Lechuga crespa'},humedad:{min:60,max:80,minBy:'Lechuga crespa',maxBy:'Lechuga crespa'},luz:{min:10000,max:32000,minBy:'Lechuga crespa',maxBy:'Lechuga crespa'},fotoperiodo:{min:11,max:14,minBy:'Lechuga crespa',maxBy:'Lechuga crespa'},fuentes:[{v:'Lechuga crespa',ref:'Lote L-2026-015',est:'activo'}]},
+  este:null,oeste:null},
+ reglas:[
+  {id:'RGL-01',inv:'norte',sensor:'HW-01',cond:'supera',act:'HW-11',acc:'Fijar velocidad',val:80,estado:'activa',ult:'cumplida',conf:3},
+  {id:'RGL-02',inv:'norte',sensor:'HW-01',cond:'vuelve',act:'HW-11',acc:'Apagar',val:'',estado:'activa',ult:'no cumplida',conf:0},
+  {id:'RGL-03',inv:'norte',sensor:'HW-02',cond:'baja',act:'HW-12',acc:'Encender',val:'',estado:'activa',ult:'no cumplida',conf:1},
+  {id:'RGL-04',inv:'norte',sensor:'HW-03',cond:'supera',act:'HW-13',acc:'Cerrar',val:'',estado:'activa',ult:'no cumplida',conf:0},
+  {id:'RGL-05',inv:'este',sensor:'HW-41',cond:'supera',act:'HW-51',acc:'Encender',val:'',estado:'activa',ult:'sin evaluar',conf:0}],
+ comandos:[
+  {id:'CMD-0420',inv:'norte',act:'HW-11',acc:'Fijar velocidad',val:80,origen:'Regla RGL-01',estado:'pendiente',int:2,enCurso:false,ult:'hace 1 min',creado:'14:08'},
+  {id:'CMD-0419',inv:'norte',act:'HW-12',acc:'Encender',val:'',origen:'Manual · Laura Benítez',estado:'ejecutado',int:1,ult:'14:09',creado:'14:09'},
+  {id:'CMD-0415',inv:'norte',act:'HW-13',acc:'Cerrar',val:'',origen:'Manual · Laura Benítez',estado:'fallido',int:4,ult:'13:06',creado:'13:02',nota:'Se agotaron los 4 intentos. Actuador fuera de servicio, alerta emitida y notificada por correo, y orden OT-0231 (prioridad alta) asignada a Ramón Acosta.'},
+  {id:'CMD-0412',inv:'norte',act:'HW-12',acc:'Apagar',val:'',origen:'Manual · Laura Benítez',estado:'ejecutado',int:1,ult:'11:30',creado:'11:30'},
+  {id:'CMD-0409',inv:'norte',act:'HW-11',acc:'Apagar',val:'',origen:'Manual · Laura Benítez',estado:'cancelado',int:0,ult:'—',creado:'10:41'},
+  {id:'CMD-0430',inv:'este',act:'HW-51',acc:'Encender',val:'',origen:'Manual · Marcos Duarte (Gerente)',estado:'ejecutado',int:1,ult:'09:12',creado:'09:12'}],
+ alertas:[
+  {id:'A-101',sev:'media',inv:'norte',tipo:'Fuera de umbral efectivo',det:'norte/sectorA/temperatura · 28,4 °C (máximo efectivo 26 °C) · desde 13:52',auto:'Se resuelve cuando la lectura baja de 25 °C (máximo menos la histéresis).'},
+  {id:'A-102',sev:'alta',inv:'norte',tipo:'Comando fallido',det:'Media sombra norte/sectorA/mediasombra · CMD-0415 · orden OT-0231 creada',auto:'Se resuelve sola cuando el actuador vuelve a estar activo.',mail:true},
+  {id:'A-104',sev:'alta',inv:'norte',tipo:'Nivel de solución bajo',det:'norte/tanque1/nivel · informa «bajo» desde 13:41',auto:'Se resuelve cuando el sensor vuelve a informar «normal».',mail:true},
+  {id:'A-105',sev:'media',inv:'norte',hw:'HW-15',tipo:'Configuración incompatible',det:'Ventana norte/sectorA/ventana · el nodo no anunció el comando FIJAR_POSICION de la acción «Fijar posición»',auto:'Se resuelve cuando no queda ninguna acción incompatible: el nodo anuncia el comando, se cambia el tipo del actuador o el Gerente corrige las acciones del tipo.'},
+  {id:'A-103',sev:'baja',inv:'norte',tipo:'Dispositivo no registrado',det:'El nodo envió lecturas de «norte/sectorA/co2», que no está registrado.',ident:'norte/sectorA/co2',auto:'Se resuelve al registrar el equipo o si deja de enviar mensajes.'},
+  {id:'A-106',sev:'baja',inv:'norte',tipo:'Dispositivo no registrado',det:'El nodo envió lecturas de «norte/sectorB/humedad», que no está registrado.',ident:'norte/sectorB/humedad',auto:'Se resuelve al reactivar el equipo, al registrar un reemplazo o si deja de enviar mensajes.'},
+  {id:'A-201',sev:'alta',inv:'sur',tipo:'Nodo sin comunicación',det:'GW-7B30C2 · última comunicación hace 14 min',auto:'Se resuelve sola cuando el nodo vuelve a comunicarse.',mail:true},
+  {id:'A-301',sev:'media',inv:'este',tipo:'Dispositivo sin actividad',det:'ESP-5001-H · sin lecturas hace 12 min',auto:'Se resuelve sola cuando el equipo vuelve a informar.'}],
+ tipos:[
+  {id:'TAC-01',n:'Ventilador',tmin:60,acc:[{n:'Encender',cmd:'ENCENDER'},{n:'Apagar',cmd:'APAGAR'},{n:'Fijar velocidad',cmd:'FIJAR_NIVEL',min:0,max:100,u:'%'}]},
+  {id:'TAC-02',n:'Bomba',tmin:60,acc:[{n:'Encender',cmd:'ENCENDER'},{n:'Apagar',cmd:'APAGAR'}]},
+  {id:'TAC-03',n:'Media sombra',tmin:60,acc:[{n:'Abrir',cmd:'ABRIR'},{n:'Cerrar',cmd:'CERRAR'},{n:'Fijar posición',cmd:'FIJAR_POSICION',min:0,max:100,u:'%'}]},
+  {id:'TAC-04',n:'Luminaria',tmin:60,acc:[{n:'Encender',cmd:'ENCENDER'},{n:'Apagar',cmd:'APAGAR'}]},
+  {id:'TAC-05',n:'Calefactor',tmin:60,acc:[{n:'Encender',cmd:'ENCENDER'},{n:'Apagar',cmd:'APAGAR'}]},
+  {id:'TAC-06',n:'Ventana',tmin:60,acc:[{n:'Abrir',cmd:'ABRIR'},{n:'Cerrar',cmd:'CERRAR'},{n:'Fijar posición',cmd:'FIJAR_POSICION',min:0,max:100,u:'%'}]}],
+ ordenes:[{id:'OT-0231',act:'HW-13',estado:'abierta'}],
+ cfg:{reint:3,interv:60,luzIni:8,luzFin:18,umbFot:1000,sinAct:5,sinCom:3,hTemp:1,hHum:3,hLuz:2000,hSol:1,conf:3,antig:5,ret:7}};
+const COND={supera:'supera el máximo efectivo',baja:'baja del mínimo efectivo',vuelve:'vuelve a quedar dentro del umbral efectivo'};
+const CNT={cmd:430,ot:231,al:400,hw:51,rgl:5};
+const nid=(k,p,pad)=>p+String(++CNT[k]).padStart(pad,'0');
+const S={role:'agronomo',inv:'norte',screen:'monitoreo',v:null,draft:{},err:{},modal:null,menu:null,cmdF:{estado:'todos',act:'todos',origen:'todos'},hwF:{q:'',tipo:'todos',estado:'todos',sector:'todos'},range:'24',col:{},n:1000};
+const IDRE=/^[A-Za-z0-9._\/-]{1,64}$/;
+/* ===== Utilidades ===== */
+const gh=id=>DB.hw.find(h=>h.id===id);
+const tipoDe=h=>DB.tipos.find(t=>t.id===h.tipoAct);
+const hwName=h=>h.tipo==='sensor'?VARS[h.var].n:tipoDe(h).n;
+const hwLbl=h=>`${hwName(h)} ${h.ident}`;
+const accsAct=h=>tipoDe(h).acc.filter(a=>a.activa!==false);
+const accsOk=h=>accsAct(h).filter(a=>!(h.inc||[]).includes(a.n));
+const accDe=(h,n)=>tipoDe(h).acc.find(a=>a.n===n);
+/* Unidades admitidas por comando con valor: lista cerrada del sistema (no se escribe a mano). */
+const UNID={FIJAR_NIVEL:[['%','% (porcentaje de la potencia)'],['rpm','rpm (vueltas por minuto)'],['L/min','L/min (litros por minuto)']],FIJAR_POSICION:[['%','% (porcentaje de apertura)'],['°','° (grados)'],['cm','cm (centímetros)']]};
+const unidOpts=(cmd,cur)=>{const l=(UNID[cmd]||[]).slice();if(cur&&!l.some(x=>x[0]===cur))l.push([cur,cur]);return l.map(x=>`<option value="${esc(x[0])}"${x[0]===cur?' selected':''}>${esc(x[1])}</option>`).join('')};
+/* Un actuador solo cambia de tipo si todavía no tiene comandos ni reglas (regla 3 de IOT-MOD-HDW). */
+const tipoCambiable=h=>!DB.comandos.some(c=>c.act===h.id)&&!DB.reglas.some(r=>r.act===h.id);
+const hasVal=a=>!!(a&&CMDV[a.cmd]&&CMDV[a.cmd].val);
+const modoLocal=()=>{const s=sys();return !!(s&&s.modo==='local')};
+const ago=sec=>sec<60?`hace ${sec} s`:sec<3600?`hace ${Math.round(sec/60)} min`:`hace ${Math.round(sec/3600)} h`;
+const sys=()=>DB.sistemas[S.inv];
+const maxInt=()=>DB.cfg.reint+1;
+const fmt=(v,d)=>Number(v).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const val=(v,h)=>VARS[h.var].bin?(v==='bajo'?'Bajo':'Normal'):fmt(v,VARS[h.var].d);
+function canOp(i){i=i||S.inv;const agr=INVS[i].agr;return S.role==='agronomo'?agr!==null:agr===null}
+function opBanner(){
+ const i=INVS[S.inv];
+ if(!canOp())return `<div class="alert alert-info">${ic('info')}<div>${esc(i.n)} tiene Agrónomo activo (${esc(i.agr)}). El Gerente lo consulta, pero lo opera solo cuando no hay Agrónomo activo.</div></div>`;
+ return S.role==='gerente'?`<div class="alert alert-ok">${ic('check')}<div>Operás este invernadero como Gerente porque no tiene Agrónomo activo.</div></div>`:'';
+}
+const visInv=()=>Object.keys(INVS).filter(k=>S.role==='gerente'||INVS[k].agr!==null);
+function toast(m,k,ms){const c={ok:'#18784a',warn:'#9a5b00',danger:'#b42828',info:'#1d4f9c'}[k||'ok'];const d=document.createElement('div');d.className='toast';d.style.setProperty('--tc',c);d.innerHTML=ic(k==='danger'||k==='warn'?'alert':'check')+`<div>${m}</div>`;d.style.cursor='pointer';d.title='Cerrar';d.onclick=()=>d.remove();const t=$('#toasts');t.appendChild(d);while(t.children.length>2)t.firstChild.remove();setTimeout(()=>d.remove(),ms||(k==='warn'||k==='danger'?9000:5000))}
+function go(screen,v){$('#toasts').innerHTML='';S.screen=screen;S.v=v||null;S.draft={};S.err={};S.menu=null;S.modal=null;render();const m=$('main.main');if(m)m.scrollTop=0}
+const F=k=>S.draft[k]==null?'':S.draft[k];
+const fld=(l,k,inner,hint,req)=>`<div class="fld"><label for="f-${k}">${l}${req?' <span class="req">*</span>':''}</label>${inner}${hint?`<div class="hint">${hint}</div>`:''}${S.err[k]?`<div class="err">${S.err[k]}</div>`:''}</div>`;
+const tx=(k,ex)=>`<input id="f-${k}" class="field-input ${S.err[k]?'bad':''}" data-k="${k}" value="${esc(F(k))}" ${ex||''}>`;
+const nm=(k,ex)=>tx(k,'inputmode="decimal" '+(ex||''));
+const sl=(k,opts,ex,pl)=>`<select id="f-${k}" class="field-input ${S.err[k]?'bad':''}" data-k="${k}" ${ex||''}>`+(pl!=null?`<option value="" ${F(k)===''?'selected':''}>${pl}</option>`:'')+opts.map(o=>`<option value="${esc(o[0])}" ${String(F(k))===String(o[0])?'selected':''}>${esc(o[1])}</option>`).join('')+'</select>';
+const ph=(t,sub,right)=>`<div class="page-h"><h1>${t}</h1><div class="spacer"></div>${right||''}${sub?`<p class="sub">${sub}</p>`:''}</div>`;
+const invSel=()=>`<div class="ctx"><label for="invsel" class="sm muted">Invernadero</label><select id="invsel" class="field-input" data-ch="inv">${visInv().map(k=>`<option value="${k}" ${k===S.inv?'selected':''}>${INVS[k].n}</option>`).join('')}</select>${canOp()?bd('ok','Podés operar'):bd('neutral','Solo consulta')}</div>`;
+const menuStyle=()=>{const p=S.menuPos||{};return p.up?`position:fixed;bottom:${p.b}px;right:${p.r}px;top:auto`:`position:fixed;top:${p.t}px;right:${p.r}px`};
+const menu=(id,items)=>`<span class="kb"><button class="kb-btn" data-act="menu" data-arg="${id}" aria-haspopup="true" aria-expanded="${S.menu===id}" aria-label="Más acciones">${ic('more')}</button>${S.menu===id?`<div class="menu" style="${menuStyle()}">${items.map(i=>i?`<button class="${i[3]||''}" data-act="${i[0]}" data-arg="${i[2]||''}">${ic(i[4]||'edit')}${i[1]}</button>`:'').join('')}</div>`:''}</span>`;
+const RNG={'1':{n:'Última hora',h:1},'6':{n:'Últimas 6 horas',h:6},'24':{n:'Últimas 24 horas',h:24},'168':{n:'Últimos 7 días',h:168},'720':{n:'Últimos 30 días',h:720}};
+const RSUM=rg=>+rg>24;
+/* Serie de ejemplo. Hasta 24 h: lecturas. 7 y 30 días: resúmenes horarios (mínimo, promedio y máximo de cada hora). */
+function series(h,rg){
+ const span=RNG[rg].h,n=RSUM(rg)?Math.min(span,120):60,now=14+10/60,a=[];
+ for(let i=0;i<n;i++){
+  const T=now-span*(1-i/(n-1)),hod=((T%24)+24)%24;
+  const r=Math.sin((i+1)*12.9898+h.seed*78.233)*43758.5453,nz=(r%1+1)%1-.5;let x;
+  if(h.var==='luz')x=(hod<8||hod>18)?0:Math.sin((hod-8)/10*Math.PI)*31000*(1+nz*.06);
+  else x=h.base+h.amp*Math.sin((hod-9)/24*Math.PI*2)+nz*h.amp*.3;
+  const sp=h.var==='luz'?2500:Math.max(.4,h.amp*.35);
+  a.push({v:x,mn:Math.max(0,x-sp*(.5+Math.abs(nz))),mx:x+sp*(.5+Math.abs(nz))})}
+ const k=Math.max(2,Math.round(n*.06));for(let j=0;j<k;j++){const w=(j+1)/k,ix=n-k+j;a[ix].v=a[ix].v*(1-w)+h.v*w}
+ return a}
+function spark(h,u,rg,mute){const s=series(h,rg),sum=RSUM(rg),W=360,H=96,L=6,R=46,vals=[].concat(...s.map(p=>sum?[p.mn,p.mx]:[p.v])).concat(u?[u.min,u.max]:[]);let mn=Math.min(...vals),mx=Math.max(...vals);const pad=(mx-mn)*.14||1;mn-=pad;mx+=pad;
+ const X=i=>L+i*(W-L-R)/(s.length-1),Y=v=>H-8-(v-mn)/(mx-mn)*(H-16),d=VARS[h.var].d;const pts=s.map((p,i)=>X(i).toFixed(1)+','+Y(p.v).toFixed(1)).join(' ');
+ const out=u&&(h.v>u.max||h.v<u.min);const c=mute?'#8a94a0':out?'var(--status-danger)':'var(--primary)';
+ const env=sum?`<polygon points="${s.map((p,i)=>X(i).toFixed(1)+','+Y(p.mx).toFixed(1)).join(' ')} ${s.map((p,i)=>X(i).toFixed(1)+','+Y(p.mn).toFixed(1)).reverse().join(' ')}" fill="${mute?'#d5dae0':'#9cc7ae'}" opacity=".45"/>`:'';
+ const band=u?`<rect x="${L}" y="${Y(u.max).toFixed(1)}" width="${W-L-R}" height="${Math.max(2,Y(u.min)-Y(u.max)).toFixed(1)}" fill="#cfe7d9"/><line x1="${L}" x2="${W-R}" y1="${Y(u.max).toFixed(1)}" y2="${Y(u.max).toFixed(1)}" stroke="#7dbb97" stroke-dasharray="3 3"/><line x1="${L}" x2="${W-R}" y1="${Y(u.min).toFixed(1)}" y2="${Y(u.min).toFixed(1)}" stroke="#7dbb97" stroke-dasharray="3 3"/><text x="${W-R+6}" y="${(Y(u.max)+3.5).toFixed(1)}" font-size="10" fill="#3f6a52">${fmt(u.max,d)}</text><text x="${W-R+6}" y="${(Y(u.min)+3.5).toFixed(1)}" font-size="10" fill="#3f6a52">${fmt(u.min,d)}</text>`:'';
+ return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${RNG[rg].n}">${band}${env}<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>${sum?'':`<circle cx="${X(s.length-1).toFixed(1)}" cy="${Y(h.v).toFixed(1)}" r="3.5" fill="${c}"/>`}</svg>`}
+/* ===== Monitoreo (IOT-CNS-LEC) ===== */
+function refRange(h){const u=DB.umb[h.inv],s=DB.sistemas[h.inv];if(VARS[h.var].cmp==='umbral')return u?u[h.var]:null;if(VARS[h.var].cmp==='rango')return s&&s.rsol;return null}
+function sensorState(h){
+ const s=DB.sistemas[h.inv];
+ if(h.estado==='baja')return {b:bd('neutral','Dado de baja'),mute:true};
+ if(h.v==null)return {b:bd('neutral','Sin confirmar'),mute:true};
+ if(INVS[h.inv].off.includes(h.sector))return {b:bd('neutral','Sector fuera de servicio'),mute:true};
+ if(s&&s.conn==='sin señal')return {b:bd('warn','Desactualizado'),mute:true};
+ if(h.st==='sinactividad')return {b:bd('warn','Sin actividad · 12 min'),mute:true};
+ if(h.st==='invalida')return {b:bd('warn','Lectura inválida'),mute:true};
+ const V=VARS[h.var];
+ if(V.bin)return {b:h.v==='bajo'?bd('danger','Nivel bajo'):bd('ok','Normal')};
+ const r=refRange(h);
+ if(!r)return {b:bd('neutral',V.cmp==='rango'?'Sin rango definido':'Sin umbral efectivo')};
+ if(h.v>r.max||h.v<r.min)return {b:bd('danger',h.v>r.max?'Supera el máximo':'Bajo el mínimo')};
+ return {b:bd('ok','En rango')};
+}
+function actState(h){
+ if(h.estado==='baja')return bd('neutral','Dado de baja');
+ if(h.estado==='fuera de servicio')return bd('danger','Fuera de servicio');
+ if(DB.comandos.some(c=>c.act===h.id&&c.estado==='pendiente'))return bd('info','Comando pendiente');
+ if(!h.rep)return bd('warn','Sin confirmar');
+ if(h.compat==='incompatible')return bd('warn','Configuración incompatible');
+ return bd('ok','Operativo');
+}
+function estInf(h,short){
+ if(!h.est)return `<span class="muted">Desconocido</span>${short?'':'<span class="sub2">El nodo todavía no informó su estado</span>'}`;
+ return `<b>${h.est.txt}</b> <span class="muted">desde las ${h.est.at}</span>${h.est.local?`<span class="sub2 warn-t">${ic('alert',12)} Cambiado en el invernadero</span>`:''}`;
+}
+const compatB=h=>h.compat==='compatible'?bd('ok','Compatible'):h.compat==='incompatible'?bd('warn','Incompatible'):bd('neutral','Sin verificar');
+const SEV={alta:['danger','Crítica'],media:['warn','Advertencia'],baja:['info','Informativa']},SEVO={alta:0,media:1,baja:2};
+function sensCard(h){
+ const st=sensorState(h),V=VARS[h.var],r=refRange(h),rg=S.range;let body;
+ if(V.bin)body=`<div class="spark empty nivel ${h.v==='bajo'&&!st.mute?'bad':''}">${h.v==='bajo'?`Informa «bajo» desde las ${h.desde}`:'Nivel normal'}</div>`;
+ else if(h.v==null)body=`<div class="spark empty">Todavía no informó datos</div>`;
+ else body=spark(h,st.mute?null:r,rg,st.mute);
+ const fot=h.var==='luz'&&h.fot?(()=>{const u=DB.umb[h.inv],fr=u&&u.fotoperiodo;const ok=fr&&h.fot.v>=fr.min&&h.fot.v<=fr.max;
+  return `<div class="fotline">${ic('clock',14)}<span>Fotoperíodo de ayer: <b>${fmt(h.fot.v,1)} h</b></span><span class="spacer"></span>${h.fot.inc?bd('neutral','Incompleto'):!fr?bd('neutral','Sin umbral'):ok?bd('ok','En rango'):bd('danger','Fuera de rango')}</div>`})():'';
+ return `<div class="sens ${st.mute?'muted-card':''}"><div class="sh"><span class="id">${esc(h.ident)}</span><span class="xs muted">${h.sector||'General'}</span><span class="spacer"></span>${st.b}</div><div class="big">${h.v==null?'—':val(h.v,h)}<small>${V.u}</small></div>${body}${fot}</div>`;
+}
+function monitoreo(){
+ const s=sys(),u=DB.umb[S.inv],i=INVS[S.inv];
+ const hws=DB.hw.filter(h=>h.inv===S.inv&&h.estado!=='baja'),sens=hws.filter(h=>h.tipo==='sensor'),acts=hws.filter(h=>h.tipo==='actuador');
+ const al=DB.alertas.filter(a=>a.inv===S.inv).sort((a,b)=>SEVO[a.sev]-SEVO[b.sev]);
+ let o=ph('Monitoreo IoT','Lecturas, estado de los equipos y umbral efectivo del invernadero.',`<button class="btn btn-ghost" data-act="refresh">${ic('refresh')}Actualizar</button>`)+`<div class="stack">`+opBanner();
+ if(!s){return o+`<div class="card"><div class="card-b" style="text-align:center;padding:40px 20px">${ic('router',32)}<h3 style="margin:10px 0 4px">${i.n} no tiene Sistema IoT</h3><p class="muted" style="margin-bottom:14px">Registrá el sistema para recibir lecturas y emitir comandos.</p><button class="btn btn-primary" data-act="nav" data-arg="sistema" ${canOp()?'':'disabled title="Solo quien opera este invernadero puede registrarlo"'}>${ic('plus')}Registrar Sistema IoT</button></div></div></div>`}
+ const cn=s.conn==='en línea'?bd('ok',ic('wifi',12)+'En línea'):bd('danger',ic('wifioff',12)+'Sin señal');
+ o+=`<div class="card"><div class="facts"><div><span class="k">Sistema</span><span class="v">${sysEstB(s)}</span></div><div><span class="k">Conectividad</span><span class="v">${cn}</span></div><div><span class="k">Modo del nodo</span><span class="v">${s.modo==='local'?bd('warn','Local'):bd('ok','Remoto')}</span></div><div><span class="k">Última comunicación</span><span class="v">${s.last}</span>${s.at?`<span class="d">a las ${s.at}</span>`:''}</div></div></div>`;
+ if(s.estado==='desconectado')o+=`<div class="alert alert-warn">${ic('alert')}<div><b>Sistema desconectado manualmente.</b> InfoPonia no evalúa lecturas ni emite comandos hasta que un responsable lo active.</div></div>`;
+ if(s.conn==='sin señal')o+=`<div class="alert ${s.last==='nunca'?'alert-info':'alert-danger'}">${ic(s.last==='nunca'?'info':'wifioff')}<div>${s.last==='nunca'?'<b>El nodo todavía no se comunicó.</b> Cargale la dirección de la API y el token; cuando se comunique pasará a «En línea».':'<b>El nodo no se comunica desde '+s.last+'.</b> Los valores son los últimos recibidos.'}</div></div>`;
+ if(s.modo==='local')o+=`<div class="alert alert-warn">${ic('alert')}<div><b>El nodo está operando en modo local.</b> Actúa por su cuenta con su control de seguridad. InfoPonia sigue registrando lecturas y alertas, pero no evalúa reglas ni entrega comandos hasta que vuelva a «remoto».</div></div>`;
+ const out=sens.filter(h=>/danger/.test(sensorState(h).b)).length;
+ o+=`<div class="kpis"><div class="kpi ${out?'danger':''}"><div class="k">Sensores con problema</div><div class="v">${out}<small> de ${sens.length}</small></div></div><div class="kpi ${al.length?'warn':''}"><div class="k">Alertas activas</div><div class="v">${al.length}</div></div><div class="kpi"><div class="k">Actuadores operativos</div><div class="v">${acts.filter(h=>h.estado==='activo').length}<small> de ${acts.length}</small></div></div><div class="kpi"><div class="k">Comandos pendientes</div><div class="v">${DB.comandos.filter(c=>c.inv===S.inv&&c.estado==='pendiente').length}</div></div></div>`;
+ o+=`<div class="card"><div class="card-h"><h3>${ic('alert')}Alertas activas</h3></div>`+(al.length?`<div style="overflow-x:auto"><table class="data-table stackrows"><thead><tr><th style="width:130px">Severidad</th><th style="width:26%">Alerta</th><th>Detalle</th><th></th></tr></thead><tbody>${al.map(a=>`<tr class="sv sv-${a.sev}"><td>${bd(SEV[a.sev][0],SEV[a.sev][1])}</td><td><b>${a.tipo}</b>${a.mail?`<span class="sub2">${ic('mail',12)} Notificada por correo</span>`:''}</td><td>${(b=>b?`El nodo envió lecturas de «${esc(a.ident)}», que era de <b>${esc(hwName(b))}</b>, dado de baja el ${b.fbaja}.`:esc(a.det))(bajaDe(a.inv,a.ident))}<span class="sub2">${a.auto}</span></td><td class="right">${a.ident?(b=>b?`<div class="row" style="justify-content:flex-end"><button class="btn btn-ghost btn-sm" data-act="modal" data-arg="rebaja:${b.id}" ${canOp()?'':'disabled'}>Reactivar equipo</button><button class="btn btn-ghost btn-sm" data-act="reg-alert" data-arg="${a.id}" ${canOp()?'':'disabled'}>Registrar reemplazo</button></div>`:`<button class="btn btn-ghost btn-sm" data-act="reg-alert" data-arg="${a.id}" ${canOp()?'':'disabled'}>Registrar este equipo</button>`)(bajaDe(a.inv,a.ident)):''}</td></tr>`).join('')}</tbody></table></div>`:`<div class="card-b muted">No hay alertas activas.</div>`)+`</div>`;
+ const grp=Object.keys(VARS).map(k=>{const l=sens.filter(h=>h.var===k);if(!l.length)return '';const V=VARS[k];
+  let sub='';if(V.cmp==='umbral'){const r=u&&u[k];sub=r?`Umbral efectivo ${fmt(r.min,V.d)} a ${fmt(r.max,V.d)} ${V.u}`+(k==='luz'?` · se evalúa de ${DB.cfg.luzIni} a ${DB.cfg.luzFin} h`:''):'Sin umbral efectivo'}
+  else if(V.cmp==='rango')sub=s.rsol?`Rango del invernadero ${fmt(s.rsol.min,1)} a ${fmt(s.rsol.max,1)} °C`:'Sin rango definido';
+  const open=!S.col[k],oc=l.filter(h=>/danger/.test(sensorState(h).b)).length;
+  return `<div class="gcard ${open?'open':''}"><button class="gh" data-act="grp" data-arg="${k}" aria-expanded="${open}">${ic(open?'chevd':'chevr')}<b>${V.n}</b><span class="xs muted">${l.length} ${l.length>1?'sensores':'sensor'}</span>${oc?bd('danger',oc+(V.bin?' en nivel bajo':' fuera de rango')):''}<span class="spacer"></span>${sub?`<span class="umb">${sub}</span>`:''}</button>${open?`<div class="gb"><div class="sgrid">${l.map(h=>sensCard(h)).join('')}</div></div>`:''}</div>`}).join('');
+ o+=`<div class="card"><div class="card-h"><h3>${ic('activity')}Sensores</h3><span class="spacer"></span><label for="rng" class="xs muted">Período</label><select id="rng" class="field-input" data-ch="range">${Object.keys(RNG).map(k=>`<option value="${k}" ${S.range===k?'selected':''}>${RNG[k].n}</option>`).join('')}</select></div><div class="card-b">${RSUM(S.range)?`<p class="xs muted" style="margin-bottom:12px">Más de 24 horas: se grafica el promedio de cada hora (línea) y su mínimo y máximo (franja), con los resúmenes horarios.</p>`:''}${grp||'<div class="muted">No hay sensores registrados en este invernadero.</div>'}</div></div>`;
+ o+=`<div class="card"><div class="card-h"><h3>${ic('cpu')}Actuadores</h3></div><div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table"><thead><tr><th>Equipo</th><th>Identificador</th><th>Estado informado por el nodo</th><th>Situación</th><th></th></tr></thead><tbody>${acts.map(h=>`<tr><td><b>${hwName(h)}</b><span class="sub2">${h.sector||'General'}</span></td><td><span class="id">${esc(h.ident)}</span></td><td>${estInf(h,1)}</td><td>${actState(h)}</td><td class="right"><button class="rowlink" data-act="cmd-for" data-arg="${h.id}" ${canOp()&&h.estado==='activo'?'':'disabled'}>Emitir comando</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">Sin actuadores.</td></tr>'}</tbody></table></div></div>`;
+ o+=`<div class="card"><div class="card-h"><h3>${ic('sliders')}Umbral efectivo</h3><span class="spacer"></span><button class="link xs" data-act="nav" data-arg="config">Ver parámetros IoT</button></div>`+(u?`<table class="data-table"><thead><tr><th>Variable</th><th>Mínimo</th><th>Máximo</th><th>Lo limita</th></tr></thead><tbody>${Object.keys(UVARS).map(k=>`<tr><td>${UVARS[k].n}</td><td>${fmt(u[k].min,UVARS[k].d)} ${UVARS[k].u}</td><td>${fmt(u[k].max,UVARS[k].d)} ${UVARS[k].u}</td><td class="sm muted">mín. ${u[k].minBy} · máx. ${u[k].maxBy}</td></tr>`).join('')}</tbody></table><div class="card-b" style="border-top:1px solid var(--border)"><div class="xs muted" style="font-weight:600;margin-bottom:8px">Variedades consideradas</div><div class="vchips">${u.fuentes.map(f=>`<span class="vchip"><i class="dot ${f.est==='activo'?'':'next'}"></i><b>${f.v}</b><span class="muted">${f.ref} · ${f.est}</span></span>`).join('')}</div></div>`:`<div class="card-b"><div class="alert alert-warn">${ic('alert')}<div><b>Sin umbral efectivo.</b> No hay lotes activos ni siembras a realizar en este invernadero, o los rangos de sus variedades no se superponen. Mientras tanto no se generan alertas por umbral ni se evalúan reglas.</div></div></div>`)+
+  `<div class="card-b" style="border-top:1px solid var(--border)"><span class="xs muted" style="font-weight:600">Temperatura de la solución</span> <span class="sm">${s.rsol?`${fmt(s.rsol.min,1)} a ${fmt(s.rsol.max,1)} °C · rango definido para este invernadero`:'Sin rango definido. Se define en Sistema IoT.'}</span></div></div></div>`;
+ return o;
+}
+/* ===== Sistema IoT (IOT-REG-SIS, IOT-MOD-SIS, IOT-DSC-SIS, IOT-ACT-SIS, IOT-BAJ-SIS) ===== */
+const sysEstB=s=>s.estado==='activo'?bd('ok','Activo'):s.estado==='desconectado'?bd('warn','Desconectado'):bd('neutral','Inactivo');
+function sistema(){
+ const s=sys(),i=INVS[S.inv];
+ if(S.v&&S.v.n==='sys-form'){const mod=!!s;
+  return `<button class="back" data-act="nav" data-arg="sistema">${ic('back')}Volver</button>`+ph(mod?'Modificar Sistema IoT':'Registrar Sistema IoT',i.n+(mod?'':(i.tec?` · Técnico: ${i.tec}`:' · sin Técnico')))+`<div class="page narrow" style="padding:0"><div class="card"><div class="card-b">`+
+  `<h3 class="sech">Nodo central</h3><div class="grid2">`+fld('Nombre','snom',tx('snom','placeholder="Ej.: Raspberry del galpón"'),'',true)+fld('Modelo','smod',tx('smod','placeholder="Ej.: Raspberry Pi 4"'),'',true)+`</div><div class="grid2">`+
+  fld('Número de serie','sserial',tx('sserial'),'Opcional. Dato físico del aparato: el nodo se identifica ante InfoPonia con su token.')+
+  (mod?'':fld('Fecha de instalación','sinst',tx('sinst','type="date" max="2026-11-19"'),'',true))+`</div>`+
+  (mod?'':fld('Insumo','sins',sl('sins',INSUMOS.map(x=>[x,x]),'','Seleccioná el insumo'),'Repuestos de hardware.',true))+
+  `<h3 class="sech">Temperatura de la solución nutritiva</h3><p class="hint" style="margin:-4px 0 10px">Opcional. Depende de lo que se cultiva en este invernadero; sin rango, las lecturas se muestran sin comparar.</p><div class="grid2">`+fld('Mínimo (°C)','smin',nm('smin'))+fld('Máximo (°C)','smax',nm('smax'))+`</div>`+
+  (mod?`<div class="fld"><span class="lbl">Token de acceso</span><p class="sm muted" style="margin-bottom:8px">${s.token}. Se guarda solo como resumen criptográfico, por eso no se puede volver a mostrar.</p><button class="btn btn-danger btn-sm" data-act="modal" data-arg="regen">${ic('key')}Regenerar token</button></div>`:`<div class="alert alert-info">${ic('key')}<div>Al registrar se genera el token del nodo y se muestra <b>una sola vez</b>, junto con la dirección de la API y la guía de integración del nodo.</div></div>`)+
+  (!mod&&!i.tec?`<div class="alert alert-warn" style="margin-top:10px">${ic('alert')}<div>El invernadero no tiene Técnico activo: se generará para el Gerente la alerta «invernadero sin Técnico activo».</div></div>`:'')+
+  `<div class="row" style="margin-top:18px"><button class="btn btn-primary" data-act="save-sys">${mod?'Guardar cambios':'Registrar y generar token'}</button><button class="btn btn-ghost" data-act="nav" data-arg="sistema">Cancelar</button></div></div></div></div>`}
+ let o=ph('Sistema IoT','Nodo central del invernadero: estado, conectividad y credencial.')+`<div class="stack">`+opBanner();
+ if(!s)return o+`<div class="card"><div class="card-b" style="text-align:center;padding:40px 20px">${ic('router',32)}<h3 style="margin:10px 0 4px">${i.n} no tiene Sistema IoT</h3><p class="muted" style="margin-bottom:14px">Registrá el nodo central para empezar a recibir lecturas.</p><button class="btn btn-primary" data-act="open-sys-form" ${canOp()?'':'disabled title="Solo quien opera este invernadero puede registrarlo"'}>${ic('plus')}Registrar Sistema IoT</button></div></div></div>`;
+ const op=canOp(),an=s.anuncio,reg=an?an.ids.filter(x=>!DB.hw.some(h=>h.inv===S.inv&&h.estado!=='baja'&&h.ident.toLowerCase()===x.toLowerCase())):[];
+ o+=`<div class="card"><div class="card-h"><h3>${ic('router')}${esc(s.nom)}</h3><span class="spacer"></span>${op?`<button class="btn btn-ghost btn-sm" data-act="open-sys-form">${ic('edit')}Modificar</button>`+(s.estado==='activo'?`<button class="btn btn-ghost btn-sm" data-act="modal" data-arg="desc">Desconectar</button>`:s.estado==='desconectado'?`<button class="btn btn-primary btn-sm" data-act="sys-activar">Activar</button>`:'')+menu('sysm',[['modal','Dar de baja','baj','danger','trash']]):''}</div>
+ <div class="facts"><div><span class="k">Estado</span><span class="v">${sysEstB(s)}</span></div><div><span class="k">Conectividad</span><span class="v">${s.conn==='en línea'?bd('ok','En línea'):bd('danger','Sin señal')}</span><span class="d">${s.last==='nunca'?'Todavía no se comunicó':'Última: '+s.last}</span></div><div><span class="k">Modo</span><span class="v">${s.modo==='local'?bd('warn','Local'):bd('ok','Remoto')}</span><span class="d">Lo informa el nodo</span></div><div><span class="k">Token de acceso</span><span class="v">${s.token}</span></div></div>
+ <div class="facts"><div><span class="k">Modelo</span><span class="v">${esc(s.modelo)}</span></div><div><span class="k">Número de serie</span><span class="v">${s.serial?esc(s.serial):'—'}</span></div><div><span class="k">Temperatura de la solución</span><span class="v">${s.rsol?`${fmt(s.rsol.min,1)} a ${fmt(s.rsol.max,1)} °C`:'Sin rango'}</span></div><div><span class="k">Último anuncio de equipos</span><span class="v">${an?`Hoy ${an.at} · ${an.n} equipos`:'El nodo no anuncia equipos'}</span><span class="d">${an?(reg.length?`${reg.length} sin registrar`:'Todos registrados'):'Compatibilidad sin verificar'}</span></div></div>
+ <div class="card-b" style="border-top:1px solid var(--border)"><div class="row"><div><span class="xs muted" style="display:block">Dirección de la API (solo HTTPS)</span><b>https://infoponia.onrender.com/api/iot/v1/</b></div><span class="spacer"></span><button class="btn btn-ghost btn-sm" data-act="guia">${ic('download')}Guía de integración del nodo</button></div></div></div>`;
+ if(op&&s.estado==='activo')o+=`<div class="proto"><div class="proto-title">SOLO PROTOTIPO · simula lo que informa el nodo</div><div class="row"><button class="btn btn-ghost btn-sm" data-act="sim-modo">${s.modo==='local'?'El nodo vuelve al modo remoto':'El nodo pasa a modo local'}</button></div></div>`;
+ o+=`</div>`;
+ return o;
+}
+/* ===== Hardware (IOT-ALT/MOD/BAJ/CNS-HDW) ===== */
+function hwBadge(h){return h.estado==='activo'?bd('ok','Activo'):h.estado==='fuera de servicio'?bd('danger','Fuera de servicio'):bd('neutral','Dado de baja')}
+const anunciadosLibres=()=>{const s=sys();if(!s||!s.anuncio)return [];return s.anuncio.ids.filter(x=>!DB.hw.some(h=>h.inv===S.inv&&h.estado!=='baja'&&h.ident.toLowerCase()===x.toLowerCase()))};
+function hardware(){
+ const s=sys(),v=S.v,op=canOp();
+ if(v&&v.n==='hw-form'){const mod=!!v.id,h=mod&&gh(v.id),tipo=mod?h.tipo:F('htipo'),vr=mod?h.var:F('hvar');
+  const sectores=INVS[S.inv].sectores.map(x=>[x,x]),libres=anunciadosLibres();
+  const rof=(l,val,hint)=>`<div class="fld"><label>${l}</label><input class="field-input" value="${esc(val)}" disabled>${hint?`<div class="hint">${hint}</div>`:''}</div>`;
+  const identF=mod&&h.rep?rof('Identificador del equipo',h.ident,'Ya reportó: identifica su historial y no se puede corregir.')
+   :fld('Identificador del equipo','hident',tx('hident',libres.length?'list="anun"':'')+(libres.length?`<datalist id="anun">${libres.map(x=>{const b=bajaDe(S.inv,x);return `<option value="${esc(x)}"${b?` label="Era de ${esc(hwName(b))}, dado de baja"`:''}>`}).join('')}</datalist>`:''),
+     (v.fromAlert?'Tomado de la alerta «Dispositivo no registrado». ':'')+'Es el nombre con el que el nodo llama al equipo (un tópico, un número de serie…). Hasta 64 caracteres sin espacios: letras, números, - _ . /'+(libres.length&&!mod?` · El nodo anunció ${libres.length} sin registrar: elegilo de la lista.`:''),true);
+  let compat='';
+  const _iu=F('hident')&&DB.hw.some(x=>x.inv===S.inv&&x.estado!=='baja'&&x.ident.toLowerCase()===F('hident').trim().toLowerCase());
+  if(!mod&&tipo==='actuador'&&F('htac')&&F('hident')&&!_iu&&!(S.err&&S.err.hident)){const an=s.anuncio,t=DB.tipos.find(x=>x.id===F('htac'));
+   if(!an||!an.ids.includes(F('hident').trim()))compat=`<div class="alert alert-info" style="margin-bottom:14px">${ic('info')}<div>El nodo no anunció este equipo: la compatibilidad queda <b>sin verificar</b>.</div></div>`;
+   else{const bad=announcedBad(F('hident').trim(),t);compat=bad.length?`<div class="alert alert-warn" style="margin-bottom:14px">${ic('alert')}<div>El nodo no anunció el comando de: <b>${bad.join(', ')}</b>. Podés registrarlo igual; esas acciones no se ofrecerán y se generará la alerta «Configuración incompatible».</div></div>`:`<div class="alert alert-ok" style="margin-bottom:14px">${ic('check')}<div>Compatible: el nodo soporta todas las acciones del tipo.</div></div>`}}
+  return `<button class="back" data-act="hw-back">${ic('back')}Volver</button>`+ph(mod?'Modificar hardware':'Registrar hardware',INVS[S.inv].n)+`<div class="page narrow" style="padding:0"><div class="card"><div class="card-b">`+
+  (mod?'':fld('Tipo de equipo','htipo',sl('htipo',[['sensor','Sensor'],['actuador','Actuador']],'data-re="1"','Seleccioná el tipo de equipo'),'',true))+
+  (tipo==='sensor'?(mod?rof('Variable que mide',VARS[h.var].n+(VARS[h.var].u?' ('+VARS[h.var].u+')':''),'No se puede cambiar.'):fld('Variable que mide','hvar',sl('hvar',Object.keys(VARS).map(k=>[k,VARS[k].n+(VARS[k].u?' ('+VARS[k].u+')':' (normal o bajo)')]),'data-re="1"','Seleccioná la variable'),'El fotoperíodo no es un sensor: InfoPonia lo calcula con los sensores de intensidad lumínica.',true))
+   :(tipo==='actuador'?(mod?(tipoCambiable(h)?fld('Tipo de actuador','htac',sl('htac',DB.tipos.map(t=>[t.id,t.n]),'data-re="1"','Seleccioná el tipo de actuador'),'Se puede cambiar porque todavía no tiene comandos ni reglas. Si falta el tipo que necesitás, pedíselo al Gerente.',true):rof('Tipo de actuador',tipoDe(h).n,'No se puede cambiar: ya tiene comandos o reglas de actuación. Para otro tipo, se da de baja y se registra uno nuevo.')):fld('Tipo de actuador','htac',sl('htac',DB.tipos.map(t=>[t.id,t.n]),'data-re="1"','Seleccioná el tipo de actuador'),S.role==='agronomo'?'Si falta el tipo que necesitás, pedíselo al Gerente: los tipos son comunes a toda la organización.':'',true)):''))+
+  identF+(!mod&&bajaDe(S.inv,F('hident'))?(b=>`<div class="alert alert-info" style="margin-bottom:14px">${ic('info')}<div>Este identificador era de <b>${esc(hwName(b))}</b>, dado de baja el ${b.fbaja}. Si es el mismo aparato, reactivalo para conservar su historial. Registrá uno nuevo solo si es un reemplazo, que empieza su propio historial.<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" data-act="modal" data-arg="rebaja:${b.id}">Reactivar ${esc(hwName(b))}</button></div></div></div>`)(bajaDe(S.inv,F('hident'))):'')+compat+
+  `<div class="grid2">`+fld('Modelo','hmod',tx('hmod','placeholder="Ej.: DHT22"'),'',true)+fld('Número de serie','hserial',tx('hserial'),'Opcional. Dato físico del aparato; puede repetirse si un aparato mide dos variables.')+`</div>`+
+  (tipo==='sensor'&&vr&&!VARS[vr].bin?`<div class="grid2">`+fld(`Calibración: mínimo${VARS[vr].u?' ('+VARS[vr].u+')':''}`,'hcmin',nm('hcmin'),'',true)+fld(`Calibración: máximo${VARS[vr].u?' ('+VARS[vr].u+')':''}`,'hcmax',nm('hcmax'),'Valores que el sensor puede medir. Fuera de ellos, la lectura es inválida.',true)+`</div>`:'')+
+  (mod?'':`<div class="grid2">`+fld('Fecha de instalación','hinst',tx('hinst','type="date" max="2026-11-19"'),'',true)+fld('Insumo','hins',sl('hins',INSUMOS.map(x=>[x,x]),'','Seleccioná el insumo'),'Repuestos de hardware.',true)+`</div>`)+
+  fld('Sector','hsector',sl('hsector',[['','General (todo el invernadero)']].concat(sectores)))+
+  `<div class="row" style="margin-top:6px"><button class="btn btn-primary" data-act="save-hw">${mod?'Guardar cambios':'Registrar hardware'}</button><button class="btn btn-ghost" data-act="hw-back">Cancelar</button></div></div></div></div>`}
+ if(v&&v.n==='hw-ficha'){const h=gh(v.id),rg=DB.reglas.filter(r=>(r.sensor===h.id||r.act===h.id)&&r.estado!=='baja'),cm=DB.comandos.filter(c=>c.act===h.id);
+  const st=h.tipo==='sensor'?sensorState(h).b:actState(h);
+  const acts=op&&h.estado!=='baja'?`<button class="btn btn-ghost btn-sm" data-act="hw-mod" data-arg="${h.id}">${ic('edit')}Modificar</button>`+(h.estado==='fuera de servicio'?`<button class="btn btn-primary btn-sm" data-act="modal" data-arg="react:${h.id}">Volver a activar</button>`:'')+menu('hwm',[['modal','Dar de baja','baj:'+h.id,'danger','trash']]):op&&h.estado==='baja'&&s.estado!=='inactivo'?`<button class="btn btn-ghost btn-sm" data-act="modal" data-arg="rebaja:${h.id}">Reactivar</button>`:'';
+  return `<button class="back" data-act="hw-back">${ic('back')}Volver al listado</button>`+ph(hwName(h),'',hwBadge(h)+acts)+`<div class="stack">`+opBanner()+
+  `<div class="card"><div class="facts"><div><span class="k">Identificador</span><span class="v">${esc(h.ident)}</span><span class="d">${h.rep?'Ya reportó':'Sin confirmar: nunca reportó'}</span></div><div><span class="k">Tipo</span><span class="v">${h.tipo==='sensor'?'Sensor · '+VARS[h.var].n:'Actuador · '+tipoDe(h).n}</span></div><div><span class="k">Sector</span><span class="v">${h.sector||'General'}</span></div><div><span class="k">Situación</span><span class="v">${st}</span></div></div>
+  <div class="facts"><div><span class="k">Modelo</span><span class="v">${esc(h.modelo)}</span></div><div><span class="k">Número de serie</span><span class="v">${h.serial?esc(h.serial):'—'}</span></div><div><span class="k">Instalación</span><span class="v">${h.inst}</span></div><div><span class="k">Insumo</span><span class="v">${esc(h.insumo)}</span></div></div>
+  ${h.tipo==='sensor'?`<div class="facts"><div><span class="k">Calibración</span><span class="v">${h.cal?`${fmt(h.cal[0],VARS[h.var].d)} a ${fmt(h.cal[1],VARS[h.var].d)} ${VARS[h.var].u}`:'No aplica'}</span></div><div><span class="k">Última lectura</span><span class="v">${h.v==null?'—':val(h.v,h)+' '+VARS[h.var].u}</span></div></div>`:`<div class="facts"><div><span class="k">Estado informado por el nodo</span><span class="v">${estInf(h)}</span></div><div><span class="k">Compatibilidad con el nodo</span><span class="v">${compatB(h)}</span>${(h.inc||[]).length?`<span class="d">No soporta: ${h.inc.join(', ')}</span>`:''}</div><div><span class="k">Tiempo mínimo entre comandos</span><span class="v">${tipoDe(h).tmin} s</span></div></div>`}</div>`+
+  `<div class="card"><div class="card-h"><h3>${ic('sliders')}Reglas activas que lo usan</h3></div>${rg.length?`<table class="data-table"><tbody>${rg.map(r=>`<tr><td><span class="id">${r.id}</span></td><td>${rglText(r)}</td></tr>`).join('')}</tbody></table>`:'<div class="card-b muted">Ninguna.</div>'}</div>`+
+  (h.tipo==='actuador'?`<div class="card"><div class="card-h"><h3>${ic('send')}Historial de comandos</h3></div>${cm.length?`<table class="data-table"><tbody>${cm.map(c=>`<tr><td><span class="id">${c.id}</span></td><td>${c.acc}${c.val!==''?' · '+c.val:''}</td><td>${cmdBadge(c.estado,c.rech)}</td><td class="muted">${c.creado}</td></tr>`).join('')}</tbody></table>`:'<div class="card-b muted">Sin comandos.</div>'}</div>`:'')+`</div>`}
+ let o=ph('Hardware','Sensores y actuadores del invernadero, identificados como los nombra el nodo central.',op&&s&&s.estado!=='inactivo'?`<button class="btn btn-primary" data-act="hw-new">${ic('plus')}Registrar hardware</button>`:'')+`<div class="stack">`+opBanner();
+ if(!s)return o+`<div class="alert alert-warn">${ic('alert')}<div>Este invernadero no tiene Sistema IoT. Registrá el sistema antes de cargar equipos. <button class="link" data-act="nav" data-arg="sistema">Ir a Sistema IoT</button></div></div></div>`;
+ const libres=anunciadosLibres();
+ if(libres.length&&op)o+=`<div class="alert alert-info">${ic('info')}<div>El nodo anunció ${libres.length} equipo(s) que todavía no están registrados: <b>${libres.map(esc).join(', ')}</b>. Registralos para empezar a aceptar sus mensajes.</div></div>`;
+ const F2=S.hwF,hasF=F2.q||F2.tipo!=='todos'||F2.estado!=='todos'||F2.sector!=='todos';
+ const all=DB.hw.filter(h=>h.inv===S.inv),q=F2.q.trim().toLowerCase();
+ const hws=all.filter(h=>(F2.tipo==='todos'||h.tipo===F2.tipo)&&(F2.estado==='todos'||h.estado===F2.estado)&&(F2.sector==='todos'||(F2.sector==='_'?!h.sector:h.sector===F2.sector))&&(!q||h.ident.toLowerCase().includes(q)||(h.serial||'').toLowerCase().includes(q)||hwName(h).toLowerCase().includes(q)));
+ const fo=(k,l,opts)=>`<select class="field-input" data-ch="hwf-${k}" aria-label="${l}">${opts.map(x=>`<option value="${x[0]}" ${String(F2[k])===String(x[0])?'selected':''}>${x[1]}</option>`).join('')}</select>`;
+ o+=`<div class="filters"><input class="field-input q" data-ch="hwf-q" value="${esc(F2.q)}" placeholder="Buscar por identificador o equipo" aria-label="Buscar">${fo('tipo','Tipo',[['todos','Todos los tipos'],['sensor','Sensores'],['actuador','Actuadores']])}${fo('estado','Estado',[['todos','Todos los estados'],['activo','Activo'],['fuera de servicio','Fuera de servicio'],['baja','Dado de baja']])}${fo('sector','Sector',[['todos','Todos los sectores']].concat(INVS[S.inv].sectores.map(x=>[x,x]),[['_','General']]))}${hasF?`<button class="btn btn-ghost btn-sm" data-act="hwf-clear">Limpiar filtros</button>`:''}</div>
+ <div class="tablewrap"><table class="data-table"><thead><tr><th>Equipo</th><th>Identificador</th><th>Sector</th><th>Estado</th><th>Situación</th><th></th></tr></thead><tbody>${hws.map(h=>`<tr><td><b>${hwName(h)}</b><span class="sub2">${h.tipo==='sensor'?'Sensor':'Actuador'}</span></td><td><span class="id">${esc(h.ident)}</span></td><td>${h.sector||'General'}</td><td>${hwBadge(h)}</td><td>${h.estado==='baja'?'—':h.tipo==='sensor'?sensorState(h).b:actState(h)}</td><td class="right"><button class="rowlink" data-act="hw-ficha" data-arg="${h.id}">Ver ficha</button></td></tr>`).join('')||`<tr><td colspan="6" class="muted">${all.length?'Ningún equipo coincide con los filtros.':'Sin equipos registrados.'}</td></tr>`}</tbody></table></div></div>`;
+ return o;
+}
+/* Comandos que el nodo no anunció para un actuador (prototipo: la ventana del norte no soporta FIJAR_POSICION). */
+/* Comandos que el nodo anunció para cada actuador (último anuncio) */
+const SOP={'norte/sectorA/ventilador':['ENCENDER','APAGAR','FIJAR_NIVEL'],'norte/sectorA/bomba':['ENCENDER','APAGAR'],'norte/sectorA/mediasombra':['ABRIR','CERRAR','FIJAR_POSICION'],'norte/sectorA/ventana':['ABRIR','CERRAR']};
+function announcedBad(ident,t,acc){const sp=SOP[ident];if(!sp)return [];return (acc||t.acc).filter(a=>a.activa!==false&&!sp.includes(a.cmd)).map(a=>a.n)}
+const t0cmds=h=>DB.tipos.find(t=>t.id===h.tipoAct).acc.map(a=>a.cmd);
+function announced(h){const s=DB.sistemas[h.inv];return !!(s&&s.anuncio&&s.anuncio.ids.some(x=>x.toLowerCase()===h.ident.toLowerCase()))}
+/* Recalcula la compatibilidad con el último anuncio y genera o resuelve la alerta (IOT-ENT-INF 1c, IOT-MOD-HDW regla 10, IOT-MOD-TAC regla 9) */
+function recompat(h){if(h.tipo!=='actuador'||h.estado==='baja')return;const t=DB.tipos.find(x=>x.id===h.tipoAct);
+ if(!announced(h)&&!SOP[h.ident]){h.compat='sin verificar';h.inc=[]}else{const bad=announcedBad(h.ident,t);h.inc=bad;h.compat=bad.length?'incompatible':'compatible'}
+ const ix=DB.alertas.findIndex(a=>a.tipo==='Configuración incompatible'&&a.hw===h.id);
+ if(h.compat==='incompatible'){const cm=t.acc.filter(a=>h.inc.includes(a.n)).map(a=>a.cmd).join(', ');const det=`${hwLbl(h)} · el nodo no anunció ${cm} (acción ${h.inc.map(n=>'«'+n+'»').join(', ')})`;
+  if(ix<0)DB.alertas.push({id:nid('al','A-',3),sev:'media',inv:h.inv,hw:h.id,tipo:'Configuración incompatible',det,auto:'Se resuelve cuando no queda ninguna acción incompatible: el nodo anuncia el comando, se cambia el tipo del actuador o el Gerente corrige las acciones del tipo.'});else DB.alertas[ix].det=det}
+ else if(ix>=0)DB.alertas.splice(ix,1)}
+/* Equipo dado de baja que usaba un identificador (se deduce, no se guarda en la alerta) */
+function bajaDe(inv,ident){if(!ident||DB.hw.some(h=>h.inv===inv&&h.estado!=='baja'&&h.ident.toLowerCase()===ident.toLowerCase()))return null;return DB.hw.filter(h=>h.inv===inv&&h.estado==='baja'&&h.ident.toLowerCase()===ident.trim().toLowerCase()).pop()||null}
+
+/* ===== Comandos (IOT-EMT-CMD, IOT-RSV-CMD, IOT-CNL-CMD) ===== */
+function cmdBadge(e,rech){return {pendiente:bd('info','Pendiente'),ejecutado:bd('ok','Ejecutado'),fallido:bd('danger',rech?'Rechazado por el nodo':'Fallido'),cancelado:bd('neutral','Cancelado')}[e]}
+function cmdForm(){
+ const acts=DB.hw.filter(h=>h.inv===S.inv&&h.tipo==='actuador'&&h.estado!=='baja');
+ const h=gh(F('cact')),s=sys(),a=h&&accDe(h,F('cacc'));
+ const pend=h&&DB.comandos.find(c=>c.act===h.id&&c.estado==='pendiente');
+ let w='';const W=(k,t)=>`<div class="alert alert-${k}" style="margin-top:8px">${ic('alert')}<div>${t}</div></div>`;
+ if(s&&s.estado==='desconectado')w=W('danger','El sistema está desconectado. No se pueden emitir comandos hasta activarlo.');
+ else if(h&&h.estado==='fuera de servicio')w=W('danger','Este actuador está fuera de servicio. Volvé a activarlo desde Hardware antes de emitir comandos.');
+ else if(pend)w=W('danger',`Ya hay un comando pendiente para este actuador (${pend.id}). Cancelalo o esperá su resultado: solo se admite uno por actuador.`);
+ else if(h){
+  if(s.conn==='sin señal')w+=W('warn','El nodo está sin señal. El comando queda pendiente, sin consumir intentos, hasta que el nodo se comunique.');
+  if(s.modo==='local')w+=W('warn','El nodo está operando en modo local. El comando queda pendiente, sin consumir intentos, hasta que vuelva a «remoto».');
+  if(!h.rep)w+=W('warn','Del actuador nunca llegó ningún mensaje. Si su identificador está mal cargado, el comando no se va a ejecutar.');
+  if(h.inc&&h.inc.length)w+=W('warn',`El nodo no soporta: ${h.inc.join(', ')}. Esas acciones no se ofrecen (alerta «Configuración incompatible»).`);
+  if(h.lastSec!=null&&h.lastSec<tipoDe(h).tmin)w+=W('warn',`El actuador cambió de estado ${ago(h.lastSec)}. Cambiarlo tan seguido puede dañar el equipo: faltan ${tipoDe(h).tmin-h.lastSec} s para cumplir el tiempo mínimo entre comandos. Podés emitirlo igual.`);
+  if(a&&h.est&&mismoEstado(a,h))w+=W('info',`Según el último estado que informó el nodo, el actuador ya está ${h.est.txt.toLowerCase()}. El nodo lo informará como ejecutado sin cambiar nada.`);
+  const rg=DB.reglas.filter(r=>r.act===h.id&&r.estado==='activa');if(rg.length)w+=W('info',`El actuador tiene ${rg.length} regla(s) activa(s) (${rg.map(r=>r.id).join(', ')}): este comando puede contradecirlas.`)}
+ const block=(h&&(h.estado!=='activo'||pend))||(s&&s.estado!=='activo');
+ return `<div class="card" style="margin-bottom:18px"><div class="card-h"><h3>${ic('send')}Emitir comando</h3>${h?`<span class="spacer"></span><span class="sm">Estado informado: ${estInf(h,1)}</span>`:''}</div><div class="card-b"><div class="grid2">`+
+ fld('Actuador','cact',sl('cact',acts.map(x=>[x.id,hwLbl(x)]),'data-ch="c-act"','Seleccioná un actuador'),'',true)+
+ fld('Acción','cacc',h?sl('cacc',accsOk(h).map(x=>[x.n,x.n]),'data-ch="c-acc"','Seleccioná la acción'):'<select class="field-input" disabled><option>Primero elegí el actuador</option></select>','',true)+`</div>`+
+ (hasVal(a)?fld(`Valor (${a.u})`,'cval',nm('cval'),`Número entero entre ${a.min} y ${a.max} ${a.u}.`,true):'')+w+
+ `<div class="row" style="margin-top:12px"><button class="btn btn-primary" data-act="emit" ${block?'disabled':''}>${ic('send')}Emitir comando</button><span class="xs muted">El nodo lo retira en su próxima consulta. Hasta ${maxInt()} intentos, uno cada ${DB.cfg.interv} s.</span></div></div></div>`;
+}
+function mismoEstado(a,h){const m={ENCENDER:'ENCENDIDO',APAGAR:'APAGADO',ABRIR:'ABIERTA',CERRAR:'CERRADA'};return m[a.cmd]&&h.est.s===m[a.cmd]}
+function comandos(){
+ const op=canOp(),s=sys();
+ let o=ph('Comandos','Órdenes enviadas a los actuadores, con sus intentos y resultado.')+`<div class="stack">`+opBanner();
+ if(!s)return o+`<div class="alert alert-warn">${ic('alert')}<div>Este invernadero no tiene Sistema IoT.</div></div></div>`;
+ if(op)o+=cmdForm();
+ const CF=S.cmdF,hasC=CF.estado!=='todos'||CF.act!=='todos'||CF.origen!=='todos';
+ const list=DB.comandos.filter(c=>c.inv===S.inv&&(CF.estado==='todos'||c.estado===CF.estado)&&(CF.act==='todos'||c.act===CF.act)&&(CF.origen==='todos'||(CF.origen==='manual'?c.origen.startsWith('Manual'):c.origen.startsWith('Regla'))));
+ const co=(k,l,opts)=>`<select class="field-input" data-ch="cf-${k}" aria-label="${l}">${opts.map(x=>`<option value="${x[0]}" ${CF[k]===x[0]?'selected':''}>${x[1]}</option>`).join('')}</select>`;
+ const aopts=DB.hw.filter(h=>h.inv===S.inv&&h.tipo==='actuador').map(h=>[h.id,hwLbl(h)]);
+ o+=`<div class="filters">${co('estado','Estado',[['todos','Todos los estados'],['pendiente','Pendientes'],['ejecutado','Ejecutados'],['fallido','Fallidos'],['cancelado','Cancelados']])}${co('act','Actuador',[['todos','Todos los actuadores']].concat(aopts))}${co('origen','Origen',[['todos','Todos los orígenes'],['manual','Manual'],['regla','Regla de actuación']])}${hasC?`<button class="btn btn-ghost btn-sm" data-act="cmdf-clear">Limpiar filtros</button>`:''}</div>`;
+ const loc=s.modo==='local';
+ o+=`<div class="tablewrap"><table class="data-table"><thead><tr><th>Código</th><th>Actuador y acción</th><th>Origen</th><th>Estado</th><th>Intentos</th><th>Último intento</th><th></th></tr></thead><tbody>${list.map(c=>{const h=gh(c.act),ad=accDe(h,c.acc)||{};
+  return `<tr><td><span class="id">${c.id}</span></td><td><b>${hwName(h)}</b> <span class="muted sm">${esc(h.ident)}</span><span class="sub2">${c.acc}${c.val!==''?' · '+c.val+' '+(ad.u||''):''} <span class="code">${ad.cmd||''}</span></span></td><td class="sm">${c.origen}</td><td>${cmdBadge(c.estado,c.rech)}</td><td>${c.int} de ${maxInt()}</td><td class="muted">${c.ult}</td><td class="right">${c.estado==='pendiente'?`<button class="rowlink" data-act="modal" data-arg="ccan:${c.id}" ${op&&!c.enCurso?'':'disabled'} title="${c.enCurso?'Hay un intento en curso: no se puede cancelar':''}">Cancelar</button>`:''}</td></tr>`+
+  (c.estado==='fallido'?`<tr class="sub"><td colspan="7"><div class="alert ${c.rech?'alert-warn':'alert-danger'}">${ic('alert',16)}<div>${c.nota}</div></div></td></tr>`:'')+
+  (c.estado==='pendiente'?`<tr class="sub"><td colspan="7"><div class="proto"><div class="proto-title">SOLO PROTOTIPO · simula la respuesta del nodo</div>${loc?'<div class="sm muted">El nodo está en modo local: no se le entregan comandos y no se consumen intentos.</div>':`<div class="row"><button class="btn btn-ghost btn-sm" data-act="sim-ok" data-arg="${c.id}">El nodo confirma la ejecución</button><button class="btn btn-ghost btn-sm" data-act="sim-fail" data-arg="${c.id}">Intento sin respuesta</button><button class="btn btn-ghost btn-sm" data-act="sim-rech" data-arg="${c.id}">El nodo no reconoce el comando</button></div>`}</div></td></tr>`:'')}).join('')||'<tr><td colspan="7" class="muted">No hay comandos con estos filtros.</td></tr>'}</tbody></table></div></div>`;
+ return o;
+}
+/* ===== Reglas de actuación (IOT-ALT/MOD/BAJ/CNS-RGL) ===== */
+function rglText(r){const s=gh(r.sensor),a=gh(r.act),ad=accDe(a,r.acc)||{};return `Cuando <b>${hwName(s)} ${esc(s.ident)}</b> ${COND[r.cond]}, <b>${hwName(a)} ${esc(a.ident)}</b>: ${r.acc}${r.val!==''?' '+r.val+(ad.u?' '+ad.u:''):''}`}
+function ultB(r){return r.ult==='cumplida'?bd('warn','Se cumple'):r.conf>0?bd('info',`Confirmando ${r.conf} de ${DB.cfg.conf}`):r.ult==='no cumplida'?bd('neutral','No se cumple'):bd('neutral','Sin evaluar')}
+function rglTags(r){const a=gh(r.act),s=DB.sistemas[r.inv],t=[];
+ if(a.estado==='fuera de servicio')t.push(bd('danger','No emite: actuador fuera de servicio'));
+ if((a.inc||[]).includes(r.acc))t.push(bd('warn','No emite: acción incompatible con el nodo'));
+ if(!DB.umb[r.inv])t.push(bd('neutral','No se evalúa: sin umbral efectivo'));
+ if(s&&s.modo==='local')t.push(bd('warn','No se evalúa: nodo en modo local'));
+ return t.join('')}
+const rglSensors=()=>DB.hw.filter(h=>h.inv===S.inv&&h.tipo==='sensor'&&h.estado==='activo'&&VARS[h.var].rules&&!INVS[S.inv].off.includes(h.sector));
+function reglas(){
+ const op=canOp(),s=sys(),v=S.v;
+ if(v&&v.n==='rgl-form'){const mod=!!v.id;
+  const sens=rglSensors(),acts=DB.hw.filter(h=>h.inv===S.inv&&h.tipo==='actuador'&&h.estado!=='baja');
+  const a=gh(F('ract')),ac=a&&accDe(a,F('racc'));
+  const prev=F('rsensor')&&F('rcond')&&a&&F('racc')&&(!hasVal(ac)||F('rval')!=='')?rglText({sensor:F('rsensor'),cond:F('rcond'),act:F('ract'),acc:F('racc'),val:F('rval')}):'';
+  return `<button class="back" data-act="nav" data-arg="reglas">${ic('back')}Volver</button>`+ph(mod?'Modificar regla':'Nueva regla de actuación',INVS[S.inv].n)+`<div class="page narrow" style="padding:0"><div class="card"><div class="card-b">`+
+  (mod?`<div class="fld"><label>Cuando el sensor…</label><input class="field-input" value="${esc(hwLbl(gh(F('rsensor'))))}" disabled><div class="hint">El sensor y el actuador no se cambian: para otros, se crea una regla nueva.</div></div>`:fld('Cuando el sensor…','rsensor',sl('rsensor',sens.map(h=>[h.id,hwLbl(h)+' · '+(h.sector||'General')]),'','Seleccioná un sensor'),'Solo temperatura, humedad e intensidad lumínica. La solución nutritiva y el fotoperíodo se monitorean con alertas.',true))+
+  `<div class="fld"><span class="lbl">…y la lectura</span><div class="chips one">${Object.keys(COND).map(k=>`<button class="chip" aria-pressed="${F('rcond')===k}" data-act="r-cond" data-arg="${k}">${COND[k]}</button>`).join('')}</div><div class="hint">Dispara una vez, cuando la condición se cumple en ${DB.cfg.conf} lecturas seguidas. Deja de cumplirse recién cuando la lectura se aleja del límite más que la histéresis, y respeta el tiempo mínimo entre comandos del actuador.</div>${S.err.rcond?`<div class="err">${S.err.rcond}</div>`:''}</div>`+
+  `<div class="grid2">`+(mod?`<div class="fld"><label>…entonces el actuador</label><input class="field-input" value="${esc(hwLbl(a))}" disabled></div>`:fld('…entonces el actuador','ract',sl('ract',acts.map(h=>[h.id,hwLbl(h)]),'data-ch="r-act"','Seleccioná un actuador'),'',true))+fld('Acción','racc',a?sl('racc',accsOk(a).map(x=>[x.n,x.n]),'data-ch="r-acc"','Seleccioná la acción'):'<select class="field-input" disabled><option>Primero elegí el actuador</option></select>',a&&a.inc&&a.inc.length?`No se ofrecen las acciones que el nodo no soporta: ${a.inc.join(', ')}.`:'',true)+`</div>`+
+  (hasVal(ac)?fld(`Valor (${ac.u})`,'rval',nm('rval'),`Número entero entre ${ac.min} y ${ac.max} ${ac.u}.`,true):'')+
+  (prev?`<div class="alert alert-info" style="margin-bottom:14px">${ic('info')}<div class="sentence">${prev}</div></div>`:'')+
+  (!DB.umb[S.inv]?`<div class="alert alert-warn" style="margin-bottom:14px">${ic('alert')}<div>Este invernadero no tiene umbral efectivo: la regla se guarda, pero no se evalúa hasta que lo tenga.</div></div>`:'')+
+  `<div class="row"><button class="btn btn-primary" data-act="save-rgl">${mod?'Guardar cambios':'Crear regla'}</button><button class="btn btn-ghost" data-act="nav" data-arg="reglas">Cancelar</button></div></div></div></div>`}
+ let o=ph('Reglas de actuación','Un sensor dispara una acción sobre un actuador del mismo invernadero.',op&&s?`<button class="btn btn-primary" data-act="rgl-new">${ic('plus')}Nueva regla</button>`:'')+`<div class="stack">`+opBanner();
+ if(!s)return o+`<div class="alert alert-warn">${ic('alert')}<div>Este invernadero no tiene Sistema IoT.</div></div></div>`;
+ const l=DB.reglas.filter(r=>r.inv===S.inv&&r.estado!=='baja');
+ o+=`<div class="tablewrap"><table class="data-table"><thead><tr><th>Código</th><th>Regla</th><th>Situación</th><th></th></tr></thead><tbody>${l.map(r=>`<tr><td><span class="id">${r.id}</span></td><td>${rglText(r)}</td><td><div class="tags">${ultB(r)}${rglTags(r)}</div></td><td class="right">${op?menu('r'+r.id,[['rgl-mod','Modificar',r.id],['modal','Dar de baja','rbaj:'+r.id,'danger','trash']]):''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">No hay reglas en este invernadero.</td></tr>'}</tbody></table></div>
+</div>`;
+ return o;
+}
+
+/* ===== Tipos de actuador (IOT-ALT/MOD/BAJ/CNS-TAC) ===== */
+const cmdOpts=()=>CAPS.map(c=>`<optgroup label="${c.n}">${c.cmds.map(x=>`<option value="${x[0]}">${x[0]}${x[1]?' (con valor)':''}</option>`).join('')}</optgroup>`).join('');
+const enUsoTac=(t,n)=>{const ids=DB.hw.filter(h=>h.tipoAct===t.id&&h.estado!=='baja').map(h=>h.id);return DB.reglas.filter(r=>r.estado==='activa'&&ids.includes(r.act)&&r.acc===n).map(r=>r.id).concat(DB.comandos.filter(c=>c.estado==='pendiente'&&ids.includes(c.act)&&c.acc===n).map(c=>c.id))};
+const histTac=(t,n)=>{const ids=DB.hw.filter(h=>h.tipoAct===t.id).map(h=>h.id);return DB.comandos.some(c=>ids.includes(c.act)&&c.acc===n)};
+function tipos(){
+ const adm=S.role==='gerente';
+ const v=S.v;
+ if(v&&v.n==='tac-form'){const mod=!!v.id,t=mod&&DB.tipos.find(x=>x.id===v.id);
+  const rows=v.acc.map((a,i)=>{if(a.activa===false)return '';const lock=mod&&a.o&&histTac(t,a.o),val=CMDV[a.cmd]&&CMDV[a.cmd].val;
+   return `<div class="blk"><div class="accl1"><div><label class="xs muted" for="an${i}">Nombre de la acción</label><input id="an${i}" class="field-input" data-ai="${i}" data-af="n" value="${esc(a.n)}" placeholder="Ej.: Fijar velocidad"></div><div><label class="xs muted" for="ac${i}">Comando del catálogo</label><select id="ac${i}" class="field-input" data-ai="${i}" data-af="cmd" ${lock?'disabled title="Tiene comandos en su historial: no cambia su comando"':''}><option value="">Seleccioná</option>${cmdOpts().replace(`value="${a.cmd}"`,`value="${a.cmd}" selected`)}</select></div><button class="btn btn-ghost btn-sm" data-act="acc-del" data-arg="${i}" aria-label="Quitar acción">${ic('trash')}</button></div>${val?`<div class="accl2"><div><label class="xs muted" for="amin${i}">Valor mínimo</label><input id="amin${i}" class="field-input num" inputmode="numeric" data-ai="${i}" data-af="min" value="${esc(a.min==null?'':a.min)}"></div><div><label class="xs muted" for="amax${i}">Valor máximo</label><input id="amax${i}" class="field-input num" inputmode="numeric" data-ai="${i}" data-af="max" value="${esc(a.max==null?'':a.max)}"></div><div><label class="xs muted" for="au${i}">Unidad</label><select id="au${i}" class="field-input" data-ai="${i}" data-af="u" ${lock||(mod&&a.o&&enUsoTac(t,a.o).length)?'disabled title="La acción está en uso o tiene comandos en su historial: su unidad no se cambia"':''}>${unidOpts(a.cmd,a.u)}</select></div></div>`:''}${lock?`<div class="hint">Tiene comandos en su historial: su comando y su unidad no se cambian.</div>`:''}</div>`}).join('');
+  const inact=v.acc.filter(a=>a.activa===false);
+  return `<button class="back" data-act="nav" data-arg="tipos">${ic('back')}Volver</button>`+ph(mod?'Modificar tipo de actuador':'Nuevo tipo de actuador','')+`<div class="page narrow" style="padding:0"><div class="card"><div class="card-b">`+
+  (mod&&DB.hw.some(h=>h.tipoAct===v.id&&h.estado!=='baja')?`<div class="alert alert-info" style="margin-bottom:16px">${ic('info')}<div>Los cambios afectan a ${DB.hw.filter(h=>h.tipoAct===v.id&&h.estado!=='baja').length} equipo(s) de este tipo.</div></div>`:'')+
+  `<div class="grid2">`+fld('Nombre del tipo','tnom',tx('tnom'),'Ej.: Extractor de aire.',true)+fld('Tiempo mínimo entre comandos (segundos)','ttmin',tx('ttmin','inputmode="numeric"'),'Protege el equipo de cambios demasiado seguidos.',true)+`</div>`+
+  `<div class="lbl">Acciones que admite <span class="req">*</span></div>`+rows+
+  (inact.length?`<p class="hint">Acciones quitadas que conservan su historial (inactivas): ${inact.map(a=>esc(a.n)).join(', ')}.</p>`:'')+
+  (S.err.tacc?`<div class="err" style="margin-bottom:8px">${S.err.tacc}</div>`:'')+`<p class="hint" style="margin-bottom:12px">Cada acción usa un comando del catálogo de capacidades, que es lo que entiende el nodo. Si el comando lleva valor, definí su rango y unidad.</p><button class="btn btn-ghost btn-sm" data-act="acc-add">${ic('plus')}Agregar acción</button>
+  <div style="margin-top:20px">${v.cw?`<div class="alert alert-warn" style="margin-bottom:0">${ic('alert')}<div>Con estas acciones quedarían incompatibles con el último anuncio de su nodo:<ul>${v.cw.map(x=>`<li>${x}</li>`).join('')}</ul>Podés guardar igual: esas acciones no se ofrecerán en esos actuadores y se generará la alerta «Configuración incompatible».</div></div>`:''}<div class="row" style="margin-top:12px"><button class="btn btn-primary" data-act="save-tac">${mod?(v.cw?'Guardar igual':'Guardar cambios'):'Crear tipo'}</button><button class="btn btn-ghost" data-act="nav" data-arg="tipos">Cancelar</button></div></div></div></div></div>`}
+ return ph('Tipos de actuador','Definen qué acciones admite cada clase de equipo y con qué comando del catálogo se ejecutan.',adm?`<button class="btn btn-primary" data-act="tac-new">${ic('plus')}Nuevo tipo</button>`:'')+
+ (adm?'':`<div class="alert alert-info" style="margin-bottom:14px">${ic('info')}<div>Los tipos de actuador los administra el Gerente porque son comunes a toda la organización: un cambio afecta a los equipos de todos los invernaderos. Podés consultarlos; si necesitás un tipo nuevo o un cambio, pedíselo.</div></div>`)+
+ `<div class="stack"><div class="tablewrap"><table class="data-table"><thead><tr><th>Código</th><th>Tipo</th><th>Acciones</th><th>Tiempo mínimo</th><th>Equipos</th>${adm?'<th></th>':''}</tr></thead><tbody>${DB.tipos.map(t=>{const n=DB.hw.filter(h=>h.tipoAct===t.id&&h.estado!=='baja').length;return `<tr><td><span class="id">${t.id}</span></td><td><b>${t.n}</b></td><td><div class="accchips">${t.acc.filter(a=>a.activa!==false).map(a=>`<span class="accchip">${a.n}${a.min!=null?` <small>${a.min} a ${a.max} ${a.u||''}</small>`:''}<small class="code">${a.cmd}</small></span>`).join('')}</div></td><td>${t.tmin} s</td><td>${n}</td>${adm?`<td class="right">${menu('t'+t.id,[['tac-mod','Modificar',t.id],['modal','Dar de baja','tbaj:'+t.id,'danger','trash']])}</td>`:''}</tr>`}).join('')}</tbody></table></div>
+ <div class="card"><div class="card-h"><h3>${ic('lock')}Catálogo de capacidades</h3><span class="spacer"></span><span class="xs muted">Forma parte del contrato de la API con el nodo · no se edita</span></div><table class="data-table"><thead><tr><th>Capacidad</th><th>Comandos</th></tr></thead><tbody>${CAPS.map(c=>`<tr><td><b>${c.n}</b></td><td><div class="accchips">${c.cmds.map(x=>`<span class="accchip code">${x[0]}${x[1]?' <small>con valor</small>':''}</span>`).join('')}</div></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
+/* ===== Configuración operativa · parámetros IoT (ADM-MOD-CFG) ===== */
+const CFGP=[
+ ['Comandos',[['reint','Reintentos de un comando','Después del primer intento (0 a 10).'],['interv','Intervalo entre intentos (s)','Espera de respuesta y tiempo mínimo entre intentos (10 a 3600).']]],
+ ['Luz y fotoperíodo',[['luzIni','Horario de luz: inicio (h)','Desde esta hora se compara la intensidad lumínica (0 a 23).'],['luzFin','Horario de luz: fin (h)','Hasta esta hora (1 a 24).'],['umbFot','Umbral de luz para el fotoperíodo (lux)','Las horas por encima de este valor cuentan como luz. Valor inicial: ajustalo según el cultivo.']]],
+ ['Actividad y comunicación',[['sinAct','Minutos sin actividad','Un sensor que ya reportó y deja de informar genera alerta.'],['sinCom','Minutos sin comunicación','Un nodo que ya se comunicó y deja de hacerlo genera alerta y correo.'],['antig','Antigüedad máxima de una lectura (min)','Las más viejas se guardan, pero no generan alertas ni disparan reglas.']]],
+ ['Reglas y alertas',[['conf','Lecturas de confirmación','Lecturas seguidas que deben cumplir la condición para disparar una regla.'],['hTemp','Histéresis de temperatura (°C)','Una alerta o regla se libera recién al alejarse del límite este valor.'],['hHum','Histéresis de humedad (% HR)',''],['hLuz','Histéresis de intensidad lumínica (lux)',''],['hSol','Histéresis de temperatura de la solución (°C)','']]],
+ ['Retención',[['ret','Días de retención de lecturas','Se conservan las que originaron una alerta o una regla. Los resúmenes horarios no se borran.']]]];
+function config(){
+ const ro=S.role!=='gerente';
+ return ph('Configuración operativa','Parámetros de cada módulo del sistema.')+`<div class="page narrow" style="padding:0"><h3 style="margin-bottom:10px">Módulo IoT</h3>${ro?`<div class="alert alert-info" style="margin-bottom:14px">${ic('lock')}<div>Estás en modo consulta. Los parámetros los modifica el Gerente.</div></div>`:''}<div class="card"><div class="card-b">${CFGP.map(g=>`<h3 class="sech">${g[0]}</h3><div class="grid2">${g[1].map(p=>fld(p[1],p[0],tx(p[0],'inputmode="numeric" '+(ro?'disabled':'')),p[2])).join('')}</div>`).join('')}${ro?'':`<div class="row"><button class="btn btn-primary" data-act="save-cfg">Guardar parámetros</button><button class="btn btn-ghost" data-act="cfg-reset">Descartar cambios</button></div>`}</div></div></div>`;
+}
+/* ===== Marco, ventanas y acciones ===== */
+const NAV=[['monitoreo','Monitoreo','activity'],['comandos','Comandos','send'],['reglas','Reglas de actuación','sliders'],['hardware','Hardware','cpu'],['sistema','Sistema IoT','router'],['tipos','Tipos de actuador','wrench']];
+const SCR={monitoreo,comandos,reglas,hardware,sistema,tipos,config};
+S.roleSel='agronomo';
+const MODS=[['Panel de control','grid'],['Datos maestros','db'],['Producción','leaf'],['IoT','activity','monitoreo'],['Configuración','settings','config'],['Usuarios y seguridad','users',0,1],['Auditoría','eye',0,1]];
+function ctxBar(){const t=S.screen==='tipos';return `<div class="ctxbar"><label for="invsel" class="lbl">Invernadero</label><select id="invsel" class="field-input" data-ch="inv" ${t?'disabled':''}>${t?'<option>Todos los invernaderos</option>':visInv().map(k=>`<option value="${k}" ${k===S.inv?'selected':''}>${INVS[k].n}</option>`).join('')}</select>${t?'<span class="sm muted">Los tipos de actuador son comunes a todos los invernaderos.</span>':canOp()?bd('ok','Podés operar'):bd('neutral','Solo consulta')}</div>`}
+function modalHtml(){
+ const m=S.modal;if(!m)return '';const [k,id]=(m.t||'').split(':');let b='';
+ const acts=(ok,lbl,danger)=>`<div class="acts">${ok?`<button class="btn ${danger?'btn-danger':'btn-primary'}" data-act="m-ok">${lbl}</button>`:''}<button class="btn btn-ghost" data-act="close">${ok?'Volver':'Entendido'}</button></div>`;
+ if(m.t==='token')b=`<h3>${m.regen?'Nuevo token del nodo':'Token del nodo'}</h3><p>Copialo ahora y cargalo en el nodo <b>${esc(m.serial)}</b>, junto con la dirección de la API. <b>No se vuelve a mostrar</b>: InfoPonia solo guarda un resumen criptográfico.</p><div class="sm muted">Dirección de la API</div><div class="tokenbox">https://infoponia.onrender.com/api/iot/v1/</div><div class="sm muted">Token</div><div class="tokenbox">${m.tok}</div><div class="row" style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" data-act="guia">${ic('download')}Descargar la guía de integración del nodo</button></div>${m.regen?`<div class="alert alert-warn" style="margin-bottom:10px">${ic('alert')}<div>El token anterior dejó de funcionar. El nodo no se comunicará hasta que cargues este.</div></div>`:''}<div class="row"><button class="btn btn-ghost btn-sm" data-act="copy">Copiar token</button></div><label class="row sm" style="margin-top:14px"><input type="checkbox" data-act="tok-ck" ${m.ck?'checked':''}> Ya guardé el token</label><div class="acts"><button class="btn btn-primary" data-act="close" ${m.ck?'':'disabled'}>Cerrar</button></div>`;
+ else if(k==='regen')b=`<h3>Regenerar token</h3><p>El token actual <b>deja de funcionar de inmediato</b> y el nodo dejará de comunicarse hasta que cargues el nuevo. El token nuevo se muestra una sola vez.</p>`+acts(1,'Regenerar token',1);
+ else if(k==='desc')b=`<h3>Desconectar el sistema</h3><p>Mientras esté desconectado, InfoPonia no acepta mensajes del nodo, no evalúa reglas, no genera alertas y no entrega comandos. Los comandos pendientes se cancelan y las alertas activas se resuelven. Podés activarlo de nuevo cuando quieras.</p>`+acts(1,'Desconectar');
+ else if(k==='baj'&&!id){const p=DB.comandos.filter(c=>c.inv===S.inv&&c.estado==='pendiente'),hs=DB.hw.filter(h=>h.inv===S.inv&&h.estado!=='baja'),ot=DB.ordenes.filter(o=>o.estado==='abierta'&&hs.some(h=>h.id===o.act)),rg=DB.reglas.filter(r=>r.inv===S.inv&&r.estado==='activa');
+  b=`<h3>Dar de baja el Sistema IoT</h3>`+(p.length||ot.length?`<div class="alert alert-danger">${ic('alert')}<div>No se puede dar de baja todavía:<ul>${p.length?`<li>Hay ${p.length} comando(s) pendiente(s) (${p.map(c=>c.id).join(', ')}). Cancelalos desde Comandos, o todos juntos desconectando el sistema.</li>`:''}${ot.length?`<li>Hay ${ot.length} orden(es) de mantenimiento a realizar (${ot.map(o=>o.id).join(', ')}). Concretalas o cancelalas.</li>`:''}</ul></div></div>`+acts(0)
+  :`<p>La baja es <b>definitiva</b>. Se dará de baja junto con el sistema:</p><ul class="blist"><li>El nodo central <b>${esc(sys().nom)}</b>; su token deja de servir.</li>${hs.map(h=>`<li>${hwName(h)} <span class="id">${esc(h.ident)}</span> ${h.estado==='fuera de servicio'?bd('danger','Fuera de servicio'):bd('ok','Activo')}${h.tipo==='actuador'?` <span class="xs muted">· último estado: ${h.est?esc(h.est.txt.toLowerCase())+' desde las '+h.est.at:'desconocido'}</span>`:''}</li>`).join('')}${rg.length?`<li>${rg.length} regla(s) de actuación: ${rg.map(r=>r.id).join(', ')}.</li>`:''}</ul>${hs.some(h=>h.tipo==='actuador')?`<div class="alert alert-warn" style="margin-bottom:10px">${ic('alert')}<div>Después de la baja, InfoPonia no podrá enviar comandos a estos actuadores: quedan en el último estado que informó el nodo.</div></div>`:''}<p class="sm muted">El historial se conserva. Si el invernadero vuelve a necesitar IoT, se registra un sistema nuevo y sus equipos pueden usar los mismos identificadores.</p>`+acts(1,'Dar de baja definitivamente',1))}
+ else if(k==='baj'){const h=gh(id),p=DB.comandos.filter(c=>c.act===id&&c.estado==='pendiente'),ot=DB.ordenes.filter(o=>o.act===id&&o.estado==='abierta'),rg=DB.reglas.filter(r=>(r.sensor===id||r.act===id)&&r.estado==='activa');
+  b=`<h3>Dar de baja ${hwLbl(h)}</h3>`+(p.length||ot.length||rg.length?`<div class="alert alert-danger">${ic('alert')}<div>No se puede dar de baja todavía:<ul>${p.length?`<li>Tiene el comando pendiente ${p[0].id}: esperá su resultado o cancelalo.</li>`:''}${ot.length?`<li>Está en la orden de mantenimiento ${ot[0].id}: concretala o cancelala.</li>`:''}${rg.length?`<li>La usan las reglas activas ${rg.map(r=>r.id).join(', ')}: dalas de baja primero.</li>`:''}</ul></div></div>`+acts(0):`<p>El equipo deja de operar y su historial se conserva. Su identificador <b>${esc(h.ident)}</b> queda libre para registrar un equipo de reemplazo.</p>`+(h.tipo==='actuador'?`<div class="alert alert-warn" style="margin-bottom:10px">${ic('alert')}<div>Último estado informado por el nodo: <b>${h.est?esc(h.est.txt.toLowerCase())+'</b> desde las '+h.est.at:'desconocido</b>'}. Después de la baja, InfoPonia no podrá enviarle comandos: si tiene que quedar apagado o cerrado, llevalo a ese estado antes.</div></div>`:'')+`<p class="sm muted">Si el aparato sigue conectado y el nodo sigue enviando su identificador, sus mensajes se rechazan y aparece la alerta «Dispositivo no registrado» indicando que era de este equipo.</p>`+acts(1,'Dar de baja',1))}
+ else if(k==='rebaja'){const h=gh(id),dup=DB.hw.find(x=>x.id!==id&&x.inv===h.inv&&x.estado!=='baja'&&x.ident.toLowerCase()===h.ident.toLowerCase());
+  b=`<h3>Reactivar ${hwLbl(h)}</h3>`+(dup?`<div class="alert alert-danger">${ic('alert')}<div>No se puede reactivar: el identificador <b>${esc(h.ident)}</b> ya lo usa ${hwName(dup)} (registrado como reemplazo).</div></div>`+acts(0):`<p>El equipo vuelve a estar activo con su historial.${h.tipo==='actuador'?' Su compatibilidad se vuelve a calcular con el último anuncio del nodo.':''}</p>`+(h.tipo==='actuador'&&announced(h)&&announcedBad(h.ident,DB.tipos.find(t=>t.id===h.tipoAct)).length?`<div class="alert alert-warn" style="margin-bottom:10px">${ic('alert')}<div>El nodo no anunció el comando de: <b>${announcedBad(h.ident,DB.tipos.find(t=>t.id===h.tipoAct)).join(', ')}</b>. Podés reactivarlo igual; esas acciones no se ofrecerán.</div></div>`:'')+acts(1,'Reactivar'))}
+ else if(k==='react'){const o=DB.ordenes.find(o=>o.act===id&&o.estado==='abierta');b=`<h3>Volver a activar ${hwLbl(gh(id))}</h3><p>El equipo vuelve a estar activo y puede recibir comandos. Su alerta de falla se resuelve.</p>${o?`<div class="alert alert-warn">${ic('alert')}<div>Está en la orden de mantenimiento <b>${o.id}</b>, que se cancelará y se le notificará al Técnico.</div></div>`:''}`+acts(1,'Volver a activar')}
+ else if(k==='ccan')b=`<h3>Cancelar ${id}</h3><p>El comando no se enviará al nodo. Esta acción no se puede deshacer.</p>`+acts(1,'Cancelar comando',1);
+ else if(k==='rbaj')b=`<h3>Dar de baja ${id}</h3><p>La regla deja de evaluarse. Su historial se conserva.</p>`+acts(1,'Dar de baja',1);
+ else if(k==='tbaj'){const n=DB.hw.filter(h=>h.tipoAct===id&&h.estado!=='baja').length;b=`<h3>Dar de baja ${DB.tipos.find(t=>t.id===id).n}</h3>`+(n?`<div class="alert alert-danger">${ic('alert')}<div>Hay ${n} equipo(s) de este tipo. Dalos de baja antes de eliminar el tipo.</div></div>`+acts(0):`<p>El tipo deja de estar disponible para nuevos equipos.</p>`+acts(1,'Dar de baja',1))}
+ return `<div class="ov" data-ov="1"><div class="modal" role="dialog" aria-modal="true">${b}</div></div>`;
+}
+function render(){
+ const sc=document.querySelector('main.main');const top=sc?sc.scrollTop:0;
+ const rs=[['agronomo','Agrónomo (Laura Benítez)'],['gerente','Gerente (Marcos Duarte)'],['gerente-este','Gerente · invernadero sin Agrónomo']];
+ $('#root').innerHTML=`<div class="shell"><header class="top"><div class="brand"><div class="logo">${ic('leaf',18)}</div><b>InfoPonia</b><span class="status-badge status-info">Prototipo IoT</span></div><div class="spacer"></div><div class="rolesel"><span>Ver como</span><select class="field-input" data-ch="role" aria-label="Rol">${rs.map(r=>`<option value="${r[0]}" ${S.roleSel===r[0]?'selected':''}>${r[1]}</option>`).join('')}</select></div></header>
+ <aside class="side"><div class="side-label">Módulos</div>${MODS.filter(m=>!m[3]||S.role==='gerente').map(m=>m[2]?`<button class="nav-item ${(m[2]==='config')===(S.screen==='config')?'active':''}" data-act="nav" data-arg="${m[2]}">${ic(m[1],18)}${m[0]}</button>`:`<div class="nav-item off" title="No forma parte de este prototipo">${ic(m[1],18)}${m[0]}</div>`).join('')}</aside>
+ <main class="main"><div class="page">${S.screen==='config'?'':ctxBar()+`<nav class="tabs" aria-label="Secciones de IoT">${NAV.map(n=>`<button class="tab" ${S.screen===n[0]?'aria-current="page"':''} data-act="nav" data-arg="${n[0]}">${n[1]}</button>`).join('')}</nav>`}${SCR[S.screen]()}</div></main><footer class="bot"><span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--status-ok);margin-right:6px"></span>Prototipo con datos de ejemplo. No hay conexión real con equipos.</span></footer>${modalHtml()}</div>`;
+ const m=document.querySelector('main.main');if(m)m.scrollTop=top;
+}
+function newTok(){const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let t='ipn_';for(let i=0;i<40;i++)t+=c[Math.floor(Math.random()*c.length)];return t}
+function failCmd(c){const h=gh(c.act);c.estado='fallido';h.estado='fuera de servicio';
+ DB.alertas.push({id:nid('al','A-',3),inv:c.inv,sev:'alta',tipo:'Comando fallido',det:`${hwLbl(h)} · ${c.id}`,auto:'Se resuelve sola cuando el actuador vuelve a estar activo.',mail:true});
+ const tec=INVS[c.inv].tec,ab=DB.ordenes.find(o=>o.act===h.id&&o.estado==='abierta');
+ if(tec&&!ab){const id=nid('ot','OT-',4);DB.ordenes.push({id,act:h.id,estado:'abierta'});c.nota=`Se agotaron los ${maxInt()} intentos. Actuador fuera de servicio, alerta emitida y notificada por correo, y orden ${id} (prioridad alta) asignada a ${tec}.`}
+ else c.nota=`Se agotaron los ${maxInt()} intentos. Actuador fuera de servicio y alerta emitida y notificada por correo. ${tec?'Ya tenía una orden de mantenimiento abierta.':'No se creó orden: el invernadero no tiene Técnico.'}`;
+ toast(`${c.id} falló tras ${maxInt()} intentos. Actuador fuera de servicio.`,'danger')}
+const num=x=>{x=String(x).trim().replace(',','.');return x!==''&&!isNaN(x)?Number(x):NaN};
+function act(a,arg){
+ const m=S.modal;
+ switch(a){
+ case 'nav':go(arg);if(arg==='config')S.draft=Object.fromEntries(Object.entries(DB.cfg).map(([k,v])=>[k,String(v)]));render();break;
+ case 'menu':{if(S.menu===arg){S.menu=null}else{const bt=document.querySelector(`[data-act=menu][data-arg="${arg}"]`).getBoundingClientRect();S.menu=arg;S.menuPos=(bt.bottom>innerHeight-170)?{up:1,b:Math.round(innerHeight-bt.top+4),r:Math.round(innerWidth-bt.right)}:{t:Math.round(bt.bottom+4),r:Math.round(innerWidth-bt.right)}}render();break}
+ case 'refresh':DB.hw.forEach(h=>{if(h.tipo==='sensor'&&!VARS[h.var].bin&&h.v!=null&&h.st==='ok'&&h.var!=='luz')h.v=Math.round((h.v+(Math.random()-.5)*.6)*10)/10});toast('Datos actualizados.','info');render();break;
+ case 'refresh-quiet':DB.hw.forEach(h=>{if(h.tipo==='sensor'&&!VARS[h.var].bin&&h.v!=null&&h.st==='ok'&&h.var!=='luz'&&!(sys()&&sys().conn==='sin señal'))h.v=Math.round((h.v+(Math.random()-.5)*.4)*10)/10});render();break;
+ case 'close':S.modal=null;render();break;
+ case 'modal':S.modal={t:arg};S.menu=null;render();break;
+ case 'tok-ck':m.ck=!m.ck;render();break;
+ case 'copy':try{navigator.clipboard.writeText(m.tok).then(()=>toast('Token copiado.'),()=>toast('No se pudo copiar. Seleccionalo y copialo a mano.','warn'))}catch(e){toast('No se pudo copiar. Seleccionalo y copialo a mano.','warn')}break;
+ case 'm-ok':{const [k,id]=m.t.split(':');S.modal=null;
+  if(k==='regen'){S.modal={t:'token',tok:newTok(),serial:sys().serial,regen:true}}
+  else if(k==='desc'){sys().estado='desconectado';const n=DB.comandos.filter(c=>c.inv===S.inv&&c.estado==='pendiente');n.forEach(c=>c.estado='cancelado');DB.alertas=DB.alertas.filter(a=>a.inv!==S.inv);toast('Sistema desconectado.'+(n.length?` ${n.length} comando(s) pendiente(s) cancelado(s).`:'')+' Sus alertas se resolvieron.','warn')}
+  else if(k==='baj'&&!id){DB.hw.forEach(h=>{if(h.inv===S.inv)h.estado='baja'});DB.reglas.forEach(r=>{if(r.inv===S.inv)r.estado='baja'});DB.alertas=DB.alertas.filter(a=>a.inv!==S.inv);delete DB.sistemas[S.inv];toast('Sistema IoT, nodo, equipos y reglas dados de baja. El historial se conserva.');S.v=null}
+  else if(k==='baj'){const h=gh(id);h.estado='baja';h.fbaja='19/11/2026';DB.alertas=DB.alertas.filter(a=>a.hw!==h.id&&!(a.det||'').includes(h.ident+' ')&&!(a.det||'').endsWith(h.ident));toast(`${hwLbl(h)} dado de baja. Su identificador queda libre.`);S.v=null}
+  else if(k==='rebaja'){const h=gh(id);h.estado='activo';delete h.fbaja;const na=DB.alertas.length;DB.alertas=DB.alertas.filter(a=>!(a.ident&&a.inv===h.inv&&a.ident.toLowerCase()===h.ident.toLowerCase()));const res=na!==DB.alertas.length;recompat(h);
+   if(S.screen==='hardware'&&S.v&&S.v.n==='hw-form')S.v=null;toast(hwLbl(h)+' reactivado con su historial.'+(res?' Se resolvió la alerta «Dispositivo no registrado».':'')+(h.compat==='incompatible'?' Quedó con configuración incompatible.':''),h.compat==='incompatible'?'warn':'ok')}
+  else if(k==='react'){const h=gh(id),o=DB.ordenes.find(o=>o.act===id&&o.estado==='abierta');h.estado='activo';if(o)o.estado='cancelada';DB.alertas=DB.alertas.filter(a=>!(a.tipo==='Comando fallido'&&a.det.includes(h.ident)));toast(hwLbl(h)+' activo de nuevo.'+(o?` Orden ${o.id} cancelada y Técnico notificado.`:''))}
+  else if(k==='ccan'){DB.comandos.find(c=>c.id===id).estado='cancelado';toast(id+' cancelado.')}
+  else if(k==='rbaj'){DB.reglas.find(r=>r.id===id).estado='baja';toast(id+' dada de baja.')}
+  else if(k==='tbaj'){DB.tipos.splice(DB.tipos.findIndex(t=>t.id===id),1);toast('Tipo de actuador dado de baja.')}
+  render();break}
+ case 'cmdf-clear':S.cmdF={estado:'todos',act:'todos',origen:'todos'};render();break;
+ case 'cf-estado':case 'cf-act':case 'cf-origen':S.cmdF[a.slice(3)]=arg;render();break;
+ case 'hwf-clear':S.hwF={q:'',tipo:'todos',estado:'todos',sector:'todos'};render();break;
+ case 'hwf-q':case 'hwf-tipo':case 'hwf-estado':case 'hwf-sector':S.hwF[a.slice(4)]=arg;render();break;
+ case 'range':S.range=arg;render();break;
+ case 'grp':S.col[arg]=!S.col[arg];render();break;
+ case 'sys-activar':sys().estado='activo';toast('Sistema activado.');render();break;
+ case 'open-sys-form':{const s=sys();S.v={n:'sys-form'};S.draft=s?{snom:s.nom,smod:s.modelo,sserial:s.serial,smin:s.rsol?String(s.rsol.min):'',smax:s.rsol?String(s.rsol.max):''}:{snom:'',smod:'',sserial:'',sinst:'',sins:'',smin:'',smax:''};S.err={};render();break}
+ case 'save-sys':{const d=S.draft,s=sys();S.err={};
+  if(!(d.snom||'').trim())S.err.snom='Ingresá el nombre del nodo.';
+  if(!(d.smod||'').trim())S.err.smod='Ingresá el modelo.';
+  if(!s){if(!d.sinst)S.err.sinst='Ingresá la fecha de instalación.';else if(d.sinst>'2026-11-19')S.err.sinst='No puede ser posterior a hoy.';if(!d.sins)S.err.sins='Seleccioná el insumo.'}
+  let rs=null;const a=(d.smin||'').trim(),b=(d.smax||'').trim();
+  if(a||b){const x=num(a),y=num(b);if(isNaN(x)||isNaN(y))S.err.smax='Completá mínimo y máximo, o dejá los dos vacíos.';else if(x>=y)S.err.smax='El mínimo tiene que ser menor que el máximo.';else rs={min:x,max:y}}
+  if(Object.keys(S.err).length){render();break}
+  if(s){Object.assign(s,{nom:d.snom.trim(),modelo:d.smod.trim(),serial:(d.sserial||'').trim(),rsol:rs});S.v=null;S.draft={};toast('Sistema IoT modificado correctamente.')}
+  else{DB.sistemas[S.inv]={estado:'activo',conn:'sin señal',nom:d.snom.trim(),modelo:d.smod.trim(),serial:(d.sserial||'').trim(),last:'nunca',token:'Generado hoy',modo:'remoto',anuncio:null,rsol:rs};S.v=null;S.draft={};S.modal={t:'token',tok:newTok(),serial:d.snom.trim()}}
+  render();break}
+ case 'guia':toast('En el sistema real se descarga el documento con el contrato de la API (docs/api_nodo.md).','info');break;
+ case 'sim-modo':{const s=sys();s.modo=s.modo==='local'?'remoto':'local';if(s.modo==='remoto')DB.reglas.forEach(r=>{if(r.inv===S.inv&&r.estado==='activa'){r.ult='sin evaluar';r.conf=0}});toast(s.modo==='local'?'El nodo informó modo local: InfoPonia no evalúa reglas ni entrega comandos.':'El nodo volvió al modo remoto: las reglas se evalúan desde la próxima lectura, como si empezaran de cero.',s.modo==='local'?'warn':'ok');render();break}
+ case 'hw-new':S.v={n:'hw-form'};S.draft={htipo:'',hvar:'',htac:'',hident:'',hserial:'',hmod:'',hcmin:'',hcmax:'',hinst:'',hins:'',hsector:''};S.err={};render();break;
+ case 'reg-alert':{const al=DB.alertas.find(x=>x.id===arg);S.inv=al.inv;S.screen='hardware';S.v={n:'hw-form',fromAlert:arg};S.draft={htipo:'',hvar:'',htac:'',hident:al.ident,hserial:'',hmod:'',hcmin:'',hcmax:'',hinst:'',hins:'',hsector:''};S.err={};render();break}
+ case 'hw-mod':{const h=gh(arg);S.v={n:'hw-form',id:arg};S.draft={hident:h.ident,hserial:h.serial||'',hmod:h.modelo,hcmin:h.cal?String(h.cal[0]):'',hcmax:h.cal?String(h.cal[1]):'',hsector:h.sector||'',htac:h.tipoAct||''};S.err={};render();break}
+ case 'hw-ficha':S.v={n:'hw-ficha',id:arg};S.menu=null;render();break;
+ case 'hw-back':S.v=null;S.draft={};S.err={};render();break;
+ case 'save-hw':{const d=S.draft,mod=S.v.id,h=mod&&gh(mod);S.err={};const idn=(d.hident||'').trim();
+  const tipo=mod?h.tipo:d.htipo,vr=mod?h.var:d.hvar;
+  if(!mod){if(!d.htipo)S.err.htipo='Seleccioná el tipo de equipo.';else if(d.htipo==='sensor'&&!d.hvar)S.err.hvar='Seleccioná la variable que mide.';else if(d.htipo==='actuador'&&!d.htac)S.err.htac='Seleccioná el tipo de actuador.'}
+  if(!(mod&&h.rep)){if(!idn)S.err.hident='Ingresá el identificador del equipo.';else if(!IDRE.test(idn))S.err.hident='Hasta 64 caracteres sin espacios: letras, números, - _ . /';
+   else{const dup=DB.hw.find(x=>x.id!==mod&&x.inv===S.inv&&x.estado!=='baja'&&x.ident.toLowerCase()===idn.toLowerCase());if(dup)S.err.hident=`Ya lo usa ${hwName(dup)} en este sistema IoT.`}}
+  if(!(d.hmod||'').trim())S.err.hmod='Ingresá el modelo.';
+  let cal=null;if(tipo==='sensor'&&vr&&!VARS[vr].bin){const x=num(d.hcmin),y=num(d.hcmax);if(isNaN(x))S.err.hcmin='Ingresá el mínimo.';if(isNaN(y))S.err.hcmax='Ingresá el máximo.';else if(!isNaN(x)&&x>=y)S.err.hcmax='El mínimo tiene que ser menor que el máximo.';cal=[x,y]}
+  if(!mod){if(!d.hinst)S.err.hinst='Ingresá la fecha de instalación.';else if(d.hinst>'2026-11-19')S.err.hinst='No puede ser posterior a hoy.';if(!d.hins)S.err.hins='Seleccioná el insumo.'}
+  if(Object.keys(S.err).length){render();break}
+  const offS=d.hsector&&INVS[S.inv].off.includes(d.hsector),nS=sec=>` El ${sec} está fuera de servicio: este sensor no generará alertas ni activará reglas.`;
+  if(mod){if(!h.rep)h.ident=idn;Object.assign(h,{serial:(d.hserial||'').trim(),modelo:d.hmod.trim(),sector:d.hsector});if(cal)h.cal=cal;if(h.tipo==='actuador'){if(d.htac&&d.htac!==h.tipoAct&&tipoCambiable(h))h.tipoAct=d.htac;recompat(h)}DB.alertas=DB.alertas.filter(x=>!(x.ident&&x.inv===S.inv&&x.ident.toLowerCase()===h.ident.toLowerCase()));S.v={n:'hw-ficha',id:mod};const w=offS&&h.tipo==='sensor';toast(`${hwLbl(h)} modificado correctamente.`+(w?nS(d.hsector):''),w?'warn':'ok')}
+  else{const s=sys(),nh={id:nid('hw','HW-',2),inv:S.inv,tipo:d.htipo,ident:idn,serial:(d.hserial||'').trim(),modelo:d.hmod.trim(),insumo:d.hins,inst:d.hinst.split('-').reverse().join('/'),sector:d.hsector,estado:'activo',rep:false,v:null,st:'sinconfirmar'};
+   if(d.htipo==='sensor'){nh.var=d.hvar;nh.cal=cal;nh.seed=9;nh.base=20;nh.amp=1}else{nh.tipoAct=d.htac;nh.est=null;nh.lastSec=null;
+   }
+   DB.hw.push(nh);recompat(nh);DB.alertas=DB.alertas.filter(x=>!(x.ident&&x.inv===S.inv&&x.ident.toLowerCase()===idn.toLowerCase()));S.v=null;const w=offS&&nh.tipo==='sensor';toast(`${hwLbl(nh)} registrado. Queda «sin confirmar» hasta que el nodo envíe su primer mensaje.`+(w?nS(d.hsector):''),w?'warn':'ok')}
+  S.draft={};render();break}
+ case 'cmd-for':go('comandos');S.draft={cact:arg,cacc:''};render();break;
+ case 'c-act':{S.draft.cact=arg;S.draft.cacc='';S.draft.cval='';S.err={};render();break}
+ case 'c-acc':S.draft.cacc=arg;S.draft.cval='';S.err={};render();break;
+ case 'emit':{S.err={};if(!S.draft.cact)S.err.cact='Seleccioná un actuador.';else if(!S.draft.cacc)S.err.cacc='Seleccioná la acción.';if(Object.keys(S.err).length){render();break}
+  const h=gh(S.draft.cact),a=accDe(h,S.draft.cacc);let v='';
+  if(hasVal(a)){const n=num(S.draft.cval);if(isNaN(n)||!Number.isInteger(n)||n<a.min||n>a.max){S.err.cval=`Ingresá un número entero entre ${a.min} y ${a.max} ${a.u}, sin decimales.`;render();break}v=n}
+  const id=nid('cmd','CMD-',4);DB.comandos.unshift({id,inv:S.inv,act:h.id,acc:a.n,val:v,origen:'Manual · '+(S.roleSel==='agronomo'?'Laura Benítez':'Marcos Duarte (Gerente)'),estado:'pendiente',int:0,enCurso:false,ult:'—',creado:'14:10'});
+  S.err={};S.draft.cval='';toast(`${id} emitido. Queda pendiente hasta que el nodo lo retire.`);render();break}
+ case 'sim-ok':{const c=DB.comandos.find(x=>x.id===arg);c.int+=1;c.estado='ejecutado';c.enCurso=false;c.ult='ahora';const h=gh(c.act),ad=accDe(h,c.acc);h.rep=true;h.st='ok';h.lastSec=0;
+  const M={ENCENDER:['ENCENDIDO','Encendido'],APAGAR:['APAGADO','Apagado'],ABRIR:['ABIERTA','Abierta'],CERRAR:['CERRADA','Cerrada'],FIJAR_NIVEL:['NIVEL','Nivel '+c.val+' %'],FIJAR_POSICION:['POSICION','Posición '+c.val+' %']}[ad.cmd];h.est={s:M[0],txt:M[1],at:'14:10'};
+  DB.alertas=DB.alertas.filter(a=>!(a.tipo==='Dispositivo sin actividad'&&a.det.includes(h.ident)));toast(`${c.id} ejecutado. El nodo informó: ${M[1].toLowerCase()}.`);render();break}
+ case 'sim-rech':{const c=DB.comandos.find(x=>x.id===arg),h=gh(c.act),ad=accDe(h,c.acc);c.int+=1;c.estado='fallido';c.rech=true;c.enCurso=false;c.ult='ahora';
+  c.nota=`El nodo no reconoce el comando ${ad.cmd} para este actuador. Falló sin reintentos; el actuador sigue activo y no se creó orden de mantenimiento. La acción «${c.acc}» queda marcada como incompatible.`;
+  SOP[h.ident]=(SOP[h.ident]||t0cmds(h)).filter(x=>x!==ad.cmd);recompat(h);
+  toast(`${c.id} rechazado por el nodo: configuración incompatible.`,'warn');render();break}
+ case 'sim-fail':{const c=DB.comandos.find(x=>x.id===arg);c.int+=1;c.enCurso=false;c.ult='ahora';if(c.int>=maxInt())failCmd(c);else toast(`${c.id}: intento ${c.int} de ${maxInt()} sin respuesta.`,'warn');render();break}
+ case 'rgl-new':{const sens=rglSensors(),ac=DB.hw.filter(h=>h.inv===S.inv&&h.tipo==='actuador'&&h.estado!=='baja');
+  if(!sens.length||!ac.length){toast('Necesitás al menos un sensor y un actuador activos en este invernadero.','warn');break}
+  S.v={n:'rgl-form'};S.draft={rsensor:'',rcond:'',ract:'',racc:'',rval:''};S.err={};render();break}
+ case 'rgl-mod':{const r=DB.reglas.find(x=>x.id===arg);S.v={n:'rgl-form',id:arg};S.draft={rsensor:r.sensor,rcond:r.cond,ract:r.act,racc:r.acc,rval:String(r.val)};S.err={};S.menu=null;render();break}
+ case 'r-cond':S.draft.rcond=arg;render();break;
+ case 'r-act':S.draft.ract=arg;S.draft.racc='';S.draft.rval='';render();break;
+ case 'r-acc':S.draft.racc=arg;S.draft.rval='';render();break;
+ case 'save-rgl':{const d=S.draft;let v='';S.err={};
+  if(!d.rsensor)S.err.rsensor='Seleccioná un sensor.';if(!d.rcond)S.err.rcond='Seleccioná la condición.';if(!d.ract)S.err.ract='Seleccioná un actuador.';else if(!d.racc)S.err.racc='Seleccioná la acción.';
+  if(Object.keys(S.err).length){render();break}
+  const a=accDe(gh(d.ract),d.racc);
+  if(hasVal(a)){const n=num(d.rval);if(isNaN(n)||!Number.isInteger(n)||n<a.min||n>a.max)S.err.rval=`Ingresá un número entero entre ${a.min} y ${a.max} ${a.u}, sin decimales.`;else v=n}
+  if(DB.reglas.some(r=>r.id!==S.v.id&&r.estado!=='baja'&&r.sensor===d.rsensor&&r.cond===d.rcond&&r.act===d.ract))S.err.ract='Ya existe una regla con el mismo sensor, condición y actuador.';
+  if(Object.keys(S.err).length){render();break}
+  let rid=S.v.id;if(rid){Object.assign(DB.reglas.find(r=>r.id===rid),{cond:d.rcond,acc:d.racc,val:v,ult:'sin evaluar',conf:0})}
+  else{rid=nid('rgl','RGL-',2);DB.reglas.push({id:rid,inv:S.inv,sensor:d.rsensor,cond:d.rcond,act:d.ract,acc:d.racc,val:v,estado:'activa',ult:'sin evaluar',conf:0})}
+  const off=gh(d.ract).estado==='fuera de servicio';go('reglas');
+  toast(`Regla ${rid} guardada correctamente.`+(off?` El actuador ${gh(d.ract).serial} está fuera de servicio: la regla no emitirá comandos hasta que vuelva a estar activo.`:''),off?'warn':'ok');break}
+ case 'tac-new':S.v={n:'tac-form',acc:[{n:'',cmd:''}]};S.draft={tnom:'',ttmin:'60'};S.err={};render();break;
+ case 'tac-mod':{const t=DB.tipos.find(x=>x.id===arg);S.v={n:'tac-form',id:arg,acc:t.acc.map(a=>Object.assign({o:a.n,ocmd:a.cmd},a))};S.draft={tnom:t.n,ttmin:String(t.tmin)};S.err={};S.menu=null;render();break}
+ case 'acc-add':S.v.acc.push({n:'',cmd:''});render();break;
+ case 'acc-del':S.v.acc.splice(+arg,1);render();break;
+ case 'save-tac':{const nom=S.draft.tnom.trim(),tm=num(S.draft.ttmin);S.err={};const mod=S.v.id,t=mod&&DB.tipos.find(x=>x.id===mod);
+  if(!nom)S.err.tnom='Ingresá el nombre del tipo.';else if(DB.tipos.some(x=>x.id!==mod&&x.n.toLowerCase()===nom.toLowerCase()))S.err.tnom='Ya existe un tipo con ese nombre.';
+  if(isNaN(tm)||!Number.isInteger(tm)||tm<0)S.err.ttmin='Ingresá un número entero de segundos (0 o más).';
+  const act=S.v.acc.filter(a=>a.activa!==false),out=[],names=new Set(),cmds=new Set(),msgs=[];
+  if(!act.length)msgs.push('El tipo necesita al menos una acción activa.');
+  for(const a of act){const n=(a.n||'').trim();if(!n){msgs.push('Cada acción necesita un nombre.');break}
+   if(!a.cmd){msgs.push(`Elegí el comando de «${n}».`);break}
+   if(names.has(n.toLowerCase())){msgs.push(`La acción «${n}» está repetida.`);break}names.add(n.toLowerCase());
+   if(cmds.has(a.cmd)){msgs.push(`Dos acciones usan el comando ${a.cmd}.`);break}cmds.add(a.cmd);
+   if(CMDV[a.cmd].val){const x=num(a.min),y=num(a.max);
+    if(isNaN(x)||isNaN(y)||!Number.isInteger(x)||!Number.isInteger(y)||x>=y){msgs.push(`«${n}» necesita un mínimo y un máximo enteros, con el mínimo menor al máximo.`);break}
+    if(!(a.u||'').trim()){msgs.push(`«${n}» necesita una unidad.`);break}
+    out.push({n,cmd:a.cmd,min:x,max:y,u:a.u.trim(),o:a.o})}else out.push({n,cmd:a.cmd,o:a.o})}
+  if(mod&&!msgs.length){for(const o of t.acc.filter(x=>x.activa!==false)){const row=S.v.acc.find(r=>r.o===o.n),u=enUsoTac(t,o.n),nv=out.find(x=>x.o===o.n);
+    if(!nv){if(u.length)msgs.push(`No se puede quitar «${o.n}»: la usan ${u.join(', ')}.`);continue}
+    if(nv.n!==o.n&&u.length)msgs.push(`No se puede renombrar «${o.n}»: la usan ${u.join(', ')}.`);
+    if(nv.cmd!==o.cmd&&(u.length||histTac(t,o.n)))msgs.push(`No se puede cambiar el comando de «${o.n}»: ${u.length?'la usan '+u.join(', '):'tiene comandos en su historial'}. Agregá una acción nueva.`);
+    if(o.min!=null&&nv.min!=null&&(nv.min>o.min||nv.max<o.max)){const ids=DB.hw.filter(h=>h.tipoAct===t.id).map(h=>h.id);const bad=DB.reglas.filter(r=>r.estado==='activa'&&ids.includes(r.act)&&r.acc===o.n&&r.val!==''&&(r.val<nv.min||r.val>nv.max)).map(r=>r.id).concat(DB.comandos.filter(c=>c.estado==='pendiente'&&ids.includes(c.act)&&c.acc===o.n&&c.val!==''&&(c.val<nv.min||c.val>nv.max)).map(c=>c.id));
+     if(bad.length)msgs.push(`El nuevo rango de «${o.n}» deja afuera el valor de ${bad.join(', ')}.`)}}}
+  if(msgs.length)S.err.tacc=msgs.join('<br>');
+  if(Object.keys(S.err).length){S.v.cw=null;render();break}
+  if(mod){const w=DB.hw.filter(h=>h.tipoAct===t.id&&h.estado!=='baja'&&announced(h)).map(h=>{const now=announcedBad(h.ident,t),nb=announcedBad(h.ident,t,out);return {h,nb:nb.filter(n=>!now.includes(n))}}).filter(x=>x.nb.length);
+   const sig=JSON.stringify(out);if(w.length&&S.v.cwSig!==sig){S.v.cw=w.map(x=>`${INVS[x.h.inv].n}: ${hwLbl(x.h)} no soporta ${x.nb.map(n=>'«'+n+'»').join(', ')}`);S.v.cwSig=sig;render();break}}
+  const fin=out.map(a=>{const c=Object.assign({},a);delete c.o;return c});let msg;
+  if(mod){const inac=t.acc.filter(o=>o.activa===false||(!out.some(x=>x.o===o.n)&&histTac(t,o.n))).map(o=>Object.assign({},o,{activa:false}));
+   const ren={};out.forEach(a=>{if(a.o&&a.o!==a.n)ren[a.o]=a.n});
+   const ids=DB.hw.filter(h=>h.tipoAct===t.id).map(h=>h.id);DB.comandos.forEach(c=>{if(ids.includes(c.act)&&ren[c.acc])c.acc=ren[c.acc]});DB.reglas.forEach(r=>{if(ids.includes(r.act)&&ren[r.acc])r.acc=ren[r.acc]});
+   t.n=nom;t.tmin=tm;t.acc=fin.concat(inac);const bef=DB.hw.filter(h=>h.tipoAct===t.id&&h.estado!=='baja').map(h=>[h,h.compat]);bef.forEach(([h])=>recompat(h));const ch=bef.filter(([h,c])=>h.compat!==c);
+   msg='Tipo de actuador modificado correctamente.'+(ch.length?` Compatibilidad recalculada: ${ch.map(([h])=>hwLbl(h)+' quedó '+h.compat).join('; ')}.`:'')+(inac.length?` Quedaron inactivas, con su historial: ${inac.map(a=>a.n).join(', ')}.`:'')}
+  else{DB.tipos.push({id:'TAC-0'+(DB.tipos.length+1),n:nom,tmin:tm,acc:fin});msg='Tipo de actuador creado correctamente.'}
+  go('tipos');toast(msg);break}
+ case 'save-cfg':{const d=S.draft,c={};S.err={};const R={reint:[0,10],interv:[10,3600],luzIni:[0,23],luzFin:[1,24],umbFot:[1,100000],sinAct:[1,1440],sinCom:[1,1440],antig:[1,1440],conf:[1,10],hTemp:[0,10],hHum:[0,30],hLuz:[0,20000],hSol:[0,10],ret:[1,365]};
+  for(const k in R){const n=num(d[k]);if(isNaN(n)||!Number.isInteger(n)||n<R[k][0]||n>R[k][1])S.err[k]=`Ingresá un entero entre ${R[k][0]} y ${R[k][1]}.`;else c[k]=n}
+  if(!S.err.luzIni&&!S.err.luzFin&&c.luzIni>=c.luzFin)S.err.luzFin='El fin debe ser posterior al inicio.';
+  if(Object.keys(S.err).length){render();break}
+  Object.assign(DB.cfg,c);toast('Parámetros guardados. Rigen desde el próximo intento y la próxima lectura.');render();break}
+ case 'cfg-reset':S.draft=Object.fromEntries(Object.entries(DB.cfg).map(([k,v])=>[k,String(v)]));S.err={};render();break;
+ case 'inv':S.inv=arg;S.v=null;S.draft={};S.err={};S.cmdF={estado:'todos',act:'todos',origen:'todos'};S.hwF={q:'',tipo:'todos',estado:'todos',sector:'todos'};render();break;
+ case 'role':S.roleSel=arg;S.role=arg==='agronomo'?'agronomo':'gerente';if(arg==='gerente-este')S.inv='este';if(!visInv().includes(S.inv))S.inv='norte';S.v=null;S.draft={};S.err={};S.modal=null;render();break;
+ }
+}
+document.addEventListener('click',e=>{
+ if(e.target.classList&&e.target.classList.contains('ov')){S.modal=S.modal&&S.modal.t==='token'?S.modal:null;render();return}
+ const b=e.target.closest('[data-act]');
+ if(S.menu&&!e.target.closest('.kb')){S.menu=null;if(!b)render()}
+ if(b&&b.tagName!=='INPUT')act(b.dataset.act,b.dataset.arg)
+});
+document.addEventListener('change',e=>{const t=e.target;
+ if(t.dataset.act==='tok-ck'){act('tok-ck');return}
+ if(t.dataset.af==='cmd'){const a=S.v.acc[+t.dataset.ai];a.cmd=t.value;if(!CMDV[a.cmd]||!CMDV[a.cmd].val){delete a.min;delete a.max;delete a.u}else if(!(UNID[a.cmd]||[]).some(x=>x[0]===a.u))a.u='%';render();return}
+ if(t.dataset.k!=null)S.draft[t.dataset.k]=t.value;
+ if(t.dataset.ch)act(t.dataset.ch,t.value);else if(t.dataset.re)render()});
+document.addEventListener('input',e=>{const t=e.target;
+ if(t.dataset.k!=null)S.draft[t.dataset.k]=t.value;
+ if(t.dataset.ai!=null&&t.dataset.af!=='cmd'){S.v.acc[+t.dataset.ai][t.dataset.af]=t.value}});
+document.addEventListener('scroll',()=>{if(S.menu){S.menu=null;render()}},true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.modal&&S.modal.t!=='token'){S.modal=null;render()}});
+render();
+/* Actualización automática: en el sistema real la pantalla consulta al servidor cada pocos segundos, sin recargar la página. */
+setInterval(()=>{const ae=document.activeElement;if(S.screen==='monitoreo'&&!S.modal&&!S.menu&&!(ae&&/SELECT|INPUT/.test(ae.tagName)))act('refresh-quiet')},20000);
+</script>
+</body>
+</html>

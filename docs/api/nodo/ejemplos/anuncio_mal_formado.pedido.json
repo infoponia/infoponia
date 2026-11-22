@@ -1,0 +1,20 @@
+{
+  "equipos": [
+    {
+      "identificador": "norte/sectorA/ventilador",
+      "clase": "actuador",
+      "comandos": [
+        "ENCENDER",
+        "APAGAR"
+      ]
+    },
+    {
+      "identificador": "norte/sectorA/ventana",
+      "clase": "actuador",
+      "comandos": [
+        "ABRIR",
+        "GIRAR"
+      ]
+    }
+  ]
+}
