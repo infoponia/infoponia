@@ -1,0 +1,11 @@
+{% comment %}Marco del módulo IoT (ctxBar y NAV del prototipo): la barra de contexto, que en «Tipos de actuador» está deshabilitada con «Todos los
+invernaderos» porque los tipos son comunes a toda la organización, y las pestañas del módulo. En IOT-01 solo existe «Tipos de actuador»; cada
+tarea siguiente suma la suya (D-25). Son enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
+<div class="ctxbar">
+  <label for="invernadero-del-contexto" class="lbl">Invernadero</label>
+  <select id="invernadero-del-contexto" class="field-input" disabled><option>Todos los invernaderos</option></select>
+  <span class="sm muted">Los tipos de actuador son comunes a todos los invernaderos.</span>
+</div>
+<div class="tabs" role="tablist" aria-label="Secciones de IoT">
+  <a class="tab" role="tab" href="{% url 'iot:tipos' %}" aria-selected="true">Tipos de actuador</a>
+</div>

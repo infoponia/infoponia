@@ -246,6 +246,12 @@ Los 14 pasos están en «Verificación a mano» de `docs/tareas/inventario/INV-0
 13. Sin JavaScript, los pasos 3, 4, 8 y 10 funcionan igual (botón «Actualizar etapas»).
 14. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas (el último paso).
 
+## IOT-01 · Tarea IOT-01 (app `iot` y tipos de actuador)
+
+Los 8 pasos están en «Verificación a mano» de `docs/tareas/iot/IOT-01-app-modelos-y-tipos-de-actuador.md`. Hay migraciones nuevas (`core` 0017, `maestros` 0010 e `iot` 0001 a 0003): `python manage.py migrate`. Cuentas: Gerente, un Agrónomo y, para el paso 6, un Capataz, un Vendedor o un Técnico. Las pantallas no se vieron en un navegador. El último paso se hace después del despliegue.
+
+---
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que

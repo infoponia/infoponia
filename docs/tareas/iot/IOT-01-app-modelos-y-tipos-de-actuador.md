@@ -86,10 +86,10 @@ funciones que hoy devuelven «nada» (marcadas «Se completa en IOT-NN» en el e
      `tests/`, y su lugar en `INSTALLED_APPS`.
    - Los modelos de `docs/modelo/iot.md`, con **todas** sus restricciones de base, en particular las de D-72: `Hardware` multitabla con
      `clase` y una sola FK `sistema`; índice único parcial `(sistema, Lower(identificador_equipo))` sin los dados de baja; índice único
-     parcial `(sistema)` con `clase = nodo` sin los dados de baja; `CheckConstraint` «nodo ⇔ identificador nulo» y «nodo ⇒ sin sector»;
+     parcial `(sistema)` con `clase = nodo` (incluye los dados de baja: el nodo no se reemplaza, D-72); `CheckConstraint` «nodo ⇔ identificador nulo» y «nodo ⇒ sin sector»;
      índice único parcial `(invernadero)` de `SistemaIoT` sin los inactivos; `token_resumen` único y nulo; un solo comando pendiente por
      actuador (índice único parcial); las de `Accion`, `Sensor` (calibración), `Telemetria`, `ReglaActuacion`, `Comando` y `AlertaIot`
-     (`num_nonnulls(hardware, telemetria) <= 1`). Todas las FK `PROTECT`.
+     (`num_nonnulls(hardware, telemetria) <= 1`). Todas las FK `PROTECT`, salvo `EquipoAnunciado.sistema`, que es `CASCADE` (dato de diseño, MD-102; ver «Convenciones» de `docs/modelo/iot.md`).
    - Los `QuerySet` con `para(usuario)` y `operables_por(usuario)` (D-28) donde la ficha los pide; en esta tarea solo los usa `TipoActuador`
      (sin alcance: todos los tipos), pero el resto queda escrito con `iot/alcance.py` (`invernaderos_que_opera`, `invernaderos_que_consulta`,
      `puede_operar`; `docs/casos_de_uso/iot/sistema_iot.md`, «Para los cinco»), con sus pruebas.
@@ -117,7 +117,7 @@ funciones que hoy devuelven «nada» (marcadas «Se completa en IOT-NN» en el e
      `baja_tipo_actuador(actor, tipo_id)`. `datos` es un `dataclass` (`DatosDeTipoActuador`, con la lista de acciones, cada una con el id de la
      original si la tenía) que arma `desde_post`.
    - Lectura: `listar_tipos(actor)`, `catalogo()` (capacidades con sus comandos y unidades), `acciones_permitidas(actor, tipo)`.
-   - Las que completan otras tareas, con su docstring «Se completa en IOT-NN»: `acciones_en_uso(tipo) -> set[int]` y
+   - Las que completan otras tareas, con su docstring «Se completa en IOT-NN»: `acciones_en_uso(tipo) -> dict[int, list[UsoDeAccion]]` y
      `acciones_con_historial(tipo) -> set[int]` (IOT-05 e IOT-06), `equipos_afectados(tipo) -> list[tuple[Invernadero, int]]` (IOT-02; ya
      escrita, con datos desde IOT-02) y la llamada a `recalcular_compatibilidad` (la crea IOT-02: en esta tarea, un `TODO` con la lista vacía).
    - Todas las reglas y decisiones de `tipos_de_actuador.md` («Cómo se aplica»): nombre único entre todos, acciones (comando del catálogo,
@@ -165,20 +165,82 @@ se recortan las restricciones de la base, las migraciones de datos ni los tipos 
   python manage.py test iot maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion
   python manage.py test iot --keepdb --tag concurrencia
 
-## Verificación a mano (la completa Claude Code al cerrar)
+## Verificación a mano
 
-Hay migraciones nuevas (`iot`, `maestros` y `core`): `python manage.py migrate`. Cuentas: Gerente y un Agrónomo.
+Hay migraciones nuevas (`iot`, `maestros` y `core`): `python manage.py migrate`. Cuentas: Gerente y un Agrónomo. Para el paso 6, además, una cuenta
+de Capataz, Vendedor o Técnico.
 
-1. Con el Gerente: el menú muestra «IoT»; abre en «Tipos de actuador» con los seis tipos iniciales y, debajo, el catálogo de capacidades en
-   solo lectura.
-2. Registrar «Extractor» con «Encender» (`ENCENDER`) y «Fijar velocidad» (`FIJAR_NIVEL`, 0 a 100 %): se crea. Registrar «extractor»: error
-   en el nombre.
-3. Modificarlo: agregar «Apagar» (`APAGAR`), cambiar «Fijar velocidad» a `ENCENDER`: error «Dos acciones usan el comando ENCENDER.».
-   Quitar «Fijar velocidad»: se guarda; en «Auditoría» hay un `modificacion_tipo_actuador` con la acción borrada.
-4. Quitar todas las acciones: «El tipo necesita al menos una acción activa.».
-5. Darlo de baja: queda inactivo, con «Reactivar»; reactivarlo.
-6. Con el Agrónomo: ve la lista y el catálogo, con el aviso de que los administra el Gerente, sin botones; la URL de alta da 403.
-7. Sin JavaScript, los pasos 2 a 5 funcionan igual: cada ventana es una página.
-8. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
+1. Con el Gerente: el menú muestra «IoT» justo después de «Producción»; abre en «Tipos de actuador» con los seis tipos iniciales (Ventilador, Bomba,
+   Luminaria, Calefactor, Ventana y Media sombra, de 60 s) y, debajo, el catálogo de capacidades en solo lectura.
+2. «Nuevo tipo»: «Extractor», con «Encender» (`ENCENDER`) y «Fijar velocidad» (`FIJAR_NIVEL`, 0 a 100 %, unidad «%» propuesta). Al elegir el comando
+   con valor aparecen el mínimo, el máximo y la unidad. «Crear tipo»: se crea y avisa. Registrar «extractor»: error «Ya existe un tipo de actuador con
+   ese nombre.» junto al nombre y lo escrito se conserva.
+3. «Modificar» el Extractor: «Agregar acción» (una fila más) con «Apagar» (`APAGAR`); cambiar «Fijar velocidad» a `ENCENDER`: error «Dos acciones
+   usan el comando ENCENDER.». Volver a `FIJAR_NIVEL` y quitar «Fijar velocidad»: se guarda; en «Auditoría» hay un `modificacion_tipo_actuador` con
+   la acción borrada en «Acciones borradas».
+4. Quitar todas las acciones y guardar: «El tipo necesita al menos una acción activa.». Probar también un nombre de acción vacío y un rango con el
+   mínimo mayor al máximo.
+5. «Dar de baja» el Extractor: la ventana pide confirmar; queda inactivo, con «Reactivar» como único botón. Reactivarlo.
+6. Con el Agrónomo: ve la lista y el catálogo, con el aviso de que los administra el Gerente, sin ningún botón de escritura; las URL
+   `/iot/tipos/nuevo/`, `/iot/tipos/<id>/modificar/` y `/iot/tipos/<id>/baja/` dan 403. Con un Capataz, un Vendedor o un Técnico, `/iot/tipos/` da 403.
+7. Sin JavaScript (desactivalo en el navegador), los pasos 2 a 5 funcionan igual: cada ventana es una página, «Agregar acción» y «Quitar» recargan la
+   página con lo escrito, y después de elegir un comando con valor se toca «Actualizar filas» para que aparezcan el rango y la unidad.
+8. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas (`core 0017`, `maestros 0010`, `iot 0001` a `0003`).
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+**Qué se hizo.**
+- La app `iot` (nivel 7) con **todos** los modelos de `docs/modelo/iot.md` salvo `RegistroComando` (IOT-05) y `MantenimientoTecnico` (IOT-07), en
+  `iot/migrations/0001_initial.py` con las restricciones de D-72; el catálogo (`0002`: 3 capacidades y 6 comandos) y los seis tipos iniciales (`0003`),
+  idempotentes y con su inversa. `iot/catalogo.py`, `iot/alcance.py` (con `para` y `operables_por` en los `QuerySet`), las fábricas de `iot/tests/fabricas.py`
+  y el admin de solo lectura.
+- Los 14 parámetros IoT en `ConfiguracionOperativa` (`maestros/migrations/0010_parametros_iot.py`), en una lista aparte `PARAMETROS_IOT`: la pantalla y
+  el formulario de MAE-04 siguen igual.
+- Los 11 tipos de alerta del IoT y la entrada «IoT» del menú, en `IotConfig.ready()`.
+- Los servicios de tipos de actuador (`iot/servicios/tipos_actuador.py`): alta, modificación, reactivación, baja, consulta, catálogo y
+  `acciones_permitidas`; las vistas, las plantillas y el CSS (`iot/static/iot/css/iot.css`).
+- `core`: las cuatro acciones de auditoría (`core/migrations/0017_iot_acciones_de_auditoria.py`) y los seis íconos del módulo.
+
+**Pruebas** (todas en verde).
+- `python manage.py test iot maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 2016 pruebas, OK (`iot`: 249).
+- `python manage.py test iot --keepdb --tag concurrencia`: 6 pruebas, OK.
+- `python manage.py test iot maestros core inventario --keepdb --tag migracion`: 8 pruebas, OK.
+- `makemigrations --check --dry-run`: sin cambios pendientes. `inventario` también se corrió completa (OK).
+- Las pruebas de servicios se escribieron primero y se mostraron en rojo (118 pruebas, módulo inexistente); el estudiante las aprobó antes de implementar.
+
+**Decisiones y diferencias con la documentación.**
+- `acciones_en_uso(tipo)` devuelve `dict[int, list[UsoDeAccion]]` (`UsoDeAccion(codigo, valor)`) y no `set[int]`: la regla 4 de IOT-MOD-TAC pide informar
+  qué reglas o comandos lo impiden y dejar achicar el rango solo si ningún valor queda afuera. En IOT-01 devuelve `{}`; IOT-05 e IOT-06 le suman la consulta.
+- `EquipoAnunciado.sistema` es `CASCADE` (MD-102, «Convenciones» de `docs/modelo/iot.md`) y el índice «un nodo por sistema» incluye los dados de baja (D-72, punto 2):
+  el texto de este archivo, en «Límites» y en el paso 1, decía otra cosa en los dos puntos.
+- La auditoría escribe **un registro por caso de uso** con las listas `acciones_creadas`, `acciones_modificadas`, `acciones_desactivadas` y `acciones_borradas`
+  (así lo fija «Cómo se aplica»), no uno por acción como dice la postcondición d.
+- `num_nonnulls(...)` de las restricciones se escribió con `Q` equivalentes. Largos que la ficha no fija: `Actuador.estado_informado` 30,
+  `Telemetria.unidad_medida_telemetria` 10, `Accion.unidad_valor` 5.
+- Se sumó `bloquear_tipo_activo(tipo_id)`, que no pedía la tarea: es el contrato de D-40 para quien cree un actuador (IOT-02), porque el `INSERT` solo toma
+  `FOR KEY SHARE` y no frena la baja del tipo. Tiene su prueba de concurrencia.
+- Una acción que cambia de nombre o de comando sale un momento de los índices únicos parciales (queda inactiva) para que dos acciones puedan
+  intercambiar nombres o comandos sin chocar a mitad de camino.
+- Las inversas de las migraciones `0002` y `0003` borran con `_raw_delete` una vez verificado que nada las usa: el `.delete()` normal fallaba de forma
+  intermitente en la prueba de `core` que baja y vuelve a subir todas las migraciones.
+- **Cambio a una prueba existente** (decidido por el estudiante): `maestros/tests/test_cns_alr.py`, `test_registrar_la_entrada_dos_veces_no_la_duplica`
+  fijaba que «Alertas» fuera la tercera entrada del Gerente. Como la tarea pide registrar «IoT» con `despues_de="Producción"`, que lo deja antes, el assert
+  pasó a un orden relativo («Panel de control» primero y «Producción» antes que «Alertas»). Se mantiene el `count("Alertas") == 1` por rol. Justificación:
+  esa línea sobre-especificaba el orden completo y se rompe con cualquier módulo que se registre después de «Producción».
+- Dos pruebas propias se corrigieron al implementar (no eran reglas): un nombre de tipo que chocaba con el inicial «Ventana» y el intercambio de acciones,
+  que buscaba la fila por un nombre que acababa de cambiar.
+
+**Pantallas: lo que se corrigió del prototipo** (D-61).
+- Baja: el prototipo borra el tipo; acá es lógica y el tipo queda inactivo, visible, con «Reactivar» (ya anotado en el extracto).
+- Se agregaron «Reactivar», los tipos inactivos y la marca «En uso» (regla 7 de MOD, reglas 1 y 2 de CNS).
+- El formulario del prototipo cambia de comando con JavaScript: acá cada cambio (y «Agregar acción» y «Quitar») manda el formulario al servidor,
+  que lo vuelve a dibujar sin guardar; con HTMX solo cambia el bloque de acciones y, sin JavaScript, hay un botón «Actualizar filas».
+- Las filas de una acción en uso o con historial muestran el nombre, el comando y la unidad deshabilitados con el motivo (el prototipo solo bloquea el comando
+  y la unidad, y solo para el historial); su valor viaja en un campo oculto.
+- Textos agregados (no están en el extracto): el nombre de una acción de más de 40 caracteres, la unidad que no es de la lista del comando, «No se puede achicar
+  el rango de «X»: quedarían afuera los valores de …» y «Las acciones del tipo cambiaron mientras lo editabas…» (`cambio_simultaneo`).
+- «Quitar» se ofrece en toda fila, también en una acción en uso: el servicio la rechaza con el motivo, para no duplicar la regla en la plantilla.
+
+**Para IOT-02 en adelante.** `bloquear_tipo_activo` antes de crear un actuador; `equipos_afectados` ya tiene datos reales; `recalcular_compatibilidad` se llama desde
+`modificar_tipo_actuador` (hoy un `TODO` con la lista vacía). La pestaña «Tipos de actuador» queda como única del marco: cada tarea suma la suya, y `/iot/` redirige a
+ella hasta IOT-02.

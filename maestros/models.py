@@ -6,8 +6,10 @@
 # MAE-04: ConfiguracionOperativa y PerfilOrganizacion, dos singletons (MD-89) sin alta ni baja.
 # MAE-05 (D-55): TransportistaInvernadero, cómo se guarda R155 (un Transportista pertenece a un invernadero o a ninguno).
 
+from decimal import Decimal
+
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 from django.db.models.functions import Lower
 from django.utils import timezone
 
@@ -674,10 +676,47 @@ def _restricciones_de_dominio():
     return restricciones
 
 
+# IOT-01 (MD-112; docs/modelo/iot.md, «Parámetros IoT de ConfiguracionOperativa»): los 14 parámetros del módulo IoT. Van en una
+# lista aparte de ``PARAMETROS_DE_CONFIGURACION`` porque su pantalla (sección «Módulo IoT») es de IOT-04: así el formulario y el
+# servicio de MAE-04 siguen igual. (campo, etiqueta, valor inicial, mínimo, máximo). Los valores iniciales están a confirmar con
+# el Jardín Botánico. ``histeresis_temperatura`` e ``histeresis_temp_solucion`` son ``Decimal(3,1)``; el resto, enteros.
+PARAMETROS_IOT = [
+    ("cant_reintentos_comando", "Reintentos de un comando", 3, 0, 10),
+    ("segundos_intervalo_reintento", "Espera entre intentos de un comando (s)", 60, 10, 3600),
+    ("hora_inicio_luz", "Inicio del horario de luz (hora)", 8, 0, 23),
+    ("hora_fin_luz", "Fin del horario de luz (hora)", 18, 1, 24),
+    ("lux_umbral_fotoperiodo", "Luz que cuenta para el fotoperíodo (lux)", 1000, 1, 100000),
+    ("minutos_sin_actividad", "Minutos sin lecturas de un sensor", 5, 1, 1440),
+    ("minutos_sin_comunicacion", "Minutos sin comunicación del nodo", 3, 1, 1440),
+    ("minutos_antiguedad_lectura", "Antigüedad de una lectura atrasada (min)", 5, 1, 1440),
+    ("cant_lecturas_confirmacion", "Lecturas para confirmar una regla", 3, 1, 10),
+    ("histeresis_temperatura", "Histéresis de la temperatura (°C)", Decimal("1.0"), 0, 10),
+    ("histeresis_humedad", "Histéresis de la humedad (% HR)", 3, 0, 30),
+    ("histeresis_luz", "Histéresis de la luz (lux)", 2000, 0, 20000),
+    ("histeresis_temp_solucion", "Histéresis de la temperatura de la solución (°C)", Decimal("1.0"), 0, 10),
+    ("dias_retencion_telemetria", "Retención de las lecturas (días)", 7, 1, 365),
+]
+
+
+def _restricciones_de_iot():
+    """Un ``CheckConstraint`` por parámetro IoT con su dominio (MD-112) y la que exige ``hora_fin_luz > hora_inicio_luz``."""
+    restricciones = []
+    for campo, _, _, minimo, maximo in PARAMETROS_IOT:
+        condicion = Q(**{f"{campo}__gte": minimo}) & Q(**{f"{campo}__lte": maximo})
+        restricciones.append(models.CheckConstraint(condition=condicion, name=f"configuracion_{campo}_en_dominio"))
+    restricciones.append(
+        models.CheckConstraint(
+            condition=Q(hora_fin_luz__gt=F("hora_inicio_luz")), name="configuracion_horario_de_luz_coherente"
+        )
+    )
+    return restricciones
+
+
 class ConfiguracionOperativa(models.Model):
     """Parámetros que rigen la operación (ADM-MOD-CFG). Singleton: ``singleton`` vale siempre 1 y es único, así que la
     base no admite una segunda fila. R001 (quién la establece) no se guarda: lo registra la auditoría (D-36). Quien use un
-    parámetro lo lee con ``maestros.servicios.configuracion.obtener()`` en cada uso (regla 7)."""
+    parámetro lo lee con ``maestros.servicios.configuracion.obtener()`` en cada uso (regla 7). Los 14 parámetros del módulo IoT
+    (``PARAMETROS_IOT``) los suma IOT-01; su pantalla es de IOT-04."""
 
     singleton = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     porc_merma_maxima = models.IntegerField("merma máxima tolerada por lote (%)", default=15)
@@ -699,6 +738,25 @@ class ConfiguracionOperativa(models.Model):
     porc_tolerancia_cobertura_pedido = models.IntegerField("tolerancia de cobertura del pedido (%)", default=0)
     cant_maxima_entregas_diarias = models.IntegerField("máximo de entregas diarias por transportista", default=10)
     cant_max_ciudades_distintas_diarias = models.IntegerField("máximo de localidades distintas por día", default=3)
+    # IOT-01 (MD-112): los 14 parámetros del módulo IoT. Dominios y valores iniciales: ``PARAMETROS_IOT``.
+    cant_reintentos_comando = models.IntegerField("reintentos de un comando", default=3)
+    segundos_intervalo_reintento = models.IntegerField("espera entre intentos de un comando (s)", default=60)
+    hora_inicio_luz = models.IntegerField("inicio del horario de luz (hora)", default=8)
+    hora_fin_luz = models.IntegerField("fin del horario de luz (hora)", default=18)
+    lux_umbral_fotoperiodo = models.IntegerField("luz que cuenta para el fotoperíodo (lux)", default=1000)
+    minutos_sin_actividad = models.IntegerField("minutos sin lecturas de un sensor", default=5)
+    minutos_sin_comunicacion = models.IntegerField("minutos sin comunicación del nodo", default=3)
+    minutos_antiguedad_lectura = models.IntegerField("antigüedad de una lectura atrasada (min)", default=5)
+    cant_lecturas_confirmacion = models.IntegerField("lecturas para confirmar una regla", default=3)
+    histeresis_temperatura = models.DecimalField(
+        "histéresis de la temperatura (°C)", max_digits=3, decimal_places=1, default=Decimal("1.0")
+    )
+    histeresis_humedad = models.IntegerField("histéresis de la humedad (% HR)", default=3)
+    histeresis_luz = models.IntegerField("histéresis de la luz (lux)", default=2000)
+    histeresis_temp_solucion = models.DecimalField(
+        "histéresis de la temperatura de la solución (°C)", max_digits=3, decimal_places=1, default=Decimal("1.0")
+    )
+    dias_retencion_telemetria = models.IntegerField("retención de las lecturas (días)", default=7)
 
     class Meta:
         verbose_name = "Configuración operativa"
@@ -706,6 +764,7 @@ class ConfiguracionOperativa(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(singleton=1), name="configuracion_singleton_es_1"),
             *_restricciones_de_dominio(),
+            *_restricciones_de_iot(),
         ]
 
     def __str__(self):

@@ -133,3 +133,13 @@ de **`ConfiguracionOperativa`** y la de **`PerfilOrganizacion`** (MD-89). Lo que
 6. **Lectura.** `maestros.servicios.configuracion.obtener()` y `maestros.servicios.perfil.obtener()` devuelven la fila; si no
    existiera (por ejemplo, una base vaciada), la **crean con los valores iniciales** de forma segura ante pedidos simultáneos
    (`get_or_create` sobre `singleton=1`) en vez de fallar. Es una red de seguridad, no el camino normal.
+
+## La inversa de una migración de datos (IOT-01)
+
+Cuando la inversa (`descargar`) tiene que borrar las filas que cargó la migración:
+
+1. **Verificá primero que nada use las filas** (acciones, comandos, equipos, tablas intermedias de M2M...). Si algo las usa, no borres nada y salí (`return`, o `continue` con el tipo que se conserva).
+2. **Borrá con `queryset._raw_delete(alias)` en orden de dependencias**: las hijas antes que las padres (comandos antes que capacidades; acciones antes que el tipo). El `alias` sale de `schema_editor.connection.alias` (o `DEFAULT_DB_ALIAS` si se llama sin `schema_editor`, como en las pruebas).
+3. **Por qué no `.delete()`**: dispara el recolector de cascadas de Django, que con los modelos históricos de una migración mezcla versiones del modelo y lanza `ValueError` («Cannot query ... Must be ... instance») al bajar todas las migraciones, como hace la prueba `MigracionEmailTests` de `core`. Falla solo a veces, según el orden de las pruebas.
+4. **Por qué es seguro**: `_raw_delete` es API privada de Django, pero antes se verificó que nada usa las filas y, si se escapara alguna, las FK `PROTECT` harían fallar el `DELETE` (un `IntegrityError` en voz alta, no un borrado silencioso).
+5. Dejá un comentario junto a cada `_raw_delete` que diga esto en pocas palabras.

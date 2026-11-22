@@ -88,7 +88,7 @@ b. Si reactivó el tipo, quedó en estado «activo».
 
 c. Si cambiaron las acciones, cada actuador no dado de baja del tipo quedó marcado «compatible», «incompatible» o «sin verificar» según el último anuncio de su nodo, con sus acciones incompatibles, y su alerta «configuración incompatible» se generó o se resolvió.
 
-d. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador del tipo y los cambios, y otro por cada acción creada, modificada o quitada y por cada alerta generada o resuelta.
+d. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador del tipo y sus cambios, con las listas de las acciones creadas, modificadas, desactivadas y borradas, y de las alertas generadas o resueltas.
 
 **Reglas:**
 
@@ -192,7 +192,7 @@ equipos que todavía no existen (está también en `docs/disparadores.md`). Mode
   (`save-tac`): «El tipo necesita al menos una acción activa.», «Cada acción necesita un nombre.», «Elegí el comando de «X».», «La acción «X» está repetida.», «Dos acciones usan el comando Y.», «“X” necesita un mínimo y un máximo enteros, con el mínimo menor al máximo.», «“X” necesita una unidad.».
 - **Modificar (reglas 3 a 9 de MOD).** El servicio recibe la lista completa de acciones del formulario, cada una con el id de la acción
   original si la tenía, y la compara con las guardadas:
-  - **En uso** = usada por una regla de actuación activa o un comando pendiente (`acciones_en_uso(tipo)`); **con historial** = algún comando
+  - **En uso** = usada por una regla de actuación activa o un comando pendiente (`acciones_en_uso(tipo) -> dict[int, list[UsoDeAccion]]`: por id de acción, sus usos, cada uno con su código `RGL-n` o `CMD-n` y el valor que aplica; así el Sistema informa qué los impide y controla el achique del rango); **con historial** = algún comando
     la usó. **Se completan en IOT-05 (comandos) e IOT-06 (reglas):** en IOT-01 las dos funciones devuelven «ninguna», con su prueba de que se
     llaman; las tareas de comandos y reglas les suman la consulta y la prueba.
   - Una acción en uso no se quita, no se renombra y no cambia su comando ni su unidad; su rango se achica solo si ningún valor de esas reglas o comandos queda afuera (los mensajes del prototipo: «No se puede quitar «X»: la usan …», etc.).

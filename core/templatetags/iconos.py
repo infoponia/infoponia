@@ -51,6 +51,15 @@ _TRAZOS = {
     "addto": '<path d="M3 10.5 12 3l9 7.5V21H3z"/><path d="M12 11v6M9 14h6"/>',
     "off": '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
     "ret": '<path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/>',
+    # IOT-01: los íconos del módulo IoT, copiados del objeto ``P`` del prototipo (docs/prototipos/iot/iot.html, línea 203).
+    "activity": '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    "send": '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+    "sliders": '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    "cpu": '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>'
+    '<path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>',
+    "router": '<rect x="2" y="14" width="20" height="8" rx="2"/>'
+    '<path d="M6 18h.01M10 18h.01M15 10v4M17.8 7.2a4 4 0 0 0-5.6 0M20.7 4.3a8 8 0 0 0-11.4 0"/>',
+    "wrench": '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/>',
 }
 
 

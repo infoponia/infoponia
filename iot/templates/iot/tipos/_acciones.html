@@ -1,0 +1,46 @@
+{% load iconos %}{% comment %}Las filas de acciones de un tipo (IOT-ALT-TAC reglas 3 y 4; «rows» de tac-form en el prototipo): nombre, comando del catálogo (agrupado por
+capacidad) y, si el comando lleva valor, mínimo, máximo y unidad (lista cerrada del comando). Es el fragmento que HTMX reemplaza en «#acciones».
+Una acción en uso no se renombra ni cambia su comando ni su unidad; una con historial, tampoco su comando ni su unidad: esos campos se muestran
+deshabilitados con el motivo y su valor viaja en un campo oculto. Sin JavaScript, «Actualizar filas» vuelve a dibujar el formulario (por ejemplo,
+después de elegir un comando con valor, para que aparezcan el rango y la unidad).{% endcomment %}
+<input type="hidden" name="acciones_total" value="{{ total }}">
+{% for mensaje in errores.acciones %}<div class="err tac-error">{{ mensaje }}</div>{% endfor %}
+{% for f in filas %}
+<div class="blk tac-fila">
+  <input type="hidden" name="accion_{{ f.i }}_id" value="{{ f.id|default_if_none:'' }}">
+  <div class="tac-l1">
+    <div class="fld">
+      <label for="an{{ f.i }}">Nombre de la acción</label>
+      <input class="field-input" id="an{{ f.i }}" name="accion_{{ f.i }}_nombre" value="{{ f.nombre }}" placeholder="Ej.: Fijar velocidad"{% if f.bloquea_nombre %} readonly{% endif %}>
+    </div>
+    <div class="fld">
+      <label for="ac{{ f.i }}">Comando del catálogo</label>
+      <select class="field-input" id="ac{{ f.i }}" data-desplegable{% if f.bloquea_comando %} disabled{% else %} name="accion_{{ f.i }}_comando" hx-post="{{ request.path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-trigger="change" hx-target="#acciones" hx-swap="innerHTML"{% endif %}>
+        <option value="">Seleccioná</option>
+        {% for grupo in catalogo %}<optgroup label="{{ grupo.capacidad.nombre }}">{% for x in grupo.comandos %}<option value="{{ x.comando.codigo }}"{% if x.comando.codigo == f.comando %} selected{% endif %}>{{ x.comando.codigo }}{% if x.comando.lleva_valor %} (con valor){% endif %}</option>{% endfor %}</optgroup>{% endfor %}
+      </select>
+      {% if f.bloquea_comando %}<input type="hidden" name="accion_{{ f.i }}_comando" value="{{ f.comando }}">{% endif %}
+    </div>
+    <button class="btn btn-ghost btn-sm tac-quitar" type="submit" name="quitar" value="{{ f.i }}" data-enviando="Quitando…" aria-label="Quitar la acción {{ f.nombre|default:forloop.counter }}" hx-post="{{ request.path }}" hx-include="closest form" hx-target="#acciones" hx-swap="innerHTML">{% icono "trash" 14 %}</button>
+  </div>
+  {% if f.lleva_valor %}
+  <div class="tac-l2">
+    <div class="fld"><label for="amin{{ f.i }}">Valor mínimo</label><input class="field-input num" id="amin{{ f.i }}" name="accion_{{ f.i }}_minimo" inputmode="numeric" value="{{ f.minimo }}"></div>
+    <div class="fld"><label for="amax{{ f.i }}">Valor máximo</label><input class="field-input num" id="amax{{ f.i }}" name="accion_{{ f.i }}_maximo" inputmode="numeric" value="{{ f.maximo }}"></div>
+    <div class="fld">
+      <label for="au{{ f.i }}">Unidad</label>
+      <select class="field-input" id="au{{ f.i }}" data-desplegable{% if f.bloquea_comando %} disabled{% else %} name="accion_{{ f.i }}_unidad"{% endif %}>
+        {% for valor, texto in f.unidades %}<option value="{{ valor }}"{% if valor == f.unidad %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+      </select>
+      {% if f.bloquea_comando %}<input type="hidden" name="accion_{{ f.i }}_unidad" value="{{ f.unidad }}">{% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% if f.motivo %}<div class="hint">{{ f.motivo }}</div>{% endif %}
+</div>
+{% endfor %}
+<p class="hint" style="margin-bottom:12px">Cada acción usa un comando del catálogo de capacidades, que es lo que entiende el nodo. Si el comando lleva valor, definí su rango y unidad.</p>
+<div class="tac-botones">
+  <button class="btn btn-ghost btn-sm" type="submit" name="agregar" value="1" data-enviando="Agregando…" hx-post="{{ request.path }}" hx-include="closest form" hx-target="#acciones" hx-swap="innerHTML">{% icono "plus" 14 %} Agregar acción</button>
+  <noscript><button class="btn btn-ghost btn-sm" type="submit" name="refrescar" value="1" data-enviando="Actualizando…">Actualizar filas</button></noscript>
+</div>

@@ -16,7 +16,7 @@ Cada tarea es un bloque funcional: una sesión de Claude Code y un PR (D-44). «
 
 | ID | Tarea | App | Casos de uso | Depende de | Lote |
 |---|---|---|---|---|---|
-| IOT-01 | App `iot`, todos sus modelos, catálogo de capacidades, tipos de actuador y los parámetros IoT de la configuración | iot (y migración en maestros) | IOT-ALT-TAC, IOT-MOD-TAC, IOT-BAJ-TAC, IOT-CNS-TAC | MAE-03, MAE-04, INV-01 (mergeadas), UI-01 | I1 |
+| IOT-01 | App `iot`, todos sus modelos, catálogo de capacidades, tipos de actuador y los parámetros IoT de la configuración | iot (y migración en maestros) | IOT-ALT-TAC, IOT-MOD-TAC, IOT-BAJ-TAC, IOT-CNS-TAC | MAE-03, MAE-04, INV-01 (mergeadas), UI-01 | I1 · **hecha el 22/11/2026** (a la espera de la revisión a mano) |
 | IOT-02 | Sistema IoT y hardware: registrar, modificar, regenerar el token, alta, modificación y consulta de equipos; conexión con `maestros` | iot (y punto de extensión en maestros) | IOT-REG-SIS, IOT-MOD-SIS, IOT-ALT-HDW, IOT-MOD-HDW, IOT-CNS-HDW | IOT-01, MAE-02b, NOT-01 | I1 |
 | IOT-03 | API del nodo I: token, lecturas, estados, modo y anuncio; alertas de lecturas; flujo de Node-RED de lecturas | iot | IOT-ENT-INF (sin la extensión \*b ni las 6a a 6d) | IOT-02, INV-03 (`umbral_efectivo`) | I2a |
 | IOT-04 | Revisión periódica (inactividad, resúmenes, fotoperíodo, retención y correos) y panel de monitoreo; sección «Módulo IoT» de la configuración | iot (y la pantalla de configuración de maestros) | IOT-ENT-INF (extensión \*b), IOT-CNS-LEC, ADM-MOD-CFG (sección IoT) | IOT-03, USR-10, MAE-02d, MAE-04 | I2b |
