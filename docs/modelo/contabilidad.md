@@ -11,7 +11,7 @@ Bloque: Contabilidad. Es el concepto padre de todo lo que, dentro del sistema, g
 | Atributo | Valores | Nota |
 |---|---|---|
 | `id` | — | El `id` automático. **Compartido** por todos los documentos: no es consecutivo por tipo |
-| `tipo` (nuevo) | `OrigenDocumento.Tipo`: `orden_de_trabajo`, `bitacora`, `movimiento_de_insumo` | Discriminador de la herencia. Lo fija la hija directa y nunca cambia. Los tipos de las rondas futuras (contrato, pago, entrega, solicitud de revisión, movimiento de stock) se suman con su clase |
+| `tipo` (nuevo) | `OrigenDocumento.Tipo`: `orden_de_trabajo`, `bitacora`, `movimiento_de_insumo`; `contrato` (COM-02, D-59: `comercial.Contrato`) | Discriminador de la herencia. Lo fija la hija directa y nunca cambia. Los tipos de las rondas futuras (contrato, pago, entrega, solicitud de revisión, movimiento de stock) se suman con su clase |
 
 ### Asociaciones
 

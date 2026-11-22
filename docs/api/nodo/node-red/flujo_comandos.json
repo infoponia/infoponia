@@ -1,0 +1,469 @@
+[
+  {
+    "id": "f2b0000000000001",
+    "type": "tab",
+    "label": "InfoPonia · comandos (API v1)",
+    "disabled": false,
+    "info": "Nodo de referencia de los comandos (D-77). Guía: docs/api/nodo/node-red/README.md",
+    "env": []
+  },
+  {
+    "id": "f2b0000000000101",
+    "z": "f2b0000000000001",
+    "type": "comment",
+    "name": "InfoPonia · nodo de referencia · comandos (API v1)",
+    "info": "Retira los comandos cada 5 s, los ejecuta en actuadores simulados y manda el resultado (D-77).\nUsa las mismas variables de entorno que el flujo de lecturas: INFOPONIA_URL e INFOPONIA_TOKEN.\nGuía: docs/api/nodo/node-red/README.md.",
+    "x": 300,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "f2b000000000010f",
+    "z": "f2b0000000000001",
+    "type": "inject",
+    "name": "Al arrancar",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 130,
+    "y": 100,
+    "wires": [
+      [
+        "f2b0000000000102"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000102",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Actuadores simulados",
+    "func": "\n// Actuadores simulados: qué comandos soporta cada uno y en qué estado está. Los identificadores tienen que ser los registrados.\nflow.set('actuadores', {\n    'norte/sectorA/ventilador': { comandos: ['ENCENDER', 'APAGAR', 'FIJAR_NIVEL'], estado: 'apagado' },\n    'norte/sectorA/ventana': { comandos: ['ABRIR', 'CERRAR', 'FIJAR_POSICION'], estado: 'cerrado' }\n});\nflow.set('memoria', {});          // id del comando → { resultado, en } durante 24 h (D-77, punto 3)\nflow.set('simulacion', 'ejecutar'); // ejecutar | fallar | no_responder | rechazar\nflow.set('en_vuelo', false);\nnode.status({ fill: 'green', shape: 'dot', text: 'simulación: ejecutar' });\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 340,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "f2b0000000000110",
+    "z": "f2b0000000000001",
+    "type": "inject",
+    "name": "Cada 5 s",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "5",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "3",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 120,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000103"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000103",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Armar GET comandos",
+    "func": "\n// Cada 5 segundos: GET comandos (D-77, punto 4). Si el anterior no volvió, no se manda otro.\n\nfunction base() { const u = env.get('INFOPONIA_URL') || ''; return u.endsWith('/') ? u : u + '/'; }\nfunction encabezados() { return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''), 'Content-Type': 'application/json' }; }\nfunction ahoraIso() { return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'); }\n\nif (flow.get('en_vuelo')) return null;\nflow.set('en_vuelo', true);\nreturn { url: base() + 'comandos', headers: encabezados(), requestTimeout: 10000 };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 320,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000104"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000104",
+    "z": "f2b0000000000001",
+    "type": "http request",
+    "name": "InfoPonia · retiro",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 520,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000105"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000105",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Repartir comandos",
+    "func": "\n// Un mensaje por comando entregado. Cualquier error del retiro solo se registra: el próximo retiro es en 5 s.\nflow.set('en_vuelo', false);\nif (msg.statusCode !== 200) {\n    node.status({ fill: 'red', shape: 'ring', text: 'retiro: ' + msg.statusCode });\n    return [null, { payload: msg.payload, topic: 'retiro fallido ' + msg.statusCode }];\n}\nconst p = msg.payload || {};\nconst cmds = p.comandos || [];\nnode.status({ fill: cmds.length ? 'blue' : 'green', shape: 'dot', text: 'modo ' + p.modo + ' · ' + cmds.length + ' comando(s)' });\nreturn [cmds.map(c => ({ comando: c })), null];\n",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 720,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000106"
+      ],
+      [
+        "f2b000000000010b"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000106",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Ejecutar (con memoria de 24 h)",
+    "func": "\n// Ejecuta (simula) un comando, con la memoria de 24 h (D-77, punto 3; regla «Comando repetido en el nodo»).\n\nfunction base() { const u = env.get('INFOPONIA_URL') || ''; return u.endsWith('/') ? u : u + '/'; }\nfunction encabezados() { return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''), 'Content-Type': 'application/json' }; }\nfunction ahoraIso() { return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'); }\n\nconst DEJA = { ENCENDER: 'encendido', APAGAR: 'apagado', ABRIR: 'abierto', CERRAR: 'cerrado' };\nconst c = msg.comando;\nconst memoria = flow.get('memoria') || {};\nconst limite = Date.now() - 24 * 3600 * 1000;\nfor (const k of Object.keys(memoria)) if (memoria[k].en < limite) delete memoria[k];\nlet cuerpo;\nif (memoria[c.id]) {\n    cuerpo = memoria[c.id].resultado;                  // ya lo ejecutó: manda el mismo resultado, no lo repite\n    node.warn('Comando ' + c.id + ' repetido: no se ejecuta otra vez.');\n} else {\n    const acts = flow.get('actuadores') || {};\n    const a = acts[c.identificador];\n    const modo = flow.get('simulacion') || 'ejecutar';\n    if (modo === 'no_responder') { node.status({ fill: 'yellow', shape: 'ring', text: c.id + ': sin respuesta (simulado)' }); return null; }\n    if (!a || !a.comandos.includes(c.comando) || modo === 'rechazar') {\n        cuerpo = { resultado: 'rechazado', detalle: c.comando + ' no está configurado para ' + c.identificador + '.' };\n    } else if (modo === 'fallar') {\n        cuerpo = { resultado: 'fallo', detalle: 'Falla simulada en el intento ' + c.intento + '.' };\n    } else {\n        a.estado = DEJA[c.comando] || (c.comando === 'FIJAR_NIVEL' ? 'nivel:' + c.valor : 'posicion:' + c.valor);\n        flow.set('actuadores', acts);\n        cuerpo = { resultado: 'ejecutado', detalle: 'Ejecutado (simulado).', estado: a.estado, informado_en: ahoraIso() };\n    }\n    if (cuerpo.resultado !== 'fallo') memoria[c.id] = { resultado: cuerpo, en: Date.now() };\n}\nflow.set('memoria', memoria);\nnode.status({ text: c.id + ': ' + cuerpo.resultado });\nreturn { url: base() + 'comandos/' + c.id + '/resultado', headers: encabezados(), requestTimeout: 10000,\n         payload: cuerpo, comando: c, intento_envio: (msg.intento_envio || 0) + 1, limite_ms: Date.now() + c.espera_segundos * 1000 };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 960,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000107"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000107",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Guardar cuerpo",
+    "func": "\n// Guarda el cuerpo antes de enviarlo: la respuesta reemplaza msg.payload y msg.headers.\nmsg.payload_enviado = msg.payload;\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1180,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000108"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000108",
+    "z": "f2b0000000000001",
+    "type": "http request",
+    "name": "InfoPonia · resultado",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 1380,
+    "y": 180,
+    "wires": [
+      [
+        "f2b0000000000109"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000109",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Según la respuesta",
+    "func": "\n// Respuesta al resultado: 200 (aceptado o ya_resuelto) termina; falla pasajera se reintenta dentro de la espera; 4xx se descarta.\nconst codigo = msg.statusCode;\nif (codigo === 200) {\n    node.status({ fill: 'green', shape: 'dot', text: msg.comando.id + ': ' + msg.payload.resultado + ' · ' + msg.payload.estado_comando });\n    return [null, { payload: msg.payload, topic: 'resultado ' + msg.comando.id }];\n}\nif ((codigo === 429 || codigo >= 500 || typeof codigo !== 'number') && msg.intento_envio < 5) {\n    const espera = Math.min(2000 * Math.pow(2, msg.intento_envio - 1), Math.max(1000, msg.limite_ms - Date.now()));\n    node.status({ fill: 'yellow', shape: 'ring', text: msg.comando.id + ': reintento del resultado' });\n    return [{ url: msg.url, payload: msg.payload_enviado, comando: msg.comando, intento_envio: msg.intento_envio + 1,\n              limite_ms: msg.limite_ms, delay: espera }, null];\n}\nnode.status({ fill: 'red', shape: 'dot', text: msg.comando.id + ': ' + codigo });\nreturn [null, { payload: msg.payload, topic: 'resultado rechazado ' + codigo + ' (no se reintenta)' }];\n",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1600,
+    "y": 180,
+    "wires": [
+      [
+        "f2b000000000010a"
+      ],
+      [
+        "f2b000000000010c"
+      ]
+    ]
+  },
+  {
+    "id": "f2b000000000010a",
+    "z": "f2b0000000000001",
+    "type": "delay",
+    "name": "Esperar para reintentar",
+    "pauseType": "delayv",
+    "timeout": "2",
+    "timeoutUnits": "seconds",
+    "rate": "1",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 1380,
+    "y": 260,
+    "wires": [
+      [
+        "f2b000000000010e"
+      ]
+    ]
+  },
+  {
+    "id": "f2b000000000010e",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Rearmar resultado",
+    "func": "\n// Vuelve a poner los encabezados (la respuesta anterior los reemplazó) antes de reenviar el mismo resultado.\n\nfunction base() { const u = env.get('INFOPONIA_URL') || ''; return u.endsWith('/') ? u : u + '/'; }\nfunction encabezados() { return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''), 'Content-Type': 'application/json' }; }\nfunction ahoraIso() { return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'); }\n\nmsg.headers = encabezados();\nmsg.requestTimeout = 10000;\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1180,
+    "y": 260,
+    "wires": [
+      [
+        "f2b0000000000107"
+      ]
+    ]
+  },
+  {
+    "id": "f2b000000000010b",
+    "z": "f2b0000000000001",
+    "type": "debug",
+    "name": "Registro de retiros",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 960,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "f2b000000000010c",
+    "z": "f2b0000000000001",
+    "type": "debug",
+    "name": "Registro de resultados",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1820,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "f2b0000000000111",
+    "z": "f2b0000000000001",
+    "type": "comment",
+    "name": "Panel: cómo responde el nodo a los próximos comandos",
+    "info": "",
+    "x": 230,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "f2b0000000000112",
+    "z": "f2b0000000000001",
+    "type": "inject",
+    "name": "Ejecutar (normal)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "ejecutar",
+    "payloadType": "str",
+    "x": 170,
+    "y": 380,
+    "wires": [
+      [
+        "f2b000000000010d"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000113",
+    "z": "f2b0000000000001",
+    "type": "inject",
+    "name": "Fallar cada intento",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "fallar",
+    "payloadType": "str",
+    "x": 170,
+    "y": 420,
+    "wires": [
+      [
+        "f2b000000000010d"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000114",
+    "z": "f2b0000000000001",
+    "type": "inject",
+    "name": "No responder",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "no_responder",
+    "payloadType": "str",
+    "x": 170,
+    "y": 460,
+    "wires": [
+      [
+        "f2b000000000010d"
+      ]
+    ]
+  },
+  {
+    "id": "f2b0000000000115",
+    "z": "f2b0000000000001",
+    "type": "inject",
+    "name": "Rechazar (no reconoce)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "rechazar",
+    "payloadType": "str",
+    "x": 170,
+    "y": 500,
+    "wires": [
+      [
+        "f2b000000000010d"
+      ]
+    ]
+  },
+  {
+    "id": "f2b000000000010d",
+    "z": "f2b0000000000001",
+    "type": "function",
+    "name": "Elegir simulación",
+    "func": "\n// Botones del panel: cómo responde el nodo a los próximos comandos.\nflow.set('simulacion', msg.payload);\nnode.status({ text: 'simulación: ' + msg.payload });\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 420,
+    "y": 440,
+    "wires": []
+  }
+]

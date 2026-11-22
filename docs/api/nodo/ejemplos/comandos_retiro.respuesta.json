@@ -1,0 +1,23 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "modo": "remoto",
+  "comandos": [
+    {
+      "id": 101,
+      "identificador": "norte/sectorA/ventilador",
+      "comando": "FIJAR_NIVEL",
+      "valor": 60,
+      "intento": 1,
+      "espera_segundos": 60
+    },
+    {
+      "id": 102,
+      "identificador": "norte/sectorA/ventana",
+      "comando": "CERRAR",
+      "valor": null,
+      "intento": 2,
+      "espera_segundos": 60
+    }
+  ]
+}

@@ -16,10 +16,15 @@ Cómo se guardan los datos de esta ficha: **D-50**.
 | Tarea | Crea |
 |---|---|
 | CON-01 | `contabilidad.OrigenDocumento` (`docs/modelo/contabilidad.md`, D-52): el padre de `OrdenTrabajo`, `Bitacora` y `MovimientoInsumo` |
-| PRD-01 | `OrdenTrabajo`, `ReservaInsumo`, `Siembra`, `OcupacionSector`, `Lote`, `Bitacora`, `Consumo`. Una sola migración inicial de `produccion` (depende de `contabilidad.0001_initial` y de `inventario`), que también crea la secuencia `produccion_orden_numero_seq` |
+| PRD-01 | `OrdenTrabajo` (con **los cinco valores** de `OrdenTrabajo.Tipo`, D-67 punto 1), `ReservaInsumo`, `Siembra`, `OcupacionSector`, `Lote`, `Bitacora`, `Consumo`. Una sola migración inicial de `produccion` (depende de `contabilidad.0001_initial` y de `inventario`), que también crea la secuencia `produccion_orden_numero_seq` |
 | PRD-02 | `TransicionEtapa`, `Merma`, `AlertaDeMerma` (migración nueva que depende de la de PRD-01) |
 | PRD-03 | `AplicacionInsumos`, `ImputacionCosto`; el origen `aplicacion` del consumo (D-51 punto 3); los tipos de evento `aplicacion`, `otro_evento` y el interno `consumo` en `Bitacora.TipoEvento`. Migración `0003` |
 | PRD-04 | `FueraDeServicio`, `Reubicacion`; `OcupacionSector.reubicacion` y `orden` nula (D-51 punto 1); los tipos `fuera_de_servicio` y `reubicacion`. Migración `0004` |
+| COM-02 | `Cosecha` y `StockCosechado` (D-59; fichas al final) y la restricción de la prioridad de la cosecha. Migración nueva de `produccion` (el valor `cosecha` del tipo ya existe: D-67, punto 1) |
+| COM-04a | `MovimientoStock`; `Bitacora.cosecha` y el tipo `cosecha`; `Cosecha.origen_cosecha`; las causas de cámara de `Merma` (D-64, fichas al final); **para las entregas** (D-68, punto 3; `docs/api/produccion.md`, sección 10): la causa `dano_en_entrega`, `Merma.orden` y `Consumo.orden` con sus restricciones; **para las solicitudes** (D-69, punto 3; sección 11): los tipos `incumplimiento_de_clausula` y `anulacion_de_resolucion` de la bitácora con su restricción. Migración nueva de `produccion`, más la de `choices` de `contabilidad` (`movimiento_de_stock`) |
+| COM-05a1 | Nada en `produccion` (el tipo `entrega` ya existe, D-67 punto 1). `Entrega` y `DetalleEntrega` viven en `comercial` (`docs/modelo/comercial.md`) |
+| COM-05a2 | La restricción nueva de `ReservaInsumo` («a lo sumo una activa por orden e insumo», D-66 punto 8). Migración nueva de `produccion` |
+| IOT-07 | La restricción de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` ya existe, D-67 punto 1). `MantenimientoTecnico` vive en `iot` |
 
 ## Convenciones de esta ficha
 
@@ -37,12 +42,12 @@ Cómo se guardan los datos de esta ficha: **D-50**.
 | Lista | Valores (clave → texto) |
 |---|---|
 | `OrdenTrabajo.Estado` | `a_realizar` → «a realizar»; `concretada` → «concretada»; `cancelada` → «cancelada» |
-| `OrdenTrabajo.Tipo` | `siembra` → «Siembra»; `transicion` → «Transición de etapa» (después: `cosecha`, `entrega`, `mantenimiento`) |
+| `OrdenTrabajo.Tipo` | `siembra` → «Siembra»; `transicion` → «Transición de etapa»; `cosecha` → «Cosecha» (hija de COM-02, D-59); `entrega` → «Entrega» (hija `Entrega` en `comercial`, COM-05a1, D-66); `mantenimiento` → «Mantenimiento técnico» (hija `MantenimientoTecnico` en `iot`, IOT-07). **Los cinco valores los crea PRD-01** en `0001_initial` (D-67, punto 1), aunque las hijas lleguen después: así se prueba con órdenes de esos tipos desde PRD-01 y ninguna tarea posterior cambia los `choices` |
 | `OrdenTrabajo.Prioridad` | `alta`, `media`, `baja` (opcional en siembra y transición, MD-73) |
 | `ReservaInsumo.Estado` | `activa`, `consumida`, `cancelada` |
 | `Lote.Estado` | `activo`, `finalizado` (MD-51) |
-| `Bitacora.TipoEvento` | `siembra`, `transicion`, `merma` (PRD-01 y PRD-02); `aplicacion`, `otro_evento` y `consumo` (interno: el de una aplicación, no se lista; PRD-03); `fuera_de_servicio` y `reubicacion` (PRD-04). Después: `cosecha` e `incumplimiento_de_clausula` |
-| `Merma.Causa` (lote en pie) | `plaga`, `enfermedad`, `falla_riego_o_nutrientes`, `condiciones_ambientales`, `dano_mecanico`, `descarte_por_seleccion`, `otra`. La partida en cámara (fuera de la ronda) suma `dano_en_camara`, `dano_en_entrega` y `vencimiento_en_camara` (MD-78) |
+| `Bitacora.TipoEvento` | `siembra`, `transicion`, `merma` (PRD-01 y PRD-02); `aplicacion`, `otro_evento` y `consumo` (interno: el de una aplicación, no se lista; PRD-03); `fuera_de_servicio` y `reubicacion` (PRD-04); `cosecha` (COM-04, D-64 punto 4); `incumplimiento_de_clausula` y `anulacion_de_resolucion` (los crea COM-04a para COM-07a: D-69 punto 3; `docs/api/produccion.md`, sección 11). Después: `comando` (IOT-05, MD-110: lo escribe la hija `iot.RegistroComando`, `docs/modelo/iot.md`) |
+| `Merma.Causa` (lote en pie) | `plaga`, `enfermedad`, `falla_riego_o_nutrientes`, `condiciones_ambientales`, `dano_mecanico`, `descarte_por_seleccion`, `otra`. La partida en cámara suma `dano_en_camara` y `vencimiento_en_camara` (COM-04; la segunda solo la usa InfoPonia, regla 9 de 8.9) y `dano_en_entrega` (la crea COM-04a y la usa COM-06a, D-68 punto 3) (MD-78). En una partida no se ofrece `descarte_por_seleccion` (regla «Causa» de PROD-REG-MRM) |
 
 Textos visibles de las causas: «Plaga», «Enfermedad», «Falla de riego o nutrientes», «Condiciones ambientales», «Daño mecánico», «Descarte por selección», «Otra» (los del prototipo, `CAUSAS`).
 El orden de **ordenación** de órdenes es: fecha programada (más antigua primero), después prioridad (`alta`, `media`, `baja`; sin prioridad cuenta como `media`), después `id`.
@@ -64,7 +69,7 @@ Bloque: Mantenimiento, alertas y auditoría. Vive en `produccion` (D-46). Orden 
 | `fechaResolucionOrden` | fecha, nula | → `fecha_resolucion_orden`. Nula mientras está «a realizar»; la de hoy al concretarla o cancelarla (sin fechas retroactivas). Vale para los dos desenlaces (concreción y cancelación), como OrdenCompra.fechaResolucion. Para saber si se concretó hay que mirar `estado_orden`, no esta fecha |
 | `descripcionOrden` | texto libre, opcional | → `descripcion_orden`. Hasta 500 caracteres; vacío si no se indicó |
 | `estadoOrden` | `OrdenTrabajo.Estado` | → `estado_orden`. Nace «a realizar». Solo cambia a «concretada» o «cancelada» y no vuelve atrás (regla 14 de 8.12) |
-| `prioridadOrden` | `OrdenTrabajo.Prioridad`, nula | → `prioridad_orden`. Opcional en siembra y transición (MD-73). **Obligatoria en mantenimiento** (ronda 19): la verifica un `CheckConstraint` por `tipo` que agrega IOT-05 (D-53, punto 6) |
+| `prioridadOrden` | `OrdenTrabajo.Prioridad`, nula | → `prioridad_orden`. Opcional en siembra y transición (MD-73). **Obligatoria en mantenimiento** (ronda 19): la verifica un `CheckConstraint` por `tipo` que agrega IOT-07 (D-53, punto 6; la tarea se llamaba IOT-05) |
 | (nuevo) `motivo_cancelacion` | texto, nulo | Texto libre, obligatorio al cancelar (paso 5 de PROD-CNL-ORD): de 1 a 300 caracteres, sin espacios al borde. Nulo en toda orden que no está «cancelada». Mismo criterio que OrdenCompra.motivoRechazo (texto libre, obligatorio al resolver con rechazo; el modelo no le fija largo): acá 300, como `motivo_diferencia_siembra` y `motivo_fuera_de_servicio`. Ver «Diferencias», n.º 17 |
 
 ### Asociaciones
@@ -76,13 +81,20 @@ Bloque: Mantenimiento, alertas y auditoría. Vive en `produccion` (D-46). Orden 
 | R075, R077, R078 | Capataz, «realiza» | — | **No está en el padre** (D-53, que enmienda D-50 punto 2): cada hija que tiene Capataz lo declara (`Siembra`, `TransicionEtapa` y, después, `Cosecha`) con la clase abstracta `ConCapataz` (abajo). `Entrega` y `MantenimientoTecnico` no lo tienen; esta última lleva `tecnico` (R047) |
 | R138 | ReservaInsumo, composición | OrdenTrabajo → ReservaInsumo = 0..* | Ver `ReservaInsumo` |
 
-Herencias: **hija directa de `OrigenDocumento`** (`contabilidad`, D-52; `TIPO_DE_ORIGEN = orden_de_trabajo`). Es padre de `Siembra` y `TransicionEtapa` (esta ronda) y de `Cosecha`, `Entrega` y `MantenimientoTecnico` (rondas futuras).
+Herencias: **hija directa de `OrigenDocumento`** (`contabilidad`, D-52; `TIPO_DE_ORIGEN = orden_de_trabajo`). Es padre de `Siembra` y `TransicionEtapa` (esta ronda) y de `Cosecha` (COM-02), `Entrega` (COM-05a, en `comercial`, D-66) y `MantenimientoTecnico` (IOT-07).
+
+**Tipos que ven las pantallas de `produccion`** (D-67, punto 1; regla «Órdenes que cancela el Agrónomo» de PROD-CNL-ORD; D-66 punto 13):
+`lista_de_ordenes`, `ordenes_cancelables` y `ordenes_del_capataz` muestran solo `TIPOS_DE_PRODUCCION` (siembra, transición y cosecha), con
+una lista de tipos permitidos y no con «todo menos X»; `cancelar_orden` acepta solo siembra y transición (`orden_no_cancelable` con los
+demás). Las entregas y los mantenimientos no son órdenes del Agrónomo. Los cuenta, en cambio, todo lo que mira «órdenes a realizar» de un
+invernadero (el impedimento `ordenes_a_realizar` de su baja) y las reservas de insumo activas (`registrar_reservas_de_insumo`). Todo lo hace
+PRD-01, con pruebas con órdenes sueltas de esos tipos (`docs/api/produccion.md`, sección 9).
 
 ### Clase abstracta `ConCapataz` (D-53)
 
 `produccion/models.py` declara `class ConCapataz(models.Model)` con `Meta.abstract = True`: el campo `capataz` (FK a `core.Capataz`, `PROTECT`, obligatoria, `related_name="%(class)s_asignadas"`) y su índice. La heredan `Siembra` y `TransicionEtapa` (junto a `OrdenTrabajo`: `class Siembra(OrdenTrabajo, ConCapataz)`) y, después, `Cosecha`. No crea tabla. Quien necesite «las órdenes de un Capataz» llama a `ordenes.ordenes_del_capataz` (`docs/api/produccion.md`); **nadie arma esa unión por su cuenta**.
 
-Hijas futuras y el IoT: `MantenimientoTecnico` hereda de `OrdenTrabajo` **sin** `ConCapataz` y declara `tecnico` (R047, obligatoria, en `iot`, D-37 A2); `Entrega` tampoco la tiene. IOT-05 agrega el valor `mantenimiento` a `OrdenTrabajo.Tipo` y la restricción de la prioridad obligatoria en ese tipo.
+Hijas futuras y el IoT: `MantenimientoTecnico` hereda de `OrdenTrabajo` **sin** `ConCapataz` y declara `tecnico` (R047, obligatoria, en `iot`, D-37 A2); `Entrega` tampoco la tiene. IOT-07 agrega la restricción de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` ya lo creó PRD-01, D-67 punto 1; ficha en `docs/modelo/iot.md`).
 
 ### Restricciones de la base
 
@@ -91,6 +103,8 @@ Hijas futuras y el IoT: `MantenimientoTecnico` hereda de `OrdenTrabajo` **sin** 
 - `fecha_resolucion_orden` nula si y solo si el estado es «a realizar».
 - `motivo_cancelacion` no nulo y no vacío si y solo si el estado es «cancelada».
 - `fecha_programada_orden >= fecha_creacion_orden` (la programada nunca es anterior a la de creación).
+- **(COM-02, D-59)** `tipo = cosecha` ⇒ `prioridad_orden` no nula (ronda 19, MD-18: obligatoria en la cosecha). Va en una migración nueva de
+  `produccion`, como la del mantenimiento de IOT-07.
 - Índices: `(invernadero, estado_orden, fecha_programada_orden)` (lista). El índice del Capataz está en cada hija con Capataz (`ConCapataz`: `(capataz)`; el estado vive en el padre).
 
 ---
@@ -105,7 +119,7 @@ Bloque: Compras e inventario (con composición hacia `OrdenTrabajo`). Vive en `p
 |---|---|---|
 | `idReservaInsumo` | — | El `id` automático |
 | `cantidadReservada` | cantidad > 0 | → `cantidad_reservada`. La que resta del stock libre mientras la reserva está «activa» |
-| `cantidadUtilizada` | cantidad ≥ 0, nula | → `cantidad_utilizada`. Nula mientras está activa; se carga al concretar. **Nunca supera la reservada** (PROD-CNC-SMB, extensión 13a) |
+| `cantidadUtilizada` | cantidad ≥ 0, nula | → `cantidad_utilizada`. Nula mientras está activa; se carga al concretar. **Nunca supera la reservada** (PROD-CNC-SMB, extensión 13a). En una entrega, el exceso de envases (regla 21 de 8.8) **no** se guarda acá: la utilizada se topea en la reservada y el exceso va en el `Consumo` del envase (D-68, punto 2). La restricción de PRD-01 no cambia |
 | `cantidadDevuelta` | cantidad ≥ 0, nula | → `cantidad_devuelta`. Nula mientras está activa. Entre 0 y `cantidad_reservada − cantidad_utilizada` |
 | `estado` | `ReservaInsumo.Estado` | Nace «activa». Al concretar: «consumida» si lo consumido es mayor que 0, «cancelada» si es 0. Al cancelar la orden: «cancelada», sin cantidad utilizada ni devuelta |
 | `fechaReserva` | fecha | → `fecha_reserva`. La de hoy al planificar |
@@ -121,7 +135,10 @@ Lo **consumido** no se guarda: es `cantidad_reservada − cantidad_devuelta` (co
 
 ### Restricciones de la base
 
-- Único `(orden, insumo_invernadero)`: una orden reserva un insumo una sola vez.
+- Único `(orden, insumo_invernadero)`, **sin condición** en PRD-01: una orden reserva un insumo una sola vez. **Desde COM-05a2** (D-66, punto 8) pasa a
+  `UniqueConstraint(orden, insumo_invernadero, condition=Q(estado="activa"))`: a lo sumo **una activa**. Un envase quitado del envasado
+  de una entrega deja su reserva «cancelada» y, si se vuelve a agregar, nace otra (regla «Una reserva por envase» de PROD-PNF-ENV). Una
+  siembra o una transición no cambian: siguen teniendo una sola reserva por insumo.
 - `cantidad_reservada > 0`. Estado «activa»: `cantidad_utilizada` y `cantidad_devuelta` nulas. Estado «consumida»: ambas no nulas. Estado «cancelada»: ambas nulas (cancelación de la orden) **o** ambas no nulas (concreción con consumo 0, que cancela la reserva con lo utilizado y devuelto cargados).
 - `cantidad_devuelta <= cantidad_reservada - cantidad_utilizada` cuando ambas existen.
 - Índice `(insumo_invernadero, estado)` (lo usa `reservado_de`).
@@ -301,6 +318,7 @@ Registro de un evento con fecha, hora y responsable. Aquí solo lo que escriben 
 | R106 | EtapaProductiva | Bitacora → EtapaProductiva = 0..1 | `etapa`, FK nula a `maestros.EtapaProductiva`, `PROTECT`. La etapa del lote en ese momento: en la merma de una transición, la de **origen** |
 | MD-77 + MD-28 | SectorProduccion, «se realiza en» | Bitacora → SectorProduccion = 0..* | `sectores`, `ManyToManyField` a `maestros.SectorProduccion` (D-51 punto 2): sustituye la asociación de un sector (MD-77) y la de varios de la aplicación (MD-28). Reglas por tipo en D-51 |
 | R076 + MD-77 | Capataz o Agrónomo, «registra» | Bitacora → responsable = 0..1 | `responsable`, FK nula a `core.Usuario`, `PROTECT` (una sola clave en lugar de las dos asociaciones; nulo = lo registró InfoPonia). Es la persona que hizo la operación |
+| R152 (COM-04) | Cosecha, «genera» | Bitacora → Cosecha = 0..1; Cosecha → Bitacora = 1..\* | `cosecha`, FK nula a `Cosecha`, `PROTECT`, `related_name="registros_de_bitacora"`. Restricción: `tipo_evento = cosecha` ⇔ `cosecha` no nula. Un registro por cada lote de la orden, también el que rindió 0 (D-64 punto 4) |
 
 Herencias: **hija directa de `OrigenDocumento`** (`contabilidad`, D-52; `TIPO_DE_ORIGEN = bitacora`). Es padre de `Consumo` y `Merma` (esta ronda) y de `AplicacionInsumos` y `FueraDeServicio` (PRD-03 y PRD-04).
 
@@ -328,21 +346,16 @@ Hijo de `Bitacora` (`tipo_evento = siembra` en esta ronda). Un consumo por cada 
 | ID | Con | Cardinalidad | Estado |
 |---|---|---|---|
 | R045 | InsumoInvernadero, «corresponde» | Consumo → InsumoInvernadero = 1 | `insumo_invernadero`, FK a `inventario.InsumoInvernadero`, `PROTECT` |
-| R105 | Siembra, «genera» | Consumo → Siembra = 0..1 | `siembra`, FK nula a `Siembra`, `PROTECT`. Esta ronda es siempre una siembra; los otros orígenes (mantenimiento, entrega y aplicación) los suman sus rondas con sus propias claves |
+| R105 | Siembra, «genera» | Consumo → Siembra = 0..1 | `siembra`, FK nula a `Siembra`, `PROTECT`. Esta ronda es siempre una siembra; los otros orígenes los suman sus rondas con sus propias claves: aplicación (PRD-03) y la orden (`orden`, abajo) |
+| R148 (COM-04a) | Entrega, «genera» | Consumo → Entrega = 0..1 | `orden`, FK nula a `OrdenTrabajo`, `PROTECT`, `related_name="consumos_de_orden"` (D-68, punto 3): el consumo de los envases de una entrega (y, en la etapa 2 del IoT, el de un mantenimiento, R135) |
 | R016 | MovimientoInsumo | Consumo → MovimientoInsumo = 1..* | Por `MovimientoInsumo.origen` (D-52): `consumo.movimientos_de_insumo`. El consumo **se crea antes** que sus movimientos |
 
-Un consumo tiene **exactamente un origen** (regla 7 de 8.4): hoy, la siembra. Restricción `siembra_id IS NOT NULL` en PRD-01; **PRD-03 la reemplaza por «exactamente uno de `siembra` y `aplicacion`»** (D-51 punto 3). Un consumo de aplicación es una fila de bitácora de tipo interno `consumo`, que la consulta no lista.
+Un consumo tiene **exactamente un origen** (regla 7 de 8.4): hoy, la siembra. Restricción `siembra_id IS NOT NULL` en PRD-01; **PRD-03 la reemplaza por «exactamente uno de `siembra` y `aplicacion`»** (D-51 punto 3) y **COM-04a por «exactamente uno de `siembra`, `aplicacion` y `orden`»** (D-68, punto 3). El consumo de una entrega es, como el de una aplicación, de tipo interno `consumo`. Su cantidad es la consumida (máx(reservada, utilizada) − devuelta, con la utilizada declarada: incluye el exceso de envases, D-68 punto 2). Un consumo de aplicación es una fila de bitácora de tipo interno `consumo`, que la consulta no lista.
 
 ### Sin tabla de enlace con el stock (D-52)
 
 En el lote 4 existía `ConsumoMovimiento` (consumo, movimiento y lote). **Ya no existe**: `inventario.MovimientoInsumo` es un documento de origen y lleva `origen = consumo`; `inventario` no nombra al consumo, solo recibe su `origen_id` (`docs/api/stock.md`). El lote de plantas asociado (R040) se deriva. Un consumo se descuenta de uno o más lotes de insumo y cada uno genera su movimiento.
 
----|---|
-| `consumo` | FK a `Consumo`, `PROTECT` |
-| `movimiento` | `OneToOne` a `inventario.MovimientoInsumo`, `PROTECT` |
-| `lote` | FK **nula** a `Lote` (de plantas), `PROTECT`: el lote de la siembra al que se asocia el movimiento (R040). Nula en los consumos de una aplicación (D-51 punto 3). En la siembra se crea el lote primero y después los movimientos |
-
-Única `(consumo, movimiento)` (lo garantiza el `OneToOne` de `movimiento`).
 
 ---
 
@@ -361,8 +374,9 @@ Hija de `Bitacora` (`tipo_evento = merma`). Plantas de un lote que se perdieron 
 
 | ID | Con | Cardinalidad | Estado |
 |---|---|---|---|
-| R082 (heredada) | Lote | 1 (en la merma de lote en pie) | La merma de un lote **siempre** tiene lote y etapa; la de una partida en cámara (fuera de la ronda) tiene el lote de origen |
+| R082 (heredada) | Lote | 1 (en la merma de lote en pie) | La merma de un lote **siempre** tiene lote y etapa; la de una partida en cámara (COM-04) tiene el **lote de origen** de la partida y **no tiene etapa** (postcondición f de PROD-REG-MRM): por eso la merma acumulada del umbral cuenta solo las mermas con etapa (regla 7 de 8.9). La partida de la merma se obtiene por su movimiento «merma en cámara» (R017 → R145) |
 | R089 | Alerta | Merma → Alerta = 0..* | Por `AlertaDeMerma` (A2) |
+| R084 (COM-04a) | Entrega, «presenta» | Merma → Entrega = 0..1 | `orden`, FK nula a `OrdenTrabajo`, `PROTECT`, `related_name="mermas_de_orden"` (D-68, punto 3). Solo la merma «daño en la entrega»: tiene el lote de origen, **sin etapa ni sectores** y sin `MovimientoStock` (`docs/api/produccion.md`, sección 10) |
 
 ### `AlertaDeMerma` (tabla de enlace, A2)
 
@@ -371,6 +385,7 @@ Una alerta de las dos que puede disparar una merma (umbral y plantas comprometid
 ### Restricciones de la base
 
 - `cant_merma > 0`. Una merma no deja a un lote con cantidad negativa: lo garantiza el servicio con el bloqueo del lote.
+- (COM-04a) `orden` no nula ⇔ `causa = dano_en_entrega`.
 
 ---
 
@@ -432,6 +447,89 @@ Sin atributos propios. El lote es `Bitacora.lote` (obligatorio), el sector de or
 
 La ocupación de origen queda con 0 ocupados y conserva su lote. **No cambia la etapa del lote ni su fecha de entrada a la etapa.** La fecha de entrada se sigue calculando con la siembra o con la transición (regla 5 de 8.21), nunca con la reubicación.
 
+
+## Cosecha (COM-02, D-59)
+
+Orden de cosecha. Hija de `OrdenTrabajo` (`tipo = cosecha`) y de `ConCapataz` (D-53). Vive en `produccion` (D-37); **sus casos de uso viven
+en `comercial`** (D-59, regla A3), porque toda cosecha tiene una reserva (R087), que es de `comercial`. COM-02 crea la tabla y las cosechas
+automáticas (PROD-ASG-STK); COM-04 programa planificar, modificar, concretar y cancelar.
+
+| Atributo | Valores | Nota |
+|---|---|---|
+| `fechaCosecha` | fecha, nula | → `fecha_cosecha`. La fecha efectiva de la cosecha; la carga COM-04 al concretar |
+| (nuevo, COM-04) `origen_cosecha` | `automatica` / `manual` / `encadenada` | **No está en el modelo** (D-64 punto 5): PROD-MOD-CSC lo muestra. `automatica` la crean PROD-ASG-STK y la pre-reserva; `manual`, PROD-PNF-CSC; `encadenada`, la extensión 13a de PROD-CNC-CSC. Textos: «Automática», «Manual», «Encadenada». La migración de COM-04 la agrega con `default="automatica"` |
+| `prioridadOrden` | `OrdenTrabajo.Prioridad` | En el padre. **Obligatoria** en la cosecha (restricción de `OrdenTrabajo`, arriba). En una automática, «media» (regla 3 de 8.11) |
+| `cantCosecha` | derivado | Σ `cantidad_cosechada` de las líneas de lote de su reserva (en `comercial`); no se guarda |
+| (nuevo) `variedad` | FK a `maestros.Variedad`, `PROTECT` | **No está en el modelo** (que la obtiene por la reserva y sus lotes): se guarda porque una cosecha abarca una sola variedad (regla 2 de 8.8) y `produccion` la necesita sin preguntarle a `comercial` (D-59, punto 1) |
+| `capataz` | FK a `core.Capataz` (`ConCapataz`) | El del invernadero al crearla (R149); obligatorio |
+
+- El invernadero es el del padre (`OrdenTrabajo.invernadero`); `agronomo` es nulo en una cosecha automática (la planificó InfoPonia, R046).
+- Los lotes y las cantidades de una cosecha **no están en `produccion`**: están en las líneas de su reserva (`comercial`). `produccion` los
+  pide con `registrar_detalle_de_cosecha` (`docs/api/extensiones_de_produccion.md`).
+- `ordenes_del_capataz` (D-53) suma `Cosecha` a su unión: así la cuentan el traspaso del Capataz y el aviso de baja de su cuenta. **La bandeja
+  del Capataz, la lista de órdenes del Agrónomo y las órdenes cancelables no las muestran hasta COM-04a**, que trae sus pantallas (COM-02
+  las oculta con un `exclude` temporal, aunque `cosecha` está en `TIPOS_DE_PRODUCCION` desde PRD-01: D-67, punto 1e).
+
+## StockCosechado (COM-02, D-59)
+
+Partida de producto ya cosechado, en cámara. Vive en `produccion` (D-37). Nadie la crea en COM-02 (las partidas nacen al concretar una
+cosecha, COM-04): COM-02 crea la tabla para que la asignación de stock maduro esté completa y se pruebe con partidas de fábrica.
+
+| Atributo | Valores | Nota |
+|---|---|---|
+| `idStockCosechado` | — | El `id` automático; se muestra como `P-{id}` |
+| `cantidadIngresoCosechado` | entero ≥ 1 | → `cantidad_ingreso_cosechado`. No se modifica |
+| `cantidadDisponibleCosechado` | entero ≥ 0 | → `cantidad_disponible_cosechado`. Nunca mayor que el ingreso, salvo una devolución (regla 29 de 8.6, COM-06): por eso la restricción es solo `>= 0` |
+| `fechaIngreso` | fecha | → `fecha_ingreso` |
+| `fechaLimite` | fecha | → `fecha_limite`. Fecha de la cosecha + postcosecha de la variedad; se guarda al crear (regla 29 de 8.6) |
+| `motivoCosechado` | cancelación del cliente / rechazo por cantidad reducida / rechazo en la entrega / cosecha planificada por el Agrónomo / excedente de cosecha / resolución del contrato | → `motivo_cosechado` (`cancelacion_cliente`, `rechazo_cantidad_reducida`, `rechazo_en_entrega`, `cosecha_del_agronomo`, `excedente_de_cosecha`, `resolucion_del_contrato`; el último por MD-121) |
+| `estadoStockCosechado` | disponible / agotado / vencido | → `estado_stock_cosechado` |
+| `costoUnitarioCosechado` | monto ≥ 0 | → `costo_unitario_cosechado`, `DecimalField(max_digits=14, decimal_places=4)`: el costo por planta del lote al crearla (regla 16 de 8.9), con cuatro decimales para no perder la fracción (`docs/patrones/costo_del_lote.md`) |
+
+| R | Con | Multiplicidad | En el código |
+|---|---|---|---|
+| R144 | Lote, «origina» | 1 | `lote`, FK a `Lote`, `PROTECT`, `related_name="partidas"`. El invernadero y la variedad de la partida son los del lote |
+| R143 | DetalleReserva | 0..* | Por `comercial.DetalleReserva.partida` (A2) |
+| R145 | MovimientoStock | 1..* | Por `MovimientoStock.partida` (COM-04, ficha abajo). Toda partida nace con su movimiento «ingreso a cámara» (`camara.crear_partida`) |
+
+- Restricciones de la base: `cantidad_ingreso_cosechado >= 1`, `cantidad_disponible_cosechado >= 0`, `costo_unitario_cosechado >= 0`;
+  `estado = agotado` ⇒ disponible 0.
+- No hereda de `OrigenDocumento` (el modelo lo dice: no origina asientos).
+- **Quién la crea (COM-04):** PROD-CNC-CSC (excedente de cosecha y cosecha sin contrato), COM-DCD-FLT (rechazo por cantidad reducida);
+  después COM-05 (cancelación del cliente), COM-06 (rechazo en la entrega) y COM-07 (resolución del contrato). Siempre con
+  `camara.crear_partida` (D-64 punto 2): fecha límite = **fecha de la cosecha** del producto + `duracion_post_cosecha` de la variedad (regla
+  29 de 8.6: no se reinicia la vida útil); costo unitario = el del movimiento «salida por cosecha» de ese lote en esa cosecha (D-64 punto 3).
+- **Estados (reglas 30 y 31 de 8.6; regla 4 de 8.9):** `disponible` → `agotado` cuando la cantidad disponible llega a 0 (merma en cámara;
+  entrega, COM-06); `disponible` → `vencido` cuando su fecha límite es **anterior** a hoy (PROD-VNC-CAM; el día de la fecha límite todavía se
+  entrega). Una partida vencida queda con disponible 0.
+
+## MovimientoStock (COM-04, D-64 punto 1)
+
+Movimiento de producto de un lote o de una partida. Vive en `produccion`. **Hija directa de `contabilidad.OrigenDocumento`**
+(`TIPO_DE_ORIGEN = movimiento_de_stock`, valor nuevo de `OrigenDocumento.Tipo` con su migración de `choices` en `contabilidad`), con el
+mismo esquema que `MovimientoInsumo` (D-52).
+
+| Atributo | Valores | Nota |
+|---|---|---|
+| `idStock` | — | El `id` de `OrigenDocumento` |
+| (nuevo) `fecha` | fecha y hora | La de la operación; en la salida por cosecha, la fecha **efectiva** con la hora actual (postcondición e de PROD-CNC-CSC) |
+| `cantidad` | entero > 0 | Siempre positiva: el sentido lo da el tipo |
+| `tipo` | ingreso a cámara / egreso de cámara por venta o entrega / merma en cámara / salida por cosecha / salida por merma | → `tipo_movimiento` (`ingreso_a_camara`, `egreso_de_camara`, `merma_en_camara`, `salida_por_cosecha`, `salida_por_merma`); el nombre `tipo` ya es del padre |
+| (nuevo) `costo_unitario` | monto ≥ 0, cuatro decimales | `DecimalField(14, 4)`. Lote: el costo por planta **antes** del movimiento; partida: su `costo_unitario_cosechado` (D-64 puntos 1 y 3) |
+
+| R | Con | Multiplicidad | En el código |
+|---|---|---|---|
+| R017 | OrigenDocumento, «se origina» | MovimientoStock → OrigenDocumento = 1 | `origen`, FK a `contabilidad.OrigenDocumento`, `PROTECT`, `related_name="movimientos_de_stock"`. La cosecha (salida por cosecha; ingreso a cámara del excedente y de la cosecha sin contrato), la merma (salida por merma y merma en cámara), el contrato (ingreso a cámara por rechazo o cancelación), la entrega (egreso, COM-06) |
+| R086 | Lote | 0..1 | `lote`, FK nula a `Lote`, `PROTECT`, `related_name="movimientos_de_stock"` |
+| R145 | StockCosechado | 0..1 | `partida`, FK nula a `StockCosechado`, `PROTECT`, `related_name="movimientos"` |
+
+- Restricciones de la base: **C2** (exactamente uno de `lote` y `partida`); `cantidad > 0`; `costo_unitario >= 0`; `tipo_movimiento` en la
+  lista; `salida_por_cosecha` y `salida_por_merma` ⇒ `lote`; `ingreso_a_camara`, `egreso_de_camara` y `merma_en_camara` ⇒ `partida`.
+- Quién lo crea: solo las funciones de núcleo de `produccion` (`docs/api/produccion.md`, sección 7). `egreso_de_camara` lo usa COM-06.
+- **No hay carga retroactiva** (D-64 punto 1): las mermas registradas antes de COM-04 no tienen su «salida por merma».
+
+---
+
 ## Cambios a las fichas del lote 4 por el lote 5
 
 - `OcupacionSector`: `orden` pasa a **nula** y se suma `reubicacion` (clave nula a `Reubicacion`), con la restricción «exactamente una de las dos» (C9, MD-76). Único `(orden, sector)` pasa a `condition=Q(orden__isnull=False)` y se suma único `(reubicacion, sector)` con la condición contraria. «Agujeros comprometidos» sigue sumando solo ocupaciones de órdenes «a realizar». «Fecha en que el lote llegó al sector» = `fecha_siembra` de su siembra, `fecha_transicion` de su transición o `fecha_bitacora` de su reubicación.
@@ -460,7 +558,7 @@ Manda el caso de uso (L7) salvo donde se diga otra cosa. Todas están también e
 | 5 | Responsable de la bitácora | R076 (Capataz) y MD-77 (Agrónomo) | Una clave `responsable` a `core.Usuario` |
 | 6 | Cantidad de plantines de la siembra | El prototipo sobrescribe la cantidad con lo sembrado | `cant_plantines_siembra` no cambia; la real es `Lote.cantidad_inicial` |
 | 7 | Fecha del movimiento de insumo | MovimientoInsumo.fecha: «hora actual de la operación» | La fecha efectiva de la siembra con la hora actual (D-50, punto 7) |
-| 8 | Alerta de plantas comprometidas, condición 1 | Reservas de cosecha activas que superan la cantidad actual | **Fuera de la ronda (D-45)**: no hay cosechas ni reservas de stock. Solo se evalúa la condición 2 |
+| 8 | Alerta de plantas comprometidas, condición 1 | Reservas de cosecha activas que superan la cantidad actual | **Fuera de la ronda «Producción 1» (D-45)**: solo se evalúa la condición 2. **COM-02 suma la condición 1** (D-59), con `produccion.extensiones.reservado_de_lotes` (`docs/api/extensiones_de_produccion.md`) |
 | 9 | Prioridad | La sección 1.19 dice que siembra y transición no tienen prioridad | MD-73 («decidido sin aplicar»): es opcional; sin valor cuenta como media |
 | 10 | Reparto del costo de una aplicación entre lotes | MD-28: proporcional a la `cantidadActual` de cada lote activo del alcance. PROD-REG-APL: proporcional a las plantas que cada lote tiene **en los sectores del alcance** | El caso de uso (D-51 punto 4) |
 | 11 | Sectores de un registro de bitácora | MD-77: uno (0..1); MD-28: varios solo en la aplicación | Una relación muchos a muchos (D-51 punto 2) |
@@ -470,6 +568,8 @@ Manda el caso de uso (L7) salvo donde se diga otra cosa. Todas están también e
 | 15 | Código de la orden | D-50: `OT-{id}` | `OT-{numero}`, con una secuencia propia (D-52 punto 3): los `id` ahora se comparten entre documentos |
 | 16 | Movimientos de un consumo | Tabla de enlace `ConsumoMovimiento` (lote 4) | `MovimientoInsumo.origen`; R040 derivado (D-52 puntos 5 y 6) |
 | 17 | Motivo y fecha de una cancelación | El modelo (ronda 22) no tiene motivo de cancelación y define `fechaResolucionOrden` solo para la concreción; PROD-CNL-ORD (Propuesta 5) pide el atributo y que la fecha valga para los dos desenlaces | Como pide el CU: `motivo_cancelacion` (1 a 300, obligatorio al cancelar) y `fecha_resolucion_orden` también al cancelar. Pendiente de registrar en pendientes_MD (Drive) |
+| 18 | Costo de un movimiento de stock | `MovimientoStock` solo tiene `cantidad` y `tipo` | `costo_unitario` en cada movimiento (D-64 puntos 1 y 3): una partida que nace después de la cosecha toma el costo por planta del momento de la cosecha |
+| 19 | Origen de una cosecha | No se guarda | `origen_cosecha` (D-64 punto 5) |
 
 ## Pendientes de MD que la afectan
 
@@ -479,7 +579,7 @@ Manda el caso de uso (L7) salvo donde se diga otra cosa. Todas están también e
 | MD-77 | Agrónomo–Bitácora «registra» y sector en la bitácora | Decidido sin aplicar | `Bitacora.responsable` a `core.Usuario`; el sector lo suma PRD-03 |
 | MD-78 | Causa «descarte por selección» | Decidido sin aplicar | En `Merma.Causa`; no suma a la merma acumulada |
 | MD-79 | Costo del lote con promedio ponderado móvil | Decidido sin aplicar | `Lote.costo_acumulado` (`costo_del_lote.md`) |
-| MD-28, MD-75, MD-76 | Decidido sin aplicar | `AplicacionInsumos`, `ImputacionCosto`, `FueraDeServicio` y `Reubicacion` (lote 5) |
+| MD-28, MD-75, MD-76 | Aplicación de insumos, imputación de costos, sector fuera de servicio y reubicación | Decidido sin aplicar | `AplicacionInsumos`, `ImputacionCosto`, `FueraDeServicio` y `Reubicacion` (lote 5) |
 | MD-49, 50, 53, 54 | Ocupaciones y fecha efectiva de la transición | Implementado (ronda 20) | Ya están en las fichas de arriba |
 | MD-84, 85 | Lotes de insumo y faltante sin lote | Implementado (ronda 22) | `registrar_salida_por_consumo` y `proponer_lotes_fefo` de `inventario` |
 | (sin número) | `OrdenTrabajo.motivoCancelacion` y fecha de resolución también al cancelar | Aprobado el 20/11/2026, sin ítem en pendientes_MD | Columna nula `motivo_cancelacion` con su restricción de la base (ver la ficha) |

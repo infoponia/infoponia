@@ -47,7 +47,17 @@ decisión, manda la decisión: avisá.
 
 ## Prototipos
 
-- El prototipo es solo una guía visual: si su lógica difiere del caso de uso, manda el caso de uso (regla L7).
+- El prototipo es una referencia, no una especificación (D-61, regla L7): si su lógica difiere del caso de uso, manda el
+  caso de uso. Puede tener errores o faltantes, también fuera de la lista «Lo que difiere del prototipo» de cada extracto.
+- **Corregí y completá la pantalla con tu criterio de diseñador**, sin frenar, cuando hace falta para que el caso de uso se
+  pueda concretar o para que la pantalla funcione bien: el campo, botón, columna, filtro o paso que falta; los estados vacío,
+  de error, de carga y sin permiso; la ventana de confirmación o de resumen; un control que no sirve para el dato o un flujo
+  que no cierra; los textos que falten (con el tono de este archivo); accesibilidad, teclado, celular y respaldo sin
+  JavaScript. Mantené el estilo del prototipo (D-47) en lo que agregues.
+- **Frená y preguntá** (L7, L9) solo si la corrección necesita una regla de negocio, un permiso, un cálculo o una columna que no
+  están en el caso de uso, el modelo o una decisión, o si contradice alguno de ellos o el código mergeado.
+- Anotá cada corrección en el «Cierre» de la tarea, en «Pantallas: lo que se corrigió del prototipo»: qué tenía, qué hiciste y
+  qué paso o regla lo pide.
 - Buscá con Grep la función que nombra la tarea y leé solo esa parte. El índice de funciones de cada prototipo está en
   su `README.md` (`docs/prototipos/<carpeta>/README.md`), salvo el de cuentas, cuyo índice está en
   `docs/casos_de_uso/usuarios.md`, sección «Pantallas».

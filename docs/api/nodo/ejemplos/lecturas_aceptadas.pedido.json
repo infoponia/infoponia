@@ -1,0 +1,29 @@
+{
+  "lecturas": [
+    {
+      "identificador": "norte/sectorA/temperatura",
+      "valor": 24.5,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/humedad",
+      "valor": 71,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/luz",
+      "valor": 32000,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/tanque1/temp-solucion",
+      "valor": 21.3,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/tanque1/nivel",
+      "valor": "normal",
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    }
+  ]
+}

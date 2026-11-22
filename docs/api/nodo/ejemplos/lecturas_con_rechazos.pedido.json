@@ -1,0 +1,63 @@
+{
+  "lecturas": [
+    {
+      "identificador": "norte/sectorA/temperatura",
+      "valor": 999,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/humedad",
+      "valor": 70,
+      "medida_en": "2026-11-21T13:50:00-03:00"
+    },
+    {
+      "identificador": "norte/sectorB/co2",
+      "valor": 450,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/temp-vieja",
+      "valor": 22.1,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/ventilador",
+      "valor": 1,
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/luz",
+      "valor": 30000,
+      "medida_en": "2026-11-21T14:20:00-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/temperatura",
+      "valor": 24.6,
+      "medida_en": "2026-11-21T14:04:30"
+    },
+    {
+      "identificador": "norte/tanque1/nivel",
+      "valor": "medio",
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/humedad",
+      "valor": "71",
+      "medida_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/sectorA/temperatura",
+      "valor": 25,
+      "medido_en": "2026-11-21T14:04:30-03:00"
+    },
+    {
+      "identificador": "norte/tanque1/temp-solucion",
+      "valor": 21.4
+    },
+    {
+      "identificador": "norte/sectorA/humedad",
+      "valor": 70,
+      "medida_en": "2026-11-21T13:50:00-03:00"
+    }
+  ]
+}

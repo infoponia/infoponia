@@ -2,7 +2,9 @@
 
 Copia para el repo del caso PROD-CNL-ORD (versión 0.1) del documento de Drive «CU extendidos», consultado el 19/11/2026. Cotejado con pendientes_CU y con pendientes_MD hasta MD-96 y con el glosario del 15/11/2026.
 
-Es un caso de uso extendido. **El código va en la app `produccion`**; archivo de pruebas: `produccion/tests/test_prod_cnl_ord.py`.
+Es un caso de uso extendido. **El código de siembras y transiciones va en la app `produccion`**; archivo de pruebas: `produccion/tests/test_prod_cnl_ord.py`.
+**Las cosechas (desde la ronda «Comercial 1», COM-04) van en `comercial`** (D-59, A3: cancelar una cosecha libera su reserva); archivo de pruebas: `comercial/tests/test_prod_cnl_ord_cosechas.py`. Ver la sección «Cómo se aplica en la ronda «Comercial 1»» al final. **Las entregas** (la «Cancelación de una entrega», sin pantalla) **van en `comercial`** desde COM-05a (D-66, punto 9); archivo de pruebas: `comercial/tests/test_prod_cnl_ord_entregas.py`. Ver «Cómo se aplica en la ronda «Comercial 1»: entregas y envasado» al final.
+**Los mantenimientos técnicos (ronda «IoT 1», IOT-07) van en `iot`**, solo la orden automática y solo desde la ficha del equipo (D-73, D-79); archivo de pruebas: `iot/tests/test_cancelar_mantenimiento.py`. Ver «Cómo se aplica en la ronda «IoT 1»» al final.
 El texto está **completo**, con las ramas de cosecha, contrato y mantenimiento: en la ronda solo existen siembras y transiciones, y la sección «Cómo se aplica en la ronda» dice qué parte se hace y cuál queda **«Fuera de la ronda (D-45)»**.
 Se quitaron los `**` sueltos del export de Drive. No cambió ninguna regla.
 
@@ -12,7 +14,7 @@ Si este archivo y el documento de Drive no coinciden, avisá: no elijas en silen
 
 | Código | Caso de uso | Actores | Archivo de pruebas |
 |---|---|---|---|
-| PROD-CNL-ORD | Cancelar Orden | Agrónomo (o InfoPonia cuando lo incluye otro caso) | `produccion/tests/test_prod_cnl_ord.py` |
+| PROD-CNL-ORD | Cancelar Orden | Agrónomo (o InfoPonia cuando lo incluye otro caso) | `produccion/tests/test_prod_cnl_ord.py`; cosechas: `comercial/tests/test_prod_cnl_ord_cosechas.py` |
 
 ---
 
@@ -543,8 +545,170 @@ Aviso con el motivo: en la ronda solo al Capataz (postcondición k). El aviso al
 - **Desde otro caso de uso**: `cancelar_orden_incluida` recibe el motivo ya armado por el llamador. PROD-PNR-FDS lo compone («Sector fuera de servicio: <sector>. <motivo>») y puede pasar de 300: la función lo recorta a 300 con «…» (el «…» cuenta dentro de los 300) y no lanza error. El texto completo queda en `FueraDeServicio.motivo_fuera_de_servicio`.
 - **Pantalla**: lista de órdenes «a realizar» agrupadas por invernadero y tipo (solo siembra y transición), el resumen de lo que se libera (reservas y agujeros por sector), el campo de motivo y la confirmación. Prototipo: `ACT['orden-cancelar']` y su vista; sin JavaScript funciona igual.
 - **Interfaces con las otras tareas**: PRD-04 usa `cancelar_orden_incluida`; la cosecha futura agregará sus ramas. Cualquier función nueva que cancele órdenes debe llamar a esta, no duplicar la lógica.
+- **Tipos de orden** (D-67, punto 1): `cancelar_orden` acepta solo siembra y transición (`TIPOS_QUE_CANCELA_PRODUCCION`); con una entrega, un
+  mantenimiento o una cosecha lanza `orden_no_cancelable` antes de bloquear. `ordenes_cancelables` lista solo `TIPOS_DE_PRODUCCION` (siembra,
+  transición y cosecha; la cosecha, desde COM-04a, con la acción de `comercial`). `cancelar_orden_incluida` acepta **cualquier tipo**, sin
+  dar por hecho que la orden tenga Capataz o sectores, con o sin reservas. Las tres cosas las hace y las prueba PRD-01, con órdenes sueltas de
+  tipo `entrega` y `mantenimiento`.
 
 ### Pruebas
 
 `produccion/tests/test_prod_cnl_ord.py` (una por regla y por postcondición a, b, c, d, e, k, m, n; siembra con reservas, transición, sin Capataz activo, orden ya concretada, motivo vacío y de 301 caracteres, invernadero inactivo, reservas que cambiaron mientras tanto, que el lote queda con la posibilidad de planificar otra transición),
 `test_cancelar_orden_incluida.py` (con `actor=None`, sin notificar, sin transacción propia, devuelve afectados) y `test_cancelar_concurrencia.py` (`@tag("concurrencia")`: cancelar contra concretar; cancelar dos veces; cancelar contra planificar otra transición del mismo lote).
+
+## Cómo se aplica en la ronda «Comercial 1»: cosechas (COM-04; D-57, D-59, D-64)
+
+Lo de «Producción 1» (siembra y transición) **no cambia**. COM-04 programa la rama de cosecha: extensiones 4b, 4c, 6b, 6c, 8c y 8d;
+postcondiciones f, g, h y l; el aviso al Capataz con el motivo (k) también para la cosecha. Sigue fuera: lo de entregas y envasado (COM-05:
+la «Cancelación de una entrega», PCU 7, y la postcondición i, COM-PNF-ENT) y el mantenimiento (4d, 8e, j: ronda del IoT).
+
+### Cambios ya decididos que se aplican (PCU 7 y 11)
+
+- **4c, punto 2:** «Validar o Modificar Cosecha Automática» es **PROD-MOD-CSC · Modificar Cosecha**, y vale para **toda** cosecha pendiente, no
+  solo las que planificó InfoPonia (PCU 11): la ventana lo recuerda siempre. Igual en la regla «Lotes excluidos».
+- **Lotes excluidos** (PCU 7; PROD-CNL-ORD, situación 6): PROD-ASG-STK recibe los lotes de la cosecha cancelada y no los considera
+  (`stock_maduro.asignar(..., lotes_excluidos=…)`, que COM-02 ya dejó con su prueba).
+- **Tema abierto «Período de suministro sin reservas»:** resuelto por PROD-PRR-SUM (COM-03): la pre-reserva diaria vuelve a tomar todo período
+  con cantidad sin cubrir mientras esté en la ventana, también el de un detalle finalizado con fecha pendiente (D-64 punto 8).
+
+### Qué hace cada parte
+
+| Parte | Código |
+|---|---|
+| Resumen (4b, 4c, 6b, 6c) | `comercial/servicios/cosechas.py`: `resumen_de_cancelacion_de_cosecha(actor, cosecha_id)` |
+| Cancelar una cosecha | `cancelar_cosecha(actor, cosecha_id, motivo, huella)` |
+| Cancelar desde otro caso de uso | `cancelar_cosecha_incluida(actor, cosecha, motivo, *, recubrir=True, avisar=True) -> CancelacionDeCosecha` |
+
+Lo comparten con `produccion` (PRD-01): el texto del motivo (1 a 300, mismos códigos `motivo_obligatorio` y `motivo_largo`), el formato del
+aviso al Capataz («Orden OT-0051 cancelada», «Motivo: <motivo>. Cosecha del <dd/mm/aaaa> en <invernadero>, cancelada por <nombre>.», con la
+misma regla de largo), la acción de auditoría `cancelacion_orden` y los estados de la orden (`cancelada`, `fecha_resolucion_orden` = hoy,
+`motivo_cancelacion`). Para no duplicar, `produccion` expone `ordenes.marcar_cancelada(orden, motivo)` y `ordenes.texto_de_cancelacion(orden,
+motivo, actor)` (los usa PRD-01 por dentro desde ahora; las pruebas de PRD-01 no cambian).
+
+### Decisiones de aplicación
+
+- **Permisos:** el Agrónomo a cargo del invernadero de la cosecha, de cualquier origen (regla 2 de 8.22). Desde la lista de órdenes y desde
+  «Modificar cosecha» (botón `cancelar` de `registrar_acciones_de_cosecha`, D-64 punto 11).
+- **Resumen (pasos 4 y 6):**
+  - 4b (sin contrato): la reserva con sus lotes y cantidades; «ese stock vuelve a estar libre en los lotes»;
+  - 4c (con contrato): la reserva con sus lotes **y sus partidas**, el contrato (tipo, cliente, variedad, fecha de entrega) y la cantidad
+    cubierta por la reserva; siempre, el recordatorio de PROD-MOD-CSC con su enlace;
+  - 6b (estimación, solo lectura): `stock_maduro.simular(variedad, invernaderos considerados, [(fecha_entrega, cubierto)], parametro,
+    lotes_excluidos=lotes de la cosecha, sin_reservas=(la reserva de la cosecha,))`, con los dos argumentos nuevos de `simular` (sección 8
+    del patrón: la reserva que se libera cuenta como libre, y sus partidas pueden volver a usarse). Si se cubre todo: de qué partidas o lotes
+    saldría y si hace falta una cosecha nueva; si no: cuánto queda sin cubrir y la consecuencia (compra-venta: el cliente recibirá un enlace,
+    o, sin correo, el Vendedor registrará la decisión; suministro: el período saldrá con menos y puede haber discrepancia o queja);
+  - 6c: el detalle o su venta ya esperan la decisión del cliente: «no se intentará volver a cubrir; la cantidad se suma al faltante».
+- **Registro (paso 8), en una transacción:**
+  1. bloqueos (orden del patrón): las cuentas (el Capataz; con contrato, el Vendedor) → el invernadero de la cosecha y, con contrato, los
+     considerados del contrato, en orden de id → la variedad → los lotes y las partidas candidatos (los de la reserva incluidos) → el contrato
+     y su detalle → **la cosecha** → su reserva y sus líneas (y, con faltante, el enlace de la venta);
+  2. relectura: 8a (`orden_no_a_realizar`: se concretó o se canceló) y 8b (`cosecha_cambio`, con la huella de la cosecha y de su reserva, y
+     el estado del detalle y de la venta, leídos al abrir el resumen);
+  3. la cosecha, cancelada (`ordenes.marcar_cancelada`); su reserva, «liberada» (f): las líneas de lote quedan sin cantidad cosechada y las de
+     partida sin cambios (la reserva liberada ya no cuenta para el stock libre);
+  4. 8c, con contrato y si el detalle se puede cubrir (venta «abierta» con el detalle «abierto», o un período con cantidad pedida): `asignar(actor,
+     detalle o período, cubierto de la reserva liberada, fecha_entrega_reserva, parametro, lotes_excluidos=…)` (g); lo no cubierto, por el
+     camino de faltante (`docs/patrones/stock_maduro.md`, sección 8);
+  5. 8d (6c): sin `asignar`; el camino de faltante con la cantidad liberada (fecha de pendiente nueva, enlace nuevo);
+  6. `on_commit`: PROD-ASG-CAM con las partidas de las líneas de cámara liberadas (h). COM-PNF-ENT (i): **se completa en COM-05**.
+- **Avisos (9, k y l), dentro de la transacción:** al Capataz con el motivo (sin Capataz activo, nada: 9a); con contrato, al Vendedor: «Cosecha
+  OT-0051 de CV-0044 cancelada», con lo que se volvió a cubrir y lo que quedó sin cubrir (l). 9b no aplica (D-42).
+- **Auditoría (m, n):** un registro `cancelacion_orden` con la orden, la reserva y sus líneas, el detalle y la venta, y lo de `asignar` y el
+  camino de faltante. «Sin bitácora» (regla del CU): no hay registro de bitácora ni movimiento de stock.
+- **`cancelar_cosecha_incluida`** (como `cancelar_orden_incluida` de PRD-01): `actor` puede ser `None`; no abre transacción (usa la del
+  llamador, con sus bloqueos ya tomados); no audita (devuelve la cosecha, la reserva y lo creado para el registro del llamador). Con
+  `recubrir=False` no llama a `asignar` ni al camino de faltante (COM-DCD-FLT: el detalle se rechazó). Con `avisar=True`, el aviso al Capataz
+  y al Agrónomo del invernadero (postcondición j de COM-DCD-FLT). La usan COM-DCD-FLT (COM-04) y, desde COM-05, COM-CNL-CVT y la cancelación
+  de entregas. **Ninguna función nueva que cancele cosechas duplica esta lógica.**
+
+### Pruebas
+
+`comercial/tests/test_prod_cnl_ord_cosechas.py` (una por postcondición f, g, h, k, l, m, n y por extensión 4b, 4c, 6b, 6c, 8a, 8b, 8c, 8d;
+cosecha sin contrato; con contrato que se vuelve a cubrir del todo con cámara, del todo con otro lote (cosecha nueva, sin los lotes
+excluidos), en parte y nada; período de un suministro; período de un detalle finalizado con fecha pendiente; la estimación 6b coincide con
+lo que después hace el paso 8; motivo vacío y de 301), `test_cancelar_cosecha_incluida.py` (con `actor=None`, `recubrir=False`, sin
+transacción propia, devuelve lo afectado) y `test_cancelar_cosecha_concurrencia.py` (`@tag("concurrencia")`: cancelar contra concretar la
+misma cosecha; cancelar contra modificarla; cancelar contra la decisión del cliente sobre el mismo detalle).
+
+## Cómo se aplica en la ronda «IoT 1»: el mantenimiento automático (IOT-07; D-73, D-79)
+
+Lo de «Producción 1» y de «Comercial 1» **no cambia**. IOT-07 programa la rama de mantenimiento (4d, 8e, 9a y las postcondiciones j, k y m)
+**solo para la orden que crea IOT-RSV-CMD** al agotarse los intentos de un comando. El detalle está en
+`docs/casos_de_uso/iot/mantenimiento_automatico.md`, «Cancelar la orden desde la ficha»; acá van solo las diferencias con lo de arriba:
+
+- **Dónde:** en la ficha del equipo del IoT, no en la lista de órdenes de `produccion`, que sigue mostrando solo siembras, transiciones y
+  cosechas (D-79, punto 1).
+- **Quién:** el alcance del IoT, es decir, el Agrónomo a cargo o, sin Agrónomo activo, el Gerente. **Es una excepción** a «Quién lo
+  ejecuta» y a «el Gerente no cancela» (D-79, punto 2). Falta pasarla a «CU extendidos» (`docs/temas_abiertos.md`).
+- **Cómo:** `iot` llama a `cancelar_orden_incluida(actor, orden, motivo, avisar=False)` y avisa al Técnico (D-73, punto 3), con el mismo
+  formato del aviso al Capataz y «Mantenimiento técnico» como tipo. Si al programar IOT-07 ya existe `ordenes.texto_de_cancelacion` (COM-04a),
+  se usa esa función.
+- **Repuestos (8e):** en esta ronda ningún mantenimiento los reserva; el resumen dice «Sin repuestos reservados».
+- **La alerta que originó la orden** (tema abierto «Alerta que originó un mantenimiento»): para la orden automática lo responde D-73
+  (punto 4). Cancelar no la resuelve: se resuelve cuando el actuador vuelve a «activo».
+- También cancela, incluida, **IOT-MOD-HDW** (regla 8, al volver a activar un equipo), con el motivo «Se volvió a activar el equipo
+  {identificador}.».
+
+## Cómo se aplica en la ronda «Comercial 1»: entregas y envasado (COM-05a1; D-57, D-59, D-66)
+
+Lo de «Producción 1», de las cosechas (COM-04) y del IoT **no cambia**. COM-05a1 programa la **«Cancelación de una entrega (solo desde otro
+caso de uso)»** de arriba, con lo que le suma la PCU (sección 7: resuelve la alerta «entrega sin transportista»), y las situaciones 10 a 12.
+No hay pantalla: **el Agrónomo no cancela entregas** (regla «Órdenes que cancela el Agrónomo»; D-66, punto 13). Archivo de pruebas:
+`comercial/tests/test_prod_cnl_ord_entregas.py`.
+
+### Qué hace cada parte
+
+- **`cancelar_entrega_incluida(actor, entrega, motivo) -> CancelacionDeEntrega`** en `comercial/servicios/entregas.py` (D-59, A3: la entrega es
+  de `comercial`). Como `cancelar_cosecha_incluida` (COM-04): `actor` puede ser `None` (InfoPonia); **no abre transacción** (usa la del caso
+  de uso base, con sus bloqueos ya tomados y la entrega bloqueada después de sus reservas de stock: `docs/patrones/bloqueos.md`, «Entregas y
+  envasado»); **no audita** (devuelve la entrega, las reservas de insumo canceladas y la alerta resuelta, para el registro del caso de uso
+  base, D-36). Lanza `entrega_no_a_realizar` si la entrega ya no está «a realizar» (8a: el caso de uso base decide cómo sigue).
+- Hace, en este orden:
+  1. `ordenes.cancelar_orden_incluida(actor, entrega, motivo, avisar=False)` de PRD-01: la orden a «cancelada», con la fecha de hoy y el
+     motivo (recortado a 300 si hace falta), y **sus reservas de insumo** (envases) a «cancelada» sin consumo (situación 10). PRD-01 ya acepta
+     una orden de tipo `entrega` (sin sectores ni Capataz) y lo prueba (D-67, punto 1): acá no se toca `produccion`;
+  2. **no toca las reservas de stock** ni sus líneas (precondición; situación 12): el destino del producto lo decide el caso de uso base. La
+     entrega conserva sus líneas como historial (R150 en 0..\*);
+  3. `resolver_alerta_de_estado(invernadero, "comercial_entrega_sin_transportista", clave=f"entrega:{id}")` si estaba activa (PCU 7);
+  4. los avisos (dentro de la transacción, D-42):
+     - al **Transportista**, si lo tiene: título «Se canceló la entrega OT-0231», detalle «{motivo}.»; si está **en curso** (su vehículo
+       `esta_en_ruta(hoy)` y la fecha programada es hoy o anterior; situación 11), además: «No la entregues: devolvé el producto y los envases
+       a Invernadero Sur.». La entrega deja de contar para su carga y sus límites (solo cuentan las no canceladas);
+     - al **Agrónomo** del invernadero (si está activo), solo si tenía envasado: «Se canceló OT-0231, que tenía envases reservados»,
+       detalle «Reservados: 20 Bandeja PET 1 kg, 5 Cajón plástico. Si ya se usaron y no se pueden volver a usar, ajustá el stock.»
+       (situación 10);
+     - **el aviso al cliente lo manda el caso de uso base**, que conoce el motivo comercial.
+- **Quién la llama en COM-05a1:** `quitar_lineas_liberadas(entrega_ids)` (`docs/casos_de_uso/comercial/entregas.md`, «Lo que completa a otras
+  tareas»), que usan **PROD-VNC-CAM 3a** (motivo «Se venció en cámara el producto reservado.») y la **merma en cámara 10c** (motivo «Se perdió en
+  cámara el producto reservado.»), cuando la entrega queda vacía. Después: **COM-CNL-CVT** (COM-05b) y **COM-RSV-SUM** (COM-07).
+
+### Pruebas
+
+`comercial/tests/test_prod_cnl_ord_entregas.py` (`ProdCnlOrdEntregasServicioTests`): la entrega cancelada con su fecha y su motivo; las
+reservas de insumo canceladas sin consumo y el stock libre que sube; las reservas de stock sin cambios; la alerta resuelta; el aviso al
+Transportista (con y sin «en curso») y al Agrónomo (con y sin envasado, sin Agrónomo activo); que no audita; `entrega_no_a_realizar`; sin
+transacción, `RuntimeError` (o lo que lance `cancelar_orden_incluida`); y, desde PROD-VNC-CAM y la merma en cámara, la entrega vacía cancelada y
+la que conserva otra línea, sin cancelar. Concurrencia (`test_entregas_concurrencia.py`): una merma en cámara que vacía la entrega contra un
+envasado de esa entrega (el que llega segundo ve la entrega cancelada: 10a de PROD-PNF-ENV).
+
+## Cómo se aplica en la ronda «Comercial 1»: la compra-venta cancelada (COM-05b; D-65, D-66, D-67)
+
+Lo anterior **no cambia**. COM-CNL-CVT (`docs/casos_de_uso/comercial/compra_venta.md`, al final) **incluye** PROD-CNL-ORD para dos tipos de
+orden, y para los dos usa las funciones que ya existen; no hay código nuevo de cancelación:
+
+- **Cosechas «a realizar»** de las reservas de los detalles que se cancelan: `cancelar_cosecha_incluida(actor, cosecha, motivo,
+  recubrir=False, avisar=True)` (COM-04a). `recubrir=False` porque el detalle se cancela (no hay nada que volver a cubrir); `avisar=True`: el
+  Capataz y el Agrónomo reciben el aviso con el motivo.
+- **Entregas «a realizar»** de la venta, con envío o de retiro (6b de COM-CNL-CVT): `cancelar_entrega_incluida(actor, entrega, motivo)`
+  (COM-05a1): la orden y sus reservas de envases canceladas (situación 10), la alerta «entrega sin transportista» resuelta (PCU 7), el aviso al
+  Transportista y, con envases, al Agrónomo. **El aviso al cliente lo da el caso de uso base**: es el comprobante de cancelación de la venta.
+- **Una entrega en curso no se cancela** (situación 11 vale solo para quien la cancela desde otro caso de uso que lo admita): COM-CNL-CVT la
+  detecta antes (4a) y no sigue.
+- El **motivo** que reciben las dos funciones lo arma COM-CNL-CVT: «Se canceló la compra-venta CV-0044: el cliente desistió.» (de 1 a 300; si
+  pasa, lo recorta `cancelar_orden_incluida`).
+- Actúa una persona (el Vendedor o el Gerente), no un proceso automático: la regla de PCU 7 («cuando lo incluye un proceso automático se
+  omite el paso 10») no aplica; el Agrónomo recibe el aviso de cada cosecha y de cada entrega con envases que se cancelan.
+
+Pruebas: en `comercial/tests/test_com_cnl_cvt.py` (postcondición d) y métodos nuevos en `test_prod_cnl_ord_entregas.py` y
+`test_cancelar_cosecha_incluida.py` (desde COM-CNL-CVT).

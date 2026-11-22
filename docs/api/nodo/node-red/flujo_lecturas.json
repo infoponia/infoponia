@@ -1,0 +1,1097 @@
+[
+  {
+    "id": "f1a0000000000001",
+    "type": "tab",
+    "label": "InfoPonia · lecturas (API v1)",
+    "disabled": false,
+    "info": "Nodo de referencia del contrato docs/api/nodo/ v1 (D-70, D-74). Guía: docs/api/nodo/node-red/README.md",
+    "env": []
+  },
+  {
+    "id": "f1a0000000000101",
+    "type": "comment",
+    "name": "InfoPonia · nodo de referencia · lecturas, estados, modo y anuncio (API v1)",
+    "info": "Flujo de referencia del contrato docs/api/nodo/ (D-70, D-74).\n\nAntes de desplegar, definí dos variables de entorno al arrancar Node-RED:\n- INFOPONIA_URL: la dirección de la API que muestra InfoPonia (termina en /api/iot/v1/).\n- INFOPONIA_TOKEN: el token del sistema IoT. Nunca lo escribas en el flujo: el flujo se versiona en un repositorio público.\n\nLos equipos simulados están en «Configuración de equipos». Cambiá los identificadores por los que registraste en InfoPonia.\nGuía: docs/api/nodo/node-red/README.md.",
+    "x": 330,
+    "y": 40,
+    "wires": [],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000116",
+    "type": "comment",
+    "name": "1 · Al arrancar",
+    "info": "Carga la configuración y manda modo, estados y anuncio (D-74, punto 4).",
+    "x": 130,
+    "y": 100,
+    "wires": [],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000117",
+    "type": "inject",
+    "name": "Al arrancar",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "1",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 140,
+    "y": 140,
+    "wires": [
+      [
+        "f1a0000000000102"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000102",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Configuración de equipos",
+    "func": "\n// Equipos simulados del nodo. Los identificadores tienen que ser los registrados en InfoPonia (IoT · Hardware).\n// «base» es el valor normal y «ruido», cuánto varía al azar en cada lectura.\nflow.set('sensores', [\n    { identificador: 'norte/sectorA/temperatura', base: 24, ruido: 1.5, decimales: 1 },\n    { identificador: 'norte/sectorA/humedad', base: 70, ruido: 4, decimales: 0 },\n    { identificador: 'norte/sectorA/luz', base: 30000, ruido: 3000, decimales: 0, soloDeDia: true },\n    { identificador: 'norte/tanque1/temp-solucion', base: 21, ruido: 0.5, decimales: 1 },\n    { identificador: 'norte/tanque1/nivel', nivel: true }\n]);\nflow.set('actuadores', [\n    { identificador: 'norte/sectorA/ventilador', comandos: ['ENCENDER', 'APAGAR', 'FIJAR_NIVEL'], estado: 'apagado' },\n    { identificador: 'norte/sectorA/ventana', comandos: ['ABRIR', 'CERRAR', 'FIJAR_POSICION'], estado: 'cerrado' }\n]);\nflow.set('forzado', {});           // condiciones forzadas desde el panel\nflow.set('reloj_ok', true);        // false = simula un reloj sin sincronizar\nflow.set('cola', []);              // cola de lecturas sin enviar (D-74, punto 3)\nflow.set('en_vuelo', false);\nflow.set('espera', 10);            // segundos del próximo reintento\nflow.set('modo', 'remoto');\nif (!env.get('INFOPONIA_URL') || !env.get('INFOPONIA_TOKEN')) {\n    node.warn('Faltan las variables de entorno INFOPONIA_URL o INFOPONIA_TOKEN: el flujo no va a poder enviar.');\n    node.status({ fill: 'red', shape: 'ring', text: 'faltan INFOPONIA_URL o INFOPONIA_TOKEN' });\n} else {\n    node.status({ fill: 'green', shape: 'dot', text: 'configurado' });\n}\nreturn [msg, msg];\n",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 140,
+    "wires": [
+      [
+        "f1a0000000000111",
+        "f1a0000000000110"
+      ],
+      [
+        "f1a000000000010f"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000111",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Modo actual",
+    "func": "\n// Al arrancar: el modo del nodo.\nreturn { ruta: 'modo', cuerpo: { modo: flow.get('modo') || 'remoto' } };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 590,
+    "y": 120,
+    "wires": [
+      [
+        "f1a000000000010a"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000110",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Estados de los actuadores",
+    "func": "\n// Al arrancar: el estado de todos los actuadores (D-74, punto 4).\n\n// Funciones comunes del flujo (se copian en cada nodo que las usa).\nfunction base() {\n    const url = env.get('INFOPONIA_URL') || '';\n    return url.endsWith('/') ? url : url + '/';\n}\nfunction encabezados() {\n    return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''),\n             'Content-Type': 'application/json' };\n}\nfunction ahoraIso() {\n    // ISO 8601 con zona (UTC, «Z») y sin milisegundos: D-74, punto 5.\n    return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');\n}\n\nconst estados = (flow.get('actuadores') || []).map(a => {\n    const e = { identificador: a.identificador, estado: a.estado };\n    if (flow.get('reloj_ok') !== false) e.informado_en = ahoraIso();\n    return e;\n});\nreturn { ruta: 'estados', cuerpo: { estados: estados } };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 610,
+    "y": 160,
+    "wires": [
+      [
+        "f1a000000000010a"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000118",
+    "type": "inject",
+    "name": "Cada 24 h",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "86400",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 140,
+    "y": 200,
+    "wires": [
+      [
+        "f1a000000000010f"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000010f",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Anuncio de equipos",
+    "func": "\n// Anuncio: todos los equipos del nodo y los comandos de cada actuador (mensajes.md, sección 4).\nconst equipos = [];\nfor (const s of (flow.get('sensores') || [])) equipos.push({ identificador: s.identificador, clase: 'sensor' });\nfor (const a of (flow.get('actuadores') || [])) {\n    let comandos = a.comandos;\n    if ((flow.get('forzado') || {}).ventana_sin_posicion && a.identificador.endsWith('/ventana')) {\n        comandos = comandos.filter(c => c !== 'FIJAR_POSICION');\n    }\n    equipos.push({ identificador: a.identificador, clase: 'actuador', comandos: comandos });\n}\nreturn { ruta: 'anuncio', cuerpo: { equipos: equipos } };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 600,
+    "y": 200,
+    "wires": [
+      [
+        "f1a000000000010a"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000119",
+    "type": "comment",
+    "name": "2 · Lecturas cada 60 s, con cola y reintentos",
+    "info": "Un lote por minuto (o el latido). Cola en orden, hasta 1 hora; reintento con espera creciente (D-74, punto 3).",
+    "x": 210,
+    "y": 280,
+    "wires": [],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000011a",
+    "type": "inject",
+    "name": "Cada 60 s",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "60",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "5",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 130,
+    "y": 320,
+    "wires": [
+      [
+        "f1a0000000000103"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000103",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Leer sensores simulados",
+    "func": "\n// Arma un lote con la lectura actual de cada sensor simulado y lo agrega a la cola.\n\n// Funciones comunes del flujo (se copian en cada nodo que las usa).\nfunction base() {\n    const url = env.get('INFOPONIA_URL') || '';\n    return url.endsWith('/') ? url : url + '/';\n}\nfunction encabezados() {\n    return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''),\n             'Content-Type': 'application/json' };\n}\nfunction ahoraIso() {\n    // ISO 8601 con zona (UTC, «Z») y sin milisegundos: D-74, punto 5.\n    return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');\n}\n\nconst sensores = flow.get('sensores') || [];\nconst forzado = flow.get('forzado') || {};\nconst relojOk = flow.get('reloj_ok') !== false;\nconst hora = new Date().getHours();\nconst lecturas = [];\nfor (const s of sensores) {\n    let valor;\n    if (s.nivel) {\n        valor = forzado.nivel_bajo ? 'bajo' : 'normal';\n    } else if (forzado[s.identificador] !== undefined) {\n        valor = forzado[s.identificador];\n    } else {\n        valor = s.base + (Math.random() * 2 - 1) * s.ruido;\n        if (s.soloDeDia && (hora < 8 || hora >= 18)) valor = Math.random() * 50;\n        valor = Number(valor.toFixed(s.decimales));\n    }\n    const l = { identificador: s.identificador, valor: valor };\n    if (relojOk) l.medida_en = ahoraIso();      // sin reloj sincronizado, sin fecha (extensión 3e)\n    lecturas.push(l);\n}\nif (forzado.no_registrado) {\n    lecturas.push({ identificador: 'norte/sectorB/co2', valor: 450, medida_en: relojOk ? ahoraIso() : undefined });\n}\n// Sin reloj sincronizado, las lecturas no se encolan: si el envío falla, se descartan (D-74, punto 5).\nmsg.lecturas = lecturas;\nmsg.encolar = relojOk;\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 320,
+    "wires": [
+      [
+        "f1a0000000000104"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000104",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Encolar",
+    "func": "\n// Cola de lecturas en orden de medición, acotada a 1 hora (D-74, punto 3).\n// Con un lote por minuto, 1 hora son unas 60 × (cantidad de sensores) lecturas.\nconst MAX = 60 * ((flow.get('sensores') || []).length + 1);\nlet cola = flow.get('cola') || [];\nif (msg.encolar) {\n    cola = cola.concat(msg.lecturas);\n    if (cola.length > MAX) {\n        node.warn('Cola llena: se descartan ' + (cola.length - MAX) + ' lecturas viejas.');\n        cola = cola.slice(cola.length - MAX);\n    }\n    flow.set('cola', cola);\n    msg.sin_cola = null;\n} else {\n    msg.sin_cola = msg.lecturas;   // se intentan una sola vez\n}\nnode.status({ text: 'en cola: ' + cola.length });\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 520,
+    "y": 320,
+    "wires": [
+      [
+        "f1a0000000000105"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000105",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Armar POST lecturas",
+    "func": "\n// Arma el pedido POST lecturas: lo más viejo de la cola, hasta 500 (o el latido si no hay nada).\n\n// Funciones comunes del flujo (se copian en cada nodo que las usa).\nfunction base() {\n    const url = env.get('INFOPONIA_URL') || '';\n    return url.endsWith('/') ? url : url + '/';\n}\nfunction encabezados() {\n    return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''),\n             'Content-Type': 'application/json' };\n}\nfunction ahoraIso() {\n    // ISO 8601 con zona (UTC, «Z») y sin milisegundos: D-74, punto 5.\n    return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');\n}\n\nif (flow.get('en_vuelo')) { node.status({ text: 'esperando respuesta' }); return null; }\nconst cola = flow.get('cola') || [];\nlet lote, deCola;\nif (cola.length > 0) {\n    lote = cola.slice(0, 500); deCola = lote.length;\n} else if (msg.sin_cola && msg.sin_cola.length > 0) {\n    lote = msg.sin_cola; deCola = 0;\n} else {\n    lote = []; deCola = 0;     // latido: mantiene al nodo «en línea»\n}\nflow.set('en_vuelo', true);\nmsg.de_cola = deCola;\nmsg.url = base() + 'lecturas';\nmsg.method = 'POST';\nmsg.headers = encabezados();\nmsg.requestTimeout = 15000;\nmsg.payload = { lecturas: lote };\nnode.status({ fill: 'blue', shape: 'dot', text: 'enviando ' + lote.length });\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 700,
+    "y": 320,
+    "wires": [
+      [
+        "f1a0000000000106"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000106",
+    "z": "f1a0000000000001",
+    "type": "http request",
+    "name": "InfoPonia · lecturas",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 900,
+    "y": 320,
+    "wires": [
+      [
+        "f1a0000000000107"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000107",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Según la respuesta",
+    "func": "\n// Decide según la respuesta (respuestas_y_errores.md, sección 3, «Qué hace el nodo con cada código»).\n// Salida 1: reintentar más tarde (con msg.delay). Salida 2: seguir vaciando la cola. Salida 3: registro.\nflow.set('en_vuelo', false);\nconst codigo = msg.statusCode;\nconst cola = flow.get('cola') || [];\nconst sacar = () => flow.set('cola', cola.slice(msg.de_cola));\n\nif (codigo === 200) {\n    sacar();\n    flow.set('espera', 10);\n    const p = msg.payload || {};\n    // Reloj: si difiere más de 2 minutos de InfoPonia, se trata como no sincronizado (D-74, punto 5).\n    if (p.servidor_en) {\n        const dif = Math.abs(Date.now() - Date.parse(p.servidor_en)) / 1000;\n        if (dif > 120) { flow.set('reloj_ok', false); node.warn('El reloj difiere ' + Math.round(dif) + ' s de InfoPonia: se manda sin fecha hasta corregirlo.'); }\n    }\n    const rech = (p.resultados || []).filter(r => r.resultado === 'rechazada');\n    node.status({ fill: rech.length ? 'yellow' : 'green', shape: 'dot',\n        text: 'aceptadas ' + p.aceptadas + ' · duplicadas ' + p.duplicadas + ' · rechazadas ' + p.rechazadas });\n    const salidas = [null, null, null];\n    if (rech.length) salidas[2] = { payload: rech, topic: 'lecturas rechazadas (se descartan)' };\n    if ((flow.get('cola') || []).length > 0) salidas[1] = { sin_cola: null };\n    return salidas;\n}\nif (codigo === 429 || codigo >= 500 || typeof codigo !== 'number') {\n    // Falla pasajera: queda en la cola y se reintenta con espera creciente (10 s → 5 min) o Retry-After.\n    let espera = flow.get('espera') || 10;\n    const ra = msg.headers && Number(msg.headers['retry-after']);\n    const segundos = (codigo === 429 && ra) ? ra : espera;\n    flow.set('espera', Math.min(espera * 2, 300));\n    node.status({ fill: 'yellow', shape: 'ring', text: 'falla ' + codigo + ': reintento en ' + segundos + ' s' });\n    return [{ delay: segundos * 1000, sin_cola: null }, null, { payload: msg.payload, topic: 'falla pasajera ' + codigo }];\n}\n// 400, 401, 403, 404, 405, 413, 415: no se reintenta (se saca de la cola y se informa).\nsacar();\nconst e = msg.payload || {};\nnode.status({ fill: 'red', shape: 'dot', text: codigo + ' ' + (e.error || '') });\nreturn [null, null, { payload: e, topic: 'mensaje rechazado ' + codigo + ' (no se reintenta)' }];\n",
+    "outputs": 3,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1100,
+    "y": 320,
+    "wires": [
+      [
+        "f1a0000000000108"
+      ],
+      [
+        "f1a0000000000115"
+      ],
+      [
+        "f1a0000000000109"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000108",
+    "z": "f1a0000000000001",
+    "type": "delay",
+    "name": "Esperar para reintentar",
+    "pauseType": "delayv",
+    "timeout": "10",
+    "timeoutUnits": "seconds",
+    "rate": "1",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 900,
+    "y": 400,
+    "wires": [
+      [
+        "f1a0000000000105"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000115",
+    "z": "f1a0000000000001",
+    "type": "delay",
+    "name": "Seguir vaciando la cola",
+    "pauseType": "delayv",
+    "timeout": "1",
+    "timeoutUnits": "seconds",
+    "rate": "1",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 900,
+    "y": 440,
+    "wires": [
+      [
+        "f1a0000000000105"
+      ]
+    ]
+  },
+  {
+    "id": "f1a0000000000109",
+    "z": "f1a0000000000001",
+    "type": "debug",
+    "name": "Registro de lecturas",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1320,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "f1a000000000011b",
+    "type": "comment",
+    "name": "3 · Estados, modo y anuncio",
+    "info": "Un pedido por mensaje; reintento simple de las fallas pasajeras (hasta 5).",
+    "x": 170,
+    "y": 520,
+    "wires": [],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000010a",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Armar POST",
+    "func": "\n// Arma un pedido de estados, modo o anuncio (msg.ruta y msg.cuerpo los pone quien lo dispara).\n\n// Funciones comunes del flujo (se copian en cada nodo que las usa).\nfunction base() {\n    const url = env.get('INFOPONIA_URL') || '';\n    return url.endsWith('/') ? url : url + '/';\n}\nfunction encabezados() {\n    return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''),\n             'Content-Type': 'application/json' };\n}\nfunction ahoraIso() {\n    // ISO 8601 con zona (UTC, «Z») y sin milisegundos: D-74, punto 5.\n    return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');\n}\n\nmsg.url = base() + msg.ruta;\nmsg.method = 'POST';\nmsg.headers = encabezados();\nmsg.requestTimeout = 15000;\nmsg.payload = msg.cuerpo;\nmsg.intento = (msg.intento || 0) + 1;\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 860,
+    "y": 160,
+    "wires": [
+      [
+        "f1a000000000010b"
+      ]
+    ]
+  },
+  {
+    "id": "f1a000000000010b",
+    "z": "f1a0000000000001",
+    "type": "http request",
+    "name": "InfoPonia · estados, modo, anuncio",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 1090,
+    "y": 160,
+    "wires": [
+      [
+        "f1a000000000010c"
+      ]
+    ]
+  },
+  {
+    "id": "f1a000000000010c",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Según la respuesta (único)",
+    "func": "\n// Estados, modo y anuncio: reintento simple de las fallas pasajeras (hasta 5 intentos, espera creciente).\nconst codigo = msg.statusCode;\nif (codigo === 429 || codigo >= 500 || typeof codigo !== 'number') {\n    if (msg.intento >= 5) { node.warn(msg.ruta + ': sin respuesta tras 5 intentos, se descarta.'); return [null, null]; }\n    const ra = msg.headers && Number(msg.headers['retry-after']);\n    msg.delay = (codigo === 429 && ra) ? ra * 1000 : 10000 * Math.pow(2, msg.intento - 1);\n    node.status({ fill: 'yellow', shape: 'ring', text: msg.ruta + ': reintento ' + msg.intento });\n    return [{ ruta: msg.ruta, cuerpo: msg.cuerpo, intento: msg.intento, delay: msg.delay }, null];\n}\nnode.status({ fill: codigo === 200 ? 'green' : 'red', shape: 'dot', text: msg.ruta + ': ' + codigo });\nreturn [null, { payload: msg.payload, topic: msg.ruta + ' ' + codigo }];\n",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1330,
+    "y": 160,
+    "wires": [
+      [
+        "f1a000000000010d"
+      ],
+      [
+        "f1a000000000010e"
+      ]
+    ]
+  },
+  {
+    "id": "f1a000000000010d",
+    "z": "f1a0000000000001",
+    "type": "delay",
+    "name": "Esperar",
+    "pauseType": "delayv",
+    "timeout": "10",
+    "timeoutUnits": "seconds",
+    "rate": "1",
+    "nbRateUnits": "1",
+    "rateUnits": "second",
+    "randomFirst": "1",
+    "randomLast": "5",
+    "randomUnits": "seconds",
+    "drop": false,
+    "allowrate": false,
+    "outputs": 1,
+    "x": 1090,
+    "y": 220,
+    "wires": [
+      [
+        "f1a000000000010a"
+      ]
+    ]
+  },
+  {
+    "id": "f1a000000000010e",
+    "z": "f1a0000000000001",
+    "type": "debug",
+    "name": "Registro de estados, modo y anuncio",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1580,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "f1a000000000011c",
+    "type": "comment",
+    "name": "4 · Panel para forzar condiciones (hacé clic en el botón de cada inyección)",
+    "info": "Cada botón cambia lo que simula el nodo. «Volver a lo normal» deshace todo lo forzado.",
+    "x": 290,
+    "y": 580,
+    "wires": [],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000011d",
+    "type": "inject",
+    "name": "Temperatura alta (35 °C)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"norte/sectorA/temperatura\": 35}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 620,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000011e",
+    "type": "inject",
+    "name": "Temperatura baja (8 °C)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"norte/sectorA/temperatura\": 8}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 660,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000011f",
+    "type": "inject",
+    "name": "Lectura inválida (999 °C)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"norte/sectorA/temperatura\": 999}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 700,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000120",
+    "type": "inject",
+    "name": "Solución caliente (27 °C)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"norte/tanque1/temp-solucion\": 27}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 740,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000121",
+    "type": "inject",
+    "name": "Nivel de solución bajo",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"nivel_bajo\": true}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 780,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000122",
+    "type": "inject",
+    "name": "Equipo no registrado (co2)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"no_registrado\": true}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 820,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000123",
+    "type": "inject",
+    "name": "Reloj sin sincronizar",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"reloj_ok\": false}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 860,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000124",
+    "type": "inject",
+    "name": "Ventana sin FIJAR_POSICION (anuncio)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"ventana_sin_posicion\": true}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 900,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000125",
+    "type": "inject",
+    "name": "Volver a lo normal",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "normal",
+    "payloadType": "str",
+    "x": 180,
+    "y": 940,
+    "wires": [
+      [
+        "f1a0000000000114"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000114",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Forzar condición",
+    "func": "\n// Botones del panel que fuerzan una condición: msg.payload = { clave: valor } o 'normal' para volver a la normalidad.\nif (msg.payload === 'normal') {\n    flow.set('forzado', {}); flow.set('reloj_ok', true);\n    node.status({ text: 'todo normal' });\n    return msg;\n}\nconst f = flow.get('forzado') || {};\nfor (const k of Object.keys(msg.payload)) {\n    if (k === 'reloj_ok') flow.set('reloj_ok', msg.payload[k]);\n    else f[k] = msg.payload[k];\n}\nflow.set('forzado', f);\nnode.status({ text: Object.keys(msg.payload).join(', ') });\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 470,
+    "y": 700,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "f1a0000000000126",
+    "type": "inject",
+    "name": "Ventilador encendido",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"identificador\": \"norte/sectorA/ventilador\", \"estado\": \"encendido\"}",
+    "payloadType": "json",
+    "x": 740,
+    "y": 620,
+    "wires": [
+      [
+        "f1a0000000000112"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000127",
+    "type": "inject",
+    "name": "Ventilador apagado",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"identificador\": \"norte/sectorA/ventilador\", \"estado\": \"apagado\"}",
+    "payloadType": "json",
+    "x": 740,
+    "y": 660,
+    "wires": [
+      [
+        "f1a0000000000112"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000128",
+    "type": "inject",
+    "name": "Ventana al 40 %",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"identificador\": \"norte/sectorA/ventana\", \"estado\": \"posicion:40\"}",
+    "payloadType": "json",
+    "x": 740,
+    "y": 700,
+    "wires": [
+      [
+        "f1a0000000000112"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000129",
+    "type": "inject",
+    "name": "Humedad en falla",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"identificador\": \"norte/sectorA/humedad\", \"estado\": \"en_falla\"}",
+    "payloadType": "json",
+    "x": 740,
+    "y": 740,
+    "wires": [
+      [
+        "f1a0000000000112"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000012a",
+    "type": "inject",
+    "name": "Humedad desconectada",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"identificador\": \"norte/sectorA/humedad\", \"estado\": \"desconectado\"}",
+    "payloadType": "json",
+    "x": 740,
+    "y": 780,
+    "wires": [
+      [
+        "f1a0000000000112"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000012b",
+    "type": "inject",
+    "name": "Humedad en línea",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "{\"identificador\": \"norte/sectorA/humedad\", \"estado\": \"en_linea\"}",
+    "payloadType": "json",
+    "x": 740,
+    "y": 820,
+    "wires": [
+      [
+        "f1a0000000000112"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000112",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Informar estado",
+    "func": "\n// Botones del panel que informan un estado: msg.payload = { identificador, estado }.\n\n// Funciones comunes del flujo (se copian en cada nodo que las usa).\nfunction base() {\n    const url = env.get('INFOPONIA_URL') || '';\n    return url.endsWith('/') ? url : url + '/';\n}\nfunction encabezados() {\n    return { 'Authorization': 'Bearer ' + (env.get('INFOPONIA_TOKEN') || ''),\n             'Content-Type': 'application/json' };\n}\nfunction ahoraIso() {\n    // ISO 8601 con zona (UTC, «Z») y sin milisegundos: D-74, punto 5.\n    return new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z');\n}\n\nconst e = { identificador: msg.payload.identificador, estado: msg.payload.estado };\nif (flow.get('reloj_ok') !== false) e.informado_en = ahoraIso();\nconst acts = flow.get('actuadores') || [];\nconst a = acts.find(x => x.identificador === e.identificador);\nif (a && !['en_linea', 'desconectado', 'en_falla'].includes(e.estado)) { a.estado = e.estado; flow.set('actuadores', acts); }\nreturn { ruta: 'estados', cuerpo: { estados: [e] } };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 990,
+    "y": 700,
+    "wires": [
+      [
+        "f1a000000000010a"
+      ]
+    ]
+  },
+  {
+    "id": "f1a000000000012c",
+    "type": "inject",
+    "name": "Modo local",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "local",
+    "payloadType": "str",
+    "x": 740,
+    "y": 860,
+    "wires": [
+      [
+        "f1a0000000000113"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000012d",
+    "type": "inject",
+    "name": "Modo remoto",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "remoto",
+    "payloadType": "str",
+    "x": 740,
+    "y": 900,
+    "wires": [
+      [
+        "f1a0000000000113"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a000000000012e",
+    "type": "inject",
+    "name": "Anunciar ahora",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": "0.5",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 740,
+    "y": 940,
+    "wires": [
+      [
+        "f1a000000000010f"
+      ]
+    ],
+    "z": "f1a0000000000001"
+  },
+  {
+    "id": "f1a0000000000113",
+    "z": "f1a0000000000001",
+    "type": "function",
+    "name": "Informar modo",
+    "func": "\n// Botones del panel que cambian el modo: msg.payload = 'local' o 'remoto'.\nflow.set('modo', msg.payload);\nreturn { ruta: 'modo', cuerpo: { modo: msg.payload } };\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 990,
+    "y": 880,
+    "wires": [
+      [
+        "f1a000000000010a"
+      ]
+    ]
+  }
+]

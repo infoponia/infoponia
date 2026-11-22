@@ -2,6 +2,8 @@
 
 Copia para el repo de los casos ADM-MOD-CFG (versión 0.2) y ADM-MOD-ORG (versión 0.1) del documento de Drive «CU extendidos»,
 consultados el 19/11/2026. Cotejado con pendientes_CU y con pendientes_MD hasta MD-96 (MD-89 y MD-93) y con el glosario.
+**Desde el lote IoT I2b (22/11/2026)** suma, al final, la sección «Módulo IoT» de ADM-MOD-CFG para la ronda «IoT 1» (IOT-04): los 14
+parámetros de MD-112 que IOT-ENT-INF («Temas abiertos») pide agregar. Esas reglas **todavía no están en «CU extendidos»**: hay que pasarlas.
 
 Son casos de uso breves (de alto nivel). **El código va en la app `maestros`** (D-37); el archivo de pruebas es
 `maestros/tests/test_adm_mod_cfg.py` y `maestros/tests/test_adm_mod_org.py`.
@@ -14,7 +16,7 @@ Para nombrar las pruebas: las reglas de cada caso de uso están numeradas, así 
 
 | Código | Caso de uso | Actores | Archivo de pruebas |
 |---|---|---|---|
-| ADM-MOD-CFG | Modificar Configuración Operativa | Gerente | `maestros/tests/test_adm_mod_cfg.py` |
+| ADM-MOD-CFG | Modificar Configuración Operativa | Gerente | `maestros/tests/test_adm_mod_cfg.py` (la sección «Módulo IoT»: `maestros/tests/test_adm_mod_cfg_iot.py`, IOT-04) |
 | ADM-MOD-ORG | Modificar Perfil de la Organización | Gerente | `maestros/tests/test_adm_mod_org.py` |
 
 ---
@@ -116,4 +118,77 @@ Tarea: **MAE-04**. Todo lo de este archivo se implementa, con estas decisiones d
 - **Regla 7 de CFG** (rige hacia adelante): `maestros` no recalcula nada; los consumidores leen el valor vigente cuando lo
   necesitan. Quien use un parámetro lo lee con `maestros.servicios.configuracion.obtener()` en cada uso (nunca lo guarda en una
   constante de módulo).
+
+---
+
+## ADM-MOD-CFG · Sección «Módulo IoT» (ronda «IoT 1», IOT-04)
+
+Fuentes: IOT-ENT-INF, «Temas abiertos» («ADM-MOD-CFG debe sumar los parámetros del IoT»); MD-112 y la tabla de `docs/modelo/iot.md`,
+«Parámetros IoT de ConfiguracionOperativa», que **manda** en nombres, dominios y valores iniciales; la pantalla `config` y `CFGP` del
+prototipo `docs/prototipos/iot/` (textos de ayuda). El caso de uso v0.2 de Drive no los lista todavía: **estas reglas se agregan a ADM-MOD-CFG
+en «CU extendidos»** (redactadas como continuación de sus reglas 2, 3, 4 y 7).
+
+**Reglas (a pasar a «CU extendidos»):**
+
+2b. En el Módulo IoT, con su valor inicial: en Comandos, los reintentos de un comando (3) y el intervalo entre intentos (60 segundos); en
+    Luz y fotoperíodo, el horario de luz (de 8 a 18 h) y el umbral de luz para el fotoperíodo (1.000 lux); en Actividad y comunicación,
+    los minutos sin actividad de un sensor (5), los minutos sin comunicación del nodo (3) y la antigüedad máxima de una lectura (5
+    minutos); en Reglas y alertas, las lecturas de confirmación (3) y la histéresis de la temperatura (1 °C), de la humedad (3 % HR), de la
+    intensidad lumínica (2.000 lux) y de la temperatura de la solución (1 °C); en Retención, los días de retención de las lecturas (7).
+    Todos están a confirmar con el Jardín Botánico.
+3b. Son enteros, salvo las dos histéresis de temperatura, que admiten un decimal. Dominios: reintentos de 0 a 10; intervalo de 10 a 3600;
+    inicio del horario de luz de 0 a 23 y fin de 1 a 24; umbral de luz de 1 a 100000; minutos sin actividad, sin comunicación y antigüedad,
+    de 1 a 1440; lecturas de confirmación de 1 a 10; histéresis de temperatura y de la solución de 0 a 10; de humedad de 0 a 30; de luz de
+    0 a 20000; retención de 1 a 365.
+4b. El fin del horario de luz es posterior a su inicio. Si no se cumple, el Sistema no guarda e indica qué valor corregir.
+5b. Si se reducen los días de retención, el Sistema advierte que la próxima revisión periódica borrará las lecturas anteriores a la nueva
+    fecha límite (salvo las que originaron una alerta o dispararon una regla) y deja guardar.
+7b. Los parámetros del IoT también rigen hacia adelante: los reintentos y el intervalo, desde el próximo intento de cada comando; el
+    horario de luz, las histéresis, la antigüedad máxima y las lecturas de confirmación, desde la próxima lectura; los minutos sin
+    actividad y sin comunicación, el umbral de luz y la retención, desde la próxima revisión periódica. No se recalculan los fotoperíodos
+    ni los resúmenes ya guardados.
+
+Además, el Agrónomo **consulta** estos parámetros en el panel de monitoreo (regla 6 de IOT-CNS-LEC), en solo lectura: la pantalla de
+configuración sigue siendo solo del Gerente (D-76, punto 9).
+
+### Cómo se aplica (IOT-04)
+
+- **Los campos ya existen:** IOT-01 los agregó a `ConfiguracionOperativa` con su migración de `maestros` y sus `CheckConstraint`. IOT-04 no
+  crea columnas ni migraciones de `maestros`.
+- **Misma pantalla, mismo servicio** (MAE-04): `/configuracion/`, pestaña «Configuración operativa». Suma el grupo «Módulo IoT» al final,
+  con los cinco subgrupos de `CFGP` en ese orden, y lo valida y guarda `maestros.servicios.configuracion.modificar_configuracion`, con el
+  mismo bloqueo, el mismo «todo o nada» (regla 6) y la misma auditoría (`modificacion_configuracion`, con antes y después de cada
+  parámetro). Ningún servicio nuevo. Si COM-04 ya sumó `dias_aviso_vencimiento_camara`, se agrega igual, en su grupo; el orden de las
+  migraciones no importa acá porque IOT-04 no tiene (`docs/patrones/trabajo_en_paralelo.md`).
+- **Etiquetas y ayudas** (de `CFGP`; las que el prototipo deja vacías, nuevas):
+
+| Campo | Etiqueta | Ayuda |
+|---|---|---|
+| `cant_reintentos_comando` | Reintentos de un comando | Después del primer intento (0 a 10). |
+| `segundos_intervalo_reintento` | Intervalo entre intentos (s) | Espera de respuesta y tiempo mínimo entre intentos (10 a 3600). |
+| `hora_inicio_luz` | Horario de luz: inicio (h) | Desde esta hora se compara la intensidad lumínica (0 a 23). |
+| `hora_fin_luz` | Horario de luz: fin (h) | Hasta esta hora (1 a 24). |
+| `lux_umbral_fotoperiodo` | Umbral de luz para el fotoperíodo (lux) | Las horas por encima de este valor cuentan como luz. Valor inicial: ajustalo según el cultivo. |
+| `minutos_sin_actividad` | Minutos sin actividad | Un sensor que ya reportó y deja de informar genera alerta. |
+| `minutos_sin_comunicacion` | Minutos sin comunicación | Un nodo que ya se comunicó y deja de hacerlo genera alerta y correo. |
+| `minutos_antiguedad_lectura` | Antigüedad máxima de una lectura (min) | Las más viejas se guardan, pero no generan alertas ni disparan reglas. |
+| `cant_lecturas_confirmacion` | Lecturas de confirmación | Lecturas seguidas que deben cumplir la condición para disparar una regla. |
+| `histeresis_temperatura` | Histéresis de temperatura (°C) | Una alerta o regla se libera recién al alejarse del límite este valor. |
+| `histeresis_humedad` | Histéresis de humedad (% HR) | Ídem, para la humedad. |
+| `histeresis_luz` | Histéresis de intensidad lumínica (lux) | Ídem, para la intensidad lumínica. |
+| `histeresis_temp_solucion` | Histéresis de temperatura de la solución (°C) | Ídem, para el rango de la solución. |
+| `dias_retencion_telemetria` | Días de retención de lecturas | Se conservan las que originaron una alerta o una regla. Los resúmenes horarios no se borran. |
+
+- **Mensajes de error por campo:** «Ingresá un entero entre {mín} y {máx}.»; en las dos histéresis de temperatura, «Ingresá un número entre 0
+  y 10, con un decimal como máximo.»; regla 4b en `hora_fin_luz`: «El fin tiene que ser posterior al inicio.». La advertencia de la regla 5b
+  se muestra como la de la regla 5 (no bloquea): «La próxima revisión periódica borrará las lecturas anteriores al {DD/MM/AAAA}, salvo las
+  que originaron una alerta o una regla.».
+- **Aviso al guardar** (el del prototipo): «Parámetros guardados. Rigen desde el próximo intento y la próxima lectura.» si cambió alguno del
+  IoT; si no, el de MAE-04.
+- Los consumidores leen el valor vigente con `obtener()` en cada uso: la API (IOT-03) una vez por pedido y la revisión una vez por corrida
+  (regla 7b).
+
+**Lo que difiere del prototipo:** el prototipo pide enteros también en las histéresis de temperatura; el modelo las define con un decimal
+(`Decimal(3,1)`): manda el modelo. El prototipo deja entrar al Agrónomo a la pantalla en modo consulta; en el sistema la ve en el panel (D-76,
+punto 9). La advertencia de la regla 5b no está en el prototipo: se agrega.
 

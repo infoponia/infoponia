@@ -57,6 +57,8 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    consulta de alertas (CU-46, MAE-02c), la campana tiene que llevar a ese detalle (que sí llama a `abrir_alerta`), o la
    `ItemDeAlerta.url` de `maestros.servicios.invernaderos.items_de_campana` tiene que apuntar a él. Va junto con el pendiente de
    pendientes_CU de la sección de CU-46 (abrir la alerta la marca «leída», regla 7 de 8.18). Nació en NOT-01.
+   **Queda para MAE-02d** (`docs/tareas/maestros/MAE-02d-enlace-de-alertas.md`, paso 5; D-62, tercera enmienda): la campana pasa por
+   `alertas:ir` cuando el enlace es de una app. La apertura desde la campana con el enlace por omisión ya la hizo MAE-02c.
 5. **Lo que espera una resolución del Gerente.** Cada app que cree algo que queda esperando al Gerente (órdenes de compra por aprobar,
    solicitudes de revisión; D-14) registra su contador en `AppConfig.ready()` con
    `core.extensiones.registrar_contador_de_pendientes(funcion)`, con `funcion() -> list[tuple[str, int]]` (descripción y cantidad; sin
@@ -77,6 +79,8 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 1. **Baja de un Transportista.** Postcondición g de USR-BAJ-USR: sus entregas a realizar quedan sin transportista. Regla 4: la baja
    lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
    `core/extensiones.py` (D-43).
+   **Planificado (lote C5a):** COM-05a, con la alerta «entrega sin transportista» y el aviso al Vendedor (`docs/casos_de_uso/comercial/entregas.md`,
+   «Lo que completa a otras tareas»).
 2. **Transportista en ruta o con entregas (D-55, nace en MAE-05).** Reglas 9 y 10 de PROD-MOD-INV y precondición d de USR-BAJ-USR.
    `comercial` registra:
 - `maestros.extensiones.registrar_impedimento_de_transportista`, con los códigos `transportista_en_ruta` y
@@ -84,15 +88,106 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 - `core.extensiones.registrar_impedimento_de_baja_de_cuenta`, con el código `transportista_en_ruta`.
    Contrato: `docs/api/extensiones_de_maestros.md`, sección «Transportistas». También la regla de COM-ASG-TRP: una entrega del día
    cuyo transportista está en ruta no se reasigna.
+   **Planificado (lote C5a):** `transportista_con_entregas`, COM-05a1. `transportista_en_ruta` (los dos puntos), **COM-06a (lote C6)**
+   (`docs/casos_de_uso/comercial/rutas.md`, «Lo que completa a otras tareas»). La regla de COM-ASG-TRP, **COM-05b (lote C5b)**: la
+   extensión 3a (`entrega_en_curso`; `docs/casos_de_uso/comercial/entregas.md`, «COM-ASG-TRP»).
 3. **Logística de la ficha del invernadero (D-55, nace en MAE-05).** Regla 3 de PROD-CNS-INV: `comercial` registra
    `maestros.extensiones.registrar_logistica_de_transportista` con el vehículo, la situación (en ruta o no) y las entregas a
    realizar de cada transportista. Con el registrante, «Logística» muestra las tres columnas de `logistica(inv, ger, true)` del
    prototipo `docs/prototipos/produccion/logistica_transportista.html`.
+   **Planificado (lote C1):** COM-01 registra el punto con el vehículo y la situación (en ruta) y `entregas_a_realizar = 0`; COM-05a completa
+   las entregas a realizar y `url_entregas` (la lista de entregas con `?transportista=<id>`) en el mismo registrante (admite uno solo).
+4. **Venta que sale toda de cámara (nace en COM-02, lote C2).** Postcondición g de COM-REG-CVT: si todas las reservas de una compra-venta
+   quedan «lista para entrega», InfoPonia planifica la entrega (COM-PNF-ENT). COM-05 suma esa llamada al final de `registrar_compra_venta` y
+   su paso diario 50 planifica también las ventas que ya estaban así.
+   COM-PCT-SUM (postcondición f) y PROD-PRR-SUM hacen lo mismo con un período de suministro (lote C3).
+   **Planificado (lote C5a):** COM-05a, con `programar_planificacion_*` y `transaction.on_commit` (D-66, punto 5); el paso 50 recupera lo
+   que no se planificó.
+5. **Fin de un detalle y de un suministro por entrega (nace en COM-03, lote C3).** Un `DetalleSuministro` pasa a «finalizado» al concretarse
+   la entrega de su último período, y el `Suministro` cuando todos sus detalles están finalizados (regla 5 de 8.11). COM-06, al concretar,
+   lo verifica y cambia los estados. COM-MOD-SUM ya finaliza un contrato que se queda sin detalles vigentes ni períodos pendientes.
+   **Planificado (lote C6):** COM-06a, paso 8 de «Concretar» (`rutas.md`).
+6. **Cierre de una rescisión (nace en COM-03, lote C3).** El paso diario 35 (`cerrar_rescisiones`) pasa a «rescindido» un suministro con
+   rescisión acordada el día siguiente a su última entrega conservada. COM-05 (o COM-06) le suma la condición «sin entregas del contrato
+   a realizar», para no cerrar un contrato con una entrega atrasada.
+   **Planificado (lote C5a):** COM-05a (la condición en `cerrar_rescisiones`).
+
+7. **Lo que deja COM-04 para las entregas (nace en el lote C4).** COM-05 lo suma al crear `Entrega`:
+   - PROD-ASG-CAM: la condición «sin detalle de entrega en una entrega no cancelada» de sus candidatos y el paso 9 (COM-PNF-ENT); lo mismo
+     después de PROD-CNC-CSC (postcondición n), de COM-DCD-FLT (paso 7) y de PROD-CNL-ORD (postcondición i);
+   - PROD-VNC-CAM, extensión 3a: quitar las líneas recortadas de su entrega «a realizar» y cancelar la entrega que quede vacía (con
+     PROD-CNL-ORD); lo mismo en la merma en cámara (10c);
+   - COM-CNL-CVT anula el enlace de decisión de la venta que se cancela (`anular_enlaces_de`, D-65).
+   Y COM-06: PROD-VNC-CAM 3b (entrega en curso); resolver «partida por vencer» cuando una entrega agota la partida
+   (`resolver_aviso_de_partida`); la devolución a una partida vencida (regla 29 de 8.6); el tipo `confirmacion_entrega` del enlace del
+   cliente (D-65) para COM-CNF-ENT; la causa «daño en la entrega».
+   **Planificado (lote C6):** PROD-VNC-CAM 3b, `resolver_aviso_de_partida` y la devolución a una partida vencida, **COM-06a**; la causa
+   «daño en la entrega» la crea **COM-04a** (D-68, punto 3) y la usa COM-06a; el tipo `confirmacion_entrega`, **COM-06b**.
+   **Planificado (lote C5a):** COM-05a hace los dos primeros guiones (candidatos «sin entrega» y los disparadores; las líneas quitadas y la
+   entrega vacía cancelada, D-66 puntos 4 y 9). El tercero (el enlace de COM-CNL-CVT) es de **COM-05b** (**planificado, lote C5b**:
+   postcondición e de COM-CNL-CVT, `anular_enlaces_de(venta)`; `docs/casos_de_uso/comercial/compra_venta.md`, «COM-CNL-CVT»).
+
+8. **Lo que deja COM-05a (nace en el lote C5a; desde el C5b, COM-05a es COM-05a1 y COM-05a2).**
+   - **COM-05b** (**planificado, lote C5b**): COM-ASG-TRP reutiliza `candidatos_para`, `peso_de_entregas` y la acción `asignacion_transportista`, resuelve la alerta
+     «entrega sin transportista» y le cambia el enlace (a la asignación, extensión 1b); suma «Asignar» y «Cambiar transportista» a la lista de
+     entregas. COM-CNL-CVT cancela las entregas «a realizar» de la venta con `cancelar_entrega_incluida`.
+   - **COM-06:** COM-INI-RUT usa `peso_de_entregas` («Peso de la ruta») y bloquea el invernadero como semáforo (D-66, punto 11); COM-CNC-ENT
+     carga `cant_entregada` y `monto_pagar`, recalcula el precio de suministro y confirma los envases. ~~**El exceso de envases** (regla 21 de 8.8) choca con dos restricciones de
+     `ReservaInsumo` de PRD-01: COM-06 las tiene que relajar para las órdenes de tipo `entrega`, con su migración.~~ **Corregido en el lote C6
+     (D-68, punto 2):** una restricción de la base no puede mirar el tipo de la orden; las restricciones **no cambian**: la utilizada se
+     topea en la reservada y el exceso va en el consumo del envase. «Concretar retiro» en la lista de entregas; `transportista_en_ruta`.
+     **Planificado (lote C6):** todo, COM-06a (`rutas.md`, «Cómo se aplica»).
+
+9. **Lo que deja COM-05b (nace en el lote C5b).**
+   - **COM-06:** COM-CNL-CVT con entregas concretadas (extensión 6a) se vuelve posible. Hasta COM-08, el servicio sigue rechazando
+     `venta_con_entregas_concretadas` (lo deja COM-05b, con una prueba de fábrica); COM-06 lo confirma con una entrega concretada real.
+     COM-CNL-CVT cancela solo los detalles **sin** línea en una entrega concretada (D-67, punto 4): COM-06 suma esa prueba con datos reales.
+     COM-INI-RUT toma el invernadero de origen antes de cambiar el vehículo (D-66 punto 11): así COM-ASG-TRP y COM-CNL-CVT ven bien si una
+     entrega está en curso.
+   - **COM-08:** con `PagoCliente` (MD-136), la extensión 6a de COM-CNL-CVT: el cobro de lo entregado en la misma operación, la venta a
+     «concretada» con los datos de la cancelación y el cobro en el comprobante. El asiento del cobro queda fuera de la ronda (D-57).
+     Desde el lote C6, `PagoCliente` lo crea **COM-06a** (D-68, punto 4): COM-08 suma R154 y reescribe C7.
+   **Planificado (lote C6):** lo de COM-06, **COM-06a** (`rutas.md`, «Lo que completa a otras tareas», fila COM-05b).
+
+10. **Lo que deja COM-06 (nace en el lote C6; D-68).**
+   - **COM-06b:** el enlace `confirmacion_entrega` en el correo de la concreción de un suministro (postcondición l de COM-CNC-ENT; COM-06a
+     manda el comprobante sin enlace). **Planificado (lote C6):** COM-06b (`confirmacion.md`, «El enlace de confirmación»).
+   - **COM-07:** COM-EVL-DSC resuelve la `DiscrepanciaEntrega` y COM-RSV-QJA las quejas; las dos cambian el enlace de su alerta (hoy, la
+     ficha del suministro) por la pantalla de la solicitud; COM-RSV-QJA usa `intentos_fallidos` (D-68, punto 6); `monto_a_cobrar` ya resta
+     las indemnizaciones de las solicitudes aceptadas.
+     **Planificado (lote C7; D-69, punto 1):** las solicitudes, **COM-07a** (`solicitudes.md`, «Lo que completa a otras tareas»: el
+     registrante del enlace de las dos alertas, `monto_a_cobrar` con lo **descontado**, D-69 punto 9); COM-RSV-SUM, **COM-07b**
+     (`resolucion.md`).
+   - **COM-08:** `Entrega.pago` (R154) y C7 de `PagoCliente` como {xor}; `estado_de_pago` con «pagada» (MD-125, MD-136) y la alerta «pago en
+     mora» (COM-VNC-PAG); el cobro en COM-ATN-ENR (regla 1) y su regla 5.
+   - **Ronda de contabilidad:** los asientos de la entrega, de sus mermas y de sus consumos (postcondiciones e, g y h de COM-CNC-ENT); el aviso
+     a quien registra los asientos manuales (postcondición b de COM-ATN-ENR).
+
+11. **Lo que deja COM-07 (nace en el lote C7; D-69).**
+   - **COM-07b:** `resoluciones.resolver_si_corresponde` deja de ser neutra (COM-07a la llama con `on_commit` en cada aceptación) y carga
+     `Suministro.solicitud_resolucion`, con lo que la extensión 2a de COM-ANL-SRV se da con datos reales. **Planificado (lote C7):** COM-07b
+     (`resolucion.md`, «Lo que completa a otras tareas»).
+   - **COM-08:** una entrega de suministro «pagada»: la extensión 6a de COM-EVL-DSC y de COM-RSV-QJA (todo se reintegra), el cobro como cambio
+     de la huella (8b) y la extensión 2b de COM-ANL-SRV (`entrega_cobrada`), hoy probados con `mock.patch` de `estado_de_pago`, con datos
+     reales; `Anulacion.pago` y `cliente_pago_en_fecha` (COM-ANL-CBR, MD-135) y la restricción «exactamente uno de `solicitud` y `pago`»;
+     COM-REG-CBR cobra `monto_a_cobrar`, que ya resta lo descontado; el cobro bloquea la entrega después del suministro
+     (`docs/patrones/bloqueos.md`, «Resolver o anular una solicitud»).
+   - **Ronda de contabilidad:** el asiento de cada indemnización (simple o compuesto, con lo descontado y lo reintegrado que guarda la
+     solicitud), el contraasiento de cada `Anulacion` y el asiento de la multa por resolución (MD-123).
+
+## Resolución de un contrato con rescisión acordada (COM-03, lote C3)
+
+COM-07 (COM-RSV-SUM): si un suministro con rescisión acordada supera sus incumplimientos tolerados antes de la última entrega, se resuelve
+igual, con su multa (la resolución prevalece, regla «Mientras se entregan…» de COM-RSC-SUM). La resolución deja los datos de la rescisión
+como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porque no está «vigente».
+**Planificado (lote C7):** COM-07b (`docs/casos_de_uso/comercial/resolucion.md`, paso 4.5; el paso 33 corre antes del 35, D-69 punto 7).
 
 ## Cuando exista Cosecha
 
-1. **Pantalla de concretar cosecha.** El prototipo de producción deriva esa pantalla a otro archivo (InfoPonia11), que
-   no está en el repo. Hay que traerlo a `docs/prototipos/produccion/` antes de escribir esa tarea (D-24).
+1. ~~**Pantalla de concretar cosecha.**~~ Resuelto el 21/11/2026 (lote C1 de «Comercial 1»): está en el prototipo comercial,
+   `docs/prototipos/comercial/comercial_y_cosecha.html` (`VIEWS.capcsc`, `capcscCalc`). Texto original: El prototipo de producción deriva
+   esa pantalla a otro archivo (InfoPonia11), que no está en el repo. Hay que traerlo a `docs/prototipos/produccion/` antes de escribir esa
+   tarea (D-24).
 
 ## Cuando un módulo de negocio audite por primera vez
 
@@ -103,26 +198,6 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 
 1. ~~**Sectores del invernadero.**~~ Hecho el 20/11/2026 en MAE-03 (`Invernadero.tiene_sectores` mira los sectores activos o fuera de servicio, pestaña «Sectores» y tarjeta «Capacidad» de la ficha, y la baja del invernadero pasa sus sectores a inactivos con un log por sector, por `registrar_efecto_de_baja`). Texto original: la marca «sin sectores» (`Invernadero.tiene_sectores`, hoy `False`), la capacidad y la pestaña de sectores de la ficha (regla 3 de PROD-CNS-INV) y la postcondición b de PROD-BAJ-INV (los sectores pasan a inactivos). Nació en MAE-01a.
 
-
-## Cuando exista una ocupación de sector, una variedad con semilla o un hardware (registrantes de los puntos de extensión de MAE-03)
-
-MAE-03 crea los puntos de extensión de sectores y cultivos (`docs/api/extensiones_de_maestros.md`) **sin registrantes**. Cada tarea
-que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
-
-1. **PRD-01 (`produccion`):** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
-   (agujeros ocupados y comprometidos, con los lotes y órdenes), `registrar_contenido_de_sector` (lotes y órdenes),
-   `registrar_perfil_de_sector` y `registrar_aviso_de_cambio_de_tipo` (lotes que deben pasar por la etapa y siembras a realizar).
-   Al reservar agujeros usa `bloquear_invernadero_activo` y `bloquear_sectores`.
-2. **PRD-04 (`produccion`):** `registrar_efecto_de_vuelta_a_servicio` (cierra el registro «Fuera de servicio» y escribe la bitácora),
-   `registrar_efecto_de_baja_de_sector` (punto nuevo de `maestros`, D-51 punto 7) y `registrar_efecto_de_baja` (cierra los registros abiertos al dar de baja el invernadero; en el lote 4 se había dicho que no registraba nada)
-   y el caso de uso PROD-PNR-FDS, que es el que produce el estado «fuera de servicio». También el Inicio del Agrónomo, como sección registrada
-   con `registrar_seccion_de_inicio` de `core/extensiones.py` (D-43; la alerta de insumos y de merma del prototipo salen de ahí).
-3. **INV-03 (`inventario`):** `registrar_semillas_de_cultivo` (contar y renombrar con su log `modificacion_semilla`) y
-   `registrar_uso_de_cultivo` (la semilla habilitada más los lotes activos que le informa `produccion`, ver el punto siguiente).
-   Además agrega a `Variedad` las columnas que faltan (rangos, postcosecha y peso en gramos). `EtapaProductiva` **no** tiene estado
-   (opción A, 19/11/2026): no hay nada que agregar ahí.
-4. **Módulo IoT (`iot`) — hecho en la documentación el 20/11/2026, se implementa en IOT-02:** `registrar_impedimento_de_baja_de_sector` con `hardware_activo` (códigos y textos de PROD-BAJ-SCT, regla 3)
-   y `registrar_contenido_de_sector` con el hardware.
 
 ## Cuando exista una ocupación de sector, una variedad con semilla o un hardware (registrantes de los puntos de extensión de MAE-03)
 
@@ -154,6 +229,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 2. **`comercial` (ronda futura):** `registrar_impedimento_de_baja_de_variedad` con el código `contratos_abiertos` (contratos vigentes
    o abiertos con un detalle de la variedad; precondición f de PROD-BAJ-VAR). **Hasta entonces la precondición f no se verifica** (no
    hay contratos): se anota en el cierre de INV-03 y en `docs/temas_abiertos.md`.
+   **Lo programa COM-02 (lote C2)** para las compra-ventas abiertas o pendientes de decisión; COM-03 suma los suministros vigentes. (COM-03, lote C3: detalles vigentes de la variedad).
 
 ## Cuando exista PRD-01 (lotes y órdenes reales de variedades) — nace con INV-03 (22/11/2026)
 
@@ -163,13 +239,42 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista SistemaIoT
 
-0. **Traspaso del Técnico y órdenes de mantenimiento** (D-53): IOT-05 agrega el valor `mantenimiento` a `OrdenTrabajo.Tipo`, el `CheckConstraint` de la prioridad obligatoria en ese tipo y su `registrar_traspaso` para el rol Técnico (el punto ya admite varios registrantes y recibe el rol). Si `maestros/extensiones.py` no entrega el rol a quien registra, es una corrección chica dentro de IOT-05.
-0. **Envío de correo desde `iot`** (D-54): usar `core.correo.enviar_correo`, nunca `_enviar_correo`. Lo deja USR-10.
+0. **Traspaso del Técnico y órdenes de mantenimiento** (D-53, D-73): **IOT-07** (antes «IOT-05») agrega el `CheckConstraint` de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` de `OrdenTrabajo.Tipo` lo crea PRD-01, D-67 punto 1) y su `registrar_traspaso` para el rol Técnico (el punto ya admite varios registrantes y recibe el rol). Si `maestros/extensiones.py` no entrega el rol a quien registra, es una corrección chica dentro de IOT-07 (hoy ya lo entrega: `traspasar(actor, invernadero, rol, saliente, entrante)`). **Planificado: IOT-07** (`docs/tareas/iot/IOT-07-orden-de-mantenimiento.md`; `docs/casos_de_uso/iot/mantenimiento_automatico.md`, «Traspaso del Técnico»; D-79, punto 9).
+0. **Envío de correo desde `iot`** (D-54, D-71): usar `core.correo.enviar_correo`, nunca `_enviar_correo`. Lo deja USR-10 y lo usa la revisión periódica de **IOT-04**.
 1. **IoT del invernadero.** `Invernadero.tiene_sistema_iot` (hoy `False`), la alerta y el campo del Técnico (regla 5 de
    PROD-ALT-INV) y la precondición h de PROD-BAJ-INV. Nació en MAE-01a. La precondición h se conecta con
-   `registrar_impedimento_de_baja`.
+   `registrar_impedimento_de_baja`. **Planificado: IOT-02** (`docs/tareas/ronda_iot_1.md`, sección 5): suma en `maestros/extensiones.py` un punto
+   de extensión para el estado del IoT del invernadero y lo registra; `tiene_sistema_iot()` lo consulta.
 
-~~Cuando exista InsumoInvernadero~~ (cerrado el 21/11/2026, INV-02)
+## Cuando existan actuadores, comandos y reglas del IoT (lotes I1 e I2a)
+
+Funciones que IOT-01 e IOT-02 dejan escritas y que hoy devuelven «nada» o no muestran algo porque falta la tabla o el comportamiento que las
+alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los extractos de `docs/casos_de_uso/iot/`, «Para más adelante».
+
+1. **Tipos de actuador** (`docs/casos_de_uso/iot/tipos_de_actuador.md`).
+   - IOT-02: el aviso de equipos afectados (regla 6 de IOT-MOD-TAC), la compatibilidad sobre actuadores reales (regla 9) y el conteo de la
+     baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados.
+   - IOT-05: `acciones_en_uso(tipo)` y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).
+   - IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.
+2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). IOT-06: desactivar, activar y dar de baja; IOT-07:
+   `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
+3. **Hardware** (`docs/casos_de_uso/iot/hardware.md`).
+   - IOT-03: la última lectura y la situación por lecturas en la lista y la ficha; los identificadores anunciados (`EquipoAnunciado`) y la
+     compatibilidad contra anuncios reales; `tiene_lecturas(sensor)` con lecturas reales.
+   - IOT-05: `tiene_comandos(actuador)`, `tiene_comando_pendiente(actuador)`, «Comando pendiente» y el historial de comandos de la ficha.
+   - IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW).
+   - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.
+     **Planificado en el lote I4** (`mantenimiento_automatico.md`).
+4. **Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
+   panel. **IOT-04.**
+5. **API del nodo** (`docs/casos_de_uso/iot/entregar_informacion.md`, «Reparto»; lote I2a). IOT-03 las deja escritas sin hacer nada:
+   - IOT-05: `explica_un_comando(actuador, estado)` en `iot/servicios/estados.py` (hoy, falso: D-75 punto 1); en modo `local`, no entregar
+     comandos (extensión 1b.2); las rutas de comandos del contrato (`docs/api/nodo/`, lote I3).
+   - IOT-06: `evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)` en `iot/servicios/lecturas.py` (paso 6 y 6a a 6d);
+     `al_volver_a_remoto(sistema)` en `iot/servicios/nodo.py` (1b.3); el reinicio de las reglas cuando el invernadero se queda sin umbral
+     efectivo (5c).
+
+## ~~Cuando exista InsumoInvernadero~~ (cerrado el 21/11/2026, INV-02)
 
 (INV-01 creó el modelo; INV-02 conectó lo de abajo.)
 
@@ -190,6 +295,11 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    ficha (la pestaña de lotes la registra PRD-01 con `registrar_pestana_de_invernadero`, ver `docs/api/extensiones_de_maestros.md`; la de cámara queda fuera, D-45). Se conectan por el punto de extensión `maestros/extensiones.py` (D-37, regla A4), creado en MAE-01b. Se registra con
    `registrar_impedimento_de_baja` en `AppConfig.ready()`. Todo caso de uso que cree algo que impide la baja llama a
    `bloquear_invernadero_activo` antes de crearlo (contrato de D-40 y de `docs/patrones/bloqueos.md`). Nació en MAE-01a.
+   **COM-02 (lote C2):** las cosechas «a realizar» impiden la baja (las cuenta el registrante de PRD-01 si cuenta por `OrdenTrabajo`; si no,
+   COM-02 las suma) y PROD-ASG-STK bloquea los invernaderos antes de crearlas. Las partidas en cámara y su pestaña: COM-04.
+   **Planificado (lote C4):** COM-04 registra la pestaña «Cámara» (desde `comercial`, porque muestra lo reservado) y el impedimento
+   `partidas_en_camara` (desde `produccion`, en el registrante de PRD-01); todo caso de uso que crea una partida bloquea antes el
+   invernadero (D-64 punto 12).
 
 ## Cuando exista Alerta (MAE-02)
 
@@ -203,13 +313,14 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 1. **Alerta del Técnico.** Al registrar o dar de baja el `SistemaIoT` de un invernadero, el caso de uso llama a
    `maestros.servicios.alertas.sincronizar_alertas_de_personal` (la alerta «invernadero sin Técnico activo» solo cuenta con sistema
-   IoT, regla 3 de 8.22). Hoy `Invernadero.tiene_sistema_iot()` es `False`. Nació en MAE-02a.
+   IoT, regla 3 de 8.22). Hoy `Invernadero.tiene_sistema_iot()` es `False`. Nació en MAE-02a. **Planificado:** IOT-02 (al registrar) e IOT-06 (al dar de baja).
 
 ## Cuando exista Hardware, Telemetría, Merma o SolicitudRevisión
 
 1. **Origen de la alerta (restricción C5).** Cada app declara el enlace desde su propia app (`OneToOneField` a `Alerta`, o una tabla de
    enlace para Hardware, R052), en la misma transacción que la alerta; el `origen` de su `TipoAlerta` dice cuál. Contrato en
    `docs/api/alertas.md`, sección 4. Mostrar el origen en una pantalla va por un punto de extensión. Nació en MAE-02a.
+   **IoT:** una sola tabla `AlertaIot` para R052 y R053 (D-72); la crea IOT-01.
 
 ## Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)
 
@@ -217,7 +328,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    (desde `MaestrosConfig.ready()`), el alcance `Alerta.objects.para(usuario)`, solo las activas, filtros por invernadero y tipo, el
    detalle que llama a `abrir_alerta` (ya existe), que funcione sin JavaScript (HTMX solo reemplaza la tabla) y que viva en `maestros`.
    **Pendiente para pendientes_CU:** abrir la alerta la marca «leída» (regla 7 de 8.18) y choca con la postcondición de CU-46 («no se
-   produjeron cambios en el sistema»). CU-41 reutiliza la consulta: `docs/api/alertas.md` todavía no nombra esa función. Nació en
+   produjeron cambios en el sistema»). CU-41 reutiliza la consulta: `consultar_alertas` (`docs/api/alertas.md`, sección 5). Nació en
    MAE-02a.
 2. **Contador de no leídas en la entrada «Alertas» del menú.** MAE-02c dejó la entrada sin contador: `core.menu.registrar_entrada` solo
    admite `(texto, url, ícono)`. Para sumarlo hay que ampliarla (por ejemplo, con `contador=funcion(usuario)`), calcularlo en
@@ -245,12 +356,17 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    las alertas activas (hecho en MAE-02a, directo en `modificar_invernadero`, no por registrante) y, si el saliente sigue activo, se cancelan sus pedidos sin orden de compra con destino a ese
    invernadero y se avisa a los proveedores invitados. `contar` alimenta el aviso de la regla 2 y la notificación de la
    postcondición c. Bloquean sus filas después del invernadero y en orden de id. Nació en MAE-01b.
+   **COM-02 (lote C2)** suma las cosechas al traspaso del Capataz (por `ordenes_del_capataz`, D-53) y registra el del Vendedor con la regla de
+   D-60 (compra-ventas); COM-03 (lote C3) suma los suministros vigentes con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
+   **IOT-07 (lote I4)** registra el del Técnico: pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
 
 ## Cuando exista un caso de uso que planifique, haga pedidos, asigne stock o reintente entregas
 
 1. **Invernaderos inactivos (regla 4 de PROD-BAJ-INV).** «Un invernadero inactivo no aparece en las planificaciones, en los
    pedidos, en la asignación de stock ni en el reintento diario de las entregas»: cada app que lo programe excluye los
    invernaderos inactivos. Hoy no hay ninguno. Nació en MAE-01b.
+   **Asignación de stock: COM-02 (lote C2)**, en `stock_maduro` (invernaderos considerados = solo activos). Planificaciones y reintento de
+   entregas: COM-03 y COM-05 (**planificado en el lote C5a:** COM-05a, en la planificación inmediata y en el paso 50).
 
 ## Cuando exista Cliente o CompraVenta
 
@@ -258,6 +374,9 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    ni se elimina; se registra una nueva y la anterior pasa a inactiva. `modificar_invernadero` (MAE-01b) crea la dirección nueva al cambiar de
    urbana a rural y borra la anterior con `Direccion.objects.filter(pk=...).delete()`: cuando existan esas clases hay que
    cambiarlo por «pasa a inactiva», o el borrado falla por PROTECT. Nació en MAE-01a.
+   **Se cierra en COM-01 (D-58):** por la restricción C6 una dirección de invernadero nunca es de un cliente, así que ningún contrato la usa y
+   `modificar_invernadero` puede seguir borrando la anterior. Lo que sí queda: COM-02 valida que la dirección de envío de una compra-venta sea
+   una dirección **activa del cliente** (y COM-03, la de cada detalle de suministro).
 
 ## Cuando se actualicen los datos de Georef
 
@@ -271,6 +390,12 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    `docs/patrones/datos_de_migracion.md`.
 
 ## Cuando exista contabilidad con asientos (D-45)
+
+- **Comercial 1 (COM-04, D-64):** los asientos de la cosecha (uno por movimiento «salida por cosecha», con su `costo_unitario`), de la
+  merma en cámara y del vencimiento se originan en `MovimientoStock` y en `Merma`, que ya guardan el costo: no hay que migrar nada.
+- **Comercial 1 (COM-07, D-69):** el asiento de cada indemnización se origina en su `SolicitudRevision` (hija de `OrigenDocumento`), con lo
+  descontado contra Deudores por Ventas y lo reintegrado contra Caja o Banco según `medio_reintegro`; el contraasiento, en su `Anulacion`; la
+  multa, en el `Suministro` (R012, MD-123). Todo lo que hace falta ya está guardado: no hay que migrar nada.
 
 0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
    ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
@@ -287,6 +412,8 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 1. **Cámara.** Pestaña `camaraTab` de la ficha del invernadero, `PROD-ASG-CAM` y la extensión 10c de `PROD-REG-MRM` (recorta las
    reservas de `comercial`). Va con la ronda de cosecha y comercial: necesita `StockCosechado` y `ReservaStock`.
+   **Planificado (21/11/2026, D-57):** entra en la ronda «Comercial 1», tarea COM-04 (`docs/tareas/ronda_comercial_1.md`).
+   **Lote C4:** COM-04 lo programa (`docs/casos_de_uso/produccion/camara.md` y la sección «Comercial 1» de `merma.md`).
 
 ## Cuando existan los pedidos de `compras` (D-45)
 
@@ -306,8 +433,12 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 1. **Pestaña «Bitácora» de la ficha del invernadero** (`registrar_pestana_de_invernadero`, PRD-03): la de «Lotes activos» ya la registra PRD-01.
 2. **Contabilidad** (ronda futura): los asientos de merma, aplicación de insumos (cuenta «Gastos de Producción», MD-90) y fuera de servicio salen de los registros de `produccion` (`Merma`, `AplicacionInsumos` e `ImputacionCosto`); hoy llevan su monto y no hay asiento (D-45).
 3. **Cosecha** (ronda futura): suma a la bitácora los tipos `cosecha` e `incumplimiento de cláusula suministrante` (hoy no se ofrecen en el filtro de PROD-CNS-BIT) y la condición 1 de la alerta de plantas comprometidas (`aplicar_merma`).
+   **Planificado:** la condición 1, COM-02 (lote C2); el tipo `cosecha` con su vínculo a la cosecha (R152), COM-04 (lote C4, D-64 punto 4); el
+   tipo `incumplimiento_de_clausula`, COM-07 (lo crean las solicitudes de revisión aceptadas). **Desde el lote C7** (D-69, punto 3): el tipo
+   lo crea **COM-04a**, junto con `anulacion_de_resolucion` y el filtro (`docs/api/produccion.md`, sección 11); COM-07a los usa.
 4. ~~**Módulo IoT** (en paralelo): decide qué pasa con el hardware de un sector que sale de servicio.~~ **Resuelto el 20/11/2026:** no se toca; sus sensores no generan alertas ambientales mientras el sector esté fuera de servicio (`temas_abiertos.md`). PROD-PNR-FDS no cambia.
 5. **Cámara de producto** (ronda futura): las partidas de cámara de PROD-REG-MRM (extensiones 4a y 10c, causas de cámara) y el movimiento «salida por merma».
+   **Planificado (lote C4):** COM-04 (sección «Comercial 1» de `merma.md`; `MovimientoStock`, D-64 punto 1).
 
 
 ## ~~Cuando exista el modelo completo de Variedad (INV-03)~~ (cerrado el 22/11/2026, INV-03)
@@ -322,7 +453,31 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 1. **Un solo cron job de Render para todo el proceso diario (D-56).** Se crea **al final de la implementación**, cuando estén
    registrados todos los pasos de `core/procesos.py`. Ejecuta `python manage.py proceso_diario`, con:
-- el mismo repositorio, la misma rama y las mismas variables de entorno que el web service, incluida la base de Neon;
-- el mismo comando de compilación;
-- una agenda antes del inicio de las rutas. La hora se confirma con el Jardín Botánico; Render usa UTC.
+   - el mismo repositorio, la misma rama y las mismas variables de entorno que el web service, incluida la base de Neon;
+   - el mismo comando de compilación;
+   - una agenda antes del inicio de las rutas. La hora se confirma con el Jardín Botánico; Render usa UTC.
    Antes, revisar el costo (`docs/temas_abiertos.md`). Después, anotar su nombre en `docs/estado.md`. Nace en DIA-01.
+2. **La revisión periódica del IoT (D-71).** `python manage.py revision_iot` cada 5 minutos, **encendido solo para las presentaciones** (un
+   rato antes y hasta un rato después; el resto del tiempo, suspendido, por Neon Free). Decidir entonces si es un cron propio o uno solo
+   cada 5 minutos que también corra el proceso diario (idempotente por día). Nace en el lote IoT 0.
+
+## Completan el ABM de cliente (COM-01, lote C1)
+
+COM-01 deja escritas, con un resultado neutro, las funciones de `comercial/servicios/clientes.py` que dependen de clases que todavía no
+existen. Cada tarea que crea la clase les pone la consulta real y la prueba (`docs/casos_de_uso/comercial/clientes.md`, «Para más adelante»).
+
+1. **COM-02 (compra-venta; escrito en el lote C2, paso 6 de la tarea):** `direcciones_en_uso` cuenta las compra-ventas con envío (en cualquier estado); `pendientes_del_cliente`, las compra-ventas
+   abiertas o pendientes de decisión; la ficha y la lista muestran sus contratos (el Vendedor, solo los suyos); el formulario usa
+   `volver` para regresar a COM-REG-CVT (regla 7 de COM-ALT-CLT, regla 5 de COM-MOD-CLT).
+2. **COM-03 (suministro; escrito en el lote C3, paso 8 de la tarea):** `direcciones_en_uso` cuenta los detalles de suministro (en cualquier estado); `impide_quitar_el_correo` mira los suministros
+   vigentes (regla 3 de COM-MOD-CLT); `pendientes_del_cliente` y la ficha suman los suministros; `volver` regresa a COM-PCT-SUM.
+3. **COM-06 (entregas concretadas, quejas y discrepancias):** la ficha y la baja muestran las entregas sin cobrar, con el monto a cobrar y
+   el vencimiento, y las quejas o discrepancias pendientes. **Planificado (lote C6):** las entregas sin cobrar y las discrepancias, COM-06a;
+   las quejas, COM-06b (`rutas.md` y `confirmacion.md`, «Lo que completa a otras tareas»).
+4. **COM-08 (cobranza):** el estado de pago de cada entrega (pagada o en mora, MD-139) en la ficha.
+
+## Completan el ABM de vehículo (COM-01, lote C1)
+
+1. **COM-05a (entregas; planificado en el lote C5a):** `entregas_a_realizar_del_transportista` y `carga_maxima_asignada` de `comercial/servicios/vehiculos.py` reciben su
+   consulta (reglas 2 y 3 de COM-MOD-VEH, precondición c y regla 1 de COM-BAJ-VEH); la lista suma «Entregas a realizar» y la ficha, la carga
+   de los próximos días frente a la capacidad (regla 2 de COM-CNS-VEH).

@@ -39,7 +39,6 @@ libres = agujeros_de(sectores)                       # ya con sus propias reserv
 |---|---|---|---|
 | `registrar_semillas_de_cultivo(contar, renombrar)` | `contar(cultivo) -> int` (semillas que cambiarían de nombre); `renombrar(actor, cultivo, nombre_anterior) -> int` (las renombra y escribe su propio log por semilla, acción `modificacion_semilla`, D-36) | `contar_semillas_a_renombrar(cultivo)` y, en `modificar_cultivo`, `renombrar_semillas(...)` (regla 3 de PROD-MOD-CLT) | `inventario` (INV-03) |
 | `registrar_uso_de_cultivo(funcion)` | `funcion(cultivo) -> set[int]`: ids de los invernaderos **activos** que usan alguna variedad del cultivo (con la semilla habilitada o con lotes activos; regla 4 de PROD-MOD-CLT) | `invernaderos_que_usan_el_cultivo(cultivo)` | **Solo `inventario` (INV-03)**: arma el conjunto con la semilla habilitada y con los lotes activos que le informa `produccion` por `registrar_uso_de_variedad` (`docs/api/extensiones_de_inventario.md`). `produccion` no se registra acá (corrección del lote 3) |
-
 | `registrar_variedades_de_cultivo(funcion)` | `funcion(actor, cultivos) -> dict[int, VariedadesDelCultivo]`, con `VariedadesDelCultivo = namedtuple("VariedadesDelCultivo", "cabecera cuerpo")`: dos fragmentos de HTML ya armados (`SafeString`) por id de cultivo, `cabecera` (los botones «+ Variedad» de la tarjeta) y `cuerpo` (la tabla de variedades con su ciclo, semilla, estado y acciones). **Es el único registrante** (una segunda llamada a `registrar_...` lanza `RuntimeError`) | `variedades_de_cultivos(actor, cultivos)`: la página «Cultivos y variedades» pone `cabecera` y `cuerpo` en cada tarjeta, y completa con lo propio de `maestros` cualquier cultivo que el registrante no devuelva. **Sin registrante** (hasta INV-03) usa lo propio de `maestros`: cuerpo con el texto «No tiene variedades» (o la lista simple de nombres si las hay, cargadas a mano) y sin botones | `inventario` (INV-03), porque la semilla y sus invernaderos son de `inventario` y `maestros` no puede importarlo (A1) |
 
 ## Cultivos: bloqueo (MAE-03)
@@ -89,3 +88,27 @@ registrantes, los dos dan su resultado neutro.
 Pruebas mínimas: sin registrantes, quitar y trasladar funcionan y «Logística» no muestra las columnas de `comercial`. Con un
 registrante falso, quitar y trasladar se rechazan con su código y no cambian nada. La baja de cuenta con un impedimento falso no
 cambia nada. Una segunda `registrar_logistica_de_transportista` lanza `RuntimeError`.
+
+## Estado del IoT del invernadero (IOT-02)
+
+`maestros` muestra en la ficha del invernadero («Ubicación») y en la lista («Con IoT») si el invernadero tiene sistema IoT, y lo usa en
+la alerta del Técnico (regla 3 de 8.22) y en el campo del Técnico del alta (regla 5 de PROD-ALT-INV). No puede importar `iot` (A1): hoy
+`Invernadero.tiene_sistema_iot()` devuelve siempre `False`. IOT-02 declara este punto en `maestros/extensiones.py` y lo registra desde
+`IotConfig.ready()`. Sin registrante, todo queda como hoy.
+
+| Registro | Firma de las funciones registradas | Qué hace `maestros` con ellas | Quién se registra |
+|---|---|---|---|
+| `registrar_estado_iot(estados, url_de_registro)` | `estados(invernadero_ids) -> dict[int, EstadoIot]`, con `EstadoIot = namedtuple("EstadoIot", "estado url")`: solo los invernaderos con un sistema **no dado de baja**; `estado` es `activo` o `desconectado`; `url` lleva a la pestaña «Sistema IoT» de ese invernadero. `url_de_registro(actor, invernadero) -> str \| None`: el enlace «Registrar sistema IoT», o `None` si el actor no opera el IoT del invernadero. **Admite un solo registrante**: una segunda llamada lanza `RuntimeError` | `estados_iot(ids) -> dict[int, EstadoIot]` (vacío sin registrante; una sola llamada para toda la lista). `Invernadero.tiene_sistema_iot()` pasa a ser `self.pk in estados_iot([self.pk])`. La ficha muestra «Activo», «Desconectado» (con el enlace `url`) o «Sin registrar» (con el enlace de `url_de_registro` si no es `None`); la lista, la marca «Con IoT» donde haya estado | `iot` (IOT-02) |
+
+Los otros dos registrantes de IOT-02 usan puntos que ya existen:
+
+- `registrar_impedimento_de_baja` (invernadero): código `sistema_iot` si el invernadero tiene un sistema no dado de baja; texto «Tiene el
+  sistema IoT «{nombre del nodo}».», `como_resolver` «Dalo de baja desde IoT · Sistema IoT.» (precondición h de PROD-BAJ-INV).
+- `registrar_impedimento_de_baja_de_sector` y `registrar_contenido_de_sector`: ver la tabla de «Sectores» (código `hardware_activo`, tipo
+  `hardware`).
+
+Cambios permitidos en `maestros` (y nada más): el registro y la función `estados_iot` en `maestros/extensiones.py`; el cuerpo de
+`Invernadero.tiene_sistema_iot()`; en la ficha y en la lista, mostrar el estado con `estados_iot` (una consulta para toda la lista). Si
+hace falta tocar más, frená y avisá. Prueba mínima en `maestros` (registrante falso con `mock.patch.object`): sin registrante,
+`tiene_sistema_iot()` es `False` y la ficha dice «Sin registrar» sin enlace; con uno, la ficha muestra el estado y el enlace; la lista
+no hace una consulta por fila; una segunda llamada a `registrar_estado_iot` lanza `RuntimeError`.

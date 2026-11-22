@@ -447,6 +447,7 @@ auditoría registra quién modificó (D-36).
 | `dias_anticipacion_cosecha_suministro` | entero ≥ 0 y ≤ `dias_pre_reserva_suministro` | 3 | Comercial |
 | `dias_vigencia_enlace_confirmacion` | entero ≥ 1 | 3 | Comercial |
 | `dias_vigencia_enlace_faltante` | entero ≥ 1 | 2 | Comercial (**el prototipo no lo muestra**; se agrega) |
+| `dias_aviso_vencimiento_camara` (COM-04, MD-134) | entero ≥ 0 (0 desactiva el aviso) | 3 | Comercial («Aviso de vencimiento de cámara», `VIEWS.cfg` del prototipo comercial). Migración propia en `maestros` (COM-04), con el valor inicial para la fila existente |
 | `dias_limite_cotizacion` | entero ≥ 1 | 3 | Compras |
 | `dias_validez_cotizacion` | entero > 0 | 7 | Compras |
 | `porc_tolerancia_cobertura_pedido` | entero de 0 a 100 | 0 | Compras |
@@ -456,8 +457,8 @@ auditoría registra quién modificó (D-36).
 Nombres en el modelo: `porcMermaMaxima`, `diasHorizonteCosecha`, `diasAvisoVencimiento`, `díasPreReservaSuministro`,
 `diasAnticipacionCosechaCompraVenta`, `diasAnticipacionCosechaSuministro`, `diasVigenciaEnlaceConfirmacion`,
 `diasVigenciaEnlaceFaltante` (nombre provisional), `diasLimiteCotizacion`, `diasValidezCotizacion` (nombre provisional),
-`porcToleranciaCoberturaPedido`, `cantMaximaEntregasDiarias`, `cantMaxCiudadesDistintasDiarias`. `idConfiguracion` es el `id`.
-Los parámetros de IoT (MD-112) los suma la tarea de IoT, no MAE-04. Valores iniciales de la ronda 22 (MD-89 y MD-93); dos
+`porcToleranciaCoberturaPedido`, `cantMaximaEntregasDiarias`, `cantMaxCiudadesDistintasDiarias`, `diasAvisoVencimientoCamara` (MD-134, decidido sin aplicar). `idConfiguracion` es el `id`.
+Los 14 parámetros de IoT (MD-112) los suma IOT-01 con una migración propia en `maestros`, no MAE-04: dominios, valores iniciales y nombres en `docs/modelo/iot.md`, «Parámetros IoT de ConfiguracionOperativa». Grupo en la pantalla: «Módulo IoT» (IOT-04). Valores iniciales de la ronda 22 (MD-89 y MD-93); dos
 están «a confirmar con el Jardín Botánico» (7 días de validez de la cotización y 2 de vigencia del enlace de faltante).
 
 ---

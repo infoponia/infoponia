@@ -13,14 +13,12 @@ no dependen entre sí pueden hacerse en paralelo.
 | ID | Tarea | App | Casos de uso | Depende de | Lote de documentación |
 |---|---|---|---|---|---|
 | UI-01 | Estilo «Diseño v2» (D-47): hoja de estilos, marco y pantallas ya hechas — **hecha el 20/11/2026** (a la espera de la revisión a mano) | core | — (no es un caso de uso) | — | 1 |
-
-| NOT-01 | Notificaciones y campana (D-42) | core | — (característica del sistema; cierra las postcondiciones de aviso que hoy están sin implementar) | UI-01 | 1 |
-| MAE-03 | «Cuando exista SectorProduccion» (`Invernadero.tiene_sectores`, pestaña de sectores, postcondición b de PROD-BAJ-INV) — hecha el 20/11/2026 (a la espera de la revisión a mano) |
-
+| NOT-01 | Notificaciones y campana (D-42) — **hecha el 20/11/2026** (a la espera de la revisión a mano) | core | — (característica del sistema; cierra las postcondiciones de aviso que hoy están sin implementar) | UI-01 | 1 |
+| MAE-03 | Sectores y cultivos, con los tipos de etapa — **hecha el 20/11/2026** (a la espera de la revisión a mano) | maestros | PROD-ALT-SCT, PROD-MOD-SCT, PROD-BAJ-SCT, PROD-CNS-SCT, PROD-ALT-CLT, PROD-MOD-CLT, PROD-BAJ-CLT, PROD-CNS-CLT | UI-01, NOT-01 | 1 |
 | MAE-04 | Configuración operativa y perfil de la organización (sin logo) — **hecha el 21/11/2026** (a la espera de la revisión a mano) | maestros | ADM-MOD-CFG, ADM-MOD-ORG | UI-01 | 1 |
-| CON-01 | `OrigenDocumento`: el documento de origen común (D-52) — **hecha el 21/11/2026** (a la espera de la revisión a mano) | contabilidad |
+| CON-01 | `OrigenDocumento`: el documento de origen común (D-52) — **hecha el 21/11/2026** (a la espera de la revisión a mano) | contabilidad | — (estructura del modelo) | — | 5 |
 | INV-01 | Tipos de insumo y catálogo de insumos — **hecha el 21/11/2026** (a la espera de la revisión a mano) | inventario | CMP-ALT-TIN, CMP-MOD-TIN, CMP-BAJ-TIN, CMP-CNS-TIN, CMP-ALT-INS, CMP-MOD-INS, CMP-BAJ-INS, CMP-CNS-INS | UI-01, NOT-01, CON-01 | 2 |
-| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos — **hecha el 21/11/2026** (a la espera de la revisión a mano) | inventario |CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK, CMP-REV-VNC | INV-01, UI-01, DIA-01 (hecha el 21/11/2026) | 2 |
+| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos — **hecha el 21/11/2026** (a la espera de la revisión a mano) | inventario | CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK, CMP-REV-VNC | INV-01, UI-01, NOT-01, DIA-01 (hecha el 21/11/2026) | 2 |
 | INV-03 | Variedades, con la creación de su semilla (los modelos `Variedad`, `Ciclo` y `EtapaProductiva` los crea MAE-03 con columnas mínimas; INV-03 completa las columnas; D-49) | inventario (y migración en maestros) | PROD-ALT-VAR, PROD-MOD-VAR, PROD-BAJ-VAR, PROD-CNS-VAR | MAE-03, INV-02 (que incluye a INV-01), UI-01, NOT-01 | 3 |
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz | produccion | PROD-PNF-SMB, PROD-CNC-SMB, PROD-CNL-ORD (órdenes de siembra) | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 | 4 |
 | PRD-02 | Transición: planificar, concretar y cancelar | produccion | PROD-PNF-TRN, PROD-CNC-TRN, PROD-CNL-ORD (órdenes de transición) | PRD-01 | 4 |
@@ -165,5 +163,5 @@ Cada archivo de tarea los trae en «Límites». Salen de `docs/disparadores.md`.
 | PRD-01 | «Cuando exista Lote, OrdenTrabajo…» (precondiciones c, d y e de PROD-BAJ-INV y traspaso de órdenes del Capataz) y «Cuando exista un caso de uso que planifique…» (excluir invernaderos inactivos) |
 | PRD-02 | el segundo de esos dos, para las transiciones |
 
-No entra en la ronda: cómo se asigna el Transportista a un invernadero (R155, disparador «Cuando exista Invernadero», punto 2):
-el prototipo no lo muestra y sigue pendiente de decidir.
+No entra en la ronda: cómo se asigna el Transportista a un invernadero (R155, disparador «Cuando exista Invernadero», punto 2).
+**Decidido el 21/11/2026 (D-55):** se asigna desde el invernadero; lo programa MAE-05, fuera de esta ronda y antes de «Comercial 1».

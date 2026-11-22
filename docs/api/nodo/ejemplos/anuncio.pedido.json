@@ -1,0 +1,45 @@
+{
+  "equipos": [
+    {
+      "identificador": "norte/sectorA/temperatura",
+      "clase": "sensor"
+    },
+    {
+      "identificador": "norte/sectorA/humedad",
+      "clase": "sensor"
+    },
+    {
+      "identificador": "norte/sectorA/luz",
+      "clase": "sensor"
+    },
+    {
+      "identificador": "norte/tanque1/temp-solucion",
+      "clase": "sensor"
+    },
+    {
+      "identificador": "norte/tanque1/nivel",
+      "clase": "sensor"
+    },
+    {
+      "identificador": "norte/sectorA/ventilador",
+      "clase": "actuador",
+      "comandos": [
+        "ENCENDER",
+        "APAGAR",
+        "FIJAR_NIVEL"
+      ]
+    },
+    {
+      "identificador": "norte/sectorA/ventana",
+      "clase": "actuador",
+      "comandos": [
+        "ABRIR",
+        "CERRAR"
+      ]
+    },
+    {
+      "identificador": "norte/sectorB/co2",
+      "clase": "sensor"
+    }
+  ]
+}

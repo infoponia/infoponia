@@ -1,0 +1,6 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "error": "ruta_inexistente",
+  "detalle": "La ruta no existe en la API v1."
+}

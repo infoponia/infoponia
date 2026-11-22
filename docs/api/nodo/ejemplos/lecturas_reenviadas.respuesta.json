@@ -1,0 +1,34 @@
+{
+  "version": "v1",
+  "servidor_en": "2026-11-21T17:05:00Z",
+  "aceptadas": 0,
+  "duplicadas": 5,
+  "rechazadas": 0,
+  "resultados": [
+    {
+      "indice": 0,
+      "identificador": "norte/sectorA/temperatura",
+      "resultado": "duplicada"
+    },
+    {
+      "indice": 1,
+      "identificador": "norte/sectorA/humedad",
+      "resultado": "duplicada"
+    },
+    {
+      "indice": 2,
+      "identificador": "norte/sectorA/luz",
+      "resultado": "duplicada"
+    },
+    {
+      "indice": 3,
+      "identificador": "norte/tanque1/temp-solucion",
+      "resultado": "duplicada"
+    },
+    {
+      "indice": 4,
+      "identificador": "norte/tanque1/nivel",
+      "resultado": "duplicada"
+    }
+  ]
+}
