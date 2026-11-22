@@ -12,8 +12,7 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 1. ~~**Roles del invernadero.**~~ Hecho el 19/11/2026 en MAE-01a (FK nulas en `Invernadero`). Las asociaciones del invernadero con su Agrónomo, Capataz, Vendedor y Técnico se agregan
    en la misma tarea que crea `Invernadero` (D-04). Según D-37, son FK declaradas en `Invernadero` (regla
    A2), no campos en los roles de `core`.
-2. **Invernadero del Transportista (R155).** **Decidido el 21/11/2026 (D-55): se asigna desde el invernadero; lo programa
-   MAE-05**, que cierra este punto. Texto original: precondición d, postcondición b y reglas 5 y 7 de USR-ALT-USR; postcondición a de
+2. ~~**Invernadero del Transportista (R155).**~~ Hecho el 21/11/2026 en MAE-05 (D-55): se asigna desde el invernadero (tabla `TransportistaInvernadero` y bloque «Logística»). Texto original: precondición d, postcondición b y reglas 5 y 7 de USR-ALT-USR; postcondición a de
    USR-MOD-USR; regla 3 de USR-CNS-USR; regla 1 de USR-GST-PRF; la precondición g y la regla 3 de PROD-BAJ-INV (solo los transportistas
    activos impiden la baja, D-39). Lo que dependía de que existiera `Invernadero` ya existe; lo que depende de `Entrega` y `Vehiculo`
    pasa a «Cuando exista Entrega» (puntos 2 y 3).

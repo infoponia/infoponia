@@ -1,0 +1,60 @@
+{% load iconos %}{% comment %}Ventana «Agregar transportista» (reglas 8 a 10 de PROD-MOD-INV, MAE-05, D-55; ``ventanaAgregar`` del prototipo). Recibe
+«invernadero», «candidatos» (``maestros.servicios.transportistas.Candidato``: el transportista y su invernadero actual o
+``None``), «elegido» (id del candidato elegido, si lo hay), «traslado» (``{"candidato"}``: el elegido trabaja para otro
+invernadero y falta confirmar, regla 8), «impedimentos» (los mensajes de las reglas 9 y 10: no se ofrece confirmar) con
+«url_entregas» (a COM-ASG-TRP, solo si `comercial` la dio) y, si el servicio rechazó por otro motivo, «error». Agregar es un POST a
+la misma URL; abrirla (GET) no cambia nada. Con HTMX se inserta sobre la ficha; sin JavaScript, el enlace lleva a la ficha con la
+ventana abierta.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Agregar transportista a {{ invernadero.nombre_invernadero }}</h2>
+    {% if traslado %}
+    {% with origen=traslado.candidato.invernadero nombre=traslado.candidato.transportista.get_full_name %}
+    <div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>{{ nombre }} trabaja para {{ origen.nombre_invernadero }}. Al confirmar, pasa a {{ invernadero.nombre_invernadero }} y deja de trabajar para {{ origen.nombre_invernadero }}. Se le avisa.</div></div>
+    {% endwith %}
+    <form method="post" action="{% url 'maestros:transportista_agregar' invernadero.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="transportista_id" value="{{ traslado.candidato.transportista.pk }}">
+      <input type="hidden" name="traslado_confirmado" value="1">
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Trasladando…">Confirmar traslado</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:transportista_agregar' invernadero.pk %}"
+           hx-get="{% url 'maestros:transportista_agregar' invernadero.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Volver</a>
+      </div>
+    </form>
+    {% elif impedimentos %}
+    <div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>
+      <ul style="margin:0;padding-left:18px">{% for mensaje in impedimentos %}<li>{{ mensaje }}</li>{% endfor %}</ul>
+    </div></div>
+    <div class="acts">
+      {% if url_entregas %}<a class="btn btn-primary" href="{{ url_entregas }}">Ver sus entregas</a>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'maestros:transportista_agregar' invernadero.pk %}"
+         hx-get="{% url 'maestros:transportista_agregar' invernadero.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" data-foco-inicial>Volver</a>
+    </div>
+    {% else %}
+    <p class="muted" style="margin-bottom:12px">Se ofrecen los transportistas activos que no trabajan para este invernadero: los que no tienen invernadero y los de otros (se trasladan).</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    {% if candidatos %}
+    <form method="post" action="{% url 'maestros:transportista_agregar' invernadero.pk %}">
+      {% csrf_token %}
+      <div style="display:grid;gap:8px;margin-bottom:14px">
+        {% for candidato in candidatos %}
+        <label class="opt"><input type="radio" name="transportista_id" value="{{ candidato.transportista.pk }}" {% if elegido == candidato.transportista.pk %}checked{% endif %}>
+          <span class="t"><b>{{ candidato.transportista.get_full_name|default:candidato.transportista.email }}</b><span>{% if candidato.invernadero %}Trabaja para {{ candidato.invernadero.nombre_invernadero }}{% else %}Sin invernadero{% endif %}</span></span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-enviando="Agregando…">Agregar</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+      </div>
+    </form>
+    {% else %}
+    <p>No hay transportistas activos para agregar. Los da de alta el Gerente en «Cuentas».</p>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>

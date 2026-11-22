@@ -14,9 +14,12 @@
 # Puntos de extensión que se prueban con registrantes falsos (maestros/extensiones.py): ``_IMPEDIMENTOS`` (funciones
 # ``f(invernadero) -> list[Impedimento]``) y ``_EFECTOS_DE_BAJA`` (funciones ``f(actor, invernadero)``).
 #
-# Sin prueba por ahora, con su disparador (D-38, D-39 y «Límites» de MAE-01b): la precondición g (transportistas
-# activos; R155 no existe), las postcondiciones b y c y los logs por sector e insumo de la f (los hacen los
-# registrantes cuando existan sus clases) y la postcondición e (alertas, MAE-02). Las pruebas de vista y de concurrencia
+# La precondición g (transportistas activos, regla 3 y D-39) la prueba ``ProdBajInvTransportistasTests`` (MAE-05, D-55): es un
+# impedimento propio de `maestros`, que lee ``TransportistaInvernadero``, y no un registrante. Su cruce de concurrencia con
+# agregar un Transportista está en ``test_transportistas_concurrencia.py``.
+#
+# Sin prueba por ahora, con su disparador (D-38, D-39 y «Límites» de MAE-01b): las postcondiciones b y c y los logs por
+# sector e insumo de la f (los hacen los registrantes cuando existan sus clases). Las pruebas de vista y de concurrencia
 # se agregan después de la pausa de revisión.
 
 from unittest import mock
@@ -27,7 +30,7 @@ from django.http import Http404
 from django.test import TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
-from core.models import RegistroAuditoria
+from core.models import RegistroAuditoria, Usuario
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import crear_administrador, crear_capataz, crear_gerente
 from maestros import extensiones
@@ -41,7 +44,9 @@ from maestros.tests.fabricas import (
     crear_alerta,
     crear_capataz_activo,
     crear_invernadero,
+    asignar_transportista,
     crear_invernadero_con_geografia_propia,
+    crear_transportista,
     tipo_de_alerta_de_prueba,
     tipo_falso,
 )
@@ -609,3 +614,145 @@ class ProdBajInvVistaTests(ConGeoref, TestCase):
     def test_pre_a_un_invernadero_inexistente_da_404(self):
         """PROD-BAJ-INV y D-28: un id que no existe es 404."""
         self.assertEqual(self.client.get(reverse("maestros:invernadero_baja", args=[0])).status_code, 404)
+
+
+class ProdBajInvTransportistasTests(ConGeoref, TestCase):
+    """Precondición g y reglas 2 y 3 de PROD-BAJ-INV *(MAE-05, D-55)*: los transportistas ACTIVOS vinculados impiden la baja
+    (código ``transportistas_activos``); los inactivos quedan como historial (D-39). Es un impedimento propio de `maestros`:
+    va junto con los de los registrantes, sin quedarse con el primero."""
+
+    TEXTO_UNO = "Tiene 1 transportista activo: Diego Ferreyra."
+    COMO = "Trasladalos a otro invernadero o quitalos desde “Logística”."
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.invernadero = crear_invernadero("Invernadero A")
+        self.otro = crear_invernadero("Invernadero B")
+        self.diego = crear_transportista("diego@infoponia.com", nombre="Diego", apellido="Ferreyra")
+        self.carla = crear_transportista("carla@infoponia.com", nombre="Carla", apellido="Sosa")
+
+    def baja(self):
+        return invernaderos.baja_invernadero(self.gerente, self.invernadero.pk)
+
+    def recargado(self):
+        return Invernadero.objects.get(pk=self.invernadero.pk)
+
+    def test_pre_g_con_un_transportista_activo_se_rechaza_con_su_texto_y_como_resolverlo(self):
+        """PROD-BAJ-INV precondición g y regla 2: un Transportista activo vinculado impide la baja; el mensaje dice cuántos y
+        quiénes, y cómo resolverlo (trasladarlos o quitarlos desde «Logística»)."""
+        asignar_transportista(self.diego, self.invernadero)
+        with con_impedimentos():
+            error = error_de(self.baja)
+        self.assertEqual(codigos(error), ["transportistas_activos"])
+        self.assertEqual(error.messages, [f"{self.TEXTO_UNO} {self.COMO}"])
+
+    def test_pre_g_el_texto_va_en_plural_con_los_nombres_por_apellido_y_nombre(self):
+        """PROD-BAJ-INV precondición g: «Tiene {N} transportista(s) activo(s): {nombres}.» con N y los nombres, por apellido y
+        nombre."""
+        asignar_transportista(self.carla, self.invernadero)
+        asignar_transportista(self.diego, self.invernadero)
+        with con_impedimentos():
+            error = error_de(self.baja)
+        self.assertEqual(
+            error.messages, [f"Tiene 2 transportistas activos: Diego Ferreyra, Carla Sosa. {self.COMO}"]
+        )
+
+    def test_pre_g_un_rechazo_no_cambia_nada(self):
+        """PROD-BAJ-INV regla 2: con el impedimento no se da de baja, no se audita y la fila sigue."""
+        asignar_transportista(self.diego, self.invernadero)
+        with con_impedimentos():
+            error_de(self.baja)
+        self.assertTrue(self.recargado().activo)
+        self.assertFalse(RegistroAuditoria.objects.exists())
+        self.assertEqual(self.invernadero.transportistas_asignados.count(), 1)
+
+    def test_pre_g_un_transportista_inactivo_no_impide_la_baja_y_la_fila_queda_como_historial(self):
+        """PROD-BAJ-INV regla 3 y D-39: los inactivos vinculados no impiden la baja; la fila se conserva (D-55, punto 8)."""
+        asignar_transportista(self.diego, self.invernadero)
+        asignar_transportista(crear_transportista("inactivo@infoponia.com", activo=False), self.invernadero)
+        Usuario.objects.filter(pk=self.diego.pk).update(is_active=False)
+        with con_impedimentos():
+            self.assertFalse(self.baja().activo)
+        self.assertEqual(self.invernadero.transportistas_asignados.count(), 2)
+
+    def test_pre_g_un_transportista_de_otro_invernadero_no_impide_la_baja(self):
+        """PROD-BAJ-INV precondición g: solo cuentan los transportistas de ESTE invernadero."""
+        asignar_transportista(self.diego, self.otro)
+        with con_impedimentos():
+            self.assertFalse(self.baja().activo)
+
+    def test_pre_g_sin_transportistas_no_hay_impedimento(self):
+        """PROD-BAJ-INV precondición g: un invernadero sin transportistas puede darse de baja (puede vender con retiro)."""
+        with con_impedimentos():
+            self.assertFalse(self.baja().activo)
+
+    def test_regla_2_va_junto_con_los_impedimentos_de_los_registrantes(self):
+        """PROD-BAJ-INV regla 2: el impedimento propio se suma a los de los registrantes; se informan todos."""
+        asignar_transportista(self.diego, self.invernadero)
+        with con_impedimentos(lambda invernadero: [impedimento()]):
+            error = error_de(self.baja)
+        self.assertCountEqual(codigos(error), ["lotes_activos", "transportistas_activos"])
+
+    def test_regla_2_impedimentos_para_baja_incluye_a_los_transportistas_activos_sin_cambiar_nada(self):
+        """PROD-BAJ-INV regla 2: la ventana recibe el impedimento (con su código, texto y cómo resolverlo); solo lectura."""
+        asignar_transportista(self.diego, self.invernadero)
+        with con_impedimentos():
+            devueltos = invernaderos.impedimentos_para_baja(self.gerente, self.invernadero.pk)
+        self.assertEqual(
+            [(i.codigo, i.texto, i.como_resolver) for i in devueltos],
+            [("transportistas_activos", self.TEXTO_UNO, self.COMO)],
+        )
+        self.assertTrue(self.recargado().activo)
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_regla_2_impedimentos_para_baja_no_cuenta_a_los_inactivos(self):
+        """PROD-BAJ-INV regla 3 y D-39: la ventana no los menciona."""
+        asignar_transportista(crear_transportista("inactivo@infoponia.com", activo=False), self.invernadero)
+        with con_impedimentos():
+            self.assertEqual(list(invernaderos.impedimentos_para_baja(self.gerente, self.invernadero.pk)), [])
+
+    def test_regla_2_quitar_al_transportista_resuelve_el_impedimento(self):
+        """PROD-BAJ-INV regla 2: «trasladalos o quitalos desde Logística»: quitado, la baja procede."""
+        from maestros.servicios import transportistas
+
+        asignar_transportista(self.diego, self.invernadero)
+        transportistas.quitar_transportista(self.gerente, self.invernadero.pk, self.diego.pk)
+        with con_impedimentos():
+            self.assertFalse(self.baja().activo)
+
+    def test_regla_2_el_impedimento_no_depende_de_los_registrantes(self):
+        """D-55: el impedimento es de `maestros` y no un registrante: sigue aunque las pruebas (o `comercial`) reemplacen la
+        lista de registrantes."""
+        asignar_transportista(self.diego, self.invernadero)
+        with con_impedimentos():
+            self.assertEqual(
+                [i.codigo for i in invernaderos.impedimentos_para_baja(self.gerente, self.invernadero.pk)],
+                ["transportistas_activos"],
+            )
+
+
+class ProdBajInvTransportistasVistaTests(ConGeoref, TestCase):
+    """La ventana de baja muestra el impedimento de los transportistas activos (PROD-BAJ-INV regla 2, D-30)."""
+
+    def setUp(self):
+        self.client.force_login(crear_gerente())
+        self.invernadero = crear_invernadero("Invernadero A")
+        asignar_transportista(crear_transportista(nombre="Diego", apellido="Ferreyra"), self.invernadero)
+        self.url = reverse("maestros:invernadero_baja", args=[self.invernadero.pk])
+
+    def test_regla_2_la_ventana_dice_los_transportistas_activos_y_no_ofrece_confirmar(self):
+        """PROD-BAJ-INV regla 2: «Tiene 1 transportista activo: …» con cómo resolverlo, y solo «Entendido»."""
+        with con_impedimentos():
+            respuesta = self.client.get(self.url)
+        self.assertContains(respuesta, "No se puede dar de baja Invernadero A")
+        self.assertContains(respuesta, "Tiene 1 transportista activo: Diego Ferreyra.")
+        self.assertContains(respuesta, "Trasladalos a otro invernadero o quitalos desde “Logística”.")
+        self.assertContains(respuesta, "Entendido")
+        self.assertNotContains(respuesta, 'data-enviando="Dando de baja…"')
+
+    def test_regla_2_confirmar_con_un_transportista_activo_no_da_de_baja_y_vuelve_a_la_ventana(self):
+        """PROD-BAJ-INV regla 2: un POST manual lo rechaza el servicio y la ventana vuelve con el motivo."""
+        with con_impedimentos():
+            respuesta = self.client.post(self.url)
+        self.assertContains(respuesta, "Tiene 1 transportista activo: Diego Ferreyra.")
+        self.assertTrue(Invernadero.objects.get(pk=self.invernadero.pk).activo)

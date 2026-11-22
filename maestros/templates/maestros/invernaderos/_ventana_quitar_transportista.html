@@ -1,0 +1,31 @@
+{% load iconos %}{% comment %}Ventana «Quitar transportista» (reglas 5, 9 y 10 de PROD-MOD-INV, MAE-05, D-55; ``ventanaQuitar`` del prototipo). Recibe
+«invernadero», «transportista» (la cuenta), «impedimentos» (los mensajes de las reglas 9 y 10: no se ofrece confirmar, D-30) con
+«url_entregas» (a COM-ASG-TRP, solo si `comercial` la dio) y, si el servicio rechazó por otro motivo, «error». Quitar es un POST a
+la misma URL; abrirla (GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% with nombre=transportista.get_full_name|default:transportista.email %}
+    <h2 id="ventana-titulo">Quitar a {{ nombre }}</h2>
+    {% if impedimentos %}
+    <div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>
+      <ul style="margin:0;padding-left:18px">{% for mensaje in impedimentos %}<li>{{ mensaje }}</li>{% endfor %}</ul>
+    </div></div>
+    <div class="acts">
+      {% if url_entregas %}<a class="btn btn-primary" href="{{ url_entregas }}">Ver sus entregas</a>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Volver</a>
+    </div>
+    {% else %}
+    <p>Deja de trabajar para {{ invernadero.nombre_invernadero }} y queda sin invernadero: no recibe entregas hasta que se lo agregue a otro. Se le avisa.</p>
+    <p class="muted">Aparece en «Personal por asignar» del Panel de control mientras siga sin invernadero.</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    <form method="post" action="{% url 'maestros:transportista_quitar' invernadero.pk transportista.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <button class="btn btn-danger" type="submit" data-enviando="Quitando…">Quitar</button>
+        <a class="btn btn-ghost" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+      </div>
+    </form>
+    {% endif %}
+    {% endwith %}
+  </div>
+</div>

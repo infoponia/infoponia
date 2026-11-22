@@ -58,6 +58,7 @@ from core.servicios import (
     desvincular_cuenta,
     gerente_activo_que_impide_el_alta,
     gerente_activo_que_impide_reactivar,
+    impedimentos_de_baja,
     modificar_usuario,
     obtener_cuenta,
     obtener_registro,
@@ -323,6 +324,8 @@ def _render_mi_perfil(request, form, ventana=None, **extra):
         "quien_gestiona": quien_gestiona(request.user),
         "vinculadas": cuentas_vinculadas(request.user),  # [] sin grupo, sin consultar la base
         "ventana": ventana,
+        # Regla 1 de USR-GST-PRF (MAE-05, D-55): datos de solo lectura que registran las apps (el invernadero del Transportista).
+        "datos_de_cuenta": extensiones.datos_de_cuenta(request.user),
     }
     contexto.update(extra)
     return render(request, "core/mi_perfil.html", contexto)
@@ -553,6 +556,8 @@ def usuario_ficha(request, cuenta_id):
             "acciones": acciones_permitidas(request.user, cuenta),
             # Regla 3 de USR-CNS-USR y regla 7 de USR-MOD-USR: los vínculos, en solo lectura.
             "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
+            # Regla 3 de USR-CNS-USR (MAE-05, D-55): datos de solo lectura que registran las apps (el invernadero del Transportista).
+            "datos_de_cuenta": extensiones.datos_de_cuenta(cuenta),
             # Regla 7 de AUD-CNS-REG: «Ver auditoría» solo si quien mira puede abrir la auditoría de esa cuenta.
             "puede_ver_auditoria": puede_ver_auditoria_de(request.user, cuenta),
         },
@@ -695,6 +700,9 @@ def _gestionar_cuenta(request, cuenta_id, accion):
     if accion == "baja":
         # Regla 4 de USR-BAJ-USR (D-43): lo que la cuenta tiene asignado y qué pasará con eso. Solo lectura.
         contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
+        # Precondición d de USR-BAJ-USR (MAE-05, D-55): lo que impide la baja (el Transportista en ruta); con alguno, la ventana
+        # lo dice y no ofrece confirmar. Solo lectura.
+        contexto["impedimentos"] = impedimentos_de_baja(request.user, cuenta.pk)
         # Postcondición c de USR-BAJ-USR (NOT-01, D-42, D-14): si la cuenta es del Gerente, cuántos pendientes quedan
         # esperando. Es un texto de la ventana, no una notificación. Solo lectura.
         if cuenta.rol == Usuario.Rol.GERENTE:
@@ -720,6 +728,10 @@ def _gestionar_cuenta(request, cuenta_id, accion):
                 contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
             elif accion == "baja":
                 contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
+                # Un impedimento que apareció con la ventana abierta: la ventana los lista todos y no repite el motivo.
+                contexto["impedimentos"] = impedimentos_de_baja(request.user, cuenta.pk)
+                if contexto["impedimentos"]:
+                    del contexto["error"]
         else:
             if accion == "baja" and cuenta.pk == actor_id:
                 # La baja ya cerró la sesión de esta cuenta (``is_active`` en False); se vacía la sesión

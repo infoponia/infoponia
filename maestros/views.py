@@ -5,16 +5,17 @@
 # solo orquestan: validan la entrada, llaman al servicio y renderizan (CLAUDE.md, arquitectura).
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
-from core.models import Usuario
+from core.models import Transportista, Usuario
+from maestros import extensiones
 from maestros.forms import (
     FormularioConfiguracion,
     FormularioCultivo,
@@ -27,6 +28,7 @@ from maestros.servicios import configuracion as api_configuracion
 from maestros.servicios import cultivos as api_cultivos
 from maestros.servicios import perfil as api_perfil
 from maestros.servicios import sectores as api_sectores
+from maestros.servicios import transportistas as api_transportistas
 from maestros.servicios.invernaderos import (
     FaltaConfirmarPersonal,
     acciones_permitidas,
@@ -66,13 +68,30 @@ def invernadero(request, invernadero_id):
 
 
 def _contexto_de_la_ficha(request, invernadero, **extra):
-    """Lo que necesita la ficha: el invernadero, si quien mira es el Gerente y las acciones que le corresponden."""
+    """Lo que necesita la ficha: el invernadero, si quien mira es el Gerente, las acciones que le corresponden y la
+    tarjeta «Logística» (MAE-05)."""
     return {
         "invernadero": invernadero,
         "es_gerente": request.user.rol == GERENTE,
         "acciones": acciones_permitidas(request.user, invernadero),
+        **_logistica(invernadero),
         **_pestana_de_sectores(request, invernadero),
         **extra,
+    }
+
+
+def _logistica(invernadero):
+    """La tarjeta «Logística» (regla 3 de PROD-CNS-INV, D-55): los transportistas del invernadero (una consulta) y, si `comercial`
+    registró su punto de extensión, el vehículo, la situación y las entregas de todos juntos (una sola llamada, sin consultas
+    por fila). Sin registrante, ``con_logistica`` es falso y la tarjeta no muestra esas columnas."""
+    cuentas = invernadero.transportistas()
+    datos = extensiones.logistica_de(cuentas) if cuentas else None
+    sin_datos = extensiones.Logistica(None, False, 0, None)
+    return {
+        "transportistas": [
+            {"cuenta": cuenta, "logistica": (datos or {}).get(cuenta.pk, sin_datos)} for cuenta in cuentas
+        ],
+        "con_logistica": datos is not None,
     }
 
 
@@ -737,3 +756,117 @@ def configuracion_guardar_organizacion(request):
         lambda actor, **datos: api_perfil.modificar_perfil(actor, **datos),
         "maestros/configuracion/_organizacion.html",
     )
+
+
+# ---- MAE-05 (D-55): transportistas de un invernadero, desde la tarjeta «Logística» de la ficha ----
+
+# Los códigos de los impedimentos de las reglas 9 y 10 (los registra `comercial`): la ventana los muestra y no ofrece confirmar.
+CODIGOS_DE_IMPEDIMENTO = {"transportista_en_ruta", "transportista_con_entregas"}
+
+
+def _nombre_de(cuenta):
+    """El nombre con el que se ve a una cuenta en los avisos."""
+    return cuenta.get_full_name() or cuenta.email
+
+
+def _url_de_entregas(cuenta):
+    """«Ver sus entregas» (COM-ASG-TRP): la URL que dio `comercial`, o ``None`` si no hay registrante o no la dio."""
+    datos = extensiones.logistica_de([cuenta])
+    return datos[cuenta.pk].url_entregas if datos and cuenta.pk in datos else None
+
+
+def _ventana_de_transportista(request, invernadero, plantilla, error=None, cuenta=None, **contexto):
+    """La ventana ``plantilla`` con el resultado de un rechazo del servicio (``error``, un ``ValidationError``): si lleva algún
+    impedimento de las reglas 9 y 10, la ventana los lista (todos) y no ofrece confirmar; si no, muestra el motivo."""
+    if error is not None:
+        codigos = [e.code for errores in getattr(error, "error_dict", {}).values() for e in errores]
+        if any(c in CODIGOS_DE_IMPEDIMENTO for c in codigos):
+            contexto["impedimentos"] = error.messages
+            contexto["url_entregas"] = _url_de_entregas(cuenta) if cuenta is not None else None
+        else:
+            contexto["error"] = error.messages[0]
+    return _ventana(request, invernadero, plantilla, **contexto)
+
+
+@rol_requerido(GERENTE)
+@never_cache
+@vary_on_headers("HX-Request")
+def transportista_agregar(request, invernadero_id):
+    """Agregar o trasladar un transportista (PROD-MOD-INV reglas 8 a 10, ``ventanaAgregar`` del prototipo). Solo el Gerente.
+
+    - GET: no cambia nada; lista los candidatos (los activos que no trabajan para este invernadero, con su invernadero actual).
+    - POST con un candidato: si es un traslado sin confirmar, la ventana vuelve con el aviso y «Confirmar traslado»; si hay
+      impedimentos (reglas 9 y 10), los lista (con «Ver sus entregas» si `comercial` dio la URL) y no ofrece confirmar; si sale
+      bien, vuelve a la ficha con un aviso breve (D-29).
+    - Un invernadero inactivo no se modifica (regla 5): vuelve a la ficha con el motivo (D-30).
+    """
+    invernadero = obtener_invernadero(request.user, invernadero_id)
+    if "modificar" not in acciones_permitidas(request.user, invernadero):
+        messages.error(request, "El invernadero está inactivo: solo se puede reactivar.")
+        return redirect("maestros:invernadero", invernadero.pk)
+    plantilla = "maestros/invernaderos/_ventana_agregar_transportista.html"
+    candidatos = api_transportistas.candidatos(request.user, invernadero.pk)
+    if request.method == "POST":
+        try:
+            elegido = int(request.POST.get("transportista_id", ""))
+        except ValueError:
+            return _ventana_de_transportista(
+                request, invernadero, plantilla, candidatos=candidatos, error=ValidationError("Elegí un transportista.")
+            )
+        candidato = next((c for c in candidatos if c.transportista.pk == elegido), None)
+        try:
+            fila = api_transportistas.agregar_transportista(
+                request.user,
+                invernadero.pk,
+                elegido,
+                traslado_confirmado="traslado_confirmado" in request.POST,
+            )
+        except api_transportistas.FaltaConfirmarTraslado:
+            return _ventana(request, invernadero, plantilla, candidatos=candidatos, traslado={"candidato": candidato})
+        except ValidationError as error:
+            cuenta = candidato.transportista if candidato else None
+            return _ventana_de_transportista(
+                request, invernadero, plantilla, error=error, cuenta=cuenta, candidatos=candidatos, elegido=elegido
+            )
+        nombre = _nombre_de(fila.transportista)
+        if candidato is not None and candidato.invernadero is not None:
+            aviso = f"{nombre} pasó de {candidato.invernadero.nombre_invernadero} a {invernadero.nombre_invernadero}."
+        else:
+            aviso = f"{nombre} ahora trabaja para {invernadero.nombre_invernadero}."
+        messages.success(request, aviso)
+        return _volver_a_la_ficha(invernadero)
+    return _ventana(request, invernadero, plantilla, candidatos=candidatos)
+
+
+@rol_requerido(GERENTE)
+@never_cache
+@vary_on_headers("HX-Request")
+def transportista_quitar(request, invernadero_id, transportista_id):
+    """Quitar un transportista del invernadero (PROD-MOD-INV reglas 5, 9 y 10, ``ventanaQuitar`` del prototipo). Solo el Gerente.
+
+    - GET: no cambia nada; muestra la confirmación o, si hay impedimentos, los lista y no ofrece confirmar.
+    - POST: quita y vuelve a la ficha con un aviso breve (D-29). Si el servicio lo rechaza, la ventana vuelve con el motivo.
+    - Un invernadero inactivo, o un transportista que no trabaja para él, vuelve a la ficha con el motivo (D-30).
+    """
+    invernadero = obtener_invernadero(request.user, invernadero_id)
+    cuenta = get_object_or_404(Transportista, pk=transportista_id)
+    plantilla = "maestros/invernaderos/_ventana_quitar_transportista.html"
+    try:
+        impedimentos = api_transportistas.impedimentos_para_quitar(request.user, invernadero.pk, cuenta.pk)
+    except ValidationError as error:
+        messages.error(request, error.messages[0])
+        return _volver_a_la_ficha(invernadero)
+    if request.method == "POST":
+        try:
+            api_transportistas.quitar_transportista(request.user, invernadero.pk, cuenta.pk)
+        except ValidationError as error:
+            return _ventana_de_transportista(
+                request, invernadero, plantilla, error=error, cuenta=cuenta, transportista=cuenta
+            )
+        messages.success(request, f"{_nombre_de(cuenta)} ya no trabaja para {invernadero.nombre_invernadero}.")
+        return _volver_a_la_ficha(invernadero)
+    contexto = {"transportista": cuenta}
+    if impedimentos:
+        contexto["impedimentos"] = [f"{i.texto} {i.como_resolver}" for i in impedimentos]
+        contexto["url_entregas"] = _url_de_entregas(cuenta)
+    return _ventana(request, invernadero, plantilla, **contexto)

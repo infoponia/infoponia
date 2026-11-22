@@ -6,13 +6,15 @@
 # prueba falle por separado en vez de romper la importación del archivo.
 
 from datetime import timedelta
+from unittest import mock
 
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.test import TestCase
 from django.urls import reverse
 
-from core import servicios
+from core import extensiones, servicios
+from core.extensiones import DatoDeCuenta
 from core.models import (
     ADMINISTRADOR,
     Agronomo,
@@ -521,3 +523,59 @@ class UsrCnsUsrVistaTests(TestCase):
         con_uno_solo = self.client.get(reverse("core:usuario", args=[administrador.pk]))
         self.assertEqual(acciones_ofrecidas(con_uno_solo, administrador), {"modificar"})
         self.assertNotContains(con_uno_solo, "Dar de baja")
+
+
+class UsrCnsUsrDatosDeCuentaTests(TestCase):
+    """Regla 3 de USR-CNS-USR (MAE-05, D-55): la ficha muestra los datos de solo lectura que registran las apps por
+    ``core.extensiones.registrar_datos_de_cuenta`` (el «Invernadero» del Transportista, que registra `maestros`). Acá, con
+    registrantes falsos: la ficha muestra la etiqueta, el valor (escapado) y la nota."""
+
+    def con(self, *funciones):
+        """Reemplaza los registrantes de datos de cuenta por ``funciones``."""
+        return mock.patch.object(extensiones, "_DATOS_DE_CUENTA", list(funciones))
+
+    def test_regla_3_la_ficha_muestra_el_dato_con_su_valor_y_su_nota(self):
+        """USR-CNS-USR regla 3 y ``fichaDeCuenta`` del prototipo: «Invernadero» con su valor y la nota."""
+        self.client.force_login(crear_gerente())
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+        dato = DatoDeCuenta("Invernadero", "Sin invernadero", "Se asigna desde la ficha del invernadero, en “Logística”.")
+
+        with self.con(lambda c: [dato]):
+            respuesta = self.client.get(reverse("core:usuario", args=[cuenta.pk]))
+
+        self.assertContains(respuesta, "Invernadero")
+        self.assertContains(respuesta, "Sin invernadero")
+        self.assertContains(respuesta, "Se asigna desde la ficha del invernadero, en “Logística”.")
+
+    def test_regla_3_el_valor_se_escapa(self):
+        """API «Transportistas»: ``valor`` es texto plano; la ficha lo escapa."""
+        self.client.force_login(crear_gerente())
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+
+        with self.con(lambda c: [DatoDeCuenta("Invernadero", "<b>Norte</b>", "")]):
+            respuesta = self.client.get(reverse("core:usuario", args=[cuenta.pk]))
+
+        self.assertContains(respuesta, "&lt;b&gt;Norte&lt;/b&gt;")
+        self.assertNotContains(respuesta, "<b>Norte</b>")
+
+    def test_regla_3_sin_registrantes_la_ficha_no_muestra_el_dato(self):
+        """Sin registrantes no hay datos de más: la ficha queda como antes."""
+        self.client.force_login(crear_gerente())
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+
+        with self.con():
+            respuesta = self.client.get(reverse("core:usuario", args=[cuenta.pk]))
+
+        self.assertNotContains(respuesta, "Sin invernadero")
+        self.assertEqual(respuesta.context["datos_de_cuenta"], [])
+
+    def test_regla_3_los_registrantes_reciben_la_cuenta_de_la_ficha(self):
+        """Contrato: ``funcion(cuenta)`` con la cuenta que se está mirando."""
+        self.client.force_login(crear_gerente())
+        cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", nombre="Marcos", apellido="Vera")
+        recibidas = []
+
+        with self.con(lambda c: recibidas.append(c.pk) or []):
+            self.client.get(reverse("core:usuario", args=[cuenta.pk]))
+
+        self.assertEqual(recibidas, [cuenta.pk])

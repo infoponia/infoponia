@@ -9,6 +9,9 @@
 # «cuenta_inactiva». Tarea 05b (D-16, SEG-15): dar de baja a un Administrador cuando no queda otro activo
 # lanza ValidationError con el código «ultimo_administrador».
 #
+# MAE-05 (D-55): la precondición d (el Transportista en ruta, MD-118) se prueba en ``UsrBajUsrImpedimentosTests``, con
+# registrantes falsos de ``core.extensiones.registrar_impedimento_de_baja_de_cuenta`` (los registra `comercial`).
+#
 # NOT-01 (D-42): la postcondición c (pendientes del Gerente en la ventana de baja) se prueba en ``UsrBajUsrPendientesTests``.
 # Fuera de estas pruebas, por no existir todavía lo que las motiva (ver «Lo que queda para más adelante»
 # de docs/casos_de_uso/usuarios.md): postcondiciones f y g y la parte de la regla 4 que no es de invernaderos (pedidos y
@@ -23,13 +26,14 @@ from django.test import Client, TestCase, TransactionTestCase, tag
 from django.urls import reverse
 
 from core import extensiones, servicios, views
-from core.extensiones import Asignacion, Efecto
+from core.extensiones import Asignacion, Efecto, ImpedimentoDeCuenta
 from core.models import (
     ADMINISTRADOR,
     Capataz,
     Gerente,
     Notificacion,
     RegistroAuditoria,
+    Transportista,
     Usuario,
     Vendedor,
     referencia,
@@ -801,3 +805,148 @@ class UsrBajUsrPendientesTests(TestCase):
             self.client.post(self.url)
 
         self.assertEqual(Notificacion.objects.count(), 0)
+
+
+class UsrBajUsrImpedimentosTests(TestCase):
+    """Precondición d de USR-BAJ-USR (MAE-05, D-55): una cuenta con un impedimento (el Transportista en ruta, MD-118) no se da de
+    baja. Los registra `comercial` por ``core.extensiones.registrar_impedimento_de_baja_de_cuenta``; acá, registrantes falsos.
+    Contrato: ``baja_usuario`` los junta DESPUÉS de bloquear la cuenta y ANTES de cambiar nada, y rechaza con ``ValidationError``
+    (un error por impedimento, con su código); ``servicios.impedimentos_de_baja(actor, cuenta_id)`` los da para la ventana (solo
+    lectura, con el alcance de ``obtener_cuenta``); la ventana los muestra y no ofrece confirmar."""
+
+    EN_RUTA = ImpedimentoDeCuenta(
+        "transportista_en_ruta",
+        "Está en ruta: el producto de sus entregas de hoy está en su vehículo.",
+        "Podés darla de baja cuando finalice la ruta.",
+    )
+    OTRO = ImpedimentoDeCuenta("otro_motivo", "Otro motivo.", "Resolvelo antes.")
+
+    def con(self, *funciones):
+        """Reemplaza los registrantes de impedimentos de la baja de una cuenta por ``funciones``."""
+        return mock.patch.object(extensiones, "_IMPEDIMENTOS_DE_BAJA_DE_CUENTA", list(funciones))
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.cuenta = crear_cuenta(Transportista, "transportista@infoponia.com", **LAURA)
+
+    def test_pre_d_un_impedimento_rechaza_la_baja_con_su_codigo_y_no_cambia_nada(self):
+        """USR-BAJ-USR precondición d: con un impedimento, la baja se rechaza con su código, cómo resolverlo, y no cambia nada
+        (la cuenta sigue activa, sin registro de auditoría)."""
+        with self.con(lambda cuenta: [self.EN_RUTA]):
+            with self.assertRaises(ValidationError) as contexto:
+                servicios.baja_usuario(self.gerente, self.cuenta.pk)
+
+        self.assertEqual(codigos(contexto.exception), ["transportista_en_ruta"])
+        self.assertIn("Podés darla de baja cuando finalice la ruta.", contexto.exception.messages[0])
+        self.assertTrue(Usuario.objects.get(pk=self.cuenta.pk).is_active)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_pre_d_informa_todos_los_impedimentos_de_todos_los_registrantes(self):
+        """USR-BAJ-USR precondición d: se juntan los de todos los registrantes, sin quedarse con el primero."""
+        with self.con(lambda cuenta: [self.EN_RUTA], lambda cuenta: [self.OTRO]):
+            with self.assertRaises(ValidationError) as contexto:
+                servicios.baja_usuario(self.gerente, self.cuenta.pk)
+        self.assertEqual(codigos(contexto.exception), ["transportista_en_ruta", "otro_motivo"])
+
+    def test_pre_d_sin_registrantes_o_sin_impedimentos_la_baja_procede(self):
+        """D-55: mientras `comercial` no exista, o si el registrante no devuelve nada, no se bloquea nada."""
+        with self.con():
+            servicios.baja_usuario(self.gerente, self.cuenta.pk)
+        self.assertFalse(Usuario.objects.get(pk=self.cuenta.pk).is_active)
+
+        otra = crear_cuenta(Transportista, "otra@infoponia.com", **LAURA)
+        with self.con(lambda cuenta: []):
+            servicios.baja_usuario(self.gerente, otra.pk)
+        self.assertFalse(Usuario.objects.get(pk=otra.pk).is_active)
+
+    def test_pre_d_los_registrantes_reciben_la_cuenta_antes_de_que_cambie_nada(self):
+        """Contrato de ``core/extensiones.py``: los impedimentos se piden con la cuenta ya bloqueada y ANTES de cambiarle el
+        estado (si no, un registrante vería una cuenta ya inactiva)."""
+        vistas = []
+
+        def registrante(cuenta):
+            vistas.append((cuenta.pk, Usuario.objects.get(pk=cuenta.pk).is_active))
+            return []
+
+        with self.con(registrante):
+            servicios.baja_usuario(self.gerente, self.cuenta.pk)
+
+        self.assertEqual(vistas, [(self.cuenta.pk, True)])
+
+    def test_pre_d_un_impedimento_no_corre_los_efectos_de_la_baja(self):
+        """USR-BAJ-USR precondición d: si hay un impedimento no se aplica ningún efecto de la baja (D-43)."""
+        llamadas = []
+        with self.con(lambda cuenta: [self.EN_RUTA]), mock.patch.object(
+            extensiones, "_EFECTOS_DE_BAJA_DE_CUENTA", [lambda actor, cuenta: llamadas.append(cuenta) or Efecto([], {})]
+        ):
+            with self.assertRaises(ValidationError):
+                servicios.baja_usuario(self.gerente, self.cuenta.pk)
+        self.assertEqual(llamadas, [])
+
+    def test_pre_d_el_impedimento_de_una_cuenta_no_afecta_a_otra(self):
+        """Los registrantes reciben la cuenta de la baja: el que sabe de una cuenta en ruta no impide dar de baja a otra."""
+        otra = crear_cuenta(Transportista, "otra@infoponia.com", **LAURA)
+        with self.con(lambda cuenta: [self.EN_RUTA] if cuenta.pk == self.cuenta.pk else []):
+            servicios.baja_usuario(self.gerente, otra.pk)
+            with self.assertRaises(ValidationError):
+                servicios.baja_usuario(self.gerente, self.cuenta.pk)
+        self.assertFalse(Usuario.objects.get(pk=otra.pk).is_active)
+        self.assertTrue(Usuario.objects.get(pk=self.cuenta.pk).is_active)
+
+    def test_regla_4_impedimentos_de_baja_devuelve_los_de_todos_los_registrantes_sin_cambiar_nada(self):
+        """Precondición d: ``impedimentos_de_baja`` (para la ventana) devuelve todos, es de solo lectura y no audita."""
+        with self.con(lambda cuenta: [self.EN_RUTA], lambda cuenta: [self.OTRO]):
+            devueltos = servicios.impedimentos_de_baja(self.gerente, self.cuenta.pk)
+
+        self.assertEqual(list(devueltos), [self.EN_RUTA, self.OTRO])
+        self.assertTrue(Usuario.objects.get(pk=self.cuenta.pk).is_active)
+        self.assertEqual(RegistroAuditoria.objects.count(), 0)
+
+    def test_regla_4_impedimentos_de_baja_sin_registrantes_es_vacio(self):
+        """Sin registrantes, la ventana ofrece confirmar."""
+        with self.con():
+            self.assertEqual(list(servicios.impedimentos_de_baja(self.gerente, self.cuenta.pk)), [])
+
+    def test_regla_4_impedimentos_de_baja_respeta_el_alcance_y_los_ids(self):
+        """SEG-13 y D-28: como ``obtener_cuenta``: solo un Gerente o Administrador activo; fuera del alcance,
+        ``PermissionDenied``; un id inexistente, ``Http404``."""
+        with self.assertRaises(PermissionDenied):
+            servicios.impedimentos_de_baja(crear_cuenta(Capataz, "capataz@infoponia.com", **LAURA), self.cuenta.pk)
+        with self.assertRaises(PermissionDenied):
+            servicios.impedimentos_de_baja(self.gerente, crear_administrador().pk)  # fuera del alcance del Gerente
+        with self.assertRaises(Http404):
+            servicios.impedimentos_de_baja(self.gerente, self.cuenta.pk + 1000)
+
+    def test_pre_d_la_ventana_lista_los_impedimentos_y_no_ofrece_confirmar(self):
+        """USR-BAJ-USR precondición d y ``bajaDeCuentaEnRuta`` del prototipo: la ventana dice todo lo que impide la baja y no
+        ofrece confirmar (D-30); sin ellos, pide confirmar."""
+        self.client.force_login(self.gerente)
+        url = reverse("core:usuario_baja", args=[self.cuenta.pk])
+
+        with self.con(lambda cuenta: [self.EN_RUTA], lambda cuenta: [self.OTRO]):
+            con = self.client.get(url, headers={"HX-Request": "true"})
+        with self.con():
+            sin = self.client.get(url, headers={"HX-Request": "true"})
+
+        self.assertContains(con, "Está en ruta: el producto de sus entregas de hoy está en su vehículo.")
+        self.assertContains(con, "Podés darla de baja cuando finalice la ruta.")
+        self.assertContains(con, "Otro motivo. Resolvelo antes.")
+        self.assertNotContains(con, 'data-enviando="Dando de baja…"')
+        self.assertContains(sin, 'data-enviando="Dando de baja…"')
+
+    def test_pre_d_sin_javascript_la_ficha_trae_la_ventana_con_los_impedimentos(self):
+        """Interfaz: sin ``HX-Request``, la ficha trae la ventana con los impedimentos."""
+        self.client.force_login(self.gerente)
+        with self.con(lambda cuenta: [self.EN_RUTA]):
+            respuesta = self.client.get(reverse("core:usuario_baja", args=[self.cuenta.pk]))
+        self.assertContains(respuesta, "<html")
+        self.assertContains(respuesta, "Está en ruta: el producto de sus entregas de hoy está en su vehículo.")
+
+    def test_pre_d_un_post_manual_con_impedimentos_vuelve_a_la_ventana_y_no_da_de_baja(self):
+        """USR-BAJ-USR precondición d: confirmar con un POST manual lo rechaza el servicio y la ventana vuelve con el motivo."""
+        self.client.force_login(self.gerente)
+        with self.con(lambda cuenta: [self.EN_RUTA]):
+            respuesta = self.client.post(reverse("core:usuario_baja", args=[self.cuenta.pk]))
+
+        self.assertContains(respuesta, "Está en ruta: el producto de sus entregas de hoy está en su vehículo.")
+        self.assertTrue(Usuario.objects.get(pk=self.cuenta.pk).is_active)

@@ -8,7 +8,9 @@ La baja lista lo que la cuenta tiene asignado («asignaciones», regla 4 de USR-
 negocio en core.extensiones). Si la cuenta es la del Gerente, «pendientes» (total y detalle, NOT-01, D-42) dice cuántos quedan
 esperando hasta el alta de otro Gerente (postcondición c): es un texto, no una notificación. Pendiente: lo que dejan los pedidos y las entregas.
 Con «gerente_activo» (reactivar un Gerente con otro activo, regla 5 y D-30) la ventana no ofrece confirmar: muestra
-el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
+el motivo, con «Ver a <nombre>» y «Cerrar».
+Con «impedimentos» (baja; precondición d de USR-BAJ-USR, MAE-05, D-55: el Transportista en ruta, que registra `comercial` en
+core.extensiones) la ventana los lista todos, cada uno con cómo resolverlo, y no ofrece confirmar: solo «Entendido» (D-30).{% endcomment %}
 <div class="ov" data-ventana>
   {% if accion == "reactivar" and gerente_activo %}
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
@@ -21,6 +23,16 @@ el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
   </div>
   {% else %}
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if accion == "baja" and impedimentos %}
+    <h2 id="ventana-titulo">No se puede dar de baja esta cuenta</h2>
+    <p>Primero hay que resolver:</p>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>
+      <ul style="margin:0;padding-left:18px">{% for impedimento in impedimentos %}<li>{{ impedimento.texto }} {{ impedimento.como_resolver }}</li>{% endfor %}</ul>
+    </div></div>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'core:usuario' cuenta.pk %}" data-cerrar-ventana data-foco-inicial>Entendido</a>
+    </div>
+    {% else %}
     {% if accion == "restablecer" %}
     <h2 id="ventana-titulo">¿Restablecer el acceso?</h2>
     <p>Se restablece el acceso de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}): su contraseña actual deja de servir y se cierran sus sesiones abiertas{% if cuenta.grupo_id %}. La cuenta <b>sale de su grupo</b> de cuentas vinculadas{% endif %}.</p>
@@ -60,6 +72,7 @@ el motivo, con «Ver a <nombre>» y «Cerrar».{% endcomment %}
         {% endif %}
       </div>
     </form>
+    {% endif %}
   </div>
   {% endif %}
 </div>

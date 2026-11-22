@@ -24,6 +24,13 @@ urlpatterns = [
     path("<int:invernadero_id>/modificar/", views.invernadero_modificar, name="invernadero_modificar"),
     path("<int:invernadero_id>/baja/", views.invernadero_baja, name="invernadero_baja"),
     path("<int:invernadero_id>/reactivar/", views.invernadero_reactivar, name="invernadero_reactivar"),
+    # MAE-05 (D-55): transportistas de un invernadero («Logística»). Cada ventana es una página y, con HTMX, un fragmento.
+    path("<int:invernadero_id>/transportistas/agregar/", views.transportista_agregar, name="transportista_agregar"),
+    path(
+        "<int:invernadero_id>/transportistas/<int:transportista_id>/quitar/",
+        views.transportista_quitar,
+        name="transportista_quitar",
+    ),
     # MAE-03: sectores de un invernadero. Cada ventana es una página (respaldo sin JavaScript) y, con HTMX, un fragmento.
     path("<int:invernadero_id>/sectores/nuevo/", views.sector_nuevo, name="sector_nuevo"),
     path("<int:invernadero_id>/sectores/<int:sector_id>/modificar/", views.sector_modificar, name="sector_modificar"),

@@ -59,6 +59,9 @@ enlace lleva a esta ficha con la ventana abierta («ventana»). «Reactivar» no
     </div>
   </div>
 
+  {# MAE-05 (D-55): «Logística», entre «Ubicación y Equipo» y «Capacidad» (regla 3 de PROD-CNS-INV). #}
+  {% include "maestros/invernaderos/_logistica.html" %}
+
   {# MAE-03: capacidad por tipo de etapa y pestaña «Sectores» (regla 3 de PROD-CNS-INV). PRD-01 suma las pestañas de lotes y bitácora. #}
   {% include "maestros/sectores/_capacidad.html" %}
   <div class="tabs" role="tablist"><span class="tab" role="tab" aria-selected="true">Sectores</span></div>

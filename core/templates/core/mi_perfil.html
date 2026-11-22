@@ -31,6 +31,8 @@ pide la contraseña actual). Tarea 06a.
       <dt>Teléfono</dt><dd>{% if user.telefono %}{{ user.telefono }}{% else %}<span class="muted">—</span>{% endif %}</dd>
       <dt>Rol</dt><dd>{% if es_administrador %}Administrador (sin rol operativo){% else %}{{ user|rol_visible }}{% endif %}</dd>
       <dt>Estado</dt><dd>{% if user.is_active %}Activo{% else %}Inactivo{% endif %}</dd>
+      {# MAE-05 (D-55): datos de solo lectura que registran las apps (el invernadero del Transportista), sin la nota. #}
+      {% for dato in datos_de_cuenta %}<dt>{{ dato.etiqueta }}</dt><dd>{{ dato.valor }}</dd>{% endfor %}
     </dl>
     {% if es_administrador %}
     <div class="row" style="margin-top:14px"><a class="btn btn-ghost" href="{% url 'core:usuario_modificar' user.pk %}">Modificar mis datos</a></div>

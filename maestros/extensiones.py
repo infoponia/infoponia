@@ -270,3 +270,51 @@ def variedades_registradas(actor, cultivos):
     if not _VARIEDADES:
         return None
     return _VARIEDADES[0](actor, list(cultivos))
+
+
+# ---- MAE-05: puntos de extensión de los transportistas (D-55; docs/api/extensiones_de_maestros.md, «Transportistas») ----
+# `maestros` guarda a qué invernadero pertenece cada Transportista (TransportistaInvernadero) y no conoce `Entrega` ni
+# `Vehiculo`, que vivirán en `comercial`: los dos puntos los registra `comercial` en su ``AppConfig.ready()``. Sin
+# registrantes, cada uno da su resultado neutro (ningún impedimento; ninguna columna de logística). Corren dentro de la
+# transacción del servicio, con la cuenta del Transportista y los invernaderos ya bloqueados (D-40).
+
+# Lo que `comercial` informa de cada Transportista para «Logística»: ``vehiculo`` es un texto («Camioneta AE123CD · 800 kg»)
+# o ``None`` (sin vehículo); ``url_entregas`` lleva a sus entregas (COM-ASG-TRP).
+Logistica = namedtuple("Logistica", "vehiculo en_ruta entregas_a_realizar url_entregas")
+
+_IMPEDIMENTOS_DE_TRANSPORTISTA = []
+_LOGISTICA = []  # a lo sumo un registrante
+
+
+def registrar_impedimento_de_transportista(funcion):
+    """Registra ``funcion(transportista) -> list[Impedimento]`` con los códigos ``transportista_en_ruta`` y
+    ``transportista_con_entregas`` (reglas 9 y 10 de PROD-MOD-INV). Solo lectura. Lo registra `comercial`."""
+    _IMPEDIMENTOS_DE_TRANSPORTISTA.append(funcion)
+    return funcion
+
+
+def impedimentos_de_transportista(transportista):
+    """Los impedimentos de todos los registrantes, juntos (sin registrantes, lista vacía: no se bloquea nada). Los usan
+    quitar y trasladar, y la ventana que los informa."""
+    juntos = []
+    for funcion in list(_IMPEDIMENTOS_DE_TRANSPORTISTA):
+        juntos.extend(funcion(transportista))
+    return juntos
+
+
+def registrar_logistica_de_transportista(funcion):
+    """Registra ``funcion(transportistas) -> dict[int, Logistica]``: vehículo, situación y entregas a realizar de cada
+    Transportista, en una sola llamada para toda la lista. **Admite un solo registrante**: una segunda llamada lanza
+    ``RuntimeError``. Lo registra `comercial`."""
+    if _LOGISTICA:
+        raise RuntimeError("registrar_logistica_de_transportista admite un solo registrante.")
+    _LOGISTICA.append(funcion)
+    return funcion
+
+
+def logistica_de(transportistas):
+    """``{id: Logistica}`` del registrante, o ``None`` si no hay ninguno (entonces «Logística» muestra solo el nombre y el
+    estado de la cuenta, sin las columnas de vehículo, situación y entregas)."""
+    if not _LOGISTICA:
+        return None
+    return _LOGISTICA[0](list(transportistas))

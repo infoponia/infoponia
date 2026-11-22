@@ -4,13 +4,14 @@
 # MAE-03: TipoEtapa (catálogo fijo), SectorProduccion, Cultivo y, con columnas mínimas, Variedad, Ciclo y EtapaProductiva
 # (docs/modelo/maestros.md; INV-03 completa Variedad).
 # MAE-04: ConfiguracionOperativa y PerfilOrganizacion, dos singletons (MD-89) sin alta ni baja.
+# MAE-05 (D-55): TransportistaInvernadero, cómo se guarda R155 (un Transportista pertenece a un invernadero o a ninguno).
 
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.utils import timezone
 
-from core.models import Agronomo, Capataz, Tecnico, Usuario, Vendedor, rol_de
+from core.models import Agronomo, Capataz, Tecnico, Transportista, Usuario, Vendedor, rol_de
 from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
 
 
@@ -255,6 +256,42 @@ class Invernadero(models.Model):
             if persona is None or not persona.is_active:
                 faltan.append((atributo, nombre, persona is None))
         return faltan
+
+    def transportistas(self):
+        """Regla 3 de PROD-CNS-INV y D-55: los ``core.Transportista`` vinculados a este invernadero (activos o no), por
+        apellido y nombre sin distinguir mayúsculas, en una sola consulta. Cada uno trae ``invernadero_asignado`` (con
+        ``desde``) ya cargado."""
+        return list(
+            Transportista.objects.filter(invernadero_asignado__invernadero=self)
+            .select_related("invernadero_asignado")
+            .order_by(Lower("last_name"), Lower("first_name"), "pk")
+        )
+
+
+class TransportistaInvernadero(models.Model):
+    """R155 en el código (D-55, MAE-05; docs/modelo/maestros.md): a qué invernadero pertenece cada Transportista.
+
+    La declara ``maestros`` porque es la app de nivel mayor (regla A2 de D-37). El ``OneToOneField`` hace que la base de
+    datos garantice el 0..1 (un Transportista no puede estar en dos invernaderos). Para agregar se crea la fila, para
+    trasladar se cambian ``invernadero`` y ``desde`` y para quitar se borra; el historial queda en la auditoría. La fila no
+    se borra al dar de baja la cuenta (regla 3 de PROD-BAJ-INV).
+    """
+
+    transportista = models.OneToOneField(
+        Transportista, on_delete=models.PROTECT, related_name="invernadero_asignado"
+    )
+    invernadero = models.ForeignKey(
+        Invernadero, on_delete=models.PROTECT, related_name="transportistas_asignados"
+    )
+    # Cuándo empezó a trabajar para este invernadero; lo fija el servicio al agregar y al trasladar (sin valor por defecto).
+    desde = models.DateTimeField("desde")
+
+    class Meta:
+        verbose_name = "Transportista del invernadero"
+        verbose_name_plural = "Transportistas de los invernaderos"
+
+    def __str__(self):
+        return f"{self.transportista.get_full_name() or self.transportista.email} · {self.invernadero.nombre_invernadero}"
 
 
 class AlertaQuerySet(models.QuerySet):
