@@ -8,6 +8,8 @@ urlpatterns = [
     path("", include("core.urls")),
     # MAE-01: invernaderos (Producción).
     path("produccion/", include("maestros.urls")),
+    # INV-03: variedades, dentro de «Cultivos y variedades» (Agrónomo).
+    path("produccion/", include("inventario.urls_variedades")),
     # MAE-04: configuración operativa y perfil de la organización (Gerente).
     path("configuracion/", include("maestros.urls_configuracion")),
     # MAE-02c: consulta de alertas (Gerente y Agrónomo).

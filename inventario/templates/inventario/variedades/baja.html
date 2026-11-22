@@ -1,0 +1,35 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Baja de una variedad (PROD-BAJ-VAR, MODALS['var-baja'] del prototipo), con confirmación previa. Recibe «variedad», «cultivo», «informe» (InformeDeBaja: impedimentos,
+habilitada_en y stock) y «errores» (si el servicio rechazó la baja con la página abierta). Con impedimentos (regla 2) los dice todos, cada uno con cómo resolverlo, y no ofrece confirmar.
+Sin ellos, pide confirmar e informa dónde está habilitada la semilla y cuánto stock queda, sin bloquear (regla 3). Dar de baja es un POST a la misma URL; abrirla no cambia nada.{% endcomment %}
+{% block titulo %}Dar de baja {{ variedad.nombre_variedad }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
+<link rel="stylesheet" href="{% static_v 'inventario/css/variedades.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'maestros:cultivos' %}">{% icono "back" 14 %} Cultivos y variedades</a>
+  {% if informe.impedimentos or errores %}
+  <div class="page-h"><h1>No se puede dar de baja {{ cultivo.nombre_cultivo }} {{ variedad.nombre_variedad }}</h1></div>
+  <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>Todavía está en producción o tiene compromisos:
+    <ul class="inv-impedimentos">
+      {% for i in informe.impedimentos %}<li>{{ i.texto }} {{ i.como_resolver }}</li>{% endfor %}
+      {% if not informe.impedimentos %}{% for e in errores %}<li>{{ e }}</li>{% endfor %}{% endif %}
+    </ul></div></div>
+  <div class="footbar"><a class="btn btn-primary" href="{% url 'maestros:cultivos' %}">Entendido</a></div>
+  {% else %}
+  <div class="page-h"><h1>¿Dar de baja {{ cultivo.nombre_cultivo }} {{ variedad.nombre_variedad }}?</h1></div>
+  <div class="stack">
+    <p>La variedad y su semilla pasan a inactivas: no podrán sembrarse ni pedirse. Conservan su ciclo, sus etapas y su historial, y pueden reactivarse después.</p>
+    {% if informe.habilitada_en %}<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>También tiene la semilla habilitada en: {{ informe.habilitada_en|join:", " }}. Las existencias de la semilla no se deshabilitan.</div></div>{% endif %}
+    {% if informe.stock %}<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Queda semilla en stock: {% for s in informe.stock %}{{ s.cantidad }} unidades en {{ s.invernadero }}{% if not forloop.last %}; {% endif %}{% endfor %}. Sigue registrada. Si se descarta, debe registrarse con un ajuste de stock.</div></div>{% endif %}
+  </div>
+  <form method="post" action="{% url 'variedades:variedad_baja' variedad.pk %}">
+    {% csrf_token %}
+    <div class="footbar">
+      <a class="btn btn-primary" href="{% url 'maestros:cultivos' %}" data-foco-inicial>Cancelar</a>
+      <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

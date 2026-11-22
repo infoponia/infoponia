@@ -32,6 +32,8 @@ urlpatterns = [
     path("prueba/mensajes/", vista_con_mensajes, name="prueba_mensajes"),
     path("", include("core.urls")),
     path("produccion/", include("maestros.urls")),
+    # INV-03: las variedades cuelgan de /produccion/ (el menú y los enlaces de cultivos las resuelven).
+    path("produccion/", include("inventario.urls_variedades")),
     # MAE-04: el menú del Gerente tiene también «Configuración» (maestros la registra en ready()).
     path("configuracion/", include("maestros.urls_configuracion")),
     # MAE-02c: el menú del Gerente y del Agrónomo tiene también «Alertas» (maestros la registra en ready()).

@@ -1,0 +1,7 @@
+/* Estilos de variedades (INV-03), sobre el Diseño v2 (D-47): tarjetas, tablas, diagrama del ciclo (.ciclo, .etapa), interruptores (.switch), avisos y
+   ventanas salen de core/static/core/css/infoponia.css. Acá quedan solo los detalles propios de la tabla de variedades y del formulario. */
+.var-ciclo{display:grid;gap:2px}
+.var-ciclo .ciclo-w{min-width:0}
+.etapa-row .dur .inv-conunidad .field-input{max-width:110px}
+.field-input.num{font-variant-numeric:tabular-nums}
+.fld .inv-conunidad .field-input{max-width:200px}

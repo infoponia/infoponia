@@ -1,0 +1,23 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Qué sigue» tras crear una variedad (regla 9 de PROD-ALT-VAR; S.ok de VIEWS['var-form'] del prototipo). Recibe «variedad», «cultivo», «semilla» y «puede_habilitar»
+(la cuenta tiene un invernadero activo a su cargo). El botón abre la ventana de CMP-HAB-IIN (INV-02) con la semilla ya elegida: con HTMX sobre esta página y, sin JavaScript, en
+la pestaña de existencias.{% endcomment %}
+{% block titulo %}Variedad creada · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div><b>Variedad creada: {{ cultivo.nombre_cultivo }} {{ variedad.nombre_variedad }}</b><div>También se creó su semilla: «{{ semilla.nombre_insumo }}», en la categoría Semillas, con control de vencimiento.</div></div></div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">Qué sigue</div>
+    <p>Para poder pedirla o sembrarla, habilitá la semilla en cada invernadero donde se vaya a utilizar. Después cargá su stock con una compra o con un ajuste de «carga inicial».</p>
+    <div class="row" style="margin-top:12px">
+      {% if puede_habilitar and semilla %}<a class="btn btn-primary" href="{% url 'inventario:habilitar' %}?insumo={{ semilla.pk }}" hx-get="{% url 'inventario:habilitar' %}?insumo={{ semilla.pk }}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Habilitar la semilla en un invernadero</a>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'maestros:cultivos' %}">Volver a cultivos y variedades</a>
+    </div>
+    {% if not puede_habilitar %}<div class="hint" style="margin-top:10px">No tenés invernaderos activos a tu cargo: la semilla la habilita el Agrónomo de cada invernadero.</div>{% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar"></div>
+{% endblock %}

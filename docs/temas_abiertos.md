@@ -226,9 +226,29 @@ agregan en los lotes de documentación del IoT; **hasta entonces estos temas son
 - **La ventana «Agregar» no resalta el candidato elegido.** Usa radios nativos dentro de `label.opt`; el prototipo marca la opción con `aria-pressed`, que hoy no se actualiza sin JavaScript.
 - **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
 
+## Abiertos desde INV-03 (22/11/2026)
+
+- **Lo implementado distinto de lo escrito, o que la tarea no decía** (detalle en el «Cierre» del archivo de la tarea):
+  - **Reactivar es una página de confirmación**, no un botón directo como en el prototipo: la tabla de variedades la arma `inventario` para `maestros` sin recibir el pedido y no puede llevar un formulario con CSRF. Escribirlo en PROD-MOD-VAR (regla 9) si se acepta.
+  - **Fuera de «Permitido fuera de la app»:** `core/tests/urls_prueba_acceso.py` (la misma línea de rutas que `config/urls.py`; sin ella las pruebas de interfaz de `core` no resuelven los enlaces).
+  - **Tres pruebas existentes adaptadas:** `maestros/tests/test_cultivos_concurrencia.py` (usa `crear_variedad(cultivo, "Crespa")`) y dos de `maestros/tests/test_extensiones_sectores.py` (`test_ext_semillas_sin_registrantes_son_cero` y `test_ext_uso_de_cultivo_sin_registrantes_no_hay_invernaderos`, que ahora aíslan el punto con `mock.patch.object`): con `inventario` instalado esos puntos ya tienen registrante. La fábrica `crear_variedad` también cambió (valores por defecto válidos).
+  - **`gestion_de` y `acciones_de`** en `inventario/servicios/variedades.py`: la regla de `puede_gestionar` y `acciones_permitidas` para toda la tabla en una consulta; las dos de antes delegan en ellas.
+  - **`habilitar` de INV-02** acepta una semilla activa que llega con `?insumo=`; la lista general sigue sin semillas.
+  - **El comando de pruebas de migración** de la tarea no incluía `core` (la migración `core/0016` también se prueba): corregir la tarea.
+- **Hueco conocido:** la precondición f de PROD-BAJ-VAR (contratos) no se verifica hasta que `comercial` registre `contratos_abiertos`.
+- **`reactivar_variedad` no reevalúa las alertas de stock** de las existencias que quedaron activas (la baja sí). Decidir en PRD-01.
+- **`habilitar_insumo` (INV-02) no mira la variedad de una semilla:** la ventana entre habilitar y dar de baja la variedad la cubre la baja con `cambio_simultaneo` (no reintenta, para no bloquear fuera de orden).
+- **Variedad sin Agrónomo:** si todos los invernaderos que usan una variedad están sin Agrónomo, nadie la gestiona hasta que el Gerente asigne uno.
+- **`renombrar_semillas(actor, cultivo, nombre_anterior)`:** `nombre_anterior` no se usa (el nombre de la semilla se arma con el cultivo y la variedad). Sacarlo de la firma de `docs/api/extensiones_de_maestros.md` o usarlo.
+- **Prueba de espacios al borde:** documenta la frontera entre la base (no recorta) y el servicio (recorta antes de comparar).
+- **Cruce de concurrencia agregado:** alta de una variedad contra el renombre de su cultivo (la tarea no lo pedía).
+- **Sin verificar:** HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).
+
 ## Abiertos desde H2 (20/11/2026)
 
 | Tema | Qué falta | Cuándo |
 |---|---|---|
 | Registrar H2 en el modelo de Drive | Ítem nuevo de pendientes_MD: `OrdenTrabajo.motivoCancelacion` (texto, obligatorio al cancelar, 1 a 300) y `fechaResolucionOrden` también como fecha de cancelación; ya aplicado en `docs/modelo/produccion.md` (Diferencias n.º 17). Pegalo vos: no tengo escritura en Drive | Antes de cerrar la ronda del modelo |
 | Aviso al Vendedor con el motivo (PROD-CNL-ORD, postcondición l) | Fuera de la ronda (D-45). La versión 0.1 del CU no menciona el motivo en ese aviso; ajustarla en Drive (pendientes_CU). Se programa con Cosecha | Cuando exista Cosecha |
+
+

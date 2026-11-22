@@ -115,16 +115,21 @@ def _volver(request):
 def habilitar(request):
     """«Habilitar insumo en un invernadero» (CMP-HAB-IIN, ``MODALS.habilitar`` del prototipo). Con ``?insumo=`` (desde el catálogo) o
     ``?invernadero=`` el campo ya viene elegido y no se cambia. Al terminar, la pestaña ofrece «Cargar stock inicial» (el stock arranca en
-    cero). Las semillas no se habilitan acá: nacen con su variedad (INV-03)."""
+    cero). La lista general no ofrece semillas (nacen con su variedad, INV-03); la semilla activa que llega ya elegida (``?insumo=`` desde «Qué sigue»
+    de la variedad) sí se habilita."""
     invernaderos = list(Invernadero.objects.en_alcance_de(request.user).order_by("nombre_invernadero", "id"))
-    insumos = [i for i in api_insumos.consultar_insumos(request.user) if i.activo and not i.es_semilla]
+    todos = [i for i in api_insumos.consultar_insumos(request.user) if i.activo]
+    insumos = [i for i in todos if not i.es_semilla]
     datos = request.POST if request.method == "POST" else request.GET
-    fijo_insumo = next((i for i in insumos if i.pk == _entero(datos.get("insumo"))), None) if datos.get("insumo") else None
+    # INV-03 (paso 8): la lista general sigue sin semillas (nacen con su variedad), pero la semilla activa que llega ya elegida
+    # (``?insumo=`` desde «Qué sigue» de la variedad, o el campo oculto al enviar) sí se puede habilitar.
+    fijo_insumo = next((i for i in todos if i.pk == _entero(datos.get("insumo"))), None) if datos.get("insumo") else None
+    habilitables = insumos + ([fijo_insumo] if fijo_insumo is not None and fijo_insumo.es_semilla else [])
     fijo_invernadero = next((g for g in invernaderos if g.pk == _entero(datos.get("invernadero"))), None) if datos.get("invernadero") else None
     if request.method == "POST":
         form = forms.FormularioExistencia(request.POST, insumos=insumos, invernaderos=invernaderos)
         form.is_valid()
-        insumo = next((i for i in insumos if i.pk == _entero(form.cleaned_data.get("insumo"))), None)
+        insumo = next((i for i in habilitables if i.pk == _entero(form.cleaned_data.get("insumo"))), None)
         invernadero = next((g for g in invernaderos if g.pk == _entero(form.cleaned_data.get("invernadero"))), None)
         if insumo is None:
             form.add_error("insumo", "Elegí el insumo.")

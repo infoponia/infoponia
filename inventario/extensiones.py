@@ -114,3 +114,79 @@ def impedimentos_de_deshabilitacion(insumo_invernadero):
     for funcion in list(_IMPEDIMENTOS_DE_DESHABILITACION):
         impedimentos.extend(funcion(insumo_invernadero))
     return impedimentos
+
+
+# ---- INV-03: puntos de extensión de variedades (docs/api/extensiones_de_inventario.md, «Variedades») ----
+# Los registra `produccion` (PRD-01: lotes, órdenes, variedades presentes) y `comercial` (ronda futura: contratos). Sin
+# registrantes, ninguna variedad tiene lotes, órdenes ni contratos: todas pueden modificarse y darse de baja sin impedimentos
+# (la precondición f de PROD-BAJ-VAR queda sin verificar hasta que `comercial` se registre). Mismo contrato que los de arriba:
+# dentro de la transacción del servicio, después de los bloqueos de docs/patrones/stock.md, sección 5, con listas de ids.
+
+# Lo que `produccion` informa de cada variedad (regla 1, 3, 4 y 5 de PROD-MOD-VAR): ``con_lotes`` (tiene algún lote, aunque esté
+# terminado), ``lotes_activos``, ``ordenes_a_realizar`` (de siembra de la variedad y de transición de sus lotes) e
+# ``invernaderos_con_lotes_activos`` (``frozenset`` de ids).
+UsoDeVariedad = namedtuple("UsoDeVariedad", "con_lotes lotes_activos ordenes_a_realizar invernaderos_con_lotes_activos")
+USO_NEUTRO = UsoDeVariedad(False, 0, 0, frozenset())
+
+_USOS_DE_VARIEDAD = []
+_VARIEDADES_PRESENTES = []
+_IMPEDIMENTOS_DE_BAJA_DE_VARIEDAD = []
+
+
+def registrar_uso_de_variedad(funcion):
+    """Registra ``funcion(variedad_ids) -> dict[int, UsoDeVariedad]``: lotes y órdenes de cada variedad. Lo que no figura es
+    ``UsoDeVariedad(False, 0, 0, frozenset())``. Lo registra `produccion` (PRD-01)."""
+    _USOS_DE_VARIEDAD.append(funcion)
+    return funcion
+
+
+def uso_de_variedades(variedad_ids):
+    """``{id: UsoDeVariedad}`` para cada id de ``variedad_ids``. Con varios registrantes se SUMAN los contadores, se unen los
+    invernaderos y ``con_lotes`` es verdadero si alguno lo dice; sin registrantes, el neutro. Una llamada por registrante."""
+    ids = list(variedad_ids)
+    total = {i: USO_NEUTRO for i in ids}
+    for funcion in list(_USOS_DE_VARIEDAD):
+        for i, uso in funcion(ids).items():
+            if i in total:
+                previo = total[i]
+                total[i] = UsoDeVariedad(
+                    previo.con_lotes or uso.con_lotes,
+                    previo.lotes_activos + uso.lotes_activos,
+                    previo.ordenes_a_realizar + uso.ordenes_a_realizar,
+                    previo.invernaderos_con_lotes_activos | frozenset(uso.invernaderos_con_lotes_activos),
+                )
+    return total
+
+
+def registrar_variedades_presentes(funcion):
+    """Registra ``funcion(invernadero_ids) -> dict[int, set[int]]``: por invernadero, las variedades con lotes activos u órdenes
+    de siembra a realizar (la definición del «umbral efectivo» de PROD-PNF-SMB). Lo registra `produccion` (PRD-01)."""
+    _VARIEDADES_PRESENTES.append(funcion)
+    return funcion
+
+
+def variedades_presentes(invernadero_ids):
+    """``{invernadero_id: set[int]}`` con las variedades presentes de todos los registrantes (sin ninguno, un conjunto vacío
+    por invernadero). Para la advertencia de rangos (regla 5 de PROD-MOD-VAR) y para ``umbral_efectivo``."""
+    ids = list(invernadero_ids)
+    juntas = {i: set() for i in ids}
+    for funcion in list(_VARIEDADES_PRESENTES):
+        for i, variedades in funcion(ids).items():
+            if i in juntas:
+                juntas[i] |= set(variedades)
+    return juntas
+
+
+def registrar_impedimento_de_baja_de_variedad(funcion):
+    """Registra ``funcion(variedad) -> list[Impedimento]`` con los códigos ``lotes_activos``, ``ordenes_a_realizar`` (`produccion`)
+    y ``contratos_abiertos`` (`comercial`). Lo llama la baja con la variedad ya bloqueada."""
+    _IMPEDIMENTOS_DE_BAJA_DE_VARIEDAD.append(funcion)
+    return funcion
+
+
+def impedimentos_de_baja_de_variedad(variedad):
+    """Los impedimentos de todos los registrantes, JUNTOS (regla 2 de PROD-BAJ-VAR: no se queda con el primero)."""
+    juntos = []
+    for funcion in list(_IMPEDIMENTOS_DE_BAJA_DE_VARIEDAD):
+        juntos.extend(funcion(variedad))
+    return juntos

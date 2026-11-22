@@ -1,0 +1,3 @@
+{% load iconos %}{% comment %}Botones de variedad en la cabecera de la tarjeta de un cultivo (PROD-CNS-VAR regla 4; docs/api/extensiones_de_maestros.md, «Cultivos»). Recibe
+«cultivo». «+ Variedad» solo con el cultivo activo: un cultivo inactivo no recibe variedades nuevas. Es un enlace: la pantalla de alta es una página.{% endcomment %}
+{% if cultivo.activo %}<a class="btn btn-ghost btn-sm" href="{% url 'variedades:variedad_nueva' cultivo.pk %}" aria-label="Agregar una variedad al cultivo {{ cultivo.nombre_cultivo }}">{% icono "plus" 14 %} Variedad</a>{% endif %}

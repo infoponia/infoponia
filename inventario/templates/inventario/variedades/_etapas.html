@@ -1,0 +1,22 @@
+{% comment %}Las filas de etapas del ciclo de una variedad (reglas 3 a 5 de PROD-ALT-VAR, «Perfil y etapas permitidas» de los casos de uso). Recibe «form» (FormularioVariedad),
+«variedad» (None en el alta) y, opcional, «solo_lectura». Se redibuja con HTMX al cambiar el perfil (sin validar) y es el contenido de #etapas. Germinación y Maduración son
+fijas; las otras se ofrecen solo si el perfil las permite. Con lotes (etapas congeladas) las casillas no se tocan pero se reenvían. Sin JavaScript, el botón «Actualizar etapas»
+envía todo lo escrito sin validar y vuelve a dibujar esta sección.{% endcomment %}
+{% if not form.perfil %}<p class="muted">Elegí primero el perfil familiar: de él dependen las etapas opcionales que se pueden incluir.</p>{% endif %}
+{% if form.etapas_bloqueadas %}<div class="alert alert-info" role="status" style="margin-bottom:14px"><div>Esta variedad ya tiene lotes: no se pueden agregar ni quitar etapas. Las duraciones sí se pueden cambiar, y rigen para los cálculos desde ahora.</div></div>{% endif %}
+{% for fila in form.filas_de_etapas %}
+<div class="etapa-row">
+  <label class="switch"><input type="checkbox" name="etapa_{{ fila.tipo.codigo }}" value="1"{% if fila.marcada %} checked{% endif %}{% if fila.congelada or solo_lectura %} disabled{% endif %} aria-label="Incluir {{ fila.tipo.nombre_etapa }}"><i></i></label>
+  {% if fila.congelada and fila.marcada and not fila.fija %}<input type="hidden" name="etapa_{{ fila.tipo.codigo }}" value="1">{% endif %}
+  <div>
+    <span class="etapa" style="--c:var(--e-{{ fila.clase }})"><i></i>{{ fila.tipo.nombre_etapa }}</span>
+    <div class="hint" style="margin-top:3px">{% if fila.fija %}{% if fila.tipo.codigo == "germinacion" %}Etapa obligatoria: todo cultivo comienza en Germinación.{% else %}Etapa obligatoria: es la etapa en la que el cultivo puede cosecharse.{% endif %}{% elif fila.marcada %}Incluida en el ciclo.{% else %}Opcional para este perfil: marcala para incluirla.{% endif %}</div>
+  </div>
+  <div class="dur">
+    <div class="inv-conunidad">{{ fila.dias }}<span class="muted sm">días</span></div>
+    {% for error in fila.dias.errors %}<div class="err">{{ error }}</div>{% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% if form.etapas_no_ofrecidas %}<div class="hint" style="margin-top:10px">No se ofrecen para este perfil: {{ form.etapas_no_ofrecidas|join:", " }}.</div>{% endif %}
+{% if not solo_lectura and not form.perfil_bloqueado %}<noscript><div style="margin-top:12px"><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar" data-enviando="Actualizando…">Actualizar etapas</button><span class="hint"> Después de elegir el perfil, actualizá para ver sus etapas.</span></div></noscript>{% endif %}

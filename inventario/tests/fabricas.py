@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from contabilidad.models import OrigenDocumento
 from inventario import extensiones
-from inventario.models import Insumo, InsumoInvernadero, LoteInsumo, MovimientoInsumo, TipoInsumo
+from inventario.models import Insumo, InsumoInvernadero, LoteInsumo, MovimientoInsumo, Semilla, TipoInsumo
 from maestros.tests.fabricas import ConDatosDeMaestros
 
 Mov = MovimientoInsumo.TipoMovimiento
@@ -225,3 +225,66 @@ def ajuste_simulado(actor, existencia, cantidad):
             detalle={"cambios": {"nombre": {"antes": "a", "despues": "b"}}},
         )
     return nuevo
+
+
+# ---- INV-03: variedades, semillas y sus puntos de extensión ----
+
+
+def variedad_con_semilla(cultivo=None, nombre="Crespa", perfil="hoja_verde", etapas=None, activa=True, **columnas):
+    """Una variedad con su ciclo, sus etapas y su semilla, como las deja el alta (PROD-ALT-VAR): extiende ``crear_variedad``.
+    ``etapas`` es una lista de códigos de tipo de etapa o de pares ``(codigo, dias)``; por omisión, germinación y maduración
+    de 10 días. La semilla se llama «Semilla {cultivo} {variedad}», es de la categoría ``semillas``, por unidad, con control de
+    vencimiento y su estado sigue al de la variedad. Sin ``cultivo`` usa «Lechuga» (lo crea si falta). Usala en lugar de armar ciclos a mano (docs/api/variedades.md)."""
+    from maestros.models import Ciclo, Cultivo, EtapaProductiva
+    from maestros.tests.fabricas import crear_cultivo, crear_variedad, tipo_etapa
+
+    # Sin cultivo, el «Lechuga» de las pruebas (se reutiliza: el nombre del cultivo es único).
+    cultivo = cultivo or Cultivo.objects.filter(nombre_cultivo="Lechuga").first() or crear_cultivo()
+    variedad = crear_variedad(cultivo, nombre=nombre, perfil=perfil, activa=activa, **columnas)
+    ciclo = Ciclo.objects.create(variedad=variedad)
+    for etapa in etapas or ("germinacion", "maduracion"):
+        codigo, dias = etapa if isinstance(etapa, (tuple, list)) else (etapa, 10)
+        EtapaProductiva.objects.create(ciclo=ciclo, tipo_etapa=tipo_etapa(codigo), duracion_estimada_dias=dias)
+    Semilla.objects.create(
+        nombre_insumo=f"Semilla {cultivo.nombre_cultivo} {nombre}",
+        tipo_insumo=categoria_del_sistema("semillas"),
+        unidad_medida_insumo="unidad",
+        controla_vencimiento=True,
+        estado_insumo="activo" if activa else "inactivo",
+        variedad=variedad,
+    )
+    return variedad
+
+
+@contextmanager
+def usos_de_variedad_de_prueba(usos=None, impedimentos=None):
+    """Registrantes falsos de los puntos de variedades que se quitan al salir. ``usos``: ``{variedad_id: UsoDeVariedad}`` para
+    ``registrar_uso_de_variedad`` (lo que no figura, el neutro); ``impedimentos``: ``{variedad_id: [Impedimento, ...]}`` para
+    ``registrar_impedimento_de_baja_de_variedad``. Sin ``variedades_presentes``: eso es ``variedades_presentes_de_prueba``."""
+    usos = usos or {}
+    impedimentos = impedimentos or {}
+
+    def uso(ids):
+        return {i: usos[i] for i in ids if i in usos}
+
+    def impedimentos_de(variedad):
+        return list(impedimentos.get(variedad.pk, []))
+
+    with (
+        mock.patch.object(extensiones, "_USOS_DE_VARIEDAD", [uso] if usos else []),
+        mock.patch.object(extensiones, "_IMPEDIMENTOS_DE_BAJA_DE_VARIEDAD", [impedimentos_de] if impedimentos else []),
+    ):
+        yield
+
+
+@contextmanager
+def variedades_presentes_de_prueba(presentes=None):
+    """Un registrante falso de ``registrar_variedades_presentes`` para probar la advertencia de rangos y ``umbral_efectivo``
+    sin lotes reales. ``presentes``: ``{invernadero_id: {variedad_id, ...}}``; sin ``presentes``, sin registrante."""
+    presentes = presentes or {}
+
+    def de_los_invernaderos(ids):
+        return {i: set(presentes[i]) for i in ids if i in presentes}
+
+    with mock.patch.object(extensiones, "_VARIEDADES_PRESENTES", [de_los_invernaderos] if presentes else []):
+        yield

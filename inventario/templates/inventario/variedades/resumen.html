@@ -1,0 +1,59 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Resumen antes de crear o guardar una variedad (regla 8 de PROD-ALT-VAR y de PROD-MOD-VAR; paso 2 de VIEWS['var-form'] del prototipo). Recibe «cultivo», «variedad» (None en el alta),
+«form», «resumen» (ResumenDeAlta o ResumenDeModificacion), «filas» ((rótulo, nuevo, anterior)), «ciclo» (las etapas enviadas), «nombre_semilla» y, si el servicio pidió confirmar la advertencia de
+rangos, «incompatibilidades» (invernadero, variable y con qué variedad). Todo lo escrito viaja en campos ocultos: nada se guarda hasta confirmar, y confirmar vuelve a validar todo en el servidor.
+La advertencia es una ventana dentro del mismo formulario: «Volver a revisar» o «Guardar igual» (regla 5 de PROD-MOD-VAR).{% endcomment %}
+{% block titulo %}Resumen · {% if variedad %}{{ variedad.nombre_variedad }}{% else %}Nueva variedad{% endif %} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
+<link rel="stylesheet" href="{% static_v 'inventario/css/variedades.css' %}">
+<div class="page narrow">
+  <form method="post" novalidate action="{% if variedad %}{% url 'variedades:variedad' variedad.pk %}{% else %}{% url 'variedades:variedad_nueva' cultivo.pk %}{% endif %}">
+    {% csrf_token %}
+    {% for nombre, valor in form.campos_ocultos %}<input type="hidden" name="{{ nombre }}" value="{{ valor }}">{% endfor %}
+    <div class="page-h"><h1>{% if variedad %}Resumen de la modificación{% else %}Resumen de la nueva variedad{% endif %}</h1><div class="sub">Revisá los datos antes de {% if variedad %}guardar los cambios{% else %}crear la variedad{% endif %}.</div></div>
+    <div class="stack">
+      {% if variedad and not resumen.hay_cambios %}<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>No cambiaste nada: al confirmar no se guarda ni se notifica nada.</div></div>{% endif %}
+      <div class="card">
+        <div class="row"><div class="card-title" style="margin:0">Variedad</div></div>
+        <dl class="dl" style="margin-top:14px">
+          <dt>Cultivo</dt><dd>{{ cultivo.nombre_cultivo }}</dd>
+          {% for rotulo, nuevo, anterior in filas %}
+          <dt>{{ rotulo }}</dt><dd{% if rotulo != "Nombre" and rotulo != "Perfil familiar" %} class="mono"{% endif %}>{% if rotulo == "Nombre" %}<b>{{ nuevo }}</b>{% else %}{{ nuevo }}{% endif %}{% if anterior %} <span class="muted">(antes {{ anterior }})</span>{% endif %}</dd>
+          {% if rotulo == "Perfil familiar" %}
+          <dt>Ciclo</dt><dd><b class="mono">{{ resumen.duracion_del_ciclo }} días</b>
+            <div style="margin-top:6px">{% include "inventario/variedades/_ciclo.html" with ciclo=ciclo %}</div>
+            <div class="muted sm" style="margin-top:6px">Cosecha estimada a los {{ resumen.dias_hasta_maduracion }} días de la siembra, al entrar en Maduración.</div>
+            {% if cambio_de_etapas %}<div class="muted sm" style="margin-top:6px">Antes: {{ resumen.cambios.etapas.0|join:", " }}.</div>{% endif %}
+          </dd>
+          {% endif %}
+          {% endfor %}
+          <dt>Semilla</dt><dd>{% if not variedad %}<b>{{ nombre_semilla }}</b> <span class="muted">· se crea en la categoría Semillas, con control de vencimiento</span>{% elif resumen.nombre_semilla %}{{ semilla.nombre_insumo }} <span class="muted">→ se renombra a</span> <b>{{ resumen.nombre_semilla }}</b>{% else %}{{ nombre_semilla }}{% endif %}</dd>
+        </dl>
+      </div>
+      {% if variedad and resumen.a_notificar %}<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Los cambios de nombre, duraciones, etapas o rangos se notificarán a los Agrónomos de: {{ resumen.a_notificar|join:", " }}.</div></div>{% endif %}
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="guardar" data-enviando="{% if variedad %}Guardando…{% else %}Creando…{% endif %}">{% if variedad %}Guardar cambios{% else %}Crear variedad{% endif %}</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="volver" formnovalidate>Volver a editar</button>
+      <a class="btn btn-ghost" href="{% url 'maestros:cultivos' %}">Cancelar</a>
+    </div>
+
+    {% if incompatibilidades %}
+    <div class="ov" data-ventana>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+        <h2 id="ventana-titulo">Revise antes de guardar</h2>
+        <div class="alert alert-warn" role="alert" style="margin-bottom:6px">{% icono "warn" 16 %}<div>Con estos rangos, <b>{{ cultivo.nombre_cultivo }} {{ variedad.nombre_variedad }}</b> deja de ser compatible con otras variedades que conviven con ella:
+          <ul>{% for i in incompatibilidades %}<li><b>{{ i.invernadero }}</b>: {{ i.variable }}, con {{ i.con }}.</li>{% endfor %}</ul>
+          Las alertas de ese invernadero se calcularán con el rango nuevo.</div></div>
+        <p style="margin-top:12px">Los lotes que ya están en producción siguen donde están.</p>
+        <div class="acts">
+          <button class="btn btn-primary" type="submit" name="accion" value="volver" data-foco-inicial data-enviando="Volviendo…">Volver a revisar</button>
+          <button class="btn btn-ghost" type="submit" name="accion" value="guardar_igual" data-enviando="Guardando…">Guardar igual</button>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

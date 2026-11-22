@@ -1,4 +1,4 @@
-# Modelos de `inventario` (nivel 4 de D-37), INV-01: TipoInsumo, Insumo, InsumoInvernadero, LoteInsumo y MovimientoInsumo.
+# Modelos de `inventario` (nivel 4 de D-37), INV-01: TipoInsumo, Insumo, InsumoInvernadero, LoteInsumo y MovimientoInsumo; INV-03: Semilla.
 # Fuente: docs/modelo/inventario.md (fichas y reglas 8.4, 8.13, 8.19 y 8.23). Cantidades: Decimal con 3 decimales en la base,
 # validadas contra la unidad del insumo en el servicio (inventario/unidades.py); precios: Decimal(14, 2). Nunca float.
 # Bajas lógicas (D-36): nunca se borra una fila de negocio; las FK son PROTECT. A2 de D-37: las FK a `maestros` y a
@@ -320,3 +320,23 @@ class MovimientoInsumo(OrigenDocumento):
     def __str__(self):
         """«Tipo de movimiento #N» (texto de la auditoría, D-36)."""
         return f"{self.get_tipo_movimiento_display()} #{self.pk}"
+
+
+class Semilla(Insumo):
+    """Semilla de una variedad (INV-03; docs/modelo/inventario.md, «Semilla»): el material de propagación, semilla o plantín.
+    Herencia multitabla de ``Insumo`` (clave ``insumo_ptr``), de modo que toda la lógica de insumos, existencias y lotes la
+    trata como un insumo más. La FK uno a uno a ``maestros.Variedad`` se declara acá, en la app de nivel mayor (A2 de D-37).
+
+    La crea, renombra, da de baja y reactiva solo su variedad (y el cultivo la renombra, PROD-MOD-CLT); ni CMP-ALT-INS ni
+    CMP-MOD-INS ni CMP-BAJ-INS la tocan. La categoría ``semillas`` la fija el servicio y una prueba de invariante la cuida
+    (una ``Semilla`` está en la categoría ``semillas`` y ningún otro insumo lo está)."""
+
+    variedad = models.OneToOneField("maestros.Variedad", on_delete=models.PROTECT, related_name="semilla")  # R137
+
+    class Meta:
+        verbose_name = "Semilla"
+        verbose_name_plural = "Semillas"
+
+    def __str__(self):
+        """El nombre «Semilla {cultivo} {variedad}» (texto de la auditoría, D-36)."""
+        return self.nombre_insumo
