@@ -3,6 +3,8 @@
 # ``MaestrosConfig.ready()`` y se prueban solos y de punta a punta (con la campana, el alta de un Gerente y la ventana de
 # baja). Fuentes: D-42, D-14, D-41; regla 7 de 8.18 (lectura); modelo de dominio, ficha ``Alerta``.
 
+import re
+
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -39,15 +41,16 @@ class CampanaAlertasFuenteTests(ConGeoref, TestCase):
         self.assertIn(invernaderos.pendientes_de_alertas, extensiones._CONTADORES_DE_PENDIENTES)
 
     def test_d42_devuelve_las_activas_con_titulo_detalle_url_y_severidad(self):
-        """D-42: título = la descripción de la alerta, detalle = el invernadero, url = su ficha, severidad = la del tipo."""
-        crear_alerta(self.invernadero, "sin_capataz", descripcion_alerta="Invernadero sin Capataz activo")
+        """D-42: título = la descripción de la alerta, detalle = el invernadero, url = el detalle de la alerta (MAE-02c, paso 4;
+        antes era la ficha del invernadero), severidad = la del tipo."""
+        alerta = crear_alerta(self.invernadero, "sin_capataz", descripcion_alerta="Invernadero sin Capataz activo")
 
         (item,) = invernaderos.items_de_campana(self.gerente)
 
         self.assertIsInstance(item, ItemDeAlerta)
         self.assertEqual(item.titulo, "Invernadero sin Capataz activo")
         self.assertEqual(item.detalle, "Invernadero Norte")
-        self.assertEqual(item.url, reverse("maestros:invernadero", args=[self.invernadero.pk]))
+        self.assertEqual(item.url, reverse("alertas:detalle", args=[alerta.pk]))
         self.assertEqual(item.severidad, "advertencia")
 
     def test_d42_leida_sale_de_estado_lectura_alerta_no_leida(self):
@@ -256,9 +259,10 @@ class CampanaConAlertasDeMaestrosTests(ConGeoref, TestCase):
         self.cliente.login(email=self.gerente.email, password=CLAVE)
         self.url = reverse("core:campana")
 
-    def test_d42_el_gerente_ve_en_alertas_la_de_sin_capataz_con_su_severidad_y_el_enlace_a_la_ficha(self):
-        """Verificación a mano 4 de NOT-01: «Alertas» del Gerente con la de «sin Capataz», su severidad y el enlace a la ficha."""
-        crear_alerta(self.invernadero, "sin_capataz", descripcion_alerta="Invernadero sin Capataz activo")
+    def test_d42_el_gerente_ve_en_alertas_la_de_sin_capataz_con_su_severidad_y_el_enlace_al_detalle(self):
+        """Verificación a mano 4 de NOT-01: «Alertas» del Gerente con la de «sin Capataz», su severidad y el enlace al detalle
+        de la alerta (MAE-02c, paso 4; antes era la ficha del invernadero)."""
+        alerta = crear_alerta(self.invernadero, "sin_capataz", descripcion_alerta="Invernadero sin Capataz activo")
 
         contenido = self.cliente.get(self.url, **HTMX).content.decode()
 
@@ -266,7 +270,7 @@ class CampanaConAlertasDeMaestrosTests(ConGeoref, TestCase):
         self.assertIn("Invernadero sin Capataz activo", contenido)
         self.assertIn("Invernadero Norte", contenido)
         self.assertIn("sev-advertencia", contenido)
-        self.assertIn(f'href="{reverse("maestros:invernadero", args=[self.invernadero.pk])}"', contenido)
+        self.assertIn(f'href="{reverse("alertas:detalle", args=[alerta.pk])}"', contenido)
 
     def test_d42_el_punto_sigue_a_la_lectura_de_la_alerta(self):
         """D-42: con una alerta no leída hay punto; ya leída (``estado_lectura_alerta``) sigue en la lista pero sin punto."""
@@ -279,6 +283,23 @@ class CampanaConAlertasDeMaestrosTests(ConGeoref, TestCase):
 
         self.assertNotIn("dotn", self.cliente.get(inicio).content.decode())
         self.assertIn("Alertas (1)", self.cliente.get(self.url, **HTMX).content.decode())
+
+    def test_regla_r7_abrir_una_alerta_desde_la_campana_la_marca_leida_y_apaga_el_punto_rojo(self):
+        """MAE-02c, paso 4 (cierra el punto 4 de «Cuando exista la primera notificación o alerta»): de punta a punta, el enlace de
+        la campana lleva al detalle, que llama a ``abrir_alerta``; las no leídas bajan en uno y el punto rojo se apaga."""
+        alerta = crear_alerta(self.invernadero, "sin_capataz", descripcion_alerta="Invernadero sin Capataz activo")
+        no_leidas = lambda: Alerta.objects.para(self.gerente).activas().no_leidas().count()
+        self.assertEqual(no_leidas(), 1)
+        self.assertIn("dotn", self.cliente.get(reverse("core:inicio")).content.decode())
+
+        enlace = re.search(r'href="(/alertas/\d+/)"', self.cliente.get(self.url, **HTMX).content.decode()).group(1)
+        respuesta = self.cliente.get(enlace)
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(enlace, reverse("alertas:detalle", args=[alerta.pk]))
+        self.assertEqual(no_leidas(), 0)
+        self.assertNotIn("dotn", self.cliente.get(reverse("core:inicio")).content.decode())
+        self.assertIn("Alertas (1)", self.cliente.get(self.url, **HTMX).content.decode())  # sigue activa
 
     def test_d42_el_agronomo_ve_las_suyas_y_el_capataz_alertas_cero(self):
         """D-42, «Quién ve la campana»: el Agrónomo las de su invernadero; el Capataz «Alertas (0)»."""

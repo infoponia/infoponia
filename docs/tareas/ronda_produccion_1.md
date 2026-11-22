@@ -28,7 +28,7 @@ no dependen entre sí pueden hacerse en paralelo.
 | PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | PROD-PNR-FDS | PRD-03 | 5 |
 
 Ya hechas o en curso fuera de la ronda: MAE-01 y MAE-01b (invernadero), MAE-02a (alerta, hecha), MAE-02b (baja y
-reactivación de cuenta, Inicio del Gerente y `abrir_alerta`, mergeada el 19/11/2026) y MAE-02c (consulta de alertas, CU-46, pendiente; archivo `docs/tareas/maestros/MAE-02c-alerta-consulta.md`).
+reactivación de cuenta, Inicio del Gerente y `abrir_alerta`, mergeada el 19/11/2026) y MAE-02c (consulta de alertas, CU-46, implementada el 22/11/2026, en su rama; archivo `docs/tareas/maestros/MAE-02c-alerta-consulta.md`).
 
 ## 2. Orden y paralelismo
 

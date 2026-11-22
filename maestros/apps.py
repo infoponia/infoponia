@@ -47,5 +47,11 @@ class MaestrosConfig(AppConfig):
             (Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO),
             despues_de="Panel de control",
         )
+        # MAE-02c (CU-46): «Alertas», del Gerente y del Agrónomo, después de «Producción». ``registrar_entrada`` no repite una
+        # entrada ya registrada (``ready()`` puede correr más de una vez). Sin contador: el menú de ``core`` no los admite y el
+        # punto rojo de la campana ya avisa de las no leídas.
+        registrar_entrada(
+            ("Alertas", "alertas:lista", "bell"), (Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO), despues_de="Producción"
+        )
         # MAE-04: «Configuración» (parámetros operativos y perfil de la organización), solo del Gerente, al final del menú.
         registrar_entrada(("Configuración", "configuracion:pantalla", "gear"), (Usuario.Rol.GERENTE,), despues_de="Auditoría")

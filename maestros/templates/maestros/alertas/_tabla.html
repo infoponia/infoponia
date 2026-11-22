@@ -1,0 +1,27 @@
+{% load iconos %}{% comment %}La tabla de «Alertas» (CU-46, R3 y R4): solo las activas del usuario, más urgentes primero. Es el fragmento que reemplaza
+HTMX al filtrar y lo que incluye lista.html. Recibe «alertas» (cada una con severidad y nombre_tipo ya calculados) y «hay_filtros». La
+descripción es el enlace al detalle; el punto marca las no leídas (el listado no marca nada como leído: eso lo hace el detalle).{% endcomment %}
+{% if alertas %}
+<div class="tablewrap">
+  <table class="data-table">
+    <thead><tr><th>Severidad</th><th>Descripción</th><th>Invernadero</th><th>Tipo</th><th>Fecha y hora</th><th aria-label="Lectura"></th></tr></thead>
+    <tbody>
+      {% for a in alertas %}
+      <tr>
+        <td>{% if a.severidad == "critica" %}<span class="status-badge status-danger">Crítica</span>{% elif a.severidad == "advertencia" %}<span class="status-badge status-warn">Advertencia</span>{% elif a.severidad == "informativa" %}<span class="status-badge status-info">Informativa</span>{% else %}<span class="status-badge status-neutral">{{ a.severidad }}</span>{% endif %}</td>
+        <td><a class="link" href="{% url 'alertas:detalle' a.pk %}"><b>{{ a.descripcion_alerta }}</b></a></td>
+        <td>{{ a.invernadero.nombre_invernadero }}</td>
+        <td>{{ a.nombre_tipo }}</td>
+        <td class="nowrap">{{ a.fecha_hora_alerta|date:"d/m/Y H:i" }}</td>
+        <td>{% if a.estado_lectura_alerta == "no_leida" %}<span class="alerta-punto" role="img" aria-label="No leída" title="No leída"></span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty">
+  {% icono "bell" 28 %}
+  <b>{% if hay_filtros %}Ninguna alerta activa coincide con el filtro.{% else %}No hay alertas activas.{% endif %}</b>
+</div>
+{% endif %}

@@ -38,7 +38,6 @@ de programar su primera tarea. El plan de la ronda vigente (tareas, orden, casos
 | USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
 | USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
-| MAE-02c | Alerta: consulta (CU-46) y entrada «Alertas» del menú | maestros | pendiente | MAE-02b, UI-01 y NOT-01 (hechas). Antes de programarla, aprobar sus tres decisiones previas | `maestros/MAE-02c-alerta-consulta.md` |
 | MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | pendiente | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
 
 ### Ronda «Producción 1» (D-44, D-45)

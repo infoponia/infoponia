@@ -10,6 +10,8 @@ urlpatterns = [
     path("produccion/", include("maestros.urls")),
     # MAE-04: configuración operativa y perfil de la organización (Gerente).
     path("configuracion/", include("maestros.urls_configuracion")),
+    # MAE-02c: consulta de alertas (Gerente y Agrónomo).
+    path("alertas/", include("maestros.urls_alertas")),
     # INV-01: catálogo de insumos y categorías (Agrónomo).
     path("inventario/", include("inventario.urls")),
 ]

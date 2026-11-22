@@ -10,7 +10,7 @@ from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_POST, require_safe
+from django.views.decorators.http import require_GET, require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
@@ -24,6 +24,7 @@ from maestros.forms import (
     FormularioSector,
 )
 from maestros.models import SectorProduccion
+from maestros.servicios import alertas as api_alertas
 from maestros.servicios import configuracion as api_configuracion
 from maestros.servicios import cultivos as api_cultivos
 from maestros.servicios import perfil as api_perfil
@@ -870,3 +871,52 @@ def transportista_quitar(request, invernadero_id, transportista_id):
         contexto["impedimentos"] = [f"{i.texto} {i.como_resolver}" for i in impedimentos]
         contexto["url_entregas"] = _url_de_entregas(cuenta)
     return _ventana(request, invernadero, plantilla, **contexto)
+
+
+# ---- MAE-02c (CU-46): consulta de alertas ----
+# Solo el Gerente y el Agrónomo (decisión 2 de MAE-02c: son los únicos que reciben alertas; cualquier otro rol, 403).
+
+_MAXIMO_ID = 2**63 - 1  # un id más grande no cabe en la base: no puede ser el de ninguna alerta ni invernadero
+
+
+def _id_de_filtro(texto):
+    """El id numérico de un filtro del formulario GET. ``(None, False)`` si está vacío (no filtra), ``(id, False)`` si es un
+    número válido y ``(None, True)`` si no lo es (``?invernadero=abc``): la lista queda vacía, sin error y sin revelar nada."""
+    if not texto:
+        return None, False
+    try:
+        valor = int(texto)
+    except ValueError:
+        return None, True
+    return (valor, False) if 0 < valor <= _MAXIMO_ID else (None, True)
+
+
+@rol_requerido(GERENTE, AGRONOMO)
+@require_safe
+@vary_on_headers("HX-Request")
+def alertas(request):
+    """CU-46: listado de las alertas activas del usuario, filtrable por invernadero y por tipo (R2 a R5). No cambia nada: no
+    marca ninguna como leída (eso es el detalle). Con HTMX (``HX-Request``) devuelve solo la tabla (R8); sin JavaScript, la
+    página completa."""
+    invernadero = request.GET.get("invernadero", "").strip()
+    tipo = request.GET.get("tipo", "").strip()
+    invernadero_id, invalido = _id_de_filtro(invernadero)
+    lista = [] if invalido else api_alertas.consultar_alertas(request.user, invernadero_id=invernadero_id, tipo=tipo or None)
+    contexto = {"alertas": lista, "hay_filtros": bool(invernadero or tipo)}
+    if _es_htmx(request):
+        return render(request, "maestros/alertas/_tabla.html", contexto)
+    contexto |= {
+        "filtros": api_alertas.filtros_de_alertas(request.user),
+        "f_invernadero": invernadero,
+        "f_tipo": tipo,
+    }
+    return render(request, "maestros/alertas/lista.html", contexto)
+
+
+@rol_requerido(GERENTE, AGRONOMO)
+@require_GET
+@never_cache
+def alerta(request, alerta_id):
+    """CU-46, R6 y R7: el detalle de una alerta. Abrirlo la marca «leída» (``detalle_de_alerta`` llama a ``abrir_alerta``), así
+    que no se guarda en la caché del navegador ni responde a HEAD. Una alerta que no existe da 404 y una ajena, 403 (D-28)."""
+    return render(request, "maestros/alertas/detalle.html", {"detalle": api_alertas.detalle_de_alerta(request.user, alerta_id)})

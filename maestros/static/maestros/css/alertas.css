@@ -1,0 +1,10 @@
+/* «Alertas» (MAE-02c, CU-46): lo único que el estilo de UI-01 (Diseño v2) no trae, el punto de «no leída» dentro de una fila.
+   Usa la variable de estado del sistema; ninguna pantalla define su propia paleta (D-47). */
+.alerta-punto {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-danger);
+  vertical-align: middle;
+}
