@@ -136,11 +136,7 @@ MAE-03 creó los puntos de extensión de sectores y cultivos (`docs/api/extensio
    `registrar_efecto_de_baja_de_sector` (punto nuevo de `maestros`, D-51 punto 7) y `registrar_efecto_de_baja` (cierra los registros abiertos al dar de baja el invernadero; en el lote 4 se había dicho que no registraba nada)
    y el caso de uso PROD-PNR-FDS, que es el que produce el estado «fuera de servicio». También el Inicio del Agrónomo, como sección registrada
    con `registrar_seccion_de_inicio` de `core/extensiones.py` (D-43; la alerta de insumos y de merma del prototipo salen de ahí).
-3. **INV-03 (`inventario`):** `registrar_semillas_de_cultivo` (contar y renombrar con su log `modificacion_semilla`) y
-   `registrar_uso_de_cultivo` (la semilla habilitada más los lotes activos que le informa `produccion`, ver el punto siguiente).
-   **Contrato de bloqueo:** quien crea una variedad bloquea el cultivo (`FOR NO KEY UPDATE`) antes de insertarla (`cultivo → variedad`); `baja_cultivo` cuenta las variedades activas después de bloquear.
-   Además agrega a `Variedad` las columnas que faltan (rangos, postcosecha y peso en gramos). `EtapaProductiva` **no** tiene estado
-   (opción A, 19/11/2026): no hay nada que agregar ahí.
+3. ~~**INV-03 (`inventario`):** `registrar_semillas_de_cultivo` y `registrar_uso_de_cultivo`, más las columnas de `Variedad`. Contrato de bloqueo: cultivo → variedad.~~ (hecho el 22/11/2026, INV-03; también registró `registrar_variedades_de_cultivo`, la tabla de cada tarjeta de cultivo)
 4. **Módulo IoT (`iot`) — hecho en la documentación el 20/11/2026, se implementa en IOT-02:** `registrar_impedimento_de_baja_de_sector` con `hardware_activo` (códigos y textos de PROD-BAJ-SCT, regla 3)
    y `registrar_contenido_de_sector` con el hardware.
 
@@ -158,6 +154,12 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 2. **`comercial` (ronda futura):** `registrar_impedimento_de_baja_de_variedad` con el código `contratos_abiertos` (contratos vigentes
    o abiertos con un detalle de la variedad; precondición f de PROD-BAJ-VAR). **Hasta entonces la precondición f no se verifica** (no
    hay contratos): se anota en el cierre de INV-03 y en `docs/temas_abiertos.md`.
+
+## Cuando exista PRD-01 (lotes y órdenes reales de variedades) — nace con INV-03 (22/11/2026)
+
+1. Las pruebas de INV-03 usan registrantes falsos de `registrar_uso_de_variedad`, `registrar_variedades_presentes` y `registrar_impedimento_de_baja_de_variedad`. PRD-01 agrega una prueba de punta a punta con los reales (modificar, dar de baja y advertencia de rangos con lotes verdaderos).
+2. Decidir si `reactivar_variedad` debe reevaluar las alertas de las existencias que quedaron activas (hoy solo lo hace la baja).
+
 
 ## Cuando exista SistemaIoT
 
@@ -178,7 +180,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 1. ~~**Botón y pestaña.** El catálogo agrega «Habilitar en un invernadero» (regla 7 de CMP-ALT-INS y regla 4 de CMP-CNS-INS) y la pestaña «Existencias de insumos» como primera; `/inventario/` pasa a redirigir a ella (hoy va al catálogo). Nació en INV-01.~~ Hecho en INV-02.
 
-## Cuando exista Variedad y Semilla (INV-03)
+## ~~Cuando exista Variedad y Semilla (INV-03)~~ (cerrado el 22/11/2026, INV-03)
 
 1. **Semillas en el catálogo.** `es_semilla` ya marca las filas «Viene del alta de la variedad»; INV-03 las enlaza con su variedad y mantiene su alta, modificación y baja. Nació en INV-01.
 
@@ -308,7 +310,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 5. **Cámara de producto** (ronda futura): las partidas de cámara de PROD-REG-MRM (extensiones 4a y 10c, causas de cámara) y el movimiento «salida por merma».
 
 
-## Cuando exista el modelo completo de Variedad (INV-03)
+## ~~Cuando exista el modelo completo de Variedad (INV-03)~~ (cerrado el 22/11/2026, INV-03)
 
 1. **Restricciones de `Variedad`.** MAE-03 la creó con columnas mínimas. INV-03 agrega la restricción única `(cultivo, lower(nombre_variedad))`, los rangos y el resto, con una migración propia en `maestros` (`docs/modelo/maestros.md`, «Variedad»).
 

@@ -665,6 +665,12 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_INSUMO_INVERNADERO = "modificacion_insumo_invernadero", "Modificación de insumo en un invernadero"
         AJUSTE_STOCK = "ajuste_stock", "Ajuste de stock de insumo"
         ALERTA_DE_VENCIMIENTO = "alerta_de_vencimiento", "Alerta de vencimiento de insumo"
+        # Variedades y su semilla (INV-03, D-36 y D-49): <acción>_<entidad>. El renombre de la semilla por su CULTIVO es aparte.
+        ALTA_VARIEDAD = "alta_variedad", "Alta de variedad"
+        MODIFICACION_VARIEDAD = "modificacion_variedad", "Modificación de variedad"
+        BAJA_VARIEDAD = "baja_variedad", "Baja de variedad"
+        REACTIVACION_VARIEDAD = "reactivacion_variedad", "Reactivación de variedad"
+        MODIFICACION_SEMILLA = "modificacion_semilla", "Modificación de semilla"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -723,6 +729,22 @@ class RegistroAuditoria(models.Model):
         "lotes": "Lotes modificados",
         "lotes_nuevos": "Lotes nuevos",
         "movimientos": "Movimientos creados",
+        # Variedades y su semilla (INV-03): rangos y duraciones van como texto (D-36); «etapas» es una lista de textos
+        # («Germinación: 5 días»); «cultivo» y «nombre_semilla» son contexto. «nombre» y «estado» ya existen.
+        "cultivo": "Cultivo",
+        "perfil_familia": "Perfil familiar",
+        "etapas": "Etapas",
+        "temp_ambiente_min": "Temperatura ambiente mínima (°C)",
+        "temp_ambiente_max": "Temperatura ambiente máxima (°C)",
+        "humedad_min": "Humedad mínima (%)",
+        "humedad_max": "Humedad máxima (%)",
+        "intensidad_luz_min": "Intensidad lumínica mínima (µmol)",
+        "intensidad_luz_max": "Intensidad lumínica máxima (µmol)",
+        "fotoperiodo_min": "Fotoperíodo mínimo (h/día)",
+        "fotoperiodo_max": "Fotoperíodo máximo (h/día)",
+        "duracion_post_cosecha": "Duración postcosecha (días)",
+        "peso_promedio_planta": "Peso promedio por planta (g)",
+        "nombre_semilla": "Nombre de la semilla",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -760,6 +782,15 @@ class RegistroAuditoria(models.Model):
             "no_admite": "No admite",
             "como_gasto": "Como gasto",
             "como_costo_de_los_lotes": "Como costo de los lotes",
+        },
+        # INV-03: los seis perfiles familiares (`core` no importa `maestros`, A1 de D-37).
+        "perfil_familia": {
+            "hoja_verde": "Hoja verde",
+            "pastura": "Pastura",
+            "frutos_grandes": "Frutos grandes",
+            "frutos_pequenos": "Frutos pequeños",
+            "flores": "Flores",
+            "hierbas": "Hierbas",
         },
         "motivo_ajuste": {
             "recuento_fisico": "Recuento físico",
@@ -935,6 +966,11 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.HABILITACION_INSUMO_INVERNADERO,
         RegistroAuditoria.Accion.MODIFICACION_INSUMO_INVERNADERO,
         RegistroAuditoria.Accion.AJUSTE_STOCK,
+        RegistroAuditoria.Accion.ALTA_VARIEDAD,
+        RegistroAuditoria.Accion.MODIFICACION_VARIEDAD,
+        RegistroAuditoria.Accion.BAJA_VARIEDAD,
+        RegistroAuditoria.Accion.REACTIVACION_VARIEDAD,
+        RegistroAuditoria.Accion.MODIFICACION_SEMILLA,
         RegistroAuditoria.Accion.ALERTA_DE_VENCIMIENTO,
     }
 )

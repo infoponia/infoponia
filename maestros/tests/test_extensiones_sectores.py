@@ -114,8 +114,9 @@ class ExtensionesDeCultivosTests(SimpleTestCase):
     def test_ext_semillas_sin_registrantes_son_cero(self):
         """docs/casos_de_uso/maestros/cultivos.md, «Cómo se aplica»: sin registrantes, 0 semillas."""
         cultivo = object()
-        self.assertEqual(extensiones.contar_semillas_a_renombrar(cultivo), 0)
-        self.assertEqual(extensiones.renombrar_semillas(object(), cultivo, "Lechuga"), 0)
+        with mock.patch.object(extensiones, "_SEMILLAS", []):  # `inventario` (INV-03) los registra en ready()
+            self.assertEqual(extensiones.contar_semillas_a_renombrar(cultivo), 0)
+            self.assertEqual(extensiones.renombrar_semillas(object(), cultivo, "Lechuga"), 0)
 
     def test_ext_semillas_se_suman_las_de_todos_los_registrantes(self):
         """API: contar y renombrar suman a todos los registrantes."""
@@ -128,7 +129,8 @@ class ExtensionesDeCultivosTests(SimpleTestCase):
 
     def test_ext_uso_de_cultivo_sin_registrantes_no_hay_invernaderos(self):
         """Regla 4 de PROD-MOD-CLT: sin registrantes, ningún invernadero usa el cultivo."""
-        self.assertEqual(extensiones.invernaderos_que_usan_el_cultivo(object()), set())
+        with mock.patch.object(extensiones, "_USOS_DE_CULTIVO", []):  # `inventario` (INV-03) lo registra en ready()
+            self.assertEqual(extensiones.invernaderos_que_usan_el_cultivo(object()), set())
 
     def test_ext_uso_de_cultivo_une_los_conjuntos_de_todos(self):
         """API: se juntan los ids de todos los registrantes, sin repetir."""

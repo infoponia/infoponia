@@ -1,0 +1,84 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Formulario de una variedad (PROD-ALT-VAR, PROD-MOD-VAR y detalle de PROD-CNS-VAR; VIEWS['var-form'] del prototipo). Paso 1 de 2: se completa y «Revisar resumen»
+valida todo en el servidor y muestra el resumen. Recibe «cultivo», «variedad» (None en el alta), «form» (FormularioVariedad), «solo_lectura» y, de una variedad guardada,
+«acciones», «semilla», «habilitada_en», «ciclo_guardado», «dias_guardados», «maduracion_guardada» y «otros». Una variedad inactiva o que la cuenta no puede gestionar se ve
+con los campos deshabilitados y el motivo (regla 4 de PROD-CNS-VAR, D-30). Sin validación en vivo: los errores salen al revisar. Sin JavaScript todo funciona igual.{% endcomment %}
+{% block titulo %}{% if variedad %}{{ variedad.nombre_variedad }}{% else %}Nueva variedad{% endif %} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
+<link rel="stylesheet" href="{% static_v 'inventario/css/variedades.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'maestros:cultivos' %}">{% icono "back" 14 %} Cultivos y variedades</a>
+  <div class="page-h"><h1>{% if not variedad %}Nueva variedad{% elif solo_lectura %}{{ variedad.nombre_variedad }}{% else %}Modificar variedad{% endif %}</h1><div class="sub">Cultivo: {{ cultivo.nombre_cultivo }}</div></div>
+
+  {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div></div>{% endif %}
+  {% if form.errors and not form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>Revisá los campos marcados.</div></div>{% endif %}
+  {% if variedad and solo_lectura %}
+    <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "lock" 16 %}<div>
+      {% if not variedad.activa %}Esta variedad está inactiva: solo se puede reactivar.{% else %}No podés modificar esta variedad.{% endif %}
+      {% if acciones.motivo %} {{ acciones.motivo }}{% endif %}
+      {% if acciones.reactivar %}<div style="margin-top:8px"><a class="btn btn-primary btn-sm" href="{% url 'variedades:variedad_reactivar' variedad.pk %}">Reactivar</a></div>{% endif %}
+    </div></div>
+  {% elif variedad and otros %}
+    <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>También la usan: {{ otros|join:", " }}. Si cambiás las duraciones, las etapas o los rangos, se les notificará.</div></div>
+  {% endif %}
+
+  <form method="post" novalidate action="{% if variedad %}{% url 'variedades:variedad' variedad.pk %}{% else %}{% url 'variedades:variedad_nueva' cultivo.pk %}{% endif %}">
+    {% csrf_token %}
+    {% if variedad %}<input type="hidden" name="variedad" value="{{ variedad.pk }}">{% endif %}
+    <div class="stack">
+      <div class="card"><div class="card-title">Identificación</div>
+        <div class="grid2">
+          {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True ayuda="Único dentro del cultivo, sin distinguir mayúsculas." %}
+          <div class="fld">
+            <label for="{{ form.perfil_familia.id_for_label }}">Perfil familiar<span class="req" aria-hidden="true"> *</span></label>
+            {{ form.perfil_familia }}
+            {% for error in form.perfil_familia.errors %}<div class="err">{{ error }}</div>{% endfor %}
+            {% if form.perfil_bloqueado %}<div class="hint"><span class="lock">{% icono "lock" 12 %} No se cambia mientras tenga lotes activos u órdenes a realizar.</span></div>
+            {% elif not form.perfil_familia.errors %}<div class="hint">Define qué etapas puede tener y con qué variedades comparte sector.</div>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card"><div class="card-title">Ciclo productivo</div>
+        {% if variedad %}
+        <div style="margin-bottom:12px">{% include "inventario/variedades/_ciclo.html" with ciclo=ciclo_guardado %}</div>
+        <div class="row" style="margin:0 0 8px;justify-content:space-between"><span class="sm">Duración del ciclo guardado: <b class="mono">{{ dias_guardados }} días</b> <span class="muted">· se calcula sumando las etapas</span></span><span class="sm muted">Cosecha estimada a los <b class="mono" style="color:var(--foreground)">{{ maduracion_guardada }} días</b> de la siembra, al entrar en Maduración</span></div>
+        {% endif %}
+        <div id="etapas">{% include "inventario/variedades/_etapas.html" %}</div>
+        {% if not variedad %}<div class="hint" style="margin-top:10px">La duración del ciclo (la suma de las etapas) y la cosecha estimada se ven en el resumen.</div>{% endif %}
+      </div>
+
+      <div class="card"><div class="card-title">Condiciones ambientales</div>
+        <div class="grid2">
+          {% for titulo, unidad, minimo, maximo, genero in form.rangos %}
+          <div class="fld"><label for="{{ minimo.id_for_label }}">{{ titulo }} {% if genero == "m" %}mínimo{% else %}mínima{% endif %}<span class="req" aria-hidden="true"> *</span></label><div class="inv-conunidad">{{ minimo }}<span class="muted sm">{{ unidad }}</span></div>{% for error in minimo.errors %}<div class="err">{{ error }}</div>{% endfor %}</div>
+          <div class="fld"><label for="{{ maximo.id_for_label }}">{{ titulo }} {% if genero == "m" %}máximo{% else %}máxima{% endif %}<span class="req" aria-hidden="true"> *</span></label><div class="inv-conunidad">{{ maximo }}<span class="muted sm">{{ unidad }}</span></div>{% for error in maximo.errors %}<div class="err">{{ error }}</div>{% endfor %}</div>
+          {% endfor %}
+        </div>
+        {% if variedad %}<div class="hint">Si tiene lotes activos y un cambio la deja incompatible con las otras variedades de un invernadero, se avisará antes de guardar.</div>{% endif %}
+      </div>
+
+      <div class="card"><div class="card-title">Postcosecha y peso</div>
+        <div class="grid2">
+          <div class="fld"><label for="{{ form.duracion_post_cosecha.id_for_label }}">Duración postcosecha<span class="req" aria-hidden="true"> *</span></label><div class="inv-conunidad">{{ form.duracion_post_cosecha }}<span class="muted sm">días</span></div>{% for error in form.duracion_post_cosecha.errors %}<div class="err">{{ error }}</div>{% empty %}<div class="hint">Días en que el producto cosechado sigue apto para la venta (de 1 a 60).</div>{% endfor %}</div>
+          <div class="fld"><label for="{{ form.peso_promedio_planta.id_for_label }}">Peso promedio por planta<span class="req" aria-hidden="true"> *</span></label><div class="inv-conunidad">{{ form.peso_promedio_planta }}<span class="muted sm">g</span></div>{% for error in form.peso_promedio_planta.errors %}<div class="err">{{ error }}</div>{% empty %}<div class="hint">Se utiliza para verificar la capacidad de carga del vehículo en las entregas.</div>{% endfor %}</div>
+        </div>
+      </div>
+
+      {% if variedad %}
+      <div class="card"><div class="card-title">Semilla</div>
+        <p>{% if semilla %}{{ semilla.nombre_insumo }}{% else %}—{% endif %} <span class="muted">· {% if habilitada_en %}habilitada en {{ habilitada_en|join:", " }}{% else %}sin habilitar en ningún invernadero{% endif %}</span></p>
+        <div class="hint">«Semilla» es el material de propagación de la variedad: semilla o plantín.</div>
+      </div>
+      {% else %}
+      <div class="alert alert-info">{% icono "info" 16 %}<div>Al crear la variedad se crea también su semilla, en la categoría Semillas y con control de vencimiento. «Semilla» es el material de propagación: semilla o plantín.</div></div>
+      {% endif %}
+    </div>
+    <div class="footbar">
+      {% if not solo_lectura %}<button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…">Revisar resumen</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'maestros:cultivos' %}">{% if solo_lectura %}Volver a cultivos y variedades{% else %}Cancelar{% endif %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

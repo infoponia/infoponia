@@ -536,9 +536,10 @@ class Cultivo(models.Model):
 
 
 class Variedad(models.Model):
-    """Variedad de un cultivo, con las columnas mínimas de MAE-03 (contar las activas de un cultivo y calcular qué
-    variedades dejan de poder sembrarse al cambiar el tipo de un sector). INV-03 agrega el resto con una migración
-    propia (docs/modelo/maestros.md, «Variedad, Ciclo y EtapaProductiva»)."""
+    """Variedad de un cultivo (PROD-ALT-VAR y siguientes; R074). MAE-03 creó las columnas mínimas; INV-03 agrega los cuatro
+    rangos ambientales, la duración postcosecha y el peso promedio en gramos (docs/modelo/maestros.md, «Variedad»). Nombre de
+    hasta 50 caracteres, único dentro del cultivo sin distinguir mayúsculas, bajas incluidas (regla 2 de PROD-ALT-VAR). Topes
+    aprobados el 19/11/2026 (D-49): humedad 0 a 100 y fotoperíodo 0 a 24; temperatura e intensidad lumínica sin tope."""
 
     class Estado(models.TextChoices):
         ACTIVO = "activo", "Activo"
@@ -548,20 +549,62 @@ class Variedad(models.Model):
     nombre_variedad = models.CharField("nombre", max_length=50)
     perfil_familia = models.CharField("perfil familiar", max_length=20, choices=PERFILES_FAMILIARES)
     estado_variedad = models.CharField(max_length=10, choices=Estado.choices, default=Estado.ACTIVO)
+    # Rangos ambientales (regla 6 de PROD-ALT-VAR): Decimal con 2 decimales; mínimo <= máximo (CheckConstraint).
+    temp_ambiente_min = models.DecimalField("temperatura mínima (°C)", max_digits=7, decimal_places=2)
+    temp_ambiente_max = models.DecimalField("temperatura máxima (°C)", max_digits=7, decimal_places=2)
+    humedad_min = models.DecimalField("humedad mínima (%)", max_digits=7, decimal_places=2)
+    humedad_max = models.DecimalField("humedad máxima (%)", max_digits=7, decimal_places=2)
+    intensidad_luz_min = models.DecimalField("intensidad lumínica mínima (µmol)", max_digits=7, decimal_places=2)
+    intensidad_luz_max = models.DecimalField("intensidad lumínica máxima (µmol)", max_digits=7, decimal_places=2)
+    fotoperiodo_min = models.DecimalField("fotoperíodo mínimo (h/día)", max_digits=7, decimal_places=2)
+    fotoperiodo_max = models.DecimalField("fotoperíodo máximo (h/día)", max_digits=7, decimal_places=2)
+    # Regla 7 de PROD-ALT-VAR: días de aptitud comercial (1 a 60) y peso en GRAMOS (MD-69: manda el CU sobre el modelo).
+    duracion_post_cosecha = models.PositiveIntegerField("duración postcosecha (días)")
+    peso_promedio_planta = models.PositiveIntegerField("peso promedio por planta (g)")
 
     class Meta:
         ordering = ["nombre_variedad"]
         verbose_name = "Variedad"
         verbose_name_plural = "Variedades"
         constraints = [
+            # Regla 2 de PROD-ALT-VAR: nombre único por cultivo, bajas incluidas (docs/modelo/maestros.md).
+            models.UniqueConstraint(Lower("nombre_variedad"), "cultivo", name="variedad_nombre_unico_por_cultivo"),
             models.CheckConstraint(
                 condition=Q(estado_variedad__in=["activo", "inactivo"]), name="variedad_estado_valido"
             ),
             models.CheckConstraint(condition=Q(perfil_familia__in=CODIGOS_DE_PERFIL), name="variedad_perfil_valido"),
+            # Regla 6: mínimo <= máximo en los cuatro rangos.
+            models.CheckConstraint(
+                condition=Q(temp_ambiente_min__lte=models.F("temp_ambiente_max")), name="variedad_temp_min_max"
+            ),
+            models.CheckConstraint(condition=Q(humedad_min__lte=models.F("humedad_max")), name="variedad_humedad_min_max"),
+            models.CheckConstraint(
+                condition=Q(intensidad_luz_min__lte=models.F("intensidad_luz_max")), name="variedad_luz_min_max"
+            ),
+            models.CheckConstraint(
+                condition=Q(fotoperiodo_min__lte=models.F("fotoperiodo_max")), name="variedad_fotoperiodo_min_max"
+            ),
+            # Topes aprobados el 19/11/2026 (D-49).
+            models.CheckConstraint(
+                condition=Q(humedad_min__gte=0, humedad_max__lte=100), name="variedad_humedad_0_a_100"
+            ),
+            models.CheckConstraint(
+                condition=Q(fotoperiodo_min__gte=0, fotoperiodo_max__lte=24), name="variedad_fotoperiodo_0_a_24"
+            ),
+            # Regla 7.
+            models.CheckConstraint(
+                condition=Q(duracion_post_cosecha__gte=1, duracion_post_cosecha__lte=60), name="variedad_postcosecha_1_a_60"
+            ),
+            models.CheckConstraint(condition=Q(peso_promedio_planta__gt=0), name="variedad_peso_mayor_que_cero"),
         ]
 
     def __str__(self):
         return f"{self.cultivo} {self.nombre_variedad}"
+
+    @property
+    def activa(self):
+        """True si la variedad está activa."""
+        return self.estado_variedad == self.Estado.ACTIVO
 
 
 class Ciclo(models.Model):

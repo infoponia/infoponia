@@ -11,13 +11,14 @@ from django.test import TransactionTestCase, tag
 
 from core.models import RegistroAuditoria
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
-from maestros.models import Cultivo, Variedad
+from maestros.models import Cultivo
 from maestros.servicios import cultivos
 from maestros.tests.fabricas import (
     ConDatosDeMaestros,
     asegurar_datos_de_maestros,
     crear_agronomo,
     crear_cultivo,
+    crear_variedad,
 )
 
 # Punto de parada que usa ``detener_antes_de`` para frenar a la primera operación justo antes de terminar.
@@ -95,7 +96,7 @@ class CultivosConcurrenciaTests(ConDatosDeMaestros, TransactionTestCase):
         def crear_variedad_bloqueando_el_cultivo():
             with transaction.atomic():
                 Cultivo.objects.select_for_update(no_key=True).get(pk=cultivo.pk)
-                Variedad.objects.create(cultivo=cultivo, nombre_variedad="Crespa", perfil_familia="hoja_verde")
+                crear_variedad(cultivo, "Crespa")  # con los rangos de INV-03: las columnas son obligatorias
                 pausa.punto()  # acá se detiene: todavía no confirmó
 
         resultados = correr_a_la_vez(

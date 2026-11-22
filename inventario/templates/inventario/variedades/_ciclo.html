@@ -1,0 +1,7 @@
+{% comment %}Diagrama del ciclo de una variedad (``ciclo`` y ``et`` del prototipo): una franja con un tramo por etapa, proporcional a sus días, y la leyenda
+con cada etapa y sus días. Recibe «ciclo» (lista de {nombre, dias, clase}) y, opcional, «mini» (franja delgada, para la tabla). Los colores salen de
+--e-ger, --e-cre, --e-flo, --e-fru y --e-mad. El texto alternativo describe todo el ciclo para lectores de pantalla.{% endcomment %}
+<div class="ciclo-w">
+  <div class="ciclo{% if mini %} mini{% endif %}" role="img" aria-label="Ciclo: {% for e in ciclo %}{{ e.nombre }} {{ e.dias }} días{% if not forloop.last %}, {% endif %}{% endfor %}">{% for e in ciclo %}<span style="--c:var(--e-{{ e.clase }});flex:{{ e.dias }} 0 0" title="{{ e.nombre }}: {{ e.dias }} días">{% if not mini %}{{ e.nombre }}{% endif %}</span>{% endfor %}</div>
+  <div class="ciclo-l">{% for e in ciclo %}<span style="--c:var(--e-{{ e.clase }})"><i></i>{{ e.nombre }} <b>{{ e.dias }} d</b></span>{% endfor %}</div>
+</div>

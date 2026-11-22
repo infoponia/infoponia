@@ -170,7 +170,7 @@ del servicio, los bloqueos, las notificaciones, la advertencia de rangos y el to
 Hay migraciones nuevas: `python manage.py migrate` (en `maestros`, `inventario` y `core`). Cuentas: Gerente, dos Agrónomos (uno con un invernadero a
 cargo y otro con otro invernadero), Capataz. Hace falta un cultivo (por ejemplo «Lechuga») y, para los pasos 8 a 10, haber habilitado una semilla en un invernadero.
 
-1. `migrate` pasa sin errores (con la tabla de variedades vacía). Si hubiera variedades cargadas a mano, falla con el mensaje de «Antes de crear la migración».
+1. `migrate` pasa sin errores (con la tabla de variedades vacía). Si hubiera variedades cargadas a mano, falla con el mensaje de «Antes de crear la migración». **Antes de `migrate` en tu base local y en Neon, borrá desde `/admin/` las variedades cargadas a mano (las que no tienen ciclo): la migración las rechaza con «Hay N variedades de prueba cargadas a mano».**
 2. «Producción» → «Cultivos y variedades» (Agrónomo): la tarjeta de «Lechuga» tiene el botón «+ Variedad». El Gerente no ve la pestaña y la URL le da 404.
 3. «Nueva variedad» «Butterhead»: sin completar nada, cada campo marca su error; con perfil «Hoja verde» solo se ofrecen Germinación, Crecimiento y Maduración (no
    Floración ni Fructificación); con «Frutos grandes», las cinco. Las duraciones y el mínimo mayor que el máximo dan error; el nombre repetido con otras mayúsculas también.
@@ -186,10 +186,55 @@ cargo y otro con otro invernadero), Capataz. Hace falta un cultivo (por ejemplo 
    `modificacion_semilla` por semilla.
 10. Dar de baja la variedad con la semilla habilitada y con stock (cargado con un ajuste): la baja informa dónde está habilitada y cuánto stock queda, y la hace. Variedad y
     semilla quedan inactivas; en «Existencias de insumos» la existencia sigue activa y en CMP-AJT-STK la semilla se puede ajustar a cero. Reactivar con el cultivo inactivo
-    da el aviso «Primero reactivá el cultivo»; con el cultivo activo, reactiva variedad y semilla y no vuelve a habilitar nada.
+    da el aviso «Primero reactivá el cultivo»; con el cultivo activo, «Reactivar» abre una página de confirmación y, al confirmar, reactiva variedad y semilla y no vuelve a habilitar nada.
 11. Con lotes u órdenes simulados desde la consola (registrante falso en `ready()`, solo para probar) la baja no se hace y lista todo junto; el perfil no se puede cambiar.
 12. Dos Agrónomos crean «Butterhead» a la vez: una sola gana; la otra ve el error de nombre repetido y no hay error 500.
 13. Sin JavaScript, los pasos 3, 4, 8 y 10 funcionan igual (cada ventana es una página).
 14. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo (22/11/2026).** Los nueve pasos, de corrido y con las pruebas de cada uno en verde:
+
+1. **Modelos y migraciones.** `maestros.Variedad` con sus diez columnas, los `CheckConstraint` y la única `(cultivo, lower(nombre_variedad))` (`maestros/0009_variedad_condiciones`, con guarda `RuntimeError` si hay variedades cargadas a mano); `inventario.Semilla(Insumo)` (`inventario/0003_semilla`); los tres puntos de extensión de variedades; fábricas `variedad_con_semilla`, `usos_de_variedad_de_prueba` y `variedades_presentes_de_prueba`.
+2. **Auditoría.** Cinco acciones nuevas en `core` (`core/0016_variedades_acciones_de_auditoria`), con etiquetas y clasificadas como de negocio.
+3. **Lectura y bloqueo.** `inventario/servicios/ciclos.py` y `variedades.py`: lectura, `bloquear_variedad`, `incompatibilidades_de_rangos`, `umbral_efectivo` y `variables_incompatibles`.
+4. **Alta.** `semillas.py` y `resumen_de_alta` / `alta_variedad`.
+5. **Modificar y reactivar.** `resumen_de_modificacion`, `modificar_variedad` y `reactivar_variedad`.
+6. **Baja.** `informe_de_baja` y `baja_variedad`.
+7. **Conexión con `maestros`.** `registrar_semillas_de_cultivo`, `registrar_uso_de_cultivo` y, en el paso 8, `registrar_variedades_de_cultivo`, los tres con guarda de idempotencia en `InventarioConfig.ready()`.
+8. **Pantallas.** `inventario/forms.py` (`FormularioVariedad`), `views_variedades.py`, `urls_variedades.py` (una línea en `config/urls.py` y otra en `core/tests/urls_prueba_acceso.py`, que las pruebas de interfaz de `core` necesitan para resolver los enlaces), plantillas en `inventario/templates/inventario/variedades/` y `variedades.css`. `views_existencias.habilitar` acepta una semilla activa que llega con `?insumo=` (la lista general sigue sin semillas). En `variedades.py` se agregaron `gestion_de` y `acciones_de` (la misma regla de `puede_gestionar` y `acciones_permitidas`, para toda la tabla sin consultas por fila; las dos funciones de antes delegan en ellas y dan el mismo resultado).
+9. **Cierre.**
+
+**Pruebas (M1).**
+- `python manage.py test inventario maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 2879 pruebas, OK.
+- `python manage.py test inventario maestros --keepdb --tag concurrencia`: 86 pruebas, OK.
+- `python manage.py test inventario maestros core --keepdb --tag migracion`: 8 pruebas, OK (se incluye `core`: el comando de la tarea no lo traía y la migración `core/0016` también se prueba).
+- `makemigrations --check --dry-run`: «No changes detected». `manage.py check`: sin problemas.
+- Los archivos de INV-03 suman 353 pruebas (47 de pantallas).
+
+**Decisiones de la tarea (para la revisión).**
+1. Rutas bajo `/produccion/` en `inventario/urls_variedades.py` (`app_name = "variedades"`), con una línea en `config/urls.py`.
+2. `crear_variedad` (fábrica de `maestros`) agrega valores válidos por defecto para las diez columnas; `test_cultivos_concurrencia.py` ahora usa `crear_variedad(cultivo, "Crespa")`.
+3. Los textos de error son los del prototipo (`varCalc`) y del caso de uso, en voseo («Ingresá el mínimo.», «Ingresá un valor entre 0 y 100.»).
+4. Un nombre de semilla repetido (choca con `insumo_nombre_unico`) da `semilla_repetida` en el campo `nombre`, en el alta, la modificación y el renombre del cultivo; también se traduce el `IntegrityError`.
+5. Códigos de error nuevos: `variedad_en_uso_por_otros`, `variedad_inactiva`, `variedad_no_inactiva`, `cultivo_inactivo`, `cambio_simultaneo`, `etapas_con_lotes` (en `etapas`), `perfil_con_lotes_u_ordenes` y `etapa_no_permitida` (en `perfil_familia`, cuando el cambio de perfil deja una etapa sin permiso).
+6. Contratos de datos: `Incompatibilidad(invernadero_id, variable, variedad_id)`, `InformeDeBaja`, `StockDeSemilla`, `ResumenDeAlta` y `ResumenDeModificacion`.
+7. Auditoría: el alta lleva `datos.cultivo` (referencia), `datos.etapas` y `datos.nombre_semilla`; la modificación, `cambios` solo con lo que cambió; rangos y postcosecha como texto; afectados de la modificación: la variedad, más el ciclo y las etapas tocadas, más la semilla si se renombró.
+8. Notificaciones: una por cuenta Agrónomo, con el título «Cambió la variedad {cultivo} {nombre anterior}»; solo avisan nombre, duraciones, etapas y rangos.
+9. Baja: bloquea primero los invernaderos de la semilla, después cultivo, variedad e insumo; si al releer aparece otro invernadero, rechaza con `cambio_simultaneo` sin reintentar; no deshabilita existencias; reevalúa cada existencia activa llamando por módulo a `alertas_de_stock.reevaluar_alertas_del_insumo`.
+10. Pantallas: sin validación en vivo (solo al revisar y al confirmar); HTMX solo redibuja las etapas del perfil (`hx-get` al cambiar el desplegable, `hx-swap="innerHTML show:none"`); respaldo completo sin JavaScript con el botón «Actualizar etapas» (dentro de `<noscript>`); la duración del ciclo y la cosecha estimada se ven en el resumen y, en una variedad guardada, como valores guardados (no en vivo como el prototipo); «Habilitar la semilla» abre la ventana de INV-02 con la semilla ya elegida.
+11. **Reactivar es una página de confirmación** (`/produccion/variedades/<id>/reactivar/`: GET confirma, POST reactiva), no un botón directo como en el prototipo: la tabla de variedades la arma `inventario` para `maestros` sin recibir el pedido y no puede llevar un formulario con CSRF.
+12. La advertencia de rangos («Revise antes de guardar») es una ventana dentro del formulario del resumen, con «Volver a revisar» y «Guardar igual».
+
+**Pendientes y límites que quedan anotados** (propuestos para `docs/temas_abiertos.md` y `docs/disparadores.md`):
+- La precondición f de PROD-BAJ-VAR (contratos) no se verifica hasta que `comercial` registre `contratos_abiertos`.
+- `reactivar_variedad` no reevalúa las alertas de stock de las existencias que quedaron activas (la baja sí).
+- `habilitar_insumo` (INV-02) no mira la variedad de una semilla: la ventana entre habilitar y dar de baja la variedad la cubre la baja con `cambio_simultaneo`.
+- Una variedad cuyos invernaderos usuarios no tienen Agrónomo no la gestiona nadie hasta que el Gerente asigne uno.
+- Tres pruebas existentes adaptadas: `maestros/tests/test_cultivos_concurrencia.py` y dos de `maestros/tests/test_extensiones_sectores.py` (`test_ext_semillas_sin_registrantes_son_cero` y `test_ext_uso_de_cultivo_sin_registrantes_no_hay_invernaderos`, que ahora aíslan el punto con `mock.patch.object`, como ya hacía la de variedades): con `inventario` instalado, esos puntos ya tienen registrante.
+- `renombrar_semillas(actor, cultivo, nombre_anterior)`: `nombre_anterior` no se usa (el nombre de cada semilla se arma con el cultivo y la variedad).
+- La prueba de espacios al borde documenta la frontera entre la base (no recorta) y el servicio (recorta antes de comparar).
+- Cruce extra de concurrencia: alta de una variedad contra el renombre del cultivo.
+- El comando de pruebas de migración de la tarea incluye ahora `core`.
+- Sin verificar: HTMX en vivo y el aspecto de las pantallas en un navegador real (no hay pruebas de navegador, por regla).

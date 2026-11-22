@@ -1,0 +1,19 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}Confirmación para reactivar una variedad dada de baja (regla 9 de PROD-MOD-VAR). Recibe «variedad» y «cultivo». Reactiva la variedad y su semilla y no vuelve a habilitar
+la semilla en ningún invernadero. Es una página con un POST porque la tabla de variedades (que arma `inventario` para `maestros`) no recibe el pedido y no puede llevar su propio
+formulario con CSRF.{% endcomment %}
+{% block titulo %}Reactivar {{ variedad.nombre_variedad }} · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'maestros:cultivos' %}">{% icono "back" 14 %} Cultivos y variedades</a>
+  <div class="page-h"><h1>¿Reactivar {{ cultivo.nombre_cultivo }} {{ variedad.nombre_variedad }}?</h1></div>
+  <p>La variedad y su semilla vuelven a estar activas. La semilla no se vuelve a habilitar en ningún invernadero: habilitala de nuevo donde la necesites.</p>
+  <form method="post" action="{% url 'variedades:variedad_reactivar' variedad.pk %}">
+    {% csrf_token %}
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" data-enviando="Reactivando…">Reactivar</button>
+      <a class="btn btn-ghost" href="{% url 'maestros:cultivos' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

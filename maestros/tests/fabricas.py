@@ -251,10 +251,23 @@ def crear_cultivo(nombre="Lechuga", activo=True):
     return Cultivo.objects.create(nombre_cultivo=nombre, estado_cultivo="activo" if activo else "inactivo")
 
 
-def crear_variedad(cultivo, nombre="Crespa", perfil="hoja_verde", activa=True):
-    """Crea una variedad (columnas mínimas de MAE-03) directo en la base."""
+def crear_variedad(cultivo, nombre="Crespa", perfil="hoja_verde", activa=True, **columnas):
+    """Crea una variedad directo en la base, con valores válidos por defecto para los rangos ambientales, la postcosecha y el
+    peso (INV-03, D-49). ``columnas`` sobrescribe cualquiera de ellos (por ejemplo ``temp_ambiente_min="20"``)."""
+    valores = {
+        "temp_ambiente_min": "18", "temp_ambiente_max": "24",
+        "humedad_min": "60", "humedad_max": "80",
+        "intensidad_luz_min": "200", "intensidad_luz_max": "400",
+        "fotoperiodo_min": "12", "fotoperiodo_max": "16",
+        "duracion_post_cosecha": 7, "peso_promedio_planta": 150,
+    }
+    valores.update(columnas)
     return Variedad.objects.create(
-        cultivo=cultivo, nombre_variedad=nombre, perfil_familia=perfil, estado_variedad="activo" if activa else "inactivo"
+        cultivo=cultivo,
+        nombre_variedad=nombre,
+        perfil_familia=perfil,
+        estado_variedad="activo" if activa else "inactivo",
+        **valores,
     )
 
 
