@@ -3,11 +3,14 @@
 # del sector. Prueba mínima de cada registrante: devuelve lo esperado con datos, el neutro sin datos y no hace consultas por fila; y, en pantalla, lo que ven la ficha del invernadero
 # y las ventanas de baja. Los registrantes los registra ``IotConfig.ready()``: acá se prueban los reales, no los falsos.
 
+from unittest import mock
+
 from django.apps import apps
 from django.test import TestCase
 from django.urls import reverse
 
 from core.tests.fabricas import crear_gerente
+from iot.servicios import hardware
 from iot.tests import fabricas
 from maestros import extensiones
 from maestros.extensiones import Contenido, EstadoIot, Impedimento
@@ -221,8 +224,10 @@ class ImpedimentoDeBajaDelSectorTests(RegistrantesBase):
         for i, sector in enumerate(sectores):
             fabricas.sensor(self.sistema, f"norte/s{i}", sector=sector)
             fabricas.actuador(self.sistema, fabricas.tipo_actuador(f"Tipo {i}"), f"norte/a{i}", sector=sector)
-        with self.assertNumQueries(2):
-            extensiones.contenido_registrado(sectores)
+        # Solo el registrante de IoT: `produccion` (PRD-01) registra el suyo en la misma lista y suma sus propias consultas.
+        with mock.patch.object(extensiones, "_CONTENIDOS", [hardware.contenido_de_sectores]):
+            with self.assertNumQueries(2):
+                extensiones.contenido_registrado(sectores)
 
 
 class ContenidoDeSectoresTests(RegistrantesBase):

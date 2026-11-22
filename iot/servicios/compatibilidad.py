@@ -5,7 +5,7 @@
 # Sin anuncio del equipo: ``sin_verificar`` y ninguna acción incompatible (no se restringe nada). Con anuncio: se comparan los comandos de las acciones
 # ACTIVAS del tipo con los anunciados para el identificador (sin distinguir mayúsculas) en el sistema del actuador.
 #
-# Bloqueos (D-40 y la decisión D-81): quien llama con varios actuadores no necesita ordenarlos ni bloquear nada; esta función los ordena por invernadero y
+# Bloqueos (D-40 y la decisión D-82): quien llama con varios actuadores no necesita ordenarlos ni bloquear nada; esta función los ordena por invernadero y
 # bloquea, para cada uno, el invernadero (con ``bloquear_invernadero_para_alertas``, reentrante) ANTES que la fila del actuador, y recién después crea o
 # resuelve su alerta. Así dos modificaciones de tipos distintos, que tocan los mismos invernaderos, no se bloquean entre sí.
 

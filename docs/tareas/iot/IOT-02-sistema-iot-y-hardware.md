@@ -203,7 +203,7 @@ invernadero sin Agrónomo. Un insumo activo de «Repuestos de hardware».
 **Qué se hizo.** Los siete pasos, en orden:
 1. `maestros`: punto de extensión `registrar_estado_iot` / `estados_iot` / `url_de_registro_iot` (`maestros/extensiones.py`); `Invernadero.estado_iot()` y `tiene_sistema_iot()`; la ficha y la lista
    del invernadero muestran «Activo», «Desconectado» o «Sin registrar» con el enlace, y «Con IoT» (una sola llamada para toda la lista).
-2. `core/enlaces.py` (`nuevo_token`, `resumen_de`) con sus pruebas. Migración `core/0018_iot_sistema_y_hardware_acciones` (solo `choices`); ninguna en `iot` ni en `maestros`.
+2. `core/enlaces.py` (`nuevo_token`, `resumen_de`) con sus pruebas. Migración `core/0019_iot_sistema_y_hardware_acciones` (solo `choices`); ninguna en `iot` ni en `maestros`.
 3. `iot/servicios/sistemas.py` (registrar con resumen, modificar, regenerar el token, lectura, conectividad y acciones) y `iot/validadores.py`.
 4. `iot/servicios/hardware.py` (alta, modificación, volver a activar, reactivar y consulta) y `iot/servicios/compatibilidad.py` (la única que calcula la compatibilidad); `modificar_tipo_actuador` ya
    la llama (se sacó el `TODO` de IOT-01).
@@ -213,14 +213,14 @@ invernadero sin Agrónomo. Un insumo activo de «Repuestos de hardware».
 
 **Pruebas.** `python manage.py test --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` (todas las apps): 3498 pruebas, todas en verde (`iot maestros core` solo: 2377).
 `python manage.py test iot --keepdb --tag concurrencia`: 17 en verde (dos altas con el mismo identificador, dos registros en el mismo invernadero, reactivar contra un alta, la baja de un tipo contra el alta de un actuador,
-dos regeneraciones, y dos `test_d81_…` de la modificación de un tipo a la vez que el alta o el cambio de tipo de un actuador). `makemigrations --check`: sin cambios pendientes. Las de servicios se escribieron antes y se revisaron en rojo.
-Las dos `test_d81_…` de `test_hardware_concurrencia.py` fuerzan el cruce con `detener_antes_de=(api_alertas, "bloquear_invernadero_para_alertas")`; con el orden invertido fallan con `DeadlockDetected` (comprobado).
+dos regeneraciones, y dos `test_d82_…` de la modificación de un tipo a la vez que el alta o el cambio de tipo de un actuador). `makemigrations --check`: sin cambios pendientes. Las de servicios se escribieron antes y se revisaron en rojo.
+Las dos `test_d82_…` de `test_hardware_concurrencia.py` fuerzan el cruce con `detener_antes_de=(api_alertas, "bloquear_invernadero_para_alertas")`; con el orden invertido fallan con `DeadlockDetected` (comprobado).
 
-**Decisiones.** D-81 (propuesta): el orden de bloqueos del hardware es tipo, invernadero, sistema y equipo (ver «Diferencias»). Se usó D-80 sin cambios.
+**Decisiones.** D-82 (propuesta): el orden de bloqueos del hardware es tipo, invernadero, sistema y equipo (ver «Diferencias»). Se usó D-80 sin cambios.
 
-**Diferencias con lo escrito (se corrigen en `hardware.md`, `sistema_iot.md` y D-81, M3; no se corrigieron en silencio).**
+**Diferencias con lo escrito (se corrigen en `hardware.md`, `sistema_iot.md` y D-82, M3; no se corrigieron en silencio).**
 - **Orden de bloqueos del hardware** (`hardware.md`, «Bloqueos»: el invernadero, el sistema y, si cambia el tipo, el tipo): se bloquea el tipo ANTES que el invernadero. Si no, el alta de un actuador (invernadero y
-  después tipo) e IOT-MOD-TAC (tipo y después los invernaderos de sus actuadores, al recalcular la compatibilidad) se cruzan y la base aborta una (500). Prueba: `test_hardware_concurrencia.py`, `test_d81_…` (con barrera; fallan con el orden inverso).
+  después tipo) e IOT-MOD-TAC (tipo y después los invernaderos de sus actuadores, al recalcular la compatibilidad) se cruzan y la base aborta una (500). Prueba: `test_hardware_concurrencia.py`, `test_d82_…` (con barrera; fallan con el orden inverso).
 - **Reactivar un actuador cuyo tipo está dado de baja** (la regla 9 de IOT-MOD-HDW no lo contempla): se rechaza con `tipo_inactivo`; si no, quedaría un actuador activo de un tipo inactivo y se rompería la
   precondición c de IOT-BAJ-TAC.
 - **`maestros` más allá del cuerpo de `tiene_sistema_iot()`:** se agregó `Invernadero.estado_iot()`, `precargar_estado_iot` en `maestros/servicios/invernaderos.py` y un cambio en `maestros/views.py` para que la lista

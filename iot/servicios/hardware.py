@@ -2,7 +2,7 @@
 # uso es una función dentro de ``transaction.atomic()`` y audita con el formato de D-36 (docs/patrones/auditoria.md). Casos de uso:
 # docs/casos_de_uso/iot/hardware.md; orden de docs/patrones/abm.md, sección 2.
 #
-# Orden de bloqueos (siempre ``FOR NO KEY UPDATE``; decisión D-81 que completa D-40): el TIPO de actuador, el invernadero, el sistema y el equipo. El tipo
+# Orden de bloqueos (siempre ``FOR NO KEY UPDATE``; decisión D-82 que completa D-40): el TIPO de actuador, el invernadero, el sistema y el equipo. El tipo
 # va primero porque es de toda la organización (como las cuentas) y ``modificar_tipo_actuador`` lo bloquea y después, al recalcular la compatibilidad, bloquea
 # los invernaderos de sus actuadores: si el alta bloqueara invernadero y después tipo, las dos transacciones se cruzarían. El alta de un actuador (y el
 # cambio de su tipo) llama a ``bloquear_tipo_activo`` ANTES de insertar: el ``INSERT`` solo toma ``FOR KEY SHARE``, que no frena la baja del tipo
@@ -325,7 +325,7 @@ def _previo(equipo_id):
 
 
 def _bloquear_equipo(actor, equipo_id, previo, tipo_id=None, campo_del_tipo=None):
-    """Bloquea, en el orden de D-81, el tipo (si se pasa), el invernadero, el sistema y el equipo, y los lee de nuevo. Con ya bloqueado: quien actúa sigue
+    """Bloquea, en el orden de D-82, el tipo (si se pasa), el invernadero, el sistema y el equipo, y los lee de nuevo. Con ya bloqueado: quien actúa sigue
     activo, el sistema no está dado de baja (precondición b, regla 9) y ``actor`` opera el invernadero (regla 1). Devuelve ``(invernadero, sistema, equipo)``."""
     if tipo_id is not None:
         _tipo_bloqueado(tipo_id, campo_del_tipo)
@@ -351,7 +351,7 @@ def alta_hardware(actor, sistema_id, datos):
       desconectado (``sistema_dado_de_baja``; regla 11: desconectado también). Un id de sistema que no existe, ``Http404``.
     - Reglas 2 a 9 y 13: errores por campo, todos juntos. Precondición c y regla 2: el identificador es único entre los equipos no dados de baja del sistema
       (``identificador_en_uso``, sin distinguir mayúsculas); dos altas a la vez, el índice único de la base respalda y su ``IntegrityError`` se traduce.
-    - Regla 7 (D-40, D-81): al crear un actuador se bloquea el tipo con ``bloquear_tipo_activo`` ANTES de insertarlo.
+    - Regla 7 (D-40, D-82): al crear un actuador se bloquea el tipo con ``bloquear_tipo_activo`` ANTES de insertarlo.
     - Postcondiciones a, b y c: el equipo queda «activo», con su clase y sus datos. Postcondición d y regla 12: se resuelve la alerta «dispositivo no
       registrado» con ese identificador. Regla 14: un actuador se compara con el último anuncio (``recalcular_compatibilidad``).
     - Postcondición e y D-36: un registro ``alta_hardware`` con el equipo y las alertas generadas o resueltas."""
@@ -443,7 +443,7 @@ def modificar_hardware(actor, equipo_id, datos):
     - Regla 3: la variable no cambia con lecturas (``variable_con_lecturas``) y el tipo del actuador, con reglas o comandos (``tipo_con_historial``).
       Regla 4: el identificador se corrige solo si el equipo nunca reportó (``identificador_ya_reporto``) y resuelve la alerta «dispositivo no registrado» del
       identificador nuevo. Regla 10 y postcondición d: al cambiar el tipo se recalcula la compatibilidad.
-    - D-28: sin cambios no se escribe ni se audita. D-36: un registro ``modificacion_hardware`` con el antes y el después. Bloqueos de D-81."""
+    - D-28: sin cambios no se escribe ni se audita. D-36: un registro ``modificacion_hardware`` con el antes y el después. Bloqueos de D-82."""
     _exigir_operador(actor)
     previo = _previo(equipo_id)
     clase = previo["clase"]

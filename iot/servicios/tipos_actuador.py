@@ -512,7 +512,7 @@ def modificar_tipo_actuador(actor, tipo_id, datos):
         creadas = _crear_acciones(tipo, creadas_filas)
 
         # Postcondición c y regla 9 de IOT-MOD-TAC (IOT-02): se recalcula la compatibilidad de los actuadores del tipo que no están dados de baja. La función
-        # ordena por invernadero y los bloquea uno por uno DESPUÉS del tipo (D-81), así no se cruza con el alta de un actuador de este tipo.
+        # ordena por invernadero y los bloquea uno por uno DESPUÉS del tipo (D-82), así no se cruza con el alta de un actuador de este tipo.
         actuadores = list(
             Actuador.objects.filter(tipo_actuador=tipo).exclude(estado_hardware="inactivo").select_related("sistema").order_by("pk")
         )

@@ -82,7 +82,7 @@ class HardwareConcurrenciaTests(fabricas.ConCatalogoIot, TransactionTestCase):
         return lambda: tipos.modificar_tipo_actuador(self.gerente, tipo.pk, datos)
 
     def cruzar_con_la_modificacion_del_tipo(self, tipo, operacion_b):
-        """Fuerza el cruce de D-81: la modificación del tipo (``a``) se detiene justo ANTES de bloquear el invernadero, con el tipo ya tomado; recién entonces
+        """Fuerza el cruce de D-82: la modificación del tipo (``a``) se detiene justo ANTES de bloquear el invernadero, con el tipo ya tomado; recién entonces
         arranca ``operacion_b``. Con el orden tipo, invernadero, sistema y equipo, ``b`` espera el tipo y no toma el invernadero: ``a`` sigue y no hay ciclo. Con el
         orden inverso, ``b`` toma el invernadero y espera el tipo mientras ``a`` espera el invernadero: la base detecta el ciclo y aborta una (``DeadlockDetected``)."""
         return correr_a_la_vez(
@@ -92,8 +92,8 @@ class HardwareConcurrenciaTests(fabricas.ConCatalogoIot, TransactionTestCase):
             detener_antes_de=(api_alertas, "bloquear_invernadero_para_alertas"),
         )
 
-    def test_d81_modificar_un_tipo_a_la_vez_que_se_da_de_alta_un_actuador_de_ese_tipo_no_se_cruzan(self):
-        """D-81 (tipo, invernadero, sistema, equipo): modificar las acciones de un tipo recalcula la compatibilidad de sus actuadores (bloquea sus invernaderos, ya con el
+    def test_d82_modificar_un_tipo_a_la_vez_que_se_da_de_alta_un_actuador_de_ese_tipo_no_se_cruzan(self):
+        """D-82 (tipo, invernadero, sistema, equipo): modificar las acciones de un tipo recalcula la compatibilidad de sus actuadores (bloquea sus invernaderos, ya con el
         tipo tomado) y el alta de un actuador de ese tipo bloquea el tipo y después el invernadero. Con barrera: ``a`` se detiene con el tipo tomado y sin el invernadero;
         las dos terminan, sin bloqueo cruzado ni 500."""
         tipo = fabricas.tipo_actuador("Extractor")
@@ -102,8 +102,8 @@ class HardwareConcurrenciaTests(fabricas.ConCatalogoIot, TransactionTestCase):
         exitos, rechazos, otros = separar(self.cruzar_con_la_modificacion_del_tipo(tipo, self.alta_de_actuador(tipo)))
         self.assertEqual((len(exitos), len(rechazos), otros), (2, 0, []))
 
-    def test_d81_modificar_un_tipo_a_la_vez_que_se_cambia_el_tipo_de_un_actuador_no_se_cruzan(self):
-        """D-81 también vale al cambiar el tipo de un actuador (IOT-MOD-HDW regla 3): tipo antes que invernadero. Misma barrera; las dos terminan, sin 500."""
+    def test_d82_modificar_un_tipo_a_la_vez_que_se_cambia_el_tipo_de_un_actuador_no_se_cruzan(self):
+        """D-82 también vale al cambiar el tipo de un actuador (IOT-MOD-HDW regla 3): tipo antes que invernadero. Misma barrera; las dos terminan, sin 500."""
         tipo = fabricas.tipo_actuador("Extractor")
         otro = fabricas.tipo_actuador("Aspersor")
         fabricas.actuador(self.sistema, tipo, "norte/existente")
