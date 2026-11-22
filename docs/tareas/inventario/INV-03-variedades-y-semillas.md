@@ -88,11 +88,17 @@ semillas no existían (INV-01 las rechaza) y MAE-03 dejó puntos de extensión s
    `docs/api/variedades.md` (`etapas_de`, `duracion_del_ciclo`, `dias_hasta_maduracion`, `tipos_de_etapa_de`, `obtener_variedad`, `semilla_de`,
    `rangos_de`, `uso_de_variedades`, `invernaderos_que_usan`, `puede_gestionar`, `acciones_permitidas`, `variedades_activas`, `bloquear_variedad`), más
    `impedimentos_de_baja_de_variedad`, `variedades_presentes` y `incompatibilidades_de_rangos(variedad, rangos_nuevos)` (la regla de la sección
-   «Advertencia de rangos» del extracto). Una consulta por tabla para toda la lista de ids. Pruebas: `test_ciclos_lectura.py` (orden por
+   «Advertencia de rangos» del extracto), y `umbral_efectivo` y `variables_incompatibles` (sección «Umbral efectivo» de `docs/api/variedades.md`;
+   agregadas el 21/11/2026: las usan PRD-01 y el módulo IoT). Una consulta por tabla para toda la lista de ids. Pruebas: `test_ciclos_lectura.py` (orden por
    `puesto_global`, suma, días hasta Maduración con y sin etapas intermedias, sin consultas por fila con `assertNumQueries`),
    `test_variedades_lectura.py` (quién usa, `puede_gestionar` en sus tres casos con registrantes falsos, acciones y su motivo, invernadero
    inactivo no cuenta como usuario) y `test_incompatibilidades_de_rangos.py` (rangos que se cruzan, que se tocan en un extremo —no hay
-   incompatibilidad—, que no se cruzan; cada variable; ninguna otra variedad presente → ninguna).
+   incompatibilidad—, que no se cruzan; cada variable; ninguna otra variedad presente → ninguna) y `test_umbral_efectivo.py`, con
+   `variedades_presentes_de_prueba`: sin registrante, todo `None`; invernadero sin variedades, `None`; una variedad, sus rangos; dos que se
+   cruzan, la intersección y qué variedad fija cada límite; empate en un límite, la de menor id; rangos que se tocan en un extremo,
+   `minimo == maximo`; una variable sin superposición, esa variable `None` y las demás bien; varios invernaderos en una llamada, sin una
+   consulta por invernadero (`assertNumQueries`); `variables_incompatibles` compatible, incompatible por arriba y por abajo con su variedad
+   limitante, umbral `None` y variable del umbral ya vacía. La fábrica `variedades_presentes_de_prueba` va en `inventario/tests/fabricas.py`.
 4. **Semilla y alta** (PROD-ALT-VAR): `inventario/servicios/semillas.py` (`crear_semilla`, `renombrar_semilla`, `dar_de_baja_semilla`,
    `reactivar_semilla`: la categoría `semillas` se busca por `codigo`, unidad `unidad`, controla vencimiento, estado igual al de la variedad;
    ninguna toca existencias) y, en `variedades.py`, `DatosDeVariedad`, `resumen_de_alta` (valida todo y devuelve el resumen sin escribir) y
@@ -153,6 +159,7 @@ del servicio, los bloqueos, las notificaciones, la advertencia de rangos y el to
 - Renombrar la variedad o su cultivo renombra su semilla, y el nombre de la semilla nunca pasa de 100 caracteres.
 - La baja de una variedad deja inactivas la variedad y la semilla, conserva las existencias de la semilla y la semilla se puede ajustar en CMP-AJT-STK.
 - Los puntos de extensión coinciden con `docs/api/extensiones_de_inventario.md` y `docs/api/variedades.md` y se prueban con registrantes falsos.
+- `umbral_efectivo` y `variables_incompatibles` cumplen la sección «Umbral efectivo» de `docs/api/variedades.md` (`test_umbral_efectivo.py`).
 - Comando de pruebas:
   python manage.py test inventario maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion
   python manage.py test inventario --keepdb --tag concurrencia

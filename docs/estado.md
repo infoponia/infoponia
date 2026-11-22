@@ -9,7 +9,7 @@ Actualizado: 21/11/2026, tras implementar MAE-05 (transportista del invernadero,
 
 ## Siguiente
 
-- MAE-02c (pantalla de consulta de alertas, CU-46, con la entrada «Alertas»; archivo por escribir).
+- MAE-02c (consulta de alertas, CU-46, con la entrada «Alertas»): archivo escrito el 22/11/2026; falta que el estudiante apruebe sus decisiones previas.
 - Ronda «Producción 1»: INV-03 (ya puede empezar: INV-02 hecha) y PRD-01 a PRD-04. Cada una se programa cuando su lote de documentación está en el repo (plan en `docs/tareas/ronda_produccion_1.md`).
 - USR-10 (correo público, D-54): antes de IOT-03.
 - IoT y comercial: en paralelo entre sí, y los dos después de lo que necesiten de «Producción 1». USR-09 y AUD-02, sin fecha; ver `docs/temas_abiertos.md`.
