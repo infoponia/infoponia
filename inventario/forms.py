@@ -156,3 +156,37 @@ def categorias_para_modificar(insumo):
     if all(tipo.pk != insumo.tipo_insumo_id for tipo in categorias):
         categorias.append(insumo.tipo_insumo)
     return categorias
+
+
+# ---- INV-02: habilitar un insumo en un invernadero y modificar su mínimo y precio (CMP-HAB-IIN y CMP-MOD-IIN) ----
+
+
+class FormularioExistencia(forms.Form):
+    """«Habilitar insumo» (``MODALS.habilitar`` del prototipo) y «Mínimo y precio» (``MODALS['ex-form']``). Solo normaliza lo escrito: las
+    reglas de cantidad y de precio las aplica el servicio (reglas 3 y 4 de CMP-HAB-IIN). ``insumos`` e ``invernaderos`` arman las listas
+    de elección; con ``fijo_insumo`` o ``fijo_invernadero`` el campo no se ofrece (se muestra su valor)."""
+
+    insumo = forms.CharField(label="Insumo", required=False, widget=forms.Select(attrs={"class": "field-input", "data-desplegable": ""}))
+    invernadero = forms.CharField(label="Invernadero", required=False, widget=forms.Select(attrs={"class": "field-input", "data-desplegable": ""}))
+    cant_min = forms.CharField(
+        label="Stock mínimo",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "field-input", "inputmode": "decimal", "autocomplete": "off"}),
+    )
+    referencia_precio = forms.CharField(
+        label="Precio de referencia",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "field-input", "inputmode": "decimal", "autocomplete": "off"}),
+    )
+
+    def __init__(self, *args, insumos=(), invernaderos=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["insumo"].widget.choices = [("", "Seleccionar…")] + [(i.pk, i.nombre_insumo) for i in insumos]
+        self.fields["invernadero"].widget.choices = [("", "Seleccionar…")] + [(g.pk, g.nombre_invernadero) for g in invernaderos]
+
+    def datos_del_servicio(self):
+        """Los argumentos ``cant_min`` y ``referencia_precio`` del servicio, tal como se escribieron (el servicio los valida)."""
+        return {
+            "cant_min": self.cleaned_data.get("cant_min", ""),
+            "referencia_precio": self.cleaned_data.get("referencia_precio", ""),
+        }

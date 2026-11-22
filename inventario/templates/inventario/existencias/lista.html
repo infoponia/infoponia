@@ -1,0 +1,94 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Inventario» → «Existencias de insumos» (CMP-CNS-IIN, existTab del prototipo): una fila por insumo habilitado de los invernaderos a cargo,
+con su stock libre (y lo reservado y en tránsito), su mínimo, su vencimiento y botones (D-30: «Modificar mínimo y precio», «Deshabilitar» y
+«Ajustar»). Cada fila despliega sus lotes con su estado; el despliegue es una casilla (funciona con teclado y sin JavaScript) y viene abierto
+si el insumo tiene algo vencido o por vencer. Los filtros son un formulario GET (regla 2). «Dar de baja» en un lote vencido abre el ajuste con el
+motivo «vencimiento». Las ventanas abren con HTMX; sin JavaScript, cada enlace lleva a esta página con la ventana abierta («plantilla_de_ventana»).
+«recien» es la existencia recién habilitada: ofrece «Cargar stock inicial». Solo el Agrónomo llega acá.{% endcomment %}
+{% block titulo %}Existencias de insumos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
+<div class="page">
+  <div class="page-h">
+    <h1>Inventario</h1>
+    <span class="spacer"></span>
+    {% if puede_habilitar %}<a class="btn btn-primary" href="{% url 'inventario:habilitar' %}" hx-get="{% url 'inventario:habilitar' %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 14 %} Habilitar insumo</a>{% endif %}
+  </div>
+  {% include "inventario/_pestanas.html" with activa="existencias" %}
+  {% if recien %}
+  <div class="alert alert-ok" role="status" style="margin-bottom:14px">{% icono "check" 16 %}<div><b>{{ recien.insumo.nombre_insumo }}</b> ya se puede pedir y usar en {{ recien.invernadero.nombre_invernadero }}. Su stock arranca en cero. Si ya hay existencias en el depósito, cargalas con un ajuste de «carga inicial».
+    <div style="margin-top:8px"><a class="btn btn-primary btn-sm" href="{% url 'inventario:ajuste' %}?invernadero={{ recien.invernadero_id }}&amp;insumo={{ recien.insumo_id }}&amp;motivo=carga_inicial">Cargar stock inicial</a></div></div></div>
+  {% endif %}
+  <form class="filters" method="get" action="{% url 'inventario:existencias' %}" aria-label="Filtros de existencias">
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero">
+      <option value="">Todos los invernaderos</option>
+      {% for g in invernaderos %}<option value="{{ g.pk }}"{% if f_invernadero == g.pk %} selected{% endif %}>{{ g.nombre_invernadero }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="categoria" data-desplegable aria-label="Categoría">
+      <option value="">Todas las categorías</option>
+      {% for c in categorias %}<option value="{{ c.pk }}"{% if f_categoria == c.pk %} selected{% endif %}>{{ c.nombre_tipo_insumo }}</option>{% endfor %}
+    </select>
+    <label><input type="checkbox" name="vencimientos" value="1"{% if f_vencimientos %} checked{% endif %}> Con vencimientos</label>
+    <label><input type="checkbox" name="bajo_minimo" value="1"{% if f_bajo_minimo %} checked{% endif %}> Bajo el mínimo</label>
+    <button class="btn btn-ghost btn-sm" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="link" href="{% url 'inventario:existencias' %}">Quitar filtros</a>{% endif %}
+  </form>
+  <div class="tablewrap">
+    <table class="data-table fixed" style="min-width:960px">
+      <colgroup><col style="width:52px"><col><col style="width:210px"><col style="width:120px"><col style="width:170px"><col style="width:250px"></colgroup>
+      <thead><tr><th><span class="sr-only">Lotes</span></th><th>Insumo</th><th class="right">Stock libre</th><th class="right">Mínimo</th><th>Vencimiento</th><th></th></tr></thead>
+      {% for f in filas %}
+      {% with i=f.iin.insumo u=f.iin.insumo.unidad_medida_insumo %}
+      <tbody class="inv-existencia">
+      <tr>
+        <td><input type="checkbox" class="inv-toggle" id="abrir-{{ f.iin.pk }}"{% if f.vencido or f.por_vencer %} checked{% endif %} aria-label="Ver los lotes de {{ i.nombre_insumo }}"><label class="kb-btn inv-chev" for="abrir-{{ f.iin.pk }}" aria-hidden="true">{% icono "chev" 16 %}</label></td>
+        <td><b>{{ i.nombre_insumo }}</b><span class="sub2">{{ i.tipo_insumo.nombre_tipo_insumo }} · {{ f.iin.invernadero.nombre_invernadero }}</span></td>
+        <td class="right"><span class="big"{% if f.marca %} style="color:var(--status-danger)"{% elif f.stock.bajo_minimo %} style="color:var(--status-warn)"{% endif %}>{{ f.stock.libre|num:u }}</span> <span class="muted sm">{{ u|unidad_de }}</span>
+          <span class="sub2 nowrap">de {{ f.stock.vigente|num:u }} en stock{% if f.stock.reservado %} · {{ f.stock.reservado|num:u }} reservados{% endif %}{% if f.stock.transito %} · {{ f.stock.transito|num:u }} en tránsito{% endif %}</span>
+          {% if f.marca == "stock_negativo" %}<span class="sub2" style="color:var(--status-danger)">Stock negativo</span>{% elif f.marca == "no_cubre_reservas" %}<span class="sub2" style="color:var(--status-danger)">No cubre las reservas</span>{% endif %}</td>
+        <td class="right"><span class="mono">{{ f.iin.cant_min_insumo|num:u }}</span>{% if f.stock.bajo_minimo %}<span class="sub2" style="color:var(--status-warn)">Bajo el mínimo</span>{% endif %}</td>
+        <td>{% if not i.controla_vencimiento %}<span class="faint sm">No vence</span>
+          {% elif f.vencido or f.por_vencer %}<span style="display:grid;gap:4px;justify-items:start">
+            {% if f.vencido %}<span class="status-badge status-danger">{{ f.vencido|num:u }} vencidos</span>{% endif %}
+            {% if f.por_vencer %}<span class="status-badge status-warn">{{ f.por_vencer|num:u }} por vencer</span>{% endif %}</span>
+          {% else %}<span class="status-badge status-ok">Al día</span>{% endif %}</td>
+        <td class="right nowrap">
+          <span class="inv-acciones">
+            <a class="ibtn neutral" href="{% url 'inventario:existencia_modificar' f.iin.pk %}" hx-get="{% url 'inventario:existencia_modificar' f.iin.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Modificar mínimo y precio de {{ i.nombre_insumo }} en {{ f.iin.invernadero.nombre_invernadero }}" title="Mínimo y precio">{% icono "pencil" 16 %}</a>
+            <a class="ibtn danger" href="{% url 'inventario:existencia_deshabilitar' f.iin.pk %}" hx-get="{% url 'inventario:existencia_deshabilitar' f.iin.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Deshabilitar {{ i.nombre_insumo }} en {{ f.iin.invernadero.nombre_invernadero }}" title="Deshabilitar">{% icono "trash" 16 %}</a>
+            <a class="btn btn-ghost btn-sm" href="{% url 'inventario:ajuste' %}?invernadero={{ f.iin.invernadero_id }}&amp;insumo={{ i.pk }}">Ajustar</a>
+          </span>
+        </td>
+      </tr>
+      <tr class="sub"><td colspan="6">
+        <div class="lotlist">
+          {% for lc in f.lotes %}
+          <div class="li">
+            <span class="id">{% if lc.lote.es_faltante_sin_lote %}Sin lote{% else %}Lote {{ lc.lote.pk }}{% endif %}</span>
+            <span><span class="k">Ingresó</span>{% if lc.lote.es_faltante_sin_lote %}—{% else %}{{ lc.lote.fecha_ingreso|fecha }}{% endif %}</span>
+            <span><span class="k">Disponible</span><b class="mono"{% if lc.lote.cantidad_disponible < 0 %} style="color:var(--status-danger)"{% endif %}>{{ lc.lote.cantidad_disponible|num:u }}</b>{% if not lc.lote.es_faltante_sin_lote %} <span class="muted">de {{ lc.lote.cantidad_ingresada|num:u }}</span>{% endif %}</span>
+            <span><span class="k">Vence</span>{% if lc.lote.fecha_vencimiento %}{{ lc.lote.fecha_vencimiento|fecha }}{% else %}—{% endif %}</span>
+            <span class="st">{{ lc|estado_del_lote }}</span>
+            <span class="act">{% if lc.estado == "vencido" and lc.lote.cantidad_disponible > 0 %}<a class="btn btn-danger btn-sm" href="{% url 'inventario:ajuste' %}?invernadero={{ f.iin.invernadero_id }}&amp;insumo={{ i.pk }}&amp;motivo=vencimiento&amp;lotes={{ lc.lote.pk }}">Dar de baja</a>{% endif %}</span>
+          </div>
+          {% empty %}
+          <div class="none">Todavía no tiene lotes: cargá el stock con una recepción o con un ajuste de «carga inicial». <a class="link" href="{% url 'inventario:ajuste' %}?invernadero={{ f.iin.invernadero_id }}&amp;insumo={{ i.pk }}&amp;motivo=carga_inicial">Cargar stock inicial</a></div>
+          {% endfor %}
+        </div>
+      </td></tr>
+      </tbody>
+      {% endwith %}
+      {% empty %}
+      <tbody><tr><td colspan="6" class="muted">{% if hay_filtros %}Ninguna existencia coincide con los filtros.{% else %}Todavía no hay insumos habilitados en tus invernaderos. Habilitá el primero con «Habilitar insumo».{% endif %}</td></tr></tbody>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="hint" style="margin-top:10px">El stock libre es lo que se puede usar hoy: no cuenta los lotes vencidos ni lo reservado por órdenes a realizar. Un lote vencido sigue en el stock hasta que lo des de baja con un ajuste.</p>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}

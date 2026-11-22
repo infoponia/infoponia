@@ -1,0 +1,33 @@
+{% load iconos %}{% comment %}Ventana «Habilitar insumo en un invernadero» (CMP-HAB-IIN, MODALS.habilitar del prototipo). Recibe «form», «fijo_insumo» y «fijo_invernadero»
+(si ya vienen elegidos: se muestran y se envían ocultos), «sin_invernaderos» y «unidad» (la del insumo elegido, para la ayuda del mínimo). Formulario
+común (POST) con «novalidate»: las reglas son del servicio. Si sale bien, la pestaña ofrece «Cargar stock inicial».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Habilitar insumo en un invernadero</h2>
+    {% if sin_invernaderos %}
+    <div class="alert alert-info" role="status" style="margin-bottom:6px">{% icono "info" 16 %}<div>No tenés invernaderos activos a tu cargo: no hay dónde habilitar un insumo.</div></div>
+    <div class="acts"><a class="btn btn-primary" href="{% url 'inventario:existencias' %}" data-cerrar-ventana data-foco-inicial>Entendido</a></div>
+    {% else %}
+    <p class="muted">Cada invernadero lleva su propio stock, mínimo y precio de referencia de cada insumo.</p>
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+    <form method="post" novalidate action="{% url 'inventario:habilitar' %}">
+      {% csrf_token %}
+      {% if fijo_insumo %}
+      <div class="fld"><span class="lbl">Insumo</span><b class="lockedval">{{ fijo_insumo.nombre_insumo }}</b><input type="hidden" name="insumo" value="{{ fijo_insumo.pk }}">{% for error in form.insumo.errors %}<div class="err">{{ error }}</div>{% endfor %}</div>
+      {% else %}{% include "core/usuarios/_campo.html" with campo=form.insumo requerido=True %}{% endif %}
+      {% if fijo_invernadero %}
+      <div class="fld"><span class="lbl">Invernadero</span><b class="lockedval">{{ fijo_invernadero.nombre_invernadero }}</b><input type="hidden" name="invernadero" value="{{ fijo_invernadero.pk }}">{% for error in form.invernadero.errors %}<div class="err">{{ error }}</div>{% endfor %}</div>
+      {% else %}{% include "core/usuarios/_campo.html" with campo=form.invernadero requerido=True %}{% endif %}
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.cant_min requerido=True ayuda="Por debajo de este valor se genera la alerta de stock bajo." %}
+        {% include "core/usuarios/_campo.html" with campo=form.referencia_precio requerido=True ayuda="En pesos, por unidad. Estimado, puesto en el invernadero: valoriza consumos y ajustes." %}
+      </div>
+      {% if unidad %}<div class="hint">La unidad de este insumo es {{ unidad }}.</div>{% endif %}
+      <div class="acts">
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Habilitando…">Habilitar</button>
+        <a class="btn btn-ghost" href="{% url 'inventario:existencias' %}" data-cerrar-ventana>Cancelar</a>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

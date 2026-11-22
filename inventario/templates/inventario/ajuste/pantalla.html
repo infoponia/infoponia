@@ -1,0 +1,15 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Ajustar stock de insumo» (CMP-AJT-STK, VIEWS.ajuste del prototipo): página completa. El bloque que cambia con cada dato es «_vivo.html» (HTMX lo recalcula
+y lo reemplaza; sin JavaScript, cada envío es un POST que vuelve a mostrar esta página entera). Solo el Agrónomo a cargo llega acá.{% endcomment %}
+{% block titulo %}Ajustar stock de insumo · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'inventario:existencias' %}">{% icono "chev" 14 %} Inventario</a>
+  <div class="page-h">
+    <h1>Ajustar stock de insumo</h1>
+    <div class="sub">Para que el sistema coincida con lo que hay en el depósito. El uso de un insumo no es un ajuste: se registra al concretar una orden o con «Registrar aplicación de insumos».</div>
+  </div>
+  {% include "inventario/ajuste/_vivo.html" %}
+</div>
+{% endblock %}

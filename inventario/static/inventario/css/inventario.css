@@ -15,3 +15,21 @@ label.opt{cursor:pointer}
 label.opt input[type=radio]{accent-color:var(--primary);margin:3px 0 0;flex:none}
 label.opt:has(input:checked){border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 1px var(--primary)}
 label.opt:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}
+/* INV-02: existencias. El despliegue de los lotes es una casilla (teclado y sin JavaScript): la fila de lotes aparece cuando está marcada. */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.inv-toggle{position:absolute;opacity:0;width:32px;height:32px;margin:0;cursor:pointer}
+.inv-chev{display:inline-flex;transition:transform .15s;pointer-events:none}
+.inv-toggle:focus-visible + .inv-chev{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px}
+.inv-toggle:checked + .inv-chev{transform:rotate(180deg)}
+tbody.inv-existencia tr.sub{display:none}
+tbody.inv-existencia:has(.inv-toggle:checked) tr.sub{display:table-row}
+tbody.inv-existencia:has(.inv-toggle:checked) > tr:first-child td{background:var(--subtle);border-bottom-color:transparent}
+.inv-lista{margin:0;padding-left:18px;display:grid;gap:4px}
+/* INV-02: ajuste. Los lotes del recuento y las casillas de «Vencimiento». */
+.inv-lote{grid-template-columns:100px 170px 130px minmax(0,1fr)}
+.inv-contado{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 18px;align-items:center;background:var(--background);padding:9px 12px;border-radius:var(--radius)}
+.inv-conunidad{display:flex;align-items:center;gap:8px}
+.inv-conunidad .field-input{flex:1;min-width:0}
+label.inv-marca{background:var(--background);padding:9px 12px;border-radius:var(--radius);cursor:pointer}
+label.inv-marca input{accent-color:var(--primary)}
+label.inv-marca:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:2px}

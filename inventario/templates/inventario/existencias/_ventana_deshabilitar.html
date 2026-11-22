@@ -1,0 +1,24 @@
+{% load iconos %}{% comment %}Ventana «Deshabilitar» (CMP-DSH-IIN, MODALS['ex-baja'] del prototipo), con confirmación previa. Recibe «iin», «impedimentos» (textos: qué pasa y cómo
+resolverlo, regla 2) y «error» (otro rechazo del servicio). Con impedimentos o error no ofrece confirmar. Deshabilitar es un POST a la misma URL; abrirla
+(GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if impedimentos or error %}
+    <h2 id="ventana-titulo">No se puede deshabilitar {{ iin.insumo.nombre_insumo }} en {{ iin.invernadero.nombre_invernadero }}</h2>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>
+      {% if error %}{{ error }}{% else %}Todavía tiene existencias o compromisos:
+      <ul class="inv-impedimentos">{% for texto in impedimentos %}<li>{{ texto }}</li>{% endfor %}</ul>{% endif %}</div></div>
+    <div class="acts"><a class="btn btn-primary" href="{% url 'inventario:existencias' %}" data-cerrar-ventana data-foco-inicial>Entendido</a></div>
+    {% else %}
+    <h2 id="ventana-titulo">¿Deshabilitar {{ iin.insumo.nombre_insumo }} en {{ iin.invernadero.nombre_invernadero }}?</h2>
+    <p>Deja de poder pedirse y usarse en ese invernadero. El insumo sigue en el catálogo y puede volver a habilitarse; conserva su historial.</p>
+    <form method="post" action="{% url 'inventario:existencia_deshabilitar' iin.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'inventario:existencias' %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Deshabilitando…">Deshabilitar</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

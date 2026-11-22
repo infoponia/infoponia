@@ -48,7 +48,6 @@ está en el repo: no se puede programar hasta que llegue su lote de documentaci�
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos | inventario | | pendiente | INV-01, UI-01 | `inventario/INV-02-insumos-del-invernadero-stock-y-vencimientos.md` |
 | INV-03 | Variedades, con la creación de su semilla | inventario | pendiente | MAE-03, INV-02, UI-01, NOT-01 | `inventario/INV-03-variedades-y-semillas.md` |
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz | produccion | pendiente | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 (y UI-01) | `produccion/PRD-01-siembra-ordenes-y-bandeja.md` |
 | PRD-02 | Transición: planificar, concretar y cancelar | produccion | pendiente | PRD-01 | `produccion/PRD-02-transicion-de-etapa.md` |

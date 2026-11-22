@@ -15,6 +15,17 @@ class InventarioConfig(AppConfig):
         from core.menu import registrar_entrada
         from core.models import Usuario
         from inventario.alertas import registrar_tipos_de_stock
+        from core.procesos import registrar_paso_diario
+        from inventario.servicios import insumos_invernadero, vencimientos
+        from maestros import extensiones as extensiones_de_maestros
 
         registrar_tipos_de_stock()
-        registrar_entrada(("Inventario", "inventario:catalogo", "box"), (Usuario.Rol.AGRONOMO,), despues_de="Producción")
+        # INV-02: la baja de un invernadero se rechaza con stock o tránsito de insumos y, si pasa, deshabilita sus insumos
+        # (precondición f y postcondición c de PROD-BAJ-INV). Con guarda: ``ready()`` puede correr más de una vez.
+        if insumos_invernadero.impedimentos_de_baja_de_invernadero not in extensiones_de_maestros._IMPEDIMENTOS:
+            extensiones_de_maestros.registrar_impedimento_de_baja(insumos_invernadero.impedimentos_de_baja_de_invernadero)
+        if insumos_invernadero.efecto_de_baja_de_invernadero not in extensiones_de_maestros._EFECTOS_DE_BAJA:
+            extensiones_de_maestros.registrar_efecto_de_baja(insumos_invernadero.efecto_de_baja_de_invernadero)
+        # INV-02, paso 7 (D-56): la revisión de vencimientos es el paso 10 del proceso diario. ``registrar_paso_diario`` es idempotente.
+        registrar_paso_diario("revisar_vencimientos", "Revisar vencimientos de insumos", 10, vencimientos.paso_diario)
+        registrar_entrada(("Inventario", "inventario:existencias", "box"), (Usuario.Rol.AGRONOMO,), despues_de="Producción")

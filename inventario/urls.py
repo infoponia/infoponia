@@ -1,15 +1,21 @@
-# Rutas de inventario bajo /inventario/ (INV-01): el catálogo de insumos y las categorías (tipos de insumo). Cada pestaña es una
-# página (respaldo sin JavaScript); INV-02 sumará «Existencias de insumos» como primera pestaña. El inicio lleva al catálogo.
+# Rutas de inventario bajo /inventario/: «Existencias de insumos» (INV-02, primera pestaña), el catálogo de insumos y las categorías
+# (INV-01) y el ajuste de stock (INV-02). Cada pestaña es una página (respaldo sin JavaScript). El inicio lleva a las existencias.
 
 from django.urls import path
 from django.views.generic import RedirectView
 
-from inventario import views
+from inventario import views, views_ajuste, views_existencias
 
 app_name = "inventario"
 
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="inventario:catalogo", permanent=False), name="inicio"),
+    path("", RedirectView.as_view(pattern_name="inventario:existencias", permanent=False), name="inicio"),
+    # Existencias de insumos (CMP-CNS-IIN, CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN) y ajuste de stock (CMP-AJT-STK).
+    path("existencias/", views_existencias.existencias, name="existencias"),
+    path("existencias/habilitar/", views_existencias.habilitar, name="habilitar"),
+    path("existencias/<int:iin_id>/modificar/", views_existencias.existencia_modificar, name="existencia_modificar"),
+    path("existencias/<int:iin_id>/deshabilitar/", views_existencias.existencia_deshabilitar, name="existencia_deshabilitar"),
+    path("ajuste/", views_ajuste.ajuste, name="ajuste"),
     # Catálogo de insumos (CMP-ALT-INS, CMP-MOD-INS, CMP-BAJ-INS, CMP-CNS-INS).
     path("catalogo/", views.catalogo, name="catalogo"),
     path("catalogo/nuevo/", views.insumo_nuevo, name="insumo_nuevo"),

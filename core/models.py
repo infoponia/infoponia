@@ -660,6 +660,11 @@ class RegistroAuditoria(models.Model):
         BAJA_INSUMO = "baja_insumo", "Baja de insumo"
         REACTIVACION_INSUMO = "reactivacion_insumo", "Reactivación de insumo"
         BAJA_INSUMO_INVERNADERO = "baja_insumo_invernadero", "Baja de insumo en un invernadero"
+        # Insumos en el invernadero, ajuste de stock y vencimientos (INV-02, D-36).
+        HABILITACION_INSUMO_INVERNADERO = "habilitacion_insumo_invernadero", "Habilitación de insumo en un invernadero"
+        MODIFICACION_INSUMO_INVERNADERO = "modificacion_insumo_invernadero", "Modificación de insumo en un invernadero"
+        AJUSTE_STOCK = "ajuste_stock", "Ajuste de stock de insumo"
+        ALERTA_DE_VENCIMIENTO = "alerta_de_vencimiento", "Alerta de vencimiento de insumo"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -708,6 +713,16 @@ class RegistroAuditoria(models.Model):
         "unidad_medida": "Unidad de medida",
         "controla_vencimiento": "Controla vencimiento",
         "consumo_directo": "Consumo directo",
+        # Insumos en el invernadero y ajuste de stock (INV-02): cantidades y precios van como texto (D-36).
+        "insumo": "Insumo",
+        "cant_min_insumo": "Stock mínimo",
+        "referencia_precio": "Precio de referencia",
+        "stock": "Stock",
+        "motivo_ajuste": "Motivo del ajuste",
+        "descripcion_ajuste": "Descripción del ajuste",
+        "lotes": "Lotes modificados",
+        "lotes_nuevos": "Lotes nuevos",
+        "movimientos": "Movimientos creados",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -745,6 +760,14 @@ class RegistroAuditoria(models.Model):
             "no_admite": "No admite",
             "como_gasto": "Como gasto",
             "como_costo_de_los_lotes": "Como costo de los lotes",
+        },
+        "motivo_ajuste": {
+            "recuento_fisico": "Recuento físico",
+            "rotura_o_perdida": "Rotura o pérdida",
+            "carga_inicial": "Carga inicial",
+            "vencimiento": "Vencimiento",
+            "correccion_entre_lotes": "Corrección entre lotes",
+            "otro": "Otro",
         },
         "unidad_medida": {
             "unidad": "unidad",
@@ -909,6 +932,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.BAJA_INSUMO,
         RegistroAuditoria.Accion.REACTIVACION_INSUMO,
         RegistroAuditoria.Accion.BAJA_INSUMO_INVERNADERO,
+        RegistroAuditoria.Accion.HABILITACION_INSUMO_INVERNADERO,
+        RegistroAuditoria.Accion.MODIFICACION_INSUMO_INVERNADERO,
+        RegistroAuditoria.Accion.AJUSTE_STOCK,
+        RegistroAuditoria.Accion.ALERTA_DE_VENCIMIENTO,
     }
 )
 

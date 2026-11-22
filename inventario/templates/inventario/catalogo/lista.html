@@ -3,7 +3,7 @@
 y descripción, su categoría (con el candado si es del sistema), la unidad, si controla vencimiento, dónde está habilitado («Ninguno» si
 en ningún invernadero) y su estado. Los botones salen de «acciones» (D-30); si la cuenta no puede gestionarlo (regla 1 de CMP-MOD-INS), se
 muestran deshabilitados con el nombre de quien lo usa (regla 3 de CMP-CNS-INS). Las semillas indican que vienen de su variedad y no
-tienen botones. «Habilitar en un invernadero» lo agrega INV-02. Las ventanas abren con HTMX; sin JavaScript, cada enlace lleva a esta
+tienen botones. «Habilitar en un invernadero» (INV-02) abre la ventana de habilitar con el insumo ya elegido. Las ventanas abren con HTMX; sin JavaScript, cada enlace lleva a esta
 página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo llega acá.{% endcomment %}
 {% block titulo %}Catálogo de insumos · InfoPonia{% endblock %}
 {% block contenido %}
@@ -15,9 +15,13 @@ página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo lle
     <a class="btn btn-primary" href="{% url 'inventario:insumo_nuevo' %}" hx-get="{% url 'inventario:insumo_nuevo' %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "plus" 14 %} Nuevo insumo</a>
   </div>
   {% include "inventario/_pestanas.html" with activa="catalogo" %}
+  {% if recien and puede_habilitar %}
+  <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div><b>{{ recien.nombre_insumo }}</b> todavía no está habilitado en ningún invernadero: habilitalo para cargarle stock.
+    <div style="margin-top:8px"><a class="btn btn-primary btn-sm" href="{% url 'inventario:habilitar' %}?insumo={{ recien.pk }}" hx-get="{% url 'inventario:habilitar' %}?insumo={{ recien.pk }}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Habilitar en un invernadero</a></div></div></div>
+  {% endif %}
   <div class="tablewrap">
     <table class="data-table fixed" style="min-width:960px">
-      <colgroup><col><col style="width:170px"><col style="width:80px"><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:150px"></colgroup>
+      <colgroup><col><col style="width:170px"><col style="width:80px"><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:270px"></colgroup>
       <thead><tr><th>Insumo</th><th>Categoría</th><th>Unidad</th><th>Vencimiento</th><th>Habilitado en</th><th>Estado</th><th></th></tr></thead>
       <tbody>
       {% for f in filas %}
@@ -39,6 +43,9 @@ página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo lle
             {% if f.puede %}<a class="ibtn danger" href="{% url 'inventario:insumo_baja' i.pk %}" hx-get="{% url 'inventario:insumo_baja' i.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Dar de baja {{ i.nombre_insumo }}" title="Dar de baja {{ i.nombre_insumo }}">{% icono "trash" 16 %}</a>
             {% else %}<span class="ibtn danger" role="img" aria-disabled="true" aria-label="Dar de baja {{ i.nombre_insumo }}: no disponible">{% icono "trash" 16 %}</span>{% endif %}
           {% endif %}
+          {% if puede_habilitar and i.activo and not i.es_semilla %}
+            <a class="btn btn-ghost btn-sm" href="{% url 'inventario:habilitar' %}?insumo={{ i.pk }}" hx-get="{% url 'inventario:habilitar' %}?insumo={{ i.pk }}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Habilitar en un invernadero</a>
+          {% endif %}
           {% if "reactivar" in f.acciones %}
             <form method="post" action="{% url 'inventario:insumo_reactivar' i.pk %}">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit" data-enviando="Reactivando…">Reactivar</button></form>
           {% endif %}
@@ -53,7 +60,7 @@ página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo lle
       </tbody>
     </table>
   </div>
-  <p class="hint" style="margin-top:10px">El catálogo es el mismo para toda la organización. Para tener stock de un insumo en un invernadero, primero hay que habilitarlo ahí (disponible en la próxima etapa). Modifica o da de baja un insumo el Agrónomo que lo tiene habilitado en un invernadero a su cargo; si nadie lo usa, cualquier Agrónomo.</p>
+  <p class="hint" style="margin-top:10px">El catálogo es el mismo para toda la organización. Para tener stock de un insumo en un invernadero, primero hay que habilitarlo ahí, con «Habilitar en un invernadero». Modifica o da de baja un insumo el Agrónomo que lo tiene habilitado en un invernadero a su cargo; si nadie lo usa, cualquier Agrónomo.</p>
 </div>
 {% endblock %}
 
