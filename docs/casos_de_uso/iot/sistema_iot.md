@@ -366,7 +366,7 @@ Tareas: **IOT-02** (IOT-REG-SIS e IOT-MOD-SIS) e **IOT-06** (IOT-DSC-SIS, IOT-AC
   alcance; verificar que no tiene un sistema no dado de baja (8a; además lo respalda el índice único parcial: un `IntegrityError` se traduce
   al mismo mensaje, nunca un 500); crear `SistemaIoT` (activo) y su `NodoCentral` (activo, modo `remoto`, sin sector); generar el token con
   `core.enlaces.nuevo_token()` y guardar solo `token_resumen` (D-70; si `core/enlaces.py` no existe todavía, lo crea esta tarea tal como lo
-  describe `docs/patrones/enlace_del_cliente.md`, sección «Token»); llamar a `maestros.servicios.alertas.sincronizar_alertas_de_personal` (crea
+  describe `docs/patrones/enlace_del_cliente.md`, sección «1. Piezas»); llamar a `maestros.servicios.alertas.sincronizar_alertas_de_personal` (crea
   la alerta «invernadero sin Técnico activo» si corresponde: postcondición e) y auditar.
 - **Mostrar el token una sola vez (pasos 9 y 10, extensión 9a).** La respuesta al POST que registra **renderiza** la pantalla del token (no
   redirige: el token no se guarda en ningún lado para mostrarlo después), con `never_cache` y `Cache-Control: no-store`. Muestra la dirección

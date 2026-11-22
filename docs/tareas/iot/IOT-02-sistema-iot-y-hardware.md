@@ -211,8 +211,8 @@ invernadero sin Agrónomo. Un insumo activo de «Repuestos de hardware».
 6. Vistas (`views_sistema.py`, `views_hardware.py`, `contexto.py`), plantillas, pestañas «Hardware», «Sistema IoT» y «Tipos de actuador»; `/iot/` redirige a «Sistema IoT».
 7. Documentación propuesta (M3), sin aplicar.
 
-**Pruebas.** `python manage.py test --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` (todas las apps): 3498 pruebas, todas en verde (`iot maestros core` solo: 2377).
-`python manage.py test iot --keepdb --tag concurrencia`: 17 en verde (dos altas con el mismo identificador, dos registros en el mismo invernadero, reactivar contra un alta, la baja de un tipo contra el alta de un actuador,
+**Pruebas.** `python manage.py test --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` (todas las apps, tras el merge de PRD-01): 3791 pruebas, todas en verde.
+`python manage.py test iot produccion --keepdb --tag concurrencia`: 30 en verde, 17 de ellas de `iot` (dos altas con el mismo identificador, dos registros en el mismo invernadero, reactivar contra un alta, la baja de un tipo contra el alta de un actuador,
 dos regeneraciones, y dos `test_d82_…` de la modificación de un tipo a la vez que el alta o el cambio de tipo de un actuador). `makemigrations --check`: sin cambios pendientes. Las de servicios se escribieron antes y se revisaron en rojo.
 Las dos `test_d82_…` de `test_hardware_concurrencia.py` fuerzan el cruce con `detener_antes_de=(api_alertas, "bloquear_invernadero_para_alertas")`; con el orden invertido fallan con `DeadlockDetected` (comprobado).
 
@@ -227,7 +227,7 @@ Las dos `test_d82_…` de `test_hardware_concurrencia.py` fuerzan el cruce con `
   y la ficha hagan UNA llamada al registrante (el contrato pide que no haya consultas por fila).
 - **Pruebas existentes que cambiaron** (la tarea decía que ninguna de `maestros`): `iot/tests/test_tipos_actuador_vistas.py` (el destino de `/iot/`, que la tarea manda cambiar) y, con la aprobación del estudiante,
   `test_ext_impedimentos_de_sector_sin_registrantes_no_hay_ninguno` y `test_ext_contenido_sin_registrantes_esta_vacio` de `maestros/tests/test_extensiones_sectores.py`: asumían que ninguna app registraba los puntos de sector
-  y usan un sector falso sin base; ahora `iot` los registra y las dos pruebas aíslan la lista con `mock.patch.object`. Siguen probando el neutro «sin registrantes».
+  y `iot` ya los registra. Siguen probando el neutro «sin registrantes». Tras el merge, el `setUp` de PRD-01 en el mismo archivo aísla las mismas listas.
 - `docs/casos_de_uso/iot/sistema_iot.md` cita una sección «Token» de `enlace_del_cliente.md` que no existe: la correcta es «1. Piezas».
 - El texto «Ya lo usa {equipo} en este sistema IoT.» usa el nombre del prototipo (`hwName`: «Temperatura», o el tipo del actuador), que el caso de uso no define.
 

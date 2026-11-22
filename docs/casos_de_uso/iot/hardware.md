@@ -127,7 +127,7 @@ e. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 
 8. Al volver a activar un equipo fuera de servicio, el Sistema muestra las órdenes de mantenimiento a realizar que lo incluyen, y por cada una el actor elige cancelarla o mantenerla. Si la orden incluye otros equipos que siguen fuera de servicio, no se ofrece cancelarla. La cancelación sigue a Cancelar Orden: libera las reservas, si las hubiera.
 
-9. Un equipo dado de baja no se modifica: solo se reactiva. No se reactiva si su sistema IoT está dado de baja (regla 2 de IOT-BAJ-SIS) ni si otro equipo no dado de baja del mismo sistema usa su identificador (regla 2 de IOT-ALT-HDW).
+9. Un equipo dado de baja no se modifica: solo se reactiva. No se reactiva si su sistema IoT está dado de baja (regla 2 de IOT-BAJ-SIS) ni si otro equipo no dado de baja del mismo sistema usa su identificador (regla 2 de IOT-ALT-HDW). Tampoco se reactiva un actuador cuyo tipo de actuador está dado de baja (D-82; código `tipo_inactivo`): el Gerente reactiva antes el tipo.
 
 10. Al reactivar un actuador o cambiar su tipo, el Sistema vuelve a comparar los comandos de las acciones activas de su tipo con el último anuncio del nodo, igual que en el alta (regla 14 de IOT-ALT-HDW), e informa el resultado antes de guardar. Una incompatibilidad se advierte y no impide guardar.
 
@@ -292,9 +292,11 @@ de aplicación:
     PROD-BAJ-SCT);
   - `registrar_contenido_de_sector`: un `Contenido` de tipo `hardware` por equipo no dado de baja del sector («Sensor de temperatura
     norte/sectorA/temperatura», con la URL de su ficha).
-- **Bloqueos.** Alta: el invernadero (`bloquear_invernadero_activo`), después el sistema (`FOR NO KEY UPDATE`), releído. MOD, reactivación y
-  baja: invernadero, sistema y el equipo, releídos; si cambia el tipo de un actuador, también el tipo de actuador nuevo (para que no se dé de
-  baja a la vez). Sin cambios no se escribe ni se audita.
+- **Bloqueos (D-82, excepción a D-40).** Alta: el invernadero (`bloquear_invernadero_activo`), después el sistema (`FOR NO KEY UPDATE`), releído. MOD, reactivación y
+  baja: invernadero, sistema y el equipo, releídos. **Cuando interviene un tipo de actuador** (el alta de un actuador, el cambio del tipo de un actuador y la
+  reactivación de un actuador), el tipo se bloquea primero (`bloquear_tipo_activo`) y recién después el invernadero, el sistema y el equipo. El tipo va antes
+  porque IOT-MOD-TAC lo bloquea y después bloquea los invernaderos de sus actuadores al recalcular la compatibilidad; si el alta o el cambio de tipo bloquearan primero el
+  invernadero, las dos operaciones se cruzarían y la base abortaría una. Sin cambios no se escribe ni se audita.
 - **Auditoría (D-36).** Un registro por caso de uso: `alta_hardware`, `modificacion_hardware`, `reactivacion_hardware` (con `datos.desde`:
   `fuera_de_servicio` o `inactivo`) y `baja_hardware`. Afectados: el equipo, las alertas generadas o resueltas y, en IOT-07, las órdenes
   canceladas.
