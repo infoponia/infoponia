@@ -192,8 +192,11 @@ al estudiante la verificación, Claude Code deja la base local cargada con lo qu
 cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
 siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
 
-Hay migraciones nuevas (`comercial` y `core`): `python manage.py migrate`. Cuentas: Gerente, un Vendedor y dos Transportistas (uno ya agregado
-a un invernadero desde «Logística», MAE-05, y otro sin invernadero).
+Hay migraciones nuevas (`comercial` y `core`): `python manage.py migrate`. **Ya están cargados los datos** (comando `cargar_datos_de_verificacion --solo comercial`,
+con la contraseña de `CLAUDE.local.md`). Cuentas: el Gerente de siempre (solo hay uno activo), `vendedor@prueba5.local`, `transportista@prueba5.local` (ya agregado a
+«Invernadero Comercial» desde «Logística», MAE-05) y `transportista2@prueba5.local` (sin invernadero). Clientes cargados: «Verdulería Los Pinos S.R.L. (prueba)» (con correo
+y dos direcciones), «Marta Gómez (prueba)» (física, sin correo) y «Cerrado S.A. (prueba)» (dado de baja); vehículo cargado: `ZZZ999`, dado de baja. Los CUIT de los pasos 2 a 6
+tienen que ser otros (por ejemplo 30-71234567-1 y 20-12345678-6).
 
 1. Con el Vendedor: el menú muestra «Comercial» después de «Panel de control»; la pantalla abre en «Clientes» y no tiene la pestaña
    «Vehículos».
@@ -214,4 +217,92 @@ a un invernadero desde «Logística», MAE-05, y otro sin invernadero).
 10. Sin JavaScript, los pasos 2 a 6 y 7 a 9 funcionan igual: cada ventana es una página.
 11. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+**Qué se hizo** (rama `feature/com-01-clientes-y-vehiculos`, 23/11/2026)
+
+- **App `comercial`** (nivel 6, D-37) en `INSTALLED_APPS`: `Cliente`, `DireccionCliente` y `Vehiculo` con todas las restricciones de la base (CUIT único y de
+  11 dígitos, datos por tipo de cliente, patente única y con formato, capacidad mayor que 0, `en_ruta` ⇒ fecha, inactivo ⇒ sin transportista y los dos
+  `OneToOneField`), `en_alcance_de` en un único lugar (D-28), `esta_en_ruta(hoy)` y el admin de solo lectura. Migraciones `comercial` 0001 y `core` 0024
+  (`0024_comercial_acciones_de_auditoria`, solo `choices`, con las ocho acciones). Ninguna migración en `maestros`.
+- **API de `maestros` (D-58):** `maestros/servicios/direcciones.py` (`validar_direccion`, `crear_direccion`, `corregir_direccion`, `inactivar_direccion`,
+  `borrar_direccion`, `datos_de_la_direccion`, `clave_de_ubicacion`) y `validar_cuit` / `formatear_cuit` en `maestros/validadores.py`. `invernaderos.py` y
+  `perfil.py` delegan en ellas sin cambiar su comportamiento (el CUIT vacío del perfil sigue permitido, con el mismo mensaje y código).
+- **Servicios de clientes** (`comercial/servicios/clientes.py`): `alta_cliente`, `reactivar_cliente`, `modificar_cliente`, `baja_cliente`, `buscar_clientes`,
+  `ficha_del_cliente`, `acciones_permitidas`, `DatosDeCliente.desde_post` y las tres funciones que completan otras tareas (`direcciones_en_uso`,
+  `impide_quitar_el_correo`, `pendientes_del_cliente`, neutras).
+- **Servicios de vehículos** (`comercial/servicios/vehiculos.py`): alta, modificación, reactivación, baja, búsqueda, ficha, `transportistas_disponibles`,
+  `texto_capacidad`, `entregas_a_realizar_del_transportista` y `carga_maxima_asignada` (neutras, las completa COM-05) y los dos registrantes.
+- **Pantallas:** «Comercial» con las pestañas «Clientes» y, solo para el Gerente, «Vehículos»; lista, ficha, formulario y ventana de baja de cada uno; los tres
+  fragmentos de dirección (solo GET); el ícono `cart`; la entrada «Comercial» del menú; `config/urls.py` y `core/tests/urls_prueba_acceso.py`.
+- **Registros en `ready()`** (con guarda contra el doble registro): «Logística» (`registrar_logistica_de_transportista`), el «Vehículo» de la ficha de la
+  cuenta y de «Mi perfil» (`registrar_datos_de_cuenta`) y el cargador de datos de verificación (orden 20).
+
+**Pruebas** (M1)
+
+- `python manage.py test comercial maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 2223 pruebas, OK.
+- `python manage.py test comercial --keepdb --tag concurrencia`: 10 pruebas, OK. Además, `maestros --tag concurrencia`: 38, OK (se tocaron el alta y la
+  modificación del invernadero).
+- `makemigrations --check --dry-run`: sin cambios. `manage.py check`: sin problemas.
+- Corrida extra de toda la suite (sin concurrencia ni migración): 5048 pruebas, OK.
+- Pruebas nuevas: `comercial/tests/test_modelos_comercial.py`, `test_com_{alt,mod,baj,cns}_{clt,veh}.py`, `test_clientes_concurrencia.py`,
+  `test_vehiculos_concurrencia.py`, `test_clientes_vistas.py`, `test_vehiculos_vistas.py`, `test_logistica.py`, `test_datos_de_cuenta.py`,
+  `test_verificacion.py`; y en `maestros`: `test_direcciones.py` y `test_validar_cuit.py`.
+
+**Decisiones:** ninguna nueva (se aplicó D-58, ya vigente). Los contratos de código que fijaron las pruebas (códigos de error, nombres de los campos
+del formulario, `DatosDeCliente`, `DatosDeVehiculo`) están anotados en `docs/temas_abiertos.md` (propuesta de M3).
+
+**Una prueba existente de `maestros` se tocó, con permiso del estudiante** (la tarea dice que ninguna se modifica, pero lo pide a la vez el registrante de
+`datos_de_cuenta`): `maestros/tests/test_datos_de_cuenta_transportista.py`, clase `DatosDeCuentaDelTransportistaTests`. Esas pruebas usaban los registrantes reales y
+esperaban exactamente `[DatoDeCuenta("Invernadero", …)]` y una sola consulta; con el «Vehículo» de `comercial` fallan. Se aíslan con
+`mock.patch.object(core.extensiones, "_DATOS_DE_CUENTA", [transportistas.datos_de_cuenta])` en `setUp`. Prueban lo mismo (el registrante de `maestros`) y
+nada se debilitó; las pantallas, que siguen con los registrantes reales, pasan sin cambios.
+
+**Pantallas: lo que se corrigió del prototipo** (D-61)
+
+| Qué tenía el prototipo | Qué se hizo | Qué paso o regla lo pide |
+|---|---|---|
+| El formulario del cliente solo agregaba y desactivaba direcciones | Cada dirección activa se puede corregir (en el lugar, o creando otra si la usa un contrato), desactivar y borrar (solo si nada la usa); se confirma al guardar | Regla 4 y postcondiciones c, d y e de COM-MOD-CLT |
+| «Reactivar» activaba al cliente con un clic | Lleva al formulario del alta con los datos guardados, para corregirlos; el Vendedor ve que se avisa al Gerente | Postcondición c y regla 2 de COM-ALT-CLT |
+| La caja de dirección urbana no tenía «Referencias» | Se agregó, como en el invernadero | D-39 |
+| Las direcciones se cargaban con una caja y un botón «Agregar» que redibujaba todo en el navegador | Bloques de dirección con tipo, provincia, departamento y localidad encadenados por HTMX (`show:none`, sin validar), y «Agregar dirección» y «Actualizar» como botones de envío para que funcione sin JavaScript. Un bloque vacío se ignora | `interfaz.md` («Validaciones e interacción HTMX») y D-58, punto 7 |
+| El CUIT repetido y el error del dígito verificador se mostraban al tipear | Se muestran al guardar, junto al campo, con «Abrir su ficha» o «Reactivarlo» | `interfaz.md` y regla 2 de COM-ALT-CLT |
+| La razón social o el nombre y el apellido se alternaban con JavaScript | Se alternan con CSS (`:has`), sin JavaScript y sin pedir nada al servidor; se descarta lo del tipo no elegido | Regla 3 de COM-ALT-CLT |
+| La lista de clientes filtraba al tipear | Formulario GET común con «Filtrar», que funciona sin JavaScript | `interfaz.md` |
+| La lista de clientes traía «Contratos vigentes»; la ficha, «Deuda» y «Contratos» con datos de ejemplo | No se muestran hasta que existan (COM-02, COM-03, COM-06, COM-08) | D-25; «Solo prototipo» de `clientes.md` |
+| La lista de vehículos no tenía búsqueda ni filtros | Búsqueda por patente, tipo o transportista, y filtros por estado y por invernadero; columna «Situación»; sin «Entregas a realizar» (la suma COM-05) | Regla 1 de COM-CNS-VEH |
+| «Marca y modelo» era un solo campo y la patente no se podía cambiar al modificar | Dos campos obligatorios; la patente se puede cambiar | MD-129 y precondición c de COM-MOD-VEH |
+| No había ficha del vehículo | Se armó con el estilo de la ficha del cliente: datos, transportista, invernadero y situación | Regla 2 de COM-CNS-VEH |
+| «Reactivar» un vehículo no decía qué pasaba con el transportista | El aviso dice que queda sin transportista; «Dar de baja» se explica en la ventana y no ofrece confirmar con la ruta iniciada o con entregas a realizar | Postcondición c de COM-MOD-VEH y precondiciones b y c de COM-BAJ-VEH |
+| El transportista sin invernadero no tenía aviso | El formulario avisa «No recibe entregas hasta que se lo agregue a un invernadero, en "Logística".» | «Transportista» de `vehiculos.md` |
+| Sin estados vacíos ni foco | Estados vacíos con cómo empezar, Enter guarda (el primer botón del formulario es el de guardar, no «Agregar dirección») y foco inicial en las ventanas | `interfaz.md` |
+| El menú del prototipo pone «Comercial» antes de «IoT» | Queda después de «IoT» (cada app se registra después de «Producción» en el orden de `INSTALLED_APPS`, y una prueba de `iot` pide «IoT» justo después de «Producción») | Paso 5 de la tarea; sin cambios en `core` |
+
+**Datos que quedaron cargados en la base local** (`python manage.py cargar_datos_de_verificacion --solo comercial`, contraseña de `CLAUDE.local.md` por
+la variable de entorno; idempotente)
+
+- Cuentas (todas con la contraseña de quien trabaja): `vendedor@prueba5.local`, `transportista@prueba5.local` (agregado a «Invernadero Comercial» desde «Logística»)
+  y `transportista2@prueba5.local` (sin invernadero). El Gerente es el de la base (solo puede haber uno activo, D-09).
+- «Invernadero Comercial», sin personal.
+- Clientes: «Verdulería Los Pinos S.R.L. (prueba)» (CUIT 30-50000001-1, con correo, teléfono y dos direcciones: una urbana y una rural, cargado por el Vendedor);
+  «Marta Gómez (prueba)» (física, 20-50000003-2, sin correo ni direcciones); «Cerrado S.A. (prueba)» (30-50000004-6, dado de baja).
+- Vehículos: `ZZZ999` (furgón, dado de baja). **No** se carga la camioneta `AE123CD` de los pasos 7 a 9: la registra la persona.
+- Se aplicaron las migraciones nuevas a la base local (`migrate`); no se borró ni se tocó nada.
+
+**Diferencias con lo escrito (van a `docs/temas_abiertos.md`)**
+
+- La cuenta del segundo Transportista es `transportista2@prueba5.local` (el patrón `<rol>@prueba<N>.local` no alcanza para dos del mismo rol).
+- `docs/patrones/datos_de_verificacion.md` dice «Hoy: `maestros` (orden 5, MAE-02d) e `iot` (orden 10)» y que la siguiente app usa `prueba4`: ya están `produccion` (orden 15,
+  `prueba4`) y ahora `comercial` (orden 20, `prueba5`).
+- La rama de «dirección en uso» de `modificar_cliente` (crear otra, dejar la anterior inactiva, no borrar) ya está escrita y probada con `mock.patch`: COM-02 y COM-03 solo
+  reescriben `direcciones_en_uso`. El extracto la daba por completar en esas tareas.
+- Si se desactiva o se borra una dirección, su corrección (que el formulario manda siempre, sin cambios) se ignora: `modificar_cliente` y `reactivar_cliente` lo resuelven en
+  el servicio.
+- Código y nombres que fijaron las pruebas: `DatosDeCliente` (`desde_post` con `nueva-<i>-<campo>`, `corregida-<id>-<campo>`, `desactivar` y `borrar`), `DatosDeVehiculo`,
+  códigos `cuit_de_cliente_activo|inactivo` (con `params["cliente_id"]`), `direccion_repetida`, `direccion_invalida`, `direccion_en_uso`,
+  `correo_con_suministro_vigente`, `patente_invalida|repetida`, `capacidad_invalida`, `capacidad_menor_que_la_carga`, `transportista_invalido|con_vehiculo|con_entregas`,
+  `vehiculo_en_ruta|inactivo|no_inactivo` y `cambio_simultaneo`.
+- Textos de las notificaciones de vehículo (el extracto da «con {tipo} {patente} ({capacidad} kg)»): «Desde ahora hacés tus entregas con camioneta AE123CD (800 kg).», con el
+  tipo en minúscula.
+- Los vehículos se bloquean con las cuentas primero (quien actúa y los transportistas que entran o salen, en una consulta y por id) y después el vehículo; como hay un solo
+  Gerente activo, todo el ABM de vehículos queda serializado por su cuenta. La restricción de la base respalda la patente y el transportista.

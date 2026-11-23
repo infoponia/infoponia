@@ -27,9 +27,11 @@ from core.models import (
     rol_de,
 )
 from maestros import extensiones
-from maestros.models import Alerta, Direccion, DireccionRural, DireccionUrbana, Invernadero, Localidad
+from maestros.models import Alerta, Direccion, DireccionRural, DireccionUrbana, Invernadero
 from maestros.servicios import alertas as api_alertas
-from maestros.validadores import validar_con_contenido, validar_kilometro, validar_numero_calle
+from maestros.servicios import direcciones
+from maestros.servicios.direcciones import datos_de_la_direccion  # noqa: F401 (la importa maestros/forms.py desde acá)
+from maestros.validadores import validar_con_contenido
 
 TIPOS_DE_DIRECCION = ("urbana", "rural")
 
@@ -46,33 +48,10 @@ MENSAJE_NOMBRE_REPETIDO = "Ya existe un invernadero con ese nombre."
 
 # Largo máximo de cada texto que carga el alta (D-39, decisión 6): los de las columnas, para rechazarlo con un error de
 # campo en vez de dejar que la base lo rechace con un error 500.
-LARGOS = {
-    "nombre": Invernadero._meta.get_field("nombre_invernadero").max_length,
-    "calle": DireccionUrbana._meta.get_field("calle").max_length,
-    "numero_calle": DireccionUrbana._meta.get_field("numero_calle").max_length,
-    "piso": DireccionUrbana._meta.get_field("piso").max_length,
-    "departamento_unidad": DireccionUrbana._meta.get_field("departamento").max_length,
-    "barrio": DireccionUrbana._meta.get_field("barrio").max_length,
-    "referencias": DireccionUrbana._meta.get_field("referencias").max_length,
-    "ruta": DireccionRural._meta.get_field("ruta").max_length,
-    "kilometro": DireccionRural._meta.get_field("kilometro").max_length,
-    "lote_rural": DireccionRural._meta.get_field("lote").max_length,
-}
+LARGOS = {"nombre": Invernadero._meta.get_field("nombre_invernadero").max_length, **direcciones.LARGOS}
 
-
-# Validador de formato o de contenido de cada campo que lo tiene (D-39): el mismo que usa el campo del modelo. El número y
-# el kilómetro tienen su formato; los textos libres (calle, ruta y los opcionales) exigen una letra o un número.
-FORMATOS = {
-    "numero_calle": validar_numero_calle,
-    "kilometro": validar_kilometro,
-    "calle": validar_con_contenido,
-    "ruta": validar_con_contenido,
-    "piso": validar_con_contenido,
-    "departamento_unidad": validar_con_contenido,
-    "barrio": validar_con_contenido,
-    "referencias": validar_con_contenido,
-    "lote_rural": validar_con_contenido,
-}
+# Los formatos de los campos de la dirección viven en la API pública (D-58).
+FORMATOS = direcciones.FORMATOS
 
 
 def _datos_de_alertas(creadas=(), resueltas=(), traspasadas=()):
@@ -145,37 +124,6 @@ def _entero_o_none(valor):
         return None
 
 
-def _limpiar_direccion(tipo, datos, errores):
-    """Regla 2 de PROD-ALT-INV: valida y recorta los datos de la dirección del tipo elegido, y descarta los del otro.
-    Devuelve ``{campo: texto}`` solo con los datos del tipo, o ``{}`` si el tipo no es válido."""
-    if tipo not in TIPOS_DE_DIRECCION:
-        errores["tipo_direccion"] = _error("Elegí si la dirección es urbana o rural.", "tipo_invalido")
-        return {}
-    if tipo == "urbana":
-        obligatorios = {"calle": "Ingresá la calle.", "numero_calle": "Ingresá el número."}
-        opcionales = ("piso", "departamento_unidad", "barrio", "referencias")
-    else:
-        obligatorios = {"ruta": "Ingresá la ruta o el camino.", "kilometro": "Ingresá el kilómetro."}
-        opcionales = ("lote_rural",)
-    limpios = {}
-    for campo in (*obligatorios, *opcionales):
-        limpios[campo] = (datos.get(campo) or "").strip()
-    for campo, mensaje in obligatorios.items():
-        if not limpios[campo]:
-            errores[campo] = _error(mensaje, "obligatorio")
-    # Formato (D-39): solo de lo que se escribió; vacío ya quedó como «obligatorio».
-    for campo, validador in FORMATOS.items():
-        if campo in limpios and limpios[campo] and campo not in errores:
-            try:
-                validador(limpios[campo])
-            except ValidationError as error:
-                errores[campo] = error.error_list
-    for campo, texto in limpios.items():
-        if campo not in errores and (error := _largo_excedido(campo, texto)):
-            errores[campo] = error
-    return limpios
-
-
 def _buscar_personal(ids, errores, actuales=None):
     """Regla 4 de PROD-ALT-INV: cada persona tiene que ser una cuenta activa de ese rol. Devuelve
     ``{atributo: cuenta}`` solo con los roles que se asignaron.
@@ -200,22 +148,14 @@ def _buscar_personal(ids, errores, actuales=None):
     return personal
 
 
-def _crear_direccion(tipo, localidad, datos):
-    """Crea la dirección urbana o rural (postcondición b). Los nombres de ``datos`` son los del servicio:
-    ``departamento_unidad`` y ``lote_rural`` evitan chocar con otras entidades del glosario (D-39)."""
-    if tipo == "urbana":
-        return DireccionUrbana.objects.create(
-            localidad=localidad,
-            calle=datos["calle"],
-            numero_calle=datos["numero_calle"],
-            piso=datos["piso"],
-            departamento=datos["departamento_unidad"],
-            barrio=datos["barrio"],
-            referencias=datos["referencias"],
-        )
-    return DireccionRural.objects.create(
-        localidad=localidad, ruta=datos["ruta"], kilometro=datos["kilometro"], lote=datos["lote_rural"]
-    )
+def _validar_direccion(tipo, pedido, localidad_id, errores):
+    """Delega en la API pública (D-58): valida la dirección y vuelca sus errores por campo en ``errores``, junto con los demás
+    del caso de uso. Devuelve ``DireccionValidada`` o ``None`` si hubo errores."""
+    try:
+        return direcciones.validar_direccion({**pedido, "tipo_direccion": tipo, "localidad": localidad_id})
+    except ValidationError as error:
+        errores.update(error.error_dict)
+        return None
 
 
 def _validar_nombre(nombre, errores, excluir_pk=None):
@@ -235,18 +175,6 @@ def _validar_nombre(nombre, errores, excluir_pk=None):
     elif error := _largo_excedido("nombre", nombre):
         errores["nombre"] = error
     return nombre
-
-
-def _buscar_localidad(localidad_id, errores):
-    """Regla 3 de PROD-ALT-INV: la localidad es una de las precargadas de Georef (MD-88)."""
-    localidad = (
-        Localidad.objects.select_related("departamento__provincia")
-        .filter(pk=_entero_o_none(localidad_id))
-        .first()
-    )
-    if localidad is None:
-        errores["localidad"] = _error("Elegí la localidad de la lista.", "localidad_invalida")
-    return localidad
 
 
 def _titulo_del_aviso(invernadero):
@@ -315,7 +243,7 @@ def alta_invernadero(
 
     nombre = _validar_nombre(nombre, errores)
 
-    datos = _limpiar_direccion(
+    validada = _validar_direccion(
         tipo_direccion,
         {
             "calle": calle,
@@ -328,10 +256,9 @@ def alta_invernadero(
             "kilometro": kilometro,
             "lote_rural": lote_rural,
         },
+        localidad_id,
         errores,
     )
-
-    localidad = _buscar_localidad(localidad_id, errores)
 
     personal = _buscar_personal(
         {
@@ -344,9 +271,10 @@ def alta_invernadero(
     )
     if errores:
         raise ValidationError(errores)
+    datos, localidad = validada.campos, validada.localidad
 
     with transaction.atomic():
-        direccion = _crear_direccion(tipo_direccion, localidad, datos)
+        direccion = direcciones.crear_direccion(validada)
         try:
             # Savepoint: dos altas simultáneas con el mismo nombre las rechaza la restricción de la base; se informa
             # como nombre repetido en vez de un error 500.
@@ -465,7 +393,6 @@ MENSAJE_YA_INACTIVO = "El invernadero ya está dado de baja."
 MENSAJE_YA_ACTIVO = "El invernadero ya está activo."
 
 # Nombre del atributo del modelo de cada dato de la dirección cuyo nombre en el servicio es otro (D-39).
-_ATRIBUTO_DE_LA_DIRECCION = {"departamento_unidad": "departamento", "lote_rural": "lote"}
 
 
 class FaltaConfirmarPersonal(Exception):
@@ -522,15 +449,6 @@ def bloquear_invernadero_activo(invernadero_id):
 def _ids_actuales(invernadero):
     """``{atributo: id}`` de las personas que el invernadero tiene asignadas hoy (activas o no)."""
     return {atributo: getattr(invernadero, f"{atributo}_id") for atributo, _ in Invernadero.ROLES}
-
-
-def datos_de_la_direccion(hija):
-    """Los datos de una dirección (urbana o rural) con los nombres del servicio y ``None`` en los que están vacíos."""
-    if hija.ZONA == "urbana":
-        campos = ("calle", "numero_calle", "piso", "departamento_unidad", "barrio", "referencias")
-    else:
-        campos = ("ruta", "kilometro", "lote_rural")
-    return {campo: getattr(hija, _ATRIBUTO_DE_LA_DIRECCION.get(campo, campo)) or None for campo in campos}
 
 
 def _aviso_de_personal(invernadero, cambiados):
@@ -633,11 +551,11 @@ def modificar_invernadero(
     # Validación previa, sin bloquear: rechaza pronto lo evidente y junta todos los errores de campo.
     errores = {}
     nombre = _validar_nombre(nombre, errores, excluir_pk=actual.pk)
-    datos = _limpiar_direccion(tipo_direccion, pedido, errores)
-    localidad = _buscar_localidad(localidad_id, errores)
+    validada = _validar_direccion(tipo_direccion, pedido, localidad_id, errores)
     _buscar_personal(ids, errores, _ids_actuales(actual))
     if errores:
         raise ValidationError(errores)
+    datos, localidad = validada.campos, validada.localidad
 
     with transaction.atomic():
         # 1) Las cuentas de quien actúa y de todo el personal enviado, en una sola consulta y en orden de id. Se
@@ -709,13 +627,10 @@ def modificar_invernadero(
             campos_a_guardar.append("nombre_invernadero")
         if tipo_direccion != tipo_actual:
             direccion_vieja = invernadero.direccion_id
-            invernadero.direccion = _crear_direccion(tipo_direccion, localidad, datos)
+            invernadero.direccion = direcciones.crear_direccion(validada)
             campos_a_guardar.append("direccion")
         elif any(campo in cambios for campo in (*despues_de_la_direccion, "localidad")):
-            hija.localidad = localidad
-            for campo, valor in datos.items():
-                setattr(hija, _ATRIBUTO_DE_LA_DIRECCION.get(campo, campo), valor)
-            hija.save()
+            direcciones.corregir_direccion(hija, validada)
         for atributo, (_, entrante) in cambiados.items():
             setattr(invernadero, f"{atributo}_id", entrante.pk if entrante else None)
             campos_a_guardar.append(f"{atributo}_id")

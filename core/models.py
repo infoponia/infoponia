@@ -703,6 +703,15 @@ class RegistroAuditoria(models.Model):
         # Lo que el nodo central entrega por la API del IoT (IOT-03, postcondición z de IOT-ENT-INF): lecturas, estados, modo y anuncio. Actor ``None``
         # (InfoPonia, como los procesos de D-56). Nunca lleva el token (D-70).
         ENTREGA_INFORMACION_IOT = "entrega_informacion_iot", "Entrega de información del nodo (IoT)"
+        # Clientes y vehículos (COM-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
+        ALTA_CLIENTE = "alta_cliente", "Alta de cliente"
+        MODIFICACION_CLIENTE = "modificacion_cliente", "Modificación de cliente"
+        BAJA_CLIENTE = "baja_cliente", "Baja de cliente"
+        REACTIVACION_CLIENTE = "reactivacion_cliente", "Reactivación de cliente"
+        ALTA_VEHICULO = "alta_vehiculo", "Alta de vehículo"
+        MODIFICACION_VEHICULO = "modificacion_vehiculo", "Modificación de vehículo"
+        BAJA_VEHICULO = "baja_vehiculo", "Baja de vehículo"
+        REACTIVACION_VEHICULO = "reactivacion_vehiculo", "Reactivación de vehículo"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -872,6 +881,21 @@ class RegistroAuditoria(models.Model):
         "color_secundario": "Color 2",
         "color_terciario": "Color 3",
         "color_cuaternario": "Color 4",
+        # Clientes y vehículos (COM-01): «nombre», «apellido», «telefono», «email», «estado» y «localidad» ya existen.
+        "tipo_cliente": "Tipo de cliente",
+        "cuit": "CUIT",
+        "razon_social": "Razón social",
+        "direcciones_creadas": "Direcciones creadas",
+        "direcciones_corregidas": "Direcciones corregidas",
+        "direcciones_reemplazadas": "Direcciones reemplazadas",
+        "direcciones_desactivadas": "Direcciones desactivadas",
+        "direcciones_borradas": "Direcciones borradas",
+        "patente": "Patente",
+        "tipo_vehiculo": "Tipo de vehículo",
+        "marca": "Marca",
+        "modelo": "Modelo",
+        "capacidad_carga": "Capacidad de carga (kg)",
+        "transportista": "Transportista",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -917,6 +941,15 @@ class RegistroAuditoria(models.Model):
             "m3": "m³",
             "m": "m",
             "m2": "m²",
+        },
+        # COM-01: las listas cerradas de cliente y vehículo (`core` no importa `comercial`, A1 de D-37).
+        "tipo_cliente": {"juridica": "Persona jurídica", "fisica": "Persona física"},
+        "tipo_vehiculo": {
+            "camioneta": "Camioneta",
+            "furgon": "Furgón",
+            "camion": "Camión",
+            "utilitario": "Utilitario",
+            "moto": "Moto",
         },
     }
     SIN_VALOR = "—"
@@ -1100,6 +1133,14 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_HARDWARE,
         RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
         RegistroAuditoria.Accion.ENTREGA_INFORMACION_IOT,
+        RegistroAuditoria.Accion.ALTA_CLIENTE,
+        RegistroAuditoria.Accion.MODIFICACION_CLIENTE,
+        RegistroAuditoria.Accion.BAJA_CLIENTE,
+        RegistroAuditoria.Accion.REACTIVACION_CLIENTE,
+        RegistroAuditoria.Accion.ALTA_VEHICULO,
+        RegistroAuditoria.Accion.MODIFICACION_VEHICULO,
+        RegistroAuditoria.Accion.BAJA_VEHICULO,
+        RegistroAuditoria.Accion.REACTIVACION_VEHICULO,
     }
 )
 

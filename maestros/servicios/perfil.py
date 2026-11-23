@@ -15,6 +15,7 @@ from core.models import RegistroAuditoria, Usuario, rol_de
 from core.validadores import validar_telefono
 from maestros.models import PerfilOrganizacion
 from maestros.servicios.invernaderos import _actor_sigue_activo
+from maestros.validadores import validar_cuit
 
 CAMPOS_DE_TEXTO = (
     "nombre_organizacion",
@@ -30,7 +31,6 @@ _LARGOS = {
     for campo in ("nombre_organizacion", "direccion_organizacion", "email_organizacion")
 }
 _COLOR = re.compile(r"^#[0-9a-fA-F]{6}\Z")
-_PESOS_CUIT = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)  # módulo 11, como ``cuitOk`` del prototipo
 
 
 def obtener():
@@ -56,16 +56,6 @@ def _exigir_gerente(actor):
         raise PermissionDenied("Solo un Gerente activo puede modificar el perfil de la organización.")
 
 
-def _cuit_valido(digitos):
-    """True si ``digitos`` son 11 dígitos con el verificador correcto (módulo 11; 11 cuenta como 0 y 10 no es válido)."""
-    if not re.fullmatch(r"\d{11}", digitos, re.ASCII):
-        return False
-    verificador = 11 - sum(p * int(d) for p, d in zip(_PESOS_CUIT, digitos)) % 11
-    if verificador == 11:
-        verificador = 0
-    return verificador != 10 and verificador == int(digitos[10])
-
-
 def _texto(valor):
     """``valor`` como texto recortado (``None`` es vacío)."""
     return "" if valor is None else str(valor).strip()
@@ -88,9 +78,11 @@ def _validar(datos):
             error(campo, f"Usá como máximo {largo} caracteres.", "demasiado_largo")
 
     cuit = re.sub(r"[\s-]", "", limpios["cuit_organizacion"])
-    if cuit and not _cuit_valido(cuit):
-        error("cuit_organizacion", "El CUIT no es válido: revisá los números (11 dígitos, con su dígito verificador).",
-              "cuit_invalido")
+    if cuit:  # vacío está permitido (ADM-MOD-ORG): solo se valida si viene informado
+        try:
+            validar_cuit(cuit)  # D-58 punto 4: el mismo cálculo, ahora público
+        except ValidationError as problema:
+            error("cuit_organizacion", problema.messages[0], problema.code)
     limpios["cuit_organizacion"] = cuit
 
     try:

@@ -1,0 +1,50 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Comercial» → «Vehículos» (COM-CNS-VEH, tabVehiculos del prototipo; solo el Gerente). Búsqueda por patente, tipo o transportista; filtros por estado y
+por el invernadero del transportista. Formulario GET común (sin JavaScript funciona igual). La columna «Entregas a realizar» la suma COM-05.
+Recibe «filas» (FilaDeVehiculo), «q», «estado», «invernadero_id» e «invernaderos».{% endcomment %}
+{% block titulo %}Vehículos · Comercial · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Comercial</h1></div>
+  {% include "comercial/_pestanas.html" with activa="vehiculos" es_gerente=True %}
+  <p class="muted" style="margin-bottom:14px">Con estos vehículos los transportistas hacen las entregas con envío. Cada vehículo tiene a lo sumo un transportista y trabaja para el invernadero de él.</p>
+
+  <form class="filters" method="get" action="{% url 'comercial:vehiculos' %}" role="search">
+    <input class="field-input q" type="search" name="q" value="{{ q }}" placeholder="Buscar por patente, tipo o transportista" aria-label="Buscar vehículo" autocomplete="off">
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="">Todos los estados</option>
+      <option value="activo"{% if estado == "activo" %} selected{% endif %}>Activos</option>
+      <option value="inactivo"{% if estado == "inactivo" %} selected{% endif %}>Inactivos</option>
+    </select>
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero">
+      <option value="">Todos los invernaderos</option>
+      {% for i in invernaderos %}<option value="{{ i.pk }}"{% if invernadero_id == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+    <span class="spacer"></span>
+    <a class="btn btn-primary" href="{% url 'comercial:vehiculo_nuevo' %}">{% icono "plus" 15 %} Registrar vehículo</a>
+  </form>
+
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Patente</th><th>Tipo y modelo</th><th class="right">Capacidad</th><th>Transportista</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for fila in filas %}
+        <tr>
+          <td><b class="mono" style="font-weight:600">{{ fila.vehiculo.patente }}</b></td>
+          <td>{{ fila.vehiculo.get_tipo_vehiculo_display }}<span class="sub2">{{ fila.vehiculo.marca }} {{ fila.vehiculo.modelo }}</span></td>
+          <td class="right">{{ fila.vehiculo.capacidad_carga|kg }}</td>
+          <td>{% if fila.vehiculo.transportista %}{{ fila.vehiculo.transportista.get_full_name|default:fila.vehiculo.transportista.email }}<span class="sub2">{% if fila.invernadero %}{{ fila.invernadero.nombre_invernadero }}{% else %}Sin invernadero{% endif %}</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
+          <td>{% if fila.en_ruta %}<span class="status-badge status-info">En ruta</span>{% endif %}</td>
+          <td>{% if fila.vehiculo.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+          <td class="right"><a class="rowlink" href="{% url 'comercial:vehiculo' fila.vehiculo.pk %}">Ver<span class="sr"> el vehículo {{ fila.vehiculo.patente }}</span></a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">{% if q or estado or invernadero_id %}Ningún vehículo coincide con la búsqueda.{% else %}Todavía no hay vehículos. Registrá el primero con «Registrar vehículo».{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
