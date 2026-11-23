@@ -329,7 +329,7 @@ c. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
   entrega de suministro (postcondición l de COM-CNC-ENT, que COM-06a dejó sin enlace; D-68 punto 1); `Queja`; el resultado de la
   averiguación.
 - **No entra:** las entregas de suministro concretadas **antes** de COM-06b no reciben enlace (estado de paso, D-68 punto 1); resolver la
-  queja (COM-RSV-QJA, COM-07); el cobro (COM-08); los asientos que muestra COM-ATN-ENR (D-57); notificar a «quien registra los asientos
+  queja (COM-RSV-QJA, COM-07); el cobro (COM-08a); los asientos que muestra COM-ATN-ENR (D-57); notificar a «quien registra los asientos
   manuales» (postcondición b de COM-ATN-ENR): ese rol es de la ronda de contabilidad; hasta entonces se notifica a los Gerentes activos y al
   Vendedor (`docs/temas_abiertos.md`).
 
@@ -402,8 +402,8 @@ c. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 
 | Función | Qué hace |
 |---|---|
-| `ficha_de_no_reconocida(actor, alerta_id) -> FichaDeNoReconocida` | Regla 1: la entrega con sus líneas (planificada, entregada, perdida y devuelta), el transportista y su vehículo de hoy, la fecha y la hora de la concreción (del registro `concrecion_entrega`), los intentos fallidos (`intentos_fallidos`, COM-06a), la confirmación del cliente con el motivo, los consumos de envases (por `Consumo.orden`), el cobro (hasta COM-08, «Sin cobro registrado») y los asientos como «Fuera de esta ronda · contabilidad». Solo el Gerente activo y una alerta de ese tipo, activa |
-| `atender_entrega_no_reconocida(actor, alerta_id, resultado, descripcion) -> Alerta` | Bloqueos: las cuentas (el Gerente y el Vendedor) → el invernadero (`bloquear_invernadero_para_alertas`) → la entrega → la `AlertaComercial`. Relee que la alerta siga activa (si no, `alerta_resuelta`). Carga `resultado_averiguacion` (de la lista de la regla 2) y `descripcion_averiguacion` (obligatoria, hasta 500) y resuelve la alerta (`resolver_alerta`). Con «no llegó»: aviso a los Gerentes activos y al Vendedor («OT-0231 no llegó al cliente (producto perdido): corresponde corregir los asientos a mano.»). Regla 3: no toca la entrega, el stock, los asientos ni los incumplimientos. Regla 5: si la entrega tiene un pago vigente (desde COM-08), rechaza con `entrega_cobrada` («Primero anulá el cobro.»). Auditoría `atencion_entrega_no_reconocida` con la alerta, la entrega y el resultado |
+| `ficha_de_no_reconocida(actor, alerta_id) -> FichaDeNoReconocida` | Regla 1: la entrega con sus líneas (planificada, entregada, perdida y devuelta), el transportista y su vehículo de hoy, la fecha y la hora de la concreción (del registro `concrecion_entrega`), los intentos fallidos (`intentos_fallidos`, COM-06a), la confirmación del cliente con el motivo, los consumos de envases (por `Consumo.orden`), el cobro (hasta COM-08a, «Sin cobro registrado») y los asientos como «Fuera de esta ronda · contabilidad». Solo el Gerente activo y una alerta de ese tipo, activa |
+| `atender_entrega_no_reconocida(actor, alerta_id, resultado, descripcion) -> Alerta` | Bloqueos: las cuentas (el Gerente y el Vendedor) → el invernadero (`bloquear_invernadero_para_alertas`) → la entrega → la `AlertaComercial`. Relee que la alerta siga activa (si no, `alerta_resuelta`). Carga `resultado_averiguacion` (de la lista de la regla 2) y `descripcion_averiguacion` (obligatoria, hasta 500) y resuelve la alerta (`resolver_alerta`). Con «no llegó»: aviso a los Gerentes activos y al Vendedor («OT-0231 no llegó al cliente (producto perdido): corresponde corregir los asientos a mano.»). Regla 3: no toca la entrega, el stock, los asientos ni los incumplimientos. Regla 5: si la entrega tiene un pago vigente (desde COM-08a), rechaza con `entrega_cobrada` («Primero anulá el cobro.»). Auditoría `atencion_entrega_no_reconocida` con la alerta, la entrega y el resultado |
 
 ### Lo que completa a otras tareas
 
@@ -453,7 +453,7 @@ Referencia visual (D-61): `docs/prototipos/comercial/` (`README.md`).
 
 - **COM-07:** COM-RSV-QJA resuelve las quejas (con los intentos fallidos a la vista) y COM-EVL-DSC la discrepancia; el correo al cliente
   cuando se rechaza una discrepancia (regla 15 de 8.14).
-- **COM-08:** el cobro que muestra COM-ATN-ENR (regla 1) y su regla 5 con datos reales.
+- **COM-08a:** el cobro que muestra COM-ATN-ENR (regla 1) y su regla 5 con datos reales (`cobranza.md`, «Lo que completa a otras tareas»).
 - **Ronda de contabilidad:** el aviso a quien registra los asientos manuales (COM-ATN-ENR, postcondición b); los asientos de la regla 1.
 - Temas abiertos de COM-CNF-ENT: que el Vendedor registre una queja en nombre del cliente; reenviar el enlace con una vigencia nueva.
 - Mejoras futuras: anular una concreción y reingresar el producto devuelto (COM-ATN-ENR, regla 4).

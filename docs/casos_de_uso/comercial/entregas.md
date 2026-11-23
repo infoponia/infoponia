@@ -337,7 +337,7 @@ Por invernadero de origen (`ReservaStock.invernadero`, D-59), dentro de `transac
 5. **Agrupamiento** (4a; y en una venta, D-66 punto 7, a validar): ver abajo. Si agrupa, se agregan las líneas (o las reservas a la línea
    que ya tiene ese detalle) y se sigue en el paso 10.
 6. **Transportista** (pasos 5 a 7, 6a, 7a), solo con envío: ver «Candidatos». Con retiro, sin transportista (2a).
-7. **Registro** (paso 8): `Entrega` (`tipo = entrega`, `agronomo = None`, `fecha_creacion_orden = hoy`, `numero` de la secuencia de
+7. **Registro** (paso 8): `Entrega` (`tipo_orden = entrega`, `agronomo = None`, `fecha_creacion_orden = hoy`, `numero` de la secuencia de
    órdenes, `estado_confirmacion_cliente = no_confirmado` si es de suministro) y sus líneas. **Antes de crearla,
    `bloquear_invernadero_activo`** (contrato de D-40: una entrega «a realizar» impide la baja del invernadero).
 8. **Sin transportista** (6a): la alerta (abajo) y la notificación al Vendedor.

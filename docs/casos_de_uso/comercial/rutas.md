@@ -585,7 +585,7 @@ fallido registrado.
   origen en los movimientos) y no crea asientos.
 - **COM-06b:** el enlace de confirmación (postcondición l, 3a.4 y 3a.5: el correo de la concreción sale **sin enlace** hasta COM-06b; D-68,
   punto 1), COM-CNF-ENT y COM-ATN-ENR.
-- **COM-07:** resolver la discrepancia (COM-EVL-DSC). **COM-08:** el cobro de una entrega de suministro, el estado de pago con «pagada» y la
+- **COM-07:** resolver la discrepancia (COM-EVL-DSC). **COM-08a:** el cobro de una entrega de suministro, el estado de pago con «pagada» y la
   alerta «pago en mora» (COM-VNC-PAG).
 
 ### Servicios
@@ -753,9 +753,9 @@ quitado), `ruta_no_iniciada`, `ruta_con_entregas_pendientes`, `entrega_no_concre
 |---|---|
 | MAE-05 y COM-05a1 | `transportista_en_ruta` en `registrar_impedimento_de_transportista` (el mismo registrante de `transportista_con_entregas`, D-55; reglas 9 y 10 de PROD-MOD-INV): «Está en ruta desde hoy con N entregas.», como resolver «Esperá a que finalice la ruta.» |
 | MAE-05 (core) | `transportista_en_ruta` en `core.extensiones.registrar_impedimento_de_baja_de_cuenta` (precondición d de USR-BAJ-USR) |
-| COM-05b | COM-CNL-CVT con entregas concretadas (6a): el servicio **sigue rechazando** `venta_con_entregas_concretadas` hasta COM-08; esta tarea lo prueba con una entrega concretada real y prueba que los detalles cancelados son los **sin** línea en una entrega concretada (D-67, punto 4) |
+| COM-05b | COM-CNL-CVT con entregas concretadas (6a): el servicio **sigue rechazando** `venta_con_entregas_concretadas` hasta COM-08b; esta tarea lo prueba con una entrega concretada real y prueba que los detalles cancelados son los **sin** línea en una entrega concretada (D-67, punto 4) |
 | COM-05a1 | «Concretar retiro» en la lista de entregas (Vendedor responsable, entregas de retiro «a realizar» con fecha `<= hoy`) |
-| COM-03a y COM-03b | La ficha del suministro: «Entregado» en el calendario (regla 6 de COM-CNS-SUM), las entregas concretadas con monto, vencimiento y estado de pago (regla 7; «pagada» llega con COM-08) y las discrepancias pendientes |
+| COM-03a y COM-03b | La ficha del suministro: «Entregado» en el calendario (regla 6 de COM-CNS-SUM), las entregas concretadas con monto, vencimiento y estado de pago (regla 7; «pagada» llega con COM-08a) y las discrepancias pendientes |
 | COM-01 | La ficha del cliente: entregas sin cobrar (suministro, con monto a cobrar y vencimiento) y discrepancias pendientes; la baja del cliente las informa (regla 1 de COM-BAJ-CLT; `clientes.md`, «Se completa en») |
 | COM-02 | La ficha de la compra-venta: fecha de concreción, el pago (medio, fecha, monto) y, por detalle, lo entregado |
 
@@ -824,7 +824,7 @@ de cada función. El Transportista trabaja **desde el celular, en «modo campo»
 - **COM-06b:** el enlace de confirmación en el correo de la concreción (postcondición l); COM-CNF-ENT; COM-ATN-ENR (lee `intentos_fallidos`
   y lo que registró la concreción).
 - **COM-07:** COM-EVL-DSC resuelve la discrepancia; COM-RSV-QJA lee `intentos_fallidos`; el monto a cobrar resta lo indemnizado.
-- **COM-08:** el cobro de las entregas de suministro (`Entrega.pago`, R154), «pagada» y la alerta «pago en mora»; la extensión 6a de
+- **COM-08a:** el cobro de las entregas de suministro (R154, en `LineaPago`: D-94, punto 2), «pagada» y la alerta «pago en mora»; la extensión 6a de
   COM-CNL-CVT.
 - **Contabilidad** (D-57): los asientos de la entrega, de las mermas y de los consumos (postcondiciones e, g y h).
 - Temas abiertos de los casos de uso: el cliente de una compra-venta que no puede pagar el total; la hora de la ejecución diaria (con el cron

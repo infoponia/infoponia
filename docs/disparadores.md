@@ -70,6 +70,8 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 
 ## Cuando exista Pedido
 
+**Planificado:** CMP-02b (`registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta`; D-87).
+
 1. **Baja de un Agrónomo.** Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se avisa. Regla 4:
    la baja lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
    `core/extensiones.py` (D-43); bloquea sus filas después del invernadero y en orden de id.
@@ -147,6 +149,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    - **COM-08:** con `PagoCliente` (MD-136), la extensión 6a de COM-CNL-CVT: el cobro de lo entregado en la misma operación, la venta a
      «concretada» con los datos de la cancelación y el cobro en el comprobante. El asiento del cobro queda fuera de la ronda (D-57).
      Desde el lote C6, `PagoCliente` lo crea **COM-06a** (D-68, punto 4): COM-08 suma R154 y reescribe C7.
+     **Planificado (lote C8; D-94, puntos 1 y 14):** la extensión 6a, **COM-08b** (`compra_venta.md`, «La extensión 6a (COM-08b)»).
    **Planificado (lote C6):** lo de COM-06, **COM-06a** (`rutas.md`, «Lo que completa a otras tareas», fila COM-05b).
 
 10. **Lo que deja COM-06 (nace en el lote C6; D-68).**
@@ -160,6 +163,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      (`resolucion.md`).
    - **COM-08:** `Entrega.pago` (R154) y C7 de `PagoCliente` como {xor}; `estado_de_pago` con «pagada» (MD-125, MD-136) y la alerta «pago en
      mora» (COM-VNC-PAG); el cobro en COM-ATN-ENR (regla 1) y su regla 5.
+     **Planificado (lote C8):** todo en **COM-08a** (`cobranza.md`). R154 no es `Entrega.pago`: es la tabla `LineaPago` (D-94, punto 2).
    - **Ronda de contabilidad:** los asientos de la entrega, de sus mermas y de sus consumos (postcondiciones e, g y h de COM-CNC-ENT); el aviso
      a quien registra los asientos manuales (postcondición b de COM-ATN-ENR).
 
@@ -172,6 +176,9 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      reales; `Anulacion.pago` y `cliente_pago_en_fecha` (COM-ANL-CBR, MD-135) y la restricción «exactamente uno de `solicitud` y `pago`»;
      COM-REG-CBR cobra `monto_a_cobrar`, que ya resta lo descontado; el cobro bloquea la entrega después del suministro
      (`docs/patrones/bloqueos.md`, «Resolver o anular una solicitud»).
+     **Planificado (lote C8):** la entrega pagada con datos reales y el cobro en la huella, **COM-08a** (`cobranza.md`, «Lo que completa a
+     otras tareas»; el cobro bloquea el invernadero de origen y la entrega, sin el suministro: `bloqueos.md`, «Cobranza»); `Anulacion.pago`,
+     `cliente_pago_en_fecha` y las restricciones de `Anulacion`, **COM-08b**.
    - **Ronda de contabilidad:** el asiento de cada indemnización (simple o compuesto, con lo descontado y lo reintegrado que guarda la
      solicitud), el contraasiento de cada `Anulacion` y el asiento de la multa por resolución (MD-123).
 
@@ -403,11 +410,23 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
 
 ## Cuando exista contabilidad con asientos (D-45)
 
+- **Ronda Contabilidad 1 (CON-02, D-84 a D-86):** el servicio `registrar_asiento_automatico` existe desde CON-02.
+  **Planificado (Contabilidad 2, D-92):** punto 0 (inventario) → **CON-04b**; punto 1 (producción) → **CON-04a** (también la fila de
+  PROD-PNR-FDS: PRD-04 se mergeó sin CON-02); «Comercial 1 (COM-04)» → **CON-04c**; «Comercial 1 (COM-07)» y «Comercial 1 (COM-08)» →
+  **CON-04d**. Toda tarea de Producción o Comercial que empiece con CON-02 ya en `main` programa su asiento con la tabla de su tarea de
+  reapertura (D-92 punto 9). Las precondiciones «existe un ejercicio y existen las cuentas» no se programan (D-92 punto 2).
+  **Decidido el haber de la carga inicial (MD-90):** Capital Inicial (H3/H4, D-92 punto 7).
+
 - **Comercial 1 (COM-04, D-64):** los asientos de la cosecha (uno por movimiento «salida por cosecha», con su `costo_unitario`), de la
   merma en cámara y del vencimiento se originan en `MovimientoStock` y en `Merma`, que ya guardan el costo: no hay que migrar nada.
 - **Comercial 1 (COM-07, D-69):** el asiento de cada indemnización se origina en su `SolicitudRevision` (hija de `OrigenDocumento`), con lo
   descontado contra Deudores por Ventas y lo reintegrado contra Caja o Banco según `medio_reintegro`; el contraasiento, en su `Anulacion`; la
   multa, en el `Suministro` (R012, MD-123). Todo lo que hace falta ya está guardado: no hay que migrar nada.
+- **Comercial 1 (COM-08, D-94):** el asiento del cobro de un suministro se origina en su `PagoCliente` (Debe Caja o Banco c/c por
+  `monto_pagado` / Haber Deudores por Ventas por Σ `LineaPago.monto_cobrado` / Haber Indemnizaciones por Atraso en el Pago por Σ
+  `indemnizacion_atraso`, si es mayor que cero); el contraasiento de un cobro anulado, en su `Anulacion`; el del cobro de 6a de COM-CNL-CVT, en
+  su `PagoCliente` de compra-venta (MD-130). La precondición c de COM-REG-CBR (ejercicio y cuentas) se suma al reabrirlo. Todo lo que hace
+  falta ya está guardado.
 
 0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
    ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
@@ -430,6 +449,10 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
    **Lote C4:** COM-04 lo programa (`docs/casos_de_uso/produccion/camara.md` y la sección «Comercial 1» de `merma.md`).
 
 ## Cuando existan los pedidos de `compras` (D-45)
+
+**Planificado (Compras 1, D-87):** el punto 1 lo programan CMP-02b (`pedido_en_curso`), CMP-03 (`orden_de_compra_aprobada` y el tránsito al
+aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, CMP-04 con `registrar_ingreso_por_recepcion` (`docs/api/stock.md`,
+«Escritura de compras», D-90): el vínculo `OneToOne` es `compras.DetalleRecepcionMovimiento`, además del `origen` de D-52.
 
 1. **Insumo en tránsito y compras.** En la ronda «Producción 1» el stock en tránsito es 0: la columna `cant_transito_insumo` existe y
    solo la escribirá `compras`. `compras` se enchufa a `inventario` por dos vías ya documentadas (`docs/api/extensiones_de_inventario.md`):
@@ -511,10 +534,33 @@ existen. Cada tarea que crea la clase les pone la consulta real y la prueba (`do
 3. **COM-06 (entregas concretadas, quejas y discrepancias):** la ficha y la baja muestran las entregas sin cobrar, con el monto a cobrar y
    el vencimiento, y las quejas o discrepancias pendientes. **Planificado (lote C6):** las entregas sin cobrar y las discrepancias, COM-06a;
    las quejas, COM-06b (`rutas.md` y `confirmacion.md`, «Lo que completa a otras tareas»).
-4. **COM-08 (cobranza):** el estado de pago de cada entrega (pagada o en mora, MD-139) en la ficha.
+4. **COM-08 (cobranza):** el estado de pago de cada entrega (pagada o en mora, MD-139) en la ficha. **Planificado (lote C8):** COM-08a
+   (`cobranza.md`, «Lo que completa a otras tareas», fila COM-01).
 
 ## Completan el ABM de vehículo (COM-01, lote C1)
 
 1. **COM-05a (entregas; planificado en el lote C5a):** `entregas_a_realizar_del_transportista` y `carga_maxima_asignada` de `comercial/servicios/vehiculos.py` reciben su
    consulta (reglas 2 y 3 de COM-MOD-VEH, precondición c y regla 1 de COM-BAJ-VEH); la lista suma «Entregas a realizar» y la ficha, la carga
    de los próximos días frente a la capacidad (regla 2 de COM-CNS-VEH).
+
+## Cuando exista el rol Contador (USR-11) — nace con el lote 1 de Contabilidad
+
+1. El aviso de «registrar asiento manual» de COM-ATN-ENR (postcondición b) pasa del Vendedor a `responsable_contable()` (H12). Lo programa
+   **CON-04d**, o COM-06b si llega después de CON-02. Toda pantalla que diga «Gerente y Vendedor registran asientos» se corrige.
+
+## Cuando se programe CON-03a — nace con el lote 1 de Contabilidad
+
+1. La entrada del menú «Contabilidad» y la alerta del «ejercicio en cierre» en el Panel del Contador y del Gerente (sin Contador, al Gerente).
+
+## Cuando una app tenga un origen de asiento con pantalla propia — nace con el lote 1 de Contabilidad
+
+1. Registrar su `registrar_enlace_de_origen(tipo, funcion)` en `ready()` (punto de extensión de `contabilidad/extensiones.py`, creado por CON-03a),
+   para que el libro de gestión enlace el asiento con su documento. Compras: CMP-04 (recepción), CMP-05 (pago), CMP-06 (corrección).
+
+## Cuando se programe COM-04c o CMP-02a (lo que llegue primero) — nace con el lote 2 de Compras
+
+1. Crear `rol_externo` en `core` con `ROL_CLIENTE_ENLACE` y `ROL_PROVEEDOR_ENLACE` (D-65 punto 8; D-88 punto 5). La segunda tarea solo suma su constante.
+
+## Cuando se programe COM-01 o CMP-01 (lo que llegue primero) — nace con el lote 2 de Compras
+
+1. `validar_cuit` y `formatear_cuit` en `maestros/validadores.py` (D-58). La segunda tarea los usa.

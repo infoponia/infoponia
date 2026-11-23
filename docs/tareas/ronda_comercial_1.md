@@ -34,7 +34,9 @@ las que registran un paso diario.
 | COM-06b | Confirmación del cliente: el enlace de confirmación, las quejas y la entrega no reconocida | comercial | COM-CNF-ENT, COM-ATN-ENR (y el enlace de la postcondición l de COM-CNC-ENT) | COM-06a | C6 |
 | COM-07a | Solicitudes de revisión: evaluar, resolver, anular y consultar (crea `Anulacion`, D-69) | comercial | COM-EVL-DSC, COM-RSV-QJA, COM-ANL-SRV, COM-CNS-SRV | COM-06b (y la sección 11 de `docs/api/produccion.md`, que hace COM-04a) | C7 |
 | COM-07b | Resolución del suministro por incumplimientos | comercial | COM-RSV-SUM (paso diario 33, D-69), PROD-CNL-ORD (cosechas y entregas, incluida) | COM-07a | C7 |
-| COM-08 | Cobranza y estadísticas | comercial | COM-REG-CBR, COM-ANL-CBR, COM-VNC-PAG (paso diario 30), COM-CNS-EST | COM-07b | C8 |
+| COM-08a | Cobro de suministros y mora (crea `LineaPago`, D-94) | comercial | COM-REG-CBR, COM-VNC-PAG (paso diario 30) | COM-07b | C8 |
+| COM-08b | Anular un cobro y cobrar lo entregado al cancelar una compra-venta | comercial | COM-ANL-CBR, COM-CNL-CVT (extensión 6a) | COM-08a | C8 |
+| COM-08c | Estadísticas comerciales y «Resultados del mes en curso» | comercial | COM-CNS-EST | COM-08b (puede ir en paralelo con ella: sin migraciones) | C8 |
 
 Son 43 casos de uso (41 más COM-RSC-SUM y COM-ANL-RSC, del 21/11/2026) (PROD-CNL-ORD se reparte entre COM-04a, COM-05a1 y COM-05b).
 
@@ -48,6 +50,7 @@ documentos escritos antes, los nombres se leen así:
 | «COM-05a» | **COM-05a1**: `Entrega` y `DetalleEntrega`, COM-PNF-ENT con el paso 50 (menos el aviso de envasado), la cancelación incluida, los disparadores en las tareas anteriores, la lista de entregas y lo que protege a las entregas (logística, baja del transportista, reglas de los vehículos, cierre de una rescisión). **COM-05a2**: PROD-PNF-ENV, la restricción de `ReservaInsumo` y el núcleo de reservas en `produccion`, el aviso de envasado, el panel, las fichas de los contratos y las pantallas de vehículos |
 | «COM-07» (de antes del lote C7; D-69, punto 1) | **COM-07a**: COM-EVL-DSC, COM-RSV-QJA, COM-ANL-SRV, COM-CNS-SRV, `Anulacion`, la aplicación de la indemnización, el contador de incumplimientos, la bitácora, la pestaña, la ficha y el grupo del panel. **COM-07b**: COM-RSV-SUM, el paso 33, la alerta «suministro resuelto» y «Dar por atendida». **Lo de `produccion`** que nombraban «COM-07» (el tipo de bitácora `incumplimiento_de_clausula`) es de **COM-04a** (D-69, punto 3) |
 | «COM-05» (de antes del lote C5a) | Primero la tabla de la nota de abajo (COM-05a o COM-05b) y, si es COM-05a, esta |
+| «COM-08» (de antes del lote C8; D-94, punto 1) | **COM-08a**: COM-REG-CBR, COM-VNC-PAG y el paso 30, `LineaPago` (R154), lo nuevo de `PagoCliente` y la mora en `Entrega`, «pagada» en `estado_de_pago`, la alerta «pago en mora», la pestaña «Cobranza», el grupo «Cobranza» del panel y lo que dejaron las anteriores sobre una entrega pagada (solicitudes, entrega no reconocida, fichas del cliente y del suministro). **COM-08b**: COM-ANL-CBR (`Anulacion.pago`, el cobro que corrige uno anulado) y la extensión 6a de COM-CNL-CVT. **COM-08c**: COM-CNS-EST y «Resultados del mes en curso» |
 | «COM-06» (de antes del lote C6; D-68, punto 1) | **COM-06a**: COM-INI-RUT, COM-CNC-ENT (menos el enlace), COM-FIN-RUT, `transportista_en_ruta`, PROD-VNC-CAM 3b, la cámara y el contrato al concretar, `PagoCliente`, `IntentoFallido`, `SolicitudRevision` y la discrepancia, «Concretar retiro», las entregas sin cobrar en las fichas. **COM-06b**: el enlace de confirmación (tipo `confirmacion_entrega` y el correo de la concreción), COM-CNF-ENT, `Queja`, COM-ATN-ENR y su resultado (MD-137), las quejas en las fichas. **Lo de `produccion`** que nombraban «COM-06» (la causa «daño en la entrega», la merma y el consumo de la entrega, el egreso y la devolución de la cámara) es de **COM-04a** (D-68, punto 3) |
 
 **COM-05 se partió en dos (D-66, punto 1, 22/11/2026).** En los documentos escritos antes, «COM-05» se lee así: lo de `Entrega` y su
@@ -83,6 +86,10 @@ disparador «Cuando se arme el cron único» (D-56), al final de toda la impleme
 - **COM-07 en dos (D-69, punto 1):** COM-07a es lo que decide el Gerente (evaluar, resolver, anular y consultar las solicitudes); COM-07b, lo
   que hace InfoPonia cuando una aceptación supera la tolerancia (deshacer lo pendiente del contrato, con su paso diario). Entre las dos, un
   contrato que supera la tolerancia queda «vigente» hasta que el paso 33 de COM-07b lo resuelve: es la falla que el caso de uso ya prevé.
+- **COM-08 en tres (D-94, punto 1):** COM-08a es lo que crea el cobro y la mora (y lo que sin un cobro real no se puede probar); COM-08b, lo
+  que lo deshace (la anulación) y el único cobro que nace de otro caso de uso (cancelar una venta con entregas concretadas); COM-08c, lo que
+  solo lee. Entre COM-08a y COM-08b, un cobro mal registrado no se puede anular: no rompe datos (`docs/temas_abiertos.md`, «Abiertos desde
+  el lote C8»).
 - **COM-RSV-SUM va con las solicitudes (COM-07b, después de COM-07a):** lo disparan COM-EVL-DSC y COM-RSV-QJA al aceptar el incumplimiento que agota la
   tolerancia.
 - **Tamaño:** COM-02 tiene tres casos de uso, pero PROD-ASG-STK y COM-REG-CVT son de los más grandes del sistema y crean el núcleo del
@@ -116,7 +123,7 @@ sigue vacía), y también MAE-05, DIA-01, USR-10 y MAE-02c.
 | COM-06a | La sección 10 de `docs/api/produccion.md` (la hace COM-04a, D-68 punto 3; usa `registrar_salida_por_consumo` de INV-02 para los envases) | por COM-05b |
 | COM-06b | Lo que dejan las anteriores | por COM-06a |
 | COM-07a | La sección 11 de `docs/api/produccion.md` (los tipos de bitácora y `registrar_evento_de_contrato`; la hace COM-04a, D-69 punto 3) | por COM-06b |
-| COM-07b y COM-08 | Lo que dejan las anteriores (COM-07b usa `cancelar_cosecha_incluida` y `crear_partida` de COM-04a) | por COM-07a |
+| COM-07b y COM-08a a COM-08c | Lo que dejan las anteriores (COM-07b usa `cancelar_cosecha_incluida` y `crear_partida` de COM-04a) | por COM-07a |
 
 **Por qué COM-02 espera a PRD-04 y no solo a PRD-02:** funcionalmente alcanzaría con PRD-02, pero COM-02 agrega un modelo y una
 migración en `produccion` (`Cosecha`, hija de `OrdenTrabajo` con `ConCapataz`, D-50 y D-53), suma la cosecha a `ordenes_del_capataz` y
@@ -130,19 +137,19 @@ y COM-04 las necesita todas. Regla simple: **desde COM-02, la ronda empieza con 
 MAE-05 ──► COM-01 ──────────────────────────────────────────────┐
                                                                 ▼
 INV-02 ► INV-03 ► PRD-01 ► PRD-02 ► PRD-03 ► PRD-04 ──────────► COM-02 ► COM-03a ► COM-03b ► COM-04a ► COM-04b ► COM-04c ►
-                                                                ► COM-05a1 ► COM-05a2 ► COM-05b ► COM-06a ► COM-06b ► COM-07a ► COM-07b ► COM-08
-DIA-01 (antes de INV-02) ─────────────────────────────────────────────────────►┘ (COM-03b, COM-04b, COM-04c, COM-05a1, COM-07b y COM-08 registran pasos)
+                                                                ► COM-05a1 ► COM-05a2 ► COM-05b ► COM-06a ► COM-06b ► COM-07a ► COM-07b ► COM-08a ► COM-08b ► COM-08c
+DIA-01 (antes de INV-02) ─────────────────────────────────────────────────────►┘ (COM-03b, COM-04b, COM-04c, COM-05a1, COM-07b y COM-08a registran pasos)
 USR-10 ────────────────────────────────────────────────────────►┘
 MAE-02d ──────────────────────────────────────────────────────────────────────►┘ (COM-03b; también IOT-04)
-                                     ronda IoT (en paralelo con COM-02 a COM-08)
+                                     ronda IoT (en paralelo con COM-02 a COM-08c)
 ```
 
 - **Puede arrancar ya:** MAE-05 (no depende de producción). COM-01 arranca cuando MAE-05 está mergeada; tampoco depende de producción,
   así que puede hacerse mientras se termina «Producción 1» si hay un carril libre (decisión de ustedes).
 - **USR-10** (D-54) va antes de COM-02: COM-REG-CVT envía el comprobante por correo (postcondición h); después, COM-PCT-SUM, COM-DCD-FLT,
   COM-CNF-ENT y COM-VNC-PAG envían comprobantes, enlaces y avisos.
-- **COM-02 a COM-08 son una cadena** (cada una usa lo que crea la anterior), también sus partes (COM-03a a COM-06b): no se reparten en
-  paralelo entre sí.
+- **COM-02 a COM-08 son una cadena** (cada una usa lo que crea la anterior), también sus partes (COM-03a a COM-08b): no se reparten en
+  paralelo entre sí. La única excepción es COM-08c, que solo lee y no tiene migraciones: puede ir en paralelo con COM-08b (D-94, punto 1).
 - **Reparto en dos carriles** (lo deciden ustedes): un carril con comercial y otro con el IoT, después de «Producción 1». Los puntos donde
   se tocan están en la sección 5.
 
@@ -190,10 +197,10 @@ de dominio (ronda 22) y «Contratos de operación del sistema». El extracto de 
 | COM-RSV-SUM | Resolver Suministro por Incumplimientos | 0.1 (CU extendidos) | COM-07b | C7 (`comercial/resolucion.md`; el plan decía `suministro.md`, ver `docs/temas_abiertos.md`) |
 | COM-ANL-SRV | Anular Resolución de Solicitud | 0.1 (Drive) | COM-07a | C7 (`comercial/solicitudes.md`) |
 | COM-CNS-SRV | Consultar Solicitudes de Revisión (alto nivel) | 0.1 (Drive) | COM-07a | C7 (`comercial/solicitudes.md`) |
-| COM-REG-CBR | Registrar Cobro de Suministro | 0.2 (Drive) más PCU 9 y 14 | COM-08 | C8 (`comercial/cobranza.md`) |
-| COM-ANL-CBR | Anular Cobro | 0.1 (Drive) | COM-08 | C8 |
-| COM-VNC-PAG | Vencer Pagos de Suministro (alto nivel) | 0.1 (Drive) | COM-08 | C8 |
-| COM-CNS-EST | Consultar Estadísticas Comerciales (alto nivel) | 0.1 (Drive) | COM-08 | C8 (`comercial/estadisticas.md`) |
+| COM-REG-CBR | Registrar Cobro de Suministro | 0.2 (Drive) más PCU 9 y 14 y MD-139 | COM-08a (la fecha de 7a de COM-ANL-CBR, COM-08b) | C8 (`comercial/cobranza.md`) |
+| COM-ANL-CBR | Anular Cobro | 0.1 (Drive) | COM-08b | C8 (`comercial/cobranza.md`) |
+| COM-VNC-PAG | Vencer Pagos de Suministro (alto nivel) | 0.1 (Drive) más MD-139 | COM-08a | C8 (`comercial/cobranza.md`) |
+| COM-CNS-EST | Consultar Estadísticas Comerciales (alto nivel) | 0.1 (Drive) | COM-08c | C8 (`comercial/estadisticas.md`) |
 
 **Casos de uso sin extender (L9):** ninguno del alcance. Los de «CUs que faltan extender» que son de este módulo (PROD-ASG-STK,
 asignación de cámara, envasado, Iniciar y Finalizar Ruta, Decidir Faltante, Cancelar Orden, Registrar Cobro, Resolver Suministro,
@@ -235,9 +242,10 @@ línea de cada una).
 | Comercial · Solicitudes de revisión: ficha, evaluar, resolver y anular (`tabSolicitudes`, `VIEWS.srv`, `srvCalc`, `MODALS.anlsrv`) | COM-07a |
 | Ficha del suministro: la sección «Solicitudes de revisión» (`VIEWS.sum`, `ccard('sol', …)`) | COM-07a |
 | Ficha y lista del suministro: la resolución por incumplimientos y «Dar por atendida» (`VIEWS.sum`, `tabContratos`; el prototipo no la tiene completa) | COM-07b |
-| Comercial · Cobranza: registrar y anular cobro (`tabCobranza`, `cobGroups`, `VIEWS.cobro`, `MODALS.anlcbr`) | COM-08 |
-| Comercial · Estadísticas (pestaña, no entrada del menú) (`VIEWS.est`, la versión de `VIEWS.com` que la agrega como pestaña) | COM-08 |
-| Panel de control del Gerente y del Vendedor: Entregas, Solicitudes (solo el Gerente), Cobranza y «Resultados del mes en curso» (solo el Vendedor) (`secComercial`, `secMes`) | Cada grupo lo agrega su tarea: Entregas en COM-05a2, Solicitudes en COM-07a, Cobranza y Resultados en COM-08 |
+| Comercial · Cobranza: por cobrar, registrar cobro y cobros registrados (`tabCobranza`, `cobGroups`, `VIEWS.cobro`) | COM-08a |
+| Comercial · Cobranza: anular cobro (`MODALS.anlcbr`) y la fecha del cobro anulado en el registro | COM-08b |
+| Comercial · Estadísticas (pestaña, no entrada del menú) (`VIEWS.est`, la versión de `VIEWS.com` que la agrega como pestaña) | COM-08c |
+| Panel de control del Gerente y del Vendedor: Entregas, Solicitudes (solo el Gerente), Cobranza y «Resultados del mes en curso» (solo el Vendedor) (`secComercial`, `secMes`) | Cada grupo lo agrega su tarea: Entregas en COM-05a2, Solicitudes en COM-07a, Cobranza en COM-08a y Resultados en COM-08c |
 | Panel de control del Agrónomo: cosechas y envasado (`secCosecha`) | COM-04a (cosechas), COM-04b (cámara) y COM-05a2 (envasado) |
 
 Lo marcado «Ya existe» (`mk-ext`) o «IoT» (`mk-iot`) en el prototipo no lo hace esta ronda: está para mostrar dónde va lo nuevo.
@@ -256,7 +264,7 @@ tarea con su contrato en `docs/api/`.
 | **Ficha del invernadero** | Pestañas por `maestros.extensiones.registrar_pestana_de_invernadero` (lo crea PRD-01; hoy no existe en el código), en orden de registro. «Equipo» y «Logística» (MAE-05) son de `maestros` | El vehículo, la situación y las entregas de cada transportista en «Logística» (`registrar_logistica_de_transportista`, un solo registrante: COM-01 lo crea y COM-05a1 lo completa); pestaña «Cámara» (COM-04b) | El estado del sistema IoT va en «Ubicación» (PROD-CNS-INV, regla 3) y sus pestañas por el mismo punto |
 | **Menú** | `core.menu.registrar_entrada(entrada, roles, despues_de)` desde `ready()` | «Comercial» (Gerente y Vendedor), después de «Producción»; Estadísticas es una pestaña de Comercial, no una entrada | «IoT» con su propio `despues_de`; si los dos usan el mismo, queda primero el que se registra primero |
 | **Campana** | Las alertas de `maestros.Alerta` salen solas (`items_de_campana`, NOT-01); las notificaciones, con `core.notificaciones` (D-42) | Sus tipos de alerta con `registrar_tipo_de_alerta`, el vínculo con su origen en `AlertaComercial` (D-63) y el enlace a su pantalla con `registrar_enlace_de_alerta` (D-62). La primera alerta comercial es «período sin cobertura completa» (MD-133, COM-03b) | **Resuelto en C3 (D-62):** el enlace de cada alerta lo da un punto de extensión de `maestros` por código de tipo y según el usuario; los orígenes de C5 suman `entrega`, `suministro`, `detalle_suministro` y `stock_cosechado`. El IoT usa el mismo punto para sus alertas. **El punto lo crea MAE-02d** (MAE-02c se programó sin él: D-62, tercera enmienda); COM-03b e IOT-04 dependen de ella |
-| **Proceso diario** | `core/procesos.py` y el comando `proceso_diario` (DIA-01, D-56). Cada app registra sus pasos en `ready()` con `registrar_paso_diario` | Pasos 20 (vencer partidas en cámara, COM-04b), 25 (reasignar cámara, COM-04b, D-64), 27 (avisar enlaces vencidos, COM-04c, D-65), 30 (vencer pagos, COM-08), 33 (resolver suministros con incumplimientos superados, COM-07b, D-69), 35 (cerrar rescisiones, COM-03b), 40 (pre-reservar, COM-03b) y 50 (planificar entregas, COM-05a1). Ninguna tarea crea un cron job | El IoT no usa este proceso (D-56, punto 6): su revisión es cada 5 minutos |
+| **Proceso diario** | `core/procesos.py` y el comando `proceso_diario` (DIA-01, D-56). Cada app registra sus pasos en `ready()` con `registrar_paso_diario` | Pasos 20 (vencer partidas en cámara, COM-04b), 25 (reasignar cámara, COM-04b, D-64), 27 (avisar enlaces vencidos, COM-04c, D-65), 30 (vencer pagos, COM-08a), 33 (resolver suministros con incumplimientos superados, COM-07b, D-69), 35 (cerrar rescisiones, COM-03b), 40 (pre-reservar, COM-03b) y 50 (planificar entregas, COM-05a1). Ninguna tarea crea un cron job | El IoT no usa este proceso (D-56, punto 6): su revisión es cada 5 minutos |
 | **Configuración operativa** (`maestros`, MAE-04) | Trece parámetros con migración propia | `dias_aviso_vencimiento_camara` (MD-134), con migración en `maestros` (COM-04b) | El IoT también agrega parámetros: son dos migraciones en `maestros` desde dos ramas. Seguir `docs/patrones/trabajo_en_paralelo.md`, «Migraciones» |
 | **Íconos** (`core/templatetags/iconos.py`) | Los que trajo UI-01 | `cart` (menú «Comercial») y `truck` (vehículos), si MAE-05 no agregó este último | Cada ronda suma los suyos; dos ramas que tocan el mismo diccionario chocan en el merge (ver «Qué archivos suelen chocar») |
 
@@ -299,7 +307,7 @@ tarea con su contrato en `docs/api/`.
 | C5b | **PRD-01 con los tipos de orden futuros** (D-67, punto 1: los cinco valores del tipo, las listas por tipos permitidos, `cancelar_orden` y `cancelar_orden_incluida`, los registrantes; ajustes en `modelo/produccion.md`, `api/produccion.md` sección 9, COM-02, IOT-07 y sus extractos); **el corte** de COM-03 (03a y 03b), COM-04 (04a, 04b y 04c) y COM-05a (05a1 y 05a2) (D-67, punto 2); COM-05b: archivo de tarea; COM-ASG-TRP y COM-CNL-CVT (extractos en `entregas.md` y `compra_venta.md`; sección nueva de `cancelar_orden.md`); los datos de la cancelación (MD-130); **D-67** | validado (22/11/2026) |
 | C6 | **COM-06 partida en COM-06a y COM-06b** (D-68, punto 1): sus dos archivos de tarea; `PagoCliente`, `IntentoFallido`, `SolicitudRevision`, `DiscrepanciaEntrega`, `LineaDiscrepancia` y `Queja`, los campos de la concreción en `Entrega` y `DetalleEntrega`, `AlertaComercial.solicitud` y el enlace de confirmación (`modelo/comercial.md`); extractos `comercial/rutas.md` y `comercial/confirmacion.md`; **la sección 10 de `api/produccion.md` en COM-04a** (D-68, punto 3) y el exceso de envases sin tocar `ReservaInsumo` (punto 2); bloqueos y el patrón del enlace; **D-68** | validado (22/11/2026) |
 | C7 | **COM-07 partida en COM-07a y COM-07b** (D-69, punto 1): sus dos archivos de tarea; `Anulacion` (MD-135), la aplicación de la indemnización y el aviso en `SolicitudRevision`, `Suministro.solicitud_resolucion` (`modelo/comercial.md`); extractos `comercial/solicitudes.md` y `comercial/resolucion.md`; **la sección 11 de `api/produccion.md` en COM-04a** (D-69, punto 3); MD-115 en COM-EVL-DSC (punto 2); el paso 33 (enmienda D-56); bloqueos; **D-69** | a validar (puntos 1 a 8 validados antes de escribir) |
-| C8 | COM-08: archivo de tarea, R154 (`Entrega.pago`) y C7 de `PagoCliente` (la clase la crea COM-06a, D-68 punto 4), la anulación (MD-136), extractos, consultas de estadísticas | por escribir |
+| C8 | **COM-08 partida en COM-08a, COM-08b y COM-08c** (D-94, punto 1): sus tres archivos de tarea; R154 como `LineaPago` (no `Entrega.pago`, D-94 punto 2), C7 de `PagoCliente` como {xor}, `estado_pago` anulado (MD-136), la mora en `Entrega`, `Anulacion.pago` y `cliente_pago_en_fecha` (MD-135), `PagoCliente.anulacion_corregida` (`modelo/comercial.md`); extractos `comercial/cobranza.md` y `comercial/estadisticas.md`; la extensión 6a en `compra_venta.md`; lo que completa a COM-01 a COM-07a; bloqueos de la cobranza; **D-94**. Además, las correcciones por lo mergeado hasta la PR #57 (D-81, D-83, la regla de interfaz de INV-02, los datos de verificación, `core/enlaces.py`) | validado (23/11/2026; D-94, punto 12 cambiado) |
 
 Un lote se programa recién cuando él y los anteriores están entregados y validados. COM-01 (C1) puede programarse mientras se escriben
 los demás; **COM-02 en adelante, cuando la documentación de la ronda esté completa** (como se decidió para PRD-01 el 19/11/2026), porque
@@ -308,7 +316,8 @@ el modelo de COM-02 condiciona a todas las que siguen.
 ## 8. Decisiones tomadas o por confirmar
 
 Las decisiones de comercial tomadas van de D-57 a D-69 (D-55 y D-56 ya se usaron para MAE-05 y DIA-01). Las de abajo con número son de los
-lotes C0 a C7; las del lote C8 toman su número al escribirse (`docs/decisiones/README.md`, «Numeración»).
+lotes C0 a C7; la del lote C8 tomó su número al escribirse (`docs/decisiones/README.md`, «Numeración»): **D-94** (D-80 a D-83 ya eran de IoT y
+producción). Si al abrir el PR ya está tomada, se renumera.
 
 | Tema | Decisión o propuesta de trabajo | Lote |
 |---|---|---|
@@ -326,6 +335,7 @@ lotes C0 a C7; las del lote C8 toman su número al escribirse (`docs/decisiones/
 | Las pantallas del prototipo | **D-61** (vigente, pedida por el estudiante): referencia, no especificación; Claude Code las corrige y completa y lo anota en el «Cierre» | C3 |
 | Cambio de Vendedor de un invernadero (pendientes_CU, caso 22; MD-46 y MD-60) | **D-60** (vigente): el traspaso es automático, con una regla en lugar de «el Gerente decide contrato por contrato» | C2 |
 | Pago «en mora» | MD-139: `pendiente` / `en_mora` / `pagada`; alerta «pago en mora»; «atrasada» para una entrega con la fecha pasada | C5a a C8 (textos; «atrasada» ya en C5a) |
+| Corte de COM-08; R154 como `LineaPago`; C7 como {xor}; estado de pago y mora; la alerta «pago en mora» y el paso 30; bloqueos y huella del cobro; el cobro que corrige uno anulado; `Anulacion.pago`; la indemnización por atraso; correos; el cobro al cancelar una venta; las fechas de las estadísticas | **D-94** (aprobada el 23/11/2026; punto 12 cambiado: la cláusula vigente al vencer) | C8 |
 | Entregas y envasado en el código (corte de COM-05, modelo, `on_commit`, paso 50, agrupamiento de una venta, reserva de insumo, cancelación de una entrega, alerta, semáforo) | **D-66** (propuesta, a validar) | C5a |
 | Enlace de las alertas sobre la MAE-02c de `main` | **D-62, tercera enmienda** (vigente): MAE-02d, ruta `alertas:ir`, `tipos` | C5a |
 | Tipos de orden futuros en PRD-01; corte de COM-03, COM-04 y COM-05a; COM-ASG-TRP y COM-CNL-CVT en el código | **D-67** (vigente) | C5b |
@@ -334,7 +344,7 @@ lotes C0 a C7; las del lote C8 toman su número al escribirse (`docs/decisiones/
 | Terminación anticipada de un suministro por mutuo acuerdo | **COM-RSC-SUM** (decisión del estudiante del 21/11/2026): rescisión bilateral (art. 1076 CCyC) que registra el Gerente; se conservan los períodos de la ventana; sin multa; se puede dejar sin efecto hasta la última entrega (COM-ANL-RSC); motivo en lista cerrada con descripción. Propuesta MD-140 para el modelo | C3 |
 | Incumplimientos tolerados | 0..99 al pactar y al modificar; al modificar, nunca menos que los acumulados (PCU 16). Aplicado en `suministro.md` («Cambios ya decididos», punto 1) | C3 |
 | Confirmación del cliente | Monto por línea y total de la entrega; precio unitario como dato secundario (PCU 16) | C6 |
-| Criterios de interfaz | Buscadores en lugar de desplegables para datos que crecen (clientes, contratos); pasos siguientes bloqueados hasta completar el actual; contadores en rojo; tablas siempre ordenadas; **textos explicativos siempre** («alguien nuevo debe entender el sistema rápidamente»). Van en «Pantallas» de cada tarea | todos |
+| Criterios de interfaz | Buscadores en lugar de desplegables para datos que crecen (clientes, contratos); pasos siguientes bloqueados hasta completar el actual; contadores en rojo; tablas siempre ordenadas; **textos explicativos siempre** («alguien nuevo debe entender el sistema rápidamente»). Van en «Pantallas» de cada tarea | todos **Desde INV-02** (`.claude/rules/interfaz.md`, «Validaciones e interacción HTMX»): nada se valida ni se recalcula mientras se tipea; los `calcular/` de las pantallas de comercial (compra-venta, suministro, asignación, concreción, cobro) corren con un botón («Actualizar», «Ver resumen», «Revisar y registrar») o cuando cambia un **selector**, que redibuja sin validar (`hx-swap="innerHTML show:none"`, `data-sin-envio-en-curso`). Donde un documento anterior diga otra cosa (COM-02 decía un retardo de 350 ms), manda la regla |
 
 ## 9. Disparadores existentes que cierra cada tarea
 
@@ -354,4 +364,6 @@ Salen de `docs/disparadores.md`; cada archivo de tarea los trae en «Límites».
 | COM-06b | «Cuando exista Entrega», punto 10 (el enlace); «Completan el ABM de cliente» para quejas |
 | COM-07a | «Cuando exista Entrega», punto 10 (lo de COM-07: las solicitudes, el enlace de sus alertas, `intentos_fallidos`, `monto_a_cobrar`); «Cuando exista `produccion` completa», punto 3 (usa el tipo `incumplimiento_de_clausula` que crea COM-04a). Nace: «Cuando exista Entrega», punto 11 (para COM-07b, COM-08 y contabilidad) |
 | COM-07b | «Resolución de un contrato con rescisión acordada»; «Cuando exista Entrega», punto 11 (lo de COM-07b) |
-| COM-08 | «Completan el ABM de cliente» para el estado de pago de cada entrega (pagada o en mora) |
+| COM-08a | «Cuando exista Entrega», puntos 10 (`estado_de_pago` con «pagada», `PagoCliente` de suministro, C7 como {xor}) y 11 (lo de COM-08a: la entrega pagada en las solicitudes y en COM-ATN-ENR); «Completan el ABM de cliente», punto 4 (el estado de pago de cada entrega) |
+| COM-08b | «Cuando exista Entrega», punto 9 (la extensión 6a de COM-CNL-CVT) y lo de COM-08b del 11 (`Anulacion.pago`) |
+| COM-08c | Ninguno |

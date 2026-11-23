@@ -221,14 +221,14 @@ existen (está también en `docs/disparadores.md`, «Completan el ABM de cliente
 - **Baja (BAJ).** Solo el Gerente activo; el Vendedor no ve el botón y la URL le da 403. La ventana informa lo pendiente (regla 1) con
   `pendientes_del_cliente(cliente, actor) -> list[str]`, que en COM-01 devuelve una lista vacía y la ventana dice «No tiene contratos ni
   entregas pendientes.». **Se completa en** COM-02 (compra-ventas abiertas), COM-03 (suministros vigentes), COM-06 (entregas sin cobrar,
-  quejas y discrepancias pendientes) y COM-08 (estado de pago). La baja no se bloquea nunca. Acción de auditoría: `baja_cliente`.
+  quejas y discrepancias pendientes) y COM-08a (estado de pago). La baja no se bloquea nunca. Acción de auditoría: `baja_cliente`.
 - **Consulta (CNS).**
   - Lista: búsqueda por CUIT (desde 2 dígitos, con o sin guiones), por razón social o por nombre y apellido, sin distinguir mayúsculas
     (`icontains`; sin `unaccent`, `docs/temas_abiertos.md`); filtro por estado; orden por nombre visible y después id; 50 por página.
     Columnas de COM-01: cliente (con su tipo), CUIT, contacto (correo y teléfono), direcciones activas, estado y acciones. La columna
     «Contratos vigentes» la suma COM-02.
   - Ficha: datos y direcciones (activas e inactivas). **Se completa en** COM-02 y COM-03 (contratos, con el alcance del Vendedor: solo los
-    suyos) y COM-06 y COM-08 (entregas sin cobrar, con el monto a cobrar y el vencimiento). Mientras no existan, la ficha **no** muestra
+    suyos) y COM-06 y COM-08a (entregas sin cobrar, con el monto a cobrar y el vencimiento). Mientras no existan, la ficha **no** muestra
     esas tarjetas (D-25: solo se muestra lo que existe).
   - Alcance: `Cliente.objects.en_alcance_de(actor)`, un único lugar (D-28): Gerente y Vendedor activos ven todos; cualquier otro rol, 403.
 - **Bloqueos.** MOD, BAJ y la reactivación toman el cliente con `FOR NO KEY UPDATE` y lo releen; MOD toma además sus `DireccionCliente`,
@@ -280,12 +280,12 @@ Cada punto está también en `docs/disparadores.md`, «Completan el ABM de clien
 - COM-03: suministros en la ficha, la lista y la baja; direcciones en uso por un detalle de suministro; la regla 3 de MOD (correo con
   suministro vigente); el regreso a COM-PCT-SUM.
 - COM-06: entregas sin cobrar (monto a cobrar y vencimiento) en la ficha y en la baja; quejas y discrepancias pendientes en la baja.
-- COM-08: el estado de pago de cada entrega (pagada o en mora) en la ficha.
+- COM-08a: el estado de pago de cada entrega (pagada o en mora) en la ficha (`cobranza.md`, «Lo que completa a otras tareas»).
 
 ## Solo prototipo
 
 Los de `docs/prototipos/comercial/README.md`, «Elementos del prototipo que no van en el sistema». En estas pantallas, además:
 
-- La columna y el dato «Deuda» de la ficha con datos de ejemplo (llegan con COM-06 y COM-08).
+- La columna y el dato «Deuda» de la ficha con datos de ejemplo (llegan con COM-06 y COM-08a).
 - Los identificadores `CL-01` a `CL-05`.
 - La lista de muestra de localidades (`GEOP`): el sistema usa Georef.

@@ -101,6 +101,12 @@ restricciones de la base, los bloqueos, la vigencia calculada ni las pruebas de 
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
+**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
+al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
+`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
+cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
+siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
+
 Hay migraciones nuevas (`comercial`, `core`): `python manage.py migrate`. Datos: los de COM-06a, con un cliente de suministro **con un correo
 que puedas leer** y una entrega del suministro planificada para hoy, con un período demorado.
 

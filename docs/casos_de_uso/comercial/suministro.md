@@ -723,7 +723,7 @@ d. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
    la regla «Datos del contrato» de COM-PCT-SUM y «mayor que los acumulados» de COM-MOD-SUM 5e y su regla.
 2. **Par (variedad, dirección) nuevo** (PCU 9; MD-131): al pactar y al agregar, los detalles finalizados no cuentan.
 3. **9d de COM-PCT-SUM** nombra «Modificar Suministro, CU-38»: es COM-MOD-SUM.
-4. **Estado de pago «en mora»** (MD-139): la regla 7 de COM-CNS-SUM dice «vencida»; se muestra «en mora» (cuando exista, COM-08).
+4. **Estado de pago «en mora»** (MD-139): la regla 7 de COM-CNS-SUM dice «vencida»; se muestra «en mora» (cuando exista, COM-08a).
 5. **Un detalle finalizado no reserva períodos posteriores a su fecha de fin** (PCU 9; MD-131): lo cumple el calendario
    (`fecha_fin_detalle`), para PROD-PRR-SUM y PROD-ASG-STK.
 
@@ -913,7 +913,7 @@ precio por período, funciones puras), `pre_reserva.py` (PROD-PRR-SUM, en `docs/
   dd/mm…» y, en la lista, la marca «Rescisión acordada»; rescindido, el aviso «Rescindido por mutuo acuerdo el dd/mm…». Los períodos
   posteriores a la rescisión no aparecen en el calendario.
 - **Regla 10:** «Modificar suministro» si está vigente, sin rescisión acordada, y el actor es su Vendedor o el Gerente. «Rescindir
-  suministro» (Gerente, vigente sin rescisión) y «Dejar sin efecto la rescisión» (Gerente, con rescisión acordada). «Registrar cobro» (COM-08) y la consulta de
+  suministro» (Gerente, vigente sin rescisión) y «Dejar sin efecto la rescisión» (Gerente, con rescisión acordada). «Registrar cobro» (COM-08a) y la consulta de
   una solicitud (COM-07a): **se completan en** esas tareas. La resolución en la ficha y «Dar por atendida»: COM-07b (`resolucion.md`).
 
 ### COM-RSC-SUM y COM-ANL-RSC (rescisión por mutuo acuerdo)
@@ -1004,7 +1004,7 @@ Textos explicativos:
 | 9 | Terminar el último detalle: sin aviso | 5c.1a con «Acortar la duración» | COM-MOD-SUM |
 | 10 | Correo del cliente: aviso, pero deja seguir | Bloquea hasta cargarlo, con el enlace | 4b |
 | 11 | Calendario de la ficha con un tramo fijo | El mismo tramo por defecto y «Ver todo el calendario» | Regla 6 de COM-CNS-SUM («pasados y futuros») |
-| 12 | «Registrar cobro» y solicitudes en la ficha | Llegan con COM-08 y COM-07a | D-25 |
+| 12 | «Registrar cobro» y solicitudes en la ficha | Llegan con COM-08a y COM-07a | D-25 |
 | 13 | Rescindir: la rescisión se cierra en el momento si no hay períodos; el cierre posterior no se ve | El paso diario 35 la cierra | Regla «Cierre» de COM-RSC-SUM |
 
 ## Para más adelante
@@ -1018,7 +1018,7 @@ Textos explicativos:
 - COM-07a: solicitudes de revisión e incumplimientos (`solicitudes.md`). COM-07b: la resolución (`fecha_resolucion_suministro`, alerta
   «suministro resuelto» con T-02, «Dar por atendida»); la resolución de un contrato con rescisión acordada (prevalece la resolución;
   `resolucion.md`).
-- COM-08: «Registrar cobro» y el estado de pago («en mora», MD-139).
+- COM-08a: «Registrar cobro» y el estado de pago («en mora», MD-139; `cobranza.md`, «Lo que completa a otras tareas»).
 
 ## Solo prototipo
 

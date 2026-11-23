@@ -39,7 +39,7 @@ decisión. El enlace queda listo para que COM-06 lo reutilice en la confirmació
 - Código a leer:
   - `comercial/` completo (COM-01 a COM-04b): `servicios/` (`faltantes.py`, `stock_maduro.py`, `cosechas.py`, `camara.py`,
     `merma_camara.py`, `compra_ventas.py`, `comprobantes.py`), vistas, plantillas (la ficha de la compra-venta), `apps.py`, fábricas;
-  - `core/views.py` (`recuperacion_enlace`, como modelo de la entrada del enlace), `core/tokens.py`, `core/enlaces.py` si ya existe (IOT-02),
+  - `core/views.py` (`recuperacion_enlace`, como modelo de la entrada del enlace), `core/tokens.py`, `core/enlaces.py` (**ya existe**: lo creó IOT-02 el 22/11/2026, con `nuevo_token` y `resumen_de`),
     `core/models.py` (auditoría: `registrar`), `core/correo.py`, `core/procesos.py`;
   - `maestros/servicios/invernaderos.py` (`bloquear_invernadero_para_alertas`).
 
@@ -51,23 +51,22 @@ decisión. El enlace queda listo para que COM-06 lo reutilice en la confirmació
   - `comercial/migrations/00NN_enlace_cliente.py`: `EnlaceCliente` con su índice parcial y sus restricciones;
   - `core/migrations/00NN_comercial_faltantes`: solo `choices` (acciones `decision_faltante`, `vencimiento_enlace`).
 - Permitido fuera de `comercial`:
-  - `core`: `core/enlaces.py`, **solo si no existe** (lo crea también IOT-02, D-70 punto 1: la tarea que llegue primero lo crea tal como lo
-    describe `docs/patrones/enlace_del_cliente.md`, «1. Piezas», y la otra lo usa sin cambiarlo; si ya existe, leelo y no lo toques); en
+  - `core`: **no** `core/enlaces.py` (ya lo creó IOT-02, D-70 punto 1, tal como lo describe `docs/patrones/enlace_del_cliente.md`, «1.
+    Piezas»: se usa sin cambiarlo); en
     `core/models.py`, `ROL_CLIENTE_ENLACE`, el argumento `rol_externo` de `registrar` (D-65 punto 8) y las acciones, `ETIQUETAS`,
     `VALORES_VISIBLES` (`estado` del enlace) y `ACCIONES_DE_NEGOCIO`; en `core/procesos.py`, solo el comentario (fila 27); el texto «Cliente
     (mediante enlace)» en la pantalla de auditoría;
   - al cerrar (M3), los textos de `docs/disparadores.md`, `docs/tareas/README.md`, `docs/tareas/ronda_comercial_1.md` y `docs/estado.md`.
 - Dependencias nuevas: ninguna (`secrets` y `hashlib` son de la biblioteca estándar).
-- Si `core/enlaces.py` ya existe (lo creó IOT-02), el «Cierre» lo dice y la fila de `core` de «Permitido fuera de la app» se usa sin ese archivo.
+- `core/enlaces.py` ya existe (IOT-02, PR #52): esta tarea no lo crea ni lo cambia.
 - Fuera de alcance: COM-CNL-CVT y la anulación de su enlace (COM-05b); la confirmación de entregas por el enlace (COM-06); el reenvío del
   enlace y «esperar otra fecha» (mejoras futuras); reintentos automáticos de correos (no hay cola).
 
 ## Pasos (en este orden; corré las pruebas del paso antes de seguir)
 
-1. **Modelos y piezas de `core`** (D-65). `EnlaceCliente`; `core/enlaces.py` **solo si no existe** (si IOT-02 ya lo creó, se usa como está y
-   sus pruebas no se duplican); `rol_externo`; las acciones. Fábrica `enlace(...)`.
-   Pruebas: en `comercial/tests/test_modelos_cosecha_camara.py`, métodos nuevos (las restricciones del enlace); `core/tests/test_enlaces.py`
-   **si esta tarea crea `core/enlaces.py`** (dos tokens distintos, el resumen de 64); `core/tests/test_auditoria_rol_externo.py` (el rol
+1. **Modelos y piezas de `core`** (D-65). `EnlaceCliente`; `core/enlaces.py` ya existe (IOT-02): se usa como está y sus pruebas
+   no se duplican; `rol_externo`; las acciones. Fábrica `enlace(...)`.
+   Pruebas: en `comercial/tests/test_modelos_cosecha_camara.py`, métodos nuevos (las restricciones del enlace); `core/tests/test_auditoria_rol_externo.py` (el rol
    guardado; `rol_externo` con un usuario lanza `ValueError`).
 2. **Enlace del cliente** (`enlace_del_cliente.md`): `comercial/servicios/enlaces.py` (crear, reemplazar, anular, usar, vencer; el correo con
    `on_commit`).
@@ -110,6 +109,12 @@ concurrencia.
   python manage.py test comercial --keepdb --tag concurrencia
 
 ## Verificación a mano (la completa Claude Code al cerrar)
+
+**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
+al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
+`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
+cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
+siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
 
 Hay migraciones nuevas (`comercial`, `core`): `python manage.py migrate`. Datos: los de COM-04b; un cliente con correo y otro sin correo; en
 «Configuración», vigencia del enlace de faltante 2 días.

@@ -274,13 +274,18 @@ class ConsultaTests(Base):
     def test_regla_7_una_consulta_por_pagina_sin_consultas_por_fila_con_1_o_con_50_registros(self):
         """Regla 7 y D-51: una consulta por tabla para toda la página, sin consultas por fila: el mismo número de consultas con 1 registro que con 50 (con
         lote, sectores, responsable y aplicaciones con sus consumos)."""
-        habilitado = existencia(insumo("Limpiador", unidad="l"), self.e.invernadero)
+        limpiador = insumo("Limpiador", unidad="l")
+        habilitado = existencia(limpiador, self.e.invernadero)
         pocos = crear_invernadero("Pocos", agronomo=self.e.agronomo)
-        self.evento("Uno solo", invernadero=pocos)
+        # Los dos escenarios tienen una aplicación con consumo en la página: si no, Django se saltea la consulta de los consumos y la comparación
+        # mezclaría un caso con aplicaciones y otro sin ellas. La fecha y la hora van fijas (las aplicaciones más recientes que las mermas, siempre en la
+        # página 1): con la hora actual, antes de las 09:50 quedaban en la página 2 y la prueba pasaba o fallaba según la hora de corrida.
+        solo = aplicacion_de(self.e, invernadero=pocos, descripcion_evento="Aplicación única", fecha_bitacora=HOY, hora_bitacora=time(11, 0))
+        consumo_de(self.e, existencia(limpiador, pocos), invernadero=pocos, aplicacion=solo)
         for n in range(50):
             self.evento(f"Merma {n}", tipo="merma", hora=time(9, n), lote=self.lote, sectores=(self.e.sectores["germinacion"], self.e.sectores["crecimiento"]), clase=Merma, cant_merma=1, causa="plaga")
         for n in range(5):
-            aplicacion = aplicacion_de(self.e, descripcion_evento=f"Aplicación {n}")
+            aplicacion = aplicacion_de(self.e, descripcion_evento=f"Aplicación {n}", fecha_bitacora=HOY, hora_bitacora=time(11, n))
             aplicacion.sectores.set([self.e.sectores["germinacion"].pk])
             consumo_de(self.e, habilitado, aplicacion=aplicacion)
         with CaptureQueriesContext(connection) as con_uno:
@@ -289,4 +294,5 @@ class ConsultaTests(Base):
             muchos = self.consultar()
         self.assertEqual(len(self.registros(uno)), 1)
         self.assertEqual(len(self.registros(muchos)), 50)
+        self.assertEqual(sum(1 for r in self.registros(muchos) if r.tipo == "aplicacion" and r.consumos), 5)  # control: la página sí trae aplicaciones
         self.assertEqual(len(con_uno), len(con_muchos), [q["sql"][:80] for q in con_muchos.captured_queries])

@@ -63,7 +63,7 @@ Bloque: Mantenimiento, alertas y auditoría. Vive en `produccion` (D-46). Orden 
 | Atributo | Valores | Nota |
 |---|---|---|
 | `idOrden` | — | El `id` automático |
-| (nuevo) `tipo` | `OrdenTrabajo.Tipo` | Discriminador de la herencia. Obligatorio, nunca cambia |
+| (nuevo) `tipo_orden` | `OrdenTrabajo.Tipo` | Discriminador de la herencia. Obligatorio, nunca cambia. Se llama `tipo_orden` y no `tipo` porque `OrigenDocumento` ya tiene `tipo` (D-81) |
 | `fechaCreacionOrden` | fecha | → `fecha_creacion_orden`. La de hoy al planificar (`auto`, no editable). **Nunca es posterior a hoy** |
 | `fechaProgramadaOrden` | fecha | → `fecha_programada_orden`. Obligatoria. Al planificar, ≥ hoy |
 | `fechaResolucionOrden` | fecha, nula | → `fecha_resolucion_orden`. Nula mientras está «a realizar»; la de hoy al concretarla o cancelarla (sin fechas retroactivas). Vale para los dos desenlaces (concreción y cancelación), como OrdenCompra.fechaResolucion. Para saber si se concretó hay que mirar `estado_orden`, no esta fecha |
@@ -84,7 +84,8 @@ Bloque: Mantenimiento, alertas y auditoría. Vive en `produccion` (D-46). Orden 
 Herencias: **hija directa de `OrigenDocumento`** (`contabilidad`, D-52; `TIPO_DE_ORIGEN = orden_de_trabajo`). Es padre de `Siembra` y `TransicionEtapa` (esta ronda) y de `Cosecha` (COM-02), `Entrega` (COM-05a, en `comercial`, D-66) y `MantenimientoTecnico` (IOT-07).
 
 **Tipos que ven las pantallas de `produccion`** (D-67, punto 1; regla «Órdenes que cancela el Agrónomo» de PROD-CNL-ORD; D-66 punto 13):
-`lista_de_ordenes`, `ordenes_cancelables` y `ordenes_del_capataz` muestran solo `TIPOS_DE_PRODUCCION` (siembra, transición y cosecha), con
+`lista_de_ordenes` y `ordenes_del_capataz` muestran solo `TIPOS_DE_PRODUCCION` (siembra, transición y cosecha) y `ordenes_cancelables`,
+en PRD-01, solo los que además acepta `cancelar_orden` (siembra y transición; desde COM-04a, todos los de `TIPOS_DE_PRODUCCION`: lote C8), con
 una lista de tipos permitidos y no con «todo menos X»; `cancelar_orden` acepta solo siembra y transición (`orden_no_cancelable` con los
 demás). Las entregas y los mantenimientos no son órdenes del Agrónomo. Los cuenta, en cambio, todo lo que mira «órdenes a realizar» de un
 invernadero (el impedimento `ordenes_a_realizar` de su baja) y las reservas de insumo activas (`registrar_reservas_de_insumo`). Todo lo hace
@@ -103,7 +104,7 @@ Hijas futuras y el IoT: `MantenimientoTecnico` hereda de `OrdenTrabajo` **sin** 
 - `fecha_resolucion_orden` nula si y solo si el estado es «a realizar».
 - `motivo_cancelacion` no nulo y no vacío si y solo si el estado es «cancelada».
 - `fecha_programada_orden >= fecha_creacion_orden` (la programada nunca es anterior a la de creación).
-- **(COM-02, D-59)** `tipo = cosecha` ⇒ `prioridad_orden` no nula (ronda 19, MD-18: obligatoria en la cosecha). Va en una migración nueva de
+- **(COM-02, D-59)** `tipo_orden = cosecha` ⇒ `prioridad_orden` no nula (ronda 19, MD-18: obligatoria en la cosecha). Va en una migración nueva de
   `produccion`, como la del mantenimiento de IOT-07.
 - Índices: `(invernadero, estado_orden, fecha_programada_orden)` (lista). El índice del Capataz está en cada hija con Capataz (`ConCapataz`: `(capataz)`; el estado vive en el padre).
 
@@ -147,7 +148,7 @@ Lo **consumido** no se guarda: es `cantidad_reservada − cantidad_devuelta` (co
 
 ## Siembra
 
-Hija de `OrdenTrabajo` (`tipo = siembra`). Orden de sembrar una variedad en sectores de Germinación de un invernadero; al concretarla crea el lote.
+Hija de `OrdenTrabajo` (`tipo_orden = siembra`). Orden de sembrar una variedad en sectores de Germinación de un invernadero; al concretarla crea el lote.
 
 ### Atributos
 
@@ -180,7 +181,7 @@ Hija de `OrdenTrabajo` (`tipo = siembra`). Orden de sembrar una variedad en sect
 
 ## TransicionEtapa
 
-Hija de `OrdenTrabajo` (`tipo = transicion`). Traslada **el lote entero** a la etapa siguiente de su ciclo. La crea PRD-02.
+Hija de `OrdenTrabajo` (`tipo_orden = transicion`). Traslada **el lote entero** a la etapa siguiente de su ciclo. La crea PRD-02.
 
 ### Atributos
 
@@ -197,7 +198,7 @@ Hija de `OrdenTrabajo` (`tipo = transicion`). Traslada **el lote entero** a la e
 | R160 | Lote, «traslada» | TransicionEtapa → Lote = 1; Lote → TransicionEtapa = 0..* | `lote`, FK a `Lote`, `PROTECT` |
 | R107 | EtapaProductiva, «corresponde» | TransicionEtapa → EtapaProductiva = 1 | `etapa_destino`, FK a `maestros.EtapaProductiva`, `PROTECT`. La etapa de origen no se guarda (regla 1 de 8.20) |
 | R077 | Capataz, «realiza» | TransicionEtapa → Capataz = 1 | `capataz`, FK a `core.Capataz`, `PROTECT`, obligatoria. Por la clase abstracta `ConCapataz` (D-53): la persona asignada al planificar; se traspasa al nuevo Capataz del invernadero (regla 3 de 8.22) |
-| R080 | Bitacora, «genera» | TransicionEtapa → Bitacora = 1 (al concretar) | `bitacora`, `OneToOne` a `Bitacora`, nula hasta concretar |
+| R080 | Bitacora, «genera» | TransicionEtapa → Bitacora = 1 (al concretar) | `bitacora_de_transicion`, `OneToOne` a `Bitacora`, nula hasta concretar (no `bitacora`: choca con el accesorio de `OrigenDocumento`, D-83) |
 | R164 | OcupacionSector, composición | TransicionEtapa → OcupacionSector = 1..* | Por `OcupacionSector.orden` |
 
 ### Restricciones de la base
@@ -450,7 +451,7 @@ La ocupación de origen queda con 0 ocupados y conserva su lote. **No cambia la 
 
 ## Cosecha (COM-02, D-59)
 
-Orden de cosecha. Hija de `OrdenTrabajo` (`tipo = cosecha`) y de `ConCapataz` (D-53). Vive en `produccion` (D-37); **sus casos de uso viven
+Orden de cosecha. Hija de `OrdenTrabajo` (`tipo_orden = cosecha`) y de `ConCapataz` (D-53). Vive en `produccion` (D-37); **sus casos de uso viven
 en `comercial`** (D-59, regla A3), porque toda cosecha tiene una reserva (R087), que es de `comercial`. COM-02 crea la tabla y las cosechas
 automáticas (PROD-ASG-STK); COM-04 programa planificar, modificar, concretar y cancelar.
 
@@ -468,7 +469,8 @@ automáticas (PROD-ASG-STK); COM-04 programa planificar, modificar, concretar y 
   pide con `registrar_detalle_de_cosecha` (`docs/api/extensiones_de_produccion.md`).
 - `ordenes_del_capataz` (D-53) suma `Cosecha` a su unión: así la cuentan el traspaso del Capataz y el aviso de baja de su cuenta. **La bandeja
   del Capataz, la lista de órdenes del Agrónomo y las órdenes cancelables no las muestran hasta COM-04a**, que trae sus pantallas (COM-02
-  las oculta con un `exclude` temporal, aunque `cosecha` está en `TIPOS_DE_PRODUCCION` desde PRD-01: D-67, punto 1e).
+  las oculta de la bandeja y de la lista con un `exclude` temporal, aunque `cosecha` está en `TIPOS_DE_PRODUCCION` desde PRD-01: D-67,
+  punto 1e; las cancelables ya las dejan afuera desde PRD-01, que las cruza con `TIPOS_QUE_CANCELA_PRODUCCION`, y COM-04a las suma).
 
 ## StockCosechado (COM-02, D-59)
 

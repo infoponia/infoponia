@@ -88,7 +88,7 @@ de cada prototipo).
 - El alcance por usuario se aplica con un único manager o queryset por modelo.
 - Modelo de usuario: D-01 a D-04.
 - Apps por niveles (D-37): `core` (1), `contabilidad` (2), `maestros` (3), `inventario` (4), `produccion` (5),
-  `compras` y `comercial` (6), `iot` (7).
+  `compras` y `comercial` (6), `iot` (7), `estadisticas` (8).
   - A1. Una app solo importa de apps de nivel menor. `compras` y `comercial` no se importan entre sí.
   - A2. Toda FK o M2M se declara en la app de nivel mayor.
   - A3. Un caso de uso que toca varias apps vive en la más alta que toca.

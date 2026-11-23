@@ -100,6 +100,12 @@ recortan los bloqueos, la relectura (6a), la recuperación diaria, el aviso a qu
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
+**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
+al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
+`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
+cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
+siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
+
 Hay una migración nueva (`core`, solo `choices`): `python manage.py migrate`. Datos: los de COM-07a, con un suministro vigente con 0
 incumplimientos tolerados y multa, que tenga una entrega a realizar con envasado, otra reserva activa con su cosecha a realizar y una
 discrepancia pendiente; un cliente **con un correo que puedas leer**.

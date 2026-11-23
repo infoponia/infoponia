@@ -86,7 +86,7 @@ invernadero, las órdenes pasan al nuevo. Planificar y concretar mantenimientos 
 ## Pasos (en este orden; corré las pruebas del paso antes de seguir)
 
 1. **Modelo y migraciones** («Modelo y migraciones» del extracto). Pruebas (`iot/tests/test_modelos_mantenimiento.py`):
-   - crear una orden le pone `tipo = mantenimiento`, y su código es `OT-NNNN`;
+   - crear una orden le pone `tipo_orden = mantenimiento`, y su código es `OT-NNNN`;
    - un mantenimiento sin prioridad no se guarda (`IntegrityError`, la restricción);
    - una siembra sin prioridad se sigue guardando;
    - `tecnico` es obligatorio;

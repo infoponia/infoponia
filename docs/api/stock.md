@@ -35,6 +35,22 @@ vuelven a leer y a bloquear lo suyo (`InsumoInvernadero` y lotes, en orden de id
 
 Todo lo demás (ajustes, mínimos, deshabilitar, vencimientos) lo hacen los servicios de `inventario`; `produccion` no lo llama.
 
+## Escritura de compras (D-90; las escriben CMP-03, CMP-04 y CMP-06 dentro de `inventario`)
+
+Mismo contrato que las de arriba: corren **dentro de la transacción de quien llama**, con el invernadero ya bloqueado; vuelven a leer y bloquear
+lo suyo (`InsumoInvernadero` y lotes, en orden de id); no auditan (lo hace el caso de uso). Las cantidades se validan con `validar_cantidad`.
+
+| Función | Qué hace | La escribe |
+|---|---|---|
+| `stock.sumar_transito(iin_id, cantidad) -> InsumoInvernadero` | Suma a `cant_transito_insumo` (aprobar una orden). No crea movimientos (regla 1 de 8.19) | CMP-03 |
+| `stock.restar_transito(iin_id, cantidad) -> InsumoInvernadero` | Resta (cerrar con faltante). `ValueError` si quedaría negativo | CMP-04 |
+| `stock.registrar_ingreso_por_recepcion(iin_id, partes, *, origen_id, fecha=None) -> list[MovimientoInsumo]` | `partes = [(cantidad, vencimiento \| None)]`. Cubre primero el **faltante sin lote** (lo deja como mucho en 0), crea un lote nuevo por parte con lo que sobra (vencimiento obligatorio si el insumo lo controla; nunca una fecha pasada: eso es un inconveniente, no un ingreso), un movimiento «ingreso por recepción» por lote tocado con `origen = origen_id` (la `Recepcion`), resta el tránsito por el total y llama a `reevaluar_alertas_del_insumo`. Devuelve los movimientos en el orden en que tocó los lotes (para que `compras` cree sus vínculos) | CMP-04 |
+| `stock.lotes_de_ingreso(movimiento_ids) -> list[(LoteInsumo, Decimal)]` | Lectura: los lotes que esos movimientos crearon (sin el faltante sin lote) y lo ingresado en cada uno; para «lo máximo corregible» | CMP-06 |
+| `stock.registrar_salida_por_correccion_de_recepcion(lote_id, cantidad, *, origen_id) -> MovimientoInsumo` | Descuenta del lote (nunca por debajo de 0: `ValueError`), crea el movimiento del tipo nuevo `salida_por_correccion_de_recepcion` con `origen = origen_id` (la `CorreccionRecepcion`), suma el tránsito por esa cantidad y reevalúa las alertas | CMP-06 |
+
+Las cuatro escrituras **no** cambian `referencia_precio` (regla 6 de 8.18). La migración del tipo nuevo de movimiento (y de su restricción de origen)
+es de CMP-06.
+
 ## Reglas para quien llama
 
 1. Nunca cambies `cantidad_disponible` de un lote ni cree un `LoteInsumo`/`MovimientoInsumo` por tu cuenta: es de `inventario` (regla 1 de 8.19).
