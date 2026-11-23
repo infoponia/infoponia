@@ -30,6 +30,7 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 | UI | interfaz (hoja de estilos y marco, en core) |
 | DOC | documentación |
 | DIA | proceso diario (en core; D-56) |
+| EST | estadisticas (app nueva, nivel 8; D-93) |
 
 ## Pendientes
 
@@ -46,7 +47,11 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 Plan completo en `docs/tareas/ronda_produccion_1.md`. «Por escribir» quiere decir que el archivo de la tarea todavía no
 está en el repo: no se puede programar hasta que llegue su lote de documentación.
 
-|
+| ID | Título | App | Estado | Depende de / espera | Archivo |
+|---|---|---|---|---|---|
+| PRD-02 | Transición: planificar, concretar y cancelar | produccion | hecha (PR #53, 22/11/2026; revisión a mano pendiente) | PRD-01 | `produccion/PRD-02-transicion-de-etapa.md` |
+| PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora | produccion | hecha (PR #57, 23/11/2026; revisión a mano pendiente) | PRD-02 | `produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md` |
+| PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | hecha (PR #58, 23/11/2026; revisión a mano pendiente) | PRD-03 | `produccion/PRD-04-sector-fuera-de-servicio-e-inicio.md` |
 
 ### Ronda «Comercial 1» (D-56, D-57)
 
@@ -70,7 +75,9 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 | COM-06b | Confirmación del cliente: el enlace, las quejas y la entrega no reconocida (D-68) | comercial | pendiente | COM-06a | `comercial/COM-06b-confirmacion-del-cliente.md` |
 | COM-07a | Solicitudes de revisión: evaluar, resolver, anular y consultar (D-69) | comercial | pendiente | COM-06b (y la sección 11 de COM-04a) | `comercial/COM-07a-solicitudes-de-revision.md` |
 | COM-07b | Resolución del suministro por incumplimientos (paso diario 33) | comercial | pendiente | COM-07a | `comercial/COM-07b-resolucion-del-suministro.md` |
-| COM-08 | Cobranza y estadísticas | comercial | por escribir | COM-07b; lote C8 | — |
+| COM-08a | Cobro de suministros y mora (paso diario 30) (D-94) | comercial | pendiente | COM-07b | `comercial/COM-08a-cobro-y-mora.md` |
+| COM-08b | Anular un cobro y cobrar lo entregado al cancelar una compra-venta (D-94) | comercial | pendiente | COM-08a | `comercial/COM-08b-anular-cobro-y-cobro-al-cancelar.md` |
+| COM-08c | Estadísticas comerciales y «Resultados del mes en curso» (D-94) | comercial | pendiente | COM-08b (o en paralelo con ella) | `comercial/COM-08c-estadisticas.md` |
 
 ### Ronda «IoT 1» (D-70 a D-79)
 
@@ -101,3 +108,52 @@ No tienen archivo: su registro está en `docs/historial.md`. Los IDs nuevos sirv
 
 - **USR-10** (`docs/tareas/core/USR-10-envio-de-correo-publico.md`, D-54): función pública de correo de `core`. Se hace después de la ronda y antes de COM-02 y de IOT-04 (el correo del IoT lo manda la revisión periódica, D-71).
 - **IOT-01 a IOT-07** (módulo `iot`): ver «Ronda «IoT 1»» arriba y `docs/tareas/ronda_iot_1.md`.
+
+### Ronda «Contabilidad 1» (D-84 a D-86; reabre casos de uso en CON-04)
+
+Plan completo en `docs/tareas/ronda_contabilidad_1.md`. **Es la primera de las tres rondas nuevas** (el núcleo contable va primero, A0 P1(a)):
+compras y estadísticas dependen de ella. Las tareas están en orden de implementación.
+
+| ID | Título | App | Estado | Depende de / espera | Archivo |
+|---|---|---|---|---|---|
+| USR-11 | El rol Contador y quién registra los asientos | core (y `contabilidad/servicios/responsables.py`) | pendiente | — | `core/USR-11-rol-contador.md` |
+| CON-02 | Núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos | contabilidad | pendiente | USR-11, CON-01 (hecha) | `contabilidad/CON-02-nucleo-contable.md` |
+| CON-03a | Libro de gestión, plan de cuentas y ejercicios (con el cierre) | contabilidad | pendiente | CON-02 | `contabilidad/CON-03a-libro-plan-y-ejercicios.md` |
+| CON-03b | Asientos manuales y contraasientos | contabilidad | pendiente | CON-03a | `contabilidad/CON-03b-asientos-manuales-y-contraasientos.md` |
+
+### Ronda «Compras 1» (D-87 a D-91)
+
+Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a la contabilidad; CMP-04 espera a CON-02 y CMP-05, además, a USR-11.
+
+| ID | Título | App | Estado | Depende de / espera | Archivo |
+|---|---|---|---|---|---|
+| CMP-01 | App `compras` y proveedores | compras | pendiente | INV-02 (hecha) | `compras/CMP-01-app-compras-y-proveedores.md` |
+| CMP-02a | Pedido de cotización y portal del proveedor | compras (y una constante en core) | pendiente | CMP-01, USR-10 (hecha) | `compras/CMP-02a-pedido-y-portal-del-proveedor.md` |
+| CMP-02b | Cancelar pedido, reenviar invitación y lo que cancela solo | compras | pendiente | CMP-02a | `compras/CMP-02b-cancelar-reenviar-y-bajas.md` |
+| CMP-03 | Orden de compra y pasos diarios 60 a 62 | compras (y el tránsito en inventario) | pendiente | CMP-02b | `compras/CMP-03-orden-de-compra-y-pasos-diarios.md` |
+| CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario) | pendiente | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
+| CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11, CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
+| CMP-06 | Corrección de recepción y reclamos | compras (y un tipo en inventario) | pendiente | CMP-05 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
+
+### Ronda «Contabilidad 2» (D-92; reaperturas y lote existente)
+
+Plan completo en `docs/tareas/ronda_contabilidad_2.md`. CON-04b y PRD-05 van apenas esté CON-02; CON-04c y CON-04d esperan a Comercial (y se
+achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
+
+| ID | Título | App | Estado | Depende de / espera | Archivo |
+|---|---|---|---|---|---|
+| CON-04b | Asientos de los ajustes de stock | inventario | pendiente | CON-02 | `contabilidad/CON-04b-asientos-de-inventario.md` |
+| PRD-05 | Registrar Lote Existente | produccion | pendiente | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
+| CON-04a | Asientos de producción (reapertura) | produccion | pendiente | CON-02 (PRD-04, hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
+| CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | pendiente | CON-02, COM-04a, COM-04b, COM-06a | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
+| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11, COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
+
+### Ronda «Estadísticas 1» (D-93)
+
+Plan completo en `docs/tareas/ronda_estadisticas_1.md`. Va última; EST-03 espera a COM-08c.
+
+| ID | Título | App | Estado | Depende de / espera | Archivo |
+|---|---|---|---|---|---|
+| EST-01 | App `estadisticas` y estadísticas de producción | estadisticas | pendiente | PRD-03 (hecha); mejor después de CON-04a | `estadisticas/EST-01-app-y-estadisticas-de-produccion.md` |
+| EST-02 | Estadísticas consolidadas del Gerente | estadisticas | pendiente | EST-01, CON-03a, CMP-06 | `estadisticas/EST-02-estadisticas-consolidadas.md` |
+| EST-03 | Lo comercial dentro de las consolidadas | estadisticas | pendiente | EST-02, COM-08c | `estadisticas/EST-03-estadisticas-comerciales-en-las-consolidadas.md` |

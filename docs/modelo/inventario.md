@@ -102,7 +102,7 @@ y su precio de referencia propios. Es **parte del invernadero** (R131, composici
 | `idInsumoInvernadero` | — | El `id` automático |
 | `/cantActualInsumo` | **derivado** | → función `stock_actual`. Suma de `cantidad_disponible` de sus lotes, incluido el faltante sin lote. Puede ser negativo. **No se guarda** (regla 3 de 8.23) |
 | `cantMinInsumo` | cantidad ≥ 0, con los decimales de la unidad | → `cant_min_insumo` |
-| `cantTransitoInsumo` | cantidad ≥ 0 | → `cant_transito_insumo`. **En esta ronda vale 0 y solo la escribirá `compras`** (D-45). La columna existe |
+| `cantTransitoInsumo` | cantidad ≥ 0 | → `cant_transito_insumo`. Lo escribe `compras` (CMP-03 al aprobar, CMP-04 al recibir o cerrar con faltante, CMP-06 al corregir), siempre con `sumar_transito` y `restar_transito` (D-90). La columna existe |
 | `referenciaPrecio` | precio > 0, 2 decimales | → `referencia_precio`. Precio por unidad puesto en el invernadero, con flete; lo mantiene el Agrónomo (regla 6 de 8.18) |
 | `estadoInsumoInvernadero` | activo / inactivo | → `estado_insumo_invernadero`. Baja: regla 3 de 8.4 |
 
@@ -180,7 +180,7 @@ movimiento de ese lote (regla 1 de 8.19). Una operación que toca varios lotes g
 | `idMovimientoInsumo` | — | El `id` automático |
 | `fecha` | fecha y hora | → `fecha`. La fecha de la operación con la hora actual. En una salida por consumo de siembra, la fecha es la **efectiva** de la siembra (que puede ser anterior a hoy; D-50 punto 7) |
 | `cantidad` | cantidad > 0 | → `cantidad`. Siempre positiva: el sentido lo da el tipo |
-| `tipo_movimiento` | ingreso por recepción / salida por consumo / ajuste positivo / ajuste negativo / salida por corrección entre lotes / entrada por corrección entre lotes | `tipo_movimiento` (`TextChoices`; no se llama `tipo` porque choca con `OrigenDocumento.tipo`, D-52). En esta ronda se crean los cuatro últimos y «salida por consumo»; el ingreso por recepción lo crea `compras` |
+| `tipo_movimiento` | ingreso por recepción / salida por consumo / ajuste positivo / ajuste negativo / salida por corrección entre lotes / entrada por corrección entre lotes / salida por corrección de recepción (D-90, la crea CMP-06) | `tipo_movimiento` (`TextChoices`; no se llama `tipo` porque choca con `OrigenDocumento.tipo`, D-52). En esta ronda se crean los cuatro últimos y «salida por consumo»; el ingreso por recepción lo crea CMP-04 y la salida por corrección de recepción, CMP-06 |
 | `motivoAjuste` | recuento físico / rotura o pérdida / carga inicial / vencimiento / otro | → `motivo_ajuste`. Solo en ajustes. **La corrección entre lotes no es un motivo guardado**: se guarda con sus dos tipos propios, aunque la pantalla la ofrece como un motivo más |
 | `descripcionAjuste` | texto libre | → `descripcion_ajuste`. Solo en ajustes; obligatoria si el motivo es «otro» |
 
@@ -190,7 +190,7 @@ movimiento de ese lote (regla 1 de 8.19). Una operación que toca varios lotes g
 |---|---|---|---|
 | R166 | LoteInsumo, «afecta» | MovimientoInsumo → LoteInsumo = 1 | Vigente. Clave foránea `lote_insumo`, protegida |
 | R016 | OrigenDocumento, «se origina» | MovimientoInsumo → OrigenDocumento = 0..1; OrigenDocumento → MovimientoInsumo = 0..* | **Vigente desde D-52.** `origen`: clave foránea nula a `contabilidad.OrigenDocumento`, `PROTECT`, `related_name="movimientos_de_insumo"`. **Reemplaza a `movimiento_origen`**: la entrada por corrección entre lotes apunta a su salida (que es un documento, porque `MovimientoInsumo` hereda de `OrigenDocumento`); la salida por consumo apunta al `Consumo` (lo recibe de `produccion` como `origen_id`); el ingreso por recepción apuntará a la recepción (`compras`, ronda futura) |
-| R016 / R032 | Consumo / DetalleRecepcion | | **Ya no hay tabla de enlace (D-52):** el consumo (`produccion`) y la recepción (`compras`) son documentos de origen y sus movimientos los apuntan con `origen`. Se leen con `consumo.movimientos_de_insumo` |
+| R016 / R032 | Consumo / DetalleRecepcion | | **Ya no hay tabla de enlace (D-52):** el consumo (`produccion`) y la recepción (`compras`) son documentos de origen y sus movimientos los apuntan con `origen`. Se leen con `consumo.movimientos_de_insumo`. La línea de la recepción se une a sus movimientos por `compras.DetalleRecepcionMovimiento` (D-90): una recepción tiene varias líneas y `origen` solo dice la recepción |
 | R040 | Lote (de plantas), «asocia» | 0..1 – 0..* | **Se deriva, no se guarda (D-52 punto 6):** en una siembra, por `consumo.siembra.lote`; en una aplicación, por las imputaciones del consumo |
 
 Herencias: **hereda de `OrigenDocumento`** (`contabilidad`, D-52): se implementa como herencia multitabla de Django, con clave primaria `origendocumento_ptr` y `tipo = movimiento_de_insumo`. Cada movimiento de ajuste es su propio documento de origen (regla 3 de 8.19); el asiento que origina está fuera de la ronda (D-45).

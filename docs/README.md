@@ -23,12 +23,17 @@ docs/
 ├── revisiones_pendientes.md      listas completas de verificación a mano. Solo si el estudiante lo pide
 ├── temas_abiertos.md             temas sin tarea ni disparador. Al planificar
 ├── disparadores.md               «cuando exista X, hay que hacer Y». Cuando la tarea crea modelos
-├── api/                          contratos entre apps: alertas, notificaciones, correo (`core/correo.py`, D-54), puntos de extensión de maestros, de inventario y de producción, stock, variedades, producción y direcciones; `nodo/`, el contrato con el nodo central del IoT (v1: guía, mensajes, errores, ejemplos y el flujo de Node-RED; lote I2a)
+├── api/                          contratos entre apps: asientos (D-86), alertas, notificaciones, correo (`core/correo.py`, D-54), puntos de extensión de maestros, de inventario y de producción, stock, variedades, producción y direcciones; `nodo/`, el contrato con el nodo central del IoT (v1: guía, mensajes, errores, ejemplos y el flujo de Node-RED; lote I2a)
 ├── tareas/
 │   ├── README.md                 índice de tareas pendientes de todas las apps. Al elegir la próxima
 │   ├── ronda_produccion_1.md     plan completo de la ronda: tareas, orden, casos de uso, pantallas y lotes de documentación
 │   ├── ronda_comercial_1.md      ídem, ronda «Comercial 1» (con cosecha; en paralelo con el IoT)
 │   ├── ronda_iot_1.md            ídem, ronda «IoT 1» (D-70 a D-79; IOT-01 e IOT-02 en paralelo con producción)
+│   ├── ronda_contabilidad_1.md   ídem, rondas nuevas: «Contabilidad 1» y «Contabilidad 2» (D-84 a D-86, D-92),
+│   ├── ronda_contabilidad_2.md     «Compras 1» (D-87 a D-91) y «Estadísticas 1» (D-93)
+│   ├── ronda_compras_1.md
+│   ├── ronda_estadisticas_1.md
+│   ├── orden_de_implementacion.md  qué tarea sigue, de las tres rondas nuevas
 │   ├── _plantilla.md             plantilla de una tarea (un bloque funcional, con pasos)
 │   └── <app>/<ID>-<nombre>.md    la orden de trabajo. Primero, al empezar
 ├── decisiones/
@@ -43,7 +48,9 @@ docs/
 │   ├── stock.md                  stock libre, reservas, FEFO y «faltante sin lote» (lote 2)
 │   ├── costo_del_lote.md         costo acumulado y costo por planta sin asientos (lote 4, D-50)
 │   ├── stock_maduro.md           stock maduro, reservas, períodos, cosecha, cámara y faltantes (comercial, D-59, D-64)
-│   └── enlace_del_cliente.md     el enlace de un solo uso que recibe un cliente sin cuenta (D-65)
+│   ├── enlace_del_cliente.md     el enlace de un solo uso que recibe un cliente sin cuenta (D-65)
+│   ├── enlace_del_proveedor.md   el mismo patrón para el proveedor que cotiza sin cuenta (D-88)
+│   └── asientos.md               cómo una operación genera su asiento automático (D-86)
 ├── casos_de_uso/
 │   ├── _plantilla.md             encabezado y secciones de un extracto
 │   ├── usuarios.md, auditoria.md (quedan donde están)
@@ -60,9 +67,13 @@ docs/
     ├── comercial/
     │   ├── README.md             ídem, con la línea de cada sobrescritura (ronda «Comercial 1»)
     │   └── comercial_y_cosecha.html
-    └── iot/
-        ├── README.md             ídem, con la línea de cada función (ronda «IoT 1»)
-        └── iot.html              el prototipo del IoT v8.5
+    ├── iot/
+    │   ├── README.md             ídem, con la línea de cada función (ronda «IoT 1»)
+    │   └── iot.html              el prototipo del IoT v8.5
+    └── compras_contabilidad/
+        ├── README.md             ídem, rondas nuevas (contabilidad, compras, estadísticas)
+        ├── nota_de_cobertura.md  qué pantalla cumple cada caso de uso
+        └── compras_contabilidad_y_estadisticas.html
 ```
 
 Fuera de `docs/`, el esquema también cambia `CLAUDE.md`, `.claude/rules/pruebas.md`, `.claude/rules/interfaz.md` y

@@ -279,6 +279,22 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 | El extracto de COM-RSV-SUM | El plan decía `comercial/suministro.md`; va en `comercial/resolucion.md` porque `suministro.md` ya pasa de mil líneas y COM-07b no necesita leer COM-PCT-SUM ni COM-MOD-SUM. `suministro.md` remite al nuevo | — |
 | Pendientes de Drive del lote C7 | pendientes_CU: COM-EVL-DSC v0.3 con la extensión 6d (MD-115) y «Lo sigue: COM-ANL-SRV»; COM-ANL-SRV v0.2 con la alerta (D-69 punto 4), los bloqueos 2a y 2c (punto 5) y la bitácora (punto 6); COM-CNS-SRV, regla 6 (punto 16); COM-RSV-SUM, las dos filas de arriba. pendientes_MD: el tipo de bitácora «anulación de una resolución»; que MD-115 diga que el descuento y el reintegro se registran en la solicitud | Al pegar en Drive |
 
+## Abiertos desde el lote C8 de «Comercial 1» (23/11/2026)
+
+| Tema | Qué falta | Cuándo |
+|---|---|---|
+| D-94 completa | La propuso Claude con el lote (el estudiante pidió escribirlo sin validar el corte antes). Los más discutibles: el corte en tres (punto 1), R154 como `LineaPago` y no `Entrega.pago` (punto 2), la fecha del cobro que corrige uno anulado (punto 10) y las fechas del indicador de faltantes y rechazos (punto 15) | Al validar el lote C8 |
+| Número de la decisión del C8 | El contexto del C8 decía «desde D-80», pero D-80 a D-83 ya las usaron IoT y producción. Con la regla de `docs/decisiones/README.md` («Numeración») es **D-94**; si al abrir el PR está tomada, se renumera | Al abrir el PR del lote |
+| Estado de paso entre COM-08a y COM-08b | Un cobro mal registrado no se puede anular; la extensión 2b de COM-ANL-SRV bloquea para siempre la anulación de una solicitud cuya entrega se cobró con descuento; COM-CNL-CVT sigue rechazando `venta_con_entregas_concretadas`. No rompe datos | Programar COM-08b enseguida de COM-08a |
+| R154 en el modelo | Entrega → PagoCliente = 0..1 no admite el cobro anulado y el correcto de la misma entrega (MD-136): pasa a 0..\*, con a lo sumo un pago vigente. Anotarlo en pendientes_MD | Al pegar en Drive |
+| La fecha del cobro anulado (7a de COM-ANL-CBR) | COM-REG-CBR v0.2 dice «sin fechas retroactivas»; PCU 14 decide que propone la del cobro anulado. D-94 (punto 10) la acota: solo el Gerente, solo las entregas del cobro anulado, una vez. Anotarlo en pendientes_CU (COM-REG-CBR v0.3) | Al pegar en Drive |
+| La indemnización por día después de modificar la cláusula | El atraso se calcula con la cláusula del suministrado **al cobrar** (regla del caso de uso); MD-132 fijó el vencimiento, no el monto por día. Si COM-MOD-SUM cambia ese monto, las entregas ya vencidas y sin cobrar usan el nuevo. Confirmar con el Jardín Botánico si debería ser el vigente al concretar | Al validar el lote C8 |
+| La alerta «pago en mora» con el invernadero dado de baja | La API no crea alertas de un invernadero inactivo: la entrega queda en mora sin alerta (el aviso al Vendedor y el correo salen igual). El Gerente la ve en «Cobranza» | Si el Jardín Botánico lo pide |
+| Fechas del indicador 7 de COM-CNS-EST | El modelo no guarda la fecha de la decisión del cliente ni la del rechazo: D-94 (punto 15) usa `fecha_pendiente_decision`, la concreción de la entrega y la cancelación de la venta. Anotarlo en pendientes_CU | Al pegar en Drive |
+| Índice para las estadísticas | Si `test_com_cns_est.py` muestra consultas lentas por `fecha_resolucion_orden`, hace falta un índice en `OrdenTrabajo` (migración de `produccion`): no entra en COM-08c | Al programar COM-08c |
+| `ordenes_cancelables` y las cosechas | El código de PRD-01 cruza `TIPOS_DE_PRODUCCION` con `TIPOS_QUE_CANCELA_PRODUCCION` y no lista cosechas; D-67 (1e) esperaba que COM-04a las mostrara. Corrección del C8: COM-02 ya no le pone `exclude` y COM-04a la cambia para que liste todos los de `TIPOS_DE_PRODUCCION`, con la acción «Cancelar» de `comercial` en la fila de una cosecha. A validar | Al validar el lote C8 |
+| Pendientes de Drive del lote C8 | pendientes_CU: COM-REG-CBR v0.3 («en mora»; la fecha de 7a; «Lo sigue: COM-ANL-CBR»; COM-VNC-PAG como paso 30); COM-VNC-PAG v0.2 («pago en mora»; la regla 7 definida); COM-CNS-EST (fechas del indicador 7). pendientes_MD: R154 en 0..\* | Al pegar en Drive |
+
 ## Abiertos desde INV-03 (22/11/2026)
 
 - **Lo implementado distinto de lo escrito, o que la tarea no decía** (detalle en el «Cierre» del archivo de la tarea):
@@ -365,7 +381,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 | Acceso al envasado «desde la notificación» | PROD-PNF-ENV (1a y un requisito especial) pide un acceso directo desde la notificación de COM-PNF-ENT; las notificaciones no tienen enlace (D-42). El texto dice dónde está | pendientes_CU (PROD-PNF-ENV); o ampliar `core.notificaciones` con un enlace (cambio de D-42) |
 | Entre COM-05a y COM-05b (desde el C5b: entre COM-05a1 y COM-05b) | Mergeada COM-05a y no COM-05b, un transportista con entregas no se puede quitar ni trasladar (`transportista_con_entregas`) y todavía no hay «Asignar transportista»; tampoco se concretan (COM-06). No rompe nada: es un estado de paso | Programar COM-05b enseguida de COM-05a |
 | ~~Exceso de envases al concretar~~ | ~~La regla 21 de 8.8 admite usar más envases que los reservados; PRD-01 tiene restricciones que lo impiden~~ | **Cerrado en el lote C6 (D-68, punto 2, opción A, 22/11/2026):** las restricciones no cambian; el exceso va en el consumo del envase |
-| ~~Números de decisión de «Comercial 1»~~ | ~~Quedan D-67 a D-69 para los lotes C5b a C8~~ ~~El C5b usó D-67: quedan D-68 y D-69 para C6 a C8~~ ~~El C6 usó D-68: queda D-69 para C7 y C8~~ | **Cerrado el 22/11/2026:** el C7 usó D-69; el C8 empieza en **D-80** (`docs/decisiones/README.md`) |
+| ~~Números de decisión de «Comercial 1»~~ | ~~Quedan D-67 a D-69 para los lotes C5b a C8~~ ~~El C5b usó D-67: quedan D-68 y D-69 para C6 a C8~~ ~~El C6 usó D-68: queda D-69 para C7 y C8~~ | **Cerrado el 22/11/2026:** el C7 usó D-69; ~~el C8 empieza en D-80~~ el C8 toma la siguiente libre al escribirse: **D-94** (23/11/2026; `docs/decisiones/README.md`, «Numeración») |
 | ~~D-66, punto 3: los datos copiados en `Entrega`~~ | `contrato`, `modalidad_entrega` y `direccion_destino` se guardan en la entrega aunque se deducen de sus detalles. Preocupación del estudiante: que no coincidan. Respuesta del 22/11/2026: las tres son claves que apuntan a las mismas filas (no copian valores), se escriben una sola vez al crear la entrega y su fuente no cambia (una compra-venta no se modifica; COM-MOD-SUM no cambia la dirección de un detalle: crea un sucesor con la misma, MD-131). Propuesta de refuerzo: una sola función las escribe, el servicio rechaza un detalle de otro contrato, modalidad o dirección, y `verificar_invariantes_de_entregas` lo revisa en cada prueba que escribe. La otra opción es no guardarlas y calcularlas desde los detalles | **Cerrado el 22/11/2026: opción A** (guardarlas con los refuerzos; D-66, punto 3) |
 | Pendientes de Drive del lote C5a | pendientes_CU: COM-PNF-ENT (D-66 punto 7; la postcondición n de PCU 8 ya está decidida) y PROD-PNF-ENV (1a). «CU extendidos»: la tercera enmienda de D-62 no toca casos de uso. pendientes_MD: nada nuevo (lo del modelo es del código, `docs/modelo/comercial.md`, «Pendientes de MD») | Al pegar en Drive |
 
@@ -463,4 +479,10 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Descripción de la `Reubicacion`:** lleva las plantas por destino («… a Germinación 2 (25) y Germinación 3 (10).»).
 - **Cargador de verificación:** el sector ya fuera de servicio es de Maduración (el ciclo de la variedad de prueba exige un sector de cada etapa) y no se vuelve a sacar de servicio uno que ya se activó.
 
+## Abiertos desde la documentación de Contabilidad, Compras y Estadísticas (23/11/2026)
 
+- **Numeración de decisiones.** Contabilidad, Compras y Estadísticas usan D-84 a D-93 (aprobadas); la del lote C8 de Comercial, escrita como
+  D-84, pasó a **D-94** en el mismo paquete (regla de `docs/decisiones/README.md`).
+- **Fecha del contraasiento.** El prototipo la limita al ejercicio del asiento original; el caso de uso (C3) deja elegir cualquier fecha de un
+  ejercicio abierto o en cierre. Las tareas siguen el caso de uso.
+- **Indicadores de estadísticas (D-93).** Son provisorios: se revisan después de la entrevista a un productor (H26).

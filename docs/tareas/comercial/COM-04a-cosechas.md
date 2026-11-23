@@ -88,10 +88,15 @@ que queda «pendiente de decisión del cliente» no tiene todavía enlace ni pan
     `aplicar_merma_de_partida`, `vencer_partida`, `partidas_del_invernadero`, aunque sus casos de uso sean de COM-04b; **y las de la sección 10**,
     `aplicar_merma_de_entrega`, `egresar_de_partida`, `devolver_a_partida`, `cerrar_reserva` y `registrar_consumo_de_orden`, aunque las use
     COM-06a; **y la de la sección 11**, `bitacora.registrar_evento_de_contrato`, aunque la use COM-07a); los puntos 3 y 4 de
-    `extensiones.py`; el impedimento `partidas_en_camara`; **quitar los tres `exclude(tipo=COSECHA)` «hasta COM-04a»** que dejó COM-02 en la
-    bandeja, la lista y las cancelables (D-67, punto 1e), para que muestren las cosechas con las acciones de `comercial` por los puntos
-    nuevos; el filtro «Cosecha» de la bitácora (y los de los dos tipos de la sección 11). **Las pruebas existentes de `produccion` no se modifican** salvo las que esperaban que la
-    bandeja, la lista y las cancelables excluyeran las cosechas (las de COM-02): anotalas en el PR;
+    `extensiones.py`; el impedimento `partidas_en_camara`; **quitar los dos `exclude(tipo_orden=COSECHA)` «hasta COM-04a»** que dejó COM-02 en la
+    bandeja y la lista, y **cambiar `ordenes_cancelables`** para que liste todos los `TIPOS_DE_PRODUCCION` (el código de PRD-01 la cruza con
+    `TIPOS_QUE_CANCELA_PRODUCCION` y deja afuera las cosechas; `cancelar_orden` las sigue rechazando: la fila de una cosecha lleva la acción
+    «Cancelar» de `comercial`) (D-67, punto 1e; lote C8, corrección a validar), para que muestren las cosechas con las acciones de
+    `comercial` por los puntos nuevos; **reemplazar las restricciones `merma_causa_valida` y `bitacora_tipo_evento_valido`** con la lista
+    completa de valores (las de PRD-01 a PRD-03 enumeran los valores: sumarlos a los `choices` no alcanza; `docs/api/produccion.md`, sección
+    10); el filtro «Cosecha» de la bitácora (y los de los dos tipos de la sección 11). **Las pruebas existentes de `produccion` no se modifican** salvo las que esperaban que la
+    bandeja y la lista excluyeran las cosechas (las de COM-02), la de PRD-01 que espera que `ordenes_cancelables` no liste cosechas y las
+    de las dos restricciones reemplazadas (suman los valores nuevos): anotalas en el PR;
   - `core/models.py`: las acciones, `ETIQUETAS`, `VALORES_VISIBLES` (`origen_cosecha`) y `ACCIONES_DE_NEGOCIO`;
   - al cerrar (M3), los textos de `docs/disparadores.md`, `docs/tareas/README.md`, `docs/tareas/ronda_comercial_1.md` y `docs/estado.md`.
 - Dependencias nuevas: ninguna.
@@ -173,6 +178,12 @@ recortan las restricciones de la base, los bloqueos, la huella de PROD-MOD-CSC n
   python manage.py test comercial produccion --keepdb --tag concurrencia
 
 ## Verificación a mano (la completa Claude Code al cerrar)
+
+**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
+al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
+`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
+cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
+siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
 
 Hay migraciones nuevas (`produccion`, `contabilidad`, `comercial`, `core`): `python manage.py migrate`. Datos: los de COM-03b (un invernadero
 con Agrónomo, Capataz y Vendedor y un lote de «Lechuga Crespa» en Maduración con 300 plantas libres en dos sectores); un cliente con correo.

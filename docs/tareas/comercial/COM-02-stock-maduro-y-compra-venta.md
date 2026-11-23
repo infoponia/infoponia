@@ -72,9 +72,9 @@ pruebas). Además, el cambio de Vendedor de un invernadero pasa sus compra-venta
 - Permitido fuera de la app:
   - `produccion`: los dos modelos y su admin de solo lectura; la restricción de la prioridad de la cosecha; `produccion/extensiones.py` (nuevo, tal
     cual `docs/api/extensiones_de_produccion.md`); en `servicios/ordenes.py`, sumar `Cosecha` a la unión de `ordenes_del_capataz` y al
-    traspaso del Capataz, y **excluirla** de la bandeja del Capataz, de la lista del Agrónomo y de `ordenes_cancelables` (un
-    `exclude(tipo=COSECHA)` en cada una, con el comentario «hasta COM-04a»: `cosecha` ya está en `TIPOS_DE_PRODUCCION` desde PRD-01, D-67
-    punto 1e); en
+    traspaso del Capataz (agregándola a `_HIJAS_CON_CAPATAZ`, que PRD-02 dejó con sus relaciones por clase), y **excluirla** de la bandeja del
+    Capataz y de la lista del Agrónomo (un `exclude(tipo_orden=COSECHA)` en cada una, con el comentario «hasta COM-04a»: `cosecha` ya está en
+    `TIPOS_DE_PRODUCCION` desde PRD-01, D-67 punto 1e; `ordenes_cancelables` no lo necesita: el código de PRD-01 ya la deja afuera); en
     `servicios/mermas.py`, la condición 1 de plantas comprometidas; si PRD-01 contó los impedimentos de baja del invernadero o de la variedad
     por hija y no por `OrdenTrabajo`, sumar `Cosecha`; si la función del número de orden quedó privada, hacerla pública sin cambiarla;
     pruebas nuevas en `produccion/tests/test_extensiones.py` y `test_cosecha_en_produccion.py`. **Ninguna prueba existente de `produccion`
@@ -96,7 +96,7 @@ pruebas). Además, el cambio de Vendedor de un invernadero pasa sus compra-venta
      obligatoria; `OrigenDocumento.Tipo.CONTRATO`.
    - `produccion/extensiones.py` con los dos puntos y sus funciones de uso.
    - `ordenes_del_capataz` suma `Cosecha` (sin consultas por fila); el traspaso del Capataz actualiza `capataz` también en las cosechas «a
-     realizar»; bandeja, lista del Agrónomo y cancelables las excluyen (hasta COM-04a).
+     realizar»; bandeja y lista del Agrónomo las excluyen (hasta COM-04a); las cancelables ya las excluyen (PRD-01).
    - `aplicar_merma`: condición 1 de plantas comprometidas con `reservado_de_lotes`.
    - Fábricas en `produccion/tests/fabricas.py` (si las fábricas de PRD-01 no tienen ya una de lote en Maduración, sumá `lote_maduro`).
    Pruebas: `produccion/tests/test_cosecha_en_produccion.py` (restricciones; `ordenes_del_capataz` con una cosecha; traspaso del Capataz con
@@ -142,8 +142,10 @@ pruebas). Además, el cambio de Vendedor de un invernadero pasa sus compra-venta
    COM-02»; anotalas en el PR); `test_traspaso_de_vendedor.py` (los dos casos de D-60, punto 2, sin entrante, y con el `contar` en la ventana
    de PROD-MOD-INV); `test_impedimento_de_variedad.py` (las tres pruebas mínimas).
 7. **Vistas, plantillas y pestaña.** `compra_venta.md`, «Pantallas»: la pestaña «Contratos» primera y `/comercial/` redirigiendo a ella; el
-   formulario con sus tres secciones, el recálculo con HTMX (`hx-post` a `calcular/`, `hx-trigger` con retardo de 350 ms en los campos de
-   texto), la ventana de resumen, la ficha, el comprobante imprimible y «Reenviar comprobante». Las vistas solo orquestan (`abm.md`, sección
+   formulario con sus tres secciones, el recálculo con HTMX (`hx-post` a `calcular/`, **solo** al cambiar un selector —cliente, Vendedor, modalidad, invernadero,
+   variedad— y con «Actualizar» o «Revisar y registrar»; **nunca mientras se tipea**: nada de `hx-trigger` con retardo en los campos de
+   texto, de número o de fecha; los selectores redibujan sin validar, con `hx-swap="innerHTML show:none"` y `data-sin-envio-en-curso`:
+   `.claude/rules/interfaz.md`, «Validaciones e interacción HTMX», desde INV-02), la ventana de resumen, la ficha, el comprobante imprimible y «Reenviar comprobante». Las vistas solo orquestan (`abm.md`, sección
    1), con `rol_requerido`, `never_cache` y `vary_on_headers("HX-Request")`; respaldo sin JavaScript; errores por campo; aviso breve (D-29).
    Pruebas: `comercial/tests/test_compra_ventas_vistas.py` (`ComRegCvtVistaTests`, `ComCnsCvtVistaTests`): permisos (los demás roles, 403;
    ningún botón lleva a un 403; el Vendedor no ve el filtro Vendedor); el flujo completo con HTMX y sin él; `volver` desde el alta del cliente
@@ -175,6 +177,12 @@ concurrencia.
   python manage.py test comercial produccion --keepdb --tag concurrencia
 
 ## Verificación a mano (la completa Claude Code al cerrar)
+
+**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
+al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
+`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
+cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
+siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
 
 Hay migraciones nuevas (`produccion`, `contabilidad`, `comercial`, `core`): `python manage.py migrate`. Datos: un invernadero con Agrónomo,
 Capataz y Vendedor activos y un lote de «Lechuga Crespa» en Maduración (el de la verificación de PRD-02, o llevá uno con sus transiciones);

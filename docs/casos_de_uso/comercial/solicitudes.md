@@ -766,9 +766,10 @@ a. Ninguna: es una consulta.
 - **COM-07b:** COM-RSV-SUM (lo que dispara la extensión 6b de los dos casos de uso: COM-07a llama a `resoluciones.resolver_si_corresponde`,
   que hasta COM-07b no hace nada, D-69 punto 13) y la extensión 2a de COM-ANL-SRV con datos reales (el campo y la verificación los deja
   COM-07a; los carga COM-07b).
-- **COM-08:** una entrega de suministro «pagada» (6a de COM-EVL-DSC y de COM-RSV-QJA; el cobro de sus 8b; 2b de COM-ANL-SRV). Se escriben con
-  `entregas.estado_de_pago` (que hasta COM-08 nunca devuelve «pagada») y se prueban con una fábrica que simula la entrega pagada con
-  `mock.patch`; COM-08 las prueba con datos reales. `Anulacion.pago` y `cliente_pago_en_fecha` (COM-ANL-CBR).
+- **COM-08a** (lote C8; D-94, punto 1): una entrega de suministro «pagada» (6a de COM-EVL-DSC y de COM-RSV-QJA; el cobro de sus 8b; 2b de COM-ANL-SRV). Se escriben con
+  `entregas.estado_de_pago` (que hasta COM-08a nunca devuelve «pagada») y se prueban con una fábrica que simula la entrega pagada con
+  `mock.patch`; COM-08a las prueba con datos reales (`cobranza.md`, «Lo que completa a otras tareas»). `Anulacion.pago` y
+  `cliente_pago_en_fecha` (COM-ANL-CBR): **COM-08b**.
 - **Fuera de esta ronda · contabilidad** (D-57): precondición c, asientos, contraasiento. El código guarda todo lo que esos asientos necesitan
   (el monto, lo descontado, lo reintegrado y el medio) y no crea asientos.
 
@@ -916,7 +917,7 @@ nuevo en `verificar_invariantes_de_solicitudes` lo prueba). Las pruebas de COM-0
 - **Bloqueos de 2a a 2c** (D-69, punto 5), en `datos_de_anulacion` y otra vez bajo bloqueo:
   - **2a** (`resolucion_del_contrato`): `suministro.solicitud_resolucion_id == solicitud.id`. «No se puede anular: esta aceptación resolvió el
     contrato SUM-0013.» El campo lo crea COM-07a (vacío) y lo carga COM-07b: hasta entonces 2a se prueba con una fábrica que lo carga.
-  - **2b** (`entrega_cobrada`): aceptada con `monto_descontado > 0` y la entrega «pagada» (`estado_de_pago`; desde COM-08). «Primero anulá el
+  - **2b** (`entrega_cobrada`): aceptada con `monto_descontado > 0` y la entrega «pagada» (`estado_de_pago`; desde COM-08a). «Primero anulá el
     cobro de OT-0231 (Anular cobro).»
   - **2c** (`indemnizacion_reintegrada`): `monto_reintegrado > 0`. «No se puede anular: la indemnización ya se le reintegró al cliente
     ($ 1.200,00 por transferencia).»
@@ -974,7 +975,7 @@ Referencia visual (D-61): `docs/prototipos/comercial/` (`README.md`). Vale la ve
 
 - **Panel de control (comparado con lo que va a estar implementado, plan de la ronda, sección 5):** el grupo «Solicitudes» va dentro de
   la sección «Comercial» que registró COM-05a2 con `registrar_seccion_de_inicio` (grupo «Entregas»), después de él; COM-07a suma su
-  indicador en la **misma** sección (no registra otra) y COM-08 sumará «Cobranza». Para el Vendedor no se muestra (regla 4 de COM-CNS-SRV:
+  indicador en la **misma** sección (no registra otra) y COM-08a sumará «Cobranza» (y COM-08c, para el Vendedor, «Resultados del mes en curso»). Para el Vendedor no se muestra (regla 4 de COM-CNS-SRV:
   la resuelve el Gerente).
 - **Campana:** las alertas de discrepancia y de queja ya salen (COM-06a, COM-06b); COM-07a solo cambia su enlace.
 - **Menú:** sin cambios (la pestaña es de «Comercial»).
@@ -1035,7 +1036,7 @@ Referencia visual (D-61): `docs/prototipos/comercial/` (`README.md`). Vale la ve
 ## Para más adelante
 
 - **COM-07b:** COM-RSV-SUM (lo que dispara 6b) y `solicitud_resolucion` cargado (2a con datos reales).
-- **COM-08:** la entrega pagada (6a, el cobro de 8b, 2b) con datos reales; `Anulacion.pago` y `cliente_pago_en_fecha`; COM-REG-CBR cobra el
+- **COM-08a:** la entrega pagada (6a, el cobro de 8b, 2b) con datos reales; **COM-08b:** `Anulacion.pago` y `cliente_pago_en_fecha`; COM-REG-CBR cobra el
   monto a cobrar que deja esta tarea.
 - **Ronda de contabilidad:** los asientos de la indemnización (simple o compuesto) y el contraasiento, originados en la solicitud y en la
   `Anulacion`.

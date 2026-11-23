@@ -43,7 +43,7 @@ Para un CU de otra tarea que **incluye** la cancelación de una orden (PROD-PNF-
 | `ordenes.ordenes_del_capataz(capataz, *, estado=None)` | **La única unión** de las órdenes de un Capataz (D-53): recorre `Siembra` y `TransicionEtapa` (y `Cosecha` cuando exista), filtrada además por `TIPOS_DE_PRODUCCION`, y devuelve filas ya con lo que necesitan la bandeja, el traspaso y el aviso de baja de cuenta. Sin consultas por fila |
 | `ordenes.bandeja_del_capataz(capataz) -> Bandeja` | Con `ordenes_del_capataz`: las órdenes «a realizar» asignadas a ese Capataz, ordenadas por fecha programada, después prioridad (sin valor = media), después `id`; con los grupos «vencidas», «hoy» y «próximas» |
 | `ordenes.lista_de_ordenes(actor, filtros)` | Las órdenes visibles para el actor (Agrónomo a cargo; el Gerente en solo lectura), solo de los tipos de `TIPOS_DE_PRODUCCION` |
-| `ordenes.ordenes_cancelables(actor)` | Las «a realizar» de sus invernaderos, de los tipos de `TIPOS_DE_PRODUCCION`, agrupadas por invernadero y tipo |
+| `ordenes.ordenes_cancelables(actor)` | Las «a realizar» de sus invernaderos, agrupadas por invernadero y tipo. **En PRD-01** (el código), de los tipos de `TIPOS_DE_PRODUCCION` que además están en `TIPOS_QUE_CANCELA_PRODUCCION` (siembra y transición): no lista cosechas. **Desde COM-04a**, de todos los de `TIPOS_DE_PRODUCCION`; la fila de una cosecha lleva la acción «Cancelar» de `comercial` (`registrar_acciones_de_cosecha`), porque `cancelar_orden` la sigue rechazando (lote C8, corrección a validar) |
 | `ordenes.TIPOS_DE_PRODUCCION`, `ordenes.TIPOS_QUE_CANCELA_PRODUCCION` | Constantes (D-67, punto 1): `(SIEMBRA, TRANSICION, COSECHA)`, las órdenes que muestran las pantallas de `produccion` (lista, cancelables, bandeja); `(SIEMBRA, TRANSICION)`, las que acepta `cancelar_orden`. Las listas filtran con `tipo__in`, **nunca** con «todo menos X»: un tipo nuevo no aparece en las pantallas de `produccion` hasta que alguien lo agregue a propósito |
 | `lotes.lotes_activos_de(invernadero_ids)` | Lotes activos con variedad, etapa, cantidad, costo por planta, fecha de entrada a la etapa y fecha estimada de fin |
 | `lotes.fecha_de_entrada_a_la_etapa(lote)` | Regla 5 de 8.21 |
@@ -163,7 +163,7 @@ registro (D-36). Los casos de uso que las llaman viven en `comercial` (D-59, D-6
 | `camara.aplicar_merma_de_partida(partida, cantidad, causa, descripcion, responsable) -> ResultadoMermaDePartida(merma, movimiento)` | `Merma` (hija de `Bitacora`, tipo `merma`) con el lote de origen, **sin etapa**, el invernadero, fecha y hora actuales (regla 8 de 8.9) y `responsable` (`None` = InfoPonia); baja la disponible de la partida; `agotado` si llega a 0; `MovimientoStock` `merma_en_camara` (origen: la merma, `costo_unitario` = el de la partida). No toca el lote ni su costo. `ErrorDeProduccion('merma_supera_partida')` si pasa de la disponible. **No recorta reservas**: eso lo hace `comercial` antes de llamarla |
 | `camara.vencer_partida(partida, hoy) -> ResultadoMermaDePartida \| None` | Si la disponible es mayor que 0, `aplicar_merma_de_partida` con causa `vencimiento_en_camara` y `responsable=None`; la partida queda `vencido` con disponible 0 en todos los casos. `None` si no había nada |
 | `camara.partidas_del_invernadero(invernadero_ids)` | Lectura: partidas con variedad, lote, ingreso, fecha límite, disponible y estado, para la pestaña «Cámara» (lo reservado lo suma `comercial`) |
-| `ordenes.marcar_cancelada(orden, motivo)` y `ordenes.texto_de_cancelacion(orden, motivo, actor) -> (titulo, detalle)` | Lo común de cancelar cualquier orden (estado, fecha de resolución, motivo con su validación y recorte; el texto del aviso con su regla de largo), que PRD-01 ya tiene dentro de `cancelar_orden`: COM-04a lo saca a dos funciones para que la cancelación de una cosecha (`comercial`) no lo duplique. Las pruebas de PRD-01 no cambian |
+| `ordenes.marcar_cancelada(orden, motivo)` y `ordenes.texto_de_cancelacion(orden, motivo, actor) -> (titulo, detalle)` | Lo común de cancelar cualquier orden (estado, fecha de resolución, motivo con su validación y recorte; el texto del aviso con su regla de largo), **Ya existen desde PRD-01** (`produccion/servicios/ordenes.py`, código mergeado): COM-04a las **usa** para que la cancelación de una cosecha (`comercial`) no duplique la lógica; no las escribe ni las cambia |
 | `mermas.aplicar_merma(...)` (cambia) | Suma el `MovimientoStock` `salida_por_merma` del lote (origen: la merma; `costo_unitario` = el costo por planta de antes). Nada más cambia |
 | `mermas.merma_acumulada(lote)` (cambia) | Cuenta solo las mermas **con etapa** (lote en pie, regla 7 de 8.9): las de cámara no suman |
 
@@ -181,7 +181,7 @@ registro (D-36). Los casos de uso que las llaman viven en `comercial` (D-59, D-6
 ## 9. Entregas y mantenimientos frente a `produccion`: lo que deja hecho PRD-01 y lo que suma COM-05a2 (D-66, D-67)
 
 `Entrega` vive en `comercial` y es hija de `OrdenTrabajo` (D-66, punto 2). `produccion` no la conoce por su clase: la ve como una orden de
-`tipo = entrega` (lo mismo que un mantenimiento de IOT-07, hijo de `OrdenTrabajo` en `iot`). Hay dos partes: lo que **deja hecho PRD-01**
+`tipo_orden = entrega` (lo mismo que un mantenimiento de IOT-07, hijo de `OrdenTrabajo` en `iot`). Hay dos partes: lo que **deja hecho PRD-01**
 (D-67, punto 1), que ninguna tarea posterior toca, y lo que **suma COM-05a2** para el envasado (permitido en su tarea).
 
 ### Lo que deja hecho PRD-01 (D-67, punto 1)
@@ -193,7 +193,7 @@ orden de tipo `entrega` o `mantenimiento`:
 |---|---|
 | `ordenes.lista_de_ordenes`, `ordenes.ordenes_cancelables`, `ordenes.ordenes_del_capataz` (y con ella la bandeja) | **No la muestran**: filtran con `TIPOS_DE_PRODUCCION` (`tipo__in`). Las entregas tienen su pantalla «Envasado» (`comercial`); el mantenimiento, la ficha del equipo (`iot`) |
 | `ordenes.cancelar_orden` (la del Agrónomo) | **La rechaza** con `ErrorDeProduccion('orden_no_cancelable')`, sin bloquear ni cambiar nada: acepta solo `TIPOS_QUE_CANCELA_PRODUCCION` (siembra y transición). Una entrega o un mantenimiento solo se cancelan desde otro caso de uso (PROD-CNL-ORD, regla «Órdenes que cancela el Agrónomo»); una cosecha, con `comercial.cancelar_cosecha` (D-64) |
-| `ordenes.cancelar_orden_incluida(actor, orden, motivo)` | **Sí la acepta**, de cualquier tipo, sin dar por hecho Capataz ni sectores y con o sin reservas de insumo. La usan `comercial.servicios.entregas.cancelar_entrega_incluida` (D-66, punto 9) e `iot` (D-73, punto 3) |
+| `ordenes.cancelar_orden_incluida(actor, orden, motivo, *, avisar=False)` | **Sí la acepta**, de cualquier tipo, sin dar por hecho Capataz ni sectores y con o sin reservas de insumo. La usan `comercial.servicios.entregas.cancelar_entrega_incluida` (D-66, punto 9) e `iot` (D-73, punto 3) |
 | El impedimento `ordenes_a_realizar` de la baja del invernadero | **La cuenta**: cuenta las órdenes «a realizar» de todos los tipos (precondición de PROD-BAJ-INV; D-64, punto 12) |
 | `registrar_reservas_de_insumo` (en `inventario`) | **Cuenta sus reservas activas** (las de todas las órdenes): los envases reservados restan del stock libre |
 | `registrar_ordenes_que_reservan` (en `inventario`) | Una orden de un tipo que no está en `TIPOS_DE_PRODUCCION` se nombra «`OT-0231` · <texto del tipo>» («`OT-0231` · Entrega») con `url=None` (`produccion` no conoce la pantalla de `comercial`, y la de envasado es solo del Agrónomo: D-30) |
@@ -202,9 +202,10 @@ orden de tipo `entrega` o `mantenimiento`:
 Las pruebas son de PRD-01, con órdenes sueltas (`orden_suelta(invernadero, tipo, ...)`, sin hija). Cuando existen las hijas, siguen
 valiendo: COM-05a1, COM-05a2 e IOT-07 no las modifican ni suman filtros.
 
-**COM-02 y COM-04a** (D-67, punto 1e): `cosecha` está en `TIPOS_DE_PRODUCCION` desde PRD-01, pero COM-02 la oculta de la bandeja, de la
-lista y de las cancelables hasta COM-04a (las tres con un `exclude(tipo=COSECHA)` y el comentario «hasta COM-04a»), porque antes no hay
-acciones de cosecha; COM-04a quita esas tres líneas.
+**COM-02 y COM-04a** (D-67, punto 1e): `cosecha` está en `TIPOS_DE_PRODUCCION` desde PRD-01, pero COM-02 la oculta de la bandeja y de la
+lista hasta COM-04a (las dos con un `exclude(tipo_orden=COSECHA)` y el comentario «hasta COM-04a»), porque antes no hay acciones de
+cosecha; COM-04a quita esas dos líneas. `ordenes_cancelables` no necesita el `exclude`: el código de PRD-01 ya deja afuera las cosechas
+(las cruza con `TIPOS_QUE_CANCELA_PRODUCCION`); COM-04a la cambia para que liste todos los `TIPOS_DE_PRODUCCION` (sección 2).
 
 ### Lo que suma COM-05a2
 
@@ -233,7 +234,7 @@ filtros por tipo y lo demás de la tabla de PRD-01 **no** se vuelven a probar: y
 
 Lo escribe **COM-04a**, en su única migración de `produccion`, aunque lo use **COM-06a** (COM-CNC-ENT): así `produccion` recibe todos sus
 cambios de la ronda en una tarea (D-67, punto 2; elección del estudiante del 22/11/2026). Las funciones no conocen `Entrega`: reciben una
-`OrdenTrabajo` (la entrega la ve como `tipo = entrega`, sección 9). Son de **núcleo**, como las de la sección 8: corren dentro de la
+`OrdenTrabajo` (la entrega la ve como `tipo_orden = entrega`, sección 9). Son de **núcleo**, como las de la sección 8: corren dentro de la
 transacción de quien llama (sin ella, `RuntimeError`), con lo suyo ya bloqueado por quien llama (`docs/patrones/bloqueos.md`, «Concretar
 una entrega»), **no auditan ni notifican** y devuelven lo que crearon o cambiaron para el único registro del caso de uso (D-36).
 
@@ -242,6 +243,7 @@ una entrega»), **no auditan ni notifican** y devuelven lo que crearon o cambiar
 | Cambio | Qué |
 |---|---|
 | `Merma.Causa` | Suma `dano_en_entrega` («Daño en la entrega», MD-78; postcondición e de COM-CNC-ENT). No se ofrece en PROD-REG-MRM |
+| Restricciones de PRD-01 a PRD-03 | `Merma.Causa` y `Bitacora.TipoEvento` tienen en el código una restricción con la **lista cerrada** de valores (`merma_causa_valida` y `bitacora_tipo_evento_valido`): sumar un valor a los `choices` no alcanza; la migración de COM-04a **reemplaza** las dos restricciones con la lista completa (las causas de cámara y de entrega; los tipos `cosecha`, `incumplimiento_de_clausula` y `anulacion_de_resolucion`) y suma los tipos a `bitacora.TIPOS_DE_FILTRO` (disparador «Cuando exista PRD-03 o PRD-04», punto 2) |
 | `Merma.orden` | FK nula a `OrdenTrabajo`, `PROTECT`, `related_name="mermas_de_orden"` (R084, Merma «presenta» Entrega). Restricción: `orden` no nula ⇔ `causa = dano_en_entrega` |
 | `Consumo.orden` | FK nula a `OrdenTrabajo`, `PROTECT`, `related_name="consumos_de_orden"` (R148, Entrega «genera» Consumo). La restricción de origen de PRD-03 pasa a **exactamente uno de `siembra`, `aplicacion` y `orden`** |
 

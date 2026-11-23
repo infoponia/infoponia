@@ -61,6 +61,9 @@ en los extractos).
 - Crea modelos: `comercial.Cliente`, `comercial.DireccionCliente` y `comercial.Vehiculo` (`docs/modelo/comercial.md`, con todas sus
   restricciones de base) → revisá docs/disparadores.md: cierra «Cuando exista Cliente o CompraVenta» y, en parte, el punto 3 de «Cuando exista
   Entrega»; nacen «Completan el ABM de cliente» y «Completan el ABM de vehículo» (ya escritos en el lote C1).
+- Crea también el cargador de datos de verificación de `comercial` (`comercial/verificacion.py`, con su registro en `ComercialConfig.ready()`
+  y `comercial/tests/test_verificacion.py`; `docs/patrones/datos_de_verificacion.md`): nació después del lote C1 (CLAUDE.md, MAE-02d e
+  IOT-03). Las tareas COM siguientes lo amplían.
 - Migraciones: `comercial/migrations/0001_initial.py` (esquema; depende de la última de `maestros` y de `core`). Una de `core`, solo de
   `choices`, con las ocho acciones nuevas: `00NN_comercial_acciones_de_auditoria`, con el número libre en `main` al abrir el PR. **Ninguna
   en `maestros`.** Ninguna de datos.
@@ -182,6 +185,12 @@ restricciones de la base, los bloqueos ni la API de `maestros`.
   python manage.py test comercial --keepdb --tag concurrencia
 
 ## Verificación a mano (la completa Claude Code al cerrar)
+
+**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
+al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
+`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
+cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
+siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
 
 Hay migraciones nuevas (`comercial` y `core`): `python manage.py migrate`. Cuentas: Gerente, un Vendedor y dos Transportistas (uno ya agregado
 a un invernadero desde «Logística», MAE-05, y otro sin invernadero).

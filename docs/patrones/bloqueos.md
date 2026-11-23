@@ -218,7 +218,7 @@ Orden de las operaciones que reservan stock (compra-venta, suministro, cosecha, 
   - **Resolver o anular una solicitud** (COM-EVL-DSC, COM-RSV-QJA y COM-ANL-SRV, COM-07a): las cuentas (el Gerente y el Vendedor del contrato)
     → el **invernadero de origen** de la entrega (`bloquear_invernadero_para_alertas`: activo o no; escribe la bitácora y resuelve la alerta)
     → el **suministro** (el contador de incumplimientos: dos aceptaciones del mismo contrato quedan en fila) → la **entrega** (el cobro de
-    COM-08 la bloquea también, así no se cobra mientras se registra la aceptación) → la **solicitud** (y su hija) → su `AlertaComercial`. Va
+    COM-08a la bloquea también, así no se cobra mientras se registra la aceptación; «Cobranza», abajo) → la **solicitud** (y su hija) → su `AlertaComercial`. Va
     en el mismo sentido que la concreción (invernadero → contrato → entrega): no se cruzan. Dos solicitudes de entregas de invernaderos
     distintos del mismo contrato toman cada una su invernadero y después el mismo suministro: tampoco se cruzan.
   - **Resolver un suministro** (COM-RSV-SUM, COM-07b): el orden de «Cancelar una compra-venta» con el **suministro** en lugar de la venta:
@@ -229,3 +229,35 @@ Orden de las operaciones que reservan stock (compra-venta, suministro, cosecha, 
     el inicio de ruta y la concreción de una entrega (el invernadero), con la pre-reserva (el invernadero y el suministro) y con una
     aceptación o una anulación del mismo contrato (el invernadero y el suministro). Lo que la lectura previa no vio y aparece al bloquear
     (una fila de otro invernadero) obliga a repetir una vez (6a de COM-RSV-SUM; `docs/casos_de_uso/comercial/resolucion.md`).
+
+- Cobranza (COM-08a y COM-08b, D-94 punto 8).
+  - **Registrar un cobro** (COM-REG-CBR, COM-08a): las cuentas (el actor y los Vendedores de los contratos de las entregas, en orden de id) →
+    los **invernaderos de origen** de las entregas (`bloquear_invernadero_para_alertas`, en orden de id: activos o no; resuelve la alerta
+    «pago en mora») → las **entregas** (en orden de id). Sin el suministro: el cobro no lo cambia. Es una parte del orden de «Resolver o anular
+    una solicitud» (invernadero → suministro → entrega): una aceptación y un cobro de la misma entrega quedan en fila en la entrega y el
+    segundo ve la huella cambiada. Dos cobros de la misma entrega: el segundo ve la línea vigente (10a).
+  - **Anular un cobro** (COM-ANL-CBR, COM-08b): el orden de «Registrar un cobro» → el **pago** y sus líneas. Se cruza bien con el registro del
+    cobro correcto (el pago nuevo nace después) y con la anulación de una solicitud de la misma entrega (la entrega).
+  - **Vencer pagos** (paso 30, COM-08a): por entrega, en su transacción, el invernadero de origen → la entrega.
+  - **Cobrar al cancelar una compra-venta** (6a de COM-CNL-CVT, COM-08b): el orden de «Cancelar una compra-venta», sin cambios; el pago nace
+    al final.
+
+## Contabilidad: el ejercicio se bloquea último (D-86)
+
+Quien crea un asiento (propio o desde otra app) bloquea **todo lo suyo primero** (la operación, las cuentas, los lotes, los orígenes) y el
+`EjercicioContable` destino **al final**, con `select_for_update(no_key=True)`: así dos operaciones distintas que asientan a la vez no se
+cruzan (una espera a la otra solo en el último paso, el de más corta duración). El contraasiento bloquea primero el asiento a anular y
+después el ejercicio. Detalle y receta: `docs/patrones/asientos.md`.
+
+## `compras` (CMP-01 a CMP-06, D-88 y D-90)
+
+Toda operación de compras sigue el orden de `docs/patrones/stock.md`, sección 5, punto 8. Lo particular:
+
+- ABM de proveedores (CMP-01): cuentas → la fila del proveedor. La unicidad del CUIT la asegura la restricción `UNIQUE` (no un bloqueo): la
+  segunda alta concurrente recibe `IntegrityError` y se traduce al mensaje del caso de uso.
+- Enviar una cotización por el enlace (CMP-ENV-COT): `Proveedor` → `Pedido` → `EnlaceProveedor`, y releer los tres (el pedido pudo cancelarse
+  o vencer; el proveedor pudo darse de baja; el enlace pudo usarse en otra pestaña). La única `(pedido, proveedor)` de `Cotizacion` es la red.
+- Cancelar un pedido, aprobar o rechazar una orden: el invernadero de destino primero (si toca tránsito o alertas), después el orden del punto 8.
+- Recepción, cierre con faltante y corrección (CMP-04, CMP-06): leen la orden sin bloquear para saber qué invernaderos e insumos tomar,
+  bloquean en el orden completo (cuentas → invernadero → insumo → `InsumoInvernadero` → lotes → … → ejercicio) y vuelven a leer.
+- El pago (CMP-05): cuentas → `OrdenCompra` → `Pago` → ejercicio. La única `(orden, proveedor)` de `Pago` es la red.

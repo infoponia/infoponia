@@ -42,7 +42,7 @@ Concurrencia: `iot/tests/test_mantenimiento_concurrencia.py` (`@tag("concurrenci
   - `hardware`: `ManyToManyField` a `Hardware`, `related_name="mantenimientos"` (R057, 1..\*: la base no lo garantiza, lo garantiza el
     servicio y lo prueba una prueba de invariante);
   - `alerta`: `OneToOneField` nulo a `maestros.Alerta`, `PROTECT`, `related_name="mantenimiento_tecnico"` (R048);
-  - `save()` fija `tipo = mantenimiento`; nunca cambia;
+  - `save()` fija `tipo_orden = mantenimiento`; nunca cambia;
   - una migración, `00NN_mantenimiento_tecnico`, que depende de la de `produccion`;
   - la fábrica `MantenimientoTecnicoFactory` en `iot/tests/fabricas.py`.
 - **`core`:** ninguna. Las acciones de auditoría ya existen: `resolucion_comando_iot` (IOT-05), `reactivacion_hardware` (IOT-02) y

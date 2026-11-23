@@ -111,7 +111,10 @@ Se suma al orden de `docs/patrones/bloqueos.md` (cuentas → invernadero → ale
 4. `Insumo`;
 5. `InsumoInvernadero`, en orden de id;
 6. `LoteInsumo` del `InsumoInvernadero`, en orden de id (los lotes de varios `InsumoInvernadero`, por `InsumoInvernadero` y por id);
-7. lo de `produccion` (reservas, órdenes, lotes y ocupaciones), después de todo lo anterior.
+7. lo de `produccion` (reservas, órdenes, lotes y ocupaciones), después de todo lo anterior;
+8. lo de `compras` (D-90 punto 5), después de los lotes: `Proveedor` → `Pedido` → `Cotizacion` → `EnlaceProveedor` → `OrdenCompra` →
+   `DetalleOrdenCompra` (en orden de id) → `Recepcion` / `DetalleRecepcion` → `Pago` → `ReclamoProveedor` → `EjercicioContable` al final
+   (D-86). `compras` y `produccion` no se cruzan en una misma transacción (nivel 6, regla A2).
 
 Se puede **saltear** un nivel pero **no volver atrás**. Después de bloquear se vuelve a leer lo que se va a cambiar. Cuando hay que
 saber qué invernaderos bloquear antes de bloquearlos (baja del insumo), se leen sin bloqueo, se bloquean y se vuelve a leer. Una

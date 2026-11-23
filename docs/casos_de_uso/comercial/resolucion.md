@@ -288,7 +288,7 @@ Muy baja: solo cuando un contrato supera los incumplimientos tolerados, más una
   - 2. Contrapartida del asiento de la multa.
   - Situación: la regla 13 de 8.14 fija el Debe (Indemnizaciones por Resolución de Contratos), pero no el Haber. Como el actor es InfoPonia, no hay nadie que elija un medio de pago, y el plan de cuentas del glosario no tiene una cuenta de pasivo para lo que la empresa le debe al cliente.
   - Propuesta: Haber Indemnizaciones a Pagar, cuenta nueva de pasivo, que se cancela cuando el Gerente registra el pago con un asiento manual (CU-17). Hay que registrarla en pendientes_MD (plan de cuentas y regla 13 de 8.14) y en el glosario («Plan de Cuentas»).
-  - Por qué: la multa se devenga al resolverse el contrato, aunque se pague después, igual que la deuda con un proveedor en la cuenta Proveedores (MD-43). Registrar el pago contra Caja o Banco supondría un pago que nadie hizo. Además, el prototipo ya usa una cuenta llamada «Indemnizaciones a pagar» (decisiones de COM-EVL-DSC en pendientes_CU).
+  - Por qué: la multa se devenga al resolverse el contrato, aunque se pague después, igual que la deuda con un proveedor en la cuenta Proveedores (MD-43). **Resuelto (23/11/2026):** la cuenta 2.1.02 «Indemnizaciones a Pagar» (Pasivo) entra al plan de cuentas (D-84 punto 7, aprobada por Ezequiel); su pago lo registra el Contador con un asiento manual (D-92 punto 10). Registrar el pago contra Caja o Banco supondría un pago que nadie hizo. Además, el prototipo ya usa una cuenta llamada «Indemnizaciones a pagar» (decisiones de COM-EVL-DSC en pendientes_CU).
   - 3. Motivo de la partida de cámara.
   - Situación: StockCosechado.motivoCosechado admite «cancelación del cliente», «rechazo por cantidad reducida», «rechazo en la entrega», «cosecha planificada por el Agrónomo» y «excedente de cosecha». Ninguno describe el producto que vuelve a la cámara porque la empresa incumplió el contrato.
   - Propuesta: valor nuevo «resolución del contrato». Hay que registrarlo en pendientes_MD (ficha de StockCosechado y regla 28 de 8.6).
@@ -406,9 +406,9 @@ creadas, las alertas resueltas y la alerta creada. Errores con `ErrorComercial` 
       quedan como estaban (disparador «Resolución de un contrato con rescisión acordada»: la resolución prevalece y el paso 35 ya no lo toma).
    6. **Alertas del contrato que dejan de tener sentido** (regla 7 de 8.18: se resuelven cuando desaparece el hecho): la «período sin cobertura
       completa» activas de los detalles del contrato (una por período: se encuentran por `AlertaComercial.detalle_suministro` y se
-      resuelven con `resolver_alerta_de_estado(invernadero, "comercial_periodo_sin_cobertura", clave=…)`, COM-03b). El
+      resuelven con `resolver_alerta_de_estado(invernadero.pk, "comercial_periodo_sin_cobertura", clave=…)` (la API recibe el id), COM-03b). El
       caso de uso no lo dice (va a pendientes_CU). Las alertas de las solicitudes pendientes **no** cambian: se evalúan como historial.
-   7. **La alerta «suministro resuelto»** (i; D-69 punto 14): `crear_alerta_de_evento(invernadero, "comercial_suministro_resuelto",
+   7. **La alerta «suministro resuelto»** (i; D-69 punto 14): `crear_alerta_de_evento(invernadero.pk, "comercial_suministro_resuelto",
       descripcion)` con su `AlertaComercial(suministro=…)`. Invernadero: el de D-63, punto 2 (el del primer detalle con alguna reserva; si no
       hay, el activo de menor id del Vendedor). Si ese invernadero está inactivo, `crear_alerta_de_evento` devuelve `None`: se usa el activo de
       menor id del Vendedor; si tampoco hay, sin alerta y con aviso al Gerente (D-63, punto 4). Descripción («Lista de tecnología», 6; hasta

@@ -16,9 +16,10 @@ El lote C5a suma `Entrega` y `DetalleEntrega` y `AlertaComercial.entrega` (COM-0
 una compra-venta (COM-05b, MD-130, en «CompraVenta»). El C6 suma lo de la concreción en `Entrega` y `DetalleEntrega`, `PagoCliente`,
 `IntentoFallido`, `SolicitudRevision`, `DiscrepanciaEntrega` y `LineaDiscrepancia` (COM-06a) y `Queja` (COM-06b), con `AlertaComercial.solicitud`
 y el enlace de confirmación (D-68). El C7 suma `Anulacion` (MD-135), la aplicación de la indemnización y el aviso al cliente en
-`SolicitudRevision` y `Suministro.solicitud_resolucion` (COM-07a, D-69). Los nombres COM-03, COM-04, COM-05a, COM-06 y COM-07 de abajo se
-leen con la tabla de la sección 1 del plan (D-67, punto 2; D-68, punto 1; D-69, punto 1); las demás llegan con el lote C8
-(`docs/tareas/ronda_comercial_1.md`, sección 7). `Transportista` vive en `core` (D-01) y su
+`SolicitudRevision` y `Suministro.solicitud_resolucion` (COM-07a, D-69). El C8 suma `LineaPago` (R154), lo nuevo de `PagoCliente` y la mora
+en `Entrega` (COM-08a) y `Anulacion.pago` con `PagoCliente.anulacion_corregida` (COM-08b, D-94). Con el C8, el extracto está completo para la
+ronda. Los nombres COM-03, COM-04, COM-05a, COM-06, COM-07 y COM-08 de abajo se leen con la tabla de la sección 1 del plan (D-67, punto 2;
+D-68, punto 1; D-69, punto 1; D-94, punto 1). `Transportista` vive en `core` (D-01) y su
 invernadero en `maestros.TransportistaInvernadero` (D-55, `docs/modelo/maestros.md`).
 
 ## Convenciones de esta ficha
@@ -67,7 +68,7 @@ cuando tiene un correo registrado».
 |---|---|---|---|
 | R119 | Dirección, «tiene» | Cliente → Dirección = **0..\*** (MD-128; el modelo decía 1..\*); Dirección → Cliente = 0..1 | Tabla `DireccionCliente` en `comercial` (abajo, D-58) |
 | R114 | Contrato, «corresponde» | 0..\* – 1 | La crea COM-02 (`CompraVenta`) y COM-03 (`Suministro`) |
-| R116 | PagoCliente, «realiza» | 0..\* – 1 | La crea COM-08 |
+| R116 | PagoCliente, «realiza» | 0..\* – 1 | La crea COM-06a (`PagoCliente.cliente`, D-68 punto 4) |
 | R118 | Queja, «emite» | 0..\* – 1 | La crea COM-06 |
 
 Sin herencias.
@@ -213,7 +214,7 @@ pago ni asiento (regla 19 de 8.6).
 
 - Restricción de la base: `CheckConstraint` «envío ⇒ dirección no nula e invernadero nulo; retiro ⇒ invernadero no nulo y dirección nula».
 - **(COM-05b, MD-130)** `motivo_cancelacion_venta` no nulo ⇔ `fecha_cancelacion_venta` no nula; motivo no nulo ⇒ `estado_venta` en
-  (`cancelada`, `concretada`) (la segunda, cuando COM-08 cobre lo entregado, extensión 6a); `descripcion_cancelacion` no vacía ⇒ motivo no
+  (`cancelada`, `concretada`) (la segunda, cuando COM-08b cobre lo entregado, extensión 6a); `descripcion_cancelacion` no vacía ⇒ motivo no
   nulo.
 
 ## DetalleVenta (COM-02)
@@ -427,7 +428,7 @@ asociaciones «avisa» de MD-122, MD-133 y MD-134 (regla A2 de D-37).
 | `fecha_periodo` | fecha, nula | El período de la alerta MD-133 |
 | `cantidad_sin_cubrir` | entero, nulo | Lo que falta, actualizado en cada intento de la pre-reserva (D-63, punto 3) |
 | `partida` (COM-04) | FK a `produccion.StockCosechado`, nula, `PROTECT` | MD-134 («partida por vencer», D-64 punto 10). COM-06a la usa también para «partida vencida en una entrega en curso» (PROD-VNC-CAM 3b) |
-| `entrega` (COM-05a1) | FK a `Entrega`, nula, `PROTECT` | MD-122 y extensión 6a de COM-PNF-ENT («entrega sin transportista», D-66 punto 10). COM-06b la usa para «entrega no reconocida por el cliente»; COM-08, para «pago en mora» |
+| `entrega` (COM-05a1) | FK a `Entrega`, nula, `PROTECT` | MD-122 y extensión 6a de COM-PNF-ENT («entrega sin transportista», D-66 punto 10). COM-06b la usa para «entrega no reconocida por el cliente»; COM-08a, para «pago en mora» (`comercial_pago_en_mora`, D-94 punto 6) |
 | `solicitud` (COM-06a) | FK a `SolicitudRevision`, nula, `PROTECT`, `related_name="alertas"` | R054 (la alerta de una discrepancia, COM-06a, o de una queja, COM-06b). Una sola por solicitud: único `(solicitud)` con `solicitud` no nula |
 | `resultado_averiguacion` (COM-06b) | `llego` / `no_llego_perdido` / `no_llego_devuelto`, nulo | **MD-137.** Solo en la alerta «entrega no reconocida»; lo carga COM-ATN-ENR al resolverla (D-68, punto 9) |
 | `descripcion_averiguacion` (COM-06b) | texto, vacío | Obligatoria con resultado (de 1 a 500, sin espacios al borde) |
@@ -466,7 +467,7 @@ Enlace de acceso temporal de un cliente, sin cuenta. **No es una clase del model
 
 ## Entrega (COM-05a1, D-66)
 
-Bloque: Gestión comercial. Vive en `comercial` (D-37). **Hija multitabla de `produccion.OrdenTrabajo`** (`tipo = entrega`; D-50, D-66
+Bloque: Gestión comercial. Vive en `comercial` (D-37). **Hija multitabla de `produccion.OrdenTrabajo`** (`tipo_orden = entrega`; D-50, D-66
 punto 2), sin `ConCapataz` (D-53): la entrega no tiene Capataz. Glosario: la entrega del producto al cliente, con envío (con Transportista) o
 con retiro en el invernadero (sin Transportista; la concreta el Vendedor). Sale de un único invernadero (regla 3 de 8.8) y la planifica
 siempre InfoPonia (regla 1 de 8.12).
@@ -497,7 +498,10 @@ Lo que hereda de `OrdenTrabajo` (`docs/modelo/produccion.md`) y cómo lo usa una
 | (código) `aviso_atrasada_para` | fecha, nula | La fecha programada por la que ya salió el aviso único de entrega atrasada con transportista (PCU, sección 8; D-66, punto 6) |
 | `montoTotalEntrega` (COM-06a) | pesos ≥ 0, nulo | → `monto_total_entrega`, `DecimalField(14, 2)`. Nulo hasta concretar; Σ `monto_pagar` de las líneas (regla «Precio y montos» de COM-CNC-ENT) |
 | `fechaVencimientoPago` (COM-06a) | fecha, nula | → `fecha_vencimiento_pago`. **Se guarda al concretar** (MD-132): `fecha_resolucion_orden + plazo_pago_dias` de la cláusula del suministrado **del contrato** (MD-124). Solo en un suministro; nula en una compra-venta |
-| `montoACobrar`, `estadoPagoEntrega` | derivados | No se guardan (`comercial/servicios/entregas.py`, D-68 punto 7). Monto a cobrar = total − Σ **`monto_descontado`** de las solicitudes aceptadas de la entrega, nunca negativo (MD-115; D-69 punto 9, que corrige «Σ indemnizaciones» de D-68 punto 7: con el tope, una parte se reintegra; ninguna hasta COM-07a). Estado de pago: lo completa COM-08 (pendiente / en mora / pagada, MD-125, MD-136, MD-139); hasta entonces, «pendiente» o, si `hoy > fecha_vencimiento_pago`, «en mora», sin alerta |
+| `montoACobrar`, `estadoPagoEntrega` | derivados | No se guardan (`comercial/servicios/entregas.py`, D-68 punto 7). Monto a cobrar = total − Σ **`monto_descontado`** de las solicitudes aceptadas de la entrega, nunca negativo (MD-115; D-69 punto 9, que corrige «Σ indemnizaciones» de D-68 punto 7: con el tope, una parte se reintegra; ninguna hasta COM-07a). Estado de pago (COM-08a, D-94 punto 4): **pagada** si tiene una `LineaPago` vigente o si su monto a cobrar es 0 (saldada, MD-125); si no, **en mora** si `hoy > fecha_vencimiento_pago` y **pendiente** en otro caso (MD-136, MD-139). Hasta COM-08a, nunca «pagada» y sin alerta |
+| (código, COM-08a) `fecha_aviso_mora` | fecha, nula | **D-94, punto 5. No está en el modelo.** La fecha en que la entrega entró en mora por primera vez y se avisó (alerta, Vendedor, cliente). La carga `reevaluar_mora`; no vuelve a nula (así el correo de mora sale una sola vez) |
+| (código, COM-08a) `estado_aviso_mora` | `enviado` / `pendiente_envio` / `sin_correo`, nulo | Ídem. El resultado del correo de mora al cliente; el paso 30 reintenta los `pendiente_envio` (regla 4 de COM-VNC-PAG). Separado de `estado_aviso_cliente`, que es el del último correo de la entrega |
+| (código, COM-08a) `indemnizacion_retraso_dia` | pesos por día ≥ 0, `DecimalField(9, 2)`, nulo | La indemnización por día de la cláusula del suministrado vigente al vencer (D-94, punto 12). La copia `concretar_entrega`; `modificar_suministro` la actualiza solo si `fecha_vencimiento_pago >= hoy`. Nula en una compra-venta |
 
 | R | Con | Multiplicidad | En el código |
 |---|---|---|---|
@@ -505,7 +509,7 @@ Lo que hereda de `OrdenTrabajo` (`docs/modelo/produccion.md`) y cómo lo usa una
 | R122 | Transportista, «realiza» | Entrega → Transportista = 0..1 | `transportista` (arriba) |
 | R138 | ReservaInsumo (envases), composición | 0..\* | Heredada de `OrdenTrabajo` (`produccion`); las crea PROD-PNF-ENV |
 | R084, R148 | Merma, Consumo | 0..\* / 0..\* | `Merma.orden` y `Consumo.orden` en `produccion` (los crea COM-04a; los escribe COM-06a con el núcleo de `docs/api/produccion.md`, sección 10; D-68 punto 3) |
-| R154 | PagoCliente | 0..1 | La crea COM-08 (`Entrega.pago`, solo en un suministro) |
+| R154 | PagoCliente, «cancela» | Entrega → PagoCliente = 0..\* (a lo sumo uno vigente) | **`LineaPago`** (COM-08a; D-94, punto 2), no `Entrega.pago`: una entrega conserva el pago anulado y recibe el correcto (MD-136). Solo en un suministro |
 | (código) | IntentoFallido | 0..\* | `IntentoFallido.entrega` (COM-06a, D-68 punto 6) |
 | MD-122 | Alerta, «avisa» | 0..\* | Por `AlertaComercial.entrega` |
 
@@ -513,6 +517,8 @@ Lo que hereda de `OrdenTrabajo` (`docs/modelo/produccion.md`) y cómo lo usa una
   - `modalidad_entrega = envio` ⇔ `direccion_destino` no nula;
   - `modalidad_entrega = retiro` ⇒ `transportista` nulo (regla 25 de 8.8);
   - `aviso_atrasada_para` no nula ⇒ `transportista` no nulo.
+  - (COM-08a) `estado_aviso_mora` no nulo ⇒ `fecha_aviso_mora` no nula. Que solo una entrega de suministro concretada tenga `fecha_aviso_mora` lo
+    verifica `verificar_invariantes_de_cobros()`.
   - (COM-06a) `monto_total_entrega` nulo o `>= 0`. Que esté no nulo ⇔ «concretada», y `fecha_vencimiento_pago` no nula ⇔ concretada de un
     suministro, no pueden ir en la base (el estado y el tipo de contrato están en otras tablas): los verifica `verificar_invariantes_de_entregas()`.
   - No pueden ir en la base (dependen de otras tablas), y las verifica `verificar_invariantes_de_entregas()` en las pruebas: el contrato, la
@@ -568,33 +574,65 @@ Una línea de la entrega: satisface un detalle de venta o un período de un deta
   - Invariante (prueba): cada línea tiene al menos una reserva (R150 1..\*), y sus reservas son del mismo detalle y, en un suministro, de la
     misma fecha (`fecha_entrega_reserva = fecha_periodo`).
 
-## PagoCliente (COM-06a, D-68 punto 4)
+## PagoCliente (COM-06a, D-68 punto 4; COM-08a y COM-08b, D-94)
 
 Bloque: Gestión comercial. Vive en `comercial`. **Hija directa de `contabilidad.OrigenDocumento`** (`TIPO_DE_ORIGEN = pago_cliente`, valor
 nuevo de `OrigenDocumento.Tipo` con su migración de `choices` en `contabilidad`), como `MovimientoStock` (D-52). Glosario: el pago que hace el
-cliente. En COM-06a solo existe el de una **compra-venta** (lo registra la concreción de su última entrega, postcondición k de COM-CNC-ENT);
-COM-08 suma el de las entregas de suministro (R154) y la anulación (MD-136).
+cliente. COM-06a crea el de una **compra-venta** (lo registra la concreción de su última entrega, postcondición k de COM-CNC-ENT); **COM-08a**
+suma el de las entregas de suministro (COM-REG-CBR, con `LineaPago`); **COM-08b**, la anulación (COM-ANL-CBR, MD-136) y el de una compra-venta
+cancelada con entregas concretadas (6a de COM-CNL-CVT).
 
 | Atributo | Valores | Nota |
 |---|---|---|
 | `idPago` | — | El `id` de `OrigenDocumento` |
+| (código, COM-08a) `tipo_pago` | `compra_venta` / `suministro` | **D-94, punto 3.** El {xor} de C7. Nunca cambia. La migración lo agrega con el valor por omisión `compra_venta` (los pagos que existan son de COM-06a): no es una migración de datos |
+| (código, COM-08a) `numero` y `codigo` | entero, nulo; `COB-0032` | Secuencia propia `comercial_cobro_numero_seq` (como `SolicitudRevision.numero`). **Solo en un pago de suministro** (el que tiene pantalla propia); nulo en uno de compra-venta, que se ve en la ficha de la venta |
 | `medioPago` | efectivo / transferencia / tarjeta de débito / tarjeta de crédito | → `medio_pago` (`efectivo`, `transferencia`, `tarjeta_debito`, `tarjeta_credito`; regla 15 de 8.13). El efectivo va a Caja y los demás a Banco c/c, en el asiento (fuera de la ronda, D-57) |
-| `fechaPago` | fecha | → `fecha_pago`. La de hoy al registrarlo (en COM-06a, la fecha de resolución de la entrega) |
-| `montoPagado` | pesos > 0, dos decimales | → `monto_pagado`, `DecimalField(14, 2)`. En una compra-venta, el total de la venta: Σ `cant_entregada_venta × precio_unitario_de_venta` de sus detalles confirmados (regla «Venta registrada por entrega» de COM-CNC-ENT) |
-| `estadoPago` (MD-136) | vigente / anulado | → `estado_pago`. Nace `vigente`. Lo pasa a `anulado` COM-ANL-CBR (COM-08) |
+| `fechaPago` | fecha | → `fecha_pago`. La de hoy al registrarlo (en COM-06a, la fecha de resolución de la entrega). En un cobro que corrige uno anulado con `cliente_pago_en_fecha` (7a de COM-ANL-CBR), la del cobro anulado (COM-08b, D-94 punto 10) |
+| `montoPagado` | pesos > 0, dos decimales | → `monto_pagado`, `DecimalField(14, 2)`. En una compra-venta, el total de la venta: Σ `cant_entregada_venta × precio_unitario_de_venta` de sus detalles confirmados (regla «Venta registrada por entrega» de COM-CNC-ENT; en 6a de COM-CNL-CVT, Σ `monto_pagar` de las entregas concretadas). En un suministro, Σ (`monto_cobrado` + `indemnizacion_atraso`) de sus líneas |
+| `estadoPago` (MD-136) | vigente / anulado | → `estado_pago`. Nace `vigente`. Lo pasa a `anulado` COM-ANL-CBR (COM-08b), que también pone sus líneas en `vigente = False` |
+| (código, COM-08a) `usuario` | FK nula a `core.Usuario`, `PROTECT` | Quien lo registró (1a1 y 10a de COM-REG-CBR lo muestran). COM-08a lo carga también en el pago de compra-venta de la concreción; nulo en los anteriores |
+| (código, COM-08a) `estado_aviso_cliente` | `enviado` / `pendiente_envio` / `sin_correo`, nulo | El resultado del correo del comprobante de cobro (D-94, punto 13), como `SolicitudRevision.estado_aviso_cliente`. Nulo en un pago de compra-venta (su comprobante es el de la venta, `Contrato.estado_comprobante`) |
+| (código, COM-08b) `anulacion_corregida` | `OneToOneField` nulo a `Anulacion`, `PROTECT`, `related_name="cobro_correcto"` | **D-94, punto 10.** El cobro que se registró desde la anulación de otro (7a). Una anulación se usa una sola vez |
 
 | R | Con | Multiplicidad | En el código |
 |---|---|---|---|
 | R116 | Cliente, «realiza» | PagoCliente → Cliente = 1 | `cliente`, FK a `Cliente`, `PROTECT`, `related_name="pagos"` |
 | R117 | Compra-venta, «corresponde» | 0..1 / 0..1 | `compra_venta`, FK nula a `CompraVenta`, `PROTECT`, `related_name="pagos"` |
-| R154 | Entrega, «cancela» | — | **COM-08** (`Entrega.pago`) |
+| R154 | Entrega, «cancela» | PagoCliente → Entrega = 0..\* (1..\* en un suministro) | Por `LineaPago` (COM-08a) |
+| MD-135 | Anulacion | 0..1 | `Anulacion.pago` (COM-08b) |
 
-- Restricciones de la base: `monto_pagado > 0`; **C7 en COM-06a: `compra_venta` no nula** (COM-08 la reescribe como el {xor} del modelo:
-  compra-venta o entregas de suministro, nunca las dos); único `(compra_venta)` con `estado_pago = vigente` (una venta se paga una vez).
-- Invariante (prueba): `cliente` es el de la venta; una venta «concretada» tiene exactamente un pago vigente y una «cancelada» sin entregas
-  concretadas, ninguno.
-- No origina asiento propio en una compra-venta (regla 32 de 8.6: el cobro va en el asiento de la última entrega); igual hereda de
-  `OrigenDocumento` porque el de un suministro sí lo origina (COM-08).
+- Restricciones de la base: `monto_pagado > 0`; único `(compra_venta)` con `estado_pago = vigente` (una venta se paga una vez). **C7 (COM-06a:
+  `compra_venta` no nula; COM-08a la reescribe como el {xor} del modelo, D-94 punto 3):** `tipo_pago = compra_venta` ⇔ `compra_venta` no nula;
+  `tipo_pago = suministro` ⇔ `numero` no nulo; `UniqueConstraint(numero)`; `tipo_pago = compra_venta` ⇒ `estado_aviso_cliente` nulo.
+- Invariantes (prueba; `verificar_invariantes_de_cobros()` desde COM-08a): `cliente` es el de la venta; una venta «concretada» tiene
+  exactamente un pago vigente y una «cancelada» sin entregas concretadas, ninguno; un pago de suministro tiene al menos una línea y uno de
+  compra-venta ninguna; `monto_pagado` = Σ de sus líneas; todas sus entregas son del `cliente`; un pago anulado tiene exactamente una
+  `Anulacion` (COM-08b); un cobro con `anulacion_corregida` tiene solo entregas del cobro anulado (COM-08b).
+- Asiento: no origina asiento propio en una compra-venta (regla 32 de 8.6: el cobro va en el asiento de la última entrega), **salvo** el de 6a
+  de COM-CNL-CVT (MD-130); el de un suministro sí (postcondición d de COM-REG-CBR). Todos fuera de la ronda (D-57).
+
+## LineaPago (COM-08a, R154, D-94 punto 2)
+
+**No es una clase del modelo**: es cómo el código guarda R154 (PagoCliente «cancela» Entrega) con lo que se cobró por cada entrega, como
+`LineaDiscrepancia` guarda lo de cada detalle. Una fila por entrega cobrada en un pago de suministro.
+
+| Campo | Valores | Nota |
+|---|---|---|
+| `pago` | FK a `PagoCliente`, `PROTECT`, `related_name="lineas"` | |
+| `entrega` | FK a `Entrega`, `PROTECT`, `related_name="lineas_de_pago"` | Una entrega de suministro concretada |
+| `monto_cobrado` | pesos > 0, `DecimalField(14, 2)` | El monto a cobrar de la entrega al cobrar (MD-115: total − Σ descontado) |
+| `dias_atraso` | entero ≥ 0 | `fecha_pago − fecha_vencimiento_pago`, 0 si no es positivo (regla «Indemnización por atraso en el pago») |
+| `indemnizacion_atraso` | pesos ≥ 0, `DecimalField(14, 2)` | `dias_atraso × Entrega.indemnizacion_retraso_dia`, la de la cláusula vigente al vencer (MD-124; D-94, punto 12). Fija: no cambia si después cambia la cláusula |
+| `vigente` | booleano | Copia de `pago.estado_pago = vigente` (la base no puede mirar otra tabla en un índice). La escriben juntos `registrar_cobro` (`True`) y `anular_cobro` (`False`) |
+
+- Restricciones de la base: `UniqueConstraint(pago, entrega)`; **`UniqueConstraint(entrega, condition=Q(vigente=True))`** (a lo sumo un pago
+  vigente por entrega: garantía mínima 2 de COM-REG-CBR); `monto_cobrado > 0`; `dias_atraso >= 0`; `indemnizacion_atraso >= 0`; `dias_atraso =
+  0` ⇒ `indemnizacion_atraso = 0`.
+- Invariantes (prueba, `verificar_invariantes_de_cobros()`): `vigente` = el pago está vigente; la entrega es de suministro, está concretada y es
+  del cliente del pago; con la línea vigente, `monto_cobrado = monto_a_cobrar(entrega)`.
+- No se borra nunca (MD-136: el cobro anulado conserva su vínculo con las entregas). Se audita como parte del registro de COM-REG-CBR y de
+  COM-ANL-CBR (D-36). Índice: el de la FK `entrega` y el único parcial.
 
 ## IntentoFallido (COM-06a, D-68 punto 6)
 
@@ -687,26 +725,28 @@ de 8.13). Una por entrega, con una línea por detalle.
 
 Bloque: Gestión comercial. **Clase nueva** (MD-135): hija de `contabilidad.OrigenDocumento` (`TIPO_DE_ORIGEN = anulacion`, con su migración de
 `choices`), porque origina el contraasiento del documento que anula (R012; fuera de la ronda, D-57). En la ronda anula la resolución de una
-solicitud (COM-ANL-SRV); **COM-08** suma la anulación de un cobro (COM-ANL-CBR).
+solicitud (COM-ANL-SRV, COM-07a) y un cobro de suministro (COM-ANL-CBR, **COM-08b**; D-94, punto 11).
 
 | Atributo | Valores | Nota |
 |---|---|---|
 | `idAnulacion` | — | El `id` de `OrigenDocumento` |
 | `fechaAnulacion` | fecha | → `fecha_anulacion`. La de hoy |
 | `motivoAnulacion` | texto, obligatorio | → `motivo_anulacion`, de 1 a 500 caracteres, sin espacios al borde |
-| `clientePagoEnFecha` | booleano | **COM-08** (solo en la anulación de un cobro) |
+| `clientePagoEnFecha` | booleano, nulo | → `cliente_pago_en_fecha` (**COM-08b**). Solo en la anulación de un cobro: si el cliente realmente pagó en la fecha del cobro anulado (paso 3 de COM-ANL-CBR); con `True`, el cobro correcto puede usar esa fecha (7a; D-94, punto 10) |
 | (código) copia de la resolución anulada | `estado_anulado` (`aceptada` / `rechazada`), `fecha_resolucion_anulada`, `gerente_anulado` (FK a `core.Usuario`, `PROTECT`), `observaciones_anuladas`, `monto_indemnizacion_anulado`, `monto_descontado_anulado`, `monto_reintegrado_anulado`, `medio_reintegro_anulado` | **D-69, punto 10. No está en el modelo.** Lo que tenía la solicitud antes de volver a «pendiente», para el historial de la ficha (COM-CNS-SRV) sin leer la auditoría. Los montos y el medio, nulos si estaba rechazada |
 
 | R | Con | Multiplicidad | En el código |
 |---|---|---|---|
 | MD-135 | Usuario, «anula» | 1 | `usuario`, FK a `core.Usuario`, `PROTECT` |
 | MD-135 | SolicitudRevision, «anula» | 0..1 | `solicitud`, FK nula a `SolicitudRevision`, `PROTECT`, `related_name="anulaciones"` (una solicitud puede anularse más de una vez, una por cada resolución) |
-| MD-135 | PagoCliente, «anula» | 0..1 | `pago`: **COM-08** |
+| MD-135 | PagoCliente, «anula» | 0..1 | `pago`, `OneToOneField` nulo a `PagoCliente`, `PROTECT`, `related_name="anulacion"` (**COM-08b**): un pago se anula una sola vez. **Sin copia** de los datos del pago: el pago anulado los conserva, con `estado_pago = anulado` (D-94, punto 11) |
 
-- Restricciones de la base: `motivo_anulacion <> ''`; en COM-07a, `solicitud` no nula (COM-08 la reescribe como «exactamente uno de
-  `solicitud` y `pago`»); `estado_anulado` no nulo si `solicitud` no nula; `estado_anulado = aceptada` ⇔ `monto_indemnizacion_anulado` no
+- Restricciones de la base: `motivo_anulacion <> ''`; en COM-07a, `solicitud` no nula (**COM-08b** la reescribe como «exactamente uno de
+  `solicitud` y `pago`» y suma `pago` no nulo ⇔ `cliente_pago_en_fecha` no nulo); `estado_anulado` no nulo si `solicitud` no nula (COM-08b:
+  «si y solo si»); `estado_anulado = aceptada` ⇔ `monto_indemnizacion_anulado` no
   nulo.
-- Se audita como parte del registro de COM-ANL-SRV (`anulacion_resolucion_solicitud`, D-36), no por su cuenta. Índice `(solicitud,
+- Se audita como parte del registro de COM-ANL-SRV (`anulacion_resolucion_solicitud`) o de COM-ANL-CBR (`anulacion_cobro`, COM-08b; D-36), no
+  por su cuenta. Índice `(solicitud,
   fecha_anulacion)`.
 
 ---
@@ -735,7 +775,10 @@ escritura).
 | D-60 | Regla 8 de 8.21: qué contratos pasan al Vendedor nuevo | **Proponer en pendientes_MD** (D-60 vigente desde el 21/11/2026) |
 | D-64, punto 8 | Un período de un detalle finalizado con fecha ≤ `fechaFinDetalle` todavía tiene cantidad sin cubrir (lectura de MD-126) | **Proponer en pendientes_MD** (D-64 vigente desde el 21/11/2026) |
 | Nuevo | `EnlaceCliente` (D-65); `fecha_entrega_reserva` nula sin contrato y línea de cámara en 0 (D-64, puntos 6 y 7) | **Sin ítem**: del código (la reserva sin fecha ya la dice PROD-PNF-CSC, y el recorte, la regla 6 de 8.9) |
-| MD-135 | `Anulacion` (aplicada por COM-07a, sin `clientePagoEnFecha` ni el pago, que suma COM-08) | Decidido sin aplicar («MD · Cambios… (comercial)») |
+| MD-135 | `Anulacion` (aplicada por COM-07a con la solicitud; COM-08b suma `clientePagoEnFecha` y el pago) | Decidido sin aplicar («MD · Cambios… (comercial)») |
+| MD-136 | `PagoCliente.estadoPago` (vigente / anulado) | Decidido sin aplicar («MD · Cambios… (comercial)») |
+| **Nuevo (D-94, punto 2)** | **R154 en 0..\***: Entrega → PagoCliente = 0..\*, con a lo sumo un pago vigente. MD-136 dice que el cobro anulado conserva su vínculo con las entregas, y la entrega se vuelve a cobrar: con 0..1 no se puede | **Proponer en pendientes_MD** |
+| Nuevo (D-94) | `LineaPago` (lo cobrado y el atraso por entrega); `PagoCliente.tipo_pago`, `numero`, `usuario`, `estado_aviso_cliente` y `anulacion_corregida`; `Entrega.fecha_aviso_mora` y `estado_aviso_mora` | **Sin ítem**: del código |
 | Nuevo (D-69) | `SolicitudRevision.monto_descontado`, `monto_reintegrado`, `medio_reintegro` y `estado_aviso_cliente`; `Suministro.solicitud_resolucion`; la copia de la resolución en `Anulacion` | **Sin ítem**: del código. Pero conviene que MD-115 diga que el descuento y el reintegro se registran en la solicitud (para el asiento compuesto) |
 | Nuevo (D-69, punto 6) | Tipo de evento de bitácora «anulación de una resolución» (junto con «incumplimiento de cláusula suministrante») | **Proponer en pendientes_MD** |
 | Nuevo | `Entrega.contrato`, `modalidad_entrega`, `direccion_destino`, `estado_aviso_cliente`, `recordatorio_para`, `aviso_atrasada_para` y `DetalleEntrega.fecha_periodo` (D-66) | **Sin ítem**: del código |

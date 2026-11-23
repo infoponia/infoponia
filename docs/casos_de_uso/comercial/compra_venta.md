@@ -416,8 +416,8 @@ a. Ninguna: es una consulta, no modifica datos ni registra auditoría.
   COM-REG-CVT; se calcula en la base (`Sum` con `Case`), no en Python fila por fila.
 - **Regla 4 (ficha).** En COM-02: cliente (con CUIT y enlace a su ficha), Vendedor, modalidad con la dirección o el invernadero de retiro, las
   tres fechas, los detalles (variedad, solicitada, entregada o «—», precio, subtotal y estado) y el estado del comprobante. **Se completan
-  después:** las entregas (COM-05; mientras no hay: «La entrega se planifica cuando todo el producto esté listo.»), el cobro (COM-06 y
-  COM-08), los datos de la cancelación (COM-05, MD-130) y la fecha de vencimiento del enlace de un faltante (COM-04).
+  después:** las entregas (COM-05; mientras no hay: «La entrega se planifica cuando todo el producto esté listo.»), el cobro (COM-06a y
+  COM-08b, el de una venta cancelada con entregas concretadas), los datos de la cancelación (COM-05, MD-130) y la fecha de vencimiento del enlace de un faltante (COM-04).
 - **Regla 5.** «Ver cliente» siempre. «Cancelar compra-venta» **se completa en COM-05b** (COM-CNL-CVT, al final): en COM-02 no se muestra (D-25:
   solo lo que existe).
 - **Reservas en la ficha (decisión de aplicación).** El caso de uso no las pide y el prototipo no las muestra: no se muestran. Lo que el
@@ -472,7 +472,7 @@ caso de uso.
 - COM-04: la fecha de vencimiento del enlace (estado «pendiente de decisión»); el enlace de la notificación de cada cosecha.
 - COM-05a1 y COM-05a2: postcondición g (COM-PNF-ENT); las entregas en la ficha. COM-05b: «Cancelar compra-venta» y los datos de la
   cancelación (MD-130), al final de este archivo.
-- COM-06 y COM-08: el cobro en la ficha; la fecha de concreción.
+- COM-06a y COM-08b: el cobro en la ficha (el de la última entrega y el de una cancelación con entregas concretadas); la fecha de concreción.
 
 ## Solo prototipo
 
@@ -638,7 +638,7 @@ liberadas, los ingresos a cámara, las órdenes y entregas canceladas y el cobro
 | Parte | En COM-05b |
 |---|---|
 | Escenario, extensiones \*a, \*b, 1a, 4a, 6b, 8a, 8b, 9a; postcondiciones a a e, f (sin entregas concretadas), g, h, i | **Sí** |
-| Extensión 6a y el cobro de la postcondición f (PagoCliente) | **No en COM-05b.** Antes de COM-06 ninguna entrega se concreta, así que 6a no puede darse. COM-06 suma el rechazo `venta_con_entregas_concretadas` y COM-08, con `PagoCliente` (MD-136), el cobro y el paso a «concretada» (disparador «Cuando exista Entrega», punto 9) |
+| Extensión 6a y el cobro de la postcondición f (PagoCliente) | **No en COM-05b.** Antes de COM-06 ninguna entrega se concreta, así que 6a no puede darse. COM-06 suma el rechazo `venta_con_entregas_concretadas` y **COM-08b** (D-94, punto 14), el cobro y el paso a «concretada» (disparador «Cuando exista Entrega», punto 9): ver «La extensión 6a (COM-08b)», al final |
 | El asiento del cobro (postcondición f, garantía mínima 4, regla «Asientos») | **Fuera de esta ronda · contabilidad** (D-57) |
 | 9a «reintenta el envío» | No hay cola (D-14, D-54): el comprobante guarda su estado y la ficha ofrece «Reenviar comprobante» e «Imprimir», como el de COM-REG-CVT (16a y 16b) |
 
@@ -718,7 +718,7 @@ decir («ya entregados») y va a pendientes_CU para la próxima versión del cas
   cliente desistió.» (con la descripción, si entra).
 - **Comprobante (paso 9, g, 9a):** `enviar_comprobante(venta, tipo="cancelacion")` después de confirmar, fuera de la transacción, con
   `estado_comprobante` y «Reenviar comprobante», como COM-REG-CVT. Contenido: la venta, el cliente, el Vendedor, la fecha de cancelación, el
-  motivo (y la descripción), los detalles cancelados con su variedad y cantidad y los que no cambian. Sin cobro en COM-05b (6a, COM-08). Pie:
+  motivo (y la descripción), los detalles cancelados con su variedad y cantidad y los que no cambian. Sin cobro en COM-05b (6a, COM-08b). Pie:
   «Comprobante interno, sin validez fiscal.» **Sin correo** (regla 18 de 8.20): no se intenta; el aviso final dice «El cliente no tiene
   correo: imprimí el comprobante.» con el botón «Imprimir comprobante» (la página imprimible del comprobante, como en COM-02).
 - **Avisos** (D-42: dentro de la transacción, sin enlace):
@@ -749,7 +749,7 @@ decir («ya entregados») y va a pendientes_CU para la próxima versión del cas
 - `ACT['cvcancel-ok']` registra directo: falta el resumen (pasos 6 y 7) y la relectura (8a, 8b).
 - `VIEWS.cvcancel` toma `curso=false`: falta 4a (no deja seguir con una entrega en curso).
 - `VIEWS.cvcancel` cancela solo los detalles «abierto» y «pendiente»: también los «confirmados» sin entregar (D-67, punto 4).
-- La sección 3 «Cobro de lo entregado» y «Asientos: Solo el del cobro» del resumen: no en COM-05b (6a llega con COM-06 y COM-08; los
+- La sección 3 «Cobro de lo entregado» y «Asientos: Solo el del cobro» del resumen: no en COM-05b (6a llega con COM-06 y COM-08b; los
   asientos, fuera de la ronda, D-57).
 - «Se imprimirá el comprobante»: el sistema ofrece el botón «Imprimir comprobante» (no imprime solo).
 - El motivo es un desplegable: con tres opciones, van como botones de opción (criterio de interfaz: menos clics, todo a la vista).
@@ -773,3 +773,32 @@ decir («ya entregados») y va a pendientes_CU para la próxima versión del cas
   partida de la venta; cancelar contra asignar un transportista a su entrega.
 - `comercial/tests/test_com_cnl_cvt.py`, `ComCnlCvtVistaTests`: permisos (el Vendedor de otro contrato y los demás roles no ven el botón ni
   entran; ningún botón lleva a un 403); el flujo con HTMX y sin él; `revisar/` no escribe nada; el aviso de 4a.
+
+### La extensión 6a (COM-08b; D-94, punto 14)
+
+Lo que COM-08b le suma a COM-CNL-CVT. Lo demás de esta sección no cambia.
+
+- **Deja de rechazar** `venta_con_entregas_concretadas`: la prueba de COM-05b que lo esperaba se reemplaza (anotala en el PR).
+- **Lectura** (`datos_de_cancelacion`, paso 4 y 6a.1): con entregas concretadas, los detalles ya entregados («Ya entregado: no cambia», como
+  hasta ahora) y el **monto a cobrar de lo entregado**: Σ `monto_pagar` de las líneas de venta de las entregas **concretadas** de la venta (lo
+  que registró cada entrega, regla 32 de 8.6), con el detalle por entrega (código, fecha, monto). El estado final que muestra el resumen pasa a
+  «Concretada (se cobra lo entregado)».
+- **Datos:** `DatosDeCancelacionDeVenta` suma `medio_pago` (obligatorio solo con entregas concretadas: `medio_de_pago_obligatorio`; sin ellas,
+  `medio_no_admitido`), de la lista de `PagoCliente.medio_pago` (6a.2).
+- **Huella:** suma la lista de entregas concretadas y su monto (8a: una entrega que se concretó mientras tanto cambia el monto a cobrar).
+- **En la transacción** (el mismo orden de bloqueos; las entregas concretadas ya se bloquean con las demás de la venta), después del paso 6
+  de «Reglas en el código» y antes de los avisos:
+  1. el `PagoCliente`: `tipo_pago = compra_venta`, `compra_venta = venta`, `cliente` (el de la venta), `medio_pago`, `fecha_pago = hoy`,
+     `monto_pagado` (el de arriba), `estado_pago = vigente`, `usuario = actor`; sin `numero` (no es un cobro de suministro) ni `LineaPago`;
+  2. la venta a `concretada` (no a `cancelada`) con `fecha_concrecion_venta = hoy` y los datos de la cancelación (MD-130; la restricción ya
+     admite motivo con `concretada`).
+- **Comprobante** (g): la sección «Cobro de lo entregado» (cada entrega con su monto, el total cobrado y el medio). Sigue sin asiento (D-57).
+- **Aviso al Vendedor** (h, si actuó el Gerente): suma «Se cobró lo entregado: $ 12.000,00 en efectivo.».
+- **Auditoría** (i): el pago, en los afectados.
+- **Pantalla** (`VIEWS.cvcancel`): la sección 3 «Cobro de lo entregado» del prototipo, con el medio de pago (botones de opción) y el texto
+  «La venta ya tiene entregas concretadas: lo entregado se cobra ahora, en un solo pago. El resto se cancela.». El asiento, «Fuera de esta
+  ronda · contabilidad».
+- **Pruebas** (métodos nuevos en `test_com_cnl_cvt.py`): 6a con una venta de dos invernaderos y una entrega concretada (el pago, el monto, la
+  venta concretada con los datos de la cancelación, el comprobante con el cobro); el medio obligatorio y no admitido; 8a con una entrega que
+  se concreta en medio (concurrencia, en `test_com_cnl_cvt_concurrencia.py`); el invariante de COM-06a «una venta concretada tiene
+  exactamente un pago vigente».
