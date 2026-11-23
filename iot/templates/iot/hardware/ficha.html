@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}La ficha de un equipo (IOT-CNS-HDW regla 6; ``hw-ficha`` del prototipo): identificador, tipo, sector, situación, modelo, número de serie, fecha de instalación e insumo; de un sensor, su
 calibración; de un actuador, el estado que informó el nodo, la compatibilidad y el tiempo mínimo entre comandos; y sus alertas activas. Los botones salen de «acciones» (D-30): modificar, volver a
-activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (las lecturas, el historial de comandos, las reglas y las órdenes de mantenimiento) no se muestra; lo suman IOT-03 a IOT-07.
+activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (el historial de comandos, las reglas y las órdenes de mantenimiento) no se muestra; lo suman IOT-05 a IOT-07. La última lectura y el estado informado, con su hora, son de IOT-03.
 Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
 {% block titulo %}{{ nombre }} {{ equipo.identificador_equipo }} · Hardware · IoT · InfoPonia{% endblock %}
 {% block contenido %}
@@ -24,7 +24,7 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
       <div><span class="k">Identificador</span><span class="v">{{ equipo.identificador_equipo }}</span><span class="d">{% if equipo.ultimo_mensaje_en %}Último mensaje: {{ equipo.ultimo_mensaje_en|date:"d/m/Y H:i" }}{% else %}Sin confirmar: nunca reportó{% endif %}</span></div>
       <div><span class="k">Tipo</span><span class="v">{% if equipo.clase == "sensor" %}Sensor · {{ equipo.get_tipo_variable_sensor_display }}{% else %}Actuador · {{ equipo.tipo_actuador.nombre_actuador }}{% endif %}</span></div>
       <div><span class="k">Sector</span><span class="v">{% if equipo.sector %}{{ equipo.sector.nombre_sector }}{% else %}General{% endif %}</span></div>
-      <div><span class="k">Situación</span><span class="v"><span class="status-badge {% if situacion.clave == 'operativo' %}status-ok{% elif situacion.clave == 'baja' %}status-neutral{% elif situacion.clave == 'comando_pendiente' %}status-info{% elif situacion.clave == 'fuera_de_servicio' %}status-danger{% else %}status-warn{% endif %}">{{ situacion.texto }}</span></span></div>
+      <div><span class="k">Situación</span><span class="v"><span class="status-badge {% if situacion.clave == 'operativo' %}status-ok{% elif situacion.clave == 'baja' %}status-neutral{% elif situacion.clave == 'comando_pendiente' %}status-info{% elif situacion.clave == 'fuera_de_servicio' or situacion.clave == 'nivel_bajo' %}status-danger{% else %}status-warn{% endif %}">{{ situacion.texto }}</span></span></div>
     </div>
     <div class="facts">
       <div><span class="k">Modelo</span><span class="v">{{ equipo.modelo_hardware }}</span></div>
@@ -36,11 +36,11 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
     <div class="facts">
       <div><span class="k">Nombre</span><span class="v">{% if equipo.nombre_sensor %}{{ equipo.nombre_sensor }}{% else %}—{% endif %}</span></div>
       <div><span class="k">Calibración</span><span class="v">{% if equipo.valor_calibracion_min is not None %}{{ equipo.valor_calibracion_min }} a {{ equipo.valor_calibracion_max }} {{ equipo.unidad_medida }}{% else %}No aplica{% endif %}</span></div>
-      <div><span class="k">Última lectura</span><span class="v">—</span></div>
+      <div><span class="k">Última lectura</span><span class="v">{% if ultimo %}{{ ultimo }}{% else %}—{% endif %}</span>{% if ultimo %}<span class="d">Medida el {{ ultimo_en|date:"d/m/Y H:i" }} (hace {{ ultimo_en|timesince }})</span>{% else %}<span class="d">Todavía no mandó lecturas</span>{% endif %}</div>
     </div>
     {% else %}
     <div class="facts">
-      <div><span class="k">Estado informado por el nodo</span><span class="v">{% if equipo.estado_informado %}{{ equipo.estado_informado }}{% else %}<span class="muted">Desconocido</span>{% endif %}</span>{% if not equipo.estado_informado %}<span class="d">El nodo todavía no informó su estado</span>{% elif equipo.cambiado_en_invernadero %}<span class="d">Cambiado en el invernadero</span>{% endif %}</div>
+      <div><span class="k">Estado informado por el nodo</span><span class="v">{% if equipo.estado_informado %}{{ ultimo }}{% else %}<span class="muted">Desconocido</span>{% endif %}</span>{% if not equipo.estado_informado %}<span class="d">El nodo todavía no informó su estado</span>{% else %}<span class="d">Desde el {{ ultimo_en|date:"d/m/Y H:i" }}{% if equipo.cambiado_en_invernadero %} · Cambiado en el invernadero{% endif %}</span>{% endif %}</div>
       <div><span class="k">Compatibilidad con el nodo</span><span class="v">{% if equipo.compatibilidad == "compatible" %}<span class="status-badge status-ok">Compatible</span>{% elif equipo.compatibilidad == "incompatible" %}<span class="status-badge status-warn">Incompatible</span>{% else %}<span class="status-badge status-neutral">Sin verificar</span>{% endif %}</span>{% if equipo.compatibilidad == "incompatible" %}<span class="d">No soporta: {% for a in equipo.acciones_incompatibles.all %}{{ a.nombre_accion }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}</div>
       <div><span class="k">Tiempo mínimo entre comandos</span><span class="v">{{ equipo.tipo_actuador.tiempo_minimo_entre_comandos }} s</span></div>
       <div><span class="k">Descripción</span><span class="v">{% if equipo.descripcion_actuador %}{{ equipo.descripcion_actuador }}{% else %}—{% endif %}</span></div>

@@ -1,11 +1,10 @@
 # IOT-03 · API del nodo I: token, lecturas, estados, modo y anuncio
 
-Estado: pendiente | App: iot | Rama: feature/iot-03-api-del-nodo | Ronda: IoT 1
+Estado: hecha (a la espera de su PR) | App: iot | Rama: feature/iot-03-api-del-nodo | Ronda: IoT 1
 
 Depende de: **IOT-02** (el sistema, el hardware, `core/enlaces.py` y `recalcular_compatibilidad`) e **INV-03** (`umbral_efectivo`,
-`docs/api/variedades.md`). Si alguna no está mergeada, frená. **No depende de PRD-01:** sin él, `variedades_presentes` no tiene
-registrante, todo invernadero queda «sin umbral efectivo» (extensión 5c) y las pruebas usan `variedades_presentes_de_prueba`
-(`docs/api/variedades.md`). Tampoco depende de USR-10: esta tarea no manda correos (D-71).
+`docs/api/variedades.md`). Si alguna no está mergeada, frená. **PRD-01 ya está mergeada:** `variedades_presentes` tiene registrante y las pruebas aíslan el umbral con `variedades_presentes_de_prueba`
+(`docs/api/variedades.md`). No depende de USR-10: esta tarea no manda correos (D-71).
 
 Una tarea es un bloque funcional (D-44): se hace de corrido en una sesión y un PR. Aprobado el plan, no pidas permiso paso por paso. Si algo
 que necesitás no está en «Leer», frená (L9).
@@ -159,26 +158,82 @@ pruebas con los ejemplos ni las de concurrencia.
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-Hay una migración nueva (`core`): `python manage.py migrate`. Cuentas: un Agrónomo a cargo de un invernadero con sistema IoT registrado
-(IOT-02). Node-RED instalado y el flujo importado (`docs/api/nodo/node-red/README.md`).
+Hay una migración nueva (`core`, solo de `choices`): `python manage.py migrate`. Cuentas y datos: **ya están cargados en la base local** por
+`python manage.py cargar_datos_de_verificacion` (`docs/patrones/datos_de_verificacion.md`; te pide la contraseña de tu `CLAUDE.local.md` sin mostrarla, o la toma de la variable de
+entorno `INFOPONIA_CONTRASENA_DE_PRUEBA`; nunca va como argumento): el invernadero «Norte» con `agronomo@prueba3.local` y `capataz@prueba3.local` (sin Técnico; el Capataz hace falta para
+poder planificar la siembra), «Sector A» y «Sector B», un insumo de «Repuestos de hardware», la variedad «Lechuga Crespa» con
+stock y una siembra «a realizar» (umbral efectivo: temperatura 18 a 26 °C, humedad 60 a 80 % HR, luz 10.000 a 30.000 lux). Node-RED instalado y los dos flujos
+importados (`docs/api/nodo/node-red/README.md`, secciones 1 a 3).
 
-1. Registrá los equipos del flujo en IoT · Hardware (sección 4 de la guía de Node-RED). Arrancá Node-RED con `INFOPONIA_URL` y
-   `INFOPONIA_TOKEN` e importá el flujo: «Configuración de equipos» queda en verde.
-2. En menos de un minuto, IoT · Hardware: el nodo está «En línea» y los sensores dejan de estar «Sin confirmar», con su última lectura.
+0. Entrá como `agronomo@prueba3.local` (si «Norte» ya existía de antes, como el Agrónomo que tenga), en IoT · Sistema IoT registrá el sistema de «Norte» y **copiá el token** (se muestra una sola vez). Volvé a correr
+   `cargar_datos_de_verificacion --solo iot`: carga el rango de la solución (18,0 a 24,0 °C) y los siete equipos del flujo (los identificadores de
+   `docs/api/nodo/node-red/README.md`, sección 4). El token no pasa por el comando.
+1. Arrancá Node-RED con `INFOPONIA_URL` e `INFOPONIA_TOKEN` e importá el flujo: «Configuración de equipos» queda en verde. En IoT · Hardware están los siete equipos,
+   «Sin confirmar».
+2. En menos de un minuto, IoT · Hardware: el nodo está «En línea» y los sensores dejan de estar «Sin confirmar»: cada uno muestra su última lectura y hace cuánto.
 3. «Anunciar ahora» y después «Ventana sin FIJAR_POSICION (anuncio)» + «Anunciar ahora»: la ventana pasa a incompatible y aparece la alerta
    «Configuración incompatible». «Volver a lo normal» + «Anunciar ahora»: se resuelve.
-4. «Lectura inválida (999 °C)»: aparece «Lectura inválida» en la campana. «Volver a lo normal»: se resuelve con la lectura siguiente.
-5. «Nivel de solución bajo»: aparece la alerta crítica (sin correo hasta IOT-04). Con el rango de la solución cargado en el sistema,
-   «Solución caliente (27 °C)»: «Solución fuera de rango».
-6. «Equipo no registrado (co2)»: la lectura vuelve rechazada (barra de depuración de Node-RED) y aparece «Dispositivo no registrado»;
-   desde la alerta se puede registrar el equipo (IOT-02).
-7. «Humedad en falla»: el sensor queda «Fuera de servicio» con «Dispositivo en falla». «Ventilador encendido»: la ficha del actuador
-   muestra «Encendido» con la hora.
-8. Detené `runserver` dos minutos y volvé a arrancarlo: Node-RED reintenta (estado «falla …: reintento en …»), vacía la cola y las
-   lecturas de esos minutos llegan atrasadas, sin alertas.
-9. Regenerá el token en InfoPonia: Node-RED recibe 401 y no reintenta. Cargá el nuevo y reiniciá Node-RED: vuelve a «En línea».
-10. En «Auditoría» están los registros `entrega_informacion_iot` (sin token) y los registros del servidor no muestran el token.
-11. Después del merge, en Render: la dirección de la API que muestra el registro del sistema empieza con `https://` (si no, es la
-    configuración del proxy de USR-09: anotalo en `temas_abiertos.md`) y Node-RED, apuntado a esa dirección, recibe 200.
+4. «Temperatura alta (35 °C)»: la situación del sensor pasa a «Fuera de umbral» y aparece «Fuera de umbral efectivo» en la campana, con el valor y el máximo efectivo
+   (26 °C). «Volver a lo normal»: se resuelve cuando la lectura queda a más de 1 °C dentro del umbral.
+5. «Lectura inválida (999 °C)»: aparece «Lectura inválida» en la campana. «Volver a lo normal»: se resuelve con la lectura siguiente.
+6. «Nivel de solución bajo»: aparece la alerta crítica (sin correo hasta IOT-04) y el sensor muestra «Nivel bajo». «Solución caliente (27 °C)»: «Solución fuera de rango».
+7. «Equipo no registrado (co2)»: la lectura vuelve rechazada (barra de depuración de Node-RED) y aparece «Dispositivo no registrado»; desde la alerta se puede
+   registrar el equipo (IOT-02).
+8. «Humedad en falla»: el sensor queda «Fuera de servicio» con «Dispositivo en falla». «Ventilador encendido»: la ficha del actuador muestra «Encendido» con la hora;
+   después «Ventilador apagado»: aparece «Cambiado en el invernadero».
+9. Detené `runserver` dos minutos y volvé a arrancarlo: Node-RED reintenta (estado «falla …: reintento en …»), vacía la cola y las lecturas de esos minutos llegan
+   atrasadas, sin alertas.
+10. Regenerá el token en InfoPonia: Node-RED recibe 401 y no reintenta. Cargá el nuevo y reiniciá Node-RED: vuelve a «En línea».
+11. En «Auditoría» están los registros `entrega_informacion_iot` (sin token) y los registros del servidor no muestran el token.
+12. Después del merge, en Render: la dirección de la API que muestra el registro del sistema empieza con `https://` (si no, es la configuración del proxy de USR-09:
+    anotalo en `temas_abiertos.md`) y Node-RED, apuntado a esa dirección, recibe 200.
+
+No se prueba a mano el motivo `equipo_dado_de_baja` (necesita un equipo dado de baja y la baja es de IOT-06): se prueba con IOT-06; por ahora lo cubren las pruebas
+automáticas (`test_api_ejemplos.py`, `test_iot_ent_inf_lecturas.py`).
 
 ## Cierre (la completa Claude Code al cerrar)
+
+**Qué se hizo.** La API del nodo v1 (`iot/api/`: límites, respuestas, reloj, autenticación, traducción de la forma y las cuatro vistas con su ruta 404), los servicios
+(`nodo.py`, `alertas_iot.py`, `lecturas.py`, `estados.py`, `anuncios.py` y la auditoría común `auditoria_nodo.py`), `iot/textos.py` y la acción de auditoría
+`entrega_informacion_iot`. La lista y la ficha de Hardware muestran la última lectura, la situación por alertas y el estado informado, sin consultas por fila
+(`resumen_de_equipos`: dos consultas). `evaluar_reglas_de_la_lectura`, `al_volver_a_remoto` y `explica_un_comando` quedan escritas sin hacer nada («Se completa en IOT-05 / IOT-06»).
+
+**Pruebas.** `iot/tests/`: `test_api_traduccion` (40), `test_iot_ent_inf_lecturas` (76 con comunicación y alertas), `test_iot_ent_inf_estados` (25), `test_iot_ent_inf_anuncio` (15),
+`test_api_nodo` (24), `test_api_ejemplos` (20, con todos los ejemplos del contrato), `test_api_concurrencia` (5, `@tag("concurrencia")`) y lo sumado a `test_iot_cns_hdw`.
+Comandos de «Hecho cuando», con el merge de `main` (hasta MAE-02d, #54) ya hecho:
+- `python manage.py test iot core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` → 1554 pruebas, OK.
+- `python manage.py test iot --keepdb --tag concurrencia` → 22 pruebas, OK.
+- Además, por lo que trajo el merge y por lo que se tocó de MAE-02d: `python manage.py test maestros produccion inventario --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` → 2755, OK.
+- `python manage.py makemigrations --check --dry-run`: sin cambios.
+`test_infoponia` se recreó una vez con `--noinput` (con tu permiso) porque `main` trajo `produccion/0002`. La lista de Hardware hace **21 consultas con 3 equipos y 21 con 8**
+(no crece con la cantidad de equipos; `resumen_de_equipos` son 2). Las pruebas comparan las dos cantidades entre sí y fijan en 2 el resumen: no fijan el 21 porque incluye las del
+marco de la página (sesión, menú, alertas) y cambiaría con otras tareas.
+
+**Migración.** `core/migrations/0021_iot_entrega_de_informacion_accion.py` (solo `choices`): `main` ya traía otra `0020` (PRD-02), así que la regeneré encima de ella al hacer el merge.
+
+**Fuera de «Permitido» (con autorización expresa):** `core/verificacion.py`, `core/management/commands/cargar_datos_de_verificacion.py`, `core/tests/test_verificacion.py`,
+`iot/verificacion.py` (+ su prueba y el registro en `IotConfig.ready()`), `docs/patrones/datos_de_verificacion.md` y la regla de `CLAUDE.md` (dónde vive el comando, el número de cuenta
+de cada cargador y que la contraseña no es un argumento). **Cambio sobre MAE-02d ya mergeada** (autorizado): su comando `cargar_datos_de_verificacion` (en `maestros/management/`) chocaba
+por nombre con el de `core` y rompía sus 9 pruebas; su lógica pasó a `maestros/verificacion.py` como cargador registrado (mismo comportamiento), se borró el comando duplicado y sus pruebas se
+adaptaron (`--clave` ya no existe; los dos errores del cargador son `ErrorDeCarga`) sin borrar ni debilitar ninguna.
+
+**Cambio sobre código de IOT-02 ya mergeado.** `iot/servicios/compatibilidad.py` usa `alertas_iot.asegurar_alerta_iot` / `resolver_alerta_iot`: una sola forma de crear un `AlertaIot`.
+Mismo comportamiento y mismo orden de bloqueos (D-82); las pruebas de IOT-02, incluidas las dos `test_d82_…`, pasan sin cambios. También cambian docstrings de `hardware.py` y
+`sistemas.py`, y `situacion_de` (con un parámetro opcional) y `alertas_activas_del_equipo` (suma las alertas de las lecturas del sensor).
+
+**Lo que se implementó distinto de lo escrito (para `docs/temas_abiertos.md`).**
+- La auditoría: el extracto pone `cambios` dentro de `datos`, y D-36 solo admite `datos` y `cambios` arriba: manda D-36 (decisión del estudiante). `sistema` va como `referencia(sistema)`.
+- Resolver «nodo sin comunicación» al recibir un mensaje se audita con `mensaje: "comunicacion"` (el extracto no lo prevé: solo lista lectura, estado, modo y anuncio).
+- `ETIQUETAS` de `RegistroAuditoria` no se amplió: la pantalla de Auditoría muestra las claves de `datos` y `cambios` tal cual (como IOT-02).
+- La frase de «Depende de» («sin PRD-01, todo invernadero queda sin umbral») quedó vieja: PRD-01 ya registra `variedades_presentes`.
+- «Lectura inválida»: el extracto ya trae el texto («{identificador} · {valor}, fuera de la calibración ({mínimo} a {máximo})»); lo único que decidí es la unidad: el valor lleva la del sensor (`999 °C`) y los límites van sin unidad (`-10 a 60`).
+- `temp-vieja` (un sensor dado de baja) no se carga con el cargador hasta que IOT-06 traiga `baja_hardware`.
+
+**Pantallas: lo que se corrigió del prototipo (D-61).** `sensorState` calcula la situación comparando la última lectura con el umbral («Supera el máximo», «En rango»,
+«Desactualizado»): manda el caso de uso, que la saca de las alertas activas («Sin actividad», «Lectura inválida», «Fuera de umbral», «Fuera de rango», «Nivel bajo»). Se agregó
+una columna «Último dato» a la lista (el prototipo no la tiene): la última lectura y hace cuánto, o el estado informado con su hora y la marca «cambiado en el invernadero».
+Las cajas «Solo prototipo» no existen (`sim-modo`, `sim-ok`…).
+
+**Datos que quedaron cargados en la base local** (`cargar_datos_de_verificacion`; en la base del autor, «Norte» se cargó antes de unificar los cargadores y quedó con `agronomo@prueba1.local` y `capataz@prueba1.local`; en una base nueva el cargador usa estas): cuentas `agronomo@prueba3.local` y `capataz@prueba3.local` (contraseña de tu `CLAUDE.local.md`; el cargador de `maestros` usa `prueba1` y `prueba2`); invernadero
+«Norte» (sin Técnico) con «Sector A» y «Sector B»; insumo «Repuesto de sensor»; cultivo «Lechuga», variedad «Crespa» con su semilla habilitada y 1.000 de stock; una siembra «a realizar».
+Falta, a mano: registrar el sistema IoT de «Norte» (paso 0) y volver a correr el comando. No se tocó al Administrador ni se borró nada.

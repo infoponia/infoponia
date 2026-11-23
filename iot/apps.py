@@ -26,6 +26,13 @@ class IotConfig(AppConfig):
             despues_de="Producción",
         )
         self._registrar_en_maestros()
+        # IOT-03: el cargador de datos para la verificación a mano (core/verificacion.py; docs/patrones/datos_de_verificacion.md).
+        from core import verificacion
+        from iot import verificacion as verificacion_iot
+
+        verificacion.registrar_cargador(
+            verificacion_iot.CODIGO, "IoT: Norte, equipos del flujo de Node-RED y umbral efectivo", 10, verificacion_iot.cargar
+        )
 
     def _registrar_en_maestros(self):
         """IOT-02 (docs/api/extensiones_de_maestros.md): conecta `iot` con `maestros` por sus puntos de extensión (regla A4 de D-37): el estado del IoT del invernadero, los impedimentos

@@ -80,6 +80,7 @@ que crear.
     Ejemplo: `test_post_d_sube_cantidad_en_transito`
   - Flujo principal, `test_flujo_principal_<que_espera>`.
     Ejemplo: `test_flujo_principal_aprueba_orden`
-  - Decisión sin caso de uso, `test_d<numero>_<que_espera>`.
+  - Decisión sin caso de uso, `test_d<numero>_<que_espera>`. El número va solo si la decisión ya está en `main`; si es nueva en este PR, la prueba se
+    nombra por su tarea o su regla (el número se asigna al final y puede cambiar).
     Ejemplo: `test_d09_un_solo_gerente_activo`
 - Cada prueba tiene un docstring con la fuente exacta (caso de uso y regla, o decisión).

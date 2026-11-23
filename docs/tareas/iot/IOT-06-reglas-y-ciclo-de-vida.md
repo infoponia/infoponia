@@ -47,6 +47,14 @@ anotalo en el «Cierre».
   `nodo.py` (`al_volver_a_remoto`), `comandos.py` (`validar_comando`, `cancelar_comando_incluido`), `sistemas.py` y `hardware.py`;
   `maestros/servicios/alertas.py` (`sincronizar_alertas_de_personal`, `resolver_alerta_de_estado`).
 
+## Lo que dejó IOT-03 (cambia lo escrito arriba)
+
+- `evaluar_reglas_de_la_lectura` se llama desde `iot/servicios/lecturas.py` (`_despues_de_guardar`) solo si la lectura llegó hasta la comparación (válida, reciente, sensor activo,
+  fuera de horario y sector descartados, con umbral). **El reinicio de la extensión 5c todavía no existe:** la rama «sin umbral» solo resuelve la alerta; sumá ahí `reiniciar_reglas`.
+- `al_volver_a_remoto(sistema)` está en `iot/servicios/nodo.py` y no hace nada: completala (extensión 1b.3).
+- **Cargador de datos de verificación:** al traer `baja_hardware`, sumá `norte/sectorA/temp-vieja` (un sensor dado de baja) a `iot/verificacion.py`, usando ese servicio y no el ORM, y un paso de
+  «Verificación a mano» que pruebe el motivo `equipo_dado_de_baja` (hoy lo cubren solo las pruebas automáticas).
+
 ## Límites
 
 - No crea modelos (`ReglaActuacion` es de IOT-01). → revisá docs/disparadores.md: cierra «Cuando exista SistemaIoT (alertas)», punto 1, **la

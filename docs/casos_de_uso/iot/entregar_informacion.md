@@ -481,9 +481,12 @@ mientras siga activa. Que un «no registrado» sea de un equipo dado de baja se 
   Un registro **por elemento** (lectura o estado), por modo y por anuncio, **solo si cambió algo** además de la telemetría, la comunicación
   y el último mensaje: una alerta generada o resuelta, el estado de un equipo, su estado informado, el modo o la compatibilidad. Las
   lecturas que no cambian nada no se auditan (postcondición z: «no se auditan una por una»).
-- `datos`: `{"origen": "nodo_central", "sistema": <id>, "mensaje": "lectura" | "estado" | "modo" | "anuncio", "identificador": <texto o
-  null>, "cambios": {...}}` con «antes» y «después» de cada estado que cambió. Afectados: las alertas, el equipo y, en el anuncio, los
-  actuadores. **Nunca el token.**
+- El detalle tiene **solo dos claves** de primer nivel, `datos` y `cambios` (D-36).
+  - `datos`: `origen: "nodo_central"`, `sistema: referencia(sistema)`, `mensaje` (`lectura`, `estado`, `modo`, `anuncio` o `comunicacion`, cuando el mensaje
+    solo resolvió «nodo sin comunicación»), `identificador` (texto o `null`), `alertas_generadas` y `alertas_resueltas` (listas de `referencia(alerta)`).
+  - `cambios`: solo lo que cambió de verdad, cada uno con `antes` y `despues` (D-36 rechaza «antes» igual a «después»). Los decimales y las fechas, como
+    texto. En el anuncio, una clave por actuador que cambió: «compatibilidad de <identificador>».
+  - Afectados: las alertas, el equipo y, en el anuncio, los actuadores. **Nunca el token.**
 - La revisión periódica (IOT-04) tendrá su propia acción.
 
 ### Bloqueos y concurrencia
@@ -600,7 +603,7 @@ transacción**:
 **Auditoría (postcondición z).** Acción nueva `revision_periodica_iot`, actor `None`, **un registro por sistema y por corrida**, solo si
 generó o resolvió alertas o borró lecturas:
 
-- `datos`: `{"origen": "revision_periodica", "sistema": <id>, "ahora": <ISO>, "alertas_generadas": [...], "alertas_resueltas": [...],
+- `datos`: `{"origen": "revision_periodica", "sistema": referencia(sistema), "ahora": <ISO>, "alertas_generadas": [...], "alertas_resueltas": [...],
   "lecturas_borradas": <n>}`;
 - afectados: las alertas.
 

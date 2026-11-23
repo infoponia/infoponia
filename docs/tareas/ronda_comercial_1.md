@@ -307,8 +307,8 @@ el modelo de COM-02 condiciona a todas las que siguen.
 
 ## 8. Decisiones tomadas o por confirmar
 
-Las decisiones de comercial van de D-57 a D-69 (D-55 y D-56 ya se usaron para MAE-05 y DIA-01). Las de abajo con número son de los
-lotes C0 a C7; las del lote C8 usan D-80 en adelante (D-69 se usó en el C7).
+Las decisiones de comercial tomadas van de D-57 a D-69 (D-55 y D-56 ya se usaron para MAE-05 y DIA-01). Las de abajo con número son de los
+lotes C0 a C7; las del lote C8 toman su número al escribirse (`docs/decisiones/README.md`, «Numeración»).
 
 | Tema | Decisión o propuesta de trabajo | Lote |
 |---|---|---|

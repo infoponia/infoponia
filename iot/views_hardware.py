@@ -25,6 +25,7 @@ from iot.models import Sensor, TipoActuador
 from iot.servicios import compatibilidad as api_compatibilidad
 from iot.servicios import hardware as api
 from iot.servicios import sistemas as api_sistemas
+from iot.textos import estado_legible, lectura_legible
 
 GERENTE, AGRONOMO = Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO
 VENTANA_VOLVER_A_ACTIVAR = "iot/hardware/_ventana_volver_a_activar.html"
@@ -61,8 +62,9 @@ def hardware(request):
         contexto["sistema"] = sistema
         if sistema is not None:
             equipos = api.buscar_equipos(request.user, sistema, filtros)
+            resumen = api.resumen_de_equipos(equipos)  # dos consultas para toda la lista: sin consultas por fila
             contexto |= {
-                "filas": [{"equipo": e, "situacion": api.situacion_de(e)} for e in equipos],
+                "filas": [_fila(e, resumen[e.pk]) for e in equipos],
                 "hay_equipos": bool(equipos) or any(filtros.values()),
                 "sectores": list(api.sectores_del_invernadero(elegido)),
                 "nodo": api_sistemas.nodo_del_sistema(sistema),
@@ -74,12 +76,31 @@ def hardware(request):
     return render(request, "iot/hardware/lista.html", contexto)
 
 
+def _ultimo_dato(equipo, ultima_lectura):
+    """El «último dato» de un equipo (IOT-ENT-INF, «Lo que completa en Hardware»): de un sensor, su última lectura legible y cuándo se midió; de un actuador, el estado
+    que informó el nodo y desde cuándo, con la marca «cambiado en el invernadero». ``(texto, fecha)`` o ``("", None)`` si no hay (la pantalla muestra «—»)."""
+    if equipo.clase == "sensor":
+        return (lectura_legible(ultima_lectura), ultima_lectura.medida_en) if ultima_lectura is not None else ("", None)
+    return (estado_legible(equipo.estado_informado), equipo.estado_informado_en) if equipo.estado_informado else ("", None)
+
+
+def _fila(equipo, resumen):
+    """Una fila de la lista: el equipo, su situación (por sus alertas activas) y su último dato."""
+    texto, fecha = _ultimo_dato(equipo, resumen.ultima_lectura)
+    return {"equipo": equipo, "situacion": api.situacion_de(equipo, resumen.alertas), "ultimo": texto, "ultimo_en": fecha}
+
+
 def _contexto_de_la_ficha(request, equipo, **extra):
     """Lo que dibuja la ficha del equipo (regla 6 de IOT-CNS-HDW): el marco del invernadero del equipo, sus datos, su situación, sus alertas activas y sus botones."""
     contexto = contexto_del_modulo(request, "hardware", equipo.sistema.invernadero_id)
+    resumen = api.resumen_de_equipos([equipo])[equipo.pk]
+    ultimo, ultimo_en = _ultimo_dato(equipo, resumen.ultima_lectura)
     return contexto | {
         "equipo": equipo,
-        "situacion": api.situacion_de(equipo),
+        "situacion": api.situacion_de(equipo, resumen.alertas),
+        "ultimo": ultimo,
+        "ultimo_en": ultimo_en,
+        "modo_del_nodo": api_sistemas.nodo_del_sistema(equipo.sistema).modo,
         "alertas": api.alertas_activas_del_equipo(equipo),
         "acciones": api.acciones_permitidas(request.user, equipo),
         "nombre": api.nombre_del_equipo(equipo),

@@ -11,10 +11,10 @@
 
 from collections import namedtuple
 
-from maestros.models import Alerta
 from maestros.servicios import alertas as api_alertas
 
-from iot.models import Actuador, AlertaIot, EquipoAnunciado
+from iot.models import Actuador, EquipoAnunciado
+from iot.servicios import alertas_iot
 
 TIPO_DE_ALERTA = "iot_configuracion_incompatible"
 
@@ -46,7 +46,7 @@ def _descripcion_de_la_alerta(actuador, faltan):
 
 def recalcular_compatibilidad(actuadores):
     """Recalcula la compatibilidad de cada actuador de ``actuadores`` (los dados de baja se saltean) y genera o resuelve su alerta
-    «configuración incompatible» (clave ``hw:<id>``), con su ``AlertaIot`` (R052). Corre dentro de la transacción de quien llama. Devuelve una lista de
+    «configuración incompatible» (clave ``hw:<id>``), con su ``AlertaIot`` (R052), por ``alertas_iot`` (IOT-03: una sola forma de crear un ``AlertaIot``). Corre dentro de la transacción de quien llama. Devuelve una lista de
     ``Recalculo`` y deja actualizados los objetos recibidos. Postcondición d de IOT-MOD-HDW; regla 14 de IOT-ALT-HDW."""
     ordenados = sorted(actuadores, key=lambda a: (a.sistema.invernadero_id, a.pk))
     resultado = []
@@ -65,17 +65,17 @@ def recalcular_compatibilidad(actuadores):
         clave = f"hw:{actuador.pk}"
         creada = resuelta = None
         if calculada.estado == "incompatible":
-            ya_estaba = Alerta.objects.filter(
-                invernadero=invernadero, tipo_alerta=TIPO_DE_ALERTA, clave_estado=clave, estado_alerta="activa"
-            ).exists()
-            alerta = api_alertas.asegurar_alerta_de_estado(
-                invernadero.pk, TIPO_DE_ALERTA, clave, _descripcion_de_la_alerta(actuador, calculada.acciones_incompatibles)
+            resultado_alerta = alertas_iot.asegurar_alerta_iot(
+                invernadero.pk,
+                actuador.sistema,
+                TIPO_DE_ALERTA,
+                clave,
+                _descripcion_de_la_alerta(actuador, calculada.acciones_incompatibles),
+                hardware=actuador,
             )
-            if alerta is not None:
-                AlertaIot.objects.get_or_create(alerta=alerta, defaults={"sistema": actuador.sistema, "hardware": actuador})
-                creada = None if ya_estaba else alerta
+            creada = resultado_alerta.alerta if resultado_alerta.creada else None
         else:
-            resuelta = api_alertas.resolver_alerta_de_estado(invernadero.pk, TIPO_DE_ALERTA, clave)
+            resuelta = alertas_iot.resolver_alerta_iot(invernadero.pk, TIPO_DE_ALERTA, clave)
         recibido.compatibilidad = calculada.estado
         resultado.append(Recalculo(recibido, creada, resuelta))
     return resultado

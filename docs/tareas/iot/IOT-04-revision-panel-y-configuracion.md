@@ -60,6 +60,15 @@ anotalo en el «Cierre».
     (la pantalla de MAE-04);
   - `inventario/servicios/variedades.py` (`umbral_efectivo`) e `inventario/tests/fabricas.py`.
 
+## Lo que dejó IOT-03 (cambia lo escrito arriba)
+
+- `iot/servicios/alertas_iot.py` (`asegurar_alerta_iot` y `resolver_alerta_iot`, que devuelven `ResultadoDeAlerta(alerta, creada)` y dejan el `AlertaIot`): usalas en la revisión;
+  no llames a `maestros.servicios.alertas` directo para las alertas del IoT.
+- `iot/servicios/auditoria_nodo.py` (`auditar_entrega`) es el modelo para auditar con `datos` y `cambios` (D-36). `revision_periodica_iot` lleva `sistema` como `referencia(sistema)`.
+- `AlertaIot.ultimo_mensaje_en` ya se carga en cada rechazo de «dispositivo no registrado». Las alertas críticas nacen con `correo_enviado_en` nulo y `intentos_correo` en 0.
+- Un mensaje que solo resolvió «nodo sin comunicación» se audita con `mensaje: "comunicacion"`.
+- La lista y la ficha de Hardware ya muestran la última lectura y la situación por alertas (`resumen_de_equipos`): el panel no tiene que rehacerlo.
+
 ## Límites
 
 - No crea modelos (los creó IOT-01, incluido `AlertaIot.ultimo_mensaje_en`, D-76 punto 3). Si falta una columna, frená.

@@ -695,6 +695,9 @@ class RegistroAuditoria(models.Model):
         ALTA_HARDWARE = "alta_hardware", "Alta de hardware"
         MODIFICACION_HARDWARE = "modificacion_hardware", "Modificación de hardware"
         REACTIVACION_HARDWARE = "reactivacion_hardware", "Reactivación de hardware"
+        # Lo que el nodo central entrega por la API del IoT (IOT-03, postcondición z de IOT-ENT-INF): lecturas, estados, modo y anuncio. Actor ``None``
+        # (InfoPonia, como los procesos de D-56). Nunca lleva el token (D-70).
+        ENTREGA_INFORMACION_IOT = "entrega_informacion_iot", "Entrega de información del nodo (IoT)"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1078,6 +1081,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.ALTA_HARDWARE,
         RegistroAuditoria.Accion.MODIFICACION_HARDWARE,
         RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
+        RegistroAuditoria.Accion.ENTREGA_INFORMACION_IOT,
     }
 )
 

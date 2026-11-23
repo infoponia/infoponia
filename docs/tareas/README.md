@@ -76,14 +76,13 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 | COM-07b | Resolución del suministro por incumplimientos (paso diario 33) | comercial | pendiente | COM-07a | `comercial/COM-07b-resolucion-del-suministro.md` |
 | COM-08 | Cobranza y estadísticas | comercial | por escribir | COM-07b; lote C8 | — |
 
-### Ronda «IoT 1» (D-70 a D-73)
+### Ronda «IoT 1» (D-70 a D-79)
 
 Plan completo en `docs/tareas/ronda_iot_1.md`. Va en paralelo con «Comercial 1»; IOT-01 e IOT-02, también con «Producción 1» (aprobado
 por el estudiante el 21/11/2026). Cada tarea espera a las de producción que necesita (plan, sección 2).
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| IOT-03 | API del nodo I: token, lecturas, estados, modo y anuncio | iot | pendiente | IOT-02, INV-03 | `iot/IOT-03-api-del-nodo-lecturas.md` |
 | IOT-04 | Revisión periódica, panel de monitoreo y configuración IoT | iot (y la configuración de maestros) | pendiente | IOT-03, USR-10, MAE-02d, MAE-04 | `iot/IOT-04-revision-panel-y-configuracion.md` |
 | IOT-05 | Comandos: emitir, retirar, resolver y cancelar | iot (y un valor en produccion) | pendiente | IOT-03, PRD-01 | `iot/IOT-05-comandos.md` |
 | IOT-06 | Reglas de actuación y ciclo de vida del sistema y del hardware | iot | pendiente | IOT-05 | `iot/IOT-06-reglas-y-ciclo-de-vida.md` |

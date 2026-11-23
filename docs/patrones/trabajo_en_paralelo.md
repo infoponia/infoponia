@@ -34,7 +34,7 @@ Se usa `merge` y no `rebase`: el `rebase` reescribe el historial y no lo hacemos
 | `core/migrations/` por `choices` de `RegistroAuditoria.accion` | Cada acción de auditoría nueva (D-36) cambia los `choices`, y eso genera migración en `core` | Que una sola persona haga la migración de `core` de la semana, o que la segunda regenere la suya después del merge |
 | `config/settings.py`, `config/urls.py`, `core/menu.py` | Las dos agregan una línea en la misma lista | Conservar las dos líneas |
 | `docs/estado.md`, `docs/tareas/README.md`, `docs/historial.md`, `docs/revisiones_pendientes.md` | Las dos proponen su cierre (M3) | Conservar lo de las dos y verificar que las filas tachadas sean las que se hicieron |
-| `docs/decisiones/README.md` y el número `D-NN` | Las dos toman la «próxima libre» | Reservar el número por el chat antes de escribir; si coinciden, la que mergea segunda renumera su archivo, su fila y las citas |
+| `docs/decisiones/README.md` y el número `D-NN` | Las dos toman la «próxima libre» | Tomá el número al final, después de `git fetch`, mirando `docs/decisiones/` en `main`; si coinciden, la que mergea segunda renumera (su archivo, su fila y las citas). Una decisión ya mergeada no se renumera nunca |
 | `docs/disparadores.md` | Las dos tachan o agregan filas | Conservar las dos |
 
 ## Cómo se ve un conflicto y cómo se resuelve

@@ -45,7 +45,7 @@ lee solo sus extensiones). La numeración reemplaza a la del 20/11/2026: lo que 
 |---|---|---|---|
 | IOT-01 | MAE-03 (`SectorProduccion`), INV-01 (`Insumo`), MAE-04 (`ConfiguracionOperativa`) | FK de `Hardware` y los 14 parámetros | No se programa (las tres están en revisión al 21/11/2026) |
 | IOT-02 | INV-01 (categoría `repuestos_de_hardware`), MAE-02b, NOT-01 | Insumo del equipo (R072), alerta del Técnico, aviso al Técnico | — (hechas) |
-| IOT-03 | INV-03 (`umbral_efectivo`, `docs/api/variedades.md`) | Comparar lecturas con el umbral | Sin PRD-01, `variedades_presentes` no tiene registrante: todo invernadero queda «sin umbral efectivo» (extensión 5c), y las pruebas usan `variedades_presentes_de_prueba` |
+| IOT-03 | INV-03 (`umbral_efectivo`, `docs/api/variedades.md`) | Comparar lecturas con el umbral | — (hecha el 23/11/2026; PRD-01 ya está mergeada: `variedades_presentes` tiene registrante y las pruebas aíslan el umbral con `variedades_presentes_de_prueba`) |
 | IOT-04 | USR-10 (`core.correo.enviar_correo`, D-54), MAE-02d (`tipos` en la consulta de alertas de MAE-02c, `enlaces_de_alertas` y `alertas:ir`, D-62, tercera enmienda) | Correos de la revisión; el panel reutiliza la consulta de alertas | No se programa |
 | IOT-05 | PRD-01 (`produccion.Bitacora`) | `RegistroComando` es hija de `Bitacora` | No se programa |
 | IOT-07 | PRD-01 (`OrdenTrabajo`, `cancelar_orden_incluida`, `registrar_traspaso` del Capataz) | `MantenimientoTecnico` es hija de `OrdenTrabajo` | No se programa |
@@ -149,7 +149,7 @@ programar sus tareas (M6).
 
 | Lote | Contenido | Estado |
 |---|---|---|
-| I0 | Este plan; D-70 a D-73 (reservadas hasta D-79); `docs/modelo/iot.md` con la ronda 23 aplicada y los ajustes en `maestros.md`, `produccion.md` y `api/alertas.md`; el umbral efectivo en una sola función (`docs/api/variedades.md`, INV-03, PRD-01); filas de las tareas, disparadores y temas abiertos; la fusión con el cierre de INV-02 | validado (21/11/2026) |
+| I0 | Este plan; D-70 a D-73; `docs/modelo/iot.md` con la ronda 23 aplicada y los ajustes en `maestros.md`, `produccion.md` y `api/alertas.md`; el umbral efectivo en una sola función (`docs/api/variedades.md`, INV-03, PRD-01); filas de las tareas, disparadores y temas abiertos; la fusión con el cierre de INV-02 | validado (21/11/2026) |
 | I1 | IOT-01 e IOT-02: archivos de tarea; extractos `tipos_de_actuador.md`, `sistema_iot.md` y `hardware.md`; `docs/prototipos/iot/` con su README; datos de migración (catálogo y tipos iniciales); el punto de extensión del estado del IoT en `api/extensiones_de_maestros.md`; la sección «Cuando existan actuadores, comandos y reglas del IoT» de `disparadores.md`; D-72 vigente | entregado, a validar |
 | I2a | IOT-03: el contrato `docs/api/nodo/` v1 (`README.md` con la guía del nodo, `mensajes.md`, `respuestas_y_errores.md` con el token, los límites, los códigos HTTP y los motivos de rechazo, y `ejemplos/*.json`); `docs/api/nodo/node-red/` (guía y flujo de lecturas, estados, modo y anuncio); extracto `entregar_informacion.md` completo, con las partes de IOT-03 aplicadas y la corrección de «al generarse» (D-71); tarea IOT-03; D-74 (contrato, vigente) y D-75 (interpretaciones, validada el 22/11/2026); índice único de `Telemetria` en el modelo y en IOT-01. Partido de I2 por el estudiante el 21/11/2026 | entregado; D-75 validada (22/11/2026) |
 | I2b | IOT-04: la sección «La revisión periódica» en `entregar_informacion.md` (\*b y el correo); extracto `consultar_lecturas.md` (IOT-CNS-LEC, con los enlaces de las alertas); sección «Módulo IoT» de `maestros/configuracion.md` (ADM-MOD-CFG, reglas 2b a 7b); tarea IOT-04; D-76 (validada el 22/11/2026) y `AlertaIot.ultimo_mensaje_en`; D-75 pasa a vigente; correcciones de IOT-03 (`login_not_required`); los cambios de MAE-05 en `main` integrados al acumulativo | entregado; D-76 validada (22/11/2026) |
@@ -163,7 +163,6 @@ escriben los siguientes.
 
 | Tema | Decisión o propuesta de trabajo | Lote |
 |---|---|---|
-| Numeración de decisiones | El IoT usa **D-70 a D-79** (D-66 a D-69 quedaron reservadas para comercial en el lote C4) | I0 |
 | La ronda 23 rige en el repo | MD-98 a MD-113 están «decididos sin aplicar»: el extracto los aplica, como los demás extractos con sus MD pendientes | I0 |
 | Histéresis | Dos parámetros de temperatura: ambiente y solución (estudiante, 21/11/2026; D-72 punto 7) | I0 |
 | Umbral efectivo | Una sola función en `inventario` (`umbral_efectivo`), que usan PRD-01 y el IoT (21/11/2026) | I0 |

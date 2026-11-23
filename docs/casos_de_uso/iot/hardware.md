@@ -241,8 +241,8 @@ de aplicación:
 - **Fecha de instalación (regla 9 de ALT):** obligatoria, no posterior a hoy.
 - **Identificadores anunciados (regla 14 de ALT).** El campo ofrece (lista `datalist`) los identificadores de `EquipoAnunciado` del sistema
   que no están registrados, marcando los que eran de un equipo dado de baja. Para un actuador anunciado, antes de guardar se muestra si el
-  nodo soporta todas las acciones del tipo (el aviso «Compatible» o la lista de las que no). Los anuncios los escribe la API (**IOT-03**):
-  hasta entonces no hay ninguno, todo actuador queda «sin verificar» y la lista está vacía.
+  nodo soporta todas las acciones del tipo (el aviso «Compatible» o la lista de las que no). Los anuncios los escribe la API del nodo (IOT-03,
+  `iot/servicios/anuncios.py`); sin anuncio, todo actuador queda «sin verificar» y la lista está vacía.
 - **Compatibilidad (regla 14 de ALT, postcondición d y regla 10 de MOD).** `iot/servicios/compatibilidad.py`,
   `recalcular_compatibilidad(actuadores)`: compara los comandos de las acciones **activas** del tipo de cada actuador con los anunciados para
   su identificador en su sistema; sin anuncio, `sin_verificar` y sin acciones incompatibles; con anuncio, `compatible` o `incompatible` y
@@ -258,9 +258,9 @@ de aplicación:
   - Cambian el modelo, el número de serie, el sector, el nombre del sensor, la descripción del actuador y la calibración (regla 2).
   - El tipo de equipo nunca cambia. La variable de un sensor cambia solo si no tiene lecturas; el tipo de un actuador, solo si no tiene
     reglas ni comandos (regla 3). El identificador, solo si el equipo nunca reportó (regla 4): `ultimo_mensaje_en` nulo y sin lecturas ni
-    comandos. Funciones: `tiene_lecturas(sensor)`, `tiene_comandos(actuador)`, `tiene_reglas(equipo)`. **Se completan en IOT-03 (lecturas,
-    ya existe la tabla), IOT-05 (comandos) e IOT-06 (reglas):** en IOT-02 las tres consultan sus tablas, que todavía están vacías, y se
-    prueban con filas creadas por la fábrica.
+    comandos. Funciones: `tiene_lecturas(sensor)`, `tiene_comandos(actuador)`, `tiene_reglas(equipo)`. `tiene_lecturas` se completó en IOT-03
+    (las lecturas las guarda la API del nodo); `tiene_comandos` y `tiene_reglas` se completan en IOT-05 y en IOT-06: en IOT-02 las tres consultan sus
+    tablas y se prueban con filas creadas por la fábrica.
   - Precondición c (sin comandos pendientes): la verifica `tiene_comando_pendiente(actuador)`; los comandos existen desde IOT-05, pero la
     tabla ya existe y la consulta se escribe y se prueba en IOT-02.
   - **Volver a activar un equipo fuera de servicio** (postcondición b, reglas 7 y 8): botón aparte con su confirmación. Pasa a `activo` y
@@ -281,8 +281,9 @@ de aplicación:
     búsqueda por identificador, nombre del sensor, tipo o variable y número de serie (regla 5). Orden: sensores y después actuadores, por
     identificador.
   - «Situación» de cada equipo: «Sin confirmar» (`ultimo_mensaje_en` nulo), «Fuera de servicio», «Configuración incompatible» y, en los
-    actuadores, «Comando pendiente». Lo que depende de lecturas y alertas («En rango», «Sin actividad», la última lectura) **se completa en
-    IOT-03 e IOT-04**: hasta entonces la última lectura se muestra «—».
+    actuadores, «Comando pendiente». Con IOT-03 suma, por las alertas activas del
+    equipo, «Nivel bajo», «Lectura inválida», «Fuera de umbral», «Fuera de rango» y «Sin actividad» (la que nace por falta de mensajes la genera la
+    revisión periódica de IOT-04), y la lista muestra la última lectura de cada sensor («—» si no tiene) y el estado informado de cada actuador.
   - Ficha (regla 6): insumo, fecha de instalación, calibración o estado informado y compatibilidad, sus alertas activas y las reglas activas
     que lo usan (**IOT-06**), sus órdenes de mantenimiento (**IOT-07**) y el historial de comandos (**IOT-05**). D-25: lo que todavía no existe
     no se muestra.
@@ -324,7 +325,7 @@ Guía visual: `docs/prototipos/iot/`. Buscá la función y leé solo esa parte.
 
 En `docs/disparadores.md`, «Cuando existan actuadores, comandos y reglas del IoT»:
 
-- IOT-03: la última lectura y la situación por lecturas; los identificadores anunciados y la compatibilidad contra anuncios reales.
+- ~~IOT-03: la última lectura y la situación por lecturas; los identificadores anunciados y la compatibilidad contra anuncios reales.~~ (hecho el 23/11/2026, IOT-03)
 - IOT-05: el historial de comandos en la ficha; «Comando pendiente».
 - IOT-06: las reglas que usan el equipo; la baja (BAJ).
 - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8) y en la ficha; la precondición d de la baja. Escrito en

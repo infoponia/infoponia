@@ -2,7 +2,7 @@
 {% comment %}«IoT» → «Hardware» (IOT-CNS-HDW; ``hardware`` del prototipo): arriba, el nodo central (estado, conectividad, modo y última comunicación, regla 2); el aviso de los identificadores que el
 nodo anunció y todavía no están registrados (regla 14 de IOT-ALT-HDW); los filtros (tipo, estado, sector y búsqueda, regla 5) y la tabla de equipos, sensores y después actuadores, también los dados de
 baja. Los filtros son un formulario GET: sin JavaScript, «Filtrar» recarga la página; con HTMX, reemplazan solo la tabla y actualizan la URL. «Registrar hardware» solo lo ve quien opera el IoT del invernadero
-(D-30). Lo que depende de lecturas y alertas («En rango», la última lectura) lo completan IOT-03 e IOT-04.{% endcomment %}
+(D-30). La última lectura y la situación por alertas las completó IOT-03.{% endcomment %}
 {% block titulo %}Hardware · IoT · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">

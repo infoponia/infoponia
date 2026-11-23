@@ -187,7 +187,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 
 ## Abiertos desde MAE-02d (22/11/2026)
 
-- **Comando `cargar_datos_de_verificacion`** (`maestros/management/commands/`, con sus pruebas): lo exige CLAUDE.md, pero no estaba en «Permitido fuera de la app» ni en ningún documento. Va en `maestros` porque `core` no puede importar sus modelos (A1). No crea ni toca ningún Gerente (D-09). Los correos llevan siempre el número (`agronomo@prueba1.local`). Las próximas tareas lo amplían: si una app de nivel mayor tiene que hacerlo, decidir si se muda. Agregarlo a «Permitido fuera de la app» de la plantilla de tarea.
+- **Comando `cargar_datos_de_verificacion`** (`maestros/management/commands/`, con sus pruebas): lo exige CLAUDE.md, pero no estaba en «Permitido fuera de la app» ni en ningún documento. Va en `maestros` porque `core` no puede importar sus modelos (A1). No crea ni toca ningún Gerente (D-09). Los correos llevan siempre el número (`agronomo@prueba1.local`). Las próximas tareas lo amplían: si una app de nivel mayor tiene que hacerlo, decidir si se muda. Agregarlo a «Permitido fuera de la app» de la plantilla de tarea. *(Actualización 23/11/2026, IOT-03: ya se decidió: el comando es uno solo, en `core`, con una función por app; la de `maestros` vive en `maestros/verificacion.py`; `docs/patrones/datos_de_verificacion.md`.)*
 - **`maestros/servicios/invernaderos.py`** no figuraba en los pasos, pero es donde vive `items_de_campana` (paso 5).
 - **`ItemDeAlerta` en `core/extensiones.py`:** su comentario dice que `url` lleva «a la ficha del invernadero» (ya no es cierto desde MAE-02c). No se tocó (nada de `core`); corregir cuando se toque ese archivo.
 - **Un registrante registrado en dos pasos:** la misma función para `("a",)` y después para `("a", "b")` queda como dos pares y se la llama dos veces. No pasa con el uso previsto; si una app registra en dos pasos, agrupar por función.
@@ -421,3 +421,13 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
   - **`resumen_de_cancelacion`** suma `lote`, `etapa_origen` y `etapa_destino` (nombres; `None` en una siembra): `docs/api/produccion.md`, sección 2.
   - **Pruebas:** `python manage.py test produccion --keepdb --tag migracion` no corre ninguna (la tarea no tiene migraciones de datos). La condición 2 de plantas comprometidas queda probada solo por función hasta PRD-03.
 - **Pantallas: lo que se corrigió del prototipo** (D-61): se sacó el recálculo al escribir (`trCalc`, `ctCalc`) a favor de «Continuar», «Actualizar fechas», «Ver resumen» y «Confirmar»; la descripción de la causa «Otra» es opcional (como en el CU); la causa aparece al pedir el resumen cuando faltan plantas. **«Repartir por mí» (`tr-auto`) no se implementó:** repartir automáticamente al planificar necesita una regla que ningún caso de uso define; si se quiere, hay que documentarla (L9).
+
+## Abiertos desde IOT-03 (23/11/2026)
+
+- **Lo implementado distinto de lo escrito, o que la tarea no decía** (detalle en el «Cierre» de `docs/tareas/iot/IOT-03-api-del-nodo-lecturas.md`):
+  - **Auditoría:** manda D-36 (`datos` y `cambios` arriba, no `cambios` dentro de `datos`); un mensaje que solo resolvió «nodo sin comunicación» se audita con `mensaje: "comunicacion"`, que el caso de uso no prevé. `RegistroAuditoria.ETIQUETAS` no se amplió: la pantalla de Auditoría muestra las claves de `datos` y `cambios` tal cual.
+  - **«Lectura inválida»:** el valor lleva la unidad del sensor (`999 °C`) y los límites van sin unidad (`-10 a 60`): el extracto no lo precisa.
+  - **Respuesta del anuncio:** los actuadores salen ordenados por identificador (sin distinguir mayúsculas), como en el ejemplo; `docs/api/nodo/mensajes.md`, sección 4, no fija el orden.
+  - **Contador de pedidos** (D-70, punto 5): vive en la caché por proceso de gunicorn; con más de un proceso, cada uno cuenta aparte. Anotarlo si cambia el despliegue.
+  - **Lista de Hardware:** hace 21 consultas con 3 equipos y 21 con 8 (no crecen con la cantidad); la prueba compara las dos cantidades y no fija el 21, que incluye las del marco de la página.
+  - **Cargador de datos de verificación:** `temp-vieja` (sensor dado de baja) no se carga hasta que IOT-06 traiga `baja_hardware`; el motivo `equipo_dado_de_baja` no se prueba a mano.
