@@ -6,7 +6,6 @@
 # (AUD-CNS-REG, D-36).
 # Las vistas solo validan la entrada y llaman acá.
 
-import logging
 from collections import namedtuple
 from datetime import datetime, time, timedelta
 
@@ -14,19 +13,16 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
-from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import Http404
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
-from core import extensiones, notificaciones
-from core.identidad import nombre_de_la_organizacion
+from core import correo, extensiones, notificaciones
 from core.models import (
     ADMINISTRADOR,
     MODELO_CUENTA,
@@ -44,8 +40,6 @@ from core.models import (
 )
 from core.tokens import generador_invitacion
 from core.validadores import validar_telefono
-
-logger = logging.getLogger(__name__)
 
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
 MENSAJE_FUERA_DE_ALCANCE = "Esa cuenta no está dentro de las que gestionás."
@@ -1425,18 +1419,10 @@ def _error_enlace_invalido():
 def _enviar_correo(cuenta, asunto, plantilla, contexto):
     """Envía a ``cuenta`` un correo en texto plano con ``plantilla`` y devuelve True si salió (D-33, D-35).
 
-    Si el envío falla, la falla queda en los registros de errores (``logger.exception``) con el id de la cuenta y
-    nunca con el contenido del correo, que lleva un enlace que da acceso a la cuenta (SEG-12, regla 11 de
-    USR-ALT-USR); devuelve False y quien llama decide qué ver la persona. Se llama siempre fuera de una transacción:
-    un servidor SMTP lento (hasta ``EMAIL_TIMEOUT``) no puede mantener bloqueos tomados (D-14).
+    Delega en ``core.correo.enviar_correo`` (D-54), que es la función pública; se conserva con este nombre y esta firma
+    para la recuperación y la invitación. Se llama siempre fuera de una transacción (D-14).
     """
-    cuerpo = render_to_string(plantilla, {**contexto, "nombre_organizacion": nombre_de_la_organizacion()})
-    try:
-        send_mail(asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, [cuenta.email])
-    except Exception:
-        logger.exception("No se pudo enviar el correo «%s» a la cuenta %s.", asunto, cuenta.pk)
-        return False
-    return True
+    return correo.enviar_correo(cuenta, asunto, plantilla, contexto)
 
 
 def _ruta_del_enlace(nombre_url, cuenta, generador):

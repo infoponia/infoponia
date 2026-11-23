@@ -103,5 +103,4 @@ No tienen archivo: su registro está en `docs/historial.md`. Los IDs nuevos sirv
 
 ## Tareas agregadas fuera de la ronda «Producción 1»
 
-- **USR-10** (`docs/tareas/core/USR-10-envio-de-correo-publico.md`, D-54): función pública de correo de `core`. Se hace después de la ronda y antes de COM-02 y de IOT-04 (el correo del IoT lo manda la revisión periódica, D-71).
 - **IOT-01 a IOT-07** (módulo `iot`): ver «Ronda «IoT 1»» arriba y `docs/tareas/ronda_iot_1.md`.

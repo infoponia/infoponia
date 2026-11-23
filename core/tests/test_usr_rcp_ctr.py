@@ -172,7 +172,7 @@ class UsrRcpCtrServicioTests(TestCase):
         enlace (que da acceso a la cuenta)."""
         capataz = crear_capataz()
 
-        with self.assertLogs("core.servicios", level="ERROR") as registros:
+        with self.assertLogs("core.correo", level="ERROR") as registros:
             resultado = servicios.pedir_recuperacion(capataz.email, construir_url)
 
         self.assertIsNone(resultado)
@@ -697,7 +697,7 @@ class UsrRcpCtrVistaTests(TestCase):
         salido bien (sin un error 500) y la falla queda en los registros de errores."""
         capataz = crear_capataz()
 
-        with self.assertLogs("core.servicios", level="ERROR"):
+        with self.assertLogs("core.correo", level="ERROR"):
             respuesta = self.pedir(capataz.email, follow=True)
 
         self.assertEqual(respuesta.redirect_chain, [(reverse("core:recuperacion_enviada"), 302)])
