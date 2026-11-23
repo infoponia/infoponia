@@ -415,7 +415,7 @@ class PortalDelProveedorTests(CotizacionBase):
     """Las vistas públicas (D-88 punto 4): ``/proveedor/<token>/`` valida y redirige a ``/proveedor/enlace/``, sin el token en la barra."""
 
     # D-88 punto 4 pedía ``Referrer-Policy: no-referrer``; con esa política Chromium manda ``Origin: null`` en los POST del mismo sitio y el CSRF de Django los rechaza (lo
-    # encontró ``test_visual_pedidos``). Se usa ``same-origin``: a otro sitio no se manda ningún ``Referer`` y el token no queda en ninguna página (la entrada solo redirige).
+    # encontró una verificación con navegador real; el cliente de Django no lo ve). Se usa ``same-origin``: a otro sitio no se manda ningún ``Referer`` y el token no queda en ninguna página (la entrada solo redirige).
     ENCABEZADOS = {"Referrer-Policy": "same-origin", "X-Robots-Tag": "noindex"}
 
     def setUp(self):

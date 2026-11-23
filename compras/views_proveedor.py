@@ -45,7 +45,7 @@ def _pagina_publica(vista):
         respuesta = vista(request, *args, **kwargs)
         respuesta["Cache-Control"] = "no-store, private"
         # D-88 punto 4 pedía ``no-referrer``, pero con esa política los navegadores mandan ``Origin: null`` en los POST del mismo sitio y Django rechaza el CSRF
-        # (lo encontró la verificación visual, ``test_visual_pedidos``). ``same-origin`` protege igual: el token solo viaja en ``/proveedor/<token>/``, que responde una
+        # (lo encontró una verificación con navegador real; el cliente de Django no lo ve). ``same-origin`` protege igual: el token solo viaja en ``/proveedor/<token>/``, que responde una
         # redirección sin página (nada que pida recursos con ese ``Referer``), y a otro sitio no se manda ningún ``Referer``.
         respuesta["Referrer-Policy"] = "same-origin"
         respuesta["X-Robots-Tag"] = "noindex"

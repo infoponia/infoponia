@@ -65,20 +65,21 @@ Si el tiempo apremia, lo último que se recorta es: el filtro propuesto por espe
 - Comando de pruebas: `python manage.py test compras core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`, y
   `python manage.py test compras --keepdb --tag concurrencia`.
 
-## Verificación (hecha por Claude Code; `docs/patrones/verificacion_por_claude.md`)
+## Verificación a mano (`docs/patrones/verificacion_a_mano.md`)
 
-La «Verificación a mano» de la tarea (tres pasos) se convirtió en recorrido y en verificación visual (D-95): el paso 1 son los pasos 1 a 6 de `test_recorrido_pedidos.py`, el 2 los pasos 8 a 11 y el 3 los pasos 7 y 14.
+La «Verificación a mano» original de la tarea (tres pasos) se amplió a los pasos del final, que **hace el estudiante** y se anotan en `docs/revisiones_pendientes.md` (D-96: sin navegador automatizado ni cargadores; los datos se crean en los pasos). Los pasos 1 a 6 de la tarea original están en los pasos 1 a 7 de abajo; el 2, en los 8 a 11; y el 3, en los 7 y 13.
 
 ### Verifiqué
 
 - **Recorrido con el cliente de Django** (`compras/tests/test_recorrido_pedidos.py`, 17 pasos, en verde): inicio del Agrónomo con «Pedir» (1a), agregar del catálogo (3a) y habilitar un insumo desde el pedido (3a.1a, con error y con éxito), errores 4a/4b/5a/8a/8b juntos, filtro propuesto de proveedores y «seleccionar todos», resumen, confirmar (un correo por proveedor, cada uno con **su** enlace y sin precios de referencia), ficha del Agrónomo y del Gerente (modo consulta), 403 para otro Agrónomo y el Capataz, portal sin cuenta (redirección sin el token, sin precio de referencia ni otros invitados), errores 6a/6b/6c/9a, envío con una cantidad mayor que la pedida, acuse, solo lectura, un segundo envío rechazado, aviso de pedido cubierto **una sola vez**, el segundo proveedor cotizando con precio unitario, cotizaciones visibles en la ficha, auditoría con «Proveedor (mediante enlace)», el token ausente de `compras_enlaceproveedor` y de `core_registroauditoria`, la tarjeta de pedidos de la ficha del proveedor, el CUIT que deja de editarse y el enlace vencido.
-- **Verificación visual con Playwright** (`compras/tests/test_visual_pedidos.py`, 8 pruebas, en verde), **mirando las capturas**. Encontró cuatro cosas que ninguna otra prueba veía; las cuatro se corrigieron y se anotan abajo:
+- **Un navegador real, antes de D-96** (Playwright, hoy retirado) encontró cuatro defectos que el cliente de Django no ve; los cuatro se corrigieron:
   1. **El portal no podía enviar nada en un navegador real**: con `Referrer-Policy: no-referrer` (D-88 punto 4) Chromium manda `Origin: null` en los POST del mismo sitio y Django rechazaba el CSRF («Verificación CSRF fallida»). Se pasó a `same-origin`.
-  2. En el celular, las tarjetas de la ficha se cortaban por la derecha (la grilla `.stack` se ensanchaba con la tabla); `assertSinScrollHorizontal` no lo detecta porque la página no scrollea: se corrigió y se agregó `assertSinTarjetasCortadas` a la prueba.
+  2. En el celular, las tarjetas de la ficha se cortaban por la derecha (la grilla `.stack` se ensanchaba con la tabla); se corrigió con `.stack > *{min-width:0}`.
   3. El nombre del proveedor y su categoría salían pegados («Semillas del Sur S. A.Semillas y plantines»).
   4. Doble punto en la cabecera del portal («Semillas del Sur S. A.. Pedido P-0331»).
+  Ya no se verifica así (D-96): esos cuatro puntos los cubren los pasos 12, 18 y 19 de abajo.
 - **Migraciones:** `makemigrations --check --dry-run`: sin cambios. `sqlmigrate compras 0002`: solo `CREATE TABLE` (seis), `CHECK`, `UNIQUE`, claves foráneas y un índice único parcial; **ninguna** sentencia `DROP`, `DELETE`, `UPDATE` ni `ALTER COLUMN`. `sqlmigrate core 0028`: no-op (solo cambian los `choices` de la acción). Ambas se aplicaron al crear la base de pruebas.
-- **Comandos de «Hecho cuando»:** `python manage.py test compras core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **1134 en verde** (13 saltadas: las visuales); `python manage.py test compras --keepdb --tag concurrencia`: **7 en verde**.
+- **Comandos de «Hecho cuando»:** ver «Pruebas» en el «Cierre».
 - **Sin dependencias nuevas**; `compras` no importa de `comercial` ni de `produccion`.
 
 ### Lo cubre una prueba
@@ -101,12 +102,11 @@ La «Verificación a mano» de la tarea (tres pasos) se convirtió en recorrido 
 
 - **Envío real de correo** (SMTP) y que los enlaces de los correos se armen bien con el dominio de producción detrás del proxy de Render (`request.build_absolute_uri` con `SECURE_PROXY_SSL_HEADER`): las pruebas usan el correo simulado.
 - **Despliegue:** que Render aplique `compras 0002` y `core 0028` y que el portal abra en producción.
-- **Otros navegadores:** la corrección de `Referrer-Policy` se verificó solo en Chromium; Safari (iPhone) y Firefox no se probaron con el portal real, que es donde van a cotizar los proveedores.
-- **El Agrónomo en un celular:** el caso de uso lo piensa para computadora y en un celular la tabla de «insumos bajo el mínimo» scrollea adentro (el botón «Agregar» queda a la derecha). No se rediseñó.
-- **Criterio de producto:** si «Nuevo pedido» como formulario que se vuelve a dibujar con cada botón «se siente bien», y si el «usted» del portal es el tono que quiere la organización.
-- **Carga:** la concurrencia se probó con dos hilos, no con carga.
+- **Otros navegadores:** la corrección de `Referrer-Policy` se verificó solo en Chromium; Safari (iPhone) y Firefox no se probaron con el portal real, que es donde van a cotizar los proveedores (paso 19).
+- **El aspecto y el JavaScript:** la verificación visual automática se retiró (D-96); los cubren los pasos 12, 18 y 19. El Agrónomo en un celular: el caso de uso lo piensa para computadora y en un celular la tabla de «insumos bajo el mínimo» scrollea adentro.
+- **Criterio de producto:** si «Nuevo pedido» (un formulario que se vuelve a dibujar con cada botón) y el «usted» del portal son lo que se quiere. Concurrencia con carga (se probó con dos hilos).
 
-### Pasos para replicar (opcionales; para el estudiante)
+### Pasos (los hace el estudiante y los tacha en `docs/revisiones_pendientes.md`, M5)
 
 **Antes de empezar.** En PowerShell, con el entorno virtual activo: `python manage.py migrate` (aplica `compras 0002` y `core 0028`) y `python manage.py runserver`; abrí <http://127.0.0.1:8000/>. Para ver los correos sin enviarlos de verdad, la base local tiene que tener el correo en modo consola (`CORREO_CONSOLA=1` en tu `.env`, y reiniciá `runserver`): cada correo se imprime en la terminal y de ahí copiás el enlace. Sin eso, los enlaces quedan «No se pudo enviar» (también es un caso para mirar, paso 15). **No escribas ninguna contraseña en un archivo del repo.**
 
@@ -139,6 +139,7 @@ Datos que hay que crear a mano, **en este orden** (como Gerente, salvo que se di
 16. Con la otra Agrónoma o el Capataz, abrí la ficha del pedido (`/compras/pedidos/<número>/`): 403.
 17. (Opcional, a mano en la base) Poné la fecha límite del pedido en el pasado: el enlace del proveedor da «Este enlace no se puede usar · El plazo para cotizar terminó.» y el pedido figura «Fecha límite vencida».
 18. (Opcional) Sin JavaScript (desactivalo en el navegador) y en un celular (ancho 390 px): «Nuevo pedido» y el portal siguen funcionando; solo el rótulo del precio deja de cambiar con la elección.
+19. **Navegador real (D-96).** Los pasos 8 a 11 ya son en una ventana privada: **enviá la cotización hasta el final** y comprobá que aparece «Recibimos su cotización…» y no una página «Prohibido (403)» o «Verificación CSRF fallida»; abrí la consola del navegador (F12) y que no haya errores en rojo. Repetí lo mismo con el pedido del paso 6 (**Confirmar pedido**) y con el formulario de habilitar del paso 3. Es lo único que el recorrido con el cliente de Django no puede ver: el CSRF, el encabezado `Origin` y el JavaScript. (Un defecto así existió: con `Referrer-Policy: no-referrer` el portal no podía enviar nada en Chromium; se corrigió con `same-origin`.)
 
 ## Cierre (la completa Claude Code al cerrar)
 
@@ -148,14 +149,14 @@ Datos que hay que crear a mano, **en este orden** (como Gerente, salvo que se di
 - **`core/models.py`:** `ROL_CLIENTE_ENLACE` y `ROL_PROVEEDOR_ENLACE` (D-65 punto 8, D-88 punto 5: `rol_externo` **no existía**; lo creó esta tarea, COM-04c solo suma su uso), el argumento `rol_externo` de `RegistroAuditoria.objects.registrar` (solo sin cuenta y con una de las dos constantes), las dos acciones (de negocio), `ETIQUETAS` nuevas y los roles externos y los estados del pedido en `VALORES_VISIBLES`; y las dos plantillas de auditoría, que muestran el origen externo en lugar de «InfoPonia».
 - **Servicios:** `compras/precios.py` (D-89), `servicios/cobertura.py`, `servicios/pedidos.py` (`insumos_bajo_el_minimo`, `insumos_pedibles`, `ya_pedido`, `proponer_fecha_limite`, `categorias_del_pedido`, `proveedores_invitables`, `resumir_pedido`, `registrar_pedido`, `consultar_pedidos`, `ficha_de_pedido`), `servicios/enlaces.py`, `servicios/cotizaciones.py`, `servicios/avisos.py` (`destinatarios_por_destino`, D-87 punto 3) y `servicios/inicio.py`; en `servicios/proveedores.py`, `tiene_pedidos_u_ordenes` y `pedidos_del_proveedor`.
 - **Pantallas:** `compras/views_pedidos.py` (lista, ficha y «Nuevo pedido»), `views_proveedor.py` y `urls_proveedor.py` (el portal público, `proveedor/` en `config/urls.py`), plantillas en `compras/templates/compras/pedidos/` y `proveedor/`, los correos de invitación y de acuse (`correo/`), la sección «Compras» del Inicio del Agrónomo, la tarjeta de pedidos de la ficha del proveedor, las pestañas «Pedidos» y «Proveedores» y la entrada «Compras» del menú (abre en «Pedidos»); `static/compras/css/compras.css` y `js/portal.js` (solo cambia el rótulo del precio).
-- **Verificación:** `compras/tests/test_recorrido_pedidos.py` y `test_visual_pedidos.py`.
+- **Verificación:** `compras/tests/test_recorrido_pedidos.py` y la «Verificación a mano» de arriba. La verificación visual con Playwright se hizo y después se retiró (D-96).
 
-**Pruebas** (resultado del cierre): `python manage.py test compras core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **1134 en verde** (13 saltadas: las visuales); `python manage.py test compras --keepdb --tag concurrencia`: **7 en verde**; visuales: `INFOPONIA_VISUAL=1 python manage.py test compras.tests.test_visual_pedidos --keepdb --tag visual`: **8 en verde**; `makemigrations --check --dry-run`: sin cambios.
-Son de CMP-02a: modelo 19, precios 13, cobertura 12, CMP-RLZ-PED 44, enlaces 21, CMP-ENV-COT 57, avisos 9, CMP-CNS-PED 27, pantallas 39, recorrido 1, visuales 8 y 2 de `rol_externo` en `core` (más las 3 de concurrencia). Una prueba de CMP-01 **cambió con el permiso del estudiante**: `MenuDeComprasVistaTests` ahora dice que «Compras» abre en «Pedidos» (antes «Proveedores», la única pestaña); no se borró ni se debilitó ninguna otra.
+**Pruebas** (resultado del cierre): `python manage.py test compras core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **1121 en verde**; `python manage.py test compras --keepdb --tag concurrencia`: **7 en verde**; `makemigrations --check --dry-run`: sin cambios.
+Son de CMP-02a: modelo 19, precios 13, cobertura 12, CMP-RLZ-PED 44, enlaces 21, CMP-ENV-COT 57, avisos 9, CMP-CNS-PED 27, pantallas 39, recorrido 1 y 2 de `rol_externo` en `core` (más las 3 de concurrencia). Una prueba de CMP-01 **cambió con el permiso del estudiante**: `MenuDeComprasVistaTests` ahora dice que «Compras» abre en «Pedidos» (antes «Proveedores», la única pestaña); no se borró ni se debilitó ninguna otra.
 
 **Decisiones y desvíos** (propuestos para `docs/temas_abiertos.md`; el 1 propone una enmienda de D-88):
 
-1. **`Referrer-Policy: same-origin`, no `no-referrer` (D-88 punto 4).** Con `no-referrer`, Chromium manda `Origin: null` en los POST del mismo sitio y el CSRF de Django los rechaza: el portal no podía enviar la cotización en un navegador real (lo encontró la verificación visual). `same-origin` protege igual (el token solo viaja en `/proveedor/<token>/`, que responde una redirección sin página, y a otro sitio no se manda ningún `Referer`). **COM-04c va a tropezar con lo mismo** en el portal del cliente (`docs/patrones/enlace_del_cliente.md`, sección 4, punto 3): conviene enmendar los dos patrones.
+1. **`Referrer-Policy: same-origin`, no `no-referrer` (D-88 punto 4).** Con `no-referrer`, Chromium manda `Origin: null` en los POST del mismo sitio y el CSRF de Django los rechaza: el portal no podía enviar la cotización en un navegador real (lo encontró un navegador real, antes de D-96). `same-origin` protege igual (el token solo viaja en `/proveedor/<token>/`, que responde una redirección sin página, y a otro sitio no se manda ningún `Referer`). **COM-04c va a tropezar con lo mismo** en el portal del cliente (`docs/patrones/enlace_del_cliente.md`, sección 4, punto 3): conviene enmendar los dos patrones.
 2. **Cotizaciones visibles desde que llegan** (regla 6 de CMP-CNS-PED y prototipo; decisión del estudiante, 23/11/2026). «Cómo se aplica» de `pedidos.md` decía «solo después del final del día de la fecha límite»: hay que corregirlo.
 3. **Regla 4c incompleta a propósito:** «ya pedido» cuenta solo los pedidos «en cotización»; la parte de la orden «pendiente de aprobación» la completa CMP-03, que crea `OrdenCompra`.
 4. **Correo de invitación que falla:** el aviso va en la pantalla del paso 13 con el texto de D-88 punto 6 y la ficha marca «No se pudo enviar»; **sin notificación de campana** para quien actuó (H21; decisión del estudiante).
@@ -183,7 +184,7 @@ Son de CMP-02a: modelo 19, precios 13, cobertura 12, CMP-RLZ-PED 44, enlaces 21,
 | `VIEWS.c_pednew` (alta de insumos) | Un renglón con un selector de insumo por invernadero y recálculo mientras se escribe | Los insumos bajo el mínimo con «Agregar», el catálogo agrupado por invernadero y «Quitar»; el resumen se calcula al apretar «Revisar pedido» | Pasos 2 a 4 y extensión 3a de CMP-RLZ-PED; `interfaz.md` (nada de recálculos al tipear) |
 | `VIEWS.c_pednew` (3a.1a) | No ofrecía habilitar un insumo | Ventana «Habilitarlo en un invernadero» (mínimo y precio) que vuelve al pedido con el insumo agregado | Extensión 3a.1a de CMP-RLZ-PED |
 | `VIEWS.c_pednew` (proveedores) | Chips con la lista completa y un orden por «vende lo que pide» | Filtro propuesto por las categorías de lo que se pide, «Todos» o una categoría, y «Seleccionar todos» solo de la lista filtrada | Paso 6, extensiones 7a y 7b de CMP-RLZ-PED; H13, MD-121 |
-| `VIEWS.c_pednew` (Enter) | Cualquier botón podía dispararse con Enter | El primer botón del formulario es «Revisar pedido» (oculto): Enter nunca agrega ni quita un insumo | La verificación visual lo probó; criterio de la regla D-61 |
+| `VIEWS.c_pednew` (Enter) | Cualquier botón podía dispararse con Enter | El primer botón del formulario es «Revisar pedido» (oculto): Enter nunca agrega ni quita un insumo | Se vio con un navegador real; criterio de la regla D-61 |
 | `VIEWS.c_pednew` (fecha) | Fecha límite desde «posterior a hoy» | Fecha límite desde mañana, con la propuesta de la configuración operativa | Regla «Fecha límite de cotizaciones»; extensión 8a |
 | `VIEWS.c_pednew` (resumen) | No había resumen: enviaba directo | Pantalla de resumen con el monto, la fecha, los proveedores y las advertencias de 4c, con «Confirmar pedido» y «Volver a corregir» | Pasos 9 y 10 y extensión 10a de CMP-RLZ-PED |
 | `VIEWS.c_pednew` (correo que falla) | Un aviso emergente con el reintento «desde el pedido» | Aviso en la pantalla del paso 13 con qué hacer, y «No se pudo enviar» en la ficha; sin reintento (es «Reenviar invitación», CMP-02b) | Extensión 12a; D-88 punto 6; H21 |

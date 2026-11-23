@@ -1,5 +1,5 @@
 # Recorrido de punta a punta de «Compras» → «Pedidos» y del portal del proveedor (CMP-02a): los pasos de la antigua «Verificación a mano», hechos por una prueba con el cliente de Django, en el
-# orden en que los haría una persona (docs/patrones/verificacion_por_claude.md, D-95). Cada paso nombra el caso de uso y la regla que verifica. Es una sola prueba larga a propósito: lo que se
+# orden en que los haría una persona (docs/patrones/verificacion_a_mano.md, D-96). Cada paso nombra el caso de uso y la regla que verifica. Es una sola prueba larga a propósito: lo que se
 # verifica es que el flujo completo encadena bien (un Agrónomo arma un pedido para dos invernaderos, invita a dos proveedores, cada uno cotiza una vez desde su enlace, el aviso de pedido cubierto
 # sale una sola vez, el Gerente consulta sin poder cambiar nada y la auditoría muestra «Proveedor (mediante enlace)»); las reglas sueltas las prueban ``test_cmp_*.py`` y ``test_pedidos_vistas.py``.
 # Los correos salen en ``on_commit``: en un ``TestCase`` (que está dentro de una transacción) se lo reemplaza por una llamada inmediata, que es lo que pasa en producción.
