@@ -65,6 +65,15 @@ class ProduccionConfig(AppConfig):
             extensiones_de_maestros.registrar_traspaso(registrantes.contar_traspaso, registrantes.traspasar_ordenes)
         if not any(clave == "lotes" for clave, _, _ in extensiones_de_maestros._PESTANAS):
             extensiones_de_maestros.registrar_pestana_de_invernadero("lotes", "Lotes activos", registrantes.pestana_de_lotes)
+        # PRD-03: la pestaña «Bitácora» de la ficha del invernadero (el Agrónomo a cargo y el Gerente; el Capataz no la ve).
+        if not any(clave == "bitacora" for clave, _, _ in extensiones_de_maestros._PESTANAS):
+            extensiones_de_maestros.registrar_pestana_de_invernadero("bitacora", "Bitácora", registrantes.pestana_de_bitacora)
+        # PRD-03: «Bitácora» en el menú del Gerente (solo consulta), después de «Producción». El Agrónomo entra desde «Producción»; el Capataz, desde su bandeja
+        # (no tiene menú lateral, D-25). `registrar_entrada` no repite una entrada ya registrada.
+        from core.menu import registrar_entrada
+        from core.models import Usuario
+
+        registrar_entrada(("Bitácora", "produccion:bitacora", "clock"), (Usuario.Rol.GERENTE,), despues_de="Producción")
 
         # `maestros.alertas`: los dos tipos de alerta de la merma (PRD-02; docs/api/produccion.md, sección 3). Nombres y severidades
         # del prototipo (decisión del estudiante, 22/11/2026). Registrar dos veces la misma definición no hace nada.
@@ -90,6 +99,14 @@ class ProduccionConfig(AppConfig):
                 clase=Clase.EVENTO,
                 origen=Origen.MERMA,
             )
+        )
+
+        # PRD-03: el cargador de datos para la verificación a mano (core/verificacion.py; docs/patrones/datos_de_verificacion.md). Orden 15: después de `maestros` (5) e `iot` (10).
+        from core import verificacion
+        from produccion import verificacion as verificacion_produccion
+
+        verificacion.registrar_cargador(
+            verificacion_produccion.CODIGO, "Producción: lote con merma previa, transición a realizar e insumos", 15, verificacion_produccion.cargar
         )
 
         # `core`: ``registrar_*`` es idempotente.

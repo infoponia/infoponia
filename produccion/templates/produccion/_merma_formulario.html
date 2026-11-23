@@ -1,0 +1,79 @@
+{% load iconos produccion %}{% comment %}El formulario de «Registrar merma» (PROD-REG-MRM): lo que HTMX reemplaza dentro de #merma-vivo. Recibe «invernaderos», «invernadero_id», «lotes» (FilaDeLoteConMerma), «lote_id»,
+«propuesta» (PropuestaDeMerma o None), «valores» (lo escrito), «errores» ({campo: mensaje}; los de un sector, «sector_<id>»), «resumen» (ResumenDeMerma o None), «firma» y «cambio_la_firma». Cambiar el invernadero o el
+lote solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Sin lotes activos (extensión 4b) el formulario queda
+deshabilitado con su motivo. Todo se escapa.{% endcomment %}
+<form id="merma-form" method="post" action="{% url 'produccion:registrar_merma' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general or errores.lote %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.lote }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">1 · ¿Dónde?</div>
+      <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'produccion:registrar_merma' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for i in invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+        </select>
+        {% if not invernaderos %}<div class="hint">No tenés invernaderos activos.</div>{% endif %}</div>
+      {% if invernadero_id %}
+      {% if lotes %}
+      <div class="fld"><label for="lote">Lote<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="lote" name="lote" data-desplegable hx-post="{% url 'produccion:registrar_merma' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for l in lotes %}<option value="{{ l.lote_id }}"{% if l.lote_id == lote_id %} selected{% endif %}>{{ l.codigo }} · {{ l.variedad }} · {{ l.etapa }} · {{ l.cantidad_actual }} plantas</option>{% endfor %}
+        </select></div>
+      {% else %}
+      <div class="empty"><b>No hay lotes activos en este invernadero</b><span>Elegí otro invernadero o cancelá. Cuando se concrete una siembra, el lote aparece acá.</span></div>
+      {% endif %}
+      {% endif %}
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+    </div>
+
+    {% if propuesta %}
+    <div class="card">
+      <div class="card-title">2 · Qué se perdió</div>
+      <p class="sm">Lote <b class="mono">{{ propuesta.lote.codigo }}</b> · {{ propuesta.variedad }} · {{ propuesta.etapa }} · <b>{{ propuesta.cantidad_actual }}</b> plantas · merma acumulada {{ propuesta.merma_acumulada }} % (máximo tolerado: {{ propuesta.porcentaje_maximo }} %).</p>
+      <p class="hint">Indicá las plantas perdidas solo en los sectores donde hubo pérdidas; en los demás se toma cero.</p>
+      <div class="grid2">
+        {% for s in propuesta.sectores %}
+        <div class="fld"><label for="cant_{{ s.sector_id }}">{{ s.nombre }} <span class="muted">(ocupados por el lote: {{ s.ocupados }})</span></label>
+          <input class="field-input" id="cant_{{ s.sector_id }}" name="cant_{{ s.sector_id }}" type="number" min="0" max="{{ s.ocupados }}" step="1" inputmode="numeric" placeholder="0" value="{% campo valores 'cant' s.sector_id %}">
+          {% campo errores 'sector' s.sector_id as error_del_sector %}{% if error_del_sector %}<div class="err">{{ error_del_sector }}</div>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% endif %}
+      <div class="grid2">
+        <div class="fld"><label for="causa">Causa<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="causa" name="causa" data-desplegable>
+            <option value="">Seleccionar…</option>
+            {% for valor, texto in propuesta.causas %}<option value="{{ valor }}"{% if valores.causa == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+          </select>
+          {% if errores.causa %}<div class="err">{{ errores.causa }}</div>{% else %}<div class="hint">El descarte por selección son plantas que se sacan a propósito: no suma a la merma acumulada.</div>{% endif %}</div>
+        <div class="fld"><label for="descripcion">Descripción (opcional)</label>
+          <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="300">{{ valores.descripcion }}</textarea>
+          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
+      </div>
+    </div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la merma"><div class="card-title">Resumen</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <p class="sm"><b>Lote:</b> {{ resumen.lote.codigo }} · {{ resumen.variedad }} · {{ resumen.etapa }}</p>
+      <p class="sm"><b>Plantas perdidas:</b> {{ resumen.total }} — {% for sector, plantas in resumen.por_sector %}{% if plantas %}{{ sector.nombre_sector }}: {{ plantas }}{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}</p>
+      <p class="sm"><b>Causa:</b> {% for valor, texto in propuesta.causas %}{% if valor == resumen.causa %}{{ texto }}{% endif %}{% endfor %}{% if resumen.descripcion %} · {{ resumen.descripcion }}{% endif %}</p>
+      <p class="sm"><b>Plantas del lote:</b> {{ resumen.cantidad_actual }} → <b>{{ resumen.cantidad_resultante }}</b>{% if resumen.lote_finalizado %} (el lote queda finalizado){% endif %}</p>
+      {% if resumen.supera_umbral %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>La merma acumulada del lote pasaría a {{ resumen.merma_acumulada_resultante }} %, por encima del {{ resumen.porcentaje_maximo }} % tolerado. Se avisa al Agrónomo y al Gerente.</div></div>{% endif %}
+      {% for orden, planificadas in resumen.transiciones_sin_cobertura %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>La transición {{ orden.codigo }} planificó {{ planificadas }} plantas y el lote quedaría con {{ resumen.cantidad_resultante }}.</div></div>{% endfor %}
+      <input type="hidden" name="firma" value="{{ firma }}">
+      <input type="hidden" name="visto_cantidad" value="{{ propuesta.cantidad_actual }}">
+      <input type="hidden" name="visto_ocupados" value="{% for s in propuesta.sectores %}{{ s.sector_id }}:{{ s.ocupados }}{% if not forloop.last %},{% endif %}{% endfor %}">
+    </div>
+    {% endif %}
+
+    <div class="footbar">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…">Ver resumen</button>
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar merma</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'produccion:registrar' %}">Cancelar</a>
+    </div>
+    {% endif %}
+  </div>
+</form>

@@ -5,6 +5,8 @@
 {% block contenido %}
 <div class="page narrow">
   <div class="page-h"><h1>Mis órdenes</h1></div>
+  <div class="card" style="margin-bottom:12px"><div class="card-title">Registrar en bitácora</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-ghost" href="{% url 'produccion:registrar_merma' %}">{% icono "warn" 15 %} Merma</a> <a class="btn btn-ghost" href="{% url 'produccion:registrar_aplicacion' %}">{% icono "drop" 15 %} Aplicación de insumos</a> <a class="btn btn-ghost" href="{% url 'produccion:registrar_evento' %}">{% icono "clock" 15 %} Otro evento</a></div></div>
   {% if bandeja.vencidas or bandeja.hoy or bandeja.proximas %}
     {% if bandeja.vencidas %}<h2 class="sm" style="margin:14px 0 6px;color:var(--status-danger)">Vencidas</h2>
       {% for f in bandeja.vencidas %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}{% endif %}

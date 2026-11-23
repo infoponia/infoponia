@@ -431,3 +431,20 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
   - **Contador de pedidos** (D-70, punto 5): vive en la caché por proceso de gunicorn; con más de un proceso, cada uno cuenta aparte. Anotarlo si cambia el despliegue.
   - **Lista de Hardware:** hace 21 consultas con 3 equipos y 21 con 8 (no crecen con la cantidad); la prueba compara las dos cantidades y no fija el 21, que incluye las del marco de la página.
   - **Cargador de datos de verificación:** `temp-vieja` (sensor dado de baja) no se carga hasta que IOT-06 traiga `baja_hardware`; el motivo `equipo_dado_de_baja` no se prueba a mano.
+
+
+## Abiertos desde PRD-03 (23/11/2026)
+
+- **Lo implementado distinto de lo escrito, o que la tarea no decía** (detalle en el «Cierre» de `docs/tareas/produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md`):
+  - **`registrar_aplicacion` devuelve `ResultadoDeAplicacion(aplicacion, lineas)`** y no `AplicacionInsumos` (`docs/api/produccion.md`, sección 6): así el Agrónomo ve montos, reparto y faltante (paso 13) y el Capataz recibe `None`. Se aprobó con el estudiante.
+  - **Agregados no previstos:** `produccion/servicios/alcance.py` (quién registra y dónde, compartido por los tres casos de uso), `aplicaciones.plantas_del_alcance` (lo que la pantalla guarda como `plantas_vistas`, extensión 12a) y `lotes` y `sectores` en `PaginaDeBitacora` (opciones de los filtros).
+  - **Extensión 4b:** no hay código `sin_lotes_activos`: `lotes_con_merma_posible` devuelve la lista vacía y la pantalla informa y deshabilita el formulario.
+  - **Códigos de error nuevos** (no estaban en `docs/api/produccion.md`, sección 1): ver «Contrato de los servicios» del Cierre; incluye `descripcion_obligatoria`, `sin_sectores`, `sin_insumos`, `insumo_no_aplicable`, `insumo_repetido`, `reparto_supera_lote`, `distribucion_incompleta`, `lote_no_activo` y `filtro_invalido`.
+  - **Extensión 12a:** un insumo que ya no es aplicable da `cambio_simultaneo` solo si la línea trae `lotes_vistos` (lo que la persona vio); sin eso, `insumo_no_aplicable`. La pantalla guarda lo que mostró el resumen y «Ver resumen» no lo compara.
+  - **Evento sin etapa:** un «otro evento» no guarda `etapa` aunque lleve lote (el caso de uso no la pide); `PROD-CNS-BIT` no la muestra.
+  - **Un Agrónomo consulta también los invernaderos dados de baja que tenía a su cargo** (regla 2 de PROD-CNS-BIT: la baja conserva el historial); el caso de uso solo lo dice para el Gerente («cualquiera registrado»).
+  - **`siembras.py` (PRD-01):** se corrigió el orden de bloqueos (`Insumo` antes que `InsumoInvernadero`, `docs/patrones/stock.md`, sección 5). Hasta entonces una siembra y una aplicación sobre el mismo insumo podían trabarse entre sí.
+  - **`core/models.py`:** se agregaron etiquetas de auditoría que todavía no se usan todas (`evento`, `alcance`, `monto_consumo`, `cantidad_consumida`, `faltante_sin_lote`) y `core/tests/urls_prueba_acceso.py` incluye `produccion.urls` por la entrada «Bitácora» del menú del Gerente.
+  - **Merma contra poner el sector fuera de servicio:** sin prueba hasta PRD-04 (disparador nuevo).
+  - **Cargador de datos de verificación:** la primera corrida habilitó en «Verificación Producción» un insumo «abono» que ya existía en la base del estudiante (sin stock); no se borró. Los insumos de prueba llevan «(prueba)» en el nombre para no chocar con datos propios.
+  - **Montos en pantalla** con coma decimal («$160,00»), como el resto del sistema; los de la auditoría, como texto con punto.

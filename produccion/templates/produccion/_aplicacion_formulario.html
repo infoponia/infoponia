@@ -1,0 +1,98 @@
+{% load iconos produccion %}{% comment %}El formulario de «Registrar aplicación» (PROD-REG-APL): lo que HTMX reemplaza dentro de #aplicacion-vivo. Recibe «invernaderos», «invernadero_id», «filas» (FilaDeInsumoAplicable),
+«grupos_de_sectores» ([(tipo de etapa, [FilaDeSectorAplicable])]), «hay_sectores», «marcados» (ids), «alcance_elegido», «valores», «errores» ({campo: mensaje}), «resumen» (ResumenDeAplicacion o None), «firma», «cambio_la_firma»,
+«vistos» ({existencia_id: «lote:disponible,…»}), «plantas_vistas», «vencimientos» ({lote_de_insumo_id: fecha}) y «es_capataz». Cambiar el invernadero solo redibuja lo que depende de él (accion «actualizar»), SIN validar y sin
+mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». El Capataz NO ve valores, destinos, reparto ni avisos de stock: el servicio no se los devuelve (vienen en None) y acá tampoco se piden. Todo se escapa.{% endcomment %}
+<form id="aplicacion-form" method="post" action="{% url 'produccion:registrar_aplicacion' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general or errores.sin_insumos %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.sin_insumos }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">1 · ¿Dónde?</div>
+      <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'produccion:registrar_aplicacion' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for i in invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+        </select>
+        {% if not invernaderos %}<div class="hint">No tenés invernaderos activos.</div>{% endif %}</div>
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+    </div>
+
+    {% if invernadero_id and not filas %}
+    <div class="empty"><b>Este invernadero no tiene insumos para aplicar</b><span>Hacen falta insumos habilitados y activos cuya categoría admita consumo directo. No se registra ningún cambio.</span></div>
+    {% elif invernadero_id %}
+    <div class="card">
+      <div class="card-title">2 · ¿En qué parte?</div>
+      <div class="fld">
+        <label class="inline"><input type="radio" name="alcance" value="todo"{% if alcance_elegido != "sectores" %} checked{% endif %}> Todo el invernadero</label>
+        {% if hay_sectores %}<label class="inline"><input type="radio" name="alcance" value="sectores"{% if alcance_elegido == "sectores" %} checked{% endif %}> Algunos sectores</label>{% endif %}
+        {% if not hay_sectores %}<div class="hint">El invernadero no tiene sectores activos: solo puede indicarse todo el invernadero.</div>{% endif %}
+      </div>
+      {% if hay_sectores %}
+      <fieldset class="fld" style="border:0;padding:0;margin:0"><legend class="lbl">Sectores (solo si elegiste «Algunos sectores»)</legend>
+        {% for tipo, lista in grupos_de_sectores %}
+        <div class="sm muted" style="margin-top:6px">{{ tipo }}</div>
+        {% for s in lista %}<label class="inline"><input type="checkbox" name="sectores" value="{{ s.sector_id }}"{% if s.sector_id in marcados %} checked{% endif %}> {{ s.nombre }}</label>{% endfor %}
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+      {% if errores.sector_ids %}<div class="err">{{ errores.sector_ids }}</div>{% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">3 · Qué insumos y cuánto</div>
+      <p class="hint">Escribí la cantidad usada de cada insumo; los que dejes vacíos no se registran. No se limita al stock: el hecho ya ocurrió.</p>
+      {% for f in filas %}
+      <div style="padding:8px 0;border-top:1px solid var(--border)">
+        <div class="fld"><label for="cantidad_{{ f.existencia_id }}"><b>{{ f.nombre }}</b> <span class="muted sm">stock libre: {{ f.stock_libre|cantidad }} {{ f.unidad }}{% if f.destino == "costo_de_los_lotes" %} · va al costo de los lotes{% elif f.destino == "gasto" %} · va a gasto{% endif %}</span></label>
+          <input class="field-input" id="cantidad_{{ f.existencia_id }}" name="cantidad_{{ f.existencia_id }}" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="{% campo valores 'cantidad' f.existencia_id %}">
+          {% campo errores 'cantidad' f.existencia_id as e1 %}{% if e1 %}<div class="err">{{ e1 }}</div>{% endif %}
+          {% campo errores 'insumo' f.existencia_id as e2 %}{% if e2 %}<div class="err">{{ e2 }}</div>{% endif %}</div>
+        {% if f.controla_vencimiento and f.lotes %}
+        <details><summary class="sm">Elegir de qué lotes sale (opcional)</summary>
+          <p class="hint">Se propone el que vence primero. Si elegís lotes, indicá cuánto sale de cada uno: tiene que sumar lo usado (o lo disponible, si es menos).</p>
+          {% for lote_id, disponible, vence in f.lotes %}
+          <div class="fld"><label for="reparto_{{ f.existencia_id }}_{{ lote_id }}">Lote {{ lote_id }} <span class="muted">(disponible: {{ disponible|cantidad }}{% if vence %} · vence {{ vence|date:"d/m/Y" }}{% endif %})</span></label>
+            <input class="field-input" id="reparto_{{ f.existencia_id }}_{{ lote_id }}" name="reparto_{{ f.existencia_id }}_{{ lote_id }}" type="text" inputmode="decimal" autocomplete="off" value="{% campo valores 'reparto' f.existencia_id lote_id %}"></div>
+          {% endfor %}
+          {% campo errores 'reparto' f.existencia_id as e3 %}{% if e3 %}<div class="err">{{ e3 }}</div>{% endif %}
+        </details>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <div class="fld" style="margin-top:8px"><label for="descripcion">Descripción (opcional)</label>
+        <textarea class="field-input" id="descripcion" name="descripcion" rows="2">{{ valores.descripcion }}</textarea>
+        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 500 caracteres. Si la aplicación fue antes, aclaralo acá: se registra con la fecha y la hora de ahora.</div>{% endif %}</div>
+    </div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la aplicación"><div class="card-title">Resumen</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <p class="sm"><b>Invernadero:</b> {{ resumen.invernadero.nombre_invernadero }} · <b>Alcance:</b> {% for s in resumen.sectores %}{{ s.nombre_sector }}{% if not forloop.last %}, {% endif %}{% empty %}todo el invernadero{% endfor %}</p>
+      {% if resumen.descripcion %}<p class="sm"><b>Descripción:</b> {{ resumen.descripcion }}</p>{% endif %}
+      {% for l in resumen.lineas %}
+      <div style="padding:8px 0;border-top:1px solid var(--border)">
+        <p class="sm"><b>{{ l.nombre }}</b>: {{ l.cantidad|cantidad }} {{ l.unidad }} — sale de {% for lote_id, cant in l.partes %}lote {{ lote_id }}: {{ cant|cantidad }}{% with vence=vencimientos|valor:lote_id %}{% if vence %} (vence {{ vence|date:"d/m/Y" }}){% endif %}{% endwith %}{% if not forloop.last %} · {% endif %}{% empty %}ningún lote{% endfor %}</p>
+        {% if l.valor is not None %}
+        <p class="sm">Valor: <b>${{ l.valor }}</b> · {% if l.destino == "costo_de_los_lotes" %}costo de los lotes{% else %}gasto{% endif %}{% if l.faltante %} · <b>{{ l.faltante|cantidad }} {{ l.unidad }} sin lote: el stock de {{ l.nombre }} queda negativo</b>{% endif %}</p>
+        {% if l.aviso %}<div class="hint" role="status">{{ l.aviso }}</div>{% endif %}
+        {% if l.reparto %}<table class="data-table"><thead><tr><th>Lote</th><th class="right">Plantas</th><th class="right">Parte</th><th class="right">Monto</th><th class="right">Costo por planta</th></tr></thead><tbody>
+          {% for r in l.reparto %}<tr><td class="mono">{{ r.codigo }}</td><td class="right mono">{{ r.plantas }}</td><td class="right mono">{{ r.porcentaje }} %</td><td class="right mono">${{ r.monto }}</td><td class="right mono">${{ r.costo_por_planta_antes|default_if_none:"—" }} → ${{ r.costo_por_planta_despues }}</td></tr>{% endfor %}
+        </tbody></table>{% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% if resumen.total_a_gasto is not None %}<p class="sm"><b>Va a gasto:</b> ${{ resumen.total_a_gasto }}</p>{% endif %}
+      <input type="hidden" name="firma" value="{{ firma }}">
+      <input type="hidden" name="plantas_vistas" value="{{ plantas_vistas }}">
+      {% for f in filas %}<input type="hidden" name="vistos_{{ f.existencia_id }}" value="{{ vistos|valor:f.existencia_id }}">{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="footbar">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…">Ver resumen</button>
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar aplicación</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'produccion:registrar' %}">Cancelar</a>
+    </div>
+    {% endif %}
+  </div>
+</form>

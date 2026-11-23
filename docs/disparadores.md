@@ -419,6 +419,8 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
    PRD-02, PRD-03, PRD-04 e INV-02; en PRD-02, `concretar_transicion` y `aplicar_merma`, que suman el ejercicio, las cuentas «Pérdidas por Mermas» y «Productos en Proceso» y el asiento de la merma) y sus pruebas, incluidas las de concurrencia, y respetar el orden de bloqueos del
    patrón. Anotar lo mismo en pendientes_CU (Drive).
 
+   **PRD-03 ya existe:** el asiento de la merma va dentro de `mermas.registrar_merma` (después de `aplicar_merma`) y el de cada consumo, dentro de `aplicaciones.registrar_aplicacion` (después de cada `Consumo`); ninguno de los dos devuelve hoy lo que hace falta para el asiento más que `Merma.cant_merma`, el costo de `ResultadoMerma` y `Consumo.monto_consumo`.
+
 ## Cuando se retome la cámara de frío (D-45)
 
 1. **Cámara.** Pestaña `camaraTab` de la ficha del invernadero, `PROD-ASG-CAM` y la extensión 10c de `PROD-REG-MRM` (recorta las
@@ -441,7 +443,7 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
 
 ## Cuando exista `produccion` completa (lote 5)
 
-1. **Pestaña «Bitácora» de la ficha del invernadero** (`registrar_pestana_de_invernadero`, PRD-03): la de «Lotes activos» ya la registra PRD-01.
+1. ~~**Pestaña «Bitácora» de la ficha del invernadero**~~ Hecho el 23/11/2026 en PRD-03 (`registrantes.pestana_de_bitacora`; la ven el Agrónomo a cargo y el Gerente).
 2. **Contabilidad** (ronda futura): los asientos de merma, aplicación de insumos (cuenta «Gastos de Producción», MD-90) y fuera de servicio salen de los registros de `produccion` (`Merma`, `AplicacionInsumos` e `ImputacionCosto`); hoy llevan su monto y no hay asiento (D-45).
 3. **Cosecha** (ronda futura): suma a la bitácora los tipos `cosecha` e `incumplimiento de cláusula suministrante` (hoy no se ofrecen en el filtro de PROD-CNS-BIT) y la condición 1 de la alerta de plantas comprometidas (`aplicar_merma`).
    **Planificado:** la condición 1, COM-02 (lote C2); el tipo `cosecha` con su vínculo a la cosecha (R152), COM-04 (lote C4, D-64 punto 4); el
@@ -468,15 +470,18 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
 
 ## Cuando exista PRD-03 o PRD-04 (merma, bitácora y sector fuera de servicio) — nace con PRD-02 (22/11/2026)
 
-1. **El núcleo de la merma ya existe, no se reescribe.** PRD-03 (Registrar Merma) llama a `produccion/servicios/mermas.aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por_sector=…, sector_ids=…, ordenes_excluidas=…)` dentro de su transacción y con el lote ya bloqueado; con `por_sector` baja los agujeros ocupados de cada ocupación y deja las ocupaciones en cero conservando el lote. PRD-04 usa `sector_ids` y `ordenes_excluidas`. Códigos de error: `cantidad_invalida`, `causa_obligatoria`, `causa_invalida`, `descripcion_larga` y `fecha_invalida`.
-2. **La condición 2 de plantas comprometidas solo está probada llamando a la función.** Desde Concretar Transición no puede dispararse (se excluye la orden que se concreta): PRD-03 agrega la prueba de punta a punta desde la pantalla de merma, con una transición «a realizar» ajena (`test_mermas_nucleo.py` ya tiene la de función).
+1. 1. ~~**El núcleo de la merma ya existe, no se reescribe.**~~ Hecho el 23/11/2026 en PRD-03 (`mermas.registrar_merma` llama a `aplicar_merma` con `por_sector` y `sector_ids`). PRD-03 (Registrar Merma) llama a `produccion/servicios/mermas.aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por_sector=…, sector_ids=…, ordenes_excluidas=…)` dentro de su transacción y con el lote ya bloqueado; con `por_sector` baja los agujeros ocupados de cada ocupación y deja las ocupaciones en cero conservando el lote. PRD-04 usa `sector_ids` y `ordenes_excluidas`. Códigos de error: `cantidad_invalida`, `causa_obligatoria`, `causa_invalida`, `descripcion_larga` y `fecha_invalida`.
+2. ~~**La condición 2 de plantas comprometidas solo está probada llamando a la función.**~~ Hecho el 23/11/2026 en PRD-03 (`test_post_l_una_transicion_a_realizar_ajena_...` y el aviso del resumen de la merma). Desde Concretar Transición no puede dispararse (se excluye la orden que se concreta): PRD-03 agrega la prueba de punta a punta desde la pantalla de merma, con una transición «a realizar» ajena (`test_mermas_nucleo.py` ya tiene la de función).
 3. **Nombres que PRD-03 y PRD-04 tienen que respetar (D-83):** `TransicionEtapa.bitacora_de_transicion` (no `bitacora`) y los códigos `causa_invalida`, `descripcion_larga` y `lote_sin_plantas`. La bitácora de una transición es una `Bitacora` de tipo `transicion` con la etapa destino; la de una merma, una `Merma` de tipo `merma` en la etapa de origen: PRD-03 las lista en PROD-CNS-BIT.
-4. **`registro_merma`** (acción de auditoría ya creada por PRD-02) la usa PRD-03 como acción propia; en una transición la merma va dentro de `concrecion_transicion`.
+4. ~~**`registro_merma`**~~ Hecho el 23/11/2026 en PRD-03 (`registrar_merma` la usa como acción propia). (acción de auditoría ya creada por PRD-02) la usa PRD-03 como acción propia; en una transición la merma va dentro de `concrecion_transicion`.
 5. **PRD-04 y `cancelar_orden_incluida`:** ahora, con una transición, toma el lote (nivel 4 de `bloqueos.md`) antes de la orden: quien la llama ya tiene que haber bloqueado cuentas, invernadero, variedad, sectores y lotes en ese orden. `notificar_a` trae al Capataz de la hija `TransicionEtapa`.
 
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 
 1. **Estado «fuera de servicio».** Ningún caso de uso de MAE-03 lo produce; `maestros` ya lo muestra y ya ofrece «Volver a activar» y «Dar de baja». PRD-04 agrega `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio` (lote 5 de `docs/api/extensiones_de_maestros.md`) y registra `registrar_efecto_de_vuelta_a_servicio` y `registrar_efecto_de_baja_de_sector`. La clave `fuera_de_servicio` ya está en `VALORES_VISIBLES["estado"]`.
+2. **Tipos de bitácora y filtro de la consulta.** PRD-04 suma `fuera_de_servicio` y `reubicacion` a `Bitacora.TipoEvento`, reemplaza la restricción `bitacora_tipo_evento_valido` (hoy: siembra, transicion, merma, aplicacion, otro_evento y consumo) y los suma a `bitacora.TIPOS_DE_FILTRO` (el filtro de PROD-CNS-BIT). Lo mismo harán COM-04a (`cosecha`, `incumplimiento_de_clausula`, `anulacion_de_resolucion`) e IOT-05 (`comando`). Nace en PRD-03.
+3. **Prueba de concurrencia que PRD-03 no pudo escribir:** «merma contra poner el sector fuera de servicio» (`produccion/tests/test_merma_concurrencia.py`; `docs/patrones/bloqueos.md`, «Lote 5»). La merma toma cuentas → invernadero → variedad → sectores con pérdidas → lote → ocupaciones. Nace en PRD-03.
+
 
 ## Cuando se arme el cron único
 

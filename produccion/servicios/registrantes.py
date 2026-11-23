@@ -23,7 +23,7 @@ from maestros.extensiones import Aviso, Contenido, Impedimento
 from maestros.models import Invernadero
 from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import lotes as api_lotes
-from produccion.servicios import ordenes
+from produccion.servicios import bitacora, ordenes
 
 Estado = OrdenTrabajo.Estado
 Tipo = OrdenTrabajo.Tipo
@@ -381,3 +381,16 @@ def seccion_de_inicio(usuario):
     if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.CAPATAZ:
         return None
     return SeccionDeInicio("produccion/_seccion_de_inicio.html", {"bandeja": ordenes.bandeja_del_capataz(usuario)})
+
+
+def pestana_de_bitacora(actor, invernadero):
+    """`registrar_pestana_de_invernadero("bitacora", "Bitácora", ...)` (PRD-03): el HTML de la bitácora del invernadero (la primera página, con sus filtros y, para el
+    Agrónomo a cargo, los botones «Registrar evento» y «Registrar aplicación» con el invernadero ya elegido), o `None` si `actor` no la ve: la ven el Agrónomo a
+    cargo y el Gerente (también de un invernadero dado de baja, regla 2 de PROD-CNS-BIT). El Capataz no consulta la bitácora."""
+    from produccion.views_bitacora import contexto_de_la_consulta  # adentro: las vistas importan los servicios que importan este módulo
+
+    if rol_de(actor) not in (Usuario.Rol.AGRONOMO, Usuario.Rol.GERENTE):
+        return None
+    if invernadero.pk not in {i.pk for i in bitacora.invernaderos_de_bitacora(actor)}:
+        return None
+    return render_to_string("produccion/_pestana_bitacora.html", contexto_de_la_consulta(actor, invernadero.pk, {}))

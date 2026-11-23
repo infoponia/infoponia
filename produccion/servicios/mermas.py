@@ -6,18 +6,26 @@
 # docs/api/produccion.md (sección 6), docs/patrones/costo_del_lote.md, D-50 punto 6 y D-51 punto 5.
 # Fuera de la ronda (D-45): el movimiento de stock «salida por merma» (postcondición d), el asiento (e), la condición 1 de plantas
 # comprometidas (cosechas) y la partida en cámara.
+# PRD-03 suma, al final, el caso de uso PROD-REG-MRM (Registrar Merma) sobre este núcleo: `registrar_merma` y sus lecturas.
 
 from collections import namedtuple
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Sum
+from django.http import Http404
 from django.utils import timezone
 
+from core.models import RegistroAuditoria, Usuario, referencia
+from inventario.servicios import variedades
 from maestros.servicios import alertas, configuracion
+from maestros.servicios import sectores as api_sectores
+from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
 from produccion.models import AlertaDeMerma, Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
-from produccion.servicios import costos
+from produccion.servicios import alcance, costos
+from produccion.servicios.bloqueos import traducir as _bloquear
 
 # Lo que devuelve `aplicar_merma`: la merma creada, lo que costó (se descontó del costo acumulado del lote) y las alertas creadas.
 ResultadoMerma = namedtuple("ResultadoMerma", "merma costo alertas")
@@ -28,9 +36,9 @@ LARGO_DE_LA_DESCRIPCION = 300  # la que escribe quien registra; con el texto leg
 LARGO_DE_LA_ALERTA = 200  # `Alerta.descripcion_alerta`
 
 
-def _error(codigo, mensaje, campo=None):
+def _error(codigo, mensaje, campo=None, datos=None):
     """Un `ErrorDeProduccion` (docs/api/produccion.md, sección 1)."""
-    return ErrorDeProduccion(codigo, mensaje, campo)
+    return ErrorDeProduccion(codigo, mensaje, campo, datos)
 
 
 def plantas(cantidad):
@@ -179,3 +187,262 @@ def aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por
     for alerta in creadas:
         AlertaDeMerma.objects.create(merma=merma, alerta=alerta)
     return ResultadoMerma(merma, costo, creadas)
+
+
+# ---- PROD-REG-MRM · Registrar Merma (PRD-03): el caso de uso sobre el núcleo de arriba ----
+# Fuente: docs/casos_de_uso/produccion/merma.md («Cómo se aplica en la ronda «Producción 1»»), docs/patrones/bloqueos.md (sección
+# `produccion`, «Lote 5») y D-83. Solo el lote en pie (D-45): sin partidas de cámara, asiento ni movimiento de stock.
+
+FilaDeLoteConMerma = namedtuple("FilaDeLoteConMerma", "lote_id codigo variedad etapa cantidad_actual")
+FilaDeSectorConMerma = namedtuple("FilaDeSectorConMerma", "sector_id nombre ocupados")
+# Lo que presenta el paso 6. `causas` es `[(valor, texto)]`; `merma_acumulada` y `porcentaje_maximo` son porcentajes.
+PropuestaDeMerma = namedtuple(
+    "PropuestaDeMerma", "lote variedad etapa invernadero cantidad_actual sectores merma_acumulada porcentaje_maximo causas"
+)
+# El resumen del paso 8. `por_sector` es `[(sector, plantas)]` (con todos los sectores del lote); `transiciones_sin_cobertura`, `[(orden, planificadas)]`.
+ResumenDeMerma = namedtuple(
+    "ResumenDeMerma",
+    "lote variedad etapa invernadero por_sector total causa descripcion cantidad_actual cantidad_resultante "
+    "merma_acumulada_resultante porcentaje_maximo supera_umbral transiciones_sin_cobertura lote_finalizado",
+)
+# Todo lo que `_planear` resuelve y que `registrar_merma` usa para escribir. `por_sector` es `{sector_id: plantas}` (solo las mayores que cero).
+PlanDeMerma = namedtuple("PlanDeMerma", "lote invernadero ocupaciones por_sector total causa descripcion")
+
+
+@dataclass(frozen=True)
+class DatosDeMerma:
+    """Lo que la persona carga en el paso 7 (`cantidades` es `((sector_id, plantas), ...)`; los sectores que no figuran valen cero) y lo que
+    VIO: `cantidad_actual` del lote y `ocupados` (`((sector_id, ocupados), ...)`). Si al confirmar cambiaron, `cambio_simultaneo` con lo
+    vigente (extensión 10d); `None` no lo verifica. No hay fecha: la merma es de hoy."""
+
+    lote_id: int
+    cantidades: tuple = ()
+    causa: str = ""
+    descripcion: str = ""
+    cantidad_actual: int | None = None
+    ocupados: tuple | None = None
+
+
+def _lote_del_actor(actor, lote_id):
+    """El lote (con lo que se muestra cargado) de un invernadero activo del actor. `sin_permiso` si el actor no puede registrar o el lote
+    no es de un invernadero suyo, `Http404` si no existe, `invernadero_inactivo` y `lote_no_activo` (campo `lote`)."""
+    alcance.exigir_actor(actor)
+    lote = (
+        Lote.objects.select_related("invernadero", "siembra__variedad__cultivo", "etapa__tipo_etapa").filter(pk=lote_id).first()
+    )
+    if lote is None:
+        raise Http404("No existe ese lote.")
+    alcance.exigir_en_alcance(actor, lote.invernadero)
+    if lote.estado_lote != Lote.Estado.ACTIVO:
+        raise _error("lote_no_activo", f"El lote {lote.codigo} ya no está activo.", "lote")
+    return lote
+
+
+def _ocupaciones_vigentes(lote):
+    """Las ocupaciones del lote con agujeros ocupados (paso 6), con su sector, por id."""
+    return list(
+        OcupacionSector.objects.filter(lote=lote, cant_agujeros_ocupados__gt=0).select_related("sector").order_by("pk")
+    )
+
+
+def _exigir_lo_visto(lote, ocupadas, datos):
+    """Extensión 10d: si lo que la persona vio (la cantidad actual del lote y los agujeros ocupados por sector) ya no es lo vigente,
+    `cambio_simultaneo` con lo vigente en `datos`."""
+    cambio = datos.cantidad_actual is not None and datos.cantidad_actual != lote.cantidad_actual
+    if datos.ocupados is not None and {s: o for s, o in datos.ocupados} != ocupadas:
+        cambio = True
+    if cambio:
+        raise _error(
+            "cambio_simultaneo",
+            f"Mientras cargabas los datos, el lote {lote.codigo} cambió: ahora tiene {plantas(lote.cantidad_actual)}. Volvé a cargar las cantidades.",
+            None,
+            {"cantidad_actual": lote.cantidad_actual, "ocupados": ocupadas},
+        )
+
+
+def _exigir_cantidades(ocupadas, datos):
+    """Extensiones 8a y 8b y regla «Cantidad válida»: cada sector entre cero y los agujeros que el lote ocupa ahí; en total, al menos una
+    planta. Devuelve `{sector_id: plantas}` solo con las mayores que cero."""
+    por_sector = {}
+    for sector_id, cantidad in datos.cantidades:
+        if not isinstance(cantidad, int) or isinstance(cantidad, bool) or not 0 <= cantidad <= ocupadas.get(sector_id, 0):
+            ahi = ocupadas.get(sector_id, 0)
+            raise _error(
+                "cantidad_invalida",
+                f"Las plantas perdidas en ese sector deben ser entre 0 y {ahi} (los agujeros que el lote ocupa ahí).",
+                f"sector_{sector_id}",
+                {"ocupados": ahi},
+            )
+        por_sector[sector_id] = por_sector.get(sector_id, 0) + cantidad
+    por_sector = {s: q for s, q in por_sector.items() if q > 0}
+    if any(q > ocupadas.get(s, 0) for s, q in por_sector.items()):  # el mismo sector repetido no puede pasarse
+        raise _error("cantidad_invalida", "Las plantas perdidas en un sector no pueden superar las que el lote ocupa ahí.", "cantidad")
+    if not por_sector:
+        raise _error("cantidad_invalida", "La merma debe ser de al menos una planta.", "cantidad", {"minimo": 1})
+    return por_sector
+
+
+def _planear(actor, datos):
+    """Todas las verificaciones de los pasos 7 y 8 y de la extensión 10d, con lo que haya en la base en este momento (registrar vuelve a
+    llamarla después de bloquear). No escribe. Orden: alcance y estado, lo visto (10d), cantidades (8a, 8b), causa (8c) y descripción."""
+    lote = _lote_del_actor(actor, datos.lote_id)
+    ocupaciones = _ocupaciones_vigentes(lote)
+    ocupadas = {o.sector_id: o.cant_agujeros_ocupados for o in ocupaciones}
+    _exigir_lo_visto(lote, ocupadas, datos)
+    por_sector = _exigir_cantidades(ocupadas, datos)
+    if not datos.causa:
+        raise _error("causa_obligatoria", "Indicá la causa de la merma.", "causa")
+    if datos.causa not in Merma.Causa.values:
+        raise _error("causa_invalida", "Esa causa no corresponde a un lote en pie.", "causa")
+    descripcion = (datos.descripcion or "").strip()
+    if len(descripcion) > LARGO_DE_LA_DESCRIPCION:
+        raise _error("descripcion_larga", f"La descripción pasa de {LARGO_DE_LA_DESCRIPCION} caracteres.", "descripcion")
+    return PlanDeMerma(lote, lote.invernadero, ocupaciones, por_sector, sum(por_sector.values()), datos.causa, descripcion)
+
+
+def lotes_con_merma_posible(actor, invernadero_id):
+    """Paso 4: los lotes ACTIVOS del invernadero con su variedad, etapa y cantidad actual, por id. Lista vacía si no tiene (extensión 4b: la
+    pantalla lo informa y ofrece otro invernadero o cancelar). `sin_permiso`, `invernadero_inactivo` o `Http404` como `alcance.invernadero_del_actor`."""
+    invernadero = alcance.invernadero_del_actor(actor, invernadero_id)
+    lotes = (
+        Lote.objects.filter(invernadero=invernadero, estado_lote=Lote.Estado.ACTIVO)
+        .select_related("siembra__variedad__cultivo", "etapa__tipo_etapa")
+        .order_by("pk")
+    )
+    return [
+        FilaDeLoteConMerma(l.pk, l.codigo, str(l.siembra.variedad), l.etapa.tipo_etapa.nombre_etapa, l.cantidad_actual) for l in lotes
+    ]
+
+
+def datos_de_merma(actor, lote_id):
+    """Paso 6: la cantidad actual del lote, los sectores donde tiene ocupaciones vigentes con sus agujeros ocupados, la merma acumulada, el
+    porcentaje máximo y las causas del lote en pie. El actor propone cero plantas en cada sector. No escribe ni bloquea."""
+    lote = _lote_del_actor(actor, lote_id)
+    return PropuestaDeMerma(
+        lote,
+        str(lote.siembra.variedad),
+        lote.etapa.tipo_etapa.nombre_etapa,
+        lote.invernadero,
+        lote.cantidad_actual,
+        [FilaDeSectorConMerma(o.sector_id, o.sector.nombre_sector, o.cant_agujeros_ocupados) for o in _ocupaciones_vigentes(lote)],
+        merma_acumulada(lote),
+        configuracion.obtener().porc_merma_maxima,
+        [(c.value, c.label) for c in Merma.Causa],
+    )
+
+
+def _sin_cobertura(lote, cantidad_resultante):
+    """Condición 2 de las plantas comprometidas (regla 15 de 8.8): las transiciones «a realizar» del lote con más plantas planificadas que
+    `cantidad_resultante`, como `[(orden, planificadas)]`."""
+    pendientes = list(TransicionEtapa.objects.filter(lote=lote, estado_orden=OrdenTrabajo.Estado.A_REALIZAR).order_by("pk"))
+    planificadas = {
+        f["orden_id"]: f["total"]
+        for f in OcupacionSector.objects.filter(orden_id__in=[o.pk for o in pendientes])
+        .values("orden_id")
+        .annotate(total=Sum("cant_agujeros_planificados"))
+    }
+    return [(o, planificadas.get(o.pk, 0)) for o in pendientes if planificadas.get(o.pk, 0) > cantidad_resultante]
+
+
+def resumen_de_merma(actor, datos):
+    """Paso 8: valida todo como `registrar_merma` (sin bloquear) y presenta el lote, las plantas perdidas por sector y en total, la causa,
+    la cantidad resultante y las advertencias (umbral superado, plantas comprometidas sin cobertura). No escribe."""
+    plan = _planear(actor, datos)
+    lote = plan.lote
+    resultante = lote.cantidad_actual - plan.total
+    suma = _acumulada(lote) + (0 if plan.causa == Merma.Causa.DESCARTE_POR_SELECCION else plan.total)
+    porcentaje = configuracion.obtener().porc_merma_maxima
+    return ResumenDeMerma(
+        lote,
+        str(lote.siembra.variedad),
+        lote.etapa.tipo_etapa.nombre_etapa,
+        plan.invernadero,
+        [(o.sector, plan.por_sector.get(o.sector_id, 0)) for o in plan.ocupaciones],
+        plan.total,
+        plan.causa,
+        plan.descripcion,
+        lote.cantidad_actual,
+        resultante,
+        (Decimal(suma) * 100 / lote.cantidad_inicial).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        porcentaje,
+        suma * 100 > porcentaje * lote.cantidad_inicial,
+        _sin_cobertura(lote, resultante),
+        resultante == 0,
+    )
+
+
+def registrar_merma(actor, datos):
+    """PROD-REG-MRM: registra la merma de un lote en pie y devuelve la `Merma`.
+
+    - Quién: Capataz asignado o Agrónomo a cargo, con la cuenta activa (`sin_permiso`); invernadero activo; lote «activo».
+    - Verificaciones DESPUÉS de bloquear (todo de nuevo, con lo bloqueado): lo visto (extensión 10d: `cambio_simultaneo` con la cantidad y los
+      ocupados vigentes), las cantidades por sector (8a, 8b: `cantidad_invalida`), la causa (8c: `causa_obligatoria`, `causa_invalida`) y la
+      descripción (`descripcion_larga`).
+    - Postcondiciones a, b, c, k y l: `aplicar_merma(..., por_sector=..., sector_ids=...)`, con la fecha de hoy y el actor como responsable.
+      m, n y D-36: UN registro `registro_merma` con la merma (que es el registro de bitácora), el lote, las ocupaciones y los sectores
+      afectados (agujeros ocupados antes → después) y las alertas creadas.
+    - Bloqueos (docs/patrones/bloqueos.md, sección `produccion`), todos `FOR NO KEY UPDATE`: las cuentas del actor y del Agrónomo (en orden
+      de id) → el invernadero → la variedad → los sectores con pérdidas (por id) → el lote → sus ocupaciones (por id). Lo que se leyó antes
+      de bloquear se relee. Todo o nada (D-22).
+    """
+    previo = _lote_del_actor(actor, datos.lote_id)
+    pedidos = {s for s, q in datos.cantidades if isinstance(q, int) and q > 0}
+    sector_ids = sorted(pedidos & {o.sector_id for o in _ocupaciones_vigentes(previo)})  # los que no son del lote fallan como 8a, sin bloquearlos
+    with transaction.atomic():
+        cuentas = {actor.pk, *([previo.invernadero.agronomo_id] if previo.invernadero.agronomo_id else [])}
+        list(Usuario.objects.select_for_update(no_key=True).filter(pk__in=cuentas).order_by("pk"))
+        alcance.exigir_actor(actor)  # después de bloquear: pudo darse de baja mientras esperaba
+        _bloquear(
+            bloquear_invernadero_activo, previo.invernadero_id, equivalencias={"invernadero_inactivo": ("invernadero_inactivo", None)}
+        )
+        _bloquear(variedades.bloquear_variedad, previo.siembra.variedad_id)
+        if sector_ids:
+            _bloquear(
+                api_sectores.bloquear_sectores,
+                previo.invernadero_id,
+                sector_ids,
+                equivalencias={"sector_no_disponible": ("cambio_simultaneo", None)},
+            )
+        Lote.objects.select_for_update(no_key=True).filter(pk=previo.pk).first()
+        list(OcupacionSector.objects.select_for_update(no_key=True).filter(lote_id=previo.pk).order_by("pk"))
+        plan = _planear(actor, datos)  # 10d y todas las verificaciones, con lo bloqueado
+        return _escribir(actor, plan)
+
+
+def _escribir(actor, plan):
+    """Pasos 10 y 11: `aplicar_merma` con las cantidades por sector y el único registro de auditoría."""
+    lote = plan.lote
+    sectores = [o.sector for o in plan.ocupaciones if o.sector_id in plan.por_sector]
+    afectadas = [o for o in plan.ocupaciones if o.sector_id in plan.por_sector]
+    ocupados_antes = {pk: a.ocupados for pk, a in api_sectores.agujeros_de(sectores).items()}
+    cantidad_antes, costo_antes, estado_antes = lote.cantidad_actual, Decimal(lote.costo_acumulado), lote.estado_lote
+    resultado = aplicar_merma(
+        lote, plan.total, plan.causa, plan.descripcion, timezone.localdate(), actor, por_sector=plan.por_sector, sector_ids=sorted(plan.por_sector)
+    )
+    despues = {pk: a.ocupados for pk, a in api_sectores.agujeros_de(sectores).items()}
+    cambios = {
+        "cantidad_actual": {"antes": str(cantidad_antes), "despues": str(lote.cantidad_actual)},
+        "costo_acumulado": {"antes": str(costo_antes), "despues": str(lote.costo_acumulado)},
+        "agujeros_ocupados": {
+            "antes": [f"{s.nombre_sector}: {ocupados_antes[s.pk]}" for s in sectores],
+            "despues": [f"{s.nombre_sector}: {despues[s.pk]}" for s in sectores],
+        },
+    }
+    if lote.estado_lote != estado_antes:
+        cambios["estado"] = {"antes": estado_antes, "despues": lote.estado_lote}
+    datos_de_auditoria = {
+        "invernadero": referencia(plan.invernadero),
+        "lote": referencia(lote),
+        "merma": referencia(resultado.merma),
+        "cantidad_merma": str(plan.total),
+        "causa_merma": Merma.Causa(plan.causa).label,
+    }
+    if resultado.alertas:
+        datos_de_auditoria["alertas_creadas"] = [referencia(a) for a in resultado.alertas]
+    RegistroAuditoria.objects.registrar(
+        usuario=actor,
+        accion=RegistroAuditoria.Accion.REGISTRO_MERMA,
+        afectados=[resultado.merma, lote, *afectadas, *sectores, *resultado.alertas],
+        detalle={"cambios": cambios, "datos": datos_de_auditoria},
+    )
+    return resultado.merma

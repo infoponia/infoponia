@@ -1,0 +1,29 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Registrar en bitácora» (PRD-03, `VIEWS['bit-reg']`): qué se va a registrar. El Agrónomo puede elegir antes el invernadero (GET, sin JavaScript); el Capataz va directo. Las siembras, las
+transiciones y las cosechas se registran solas al concretar cada orden. Recibe «invernaderos», «elegido» y «es_capataz». Todo se escapa.{% endcomment %}
+{% block titulo %}Registrar en bitácora · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% if es_capataz %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "chev" 14 %} {% if es_capataz %}Mis órdenes{% else %}Producción{% endif %}</a>
+  <div class="page-h"><h1>Registrar en bitácora</h1><div class="sub">Elegí qué vas a registrar.</div></div>
+  {% if not es_capataz and invernaderos %}
+  <form class="card" method="get" action="{% url 'produccion:registrar' %}" style="margin-bottom:16px">
+    <div class="fld" style="margin:0"><label for="invernadero">Invernadero (opcional)</label>
+      <select class="field-input" id="invernadero" name="invernadero" data-desplegable>
+        <option value="">Elegirlo en el paso siguiente</option>
+        {% for i in invernaderos %}<option value="{{ i.pk }}"{% if elegido and elegido.pk == i.pk %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+      </select></div>
+    <button class="btn btn-ghost btn-sm" type="submit" style="margin-top:8px">Continuar</button>
+  </form>
+  {% endif %}
+  {% if not invernaderos %}<div class="empty"><b>No tenés invernaderos activos</b><span>Cuando tengas uno a tu cargo o asignado, vas a poder registrar acá.</span></div>
+  {% else %}
+  <div class="bigopt">
+    <a class="opt" href="{% url 'produccion:registrar_merma' %}{% if elegido %}?invernadero={{ elegido.pk }}{% endif %}"><span class="ico">{% icono "warn" 20 %}</span><span class="t"><b>Merma</b><span>Plantas de un lote en pie que se perdieron o se descartaron.</span></span>{% icono "right" 16 %}</a>
+    <a class="opt" href="{% url 'produccion:registrar_aplicacion' %}{% if elegido %}?invernadero={{ elegido.pk }}{% endif %}"><span class="ico">{% icono "drop" 20 %}</span><span class="t"><b>Aplicación de insumos</b><span>Productos de limpieza o nutrientes usados sin una orden de trabajo.</span></span>{% icono "right" 16 %}</a>
+    <a class="opt" href="{% url 'produccion:registrar_evento' %}{% if elegido %}?invernadero={{ elegido.pk }}{% endif %}"><span class="ico">{% icono "clock" 20 %}</span><span class="t"><b>Otro evento</b><span>Un hecho que conviene dejar registrado y que no es de los tipos anteriores. Por ejemplo, un corte de energía.</span></span>{% icono "right" 16 %}</a>
+  </div>
+  <p class="hint" style="margin-top:16px">Las siembras, las transiciones y las cosechas se registran solas al concretar cada orden.</p>
+  {% endif %}
+</div>
+{% endblock %}

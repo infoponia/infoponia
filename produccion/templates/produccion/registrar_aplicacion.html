@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Registrar aplicación» (PRD-03, PROD-REG-APL, `VIEWS.aplic`): página completa, pensada para el celular (marco angosto, D-25). El bloque que cambia con el invernadero es «_aplicacion_formulario.html» (HTMX lo
+reemplaza dentro de #aplicacion-vivo, sin mover el scroll ni validar; sin JavaScript, cada botón es un POST común con su «accion»). El Gerente no llega acá (404).{% endcomment %}
+{% block titulo %}Registrar aplicación · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:registrar' %}">{% icono "chev" 14 %} Registrar en bitácora</a>
+  <div class="page-h"><h1>Registrar aplicación de insumos</h1><div class="sub">Productos de limpieza o nutrientes usados sin una orden de trabajo. Se registra con la fecha y la hora actuales. Antes de confirmar vas a ver un resumen.</div></div>
+  <div id="aplicacion-vivo" hx-target="#aplicacion-vivo" hx-swap="innerHTML show:none">{% include "produccion/_aplicacion_formulario.html" %}</div>
+</div>
+{% endblock %}

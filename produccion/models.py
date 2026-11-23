@@ -8,10 +8,10 @@
 # (FieldError). Mismo caso que `MovimientoInsumo.tipo_movimiento` (INV-01). Decidido por el estudiante en PRD-01; anotado en el
 # cierre y en docs/temas_abiertos.md.
 #
-# PRD-02 suma `TransicionEtapa`, `Merma` y `AlertaDeMerma` (al final del archivo). NO hay tablas de PRD-03 y PRD-04 (`AplicacionInsumos`,
-# `FueraDeServicio`...). `OrdenTrabajo.Tipo` y
-# `Bitacora.TipoEvento` ya nacen con los valores de las tareas siguientes (D-67 punto 1 y decisión del estudiante), para que esas
-# tareas no cambien los `choices` ni las restricciones.
+# PRD-02 suma `TransicionEtapa`, `Merma` y `AlertaDeMerma`; PRD-03 suma `AplicacionInsumos` (hija de `Bitacora`), `ImputacionCosto`, el
+# origen `aplicacion` del `Consumo` (D-51 puntos 3 y 4) y los tipos de bitácora `aplicacion`, `otro_evento` y `consumo`. NO hay todavía
+# tablas de PRD-04 (`FueraDeServicio`, `Reubicacion`): sus tipos de evento los suma esa tarea. `OrdenTrabajo.Tipo` ya nace con los cinco
+# valores (D-67 punto 1), para que las tareas siguientes no cambien sus `choices` ni sus restricciones.
 
 from django.db import models
 from django.db.models import F, Q
@@ -281,11 +281,15 @@ class Bitacora(OrigenDocumento):
     TIPO_DE_ORIGEN = OrigenDocumento.Tipo.BITACORA
 
     class TipoEvento(models.TextChoices):
-        """`siembra`, `transicion` y `merma` nacen acá (decisión del estudiante en PRD-01); los demás los suman sus tareas."""
+        """`siembra`, `transicion` y `merma` nacen en PRD-01; PRD-03 suma `aplicacion`, `otro_evento` y el interno `consumo` (el de una
+        aplicación: la consulta de la bitácora no lo lista, D-51 punto 3); los demás los suman sus tareas (PRD-04, COM-04a, IOT-05)."""
 
         SIEMBRA = "siembra", "Siembra"
         TRANSICION = "transicion", "Transición de etapa"
         MERMA = "merma", "Merma"
+        APLICACION = "aplicacion", "Aplicación de insumos"
+        OTRO_EVENTO = "otro_evento", "Otro evento"
+        CONSUMO = "consumo", "Consumo"  # interno: no se lista en la bitácora
 
     invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="bitacoras")  # R081
     lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="bitacoras")  # R082
@@ -312,7 +316,8 @@ class Bitacora(OrigenDocumento):
         ]
         constraints = [
             models.CheckConstraint(
-                condition=Q(tipo_evento__in=["siembra", "transicion", "merma"]), name="bitacora_tipo_evento_valido"
+                condition=Q(tipo_evento__in=["siembra", "transicion", "merma", "aplicacion", "otro_evento", "consumo"]),
+                name="bitacora_tipo_evento_valido",
             ),
         ]
 
@@ -321,17 +326,33 @@ class Bitacora(OrigenDocumento):
         return f"Bitácora #{self.pk}"
 
 
+class AplicacionInsumos(Bitacora):
+    """Uso de insumos sin una orden de trabajo, como la limpieza o los nutrientes (PROD-REG-APL; MD-28, D-51). Hija de `Bitacora` con
+    `tipo_evento = aplicacion`: que lo sea lo garantiza el servicio (una restricción de la hija no ve el campo del padre). No tiene
+    atributos propios: usa la fecha y la hora actuales, la descripción, el invernadero y el responsable de `Bitacora`, sin lote ni etapa.
+    El alcance va en `Bitacora.sectores` (vacío = todo el invernadero); sus consumos, en `Consumo.aplicacion`."""
+
+    class Meta:
+        verbose_name = "Aplicación de insumos"
+        verbose_name_plural = "Aplicaciones de insumos"
+
+    def __str__(self):
+        """«Aplicación #N» (texto de la auditoría, D-36)."""
+        return f"Aplicación #{self.pk}"
+
+
 class Consumo(Bitacora):
-    """Un consumo por cada reserva de insumo de la siembra que se consumió (cantidad consumida mayor que cero). Hijo de
-    `Bitacora` con `tipo_evento = siembra`. Sus movimientos de insumo llevan `origen = este consumo` (D-52): no hay tabla de enlace.
-    Se crea ANTES que sus movimientos."""
+    """Un consumo por cada reserva de insumo de la siembra que se consumió (cantidad consumida mayor que cero), o por cada insumo de una
+    aplicación (PRD-03: fila de bitácora de tipo interno `consumo`). Hijo de `Bitacora` con `tipo_evento = siembra` o `consumo`. Sus
+    movimientos de insumo llevan `origen = este consumo` (D-52): no hay tabla de enlace. Se crea ANTES que sus movimientos."""
 
     monto_consumo = models.DecimalField(max_digits=14, decimal_places=2)  # cant_consumo × precio de referencia al concretar; fijo
     cant_consumo = models.DecimalField(max_digits=14, decimal_places=3)  # reservada − devuelta
     fecha_consumo = models.DateField()  # la fecha efectiva de la siembra
     insumo_invernadero = models.ForeignKey(InsumoInvernadero, on_delete=models.PROTECT, related_name="consumos")  # R045
-    # R105. Nula salvo en consumos de siembra; PRD-03 la reemplaza por «exactamente uno de siembra y aplicación» (D-51 punto 3).
+    # R105. Exactamente uno de `siembra` y `aplicacion` (D-51 punto 3, regla 7 de 8.4 con MD-28); COM-04a suma el tercero, `orden`.
     siembra = models.ForeignKey(Siembra, null=True, blank=True, on_delete=models.PROTECT, related_name="consumos")
+    aplicacion = models.ForeignKey(AplicacionInsumos, null=True, blank=True, on_delete=models.PROTECT, related_name="consumos")
 
     class Meta:
         verbose_name = "Consumo"
@@ -339,8 +360,12 @@ class Consumo(Bitacora):
         constraints = [
             models.CheckConstraint(condition=Q(monto_consumo__gte=0), name="consumo_monto_no_negativo"),
             models.CheckConstraint(condition=Q(cant_consumo__gt=0), name="consumo_cantidad_positiva"),
-            # Origen en PRD-01: siempre una siembra.
-            models.CheckConstraint(condition=Q(siembra__isnull=False), name="consumo_origen_es_siembra"),
+            # Un solo origen (D-51 punto 3): reemplaza a la de PRD-01 («`siembra` no nula», `consumo_origen_es_siembra`).
+            models.CheckConstraint(
+                condition=(Q(siembra__isnull=False) & Q(aplicacion__isnull=True))
+                | (Q(siembra__isnull=True) & Q(aplicacion__isnull=False)),
+                name="consumo_un_solo_origen",
+            ),
         ]
 
     def __str__(self):
@@ -441,3 +466,25 @@ class AlertaDeMerma(models.Model):
     def __str__(self):
         """«Alerta de merma #N» (texto de la auditoría, D-36)."""
         return f"Alerta de merma #{self.pk}"
+
+
+class ImputacionCosto(models.Model):
+    """Parte del costo de un consumo de aplicación que recibe un lote de plantas (MD-28, D-51 punto 4). La suma de las imputaciones de un
+    consumo es exactamente su `monto_consumo` (la verifica el servicio y la prueba de invariantes) y cada una suma a `Lote.costo_acumulado`
+    (docs/patrones/costo_del_lote.md). Un lote que recibe cero no tiene imputación."""
+
+    consumo = models.ForeignKey(Consumo, on_delete=models.PROTECT, related_name="imputaciones")
+    lote = models.ForeignKey(Lote, on_delete=models.PROTECT, related_name="imputaciones")
+    monto_imputado = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Imputación de costo"
+        verbose_name_plural = "Imputaciones de costo"
+        constraints = [
+            models.UniqueConstraint(fields=["consumo", "lote"], name="imputacion_unica_por_consumo_y_lote"),
+            models.CheckConstraint(condition=Q(monto_imputado__gte=0), name="imputacion_monto_no_negativo"),
+        ]
+
+    def __str__(self):
+        """«Imputación #N» (texto de la auditoría, D-36)."""
+        return f"Imputación #{self.pk}"

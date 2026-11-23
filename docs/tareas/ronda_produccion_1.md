@@ -21,8 +21,8 @@ no dependen entre sí pueden hacerse en paralelo.
 | INV-02 | Insumos del invernadero, existencias, ajuste de stock y vencimientos — **hecha el 21/11/2026** (a la espera de la revisión a mano) | inventario | CMP-HAB-IIN, CMP-MOD-IIN, CMP-DSH-IIN, CMP-CNS-IIN, CMP-AJT-STK, CMP-REV-VNC | INV-01, UI-01, NOT-01, DIA-01 (hecha el 21/11/2026) | 2 |
 | INV-03 | Variedades, con la creación de su semilla (los modelos `Variedad`, `Ciclo` y `EtapaProductiva` los crea MAE-03 con columnas mínimas; INV-03 completa las columnas; D-49) | inventario (y migración en maestros) | PROD-ALT-VAR, PROD-MOD-VAR, PROD-BAJ-VAR, PROD-CNS-VAR | MAE-03, INV-02 (que incluye a INV-01), UI-01, NOT-01 | 3 |
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz — **hecha el 22/11/2026** (a la espera de la revisión a mano) | produccion |PROD-PNF-SMB, PROD-CNC-SMB, PROD-CNL-ORD (órdenes de siembra) | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 | 4 |
-| PRD-02 | Transición: planificar, concretar y cancelar | produccion | PROD-PNF-TRN, PROD-CNC-TRN, PROD-CNL-ORD (órdenes de transición) | PRD-01 | 4 |
-| PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora | produccion | PROD-REG-MRM, PROD-REG-APL, PROD-REG-EVT, PROD-CNS-BIT | PRD-02 | 5 |
+| PRD-02 | Transición: planificar, concretar y cancelar — **hecha el 22/11/2026** (PR #53, a la espera de la revisión a mano) | produccion | PROD-PNF-TRN, PROD-CNC-TRN, PROD-CNL-ORD (órdenes de transición) | PRD-01 | 4 |
+| PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora — **hecha el 23/11/2026** (a la espera de la revisión a mano) | produccion |PROD-REG-MRM, PROD-REG-APL, PROD-REG-EVT, PROD-CNS-BIT | PRD-02 | 5 |
 | PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | PROD-PNR-FDS | PRD-03 | 5 |
 
 Ya hechas o en curso fuera de la ronda: MAE-01 y MAE-01b (invernadero), MAE-02a (alerta, hecha), MAE-02b (baja y

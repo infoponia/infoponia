@@ -3,7 +3,7 @@
 # `inventario.urls_variedades`.
 from django.urls import path
 
-from produccion import views
+from produccion import views, views_bitacora
 
 app_name = "produccion"
 
@@ -15,4 +15,10 @@ urlpatterns = [
     path("ordenes/<int:orden_id>/cancelar/", views.cancelar, name="cancelar"),
     path("bandeja/", views.bandeja, name="bandeja"),
     path("bandeja/<int:orden_id>/concretar/", views.concretar, name="concretar"),
+    # PRD-03: la bitácora (consulta y registros). Ninguna ruta edita ni borra un registro de bitácora (regla 5 de PROD-REG-EVT).
+    path("bitacora/", views_bitacora.consulta, name="bitacora"),
+    path("registrar/", views_bitacora.registrar, name="registrar"),
+    path("registrar/merma/", views_bitacora.registrar_merma, name="registrar_merma"),
+    path("registrar/aplicacion/", views_bitacora.registrar_aplicacion, name="registrar_aplicacion"),
+    path("registrar/evento/", views_bitacora.registrar_evento, name="registrar_evento"),
 ]

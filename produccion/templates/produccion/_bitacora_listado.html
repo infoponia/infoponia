@@ -1,0 +1,23 @@
+{% load iconos produccion %}{% comment %}Filtros y registros de la bitácora de un invernadero (PROD-CNS-BIT): lo usan la página «Bitácora» y la pestaña de la ficha. Recibe «pagina» (PaginaDeBitacora), «tipos», «valores» (lo escrito en los filtros) y «consulta».
+Los filtros son un formulario GET que funciona sin JavaScript; con HTMX cada cambio reemplaza solo #bitacora-resultados (sin validar nada: es una consulta). Todo se escapa.{% endcomment %}
+<form class="filters bit card" method="get" action="{% url 'produccion:bitacora' %}" aria-label="Filtros de la bitácora" hx-get="{% url 'produccion:bitacora' %}" hx-target="#bitacora-resultados" hx-swap="innerHTML show:none" hx-trigger="submit" style="margin:12px 0">
+  <input type="hidden" name="invernadero" value="{{ pagina.invernadero.pk }}">
+  <input class="field-input q" type="text" id="f-q" name="q" value="{{ valores.q }}" placeholder="Buscar en la descripción" aria-label="Buscar en la bitácora" autocomplete="off">
+  <select class="field-input" id="f-tipo" name="tipo" data-desplegable aria-label="Tipo de evento">
+    <option value="">Todos los tipos</option>
+    {% for valor, texto in tipos %}<option value="{{ valor }}"{% if valores.tipo == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+  </select>
+  <select class="field-input" id="f-lote" name="lote" data-desplegable aria-label="Lote">
+    <option value="">Todos los lotes</option>
+    {% for lote_id, codigo in pagina.lotes %}<option value="{{ lote_id }}"{% if valores.lote == lote_id|stringformat:"s" %} selected{% endif %}>{{ codigo }}</option>{% endfor %}
+  </select>
+  <select class="field-input" id="f-sector" name="sector" data-desplegable aria-label="Sector">
+    <option value="">Todos los sectores</option>
+    {% for sector_id, nombre in pagina.sectores %}<option value="{{ sector_id }}"{% if valores.sector == sector_id|stringformat:"s" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+  </select>
+  <label class="sm" for="f-desde">Desde</label><input class="field-input" type="date" id="f-desde" name="desde" value="{{ valores.desde }}">
+  <label class="sm" for="f-hasta">Hasta</label><input class="field-input" type="date" id="f-hasta" name="hasta" value="{{ valores.hasta }}">
+  <button class="btn btn-ghost btn-sm" type="submit">Filtrar</button>
+  {% if pagina.hay_filtros %}<a class="btn btn-ghost btn-sm" href="{% url 'produccion:bitacora' %}?invernadero={{ pagina.invernadero.pk }}" hx-get="{% url 'produccion:bitacora' %}?invernadero={{ pagina.invernadero.pk }}" hx-target="#bitacora-resultados" hx-swap="innerHTML show:none">Quitar filtros</a>{% endif %}
+</form>
+<div id="bitacora-resultados">{% include "produccion/_bitacora_resultados.html" %}</div>
