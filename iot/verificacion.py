@@ -3,7 +3,7 @@
 #
 # PRIMERA CORRIDA: deja la base como la necesita la verificación de la API del nodo, SIEMPRE llamando a los servicios de las apps (nunca
 # con inserciones directas: así quedan la auditoría y las reglas como en una pantalla real):
-#   - cuentas ``agronomo@prueba1.local`` y ``capataz@prueba1.local`` (la contraseña es la que se pasa al comando);
+#   - cuentas ``agronomo@prueba3.local`` y ``capataz@prueba3.local`` (las prueba1 y prueba2 son de ``maestros``) (la contraseña es la que se pasa al comando);
 #   - el invernadero «Norte», con ese Agrónomo y ese Capataz y SIN Técnico, con «Sector A»;
 #   - un insumo de «Repuestos de hardware» (el que piden los equipos);
 #   - una variedad con su semilla habilitada y con stock, y una siembra «a realizar»: eso da umbral efectivo (PROD-PNF-SMB), para poder
@@ -18,6 +18,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from core import verificacion
+from core.verificacion import ErrorDeCarga
 from core.models import Agronomo, Capataz, Gerente, Usuario
 from core.servicios import ACCESO_TEMPORAL, alta_usuario, cambiar_contrasena
 from inventario.categorias import REPUESTOS_DE_HARDWARE
@@ -44,7 +45,7 @@ NOMBRE_DEL_CULTIVO = "Lechuga"
 NOMBRE_DE_LA_VARIEDAD = "Crespa"
 NOMBRE_DEL_REPUESTO = "Repuesto de sensor"
 CUENTAS = (("agronomo", "Agrónomo"), ("capataz", "Capataz"))  # (rol, nombre) de las cuentas <rol>@prueba1.local
-SUFIJO = "prueba1.local"
+SUFIJO = "prueba3.local"  # prueba1 y prueba2 son de ``maestros`` (MAE-02d): cada cargador usa su propio número de cuenta
 
 # Rango de la temperatura de la solución del escenario de los ejemplos (docs/api/nodo/ejemplos/README.md, «Escenario»).
 RANGO_DE_LA_SOLUCION = ("18.0", "24.0")
@@ -69,7 +70,7 @@ def _gerente_activo():
     """El Gerente activo, que da de alta cuentas e invernaderos. Sin Gerente no se puede cargar nada: se lo dice."""
     gerente = Gerente.objects.filter(is_active=True).first()
     if gerente is None:
-        raise RuntimeError("No hay un Gerente activo: creá uno antes de cargar los datos de verificación.")
+        raise ErrorDeCarga("No hay un Gerente activo: creá uno antes de cargar los datos de verificación.")
     return gerente
 
 
@@ -276,12 +277,17 @@ def cargar(contrasena):
     """El cargador del IoT: ver el encabezado del archivo. Devuelve un ``ResumenDeCarga``. Nunca imprime ni devuelve la contraseña ni un token."""
     creado, cuentas, pendiente = [], [], []
     gerente = _gerente_activo()
-    agronomo_usuario = _cuenta(gerente, "agronomo", "Agrónomo", contrasena, creado, cuentas)
-    capataz_usuario = _cuenta(gerente, "capataz", "Capataz", contrasena, creado, cuentas)
-    agronomo = Agronomo.objects.get(pk=agronomo_usuario.pk)
-    capataz = Capataz.objects.get(pk=capataz_usuario.pk)
-
-    invernadero = _invernadero(gerente, agronomo, capataz, creado)
+    invernadero = Invernadero.objects.filter(nombre_invernadero__iexact=NOMBRE_DEL_INVERNADERO).first()
+    if invernadero is not None and invernadero.agronomo_id is not None:
+        # «Norte» ya existe (de una corrida anterior o armado a mano): se sigue con SU Agrónomo, sin crear cuentas nuevas.
+        agronomo = Agronomo.objects.get(pk=invernadero.agronomo_id)
+        cuentas.append(f"{agronomo.email} · Agrónomo (el de «{NOMBRE_DEL_INVERNADERO}»)")
+    else:
+        agronomo_usuario = _cuenta(gerente, "agronomo", "Agrónomo", contrasena, creado, cuentas)
+        capataz_usuario = _cuenta(gerente, "capataz", "Capataz", contrasena, creado, cuentas)
+        agronomo = Agronomo.objects.get(pk=agronomo_usuario.pk)
+        capataz = Capataz.objects.get(pk=capataz_usuario.pk)
+        invernadero = _invernadero(gerente, agronomo, capataz, creado)
     sector = _sector(agronomo, invernadero, creado)
     _insumo_de_repuesto(agronomo, creado)
     variedad = _variedad(agronomo, creado)

@@ -11,6 +11,7 @@ import os
 from collections import namedtuple
 
 from django.conf import settings
+from django.db import connection
 
 # Un cargador registrado: su código (el de ``--solo``), su nombre, su orden y su función.
 Cargador = namedtuple("Cargador", "codigo nombre orden funcion")
@@ -27,6 +28,11 @@ HOSTS_LOCALES = ("localhost", "127.0.0.1", "::1")
 
 class BaseNoLocal(RuntimeError):
     """El comando se niega a correr: no es una base local de desarrollo."""
+
+
+class ErrorDeCarga(RuntimeError):
+    """Un cargador no puede seguir (no hay un Gerente activo, falta Georef…). El comando lo informa con el mensaje, sigue con los demás cargadores y termina con
+    código 1. El mensaje nunca lleva la contraseña ni un token."""
 
 
 def registrar_cargador(codigo, nombre, orden, funcion):
@@ -62,7 +68,8 @@ def exigir_base_local():
     leer o escribir nada. Los mensajes no incluyen la cadena de conexión ni ningún secreto."""
     if not settings.DEBUG:
         raise BaseNoLocal("DEBUG está apagado: este comando solo corre en desarrollo.")
-    host = (settings.DATABASES["default"].get("HOST") or "").strip().lower()
+    # La base REALMENTE conectada (``connection``), no solo lo escrito en ``settings``: así también vale con ``DATABASE_URL``.
+    host = (connection.settings_dict.get("HOST") or "").strip().lower()
     if host not in HOSTS_LOCALES:
         raise BaseNoLocal("La base de datos no es local (localhost): este comando solo corre contra la base de desarrollo.")
     de_render = _variables_de_render()

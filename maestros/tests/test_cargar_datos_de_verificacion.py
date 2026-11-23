@@ -1,4 +1,4 @@
-# Pruebas del comando ``cargar_datos_de_verificacion`` (CLAUDE.md, «Datos para la verificación a mano»; creado en MAE-02d):
+# Pruebas del cargador de ``maestros`` (``maestros/verificacion.py``) en el comando ÚNICO ``cargar_datos_de_verificacion`` de ``core`` (CLAUDE.md, «Datos para la verificación a mano»; creado en MAE-02d, unificado en IOT-03):
 # se niega a correr con DEBUG apagado, con una base que no es localhost o con variables de Render; no toca al Administrador ni
 # crea un Gerente (D-09); es idempotente y deja la alerta «sin Capataz» activa y no leída.
 
@@ -13,6 +13,8 @@ from django.test import TestCase, override_settings
 
 from core.models import Gerente, Usuario
 from core.tests.fabricas import crear_administrador, crear_gerente
+from core.verificacion import ErrorDeCarga
+from maestros import verificacion as verificacion_de_maestros
 from maestros.models import Alerta, Invernadero
 from maestros.tests.fabricas import ConGeoref, crear_capataz_activo
 
@@ -24,7 +26,7 @@ def cargar(**opciones):
     apaga DEBUG por su cuenta). Devuelve lo que imprimió."""
     salida = StringIO()
     with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
-        call_command("cargar_datos_de_verificacion", clave=CLAVE_DE_LA_PRUEBA, stdout=salida, **opciones)
+        call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros", stdout=salida, **opciones)
     return salida.getvalue()
 
 
@@ -41,7 +43,7 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         """CLAUDE.md: «se niega a correr si DEBUG está apagado» (sin crear nada)."""
         with override_settings(DEBUG=False), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
             with self.assertRaisesMessage(CommandError, "DEBUG"):
-                call_command("cargar_datos_de_verificacion", clave=CLAVE_DE_LA_PRUEBA)
+                call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros")
         self.assertFalse(Invernadero.objects.exists())
         self.assertEqual(Usuario.objects.count(), 2)
 
@@ -49,7 +51,7 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         """CLAUDE.md: «si la base no es localhost»."""
         with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "ep-algo.neon.tech"}):
             with self.assertRaisesMessage(CommandError, "no es local"):
-                call_command("cargar_datos_de_verificacion", clave=CLAVE_DE_LA_PRUEBA)
+                call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros")
         self.assertFalse(Invernadero.objects.exists())
 
     def test_claude_md_se_niega_con_variables_de_render(self):
@@ -57,11 +59,11 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
             with mock.patch.dict(os.environ, {"RENDER_SERVICE_ID": "srv-123"}):
                 with self.assertRaisesMessage(CommandError, "Render"):
-                    call_command("cargar_datos_de_verificacion", clave=CLAVE_DE_LA_PRUEBA)
+                    call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros")
         self.assertFalse(Invernadero.objects.exists())
 
     def test_la_clave_es_obligatoria(self):
-        """La contraseña nunca está en el repo: entra por ``--clave``."""
+        """La contraseña nunca está en el repo: entra por ``--contrasena``."""
         with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
             with self.assertRaises(CommandError):
                 call_command("cargar_datos_de_verificacion")
@@ -70,8 +72,8 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         """No crea un Gerente (D-09): sin uno activo no puede dar de alta los invernaderos y lo dice."""
         Gerente.objects.update(is_active=False)
 
-        with self.assertRaisesMessage(CommandError, "Gerente activo"):
-            cargar()
+        with self.assertRaisesMessage(ErrorDeCarga, "Gerente activo"):
+            verificacion_de_maestros.cargar(CLAVE_DE_LA_PRUEBA)
         self.assertFalse(Invernadero.objects.exists())
 
     # ---- Lo que carga ----
@@ -137,5 +139,5 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         capataz = crear_capataz_activo()
         Invernadero.objects.filter(nombre_invernadero="Invernadero Verificación 1").update(capataz=capataz)
 
-        with self.assertRaisesMessage(CommandError, "ya tiene un Capataz"):
-            cargar()
+        with self.assertRaisesMessage(ErrorDeCarga, "ya tiene un Capataz"):
+            verificacion_de_maestros.cargar(CLAVE_DE_LA_PRUEBA)

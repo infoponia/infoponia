@@ -7,10 +7,12 @@ from django.test import TestCase
 from core.models import RegistroAuditoria, Usuario
 from core.tests.fabricas import crear_administrador, crear_gerente
 from inventario.servicios.variedades import umbral_efectivo
+from core.verificacion import ErrorDeCarga
 from iot import verificacion as cargador
 from iot.models import Actuador, Hardware, Sensor, SistemaIoT
 from iot.tests import fabricas
 from maestros.models import Invernadero
+from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_invernadero
 
 CLAVE = "Prueba-98765x"
 
@@ -25,13 +27,13 @@ class IotVerificacionTests(fabricas.ConCatalogoIot, TestCase):
         """Primera corrida: cuentas de prueba, «Norte» con Agrónomo y Capataz y sin Técnico, y una siembra «a realizar» que da umbral efectivo."""
         resumen = cargador.cargar(CLAVE)
         norte = Invernadero.objects.get(nombre_invernadero="Norte")
-        self.assertEqual(norte.agronomo.email, "agronomo@prueba1.local")
-        self.assertEqual(norte.capataz.email, "capataz@prueba1.local")
+        self.assertEqual(norte.agronomo.email, "agronomo@prueba3.local")
+        self.assertEqual(norte.capataz.email, "capataz@prueba3.local")
         self.assertIsNone(norte.tecnico_id)
-        self.assertTrue(Usuario.objects.get(email="agronomo@prueba1.local").check_password(CLAVE))
+        self.assertTrue(Usuario.objects.get(email="agronomo@prueba3.local").check_password(CLAVE))
         self.assertIsNotNone(umbral_efectivo([norte.pk])[norte.pk])
         self.assertEqual(Hardware.objects.count(), 0)
-        self.assertIn("agronomo@prueba1.local · Agrónomo", resumen.cuentas)
+        self.assertIn("agronomo@prueba3.local · Agrónomo", resumen.cuentas)
 
     def test_d_verificacion_sin_sistema_pide_registrarlo_por_pantalla(self):
         """Sin sistema IoT, el cargador no lo crea (el token se ve una sola vez en la pantalla) y lo dice como pendiente."""
@@ -86,8 +88,19 @@ class IotVerificacionTests(fabricas.ConCatalogoIot, TestCase):
         self.assertEqual(administrador.password, antes)
         self.assertFalse(any(CLAVE in str(registro.detalle) for registro in RegistroAuditoria.objects.all()))
 
+    def test_d_verificacion_si_norte_ya_existe_sigue_con_su_agronomo_y_no_crea_cuentas(self):
+        """Idempotencia ante un «Norte» armado antes (con otro Agrónomo): se usa el suyo, sin crear las cuentas de prueba3 ni tocar nada ajeno."""
+        agronomo = crear_agronomo("otra@infoponia.com")
+        crear_invernadero("Norte", agronomo=agronomo, capataz=crear_capataz_activo("cap@infoponia.com"))
+        cuentas = Usuario.objects.count()
+        resumen = cargador.cargar(CLAVE)
+        self.assertEqual(Usuario.objects.count(), cuentas)
+        self.assertFalse(Usuario.objects.filter(email__endswith="@prueba3.local").exists())
+        self.assertEqual(Invernadero.objects.filter(nombre_invernadero="Norte").count(), 1)
+        self.assertIn("otra@infoponia.com", resumen.cuentas[0])
+
     def test_d_verificacion_sin_gerente_frena_y_lo_dice(self):
         """Sin un Gerente activo no hay quien dé de alta las cuentas: se frena con un mensaje claro."""
         self.gerente.delete()
-        with self.assertRaisesMessage(RuntimeError, "No hay un Gerente activo"):
+        with self.assertRaisesMessage(ErrorDeCarga, "No hay un Gerente activo"):
             cargador.cargar(CLAVE)
