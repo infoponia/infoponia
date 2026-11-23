@@ -7,6 +7,8 @@
 # modificación concurrente que pierde recibe el ``IntegrityError``, traducido al mismo error de campo ``cuit_repetido``.
 # ``compras`` no importa de ``comercial`` ni de ``produccion`` (A1 de D-37).
 
+from collections import namedtuple
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
@@ -16,7 +18,7 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 
 from compras.errores import ErrorDeCompras
-from compras.models import Proveedor
+from compras.models import Cotizacion, Pedido, Proveedor
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
 from inventario.models import TipoInsumo
@@ -56,10 +58,27 @@ def _exigir_lectura(actor):
 
 
 def tiene_pedidos_u_ordenes(proveedor):
-    """Regla 2 de CMP-MOD-PRV: True si el proveedor tiene pedidos (invitaciones) u órdenes de compra, y entonces su CUIT no se modifica.
-    Hasta CMP-02a no hay pedidos: da siempre ``False``; esa tarea la completa con ``proveedor.invitaciones.exists() or
-    proveedor.cotizaciones.exists()`` (docs/casos_de_uso/compras/proveedores.md, «Cómo se aplica»)."""
-    return False
+    """Regla 2 de CMP-MOD-PRV: True si el proveedor tiene pedidos (invitaciones) o cotizaciones, y entonces su CUIT no se modifica. CMP-02a la completó
+    (docs/casos_de_uso/compras/proveedores.md, «Cómo se aplica»); las órdenes de compra cuelgan de sus cotizaciones (CMP-03)."""
+    return proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()
+
+
+# Un pedido en la ficha del proveedor (regla 4 de CMP-CNS-PRV): el pedido y si este proveedor cotizó.
+PedidoDelProveedor = namedtuple("PedidoDelProveedor", "pedido cotizo")
+
+
+def pedidos_del_proveedor(actor, proveedor):
+    """Regla 4 de CMP-CNS-PRV: los pedidos a los que se invitó al proveedor (o donde cotizó), del más reciente al más viejo, **según el alcance de quien mira**
+    (el Agrónomo, los suyos; el Gerente, todos), y si cotizó. Una consulta por tabla; no audita."""
+    _exigir_lectura(actor)
+    pedidos = list(
+        Pedido.objects.en_alcance_de(actor)
+        .filter(Q(invitaciones__proveedor=proveedor) | Q(cotizaciones__proveedor=proveedor))
+        .distinct()
+        .order_by("-fecha_pedido", "-id")
+    )
+    cotizaron = set(Cotizacion.objects.filter(proveedor=proveedor, pedido__in=pedidos).values_list("pedido_id", flat=True))
+    return [PedidoDelProveedor(p, p.pk in cotizaron) for p in pedidos]
 
 
 def impedimentos_de_baja(proveedor):

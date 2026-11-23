@@ -24,6 +24,8 @@ urlpatterns = [
     path("comercial/", include("comercial.urls")),
     # CMP-01: «Compras» → «Proveedores» (Gerente y Agrónomo).
     path("compras/", include("compras.urls")),
+    # CMP-02a: portal público del proveedor (cotiza sin cuenta por el enlace que recibió por correo; D-88).
+    path("proveedor/", include("compras.urls_proveedor")),
     # IOT-03: API HTTPS del nodo central (contrato en docs/api/nodo/; D-70). Sin sesión ni CSRF: la protege el token.
     path("api/iot/v1/", include("iot.api.urls")),
 

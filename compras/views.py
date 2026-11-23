@@ -68,7 +68,13 @@ def proveedores(request):
 def _contexto_de_la_ficha(request, proveedor_id, **extra):
     """El proveedor con sus categorías activas y los botones que le corresponden a quien mira (D-30)."""
     proveedor = api.ficha_de_proveedor(request.user, proveedor_id)
-    return {"proveedor": proveedor, "acciones": api.acciones_permitidas(request.user, proveedor), **extra}
+    return {
+        "proveedor": proveedor,
+        "acciones": api.acciones_permitidas(request.user, proveedor),
+        # CMP-02a, regla 4 de CMP-CNS-PRV: sus pedidos, según el alcance de quien mira (las órdenes, pagos y reclamos se suman de CMP-03 a CMP-06).
+        "pedidos": api.pedidos_del_proveedor(request.user, proveedor),
+        **extra,
+    }
 
 
 @rol_requerido(GERENTE, AGRONOMO)

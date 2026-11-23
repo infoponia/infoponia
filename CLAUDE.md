@@ -19,13 +19,11 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
 - No hagas commits, push ni operaciones de Git que modifiquen el historial. Los commits los hacen los estudiantes.
 - **Números de decisión.** Se asignan por orden de creación, no por reserva. Una decisión planificada se nombra por su lote o tarea. El número se toma al final, después de `git fetch`, mirando `docs/decisiones/` en `main`; si dos PR chocan, renumera el que se mergea segundo; una decisión ya mergeada no se renumera nunca; una prueba lleva el número de una decisión en su nombre solo si esa decisión ya está en `main`. Proponé el número recién al cerrar la tarea (M3).
 - Antes de borrar datos o tablas, frená y preguntá. Vale también para la base local y para los datos de prueba. Cuenta como borrar: `DROP`, `DELETE` o `TRUNCATE` a mano, `flush`, `migrate <app> zero`, `--fake` seguido de un borrado, borrar el archivo o la base de datos, y descartar la base de `--keepdb`. Contame qué se pierde, por qué hace falta y qué alternativa hay, y esperá mi respuesta. Si una migración no se puede deshacer, no la arregles tocando las tablas: avisame.
-- **Verificación (la hace Claude).** El estudiante no verifica a mano ni carga datos de prueba (D-95). Antes de cerrar una tarea, hacé lo que dice `docs/patrones/verificacion_por_claude.md`:
-  (1) un **recorrido** de punta a punta con el cliente de Django (`<app>/tests/test_recorrido_<tema>.py`), por rol y estado, con los pasos que antes serían «a mano»;
-  (2) si la tarea tiene pantallas, una **verificación visual** con Playwright (`<app>/tests/test_visual_<tema>.py`, `INFOPONIA_VISUAL=1` y `--tag visual`), **mirando vos las capturas**; lo que veas mal se corrige y se anota (D-61);
-  (3) si la tarea tiene migración, `sqlmigrate` de la nueva y aplicarla en la base de pruebas.
-  Si la tarea trae «Verificación a mano», no prepares datos ni pasos para el estudiante: convertí cada paso en un recorrido. El cargador `cargar_datos_de_verificacion` y los `<app>/verificacion.py` **se retiraron** (D-95): si una tarea los nombra, ignoralo.
-  (4) **Pasos para replicar:** al final de una ronda (cuando des el mensaje de commit y la propuesta de M3), dale al estudiante, aunque no vaya a hacerlos, los pasos de verificación a mano **con mucho detalle**, para que pueda replicarlos si se hace tiempo (formato en `docs/patrones/verificacion_por_claude.md`, «Pasos para replicar»). Van también en el «Cierre» de la tarea y en el texto del PR.
-  Playwright es la única dependencia nueva permitida, y **solo de desarrollo** (`requirements-dev.txt`; nunca en `requirements.txt`). Las pruebas visuales usan su propia base de pruebas: no toques la base local de desarrollo. Nunca escribas una contraseña en un archivo versionado: el repo es público.
+- **Verificación (recorrido por prueba; a mano, el estudiante: D-96).** Antes de cerrar una tarea, hacé lo que dice `docs/patrones/verificacion_a_mano.md`:
+  (1) un **recorrido** de punta a punta con el cliente de Django (`<app>/tests/test_recorrido_<tema>.py`), por rol y estado;
+  (2) si la tarea tiene migración, `sqlmigrate` de la nueva y aplicarla en la base de pruebas;
+  (3) escribí la **«Verificación a mano»** de la tarea para el estudiante, **con mucho detalle**: precondiciones, qué crear a mano con valores concretos, dónde tocar, qué escribir, qué tiene que ver, por rol y por estado, y qué cubre ya una prueba. Si la tarea tiene **pantallas públicas (sin cuenta) o formularios que se envían**, incluí el paso de **«navegador real»** (ventana privada y enviar el formulario hasta el final; texto en el patrón): el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+  **No abras un navegador ni mires capturas** (D-96) y **no cargues datos de prueba**: el cargador `cargar_datos_de_verificacion` y los `<app>/verificacion.py` se retiraron (D-95) y no vuelven; si una tarea los nombra, ignoralo. No agregues dependencias nuevas (tampoco Playwright). Nunca escribas una contraseña en un archivo versionado: el repo es público.
 - Nunca listes ni leas `.venv/`.
 - Verificá versiones y comandos actuales antes de recomendarlos; no recomiendes de memoria.
 
@@ -38,7 +36,7 @@ L3. Leé solo lo que la tarea lista en «Leer», y solo las secciones nombradas.
     - Decisiones: `docs/decisiones/D-NN.md`, solo las listadas.
     - Prototipo: buscá con Grep la función que nombra la tarea y leé solo esa parte.
     - Antes de escribir o correr pruebas, leé `.claude/rules/pruebas.md`; antes de tocar plantillas
-      o estilos, `.claude/rules/interfaz.md`; antes de cerrar la tarea, `docs/patrones/verificacion_por_claude.md`.
+      o estilos, `.claude/rules/interfaz.md`; antes de cerrar la tarea, `docs/patrones/verificacion_a_mano.md`.
 L4. Código: leé los archivos que vas a modificar y los que importan de forma directa.
     Para cualquier otra cosa, pedila y decí para qué la necesitás.
 L5. Si la tarea no cubre un tema, buscalo en `docs/decisiones/README.md` y avisá antes de seguir.
@@ -137,16 +135,17 @@ python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag 
 
 M1. Corré el «Comando de pruebas» de la tarea y mostrá el resultado.
 M2. Completá en el archivo de la tarea «Cierre» (qué se hizo, pruebas, decisiones y, si hubo, «Pantallas: lo que
-    se corrigió del prototipo», D-61) y «Verificación» (tres listas: «Verifiqué», «Lo cubre una prueba» y «No pude verificar», más «Pasos para replicar», opcionales para el estudiante; `docs/patrones/verificacion_por_claude.md`).
+    se corrigió del prototipo», D-61) y «Verificación a mano» (los pasos para el estudiante, con el paso de «navegador real» si corresponde; `docs/patrones/verificacion_a_mano.md`), más las tres listas del informe: «Verifiqué» (el recorrido y las migraciones), «Lo cubre una prueba» y «No pude verificar».
 M3. Proponé, sin aplicarlos (una sola vez, al cerrar la tarea entera, no por paso):
     - el `docs/estado.md` nuevo;
     - la fila de la tarea en `docs/tareas/README.md` (si queda hecha, se saca);
     - una línea para `docs/historial.md`;
+    - la sección de la tarea en `docs/revisiones_pendientes.md`, con los pasos de su «Verificación a mano»;
     - si hubo decisión, `docs/decisiones/D-NN.md` y su fila en `docs/decisiones/README.md`;
     - si creaste modelos, los disparadores que se cumplieron (se tachan) y los que nacen;
     - la fila de la tarea en el plan de su ronda (`docs/tareas/ronda_<nombre>.md`), si pertenece a una;
     - lo que implementaste distinto de lo escrito, para `docs/temas_abiertos.md` (no lo corrijas en silencio).
-M4. Proponé el mensaje de commit y el texto del PR (con los «Pasos para replicar»). El commit lo hace el estudiante.
+M4. Proponé el mensaje de commit y el texto del PR (con la «Verificación a mano»). El commit lo hace el estudiante.
 
-La regla M6 (el estudiante aprueba cada lote de documentación antes de programar) es de las personas; está en `docs/README.md`,
-«Ciclo de una tarea». La M5 (tachar las revisiones a mano) quedó en desuso: ya no se agregan revisiones a mano.
+Las reglas M5 (tachar las revisiones a mano hechas) y M6 (el estudiante aprueba cada lote de documentación antes de
+programar) son de las personas; están en `docs/README.md`, «Ciclo de una tarea». Si una tarea te las menciona, ahí están.

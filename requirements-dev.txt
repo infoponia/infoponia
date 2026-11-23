@@ -1,4 +1,0 @@
-# Dependencias SOLO de desarrollo (verificación visual con Playwright; docs/patrones/verificacion_por_claude.md).
-# El CI y Render instalan requirements.txt, no este archivo.
--r requirements.txt
-playwright==1.65.2

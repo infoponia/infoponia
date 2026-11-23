@@ -22,6 +22,12 @@ from core.validadores import validar_telefono
 ADMINISTRADOR = "administrador"
 # D-22: rol que se guarda en la auditoría cuando la acción la hace InfoPonia y no una cuenta.
 ROL_INFOPONIA = "infoponia"
+# D-65 punto 8 y D-88 punto 5: roles «externos» que se guardan en la auditoría cuando actúa alguien sin cuenta que entró por un
+# enlace (el cliente que decide un faltante, el proveedor que cotiza). Los crea la primera tarea que los necesita (CMP-02a);
+# la otra (COM-04c) solo usa su constante.
+ROL_CLIENTE_ENLACE = "cliente_enlace"
+ROL_PROVEEDOR_ENLACE = "proveedor_enlace"
+ROLES_EXTERNOS = (ROL_CLIENTE_ENLACE, ROL_PROVEEDOR_ENLACE)
 
 # SEG-04, D-18: la contraseña temporal vence a los 7 días de generada.
 VIGENCIA_CONTRASENA_TEMPORAL = timedelta(days=7)
@@ -500,7 +506,7 @@ class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQue
     # nombre una contraseña, para que un descuido al escribir un servicio no la guarde.
     FRAGMENTOS_PROHIBIDOS = ("contrase", "password")
 
-    def registrar(self, usuario, accion, afectados, detalle=None):
+    def registrar(self, usuario, accion, afectados, detalle=None, *, rol_externo=None):
         """Agrega un registro de auditoría y lo devuelve (D-22).
 
         Se llama desde el servicio del caso de uso, dentro de su ``transaction.atomic()``, para que
@@ -508,6 +514,10 @@ class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQue
 
         - ``usuario``: la cuenta que actuó, o ``None`` si la acción la hace InfoPonia (el rol que
           se guarda es entonces ``ROL_INFOPONIA``). Se guarda el rol que tiene en este momento.
+        - ``rol_externo`` (D-65 punto 8, D-88 punto 5): solo con ``usuario=None``, ``ROL_CLIENTE_ENLACE`` o
+          ``ROL_PROVEEDOR_ENLACE``. El rol que se guarda es ese y no ``ROL_INFOPONIA``: la auditoría distingue lo que
+          hace el Sistema de lo que hizo una persona sin cuenta que entró por un enlace. Quién fue (el cliente o el
+          proveedor) y sobre qué va en ``afectados``.
         - ``accion``: un valor de ``RegistroAuditoria.Accion`` (lista cerrada de SEG-14).
         - ``afectados``: las cuentas u objetos afectados; cada uno, una instancia de modelo. Se guardan como
           ``{"modelo", "id", "texto"}`` y, las cuentas (siempre ``core.usuario``), también con su ``"rol"`` (D-36).
@@ -519,12 +529,21 @@ class RegistroAuditoriaManager(models.Manager.from_queryset(RegistroAuditoriaQue
         """
         if accion not in RegistroAuditoria.Accion.values:
             raise ValueError(f"Acción de auditoría desconocida: {accion!r} (lista cerrada, SEG-14).")
+        if rol_externo is not None and (usuario is not None or rol_externo not in ROLES_EXTERNOS):
+            raise ValueError(
+                "rol_externo solo se usa sin cuenta (usuario=None) y es ROL_CLIENTE_ENLACE o ROL_PROVEEDOR_ENLACE "
+                f"(D-65 punto 8, D-88 punto 5); llegó usuario={usuario!r} y rol_externo={rol_externo!r}."
+            )
         detalle = {} if detalle is None else detalle
         self._rechazar_contrasenas(detalle)
         self._validar_formato(detalle)
+        if usuario is not None:
+            rol = rol_de(usuario)
+        else:
+            rol = rol_externo or ROL_INFOPONIA
         return self.create(
             usuario=usuario,
-            rol=ROL_INFOPONIA if usuario is None else rol_de(usuario),
+            rol=rol,
             accion=accion,
             afectados=[self._identificar(objeto) for objeto in afectados],
             detalle=detalle,
@@ -722,6 +741,10 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_PROVEEDOR = "modificacion_proveedor", "Modificación de proveedor"
         BAJA_PROVEEDOR = "baja_proveedor", "Baja de proveedor"
         REACTIVACION_PROVEEDOR = "reactivacion_proveedor", "Reactivación de proveedor"
+        # Pedidos de cotización y cotizaciones (CMP-02a, D-87 punto 8): <acción>_<entidad>. La cotización la registra un proveedor
+        # sin cuenta, con ``rol_externo`` (D-88 punto 5). Cancelar y reenviar son de CMP-02b.
+        ALTA_PEDIDO = "alta_pedido", "Alta de pedido de cotización"
+        ALTA_COTIZACION = "alta_cotizacion", "Alta de cotización"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -947,12 +970,40 @@ class RegistroAuditoria(models.Model):
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
         "tipo_proveedor": "Tipo de proveedor",
         "especialidades": "Categorías de insumos",
+        # Pedidos y cotizaciones (CMP-02a): cantidades, importes y fechas van como texto (D-36). «estado», «invernadero»,
+        # «insumo» y «agronomo» ya existen, y también «monto_estimado», «detalles» y «lineas» (los de la compra-venta de COM-02): no se repiten, porque en
+        # un diccionario la clave de más abajo pisa a la de arriba y cambiaría el texto de aquellas pantallas. Las líneas de la cotización llevan su clave propia.
+        "pedido": "Pedido",
+        "proveedor": "Proveedor",
+        "fecha_pedido": "Fecha del pedido",
+        "fecha_limite_cotizaciones": "Fecha límite de cotizaciones",
+        "invitaciones": "Proveedores invitados",
+        "cotizacion": "Cotización",
+        "fecha_validez_cotizacion": "Válida hasta",
+        "observaciones_cotizacion": "Observaciones del proveedor",
+        "monto_cotizacion": "Monto de la cotización",
+        "lineas_cotizadas": "Líneas de la cotización",
+        "pedido_cubierto": "El pedido quedó cubierto",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
-        "rol": {**dict(Usuario.Rol.choices), ADMINISTRADOR: "Administrador"},
+        # D-65 punto 8 y D-88 punto 5: los roles externos (sin cuenta) se muestran con su origen.
+        "rol": {
+            **dict(Usuario.Rol.choices),
+            ADMINISTRADOR: "Administrador",
+            ROL_CLIENTE_ENLACE: "Cliente (mediante enlace)",
+            ROL_PROVEEDOR_ENLACE: "Proveedor (mediante enlace)",
+        },
         # MAE-03: «fuera de servicio» es un estado de los sectores (permiso explícito del estudiante, 20/11/2026).
-        "estado": {"activo": "Activo", "inactivo": "Inactivo", "fuera_de_servicio": "Fuera de servicio"},
+        "estado": {
+            "activo": "Activo",
+            "inactivo": "Inactivo",
+            "fuera_de_servicio": "Fuera de servicio",
+            # CMP-02a: estados del pedido de cotización (`core` no importa `compras`, A1 de D-37).
+            "en_cotizacion": "En cotización",
+            "cerrado": "Cerrado",
+            "cancelado": "Cancelado",
+        },
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
         "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
@@ -1085,6 +1136,11 @@ class RegistroAuditoria(models.Model):
         """Nombre visible del rol que tenía quien actuó en ese momento («Capataz», «Administrador»)."""
         return self.VALORES_VISIBLES["rol"].get(self.rol, self.rol)
 
+    def es_de_actor_externo(self):
+        """True si lo hizo una persona sin cuenta que entró por un enlace (D-65 punto 8, D-88 punto 5): la pantalla muestra
+        «Proveedor (mediante enlace)» y no «InfoPonia»."""
+        return self.usuario_id is None and self.rol in ROLES_EXTERNOS
+
     def afectados_visibles(self):
         """Los afectados como ``(texto, rol visible o None)``, con el texto que tenían en el momento del cambio
         (regla 3 de AUD-CNS-REG). El rol solo lo tienen las cuentas."""
@@ -1214,6 +1270,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_PROVEEDOR,
         RegistroAuditoria.Accion.BAJA_PROVEEDOR,
         RegistroAuditoria.Accion.REACTIVACION_PROVEEDOR,
+        RegistroAuditoria.Accion.ALTA_PEDIDO,
+        RegistroAuditoria.Accion.ALTA_COTIZACION,
     }
 )
 

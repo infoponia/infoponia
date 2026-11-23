@@ -16,3 +16,51 @@ a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .prv-categoria[hidden]{display:none}
 .chip-fijo{display:inline-block;margin:0 6px 4px 0;padding:2px 10px;border:1px solid var(--border);border-radius:999px;font-size:13px}
 .prv-impedimentos{margin:0 0 6px;padding-left:20px;display:grid;gap:8px;font-size:14px}
+
+/* ---- Portal público del proveedor (CMP-02a; CMP-ENV-COT): una sola columna, para celular y computadora ---- */
+.portal{min-height:100vh;padding:28px 16px 20px;display:flex;flex-direction:column;align-items:center}
+.portal-marca{align-self:center}
+.portal-avisos{width:100%;max-width:880px;margin-bottom:14px}
+.portal-p{width:100%}
+.portal-h{margin-bottom:18px}
+.portal-h h1{margin-bottom:4px}
+.portal .stack{display:grid;gap:18px;margin-top:18px}
+.portal-modo{border:0;padding:0;margin:0 0 18px}
+.portal-radio{display:inline-flex;align-items:center;gap:8px;margin:0 22px 6px 0;font-size:14px;font-weight:500;cursor:pointer}
+.rline{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;background:#fff}
+.rl-h{display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:space-between;margin-bottom:14px;line-height:1.5}
+.rl-in{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 16px}
+.rl-in .field-input.num{max-width:none}
+.portal .sm{font-size:13px}
+.portal-resumen{margin-bottom:18px}
+.portal-condiciones{margin-top:18px}
+.tabla-responsive{overflow-x:auto}
+.portal-form .footbar{justify-content:flex-start}
+@media (max-width:640px){
+  .rl-in{grid-template-columns:1fr}
+  .portal-radio{display:flex;margin-right:0}
+  /* En el celular la tabla del resumen se apila: cada fila es una tarjeta con sus rótulos. */
+  .portal-resumen .data-table thead{display:none}
+  .portal-resumen .data-table tr{display:block;padding:10px 0;border-bottom:1px solid var(--border)}
+  .portal-resumen .data-table tbody tr:last-child{border-bottom:none}
+  .portal-resumen .data-table td{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border:0;text-align:right}
+  .portal-resumen .data-table td::before{content:attr(data-etiqueta);font-weight:600;color:var(--muted-foreground);text-align:left}
+}
+
+/* ---- «Compras» → «Pedidos» (CMP-02a): nuevo pedido, lista y ficha ---- */
+.ped-sub{font-size:14px;font-weight:600;margin:20px 0 10px}
+.ped-sub:first-of-type{margin-top:0}
+.ped-cantidad-fila{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.ped-cantidad-fila .field-input.num{max-width:190px}
+.ped-agregar,.ped-filtro{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.ped-agregar .field-input,.ped-filtro .field-input{max-width:340px}
+.ped-habilitar{margin-top:16px;border:1px dashed var(--border-strong);border-radius:var(--radius-sm);padding:12px 16px}
+.ped-habilitar summary{cursor:pointer;font-size:14px;font-weight:600}
+.ped-habilitar summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.ped-hab-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;margin-top:12px}
+.warn-t{color:var(--status-warn)}
+@media (max-width:640px){.ped-hab-grid{grid-template-columns:1fr}}
+
+/* Las tarjetas de una columna (``.stack`` es una grilla) no se ensanchan con el contenido de sus tablas: la tabla scrollea adentro de su ``.tablewrap`` (visto en la verificación visual, en un celular). */
+.stack > *{min-width:0}
+.prv-categoria .sub2{display:block;font-size:13px;color:var(--muted-foreground);font-weight:400}

@@ -1,0 +1,7 @@
+{% extends "compras/proveedor/base.html" %}{% load iconos %}
+{% comment %}«Este enlace no se puede usar» con el motivo que el caso de uso permite (extensión 2a de CMP-ENV-COT): venció, el pedido se canceló o ya no recibe
+cotizaciones, el proveedor no está activo, el enlace fue reemplazado o anulado. Nunca muestra datos del pedido (D-88 punto 3).{% endcomment %}
+{% block contenido %}
+<div class="portal-h"><h1>Este enlace no se puede usar</h1></div>
+<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>{{ motivo }}</b> Si necesita cotizar, comuníquese con {{ nombre_organizacion }}.</div></div>
+{% endblock %}

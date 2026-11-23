@@ -110,6 +110,50 @@ class RegistroAuditoriaTests(TestCase):
         self.assertIsNone(registro.usuario)
         self.assertEqual(registro.rol, "infoponia")
 
+    def test_d88_rol_externo_guarda_el_origen_en_lugar_de_infoponia(self):
+        """D-65 punto 8 y D-88 punto 5: con ``usuario=None`` y ``rol_externo`` el rol guardado es ese (no «infoponia») y
+        la pantalla lo muestra como «Proveedor (mediante enlace)» o «Cliente (mediante enlace)», no como «InfoPonia»."""
+        capataz = crear_capataz()
+        for rol, texto in (
+            (modelos.ROL_PROVEEDOR_ENLACE, "Proveedor (mediante enlace)"),
+            (modelos.ROL_CLIENTE_ENLACE, "Cliente (mediante enlace)"),
+        ):
+            with self.subTest(rol=rol):
+                registro = RegistroAuditoria.objects.registrar(
+                    None,
+                    RegistroAuditoria.Accion.MODIFICACION,
+                    [capataz],
+                    DETALLE_DE_EJEMPLO,
+                    rol_externo=rol,
+                )
+                registro.refresh_from_db()
+                self.assertIsNone(registro.usuario)
+                self.assertEqual(registro.rol, rol)
+                self.assertEqual(registro.rol_visible(), texto)
+                self.assertTrue(registro.es_de_actor_externo())
+
+    def test_d88_rol_externo_solo_sin_cuenta_y_con_una_de_las_dos_constantes(self):
+        """D-88 punto 5: ``rol_externo`` con una cuenta, o con un texto que no es una de las dos constantes, es un error de uso
+        (``ValueError``) y no guarda nada. Sin ``rol_externo`` y sin cuenta sigue siendo «infoponia» y no es un actor externo."""
+        capataz = crear_capataz()
+        antes = RegistroAuditoria.objects.count()
+        with self.subTest("con cuenta"):
+            with self.assertRaises(ValueError):
+                RegistroAuditoria.objects.registrar(
+                    capataz,
+                    RegistroAuditoria.Accion.MODIFICACION,
+                    [capataz],
+                    DETALLE_DE_EJEMPLO,
+                    rol_externo=modelos.ROL_PROVEEDOR_ENLACE,
+                )
+        with self.subTest("rol inventado"):
+            with self.assertRaises(ValueError):
+                RegistroAuditoria.objects.registrar(
+                    None, RegistroAuditoria.Accion.MODIFICACION, [capataz], DETALLE_DE_EJEMPLO, rol_externo="gerente"
+                )
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
+        self.assertFalse(registrar(None, afectados=[capataz]).es_de_actor_externo())
+
     def test_d22_registro_no_se_modifica(self):
         """D-22: al registro solo se le agregan filas; una fila guardada no se modifica, ni desde la
         instancia ni con ``update()``."""

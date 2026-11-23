@@ -1,0 +1,75 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Compras» → «Pedidos» (CMP-CNS-PED, ``tabPed`` del prototipo): una fila por pedido, del más reciente al más viejo, con su identificador y fecha, los invernaderos de destino, la fecha límite, los
+proveedores que cotizaron de los invitados, el monto estimado y el estado (regla 3). El Agrónomo ve los suyos y hace pedidos; el Gerente ve todos «en modo consulta» y filtra también por Agrónomo (reglas 1 y 2).
+Los filtros se envían con «Filtrar»: sin JavaScript funciona igual. Se marca el pedido «en cotización» con la fecha límite vencida (lo resuelve CMP-03).{% endcomment %}
+{% block titulo %}Pedidos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <div class="page-h">
+    <h1>Compras</h1>
+    <span class="spacer"></span>
+    {% if puede_hacer_pedidos %}<a class="btn btn-primary" href="{% url 'compras:pedido_nuevo' %}">{% icono "plus" 15 %} Nuevo pedido</a>{% endif %}
+  </div>
+  {% include "compras/proveedores/_pestanas.html" with activa="pedidos" %}
+
+  {% if por_resolver and puede_hacer_pedidos %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>{{ por_resolver }} pedido{{ por_resolver|pluralize }} venció su fecha límite.</b> Revisá las cotizaciones y generá la orden de compra, o cancelá el pedido si no alcanzan.</div></div>
+  {% endif %}
+
+  <form class="filters" method="get" action="{% url 'compras:pedidos' %}">
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="">Todos los estados</option>
+      {% for valor, texto in estados %}<option value="{{ valor }}"{% if filtros.estado == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero de destino">
+      <option value="">Todos los invernaderos</option>
+      {% for i in invernaderos %}<option value="{{ i.pk }}"{% if filtros.invernadero == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="proveedor" data-desplegable aria-label="Proveedor invitado">
+      <option value="">Todos los proveedores</option>
+      {% for p in proveedores %}<option value="{{ p.pk }}"{% if filtros.proveedor == p.pk|stringformat:"s" %} selected{% endif %}>{{ p.nombre_para_mostrar }}</option>{% endfor %}
+    </select>
+    {% if es_gerente %}
+    <select class="field-input" name="agronomo" data-desplegable aria-label="Agrónomo">
+      <option value="">Todos los Agrónomos</option>
+      {% for a in agronomos %}<option value="{{ a.pk }}"{% if filtros.agronomo == a.pk|stringformat:"s" %} selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <select class="field-input" name="fecha_de" data-desplegable aria-label="Fechas por">
+      <option value="pedido"{% if filtros.fecha_de != "limite" %} selected{% endif %}>Fecha del pedido</option>
+      <option value="limite"{% if filtros.fecha_de == "limite" %} selected{% endif %}>Fecha límite</option>
+    </select>
+    <input class="field-input" type="date" name="desde" value="{{ filtros.desde }}" aria-label="Desde">
+    <input class="field-input" type="date" name="hasta" value="{{ filtros.hasta }}" aria-label="Hasta">
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="btn btn-text" href="{% url 'compras:pedidos' %}">Quitar filtros</a>{% endif %}
+  </form>
+
+  {% if filas %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Pedido</th><th>Destino</th><th>Fecha límite</th><th>Proveedores</th><th class="right">Monto estimado</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+      {% with p=f.pedido %}
+      <tr>
+        <td><a class="prv-nombre" href="{% url 'compras:pedido_ficha' p.pk %}"><b>{{ p }}</b></a><span class="sub2">{{ p.fecha_pedido|date:"d/m/Y" }}{% if es_gerente %} · {{ p.agronomo.get_full_name|default:p.agronomo.email }}{% endif %}</span></td>
+        <td>{{ f.invernaderos|join:", " }}<span class="sub2">{{ f.insumos }} insumo{{ f.insumos|pluralize }}</span></td>
+        <td class="nowrap">{{ p.fecha_limite_cotizaciones|date:"d/m/Y" }}</td>
+        <td>{{ f.cotizaciones }} de {{ f.invitados }}<span class="sub2">cotizaron</span></td>
+        <td class="right nowrap mono">{{ f.monto|pesos }}</td>
+        <td><span class="status-badge {% if p.estado_pedido == 'en_cotizacion' %}status-info{% else %}status-neutral{% endif %}">{{ p.get_estado_pedido_display }}</span>{% if f.por_resolver %} <span class="status-badge status-warn">Fecha límite vencida</span>{% endif %}</td>
+        <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'compras:pedido_ficha' p.pk %}">Ver<span class="sr"> el pedido {{ p }}</span></a></td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay pedidos con esos filtros</b><span>{% if hay_filtros %}Probá quitar algún filtro.{% elif puede_hacer_pedidos %}Cuando hagas un pedido de cotización, lo ves acá.{% else %}Todavía ningún Agrónomo hizo pedidos.{% endif %}</span></div>
+  {% endif %}
+  {% if es_gerente %}<p class="hint" style="margin-top:12px">Como Gerente ves todos los pedidos en modo consulta. Los hace y los cancela el Agrónomo.</p>{% endif %}
+</div>
+{% endblock %}
