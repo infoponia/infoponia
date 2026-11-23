@@ -1,10 +1,10 @@
 {% load iconos %}{% comment %}Pestaña «Parámetros operativos» (ADM-MOD-CFG): una tarjeta por grupo (Producción, Insumos, Comercial, Compras y Entregas) con los 13
-parámetros. Recibe «form» y «advertencias» (regla 5: se muestra junto al formulario y deja guardar). Con HTMX el formulario se
+parámetros y, al final, la sección «Módulo IoT» (IOT-04) con los 14 del IoT en cinco subgrupos (``form_iot``, un formulario aparte dentro de este mismo ``<form>``). Recibe «form», «form_iot» y «advertencias» (regla 5: se muestra junto al formulario y deja guardar). Con HTMX el formulario se
 reemplaza a sí mismo con los errores por campo; sin JavaScript es un POST común. «novalidate»: las reglas son del servicio (todo o nada).{% endcomment %}
 <form id="form-parametros" method="post" novalidate action="{% url 'configuracion:guardar_parametros' %}"
       hx-post="{% url 'configuracion:guardar_parametros' %}" hx-target="this" hx-swap="outerHTML">
   {% csrf_token %}
-  {% if form.errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>Revisá los campos marcados: no se guardó ningún cambio.</div></div>{% endif %}
+  {% if form.errors or form_iot.errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>Revisá los campos marcados: no se guardó ningún cambio.</div></div>{% endif %}
   <div class="stack">
     {% for titulo, campos in form.grupos %}
     <div class="card">
@@ -14,6 +14,17 @@ reemplaza a sí mismo con los errores por campo; sin JavaScript es un POST comú
       </div>
     </div>
     {% endfor %}
+    <h2 class="sec-h">Módulo IoT</h2>
+    <p class="muted sm" style="margin-top:-4px">Valores iniciales a confirmar con el Jardín Botánico. Rigen hacia adelante: desde el próximo intento, la próxima lectura o la próxima revisión periódica.</p>
+    {% for titulo, campos in form_iot.grupos %}
+    <div class="card">
+      <div class="card-title">{{ titulo }}</div>
+      <div class="grid2">
+        {% for campo, ayuda in campos %}{% include "core/usuarios/_campo.html" with campo=campo requerido=True ayuda=ayuda %}{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% for aviso in advertencias_al_guardar %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ aviso }}</div></div>{% endfor %}
     {% for aviso in advertencias %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ aviso }}</div></div>{% endfor %}
   </div>
   <div class="footbar">

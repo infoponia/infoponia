@@ -3,12 +3,14 @@
 
 from django.urls import path
 
-from iot import views, views_hardware, views_sistema
+from iot import views, views_hardware, views_monitoreo, views_sistema
 
 app_name = "iot"
 
 urlpatterns = [
     path("", views.inicio, name="inicio"),
+    # IOT-04: Monitoreo (IOT-CNS-LEC)
+    path("monitoreo/", views_monitoreo.monitoreo, name="monitoreo"),
     # IOT-02: Sistema IoT (IOT-REG-SIS, IOT-MOD-SIS)
     path("sistema/", views_sistema.sistema, name="sistema"),
     path("sistema/registrar/", views_sistema.sistema_registrar, name="sistema_registrar"),

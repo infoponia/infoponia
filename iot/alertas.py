@@ -22,6 +22,9 @@ TIPOS_DE_ALERTA_DE_IOT = (
     ("iot_nodo_sin_comunicacion", "Nodo sin comunicación", Alerta.Severidad.CRITICA, None),
 )
 
+# Los códigos de los 11 tipos: los de las alertas que muestra el panel de monitoreo y que resuelve el registrante de enlaces (IOT-04, D-62).
+CODIGOS_DE_ALERTAS_IOT = tuple(codigo for codigo, *_ in TIPOS_DE_ALERTA_DE_IOT)
+
 
 def registrar_tipos_de_iot():
     """Registra los 11 tipos de alerta del IoT en ``maestros.alertas``. Idempotente: ``ready()`` puede correr más de una vez."""

@@ -100,10 +100,10 @@ class AccesoASistemaVistaTests(SistemaVistasBase):
             with self.subTest(nombre=nombre):
                 self.assertEqual(self.client.get(self.url(nombre, baja.pk)).status_code, 404)
 
-    def test_inicio_lleva_a_la_pestana_sistema_iot(self):
-        """«Cómo se aplica»: ``/iot/`` redirige a «Sistema IoT»."""
+    def test_inicio_lleva_a_la_pestana_monitoreo(self):
+        """«Ruta y pestaña» de IOT-CNS-LEC (IOT-04): ``/iot/`` redirige a «Monitoreo» (IOT-02 la llevaba a «Sistema IoT»)."""
         self.client.force_login(self.laura)
-        self.assertRedirects(self.client.get(reverse("iot:inicio")), reverse("iot:sistema"), fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(reverse("iot:inicio")), reverse("iot:monitoreo"), fetch_redirect_response=False)
 
     def test_las_pantallas_de_lectura_solo_aceptan_get(self):
         """SEG-14: la consulta no cambia nada: un POST a la ficha es un 405."""

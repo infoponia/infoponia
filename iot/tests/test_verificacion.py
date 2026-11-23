@@ -2,14 +2,19 @@
 # la primera corrida deja «Norte» con umbral efectivo, la segunda carga los equipos del flujo de Node-RED cuando el sistema IoT ya se
 # registró por la pantalla, nunca duplica y no pasa la contraseña ni un token por la salida ni por la auditoría.
 
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
+from unittest import mock
+
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import RegistroAuditoria, Usuario
 from core.tests.fabricas import crear_administrador, crear_gerente
 from inventario.servicios.variedades import umbral_efectivo
 from core.verificacion import ErrorDeCarga
 from iot import verificacion as cargador
-from iot.models import Actuador, Hardware, Sensor, SistemaIoT
+from iot.models import Actuador, FotoperiodoDiario, Hardware, NodoCentral, Sensor, SistemaIoT, Telemetria
 from iot.tests import fabricas
 from maestros.models import Invernadero
 from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_invernadero
@@ -22,6 +27,8 @@ class IotVerificacionTests(fabricas.ConCatalogoIot, TestCase):
 
     def setUp(self):
         self.gerente = crear_gerente()
+        # Las lecturas de los días de IOT-04 son una cada 5 minutos (288 por día y sensor, por el servicio de la API): para que las pruebas no tarden, una por hora; la prueba del fotoperíodo usa el paso real.
+        self.enterContext(mock.patch.object(cargador, "PASO_EN_MINUTOS", 60))
 
     def test_d_verificacion_primera_corrida_deja_norte_con_umbral_efectivo(self):
         """Primera corrida: cuentas de prueba, «Norte» con Agrónomo y Capataz y sin Técnico, y una siembra «a realizar» que da umbral efectivo."""
@@ -104,3 +111,78 @@ class IotVerificacionTests(fabricas.ConCatalogoIot, TestCase):
         self.gerente.delete()
         with self.assertRaisesMessage(ErrorDeCarga, "No hay un Gerente activo"):
             cargador.cargar(CLAVE)
+
+
+class IotVerificacionDeIot04Tests(fabricas.ConCatalogoIot, TestCase):
+    """Lo que suma IOT-04 al cargador: el invernadero «Sur» sin Agrónomo ni sistema y las lecturas de ayer y de anteayer de «Norte»."""
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.enterContext(mock.patch.object(cargador, "PASO_EN_MINUTOS", 60))
+
+    def con_el_sistema_registrado(self):
+        cargador.cargar(CLAVE)
+        sistema = fabricas.sistema(Invernadero.objects.get(nombre_invernadero="Norte"))
+        cargador.cargar(CLAVE)
+        return sistema
+
+    def test_d_verificacion_sur_no_tiene_agronomo_ni_sistema_y_lo_opera_el_gerente(self):
+        """«Sur»: sin Agrónomo y sin sistema IoT (el Gerente lo opera y ve «Registrar Sistema IoT»); «Norte», con Agrónomo, queda de solo consulta para el Gerente. Se crea en la primera corrida."""
+        from iot.alcance import invernaderos_que_opera
+
+        cargador.cargar(CLAVE)
+        sur = Invernadero.objects.get(nombre_invernadero="Sur")
+        self.assertIsNone(sur.agronomo_id)
+        self.assertFalse(SistemaIoT.objects.filter(invernadero=sur).exists())
+        operados = set(invernaderos_que_opera(self.gerente).values_list("nombre_invernadero", flat=True))
+        self.assertEqual(operados, {"Sur"})
+
+    def test_d_verificacion_las_lecturas_de_ayer_y_de_anteayer_no_se_cargan_sin_el_sistema(self):
+        """Sin el sistema IoT registrado (primera corrida) no hay sensores ni lecturas: el cargador pide registrarlo por la pantalla."""
+        cargador.cargar(CLAVE)
+        self.assertEqual(Telemetria.objects.count(), 0)
+
+    def test_d_verificacion_carga_un_dia_entero_de_la_temperatura_de_ayer_y_anteayer_y_de_la_luz_de_ayer(self):
+        """Segunda corrida: ayer y anteayer de la temperatura y ayer de la luz, de las 00:00 a las 23:00 (una por hora en la prueba), nada de hoy ni de los demás sensores. El último mensaje de cada sensor
+        es el de su última lectura (ayer) y el nodo sigue sin comunicación (nada de alerta crítica ni de correo antes de empezar). Los valores están dentro del umbral efectivo."""
+        sistema = self.con_el_sistema_registrado()
+        hoy = timezone.localdate()
+        zona = timezone.get_current_timezone()
+
+        def del_dia(sensor, dia):
+            inicio = datetime.combine(dia, time.min, tzinfo=zona)
+            return Telemetria.objects.filter(sensor=sensor, medida_en__gte=inicio, medida_en__lt=inicio + timedelta(days=1))
+
+        temperatura = Sensor.objects.get(identificador_equipo="norte/sectorA/temperatura")
+        luz = Sensor.objects.get(identificador_equipo="norte/sectorA/luz")
+        self.assertEqual([del_dia(temperatura, hoy - timedelta(days=n)).count() for n in (1, 2)], [24, 24])
+        self.assertEqual([del_dia(luz, hoy - timedelta(days=n)).count() for n in (1, 2)], [24, 0])
+        self.assertEqual(del_dia(temperatura, hoy).count() + del_dia(luz, hoy).count(), 0)
+        self.assertEqual(Telemetria.objects.exclude(sensor__in=[temperatura, luz]).count(), 0)
+        self.assertEqual(set(Telemetria.objects.filter(sensor=temperatura).values_list("valor_medido", flat=True)) - {Decimal(v) for v in (20, 21, 22, 23)}, set())
+        temperatura.refresh_from_db()
+        self.assertEqual(temperatura.ultimo_mensaje_en, Telemetria.objects.filter(sensor=temperatura).order_by("-medida_en").first().medida_en + timedelta(seconds=10))
+        self.assertIsNone(NodoCentral.objects.get(sistema=sistema).ultima_comunicacion)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="entrega_informacion_iot").count(), 0)  # ninguna lectura generó una alerta
+
+    def test_d_verificacion_las_lecturas_se_cargan_una_sola_vez(self):
+        """Idempotencia: la corrida repetida no vuelve a cargar un día que ya tiene lecturas."""
+        self.con_el_sistema_registrado()
+        lecturas = Telemetria.objects.count()
+        resumen = cargador.cargar(CLAVE)
+        self.assertEqual((Telemetria.objects.count(), resumen.creado), (lecturas, ()))
+
+    def test_d_verificacion_con_el_paso_real_la_revision_calcula_el_fotoperiodo_de_ayer_en_10_horas(self):
+        """Con una lectura cada 5 minutos (el paso real), el día de ayer queda completo: la primera revisión calcula su fotoperíodo, 10,00 h de luz (8 a 18 h con 15.000 lux), sin marcarlo incompleto y dentro
+        del rango del umbral (8 a 14 h): el panel dice «Fotoperíodo de ayer: 10 h» y «En rango». La hora de la revisión es el mediodía de hoy (no depende de la hora del día)."""
+        from iot.servicios import revision
+
+        cargador.cargar(CLAVE)
+        fabricas.sistema(Invernadero.objects.get(nombre_invernadero="Norte"))
+        with mock.patch.object(cargador, "PASO_EN_MINUTOS", 5), mock.patch.object(cargador, "DIAS_DE_TEMPERATURA", 1):
+            cargador.cargar(CLAVE)
+        hoy_al_mediodia = datetime.combine(timezone.localdate(), time(12), tzinfo=timezone.get_current_timezone())
+        revision.revisar(hoy_al_mediodia)
+        luz = Sensor.objects.get(identificador_equipo="norte/sectorA/luz")
+        fotoperiodo = FotoperiodoDiario.objects.get(sensor=luz, fecha=timezone.localdate() - timedelta(days=1))
+        self.assertEqual((fotoperiodo.horas, fotoperiodo.incompleto), (Decimal("10.00"), False))
