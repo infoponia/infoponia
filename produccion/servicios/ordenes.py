@@ -21,7 +21,7 @@ from maestros.models import Invernadero
 from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
+from produccion.models import Cosecha, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios.bloqueos import traducir
 
 Tipo = OrdenTrabajo.Tipo
@@ -33,13 +33,14 @@ TIPOS_DE_PRODUCCION = (Tipo.SIEMBRA, Tipo.TRANSICION, Tipo.COSECHA)
 # Las que acepta `cancelar_orden` (la del Agrónomo). La cosecha se cancela con `comercial.cancelar_cosecha` (D-64).
 TIPOS_QUE_CANCELA_PRODUCCION = (Tipo.SIEMBRA, Tipo.TRANSICION)
 
-# Las tablas hijas que tienen Capataz (`ConCapataz`, D-53). PRD-02 suma `TransicionEtapa` y COM-02, `Cosecha`.
-_HIJAS_CON_CAPATAZ = [Siembra, TransicionEtapa]
+# Las tablas hijas que tienen Capataz (`ConCapataz`, D-53). PRD-02 suma `TransicionEtapa` y COM-02, `Cosecha` (D-59).
+_HIJAS_CON_CAPATAZ = [Siembra, TransicionEtapa, Cosecha]
 # Lo que cada hija trae cargado para armar sus filas sin consultas por fila: la variedad de una siembra y, en una transición, la
 # del lote (su variedad sale de `lote.siembra`) y la etapa destino.
 _RELACIONES = {
     Siembra: ("variedad__cultivo",),
     TransicionEtapa: ("lote__siembra__variedad__cultivo", "etapa_destino__tipo_etapa"),
+    Cosecha: ("variedad__cultivo",),
 }
 
 # Una orden tal como la muestran la lista, la bandeja y los avisos: ya con todo lo que necesitan (sin consultas por fila).
@@ -90,6 +91,8 @@ def _resumen_de(hija):
         return f"{hija.variedad} · {hija.cant_plantines_siembra} plantines"
     if isinstance(hija, TransicionEtapa):
         return f"{hija.lote.codigo} · {hija.lote.siembra.variedad} → {hija.etapa_destino.tipo_etapa.nombre_etapa}"
+    if isinstance(hija, Cosecha):
+        return f"{hija.variedad} · cosecha"
     return ""
 
 
@@ -122,10 +125,13 @@ def _filas_de_ordenes(ordenes):
     return [_fila(orden, hijas.get(orden.pk), getattr(hijas.get(orden.pk), "capataz_id", None)) for orden in ordenes]
 
 
-def _ordenes_del_capataz(capataz, estado, solo_invernaderos_activos):
-    """La unión de las hijas con Capataz, filtrada por `TIPOS_DE_PRODUCCION`; una consulta por tabla hija."""
+def _ordenes_del_capataz(capataz, estado, solo_invernaderos_activos, sin_cosechas=False):
+    """La unión de las hijas con Capataz, filtrada por `TIPOS_DE_PRODUCCION`; una consulta por tabla hija. Con `sin_cosechas` (la bandeja),
+    no consulta la tabla de cosechas: hasta COM-04a la bandeja no las muestra."""
     filas = []
     for clase in _HIJAS_CON_CAPATAZ:
+        if sin_cosechas and clase is Cosecha:  # hasta COM-04a
+            continue
         consulta = clase.objects.filter(capataz_id=capataz.pk, tipo_orden__in=list(TIPOS_DE_PRODUCCION))
         if estado:
             consulta = consulta.filter(estado_orden=estado)
@@ -147,7 +153,7 @@ def bandeja_del_capataz(capataz):
     """Las órdenes «a realizar» del Capataz en invernaderos activos, ordenadas por fecha programada, prioridad e id, en los grupos
     «vencidas» (antes de hoy), «hoy» y «próximas» (después de hoy)."""
     hoy = timezone.localdate()
-    filas = _ordenes_del_capataz(capataz, Estado.A_REALIZAR, solo_invernaderos_activos=True)
+    filas = _ordenes_del_capataz(capataz, Estado.A_REALIZAR, solo_invernaderos_activos=True, sin_cosechas=True)  # cosechas: hasta COM-04a
     return Bandeja(
         vencidas=[f for f in filas if f.fecha_programada_orden < hoy],
         hoy=[f for f in filas if f.fecha_programada_orden == hoy],
@@ -161,7 +167,7 @@ def lista_de_ordenes(actor, filtros):
     más reciente a la más antigua."""
     ordenes = OrdenTrabajo.objects.filter(
         invernadero__in=Invernadero.objects.en_alcance_de(actor), tipo_orden__in=list(TIPOS_DE_PRODUCCION)
-    )
+    ).exclude(tipo_orden=Tipo.COSECHA)  # hasta COM-04a: la lista del Agrónomo todavía no muestra cosechas
     if filtros.invernadero_id:
         ordenes = ordenes.filter(invernadero_id=filtros.invernadero_id)
     if filtros.tipo:
@@ -474,7 +480,12 @@ def detalle_de_orden(actor, orden_id):
     Gerente (solo lectura) y el Agrónomo a cargo de su invernadero, y el Capataz asignado; para cualquier otra cuenta, o una orden de
     otro tipo, `Http404` (no se revela que existe). Trae además qué puede hacer `actor`: cancelar (el Agrónomo a cargo, si la orden
     es de las que cancela `produccion` y está «a realizar») o concretar (el Capataz asignado a una siembra «a realizar»)."""
-    orden = OrdenTrabajo.objects.select_related("invernadero").filter(pk=orden_id, tipo_orden__in=list(TIPOS_DE_PRODUCCION)).first()
+    orden = (
+        OrdenTrabajo.objects.select_related("invernadero")
+        .filter(pk=orden_id, tipo_orden__in=list(TIPOS_DE_PRODUCCION))
+        .exclude(tipo_orden=Tipo.COSECHA)  # hasta COM-04a: su ventana de detalle todavía no existe
+        .first()
+    )
     if orden is None or actor is None or not getattr(actor, "is_active", False):
         raise Http404("No existe esa orden.")
     hija = None

@@ -69,6 +69,40 @@ class ComercialVerificacionTests(ConGeoref, TestCase):
         self.assertEqual(antes, despues)
         self.assertEqual(resumen.creado, ())
 
+    def test_d_verificacion_com_02_los_dos_invernaderos_con_su_lote_en_maduracion_y_uno_sin_capataz(self):
+        """COM-02: «Verificación Comercial Norte» (con Capataz) y «Sur» (sin Capataz), del mismo Vendedor, cada uno con un lote de «Lechuga (prueba)
+        Crespa» en Maduración (100 y 80 plantas) y la alerta «sin Capataz activo» del Sur para el Gerente; lo carga con los servicios."""
+        from maestros.models import Alerta
+        from produccion.models import Lote
+
+        cargador.cargar(CLAVE)
+        vendedor = Usuario.objects.get(email="vendedor@prueba5.local")
+        norte = Invernadero.objects.get(nombre_invernadero=cargador.NORTE)
+        sur = Invernadero.objects.get(nombre_invernadero=cargador.SUR)
+        self.assertEqual((norte.vendedor_id, sur.vendedor_id), (vendedor.pk, vendedor.pk))
+        self.assertEqual((norte.capataz_id is not None, sur.capataz_id), (True, None))
+        lotes = {l.invernadero_id: l for l in Lote.objects.select_related("etapa__tipo_etapa")}
+        self.assertEqual((lotes[norte.pk].cantidad_actual, lotes[sur.pk].cantidad_actual), (100, 80))
+        self.assertEqual({l.etapa.tipo_etapa.codigo for l in lotes.values()}, {"maduracion"})
+        self.assertTrue(Alerta.objects.filter(invernadero=sur, tipo_alerta="sin_capataz", estado_alerta="activa").exists())
+        for correo in ("agronomo", "capataz", "vendedor2"):
+            self.assertTrue(Usuario.objects.get(email=f"{correo}@prueba5.local").check_password(CLAVE))
+
+    def test_d_verificacion_com_02_el_stock_maduro_alcanza_para_la_primera_venta_de_la_verificacion(self):
+        """Pasos 2 y 3 de la verificación a mano: para dentro de 3 días la variedad tiene 100 plantas disponibles (solo el lote del invernadero CON Capataz)."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from comercial.servicios import stock_maduro
+        from maestros.models import Variedad
+
+        cargador.cargar(CLAVE)
+        variedad = Variedad.objects.get(nombre_variedad="Crespa", cultivo__nombre_cultivo=cargador.CULTIVO)
+        invernaderos = list(Invernadero.objects.filter(nombre_invernadero__in=[cargador.NORTE, cargador.SUR]).values_list("pk", flat=True))
+        disponible = stock_maduro.disponible([variedad.pk], invernaderos, timezone.localdate() + timedelta(days=3), "compra_venta")
+        self.assertEqual(disponible[variedad.pk].total, 100)
+
     def test_d_verificacion_sin_gerente_activo_lo_dice(self):
         """Sin Gerente activo no se puede cargar nada: ``ErrorDeCarga`` con un mensaje claro."""
         self.gerente.is_active = False

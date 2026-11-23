@@ -22,7 +22,7 @@ from core.models import Usuario, rol_de
 from inventario.extensiones import USO_NEUTRO, OrdenQueReserva, UsoDeVariedad
 from maestros.extensiones import Aviso, Contenido, Impedimento
 from maestros.models import Invernadero
-from produccion.models import Bitacora, FueraDeServicio, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
+from produccion.models import Bitacora, Cosecha, FueraDeServicio, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import lotes as api_lotes
 from produccion.servicios import bitacora, inicio, ordenes
 
@@ -201,7 +201,7 @@ def impedimentos_de_baja_del_invernadero(invernadero):
 
 def _ordenes_a_traspasar(invernadero, entrante):
     """Las órdenes «a realizar» del invernadero que todavía no son del Capataz entrante, por cada tabla hija con Capataz (D-53).
-    Solo de los tipos de `TIPOS_DE_PRODUCCION` (D-67 punto 1): así no se superpone con los registrantes de COM-02 e IOT-07.
+    Solo de los tipos de `TIPOS_DE_PRODUCCION` (D-67 punto 1; desde COM-02 incluye la cosecha): así no se superpone con IOT-07.
     Si el rol había quedado vacío, pasan también las del Capataz que se fue (MD-60)."""
     for clase in ordenes._HIJAS_CON_CAPATAZ:
         yield clase, clase.objects.filter(
@@ -284,7 +284,7 @@ def ordenes_que_reservan(ids):
 
 def uso_de_variedad(variedad_ids):
     """`registrar_uso_de_variedad`: `{variedad_id: UsoDeVariedad}`: si tiene lotes (aunque estén terminados), cuántos activos,
-    cuántas órdenes «a realizar» (siembras de la variedad y, desde PRD-02, las transiciones de sus lotes) y en qué invernaderos
+    cuántas órdenes «a realizar» (siembras de la variedad, desde PRD-02 las transiciones de sus lotes y desde COM-02 sus cosechas) y en qué invernaderos
     hay lotes activos. Tres consultas."""
     ids = list(variedad_ids)
     con_lotes, activos, invernaderos = set(), defaultdict(int), defaultdict(set)
@@ -306,6 +306,9 @@ def uso_de_variedad(variedad_ids):
         .values(variedad_id=F("lote__siembra__variedad_id"))
         .annotate(n=Count("pk"))
     ):
+        pendientes[fila["variedad_id"]] = pendientes.get(fila["variedad_id"], 0) + fila["n"]
+    # COM-02 (D-59): las cosechas «a realizar» de la variedad también impiden su baja.
+    for fila in Cosecha.objects.filter(variedad_id__in=ids, estado_orden=Estado.A_REALIZAR).values("variedad_id").annotate(n=Count("pk")):
         pendientes[fila["variedad_id"]] = pendientes.get(fila["variedad_id"], 0) + fila["n"]
     resultado = {}
     for variedad_id in ids:

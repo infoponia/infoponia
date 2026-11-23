@@ -21,7 +21,7 @@ from maestros.tests.fabricas import (
     crear_sector,
 )
 from produccion.errores import ErrorDeProduccion
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
+from produccion.models import Cosecha, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import ordenes
 
 CODIGOS_DE_ETAPA = ("germinacion", "crecimiento", "floracion", "fructificacion", "maduracion")
@@ -118,6 +118,8 @@ def orden_suelta(invernadero, tipo, *, estado="a_realizar", reservas=()):
         extra["fecha_resolucion_orden"] = hoy
     if estado == "cancelada":
         extra["motivo_cancelacion"] = "Motivo de prueba"
+    if tipo == OrdenTrabajo.Tipo.COSECHA:
+        extra["prioridad_orden"] = "media"  # COM-02: la prioridad es obligatoria en la cosecha
     orden = OrdenTrabajo.objects.create(
         tipo_orden=tipo,
         numero=ordenes.siguiente_numero(),
@@ -228,6 +230,38 @@ def lote_con_ciclo(escenario, cantidad=50, etapa="crecimiento", dias_en_etapa=0,
         )
     lote.refresh_from_db()
     return lote
+
+
+def lote_maduro(escenario, cantidad=50, entrada=None, costo="100.00", variedad=None):
+    """Un lote «activo» de `cantidad` plantas que ya está en Maduración (COM-02): `entrada` es la fecha en que entró (por defecto, hoy), con
+    todas sus transiciones concretadas (`lote_con_ciclo`). Sirve para probar el stock maduro sin pasar por las pantallas."""
+    hoy = timezone.localdate()
+    return lote_con_ciclo(
+        escenario, cantidad=cantidad, etapa="maduracion", dias_en_etapa=(hoy - (entrada or hoy)).days, costo=costo, variedad=variedad
+    )
+
+
+def cosecha(escenario, variedad=None, *, estado="a_realizar", dias=0, capataz=None, invernadero=None, prioridad="media"):
+    """Una `Cosecha` suelta (sin reserva) del `escenario`, `a_realizar` por defecto, con su Capataz. Escribe directo en la base: las que
+    crea el sistema nacen con su reserva (`comercial.servicios.stock_maduro.asignar`)."""
+    hoy = timezone.localdate()
+    extra = {}
+    if estado != "a_realizar":
+        extra["fecha_resolucion_orden"] = hoy
+    if estado == "cancelada":
+        extra["motivo_cancelacion"] = "Motivo de prueba"
+    return Cosecha.objects.create(
+        tipo_orden=OrdenTrabajo.Tipo.COSECHA,
+        numero=ordenes.siguiente_numero(),
+        fecha_creacion_orden=min(hoy, hoy + timedelta(days=dias)),
+        fecha_programada_orden=hoy + timedelta(days=dias),
+        estado_orden=estado,
+        prioridad_orden=prioridad,
+        invernadero=invernadero or escenario.invernadero,
+        capataz=capataz or escenario.capataz,
+        variedad=variedad or escenario.variedad,
+        **extra,
+    )
 
 
 def variedad_con_stock(escenario, nombre="Otra", perfil="hoja_verde", stock=100, habilitar=True, **columnas):

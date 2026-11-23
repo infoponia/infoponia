@@ -4,8 +4,8 @@
 # que creó para que el caso de uso lo ponga en su único registro de auditoría (D-36).
 # Fuente: docs/casos_de_uso/produccion/transicion.md (extracto de PROD-REG-MRM y «Núcleo de la merma desde la transición»),
 # docs/api/produccion.md (sección 6), docs/patrones/costo_del_lote.md, D-50 punto 6 y D-51 punto 5.
-# Fuera de la ronda (D-45): el movimiento de stock «salida por merma» (postcondición d), el asiento (e), la condición 1 de plantas
-# comprometidas (cosechas) y la partida en cámara.
+# Fuera de la ronda (D-45): el movimiento de stock «salida por merma» (postcondición d), el asiento (e) y la partida en cámara. La condición 1
+# de plantas comprometidas (reservas de cosecha) la suma COM-02 (D-59), con `produccion.extensiones.reservado_de_lotes`.
 # PRD-03 suma, al final, el caso de uso PROD-REG-MRM (Registrar Merma) sobre este núcleo: `registrar_merma` y sus lecturas.
 
 from collections import namedtuple
@@ -22,8 +22,9 @@ from inventario.servicios import variedades
 from maestros.servicios import alertas, configuracion
 from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
+from produccion import extensiones
 from produccion.errores import ErrorDeProduccion
-from produccion.models import AlertaDeMerma, Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
+from produccion.models import AlertaDeMerma, Cosecha, Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
 from produccion.servicios import alcance, costos
 from produccion.servicios.bloqueos import traducir as _bloquear
 
@@ -117,9 +118,31 @@ def _alerta_de_umbral(lote, merma):
     return alertas.crear_alerta_de_evento(lote.invernadero_id, TIPO_UMBRAL, descripcion)
 
 
+def _alerta_por_reservas_de_cosecha(lote):
+    """Condición 1 de la regla 15 de 8.8 (COM-02, D-59; «Diferencias», fila 8): lo reservado en líneas de reservas «activas» del lote
+    (`extensiones.reservado_de_lotes`) supera su `cantidad_actual` y quedan cosechas sin cobertura. Una sola alerta por lote y por merma.
+    Nombra las cosechas «a realizar» que lo usan con `detalle_de_cosechas` (lo pide la extensión 10a: «qué órdenes de cosecha quedaron
+    sin cobertura»). Sin registrante (o sin reservas) no hace nada."""
+    reservado = extensiones.reservado_de_lotes([lote.pk])[lote.pk]
+    if reservado <= lote.cantidad_actual:
+        return None
+    candidatas = list(
+        Cosecha.objects.filter(
+            invernadero_id=lote.invernadero_id, variedad_id=lote.siembra.variedad_id, estado_orden=OrdenTrabajo.Estado.A_REALIZAR
+        ).order_by("pk")
+    )
+    detalle = extensiones.detalle_de_cosechas([c.pk for c in candidatas])
+    codigos = [c.codigo for c in candidatas if any(lote_id == lote.pk for lote_id, _, _ in detalle[c.pk].lotes)] if detalle else []
+    texto = f"{lote.codigo} tiene {lote.cantidad_actual} plantas y {reservado} reservadas para cosechas"
+    if codigos:
+        texto += f": {', '.join(codigos)}"
+    return alertas.crear_alerta_de_evento(lote.invernadero_id, TIPO_PLANTAS_COMPROMETIDAS, (texto + ".")[:LARGO_DE_LA_ALERTA])
+
+
 def _alertas_de_plantas_comprometidas(lote, ordenes_excluidas):
     """Postcondición l y extensión 10a, condición 2 de la regla 15 de 8.8: la transición «a realizar» del lote (sin contar las
-    `ordenes_excluidas`) queda con más plantas planificadas que `cantidad_actual`. Una alerta por orden afectada."""
+    `ordenes_excluidas`) queda con más plantas planificadas que `cantidad_actual`. Una alerta por orden afectada. La condición 1 (reservas
+    de cosecha) la suma COM-02 al final de la lista."""
     creadas = []
     pendientes = TransicionEtapa.objects.filter(lote=lote, estado_orden=OrdenTrabajo.Estado.A_REALIZAR).exclude(
         pk__in=list(ordenes_excluidas)
@@ -129,6 +152,7 @@ def _alertas_de_plantas_comprometidas(lote, ordenes_excluidas):
         if planificadas > lote.cantidad_actual:
             texto = f"{lote.codigo} tiene {lote.cantidad_actual} plantas y su transición {orden.codigo} planificó {planificadas}."
             creadas.append(alertas.crear_alerta_de_evento(lote.invernadero_id, TIPO_PLANTAS_COMPROMETIDAS, texto[:LARGO_DE_LA_ALERTA]))
+    creadas.append(_alerta_por_reservas_de_cosecha(lote))
     return creadas
 
 
@@ -144,7 +168,8 @@ def aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por
     - Postcondición c: solo si viene `por_sector` (`{sector_id: plantas}`, que pasa Registrar Merma, PRD-03): baja los agujeros ocupados de
       cada ocupación afectada (si el lote se pierde entero quedan todas en cero y CONSERVAN su lote, como en la concreción de una
       transición). Sin `por_sector` no toca ocupaciones: Concretar Transición libera todos los agujeros de origen.
-    - Postcondiciones k y l: alerta de umbral y alerta de plantas comprometidas (condición 2), enlazadas con la merma por `AlertaDeMerma`.
+    - Postcondiciones k y l: alerta de umbral y alertas de plantas comprometidas (condición 2: la transición; condición 1, desde COM-02: las
+      reservas de cosecha), enlazadas con la merma por `AlertaDeMerma`.
       Un invernadero inactivo no genera alertas (`crear_alerta_de_evento` da `None`): la merma se registra igual.
     - Rechaza con `ErrorDeProduccion`: `cantidad_invalida`, `causa_obligatoria`, `causa_invalida`, `descripcion_larga`, `fecha_invalida`.
     """

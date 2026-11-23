@@ -1,0 +1,21 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}El resumen de la compra-venta como página (respaldo sin JavaScript de la ventana de «_resumen.html»; COM-REG-CVT, pasos 12 y 13). «Volver a la carga»
+(extensión 13a) manda el formulario de nuevo con todo lo cargado; «Confirmar compra-venta» registra. Recibe «resumen», «f», «datos».{% endcomment %}
+{% block titulo %}Resumen · Nueva compra-venta · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Resumen de la compra-venta</h1></div>
+  <div class="card">
+    {% include "comercial/contratos/_resumen_datos.html" %}
+    <form method="post" action="{% url 'comercial:compra_venta_nueva' %}">
+      {% csrf_token %}
+      {% include "comercial/contratos/_campos_ocultos.html" %}
+      <div class="acts">
+        <button class="btn btn-ghost" type="submit" name="actualizar" value="1">Volver a la carga</button>
+        <button class="btn btn-primary" type="submit" name="confirmar" value="1" data-enviando="Registrando…">Confirmar compra-venta</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

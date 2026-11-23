@@ -24,3 +24,11 @@ def kg(valor):
 def get_item(diccionario, clave):
     """``diccionario[clave]`` o ``None`` (para mostrar un dato de una tabla calculada aparte, como la cantidad de direcciones)."""
     return diccionario.get(clave)
+
+
+@register.filter
+def pesos(valor):
+    """Un monto en pesos con dos decimales y coma decimal: «$ 1.500,50» (COM-02; ``None`` da «—»)."""
+    from comercial.servicios.compra_ventas import texto_de_pesos
+
+    return "—" if valor is None else texto_de_pesos(valor)

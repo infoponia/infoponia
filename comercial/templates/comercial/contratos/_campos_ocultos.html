@@ -1,0 +1,13 @@
+{% comment %}Los datos de la venta como campos ocultos, para confirmar o volver a la carga desde el resumen (con HTMX la ventana está sobre el formulario; sin
+JavaScript, el resumen es otra página y estos campos llevan todo de vuelta). Recibe «datos».{% endcomment %}
+{% if datos.vendedor_id %}<input type="hidden" name="vendedor" value="{{ datos.vendedor_id }}">{% endif %}
+<input type="hidden" name="cliente" value="{{ datos.cliente_id }}">
+<input type="hidden" name="fecha" value="{{ datos.fecha_pactada }}">
+<input type="hidden" name="modalidad" value="{{ datos.modalidad }}">
+<input type="hidden" name="direccion" value="{{ datos.direccion_id }}">
+<input type="hidden" name="invernadero" value="{{ datos.invernadero_id }}">
+{% for r in datos.renglones %}
+<input type="hidden" name="renglon-{{ r.indice }}-variedad" value="{{ r.variedad_id }}">
+<input type="hidden" name="renglon-{{ r.indice }}-cantidad" value="{{ r.cantidad }}">
+<input type="hidden" name="renglon-{{ r.indice }}-precio" value="{{ r.precio }}">
+{% endfor %}

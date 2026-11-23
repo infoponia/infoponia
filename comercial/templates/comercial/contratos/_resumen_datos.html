@@ -1,0 +1,19 @@
+{% load comercial %}{% comment %}Lo que dice el resumen (paso 12), en la ventana y en la página. Recibe «resumen» y «f».{% endcomment %}
+<dl class="dl">
+  <dt>Cliente</dt><dd>{{ f.cliente }} · CUIT {{ f.cliente.cuit_cliente|cuit }}</dd>
+  <dt>Vendedor responsable</dt><dd>{{ f.vendedor.get_full_name }}</dd>
+  <dt>Entrega</dt><dd>{% if f.direccion %}Envío a domicilio: {{ resumen.destino }}{% else %}Retiro en invernadero: {{ resumen.destino }}{% endif %}</dd>
+  <dt>Fecha pactada</dt><dd>{{ f.fecha|date:"d/m/Y" }}</dd>
+</dl>
+<div class="tablewrap">
+  <table class="data-table">
+    <thead><tr><th>Variedad</th><th class="right">Cantidad</th><th class="right">Precio unitario</th><th class="right">Subtotal estimado</th></tr></thead>
+    <tbody>
+    {% for fila in resumen.filas %}
+      <tr><td>{{ fila.variedad }}</td><td class="right mono">{{ fila.cantidad }}</td><td class="right mono">{{ fila.precio|pesos }}</td><td class="right mono">{{ fila.subtotal|pesos }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><th colspan="3" class="right">Monto estimado</th><th class="right mono">{{ f.monto_estimado|pesos }}</th></tr></tfoot>
+  </table>
+</div>
+<p class="hint">Al confirmar se reserva el stock y se programan las cosechas necesarias. El cliente paga al recibir.{% if f.cliente_sin_correo %} El cliente no tiene correo: el comprobante se entrega impreso.{% endif %}</p>

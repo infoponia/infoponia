@@ -210,3 +210,66 @@ otro invernadero del mismo Vendedor **sin Capataz**, con otro lote de esa varied
 13. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)
+
+
+**Qué se hizo** (rama `feature/com-02-stock-maduro-y-compra-venta`, 23/11/2026)
+
+- **Modelos y migraciones** (todas sin datos): `produccion/0005` (`Cosecha`, `StockCosechado` y la restricción «cosecha ⇒ prioridad»), `contabilidad/0002` (`contrato`),
+  `core/0025_comercial_compra_venta` (acción `registro_compra_venta`) y `comercial/0002` (`Contrato`, `CompraVenta`, `DetalleVenta`, `ReservaStock`, `DetalleReserva` y
+  la secuencia `comercial_compraventa_numero_seq` con su reverso; depende de las otras tres). Todas las restricciones de la base de las fichas; admin de solo lectura.
+- **`produccion`:** `extensiones.py` (dos puntos, un solo registrante cada uno); `Cosecha` en `ordenes_del_capataz`, en el traspaso del Capataz y en `uso_de_variedad`
+  (impide la baja de la variedad); excluida de la bandeja y de la lista (y de la ventana de detalle: 404) con «hasta COM-04a»; condición 1 de las plantas comprometidas
+  en `aplicar_merma`; fábricas `lote_maduro` y `cosecha`. Ninguna prueba existente de `produccion` se modificó.
+- **Servicios de `comercial`:** `stock_maduro.py` (`disponible`, `asignar`, `repartir`, `cantidad_sin_cubrir`, `bloquear_candidatos`, `reservado_de_lotes`,
+  `detalle_de_cosechas`), `compra_ventas.py` (`registrar_compra_venta`, `datos_del_formulario`, `resumen`, `puede_registrar`, `buscar_compra_ventas`,
+  `ficha_de_compra_venta`, `datos_del_comprobante`), `comprobantes.py`, `registrantes.py` (traspaso de D-60 e impedimento `contratos_abiertos`) y lo que completa a
+  COM-01 (`direcciones_en_uso`, `pendientes_del_cliente`, `contratos_del_cliente`, `contratos_vigentes_por_cliente`, `direcciones_activas`).
+- **Pantallas:** pestaña «Contratos» primera (`/comercial/` redirige), lista con filtros, formulario de tres secciones con recálculo HTMX solo en selectores, ventana y
+  página de resumen, ficha, comprobante imprimible y «Reenviar comprobante»; ficha y lista de clientes con sus compra-ventas; `volver` desde el alta y la modificación
+  del cliente (armado con `urllib.parse` y validado como interno).
+
+**Pruebas** (M1)
+
+- Suite completa `manage.py test --parallel --noinput` (con concurrencia y migración): **5491 pruebas, OK** Después del arreglo de «Agregar variedad» (23/11/2026): +8 pruebas en `test_compra_ventas_vistas.py`; las 113 de los módulos tocados, OK; la suite completa la corre el CI.. `makemigrations --check --dry-run`: sin cambios. `check`: sin problemas.
+- Nuevas: `produccion`: `test_cosecha_en_produccion.py`, `test_extensiones.py`; `comercial`: `test_modelos_contratos.py`, `test_prod_asg_stk.py` (61), `test_extensiones_de_produccion.py`,
+  `test_com_reg_cvt.py` (55), `test_com_cns_cvt.py` (15), `test_traspaso_de_vendedor.py`, `test_impedimento_de_variedad.py`, `test_clientes_con_compra_ventas.py`,
+  `test_compra_ventas_vistas.py` (37), `test_stock_maduro_concurrencia.py` (7), `test_compra_ventas_concurrencia.py` (5) y dos pruebas más en `test_verificacion.py`.
+- Pruebas de COM-01 reemplazadas (lo pedía «Se completa en COM-02»): `test_clientes_vistas.py` (inicio → «Contratos»; `volver` suma `cliente=<id>`; la ficha ya muestra «Contratos»);
+  `test_com_baj_clt.py` y `test_com_mod_clt.py` (solo el nombre y el docstring: siguen valiendo sin compra-ventas; con datos, `test_clientes_con_compra_ventas.py`).
+
+**Decisiones:** ninguna nueva. Aplicadas D-59 y D-60. Desvíos y precisiones (para `docs/temas_abiertos.md`):
+
+1. La condición 1 de la merma usa `detalle_de_cosechas` para nombrar las cosechas (la API decía «nadie lo llama en COM-02»).
+2. `registrar_compra_venta` llama a `enviar_comprobante` (fuera de la transacción) en vez de la vista; la venta nace `pendiente_envio` (con correo) o `para_imprimir` y el envío la pasa a `enviado`.
+   Si falla y registró el Gerente, el Vendedor recibe «El comprobante de CV-… quedó pendiente de envío.».
+3. Códigos de error: `vendedor_obligatorio|invalido|inactivo`, `cliente_obligatorio|inactivo`, `fecha_obligatoria|invalida|pasada`, `modalidad_invalida`, `direccion_obligatoria|no_valida`,
+   `invernadero_obligatorio|no_habilitado`, `variedad_obligatoria|repetida|inactiva`, `cantidad_invalida`, `supera_disponible`, `precio_invalido`, `sin_renglones`, `stock_insuficiente`,
+   `cambio_simultaneo`, `comprobante_no_pendiente`, `cliente_sin_correo`. Los campos de error: `vendedor`, `cliente`, `fecha_pactada`, `modalidad`, `direccion`, `invernadero`,
+   `renglon-<i>-variedad|cantidad|precio` y `__all__`.
+4. El precio acepta coma o punto decimal («1.500,50» y «1500.50»). La fecha se acepta `aaaa-mm-dd` o `dd/mm/aaaa`.
+5. `detalle_de_orden` (PRD-01) devuelve 404 para una cosecha hasta COM-04a (la tarea no lo pedía; evita abrir una ventana que no existe).
+6. La fábrica `orden_suelta` de `produccion` pone prioridad «media» a la cosecha (la restricción nueva la exige); no se tocó ninguna prueba.
+7. «Una venta contra la baja del invernadero» solo prueba que la baja primero rechaza la venta con retiro (`invernadero_no_habilitado`): que una reserva de cámara impida la baja llega con COM-04 (partidas).
+8. La lista de contratos filtra el cliente por texto (`cliente_q`, además de `cliente`).
+9. «Agregar variedad» no agregaba el renglón (las pruebas del servicio no lo cubrían): `_analizar` ignoraba los renglones en blanco también en pantalla. Corregido: se conservan sin validar (`estricto=False`); `cargadas` cuenta los que tienen algo cargado.
+
+
+**Pantallas: lo que se corrigió del prototipo** (D-61)
+
+| Qué tenía | Qué se hizo | Qué lo pide |
+|---|---|---|
+| Registraba sin resumen | Ventana de resumen (y página sin JavaScript) con «Confirmar» y «Volver a la carga» | Pasos 12, 13 y 13a |
+| Ofrecía todas las variedades y un «disponible» sin fecha | Solo las que tienen stock para la fecha y los invernaderos habilitados, con su «Disponible» | Paso 8 y regla «Stock maduro libre disponible» |
+| No proponía precio | Muestra el último precio de la variedad («Nunca se vendió: ingresá el precio.») | Paso 9 y 9a |
+| El cliente se elegía de un desplegable | Buscador con «Buscar»/«Elegir» (nunca al tipear) y enlace al alta con `volver` | Pasos 3, 3a y 4a |
+| Vendedor por nombre fijo | Selector de Vendedores activos con invernaderos activos, solo para el Gerente | Extensión 1a |
+| Sin estado del comprobante ni «Reenviar» | Estado, «Ver comprobante» imprimible y «Reenviar comprobante» | Extensión 16a |
+| «Cancelar compra-venta» en la ficha | No se muestra (lo agrega COM-05b) | D-25 |
+| Sin estados vacíos ni secciones bloqueadas | Pasos bloqueados con su motivo, estados vacíos, «Nueva compra-venta» deshabilitado con el motivo | Precondición b y criterio de interfaz |
+| Sin renglón inicial claro | Con stock, siempre un renglón en blanco; «Agregar variedad» suma otro y conserva lo cargado; el contador «Variedades» solo cuenta los cargados | Paso 9 y extensión 9-10a |
+
+
+**Datos cargados para la verificación a mano** (`manage.py cargar_datos_de_verificacion --solo comercial`, base local, con los servicios): cuentas `@prueba5.local`:
+`vendedor`, `vendedor2` (el Vendedor nuevo del paso 10), `agronomo`, `capataz`, `transportista` y `transportista2` (más el Gerente de la base); «Verificación Comercial Norte»
+(Agrónomo, Capataz y `vendedor`; lote de 100 plantas de «Lechuga (prueba) Crespa» en Maduración) y «Verificación Comercial Sur» (mismo Vendedor, **sin Capataz**, lote de 80 en Maduración,
+con la alerta «sin Capataz activo»); el cliente «Verdulería Los Pinos S.R.L. (prueba)» con correo y dos direcciones (de COM-01). En el paso 10, el Vendedor entrante de «Norte» es `vendedor2`.

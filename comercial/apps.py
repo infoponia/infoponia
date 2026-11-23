@@ -14,11 +14,13 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import vehiculos
+        from comercial.servicios import registrantes, stock_maduro, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
+        from inventario import extensiones as extensiones_de_inventario
         from maestros import extensiones as extensiones_de_maestros
+        from produccion import extensiones as extensiones_de_produccion
 
         # Menú: «Comercial» para el Gerente (después de «Producción») y el Vendedor (que no tiene «Producción»: queda después de «Panel de
         # control»). ``registrar_entrada`` no repite una entrada ya registrada.
@@ -33,6 +35,18 @@ class ComercialConfig(AppConfig):
         # `core`: el «Vehículo» del Transportista en la ficha de su cuenta y en «Mi perfil» (decisión del estudiante del 21/11/2026).
         # ``registrar_*`` es idempotente.
         extensiones_de_core.registrar_datos_de_cuenta(vehiculos.datos_de_cuenta_del_transportista)
+
+        # D-60: el cambio de Vendedor de un invernadero pasa sus compra-ventas al Vendedor nuevo (el punto admite varios registrantes y recibe
+        # el rol). Precondición f de PROD-BAJ-VAR: una variedad con compra-ventas abiertas no se da de baja.
+        if (registrantes.contar_contratos, registrantes.traspasar_contratos) not in extensiones_de_maestros._TRASPASOS:
+            extensiones_de_maestros.registrar_traspaso(registrantes.contar_contratos, registrantes.traspasar_contratos)
+        if registrantes.impedimentos_de_baja_de_variedad not in extensiones_de_inventario._IMPEDIMENTOS_DE_BAJA_DE_VARIEDAD:
+            extensiones_de_inventario.registrar_impedimento_de_baja_de_variedad(registrantes.impedimentos_de_baja_de_variedad)
+
+        # `produccion` (D-59, punto 3; docs/api/extensiones_de_produccion.md): lo reservado de cada lote y el detalle de cada cosecha. Un solo
+        # registrante por punto; ``registrar_*`` es idempotente con la misma función.
+        extensiones_de_produccion.registrar_reservado_de_lote(stock_maduro.reservado_de_lotes)
+        extensiones_de_produccion.registrar_detalle_de_cosecha(stock_maduro.detalle_de_cosechas)
 
         # Datos para la verificación a mano (core/verificacion.py; docs/patrones/datos_de_verificacion.md): el cargador de `comercial`, orden 20
         # (después de `maestros`, `iot` y `produccion`). ``registrar_cargador`` no repite un código ya registrado.

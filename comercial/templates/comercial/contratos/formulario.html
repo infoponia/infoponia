@@ -1,0 +1,21 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Nueva compra-venta» (COM-REG-CVT; VIEWS.cvnew del prototipo). Una sola página con tres secciones numeradas y el resumen a la derecha; el cuerpo
+(«_cuerpo.html») es lo que HTMX redibuja al cambiar un selector, sin validar y sin mover el scroll. Sin JavaScript, cada cambio se manda con «Actualizar» y
+«Revisar y registrar» lleva a una página de resumen. Con «novalidate»: las reglas son del servicio y nada se valida al tipear. «Confirmar» está en el resumen
+(ventana o página), nunca acá. Recibe lo de «_cuerpo.html».{% endcomment %}
+{% block titulo %}Nueva compra-venta · Contratos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <a class="back" href="{% url 'comercial:contratos' %}">{% icono "back" 15 %} Volver a contratos</a>
+  <div class="page-h"><h1>Nueva compra-venta</h1></div>
+  {% if not puede_registrar %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:14px">{% icono "warn" 16 %}<div>{{ motivo }}</div></div>
+  {% endif %}
+  <form id="form-cv" method="post" action="{% url 'comercial:compra_venta_nueva' %}" novalidate>
+    {% csrf_token %}
+    <div id="cuerpo-cv">{% include "comercial/contratos/_cuerpo.html" %}</div>
+  </form>
+</div>
+{% endblock %}
+{% block ventanas %}<div id="ventana-confirmar"></div>{% endblock %}

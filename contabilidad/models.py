@@ -17,6 +17,7 @@ class OrigenDocumento(models.Model):
         ORDEN_DE_TRABAJO = "orden_de_trabajo", "Orden de trabajo"
         BITACORA = "bitacora", "Bitácora"
         MOVIMIENTO_DE_INSUMO = "movimiento_de_insumo", "Movimiento de insumo"
+        CONTRATO = "contrato", "Contrato"  # COM-02 (D-52, D-59): lo crea `comercial.Contrato`
 
     # Convención de las hijas directas (D-52 puntos 1 y 2). `MovimientoInsumo` (INV-01), `OrdenTrabajo` y `Bitacora`
     # (PRD-01) la usan sin repetir lógica:

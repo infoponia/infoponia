@@ -3,7 +3,7 @@
 
 from django.contrib import admin
 
-from .models import Cliente, DireccionCliente, Vehiculo
+from .models import Cliente, CompraVenta, DetalleReserva, DetalleVenta, DireccionCliente, ReservaStock, Vehiculo
 
 
 class SoloLectura(admin.ModelAdmin):
@@ -43,3 +43,33 @@ class VehiculoAdmin(SoloLectura):
 
     list_display = ("patente", "tipo_vehiculo", "capacidad_carga", "estado_vehiculo", "transportista")
     list_filter = ("tipo_vehiculo", "estado_vehiculo")
+
+
+@admin.register(CompraVenta)
+class CompraVentaAdmin(SoloLectura):
+    """Compra-ventas: código, cliente, Vendedor, fecha pactada y estado (se crean solo con `registrar_compra_venta`)."""
+
+    list_display = ("id", "numero", "cliente", "vendedor", "fecha_pactada_venta", "estado_venta")
+    list_filter = ("estado_venta", "modalidad_entrega")
+
+
+@admin.register(DetalleVenta)
+class DetalleVentaAdmin(SoloLectura):
+    """Detalles de venta: venta, variedad, cantidad, precio y estado."""
+
+    list_display = ("id", "compra_venta", "variedad", "cant_solicitada_venta", "precio_unitario_de_venta", "estado_detalle_venta")
+
+
+@admin.register(ReservaStock)
+class ReservaStockAdmin(SoloLectura):
+    """Reservas de stock: detalle, invernadero, fecha de entrega y estado."""
+
+    list_display = ("id", "detalle_venta", "invernadero", "fecha_entrega_reserva", "estado_reserva")
+    list_filter = ("estado_reserva",)
+
+
+@admin.register(DetalleReserva)
+class DetalleReservaAdmin(SoloLectura):
+    """Líneas de reserva: reserva, lote o partida y cantidad reservada."""
+
+    list_display = ("id", "reserva", "lote", "partida", "cantidad_reservada", "cantidad_cosechada")

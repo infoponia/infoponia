@@ -109,6 +109,10 @@ class OrdenTrabajo(OrigenDocumento):
             models.CheckConstraint(
                 condition=Q(fecha_programada_orden__gte=F("fecha_creacion_orden")), name="orden_trabajo_programada_desde_creacion"
             ),
+            # COM-02 (D-59; ronda 19, MD-18): la prioridad es obligatoria en la cosecha.
+            models.CheckConstraint(
+                condition=~Q(tipo_orden="cosecha") | Q(prioridad_orden__isnull=False), name="orden_trabajo_cosecha_con_prioridad"
+            ),
         ]
 
     def __str__(self):
@@ -565,3 +569,83 @@ class Reubicacion(Bitacora):
     def __str__(self):
         """«Reubicación #N» (texto de la auditoría, D-36)."""
         return f"Reubicación #{self.pk}"
+
+
+class Cosecha(OrdenTrabajo, ConCapataz):
+    """Orden de cosecha (`tipo_orden = cosecha`; COM-02, D-59; docs/modelo/produccion.md). Vive en `produccion` pero sus casos de uso viven en
+    `comercial` (regla A3): toda cosecha tiene una reserva (R087), que es de `comercial`. Los lotes y las cantidades están en las líneas de esa
+    reserva. `variedad` se guarda porque una cosecha abarca una sola variedad (regla 2 de 8.8) y `produccion` la necesita sin preguntarle a
+    `comercial`. Su clave es `ordentrabajo_ptr`; el Capataz viene de `ConCapataz` (D-53). La prioridad obligatoria es una restricción de `OrdenTrabajo`."""
+
+    fecha_cosecha = models.DateField(null=True, blank=True)  # la efectiva; la carga COM-04 al concretar
+    variedad = models.ForeignKey(Variedad, on_delete=models.PROTECT, related_name="cosechas")
+
+    class Meta:
+        verbose_name = "Cosecha"
+        verbose_name_plural = "Cosechas"
+
+
+class StockCosechado(models.Model):
+    """Partida de producto ya cosechado, en cámara (COM-02, D-59). Nadie la crea en COM-02: las partidas nacen al concretar una cosecha
+    (COM-04). Se muestra como `P-{id}`. No hereda de `OrigenDocumento`: no origina asientos."""
+
+    class Motivo(models.TextChoices):
+        CANCELACION_CLIENTE = "cancelacion_cliente", "Cancelación del cliente"
+        RECHAZO_CANTIDAD_REDUCIDA = "rechazo_cantidad_reducida", "Rechazo por cantidad reducida"
+        RECHAZO_EN_ENTREGA = "rechazo_en_entrega", "Rechazo en la entrega"
+        COSECHA_DEL_AGRONOMO = "cosecha_del_agronomo", "Cosecha planificada por el Agrónomo"
+        EXCEDENTE_DE_COSECHA = "excedente_de_cosecha", "Excedente de cosecha"
+        RESOLUCION_DEL_CONTRATO = "resolucion_del_contrato", "Resolución del contrato"
+
+    class Estado(models.TextChoices):
+        DISPONIBLE = "disponible", "Disponible"
+        AGOTADO = "agotado", "Agotado"
+        VENCIDO = "vencido", "Vencido"
+
+    lote = models.ForeignKey(Lote, on_delete=models.PROTECT, related_name="partidas")  # R144: invernadero y variedad, los del lote
+    cantidad_ingreso_cosechado = models.PositiveIntegerField()  # no se modifica
+    # Nunca mayor que el ingreso, salvo una devolución (regla 29 de 8.6, COM-06): por eso la restricción es solo `>= 0`.
+    cantidad_disponible_cosechado = models.PositiveIntegerField()
+    fecha_ingreso = models.DateField()
+    fecha_limite = models.DateField()  # fecha de la cosecha + postcosecha de la variedad (regla 29 de 8.6)
+    motivo_cosechado = models.CharField(max_length=30, choices=Motivo.choices)
+    estado_stock_cosechado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.DISPONIBLE)
+    costo_unitario_cosechado = models.DecimalField(max_digits=14, decimal_places=4)  # por planta, con 4 decimales
+
+    class Meta:
+        verbose_name = "Partida de cámara"
+        verbose_name_plural = "Partidas de cámara"
+        constraints = [
+            models.CheckConstraint(condition=Q(cantidad_ingreso_cosechado__gte=1), name="partida_ingreso_positivo"),
+            models.CheckConstraint(condition=Q(cantidad_disponible_cosechado__gte=0), name="partida_disponible_no_negativo"),
+            models.CheckConstraint(condition=Q(costo_unitario_cosechado__gte=0), name="partida_costo_no_negativo"),
+            models.CheckConstraint(
+                condition=Q(estado_stock_cosechado__in=["disponible", "agotado", "vencido"]), name="partida_estado_valido"
+            ),
+            models.CheckConstraint(
+                condition=Q(
+                    motivo_cosechado__in=[
+                        "cancelacion_cliente",
+                        "rechazo_cantidad_reducida",
+                        "rechazo_en_entrega",
+                        "cosecha_del_agronomo",
+                        "excedente_de_cosecha",
+                        "resolucion_del_contrato",
+                    ]
+                ),
+                name="partida_motivo_valido",
+            ),
+            # Regla 30 de 8.6: agotado ⇒ nada disponible.
+            models.CheckConstraint(
+                condition=~Q(estado_stock_cosechado="agotado") | Q(cantidad_disponible_cosechado=0), name="partida_agotada_sin_disponible"
+            ),
+        ]
+
+    def __str__(self):
+        """«P-7» (texto de la auditoría, D-36)."""
+        return self.codigo
+
+    @property
+    def codigo(self):
+        """`P-7`: lo que muestran las pantallas y los avisos."""
+        return f"P-{self.pk}"

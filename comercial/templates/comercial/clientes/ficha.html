@@ -1,6 +1,6 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
-{% comment %}Ficha del cliente (COM-CNS-CLT, regla 2; VIEWS.cli del prototipo): sus datos y sus direcciones, activas e inactivas. Los contratos y las
-entregas sin cobrar los suman COM-02, COM-03, COM-06 y COM-08 (D-25: no se muestran hasta que existan; el prototipo traía una «Deuda» de ejemplo).
+{% comment %}Ficha del cliente (COM-CNS-CLT, regla 2; VIEWS.cli del prototipo): sus datos y sus direcciones, activas e inactivas. Los contratos (COM-02: compra-ventas; el
+Vendedor ve solo las suyas) los muestra «contratos». Las entregas sin cobrar las suman COM-06 y COM-08 (D-25: no se muestran hasta que existan; el prototipo traía una «Deuda» de ejemplo).
 Los botones son los de «acciones» (D-30: nadie llega por un botón a un 403). «Dar de baja» abre una ventana: con HTMX se inserta sobre la
 ficha; sin JavaScript, el enlace lleva a esta misma ficha con la ventana abierta («plantilla_de_ventana»). «Reactivar» lleva al formulario
 del alta con los datos guardados.{% endcomment %}
@@ -32,6 +32,30 @@ del alta con los datos guardados.{% endcomment %}
         <dd>{% if cliente.email_cliente %}{{ cliente.email_cliente }}{% else %}<span class="muted">Sin correo</span> <span class="muted">· Necesario para pactar suministros</span>{% endif %}</dd>
         <dt>Teléfono</dt><dd>{% if cliente.telefono_cliente %}{{ cliente.telefono_cliente }}{% else %}<span class="muted">Sin teléfono</span>{% endif %}</dd>
       </dl>
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><h3>{% icono "cart" 14 %} Contratos</h3></div>
+      {% if contratos %}
+      <div class="card-b flush">
+        <table class="data-table">
+          <thead><tr><th>Compra-venta</th><th>Entrega</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+          <tbody>
+          {% for v in contratos %}
+            <tr>
+              <td class="nowrap mono"><b style="font-weight:600">{{ v.codigo }}</b><span class="sub2">{{ v.fecha_realizacion|date:"d/m/Y" }}</span></td>
+              <td>{% if v.modalidad_entrega == "envio" %}Envío{% else %}Retiro{% endif %}<span class="sub2">{{ v.fecha_pactada_venta|date:"d/m/Y" }}</span></td>
+              <td class="right nowrap mono">{{ v.monto|pesos }}<span class="sub2">{% if v.monto_es_final %}final{% else %}estimado{% endif %}</span></td>
+              <td>{% include "comercial/contratos/_estado.html" with estado=v.estado_venta texto=v.get_estado_venta_display %}</td>
+              <td class="right"><a class="rowlink" href="{% url 'comercial:compra_venta' v.pk %}">Ver<span class="sr"> la compra-venta {{ v.codigo }}</span></a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-b muted">Todavía no tiene compra-ventas.</div>
+      {% endif %}
     </div>
 
     <div class="card seg">

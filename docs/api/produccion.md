@@ -206,6 +206,7 @@ valiendo: COM-05a1, COM-05a2 e IOT-07 no las modifican ni suman filtros.
 lista hasta COM-04a (las dos con un `exclude(tipo_orden=COSECHA)` y el comentario «hasta COM-04a»), porque antes no hay acciones de
 cosecha; COM-04a quita esas dos líneas. `ordenes_cancelables` no necesita el `exclude`: el código de PRD-01 ya deja afuera las cosechas
 (las cruza con `TIPOS_QUE_CANCELA_PRODUCCION`); COM-04a la cambia para que liste todos los `TIPOS_DE_PRODUCCION` (sección 2).
+`detalle_de_orden` (`ordenes.py`) también excluye `cosecha` con el mismo comentario «hasta COM-04a» y devuelve `Http404` (su ventana de detalle todavía no existe): COM-04a quita esa línea junto con las otras dos.
 
 ### Lo que suma COM-05a2
 

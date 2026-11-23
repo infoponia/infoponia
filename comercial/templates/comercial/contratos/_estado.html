@@ -1,0 +1,2 @@
+{% comment %}La insignia del estado de una compra-venta. Recibe «estado» y «texto».{% endcomment %}
+<span class="status-badge {% if estado == 'abierta' %}status-ok{% elif estado == 'pendiente_decision' %}status-warn{% elif estado == 'cancelada' %}status-danger{% else %}status-neutral{% endif %}">{{ texto }}</span>

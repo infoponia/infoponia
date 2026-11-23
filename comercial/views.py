@@ -19,6 +19,7 @@ from comercial.servicios import clientes as api_clientes
 from comercial.servicios import vehiculos as api_vehiculos
 from comercial.servicios.clientes import DatosDeCliente
 from comercial.servicios.vehiculos import DatosDeVehiculo
+from comercial.views_contratos import con_parametro
 from core.acceso import rol_requerido
 from core.models import Usuario
 from maestros.models import Invernadero
@@ -32,8 +33,8 @@ _PREFIJO = re.compile(r"(nueva|corregida)-\d+")
 
 def _volver_seguro(request):
     """El parámetro ``volver`` (regla 7 de COM-ALT-CLT y regla 5 de COM-MOD-CLT: volver al caso de uso que incluye el alta o la
-    modificación) solo si es una URL interna; si no, texto vacío (como la vuelta a la pantalla pedida de D-29). En COM-01 ninguna
-    pantalla lo usa todavía: lo usan COM-02 y COM-03."""
+    modificación) solo si es una URL interna; si no, texto vacío (como la vuelta a la pantalla pedida de D-29). Lo usa «Nueva
+    compra-venta» (COM-02); COM-03 suma «Pactar suministro»."""
     candidato = request.POST.get("volver") or request.GET.get("volver") or ""
     if candidato and url_has_allowed_host_and_scheme(candidato, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         return candidato
@@ -47,9 +48,8 @@ def _es_htmx(request):
 @rol_requerido(GERENTE, VENDEDOR)
 @require_safe
 def inicio(request):
-    """«Comercial»: por ahora lleva a la lista de clientes; COM-02 la cambia por «Contratos» (el menú y las pestañas muestran solo lo que
-    existe, D-25)."""
-    return redirect("comercial:clientes")
+    """«Comercial»: abre en «Contratos», la primera pestaña (COM-02; COM-01 redirigía a «Clientes»)."""
+    return redirect("comercial:contratos")
 
 
 # ---- clientes: consulta (COM-CNS-CLT) ----
@@ -69,6 +69,7 @@ def clientes(request):
         {
             "pagina": pagina,
             "activas_por_cliente": api_clientes.direcciones_activas_por_cliente(pagina.object_list),
+            "vigentes_por_cliente": api_clientes.contratos_vigentes_por_cliente(request.user, pagina.object_list),
             "q": texto,
             "estado": estado,
             "es_gerente": request.user.rol == GERENTE,
@@ -83,6 +84,7 @@ def _contexto_de_la_ficha(request, cliente_id, **extra):
         "ficha": ficha,
         "cliente": ficha.cliente,
         "acciones": api_clientes.acciones_permitidas(request.user, ficha.cliente),
+        "contratos": api_clientes.contratos_del_cliente(request.user, ficha.cliente),
         "es_gerente": request.user.rol == GERENTE,
         **extra,
     }
@@ -91,8 +93,8 @@ def _contexto_de_la_ficha(request, cliente_id, **extra):
 @rol_requerido(GERENTE, VENDEDOR)
 @require_safe
 def cliente(request, cliente_id):
-    """Ficha del cliente (COM-CNS-CLT, regla 2): sus datos y sus direcciones, activas e inactivas. Los contratos y las entregas sin
-    cobrar se suman en COM-02, COM-03, COM-06 y COM-08 (no se muestran hasta que existan, D-25)."""
+    """Ficha del cliente (COM-CNS-CLT, regla 2): sus datos y sus direcciones, activas e inactivas. Los contratos
+    (compra-ventas, COM-02; el Vendedor ve solo las suyas) y, más adelante, las entregas sin cobrar (COM-06 y COM-08)."""
     return render(request, "comercial/clientes/ficha.html", _contexto_de_la_ficha(request, cliente_id))
 
 
@@ -133,6 +135,8 @@ def _formulario_de_cliente(request, cliente_, modo):
     en_uso = api_clientes.direcciones_en_uso([h.pk for h in activas]) if activas else set()
     volver = _volver_seguro(request)
     repetido = None
+    # Con ``volver`` (regreso a «Nueva compra-venta»): qué direcciones tenía el cliente antes, para devolver la nueva elegida.
+    antes = set(api_clientes.ids_de_direcciones(cliente_)) if (volver and cliente_) else set()
     desactivar = {int(i) for i in request.POST.getlist("desactivar") if i.isdigit()}
     borrar = {int(i) for i in request.POST.getlist("borrar") if i.isdigit()}
 
@@ -168,7 +172,13 @@ def _formulario_de_cliente(request, cliente_, modo):
                     form.add_error(None, error)
             else:
                 messages.success(request, aviso)
-                return redirect(volver or "comercial:cliente", *([] if volver else [guardado.pk]))
+                if volver:
+                    # Regla 7 de ALT y 5 de MOD: se vuelve a «Nueva compra-venta» con el cliente (alta) o la dirección (modificación) recién
+                    # creados, que quedan elegidos.
+                    nuevas_ids = sorted(set(api_clientes.ids_de_direcciones(guardado)) - antes)
+                    extra = {"cliente": guardado.pk} if modo in ("alta", "reactivar") else {"cliente": guardado.pk, "direccion": nuevas_ids[-1] if nuevas_ids else None}
+                    return redirect(con_parametro(request, volver, **extra))
+                return redirect("comercial:cliente", guardado.pk)
         nuevas_en_orden = [nuevas[i] for i in sorted(nuevas)]
     else:
         form = FormularioCliente(cliente=cliente_)

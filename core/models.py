@@ -712,6 +712,8 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_VEHICULO = "modificacion_vehiculo", "Modificación de vehículo"
         BAJA_VEHICULO = "baja_vehiculo", "Baja de vehículo"
         REACTIVACION_VEHICULO = "reactivacion_vehiculo", "Reactivación de vehículo"
+        # Compra-ventas (COM-02): un solo registro con la venta, sus detalles, reservas, líneas y cosechas (D-36).
+        REGISTRO_COMPRA_VENTA = "registro_compra_venta", "Registro de compra-venta"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -896,6 +898,20 @@ class RegistroAuditoria(models.Model):
         "modelo": "Modelo",
         "capacidad_carga": "Capacidad de carga (kg)",
         "transportista": "Transportista",
+        # Compra-ventas (COM-02): las claves de `datos` del registro («vendedor» ya existe).
+        "compra_venta": "Compra-venta",
+        "cliente": "Cliente",
+        "fecha_realizacion": "Fecha de realización",
+        "fecha_pactada_venta": "Fecha pactada",
+        "modalidad_entrega": "Modalidad de entrega",
+        "direccion_envio": "Dirección de envío",
+        "invernadero_retiro": "Invernadero de retiro",
+        "estado_venta": "Estado de la venta",
+        "monto_estimado": "Monto estimado",
+        "detalles": "Detalles",
+        "reservas": "Reservas",
+        "lineas": "Líneas de reserva",
+        "cosechas": "Cosechas",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -950,6 +966,20 @@ class RegistroAuditoria(models.Model):
             "camion": "Camión",
             "utilitario": "Utilitario",
             "moto": "Moto",
+        },
+        # COM-02: las listas cerradas de la compra-venta y de la reserva (`core` no importa `comercial`).
+        "modalidad_entrega": {"retiro": "Retiro en invernadero", "envio": "Envío a domicilio"},
+        "estado_venta": {
+            "abierta": "Abierta",
+            "pendiente_decision": "Pendiente de decisión del cliente",
+            "concretada": "Concretada",
+            "cancelada": "Cancelada",
+        },
+        "estado_reserva": {
+            "activa": "Activa",
+            "lista_para_entrega": "Lista para entrega",
+            "entregada": "Entregada",
+            "liberada": "Liberada",
         },
     }
     SIN_VALOR = "—"
@@ -1141,6 +1171,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_VEHICULO,
         RegistroAuditoria.Accion.BAJA_VEHICULO,
         RegistroAuditoria.Accion.REACTIVACION_VEHICULO,
+        RegistroAuditoria.Accion.REGISTRO_COMPRA_VENTA,
     }
 )
 

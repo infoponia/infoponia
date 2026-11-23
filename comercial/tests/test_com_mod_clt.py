@@ -253,8 +253,9 @@ class ComModCltServicioTests(ConGeoref, TestCase):
             self.modificar(direcciones_desactivadas=[vinculo.direccion_id])
         self.assertEqual(Direccion.objects.get(pk=vinculo.direccion_id).estado_direccion, "inactivo")
 
-    def test_d58_direcciones_en_uso_devuelve_un_conjunto_vacio_en_com_01(self):
-        """«Dirección usada»: en COM-01 todavía no hay contratos, así que ninguna dirección está en uso."""
+    def test_d58_direcciones_en_uso_sin_compra_ventas_devuelve_un_conjunto_vacio(self):
+        """«Dirección usada»: sin compra-ventas con envío (COM-02 cuenta las suyas; COM-03 suma los suministros), ninguna está en uso. Con
+        datos: ``test_clientes_con_compra_ventas.py``."""
         self.assertEqual(clientes.direcciones_en_uso([1, 2, 3]), set())
 
     def test_regla_4_las_direcciones_de_otro_cliente_o_inexistentes_se_rechazan(self):

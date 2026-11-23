@@ -168,13 +168,13 @@ class ClientesListaYFichaTests(ConGeoref, TestCase):
         self.assertContains(self.client.get(reverse("comercial:clientes")), "Todavía no hay clientes.")
 
     def test_regla_2_la_ficha_muestra_datos_y_direcciones_y_no_inventa_tarjetas(self):
-        """Regla 2: datos y direcciones; sin las tarjetas de contratos ni de deuda hasta que existan (D-25)."""
+        """Regla 2: datos y direcciones; los contratos desde COM-02 (con su estado vacío); sin la tarjeta de deuda hasta que exista (D-25)."""
         self.client.force_login(self.vendedor)
         respuesta = self.client.get(reverse("comercial:cliente", args=[self.pinos.pk]))
         self.assertContains(respuesta, "30-71234567-1")
         self.assertContains(respuesta, "compras@pinos.com")
         self.assertContains(respuesta, "San Martín 123")
-        self.assertNotContains(respuesta, "Contratos")
+        self.assertContains(respuesta, "Todavía no tiene compra-ventas.")
         self.assertNotContains(respuesta, "Deuda")
 
     def test_regla_5_sin_correo_la_ficha_dice_necesario_para_pactar_suministros(self):
@@ -287,10 +287,11 @@ class ClientesAltaVistaTests(ConGeoref, TestCase):
         self.assertContains(respuesta, "Se le avisa al Gerente.")
 
     def test_regla_7_volver_acepta_solo_urls_internas(self):
-        """Regla 7: tras guardar vuelve a la URL interna de ``volver``; una externa se descarta y va a la ficha."""
+        """Regla 7: tras guardar vuelve a la URL interna de ``volver`` (COM-02 le suma ``cliente=<id>``, el cliente recién creado, que queda
+        elegido); una externa se descarta y va a la ficha."""
         interna = reverse("comercial:clientes") + "?q=pinos"
         respuesta = self.client.post(self.url, {**datos(), "volver": interna})
-        self.assertRedirects(respuesta, interna, fetch_redirect_response=False)
+        self.assertRedirects(respuesta, f"{interna}&cliente={Cliente.objects.get().pk}", fetch_redirect_response=False)
         Cliente.objects.all().delete()
         for externa in ("https://evil.example.com/", "//evil.example.com/", "javascript:alert(1)"):
             with self.subTest(volver=externa):
@@ -584,10 +585,10 @@ class MenuDeComercialTests(TestCase):
         self.assertEqual(self.textos(Usuario.Rol.GERENTE).count("Comercial"), 1)
         self.assertEqual(self.textos(Usuario.Rol.VENDEDOR).count("Comercial"), 1)
 
-    def test_menu_el_inicio_lleva_a_los_clientes_y_la_entrada_se_marca_activa(self):
-        """«Comercial» abre en «Clientes»; el menú la marca activa en sus pantallas internas."""
+    def test_menu_el_inicio_lleva_a_contratos_y_la_entrada_se_marca_activa(self):
+        """COM-02 (reemplaza a la de COM-01): «Comercial» abre en «Contratos», la primera pestaña; el menú la marca activa en sus pantallas internas."""
         self.client.force_login(crear_vendedor())
-        self.assertRedirects(self.client.get(reverse("comercial:inicio")), reverse("comercial:clientes"))
+        self.assertRedirects(self.client.get(reverse("comercial:inicio")), reverse("comercial:contratos"))
         pagina = self.client.get(reverse("comercial:clientes"))
         self.assertContains(pagina, 'aria-current="page"')
         self.assertContains(pagina, "Clientes")

@@ -1,0 +1,79 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}Ficha de la compra-venta (COM-CNS-CVT, regla 4, en lo que existe hoy; VIEWS.cv del prototipo): cliente (con CUIT y enlace a su ficha), Vendedor, modalidad con
+su dirección o su invernadero de retiro, las tres fechas, los detalles (variedad, solicitada, entregada o «—», precio, subtotal y estado) y el estado del comprobante
+con «Ver comprobante» y «Reenviar comprobante». Se completan después (D-25: no se muestran hasta que existan): las entregas y el cobro (COM-05, COM-06, COM-08),
+la cancelación (COM-05b) y el vencimiento del enlace de un faltante (COM-04). Mientras no haya entregas: «La entrega se planifica cuando todo el producto esté
+listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha», «venta» y «es_gerente».{% endcomment %}
+{% block titulo %}{{ venta.codigo }} · Contratos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:contratos' %}">{% icono "back" 15 %} Volver a contratos</a>
+  <div class="page-h">
+    <h1 class="mono">{{ venta.codigo }}</h1>
+    {% include "comercial/contratos/_estado.html" with estado=venta.estado_venta texto=venta.get_estado_venta_display %}
+    <span class="spacer"></span>
+    <a class="btn btn-ghost" href="{% url 'comercial:cliente' venta.cliente.pk %}">{% icono "user" 14 %} Ver cliente</a>
+  </div>
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">Datos</div>
+      <dl class="dl">
+        <dt>Cliente</dt><dd><a href="{% url 'comercial:cliente' venta.cliente.pk %}">{{ venta.cliente }}</a> <span class="muted">· CUIT {{ venta.cliente.cuit_cliente|cuit }}</span></dd>
+        <dt>Vendedor</dt><dd>{{ venta.vendedor.get_full_name }}</dd>
+        <dt>Modalidad</dt><dd>{% if venta.modalidad_entrega == "envio" %}Envío a domicilio{% else %}Retiro en invernadero{% endif %}</dd>
+        <dt>{% if venta.modalidad_entrega == "envio" %}Dirección de envío{% else %}Invernadero de retiro{% endif %}</dt><dd>{{ ficha.destino }}</dd>
+        <dt>Fecha de realización</dt><dd>{{ venta.fecha_realizacion|date:"d/m/Y" }}</dd>
+        <dt>Fecha pactada</dt><dd>{{ venta.fecha_pactada_venta|date:"d/m/Y" }}</dd>
+        <dt>Fecha de concreción</dt><dd>{% if venta.fecha_concrecion_venta %}{{ venta.fecha_concrecion_venta|date:"d/m/Y" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      </dl>
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><h3>Detalle</h3></div>
+      <div class="card-b flush">
+        <table class="data-table">
+          <thead><tr><th>Variedad</th><th class="right">Solicitada</th><th class="right">Entregada</th><th class="right">Precio unitario</th><th class="right">Subtotal</th><th>Estado</th></tr></thead>
+          <tbody>
+          {% for fila in ficha.detalles %}
+            <tr>
+              <td>{{ fila.detalle.variedad }}</td>
+              <td class="right mono">{{ fila.detalle.cant_solicitada_venta }}</td>
+              <td class="right mono">{% if fila.detalle.cant_entregada_venta is None %}—{% else %}{{ fila.detalle.cant_entregada_venta }}{% endif %}</td>
+              <td class="right mono">{{ fila.detalle.precio_unitario_de_venta|pesos }}</td>
+              <td class="right mono">{{ fila.subtotal|pesos }}</td>
+              <td>{{ fila.detalle.get_estado_detalle_venta_display }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr><th colspan="4" class="right">Monto {% if venta.monto_es_final %}final{% else %}estimado{% endif %}</th><th class="right mono">{{ ficha.monto|pesos }}</th><th></th></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Entregas</div>
+      <p class="muted">La entrega se planifica cuando todo el producto esté listo.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Comprobante</div>
+      <p>
+        {% if venta.estado_comprobante == "enviado" %}<span class="status-badge status-ok">Enviado</span> a {{ venta.cliente.email_cliente }}.
+        {% elif venta.estado_comprobante == "pendiente_envio" %}<span class="status-badge status-warn">Pendiente de envío</span> a {{ venta.cliente.email_cliente }}.
+        {% else %}<span class="status-badge status-neutral">Para imprimir</span> El cliente no tiene correo: se entrega impreso.{% endif %}
+      </p>
+      <div class="acts-fila">
+        <a class="btn btn-ghost" href="{% url 'comercial:compra_venta_comprobante' venta.pk %}" target="_blank" rel="noopener">{% icono "ext" 14 %} Ver comprobante</a>
+        {% if "reenviar_comprobante" in ficha.acciones %}
+        <form method="post" action="{% url 'comercial:compra_venta_reenviar_comprobante' venta.pk %}">
+          {% csrf_token %}
+          <button class="btn btn-primary" type="submit" data-enviando="Enviando…">Reenviar comprobante</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
