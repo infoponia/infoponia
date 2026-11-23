@@ -9,6 +9,7 @@ from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
@@ -937,4 +938,33 @@ def alertas(request):
 def alerta(request, alerta_id):
     """CU-46, R6 y R7: el detalle de una alerta. Abrirlo la marca «leída» (``detalle_de_alerta`` llama a ``abrir_alerta``), así
     que no se guarda en la caché del navegador ni responde a HEAD. Una alerta que no existe da 404 y una ajena, 403 (D-28)."""
-    return render(request, "maestros/alertas/detalle.html", {"detalle": api_alertas.detalle_de_alerta(request.user, alerta_id)})
+    detalle = api_alertas.detalle_de_alerta(request.user, alerta_id)
+    # MAE-02d (D-62, tercera enmienda, punto 5): «Dónde se atiende» solo con el enlace de una app.
+    contexto = {"detalle": detalle, "enlace_de_app": api_alertas.es_enlace_de_app(detalle.alerta, detalle.enlace)}
+    return render(request, "maestros/alertas/detalle.html", contexto)
+
+
+@rol_requerido(GERENTE, AGRONOMO)
+@require_GET
+@never_cache
+def alerta_ir(request, alerta_id):
+    """MAE-02d (D-62, primera enmienda y tercera, puntos 2 y 3): abre la alerta y redirige (302) a la pantalla de su origen.
+
+    Mismos permisos que el detalle y, como él, solo GET y sin caché: abrirla cambia la lectura. ``abrir_alerta`` la marca
+    «leída» (regla 7 de 8.18) y da 404 si no existe y 403 si el usuario no la recibe, sin marcar nada. El destino es el ``url`` del
+    enlace que registró la app de la alerta, o el detalle si no hay (``enlaces_de_alertas``). Nunca saca del sitio: un ``url`` que
+    no empieza con una sola ``/`` (vacío, ``https://...``, ``//host``) o que no es del mismo host lleva al detalle."""
+    alerta = api_alertas.abrir_alerta(request.user, alerta_id)
+    destino = api_alertas.enlaces_de_alertas(request.user, [_con_invernadero(alerta)])[alerta.pk].url
+    segura = (
+        destino.startswith("/")
+        and not destino.startswith("//")
+        and url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}, require_https=request.is_secure())
+    )
+    return redirect(destino if segura else reverse("alertas:detalle", args=[alerta.pk]))
+
+
+def _con_invernadero(alerta):
+    """La alerta con su invernadero cargado: ``enlaces_de_alertas`` lo supone (usa su nombre en el enlace por omisión)."""
+    alerta.invernadero  # una consulta; ``abrir_alerta`` devuelve la alerta sin él
+    return alerta

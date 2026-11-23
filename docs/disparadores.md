@@ -57,8 +57,8 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    consulta de alertas (CU-46, MAE-02c), la campana tiene que llevar a ese detalle (que sí llama a `abrir_alerta`), o la
    `ItemDeAlerta.url` de `maestros.servicios.invernaderos.items_de_campana` tiene que apuntar a él. Va junto con el pendiente de
    pendientes_CU de la sección de CU-46 (abrir la alerta la marca «leída», regla 7 de 8.18). Nació en NOT-01.
-   **Queda para MAE-02d** (`docs/tareas/maestros/MAE-02d-enlace-de-alertas.md`, paso 5; D-62, tercera enmienda): la campana pasa por
-   `alertas:ir` cuando el enlace es de una app. La apertura desde la campana con el enlace por omisión ya la hizo MAE-02c.
+    ~~**Queda para MAE-02d**~~ Hecho el 22/11/2026 en MAE-02d (`items_de_campana`; D-62, tercera enmienda): la campana pasa por
+   `alertas:ir` cuando el enlace es de una app, y lleva directo al detalle con el enlace por omisión (ya lo hacía MAE-02c).
 5. **Lo que espera una resolución del Gerente.** Cada app que cree algo que queda esperando al Gerente (órdenes de compra por aprobar,
    solicitudes de revisión; D-14) registra su contador en `AppConfig.ready()` con
    `core.extensiones.registrar_contador_de_pendientes(funcion)`, con `funcion() -> list[tuple[str, int]]` (descripción y cantidad; sin

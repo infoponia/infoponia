@@ -174,7 +174,8 @@ Para listar o mostrar alertas (CU-46, MAE-02c; el panel de IoT, CU-41, las reuti
 
 | Función | Qué hace |
 |---|---|
-| `consultar_alertas(actor, *, invernadero_id=None, tipo=None, tipos=None) -> list[Alerta]` | Las alertas **activas** de `actor` (`para(actor).activas()`), filtradas por invernadero y por tipo (el código; vacío o `None` no filtra) y, **desde MAE-02d**, por varios tipos (`tipos`, una lista de códigos: `None` no filtra, `[]` da `[]`; con `tipo` y `tipos` se cumplen los dos; lo usa el panel del IoT), de la más urgente a la menos (crítica, advertencia, informativa) y, dentro de cada nivel, de la más reciente a la más antigua (con fechas iguales, la de id mayor). Cada alerta trae `severidad` y `nombre_tipo` ya calculados y el invernadero cargado: una sola consulta. Un filtro que no coincide da `[]`, sin error. No filtra por el estado del invernadero. |
+| `consultar_alertas(actor, *, invernadero_id=None, tipo=None, tipos=None) -> list[Alerta]` | Las alertas **activas** de `actor` (`para(actor).activas()`), filtradas por invernadero y por tipo (el código; vacío o `None` no filtra) y, **desde MAE-02d**, por varios tipos (`tipos`, una lista o tupla de códigos:
+ `None` no filtra, `[]` da `[]`; con `tipo` y `tipos` se cumplen los dos; lo usa el panel del IoT), de la más urgente a la menos (crítica, advertencia, informativa) y, dentro de cada nivel, de la más reciente a la más antigua (con fechas iguales, la de id mayor). Cada alerta trae `severidad` y `nombre_tipo` ya calculados y el invernadero cargado: una sola consulta. Un filtro que no coincide da `[]`, sin error. No filtra por el estado del invernadero. |
 | `filtros_de_alertas(actor) -> FiltrosDeAlertas(invernaderos, tipos)` | Las opciones de los filtros: `[(id, nombre)]` y `[(código, nombre)]` de las alertas activas de `actor`. Dos consultas, sin cargar las alertas. |
 | `detalle_de_alerta(actor, alerta_id) -> DetalleDeAlerta` | Llama a `abrir_alerta` y devuelve `alerta`, `nombre_tipo`, `severidad`, `era_nueva` (la lectura de antes), `destinatarios` (textos, el Gerente primero), `invernadero_visible` y, desde MAE-02d, `enlace` (el `Enlace` de la sección 8). Abre también una alerta resuelta que `actor` recibe. `Http404` / `PermissionDenied` como `abrir_alerta`. |
 | `severidad_efectiva(alerta)`, `nombre_de_tipo(alerta)` | La severidad del tipo registrado y su nombre; si el código ya no está registrado, la severidad guardada y el propio código (MD-109). Las usan también la campana y las pantallas. |
@@ -227,14 +228,18 @@ def enlaces_de_alertas_de_periodo(usuario, alertas):     # una consulta para tod
 ```
 
 - `Enlace = namedtuple("Enlace", "url detalle")`, en `maestros/extensiones.py`. `detalle=None` usa el de omisión.
-- Un código de tipo tiene a lo sumo un registrante (`ImproperlyConfigured`). Una alerta que el registrante no devuelve usa el enlace por
+- Un código de tipo tiene a lo sumo un registrante (`ImproperlyConfigured`; se validan todos los códigos antes de registrar, así
+  que un registro con un código tomado no deja los demás a medias). Registrar de nuevo la misma función para el mismo código no hace nada
+  (`ready()` puede correr dos veces).. Una alerta que el registrante no devuelve usa el enlace por
   omisión.
 - **Nunca un enlace a un 403:** el registrante recibe el usuario y devuelve una pantalla que ese usuario puede abrir (o nada).
 - Función de uso: `maestros.servicios.alertas.enlaces_de_alertas(usuario, alertas) -> dict[int, Enlace]`, con todas las claves. Una llamada
-  por registrante (nunca una por alerta); lista vacía, `{}` sin consultar la base. La usan el detalle de la alerta (`DetalleDeAlerta.enlace`:
+  por registrante (nunca una por alerta); lista vacía, `{}` sin consultar la base. **Quien llama pasa cada alerta con su `invernadero` cargado** (`select_related`): el
+  enlace por omisión usa su nombre y la función no consulta por alerta. La usan el detalle de la alerta (`DetalleDeAlerta.enlace`:
   la fila «Dónde se atiende», solo con el enlace de una app) y `items_de_campana`, que toma de ahí el `detalle`.
 - **La campana** (D-62, tercera enmienda, punto 3): si el enlace es de una app, su `url` es `alertas:ir` (`/alertas/<id>/ir/`: abre la
-  alerta, la marca «leída» y redirige al `url` del enlace, nunca fuera del sitio); si es el de omisión, lleva directo al detalle, que ya la
+  alerta, la marca «leída» y redirige al `url` del enlace, nunca fuera del sitio; solo GET —HEAD da 405—, sin caché y con los permisos del detalle; un `url` que no empieza con una sola `/`
+  o que es de otro host lleva al detalle). «Enlace de una app» = su `url` es distinto del detalle (`es_enlace_de_app`); si es el de omisión, lleva directo al detalle, que ya la
   abre. Antes se escribía `maestros:alerta_ir`: el nombre real es `alertas:ir`.
 - **Por omisión** (ningún registrante para el tipo, o el registrante no devuelve esa alerta), el enlace es el **detalle de la alerta**
   (CU-46, `/alertas/<id>/`) con el nombre del invernadero como texto (segunda enmienda de D-62, 22/11/2026: antes era la ficha del

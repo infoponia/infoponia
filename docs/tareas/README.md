@@ -39,7 +39,7 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 | USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
 | MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | hecha (PR #45, 21/11/2026; revisión a mano pendiente) | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
-| MAE-02d | Enlace de cada alerta a la pantalla de su origen, ruta `alertas:ir` y filtro por varios tipos (D-62, tercera enmienda) | maestros | pendiente | MAE-02c (hecha). La esperan COM-03b e IOT-04 | `maestros/MAE-02d-enlace-de-alertas.md` |
+
 
 ### Ronda «Producción 1» (D-44, D-45)
 
