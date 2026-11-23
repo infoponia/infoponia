@@ -1,0 +1,18 @@
+/* Estilos de «Compras» → «Proveedores» (CMP-01), sobre el Diseño v2 (D-47): tablas, tarjetas, filtros, avisos y ventanas salen de
+   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios: las pestañas como enlaces, el aspecto de un proveedor dado de
+   baja, el selector de tipo, las categorías con casillas y la lista de impedimentos de la baja. */
+a.tab{display:inline-block;text-decoration:none}
+a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.prv-off{opacity:.75}
+.prv-nombre{color:var(--foreground);text-decoration:none}
+.prv-nombre:hover{text-decoration:underline}
+.prv-nombre:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.prv-tipo{display:inline-flex;align-items:center;gap:8px;margin-right:20px;font-size:14px}
+.prv-solo-lectura{padding:9px 0;font-size:14.5px}
+.prv-categorias{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.prv-categoria{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;cursor:pointer;background:#fff}
+.prv-categoria:has(input:checked){border-color:var(--primary);background:#f3f8f4}
+.prv-categoria:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:1px}
+.prv-categoria[hidden]{display:none}
+.chip-fijo{display:inline-block;margin:0 6px 4px 0;padding:2px 10px;border:1px solid var(--border);border-radius:999px;font-size:13px}
+.prv-impedimentos{margin:0 0 6px;padding-left:20px;display:grid;gap:8px;font-size:14px}

@@ -2,7 +2,6 @@
 # (regla A4 de D-37).
 from django.apps import AppConfig
 
-
 class IotConfig(AppConfig):
     """Registra la app `iot` (nivel 7 de D-37: importa hasta `produccion`; ninguna app de nivel menor la importa). En
     ``ready()`` registra los 11 tipos de alerta del IoT (IOT-01, docs/modelo/iot.md) y la entrada «IoT» del menú del Gerente y
@@ -26,13 +25,6 @@ class IotConfig(AppConfig):
             despues_de="Producción",
         )
         self._registrar_en_maestros()
-        # IOT-03: el cargador de datos para la verificación a mano (core/verificacion.py; docs/patrones/datos_de_verificacion.md).
-        from core import verificacion
-        from iot import verificacion as verificacion_iot
-
-        verificacion.registrar_cargador(
-            verificacion_iot.CODIGO, "IoT: Norte, equipos del flujo de Node-RED y umbral efectivo", 10, verificacion_iot.cargar
-        )
 
     def _registrar_en_maestros(self):
         """IOT-02 (docs/api/extensiones_de_maestros.md): conecta `iot` con `maestros` por sus puntos de extensión (regla A4 de D-37): el estado del IoT del invernadero, los impedimentos
@@ -49,3 +41,8 @@ class IotConfig(AppConfig):
             extensiones.registrar_impedimento_de_baja_de_sector(hardware.impedimentos_de_baja_del_sector)
         if hardware.contenido_de_sectores not in extensiones._CONTENIDOS:
             extensiones.registrar_contenido_de_sector(hardware.contenido_de_sectores)
+        # IOT-04 (D-62): adónde lleva cada alerta del IoT en la campana y en «Alertas». ``registrar_enlace_de_alerta`` es idempotente con la misma función.
+        from iot.alertas import CODIGOS_DE_ALERTAS_IOT
+        from iot.servicios import alertas_iot
+
+        extensiones.registrar_enlace_de_alerta(CODIGOS_DE_ALERTAS_IOT, alertas_iot.enlaces_de_alertas_iot)

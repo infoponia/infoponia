@@ -1,5 +1,8 @@
 # Revisiones a mano pendientes — InfoPonia
 
+> **Congelado desde el 23/11/2026** (pedido del estudiante): ya no se agregan secciones ni se tachan pasos (la regla M5 quedó en desuso). La verificación la hace Claude Code antes de cerrar cada tarea
+> (`docs/patrones/verificacion_por_claude.md`). Lo que hay abajo es historial de lo que se verificó a mano hasta entonces.
+
 Pasos que una persona tiene que hacer a mano (en el navegador, en Render o en GitHub) y que las pruebas no cubren.
 Claude Code no lee este archivo salvo que el estudiante lo pida; `docs/estado.md` tiene una línea por sección.
 
@@ -323,24 +326,6 @@ Los 7 pasos están en «Verificación a mano» de `docs/tareas/maestros/MAE-02d-
 - [ ] 6. Volvé a correr el comando de carga: la alerta vuelve a «no leída» y no se duplica nada (mismo id).
 - [ ] 7. `python manage.py test maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` pasa.
 
-## IOT-03 · Tarea IOT-03 (API del nodo I: lecturas, estados, modo y anuncio)
-
-Los 13 pasos (0 a 12) están en «Verificación a mano» de `docs/tareas/iot/IOT-03-api-del-nodo-lecturas.md`, con la preparación de datos y de Node-RED. Hay una migración nueva (`core` 0021, solo `choices`): `python manage.py migrate`. Los datos se cargan con `python manage.py cargar_datos_de_verificacion --solo iot` (cuentas `@prueba3.local`). El motivo `equipo_dado_de_baja` no se prueba a mano (es de IOT-06).
-
-- [ ] 0. Entrá como `agronomo@prueba3.local` (si «Norte» ya existía de antes, como el Agrónomo que tenga), en IoT · Sistema IoT registrá el sistema de «Norte» y **copiá el token** (se muestra una sola vez). Volvé a correr `cargar_datos_de_verificacion --solo iot`: carga el rango de la solución (18,0 a 24,0 °C) y los siete equipos del flujo (los identificadores de `docs/api/nodo/node-red/README.md`, sección 4). El token no pasa por el comando.
-- [ ] 1. Arrancá Node-RED con `INFOPONIA_URL` e `INFOPONIA_TOKEN` e importá el flujo: «Configuración de equipos» queda en verde. En IoT · Hardware están los siete equipos, «Sin confirmar».
-- [ ] 2. En menos de un minuto, IoT · Hardware: el nodo está «En línea» y los sensores dejan de estar «Sin confirmar»: cada uno muestra su última lectura y hace cuánto.
-- [ ] 3. «Anunciar ahora» y después «Ventana sin FIJAR_POSICION (anuncio)» + «Anunciar ahora»: la ventana pasa a incompatible y aparece la alerta «Configuración incompatible». «Volver a lo normal» + «Anunciar ahora»: se resuelve.
-- [ ] 4. «Temperatura alta (35 °C)»: la situación del sensor pasa a «Fuera de umbral» y aparece «Fuera de umbral efectivo» en la campana, con el valor y el máximo efectivo (26 °C). «Volver a lo normal»: se resuelve cuando la lectura queda a más de 1 °C dentro del umbral.
-- [ ] 5. «Lectura inválida (999 °C)»: aparece «Lectura inválida» en la campana. «Volver a lo normal»: se resuelve con la lectura siguiente.
-- [ ] 6. «Nivel de solución bajo»: aparece la alerta crítica (sin correo hasta IOT-04) y el sensor muestra «Nivel bajo». «Solución caliente (27 °C)»: «Solución fuera de rango».
-- [ ] 7. «Equipo no registrado (co2)»: la lectura vuelve rechazada (barra de depuración de Node-RED) y aparece «Dispositivo no registrado»; desde la alerta se puede registrar el equipo (IOT-02).
-- [ ] 8. «Humedad en falla»: el sensor queda «Fuera de servicio» con «Dispositivo en falla». «Ventilador encendido»: la ficha del actuador muestra «Encendido» con la hora; después «Ventilador apagado»: aparece «Cambiado en el invernadero».
-- [ ] 9. Detené `runserver` dos minutos y volvé a arrancarlo: Node-RED reintenta (estado «falla …: reintento en …»), vacía la cola y las lecturas de esos minutos llegan atrasadas, sin alertas.
-- [ ] 10. Regenerá el token en InfoPonia: Node-RED recibe 401 y no reintenta. Cargá el nuevo y reiniciá Node-RED: vuelve a «En línea».
-- [ ] 11. En «Auditoría» están los registros `entrega_informacion_iot` (sin token) y los registros del servidor no muestran el token.
-- [ ] 12. Después del merge, en Render: la dirección de la API que muestra el registro del sistema empieza con `https://` (si no, es la configuración del proxy de USR-09: anotalo en `temas_abiertos.md`) y Node-RED, apuntado a esa dirección, recibe 200.
-
 ## PRD-03 · Tarea PRD-03 (eventos del lote: merma, aplicación de insumos, evento y bitácora)
 
 Los 12 pasos son los de «Verificación a mano» de `docs/tareas/produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md`, copiados acá para ir tachándolos (M5). Hay dos migraciones nuevas (`core` 0022 y `produccion` 0003): `python manage.py migrate`. Los datos ya están cargados en la base local (`python manage.py cargar_datos_de_verificacion --solo produccion`, idempotente). Cuentas: `agronomo@prueba4.local`, `capataz@prueba4.local` y tu Gerente. Invernadero «Verificación Producción»: el lote L-3 (86 plantas en «Germinación A» y «Germinación B», con una merma previa de 14 de 100: a una planta del umbral del 15 %), una transición «a realizar» de 86 plantas y los insumos Detergente (gasto, 20 L), Guantes (gasto, unidades), Abono verde (prueba) (costo de los lotes, 30 kg) y Nutriente líquido (prueba) (costo de los lotes, con vencimiento y dos lotes: 4 L y 10 L). «Verificación Producción Vacío» no tiene sectores, lotes ni insumos. Las pantallas no se vieron en un navegador. Hacé el paso 4 al final (deja sin plantas al lote).
@@ -392,6 +377,24 @@ Los 11 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 10. Sin JavaScript, los pasos 2 a 6 y 7 a 9 funcionan igual: cada ventana es una página.
 - [ ] 11. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
+
+## IOT-04 · Tarea IOT-04 (revisión periódica, panel de monitoreo y configuración IoT)
+
+Los 13 pasos están en «Verificación a mano» de `docs/tareas/iot/IOT-04-revision-panel-y-configuracion.md`. Hay una migración nueva (`core` 0024, solo `choices`): `python manage.py migrate`. Los datos se cargan con `python manage.py cargar_datos_de_verificacion --solo iot` (el invernadero «Sur» y un día de lecturas de ayer y de anteayer; el Agrónomo de «Norte» y el Gerente que ya tenés). Hace falta Node-RED con el flujo de lecturas y, para el correo, el servidor de correo del `.env` (si no, la salida dice «pendientes sin servidor de correo»).
+
+- [ ] 1. Con Node-RED mandando, `python manage.py revision_iot --cada 60`: cada minuto, una línea por sistema y la de correos; la primera corrida resume ayer y anteayer y calcula el fotoperíodo de ayer.
+- [ ] 2. Como el Agrónomo, IoT · Monitoreo: el nodo «En línea», los sensores agrupados con su gráfico de 24 horas y los valores que cambian solos cada 30 s; con «Parámetros IoT» abierto no se refresca; los selectores no se cierran.
+- [ ] 3. Período «Última hora» y «Últimos 7 días» (resúmenes horarios con la franja de mínimo a máximo); «Actualizar» pide el panel al instante.
+- [ ] 4. «Nivel de solución bajo»: alerta crítica y, en el minuto siguiente, el correo («Notificada por correo»); la revisión siguiente no lo repite.
+- [ ] 5. Detener Node-RED: a los 3 minutos, «Nodo sin comunicación» crítica con su correo y los sensores «Desactualizado»; al volver, se resuelve.
+- [ ] 6. «Equipo no registrado (co2)» con «Registrar este equipo»; «Volver a lo normal»: a los 5 minutos la revisión la resuelve.
+- [ ] 7. En la campana, la alerta de un sensor lleva a la ficha del equipo; la de «no registrado», al alta con el identificador (en minúsculas).
+- [ ] 8. Gerente, Configuración operativa · «Módulo IoT»: fin igual al inicio da error; «1,55» da error y «1,5» entra; bajar la retención a 1 guarda con el aviso y la advertencia amarilla con la fecha.
+- [ ] 9. Con la retención en 1, la revisión siguiente borra las lecturas de anteayer y lo dice; los gráficos de 7 días siguen. Volver la retención a 7.
+- [ ] 10. La tarjeta de la luz dice «Fotoperíodo de ayer: 10 h» con «En rango».
+- [ ] 11. En «Auditoría», `revision_periodica_iot` y `modificacion_configuracion` con su antes y su después.
+- [ ] 12. Gerente: en «Sur», «Registrar Sistema IoT»; en «Norte», solo consulta y con el aviso de quién recibe las alertas. El Agrónomo no ve «Modificar parámetros» y a `/configuracion/` le da 403.
+- [ ] 13. Sin JavaScript, el panel se ve entero y el período se cambia con «Ver».
 
 ## CFG · Configuración del repositorio
 

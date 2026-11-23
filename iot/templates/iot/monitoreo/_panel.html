@@ -1,0 +1,130 @@
+{% load iconos %}{% comment %}El panel de monitoreo (IOT-CNS-LEC): lo que se refresca. Es un ``<div id="panel">`` que lleva SUS PROPIOS ``hx-get`` (con el invernadero y el período), ``hx-trigger`` y ``hx-swap="outerHTML"``:
+al reemplazarse a sí mismo, la respuesta vuelve a traerlos y el refresco no se detiene. El disparador espera 30 s, solo con la pestaña visible, y NO refresca mientras haya un ``<details>`` abierto en el
+panel (los parámetros): así no se cierra lo que la persona abrió. Los selectores (invernadero y período) están afuera. Recibe «panel», «filas_de_alertas», «grupos_de_parametros», «elegido», «periodo» y «es_gerente».
+Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro es el SVG de ``iot/graficos.py``, que escapa lo que lleva.{% endcomment %}
+<div id="panel"{% if panel.sistema %} hx-get="{{ url_del_panel }}" hx-trigger="every 30s [document.visibilityState === 'visible' && !document.querySelector('#panel details[open]')]" hx-swap="outerHTML"{% endif %}>
+{% if not panel.sistema %}
+  <div class="card"><div class="card-b vacio">
+    {% icono "router" 32 %}
+    <h3>{{ elegido.nombre_invernadero }} no tiene Sistema IoT</h3>
+    {% if panel.puede_registrar %}
+    <p class="muted">Registrá el sistema para recibir lecturas y emitir comandos.</p>
+    <a class="btn btn-primary" href="{% url 'iot:sistema_registrar' %}?invernadero={{ elegido.pk }}">{% icono "plus" 14 %} Registrar Sistema IoT</a>
+    {% else %}
+    <p class="muted">Lo registra quien opera el IoT de este invernadero.</p>
+    {% endif %}
+  </div></div>
+{% else %}
+<div class="stack">
+  {% for aviso in panel.avisos %}<div class="alert alert-{{ aviso.tono }}" role="status">{% if aviso.tono == "info" %}{% icono "info" 16 %}{% else %}{% icono "warn" 16 %}{% endif %}<div>{{ aviso.texto }}</div></div>{% endfor %}
+
+  <div class="card"><div class="facts">
+    <div><span class="k">Nodo central</span><span class="v">{{ panel.nodo.nombre_nodo }}</span></div>
+    <div><span class="k">Sistema</span><span class="v">{% if panel.sistema.estado_sistema == "activo" %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-warn">Desconectado</span>{% endif %}</span></div>
+    <div><span class="k">Conectividad</span><span class="v">{% if panel.conectividad.estado == "en_linea" %}<span class="status-badge status-ok">{% icono "wifi" 12 %} En línea</span>{% else %}<span class="status-badge status-danger">{% icono "wifi" 12 %} Sin señal</span>{% endif %}</span></div>
+    <div><span class="k">Modo del nodo</span><span class="v">{% if panel.nodo.modo == "local" %}<span class="status-badge status-warn">Local</span>{% else %}<span class="status-badge status-ok">Remoto</span>{% endif %}</span></div>
+    <div><span class="k">Última comunicación</span><span class="v">{% if panel.nodo.ultima_comunicacion %}{{ panel.nodo.ultima_comunicacion|date:"d/m/Y H:i" }}{% else %}Nunca{% endif %}</span></div>
+  </div></div>
+
+  <div class="kpis">
+    <div class="kpi{% if panel.indicadores.sensores_con_problema %} danger{% endif %}"><div class="k">Sensores con problema</div><div class="v">{{ panel.indicadores.sensores_con_problema }}<small> de {{ panel.indicadores.sensores }}</small></div></div>
+    <div class="kpi{% if panel.indicadores.alertas_activas %} warn{% endif %}"><div class="k">Alertas activas</div><div class="v">{{ panel.indicadores.alertas_activas }}</div></div>
+    <div class="kpi"><div class="k">Actuadores operativos</div><div class="v">{{ panel.indicadores.actuadores_operativos }}<small> de {{ panel.indicadores.actuadores }}</small></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>{% icono "warn" 16 %} Alertas activas</h3></div>
+    {% if panel.aviso_de_alertas %}<div class="card-b"><div class="alert alert-info" role="status">{% icono "info" 16 %}<div>{{ panel.aviso_de_alertas }}</div></div></div>{% endif %}
+    {% if filas_de_alertas %}
+    <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
+      <thead><tr><th>Severidad</th><th>Alerta</th><th>Detalle</th><th></th></tr></thead>
+      <tbody>{% for f in filas_de_alertas %}
+        <tr>
+          <td><span class="status-badge status-{{ f.severidad.1 }}">{{ f.severidad.0 }}</span></td>
+          <td><b>{{ f.fila.nombre_tipo }}</b>{% if f.fila.notificada_por_correo %}<span class="sub2">Notificada por correo</span>{% endif %}</td>
+          <td>{{ f.fila.enlace.detalle }}</td>
+          <td class="right">{% for texto, url in f.acciones %}<a class="btn btn-ghost btn-sm" href="{{ url }}">{{ texto }}</a> {% endfor %}</td>
+        </tr>{% endfor %}
+      </tbody>
+    </table></div>
+    {% elif not panel.aviso_de_alertas %}<div class="card-b muted">No hay alertas activas.</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>{% icono "activity" 16 %} Sensores</h3></div>
+    <div class="card-b">
+      {% if panel.resumido %}<p class="xs muted" style="margin-bottom:12px">Más de 24 horas: se grafica el promedio de cada hora (línea) y su mínimo y máximo (franja), con los resúmenes horarios.</p>{% endif %}
+      {% for g in panel.grupos %}
+      <section class="gcard" aria-label="{{ g.nombre }}">
+        <div class="gh"><b>{{ g.nombre }}</b><span class="xs muted">{{ g.tarjetas|length }} sensor{{ g.tarjetas|length|pluralize:",es" }}</span>
+          {% if g.con_problema %}<span class="status-badge status-danger">{{ g.con_problema }}{% if g.variable == "nivel_solucion" %} en nivel bajo{% else %} con problema{% endif %}</span>{% endif %}
+          <span class="spacer"></span>{% if g.subtitulo %}<span class="umb">{{ g.subtitulo }}</span>{% endif %}</div>
+        <div class="gb"><div class="sensgrid">{% for t in g.tarjetas %}
+          <div class="sens{% if t.situacion.tono == "neutral" %} muted-card{% endif %}">
+            <div class="sh"><span class="id">{{ t.sensor.identificador_equipo }}</span><span class="xs muted">{% if t.sensor.sector %}{{ t.sensor.sector.nombre_sector }}{% else %}General{% endif %}</span>
+              {% if t.sector_fuera_de_servicio and t.situacion.clave != "sector_fuera_de_servicio" %}<span class="status-badge status-neutral">Sector fuera de servicio</span>{% endif %}
+              <span class="spacer"></span><span class="status-badge status-{{ t.situacion.tono }}">{{ t.situacion.texto }}</span></div>
+            <div class="big">{{ t.texto_del_valor }}</div>
+            {% if t.ultima_lectura %}<div class="xs muted" title="{{ t.ultima_lectura.medida_en|date:'d/m/Y H:i' }}">hace {{ t.hace }}</div>{% endif %}
+            {% if t.grafico %}{{ t.grafico }}{% else %}<div class="spark empty nivel{% if t.situacion.clave == "nivel_bajo" %} bad{% endif %}">{{ t.texto_del_nivel }}</div>{% endif %}
+            {% if t.fotoperiodo %}<div class="fotline">{% icono "clock" 14 %}<span>{{ t.fotoperiodo.texto }}</span><span class="spacer"></span>
+              {% if t.fotoperiodo.estado == "incompleto" %}<span class="status-badge status-neutral">Incompleto</span>
+              {% elif t.fotoperiodo.estado == "sin_umbral" %}<span class="status-badge status-neutral">Sin umbral</span>
+              {% elif t.fotoperiodo.estado == "en_rango" %}<span class="status-badge status-ok">En rango</span>
+              {% elif t.fotoperiodo.estado == "fuera_de_rango" %}<span class="status-badge status-danger">Fuera de rango</span>{% endif %}</div>{% endif %}
+          </div>{% endfor %}
+        </div></div>
+      </section>
+      {% empty %}<div class="muted">No hay sensores registrados en este invernadero.</div>{% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>{% icono "cpu" 16 %} Actuadores</h3></div>
+    <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
+      <thead><tr><th>Equipo</th><th>Estado informado por el nodo</th><th>Situación</th><th>Compatibilidad</th><th></th></tr></thead>
+      <tbody>{% for f in panel.actuadores %}
+        <tr>
+          <td><b>{{ f.actuador.tipo_actuador.nombre_actuador }}</b><span class="sub2">{{ f.actuador.identificador_equipo }}</span></td>
+          <td>{% if f.desde %}<b>{{ f.estado_texto }}</b> <span class="muted">desde las {{ f.desde|date:"H:i" }}</span>{% if f.cambiado_en_invernadero %}<span class="sub2 warn-t">{% icono "warn" 12 %} Cambiado en el invernadero</span>{% endif %}
+            {% else %}<span class="muted">{{ f.estado_texto }}</span><span class="sub2">El nodo todavía no informó su estado</span>{% endif %}</td>
+          <td><span class="status-badge status-{{ f.situacion.tono }}">{{ f.situacion.texto }}</span></td>
+          <td>{{ f.compatibilidad }}</td>
+          <td class="right"><a class="rowlink" href="{% url 'iot:hardware_ficha' f.actuador.pk %}?invernadero={{ elegido.pk }}">Ver equipo</a></td>
+        </tr>{% empty %}<tr><td colspan="5" class="muted">Sin actuadores.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>{% icono "sliders" 16 %} Umbral efectivo</h3></div>
+    {% if panel.umbral.hay %}
+    <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
+      <thead><tr><th>Variable</th><th>Mínimo</th><th>Máximo</th><th>Lo limita</th></tr></thead>
+      <tbody>{% for f in panel.umbral.filas %}
+        <tr><td>{{ f.nombre }}</td>
+          {% if f.minimo is None %}<td colspan="3" class="muted">Sin rango en común entre las variedades</td>{% else %}
+          <td>{{ f.minimo|floatformat:"-2" }} {{ f.unidad }}</td><td>{{ f.maximo|floatformat:"-2" }} {{ f.unidad }}</td><td class="sm muted">mín. {{ f.lo_limita_minimo }} · máx. {{ f.lo_limita_maximo }}</td>{% endif %}</tr>{% endfor %}
+      </tbody>
+    </table></div>
+    <div class="card-b" style="border-top:1px solid var(--border)"><div class="xs muted" style="font-weight:600;margin-bottom:8px">Variedades consideradas</div>
+      <div class="vchips">{% for nombre in panel.umbral.variedades %}<span class="vchip"><b>{{ nombre }}</b></span>{% endfor %}</div></div>
+    {% else %}
+    <div class="card-b"><div class="alert alert-warn">{% icono "warn" 16 %}<div><b>Este invernadero no tiene umbral efectivo.</b> No tiene lotes activos ni siembras a realizar. Mientras tanto no se generan alertas por umbral ni se evalúan reglas.</div></div></div>
+    {% endif %}
+    <div class="card-b" style="border-top:1px solid var(--border)"><span class="xs muted" style="font-weight:600">Temperatura de la solución</span>
+      <span class="sm">{% if panel.umbral.rango_solucion %}{{ panel.umbral.rango_solucion.0|floatformat:"-2" }} a {{ panel.umbral.rango_solucion.1|floatformat:"-2" }} °C · rango definido para este invernadero{% else %}Sin rango definido. Se define en <a href="{% url 'iot:sistema' %}?invernadero={{ elegido.pk }}">Sistema IoT</a>.{% endif %}</span></div>
+    <div class="card-b" style="border-top:1px solid var(--border)">
+      <details class="parametros">
+        <summary>Parámetros IoT <span class="xs muted">(solo lectura)</span></summary>
+        {% for grupo, filas in grupos_de_parametros %}
+        <h4 class="sec-h">{{ grupo }}</h4>
+        <dl class="parametros-lista">{% for etiqueta, valor in filas %}<dt>{{ etiqueta }}</dt><dd>{{ valor }}</dd>{% endfor %}</dl>
+        {% endfor %}
+        {% if es_gerente %}<p><a class="link xs" href="{% url 'configuracion:pantalla' %}">Modificar parámetros</a></p>{% endif %}
+      </details>
+    </div>
+  </div>
+</div>
+{% endif %}
+</div>

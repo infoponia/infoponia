@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('contabilidad', '0002_tipo_contrato'),
-        ('core', '0025_comercial_compra_venta'),
+        ('core', '0027_comercial_compra_venta'),
         ('maestros', '0010_parametros_iot'),
         ('produccion', '0004_fuera_de_servicio'),
     ]

@@ -34,3 +34,25 @@
 .resumen dt{color:var(--muted-foreground);font-size:13px}
 .resumen dd{margin:0;font-weight:550;overflow-wrap:anywhere}
 @media (max-width:760px){.resumen dl{grid-template-columns:1fr}}
+/* IOT-04: panel de monitoreo (estilo de «Diseño v2»; guía: monitoreo, sensCard y spark del prototipo). Los grupos de sensores no se pliegan: el botón del prototipo no se implementa. */
+.gcard{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;background:#fff}
+.gcard .gh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--border)}
+.gcard .gh .umb{font-size:12.5px;color:var(--muted-foreground)}
+.gcard .gb{padding:14px}
+.sensgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.sens{border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;background:#fff}
+.sens.muted-card{background:var(--subtle)}
+.sens .sh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.sens .id{font-weight:600;font-size:13.5px;overflow-wrap:anywhere}
+.sens .big{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.2}
+.sens .spark{width:100%;height:auto;display:block;margin-top:6px}
+.spark.empty{display:flex;align-items:center;justify-content:center;min-height:60px;margin-top:6px;border:1px dashed var(--border);border-radius:var(--radius-sm);font-size:13px;color:var(--muted-foreground)}
+.spark.empty.nivel.bad{color:var(--status-danger);border-color:var(--status-danger)}
+.fotline{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:13px}
+.vchips{display:flex;flex-wrap:wrap;gap:6px}
+.vchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:13px}
+.warn-t{color:var(--status-warn)}
+.parametros summary{cursor:pointer;font-weight:600;font-size:14px}
+.parametros-lista{display:grid;grid-template-columns:max-content 1fr;gap:4px 18px;margin:0 0 8px}
+.parametros-lista dt{color:var(--muted-foreground);font-size:13px}
+.parametros-lista dd{margin:0;font-weight:550;font-variant-numeric:tabular-nums}

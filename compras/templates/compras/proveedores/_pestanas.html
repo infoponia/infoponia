@@ -1,0 +1,5 @@
+{% comment %}Barra de pestañas de «Compras» (VIEWS.c_main del prototipo). Hoy tiene solo «Proveedores» (CMP-01): cada tarea de la ronda «Compras 1» suma la suya (Pedidos,
+Órdenes de compra, Por recibir, Reclamos, Pagos), según el rol. Son enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
+<div class="tabs" role="tablist" aria-label="Compras">
+  <a class="tab" role="tab" href="{% url 'compras:proveedores' %}" aria-selected="true">Proveedores</a>
+</div>

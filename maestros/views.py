@@ -19,6 +19,7 @@ from core.models import Transportista, Usuario
 from maestros import extensiones
 from maestros.forms import (
     FormularioConfiguracion,
+    FormularioConfiguracionIot,
     FormularioCultivo,
     FormularioInvernadero,
     FormularioPerfil,
@@ -690,7 +691,7 @@ def _advertencias_de_lo_escrito(form, configuracion):
     return api_configuracion.advertencias_de(valores)
 
 
-def _contexto_de_configuracion(pestana, form_parametros=None, form_perfil=None):
+def _contexto_de_configuracion(pestana, form_parametros=None, form_perfil=None, form_iot=None, advertencias_al_guardar=()):
     """Lo que dibuja la pantalla: la pestaña activa, su formulario (los valores guardados si no viene uno con errores) y,
     en los parámetros, la advertencia de la regla 5 junto al formulario."""
     contexto = {"pestana": pestana}
@@ -700,7 +701,9 @@ def _contexto_de_configuracion(pestana, form_parametros=None, form_perfil=None):
         configuracion = api_configuracion.obtener()
         form = form_parametros or FormularioConfiguracion(configuracion=configuracion)
         contexto["form"] = form
+        contexto["form_iot"] = form_iot or FormularioConfiguracionIot(configuracion=configuracion)  # sección «Módulo IoT» (IOT-04)
         contexto["advertencias"] = _advertencias_de_lo_escrito(form, configuracion)
+        contexto["advertencias_al_guardar"] = list(advertencias_al_guardar)  # la 5b (IOT-04): se ve una sola vez, tras guardar
     return contexto
 
 
@@ -717,7 +720,9 @@ def configuracion(request):
     """Pantalla «Configuración» (ADM-MOD-CFG y ADM-MOD-ORG): «Parámetros operativos» por defecto y «Organización» con
     ``?pestana=organizacion``. Muestra los valores actuales (regla 1 de los dos casos de uso)."""
     pestana = PESTANA_ORGANIZACION if request.GET.get("pestana") == PESTANA_ORGANIZACION else PESTANA_PARAMETROS
-    return render(request, "maestros/configuracion/pantalla.html", _contexto_de_configuracion(pestana))
+    # La advertencia 5b (IOT-04) viaja por la sesión y no por ``messages``: ``core`` dibuja todo mensaje que no es de error con el estilo de éxito y acá no se toca ``core``.
+    advertencias = request.session.pop(CLAVE_DE_LAS_ADVERTENCIAS, []) if pestana == PESTANA_PARAMETROS else ()
+    return render(request, "maestros/configuracion/pantalla.html", _contexto_de_configuracion(pestana, advertencias_al_guardar=advertencias))
 
 
 def _guardar(request, pestana, formulario, servicio, plantilla_fragmento):
@@ -747,20 +752,50 @@ def _guardar(request, pestana, formulario, servicio, plantilla_fragmento):
     return render(request, "maestros/configuracion/pantalla.html", contexto)
 
 
+MENSAJE_GUARDADO_IOT = "Parámetros guardados. Rigen desde el próximo intento y la próxima lectura."
+CLAVE_DE_LAS_ADVERTENCIAS = "configuracion_advertencias_al_guardar"
+
+
+def _pasar_errores_a_sus_formularios(form, form_iot, error):
+    """Pasa los errores de un ``ValidationError`` del servicio a cada formulario, cada uno en su campo (los del IoT, al formulario del Módulo IoT; los demás, al de producción)."""
+    for campo, errores in error.error_dict.items():
+        destino = form_iot if campo in form_iot.fields else form
+        for e in errores:
+            destino.add_error(campo if campo in destino.fields else None, e)
+
+
 @rol_requerido(GERENTE)
 @require_POST
 @never_cache
 @vary_on_headers("HX-Request")
 def configuracion_guardar_parametros(request):
-    """Guarda la pestaña «Parámetros operativos» (ADM-MOD-CFG): todo o nada, con la advertencia de la regla 5 junto al
-    formulario."""
-    return _guardar(
-        request,
-        PESTANA_PARAMETROS,
-        FormularioConfiguracion,
-        lambda actor, **datos: api_configuracion.modificar_configuracion(actor, **datos),
-        "maestros/configuracion/_parametros.html",
-    )
+    """Guarda la pestaña «Parámetros operativos» (ADM-MOD-CFG): todo o nada, con la advertencia de la regla 5 junto al formulario. Desde IOT-04 incluye la sección «Módulo IoT»: sus 14 campos van en un
+    formulario aparte dentro del mismo ``<form>`` y el servicio recibe solo los que vienen en el POST. El aviso es «Parámetros guardados. Rigen desde el próximo intento y la próxima lectura.» si cambió algún
+    parámetro del IoT y el de MAE-04 si no; la advertencia 5b (bajar la retención) se muestra tras guardar con el estilo de advertencia de la regla 5 (por la sesión, una sola vez), porque ya no se puede deducir de los valores."""
+    form = FormularioConfiguracion(request.POST)
+    form.is_valid()  # los campos son de texto libre; las reglas son del servicio
+    form_iot = FormularioConfiguracionIot(request.POST)
+    form_iot.is_valid()
+    antes = api_configuracion.obtener()
+    antes = {campo: getattr(antes, campo) for campo in form_iot.fields}
+    try:
+        resultado = api_configuracion.modificar_configuracion(request.user, **form.datos_del_servicio(), **form_iot.datos_del_servicio())
+    except ValidationError as error:
+        _pasar_errores_a_sus_formularios(form, form_iot, error)
+        contexto = _contexto_de_configuracion(PESTANA_PARAMETROS, form_parametros=form, form_iot=form_iot)
+        if _es_htmx(request):
+            return render(request, "maestros/configuracion/_parametros.html", contexto)
+        return render(request, "maestros/configuracion/pantalla.html", contexto)
+    cambio_el_iot = any(getattr(resultado.configuracion, campo) != valor for campo, valor in antes.items())
+    messages.success(request, MENSAJE_GUARDADO_IOT if cambio_el_iot else MENSAJE_GUARDADO)
+    de_la_retencion = [a for a in resultado.advertencias if a.startswith(api_configuracion.PREFIJO_DE_LA_ADVERTENCIA_5B)]
+    if de_la_retencion:
+        request.session[CLAVE_DE_LAS_ADVERTENCIAS] = de_la_retencion
+    if _es_htmx(request):
+        respuesta = HttpResponse(status=204)
+        respuesta["HX-Redirect"] = reverse("configuracion:pantalla")
+        return respuesta
+    return redirect(reverse("configuracion:pantalla"))
 
 
 @rol_requerido(GERENTE)

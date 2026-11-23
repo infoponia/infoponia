@@ -248,7 +248,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 ## Cuando exista SistemaIoT
 
 0. **Traspaso del Técnico y órdenes de mantenimiento** (D-53, D-73): **IOT-07** (antes «IOT-05») agrega el `CheckConstraint` de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` de `OrdenTrabajo.Tipo` lo crea PRD-01, D-67 punto 1) y su `registrar_traspaso` para el rol Técnico (el punto ya admite varios registrantes y recibe el rol). Si `maestros/extensiones.py` no entrega el rol a quien registra, es una corrección chica dentro de IOT-07 (hoy ya lo entrega: `traspasar(actor, invernadero, rol, saliente, entrante)`). **Planificado: IOT-07** (`docs/tareas/iot/IOT-07-orden-de-mantenimiento.md`; `docs/casos_de_uso/iot/mantenimiento_automatico.md`, «Traspaso del Técnico»; D-79, punto 9).
-0. **Envío de correo desde `iot`** (D-54, D-71): usar `core.correo.enviar_correo`, nunca `_enviar_correo`. Lo deja USR-10 y lo usa la revisión periódica de **IOT-04**.
+0. ~~**Envío de correo desde `iot`** (D-54, D-71): usar `core.correo.enviar_correo`, nunca `_enviar_correo`. Lo deja USR-10 y lo usa la revisión periódica de **IOT-04**.~~ (hecho el 23/11/2026, IOT-04: `enviar_correos_pendientes`)
 1. ~~**IoT del invernadero.** `Invernadero.tiene_sistema_iot` (hoy `False`), la alerta y el campo del Técnico (regla 5 de
    PROD-ALT-INV) y la precondición h de PROD-BAJ-INV. Nació en MAE-01a. La precondición h se conecta con
    `registrar_impedimento_de_baja`. **Planificado: IOT-02** (`docs/tareas/ronda_iot_1.md`, sección 5): suma en `maestros/extensiones.py` un punto
@@ -277,8 +277,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
      de `iot` (`iot/verificacion.py`) con ese servicio.
    - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.
      **Planificado en el lote I4** (`mantenimiento_automatico.md`).
-4. **Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
-   panel. **IOT-04.**
+4. ~~**Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
+   panel. **IOT-04.**~~ (hecho el 23/11/2026, IOT-04: `enlaces_de_alertas_iot`)
 5. **API del nodo** (`docs/casos_de_uso/iot/entregar_informacion.md`, «Reparto»; lote I2a). IOT-03 las deja escritas sin hacer nada:
    - IOT-05: `explica_un_comando(actuador, estado)` en `iot/servicios/estados.py` (hoy, falso: D-75 punto 1); en modo `local`, no entregar
      comandos (extensión 1b.2); las rutas de comandos del contrato (`docs/api/nodo/`, lote I3).
@@ -288,6 +288,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 
 6. **Orden de bloqueos con un tipo de actuador (D-82).** IOT-05, IOT-06 e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
    (`bloquear_tipo_activo`) y después el invernadero, el sistema y el equipo (excepción a D-40 y a `docs/patrones/bloqueos.md`). Nació en IOT-02.
+7. **El panel de monitoreo** (`iot/servicios/monitoreo.py` y `iot/templates/iot/monitoreo/_panel.html`). IOT-05: «Comandos pendientes» (indicador y columna de actuadores) y «Emitir comando» desde la fila de cada actuador a quien opera
+   (regla 11 de IOT-CNS-LEC); IOT-06: el enlace a las reglas de actuación. Nació en IOT-04.
 
 ## ~~Cuando exista InsumoInvernadero~~ (cerrado el 21/11/2026, INV-02)
 
@@ -345,7 +347,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    (desde `MaestrosConfig.ready()`), el alcance `Alerta.objects.para(usuario)`, solo las activas, filtros por invernadero y tipo, el
    detalle que llama a `abrir_alerta` (ya existe), que funcione sin JavaScript (HTMX solo reemplaza la tabla) y que viva en `maestros`.
    **Pendiente para pendientes_CU:** abrir la alerta la marca «leída» (regla 7 de 8.18) y choca con la postcondición de CU-46 («no se
-   produjeron cambios en el sistema»). CU-41 reutiliza la consulta: `consultar_alertas` (`docs/api/alertas.md`, sección 5). Nació en
+   produjeron cambios en el sistema»). CU-41 reutiliza la consulta: `consultar_alertas` (`docs/api/alertas.md`, sección 5). **CU-41 (el panel de monitoreo) hecho el 23/11/2026 en IOT-04:** usa `consultar_alertas(…, tipos=)` y `enlaces_de_alertas`. Nació en
    MAE-02a.
 2. **Contador de no leídas en la entrada «Alertas» del menú.** MAE-02c dejó la entrada sin contador: `core.menu.registrar_entrada` solo
    admite `(texto, url, ícono)`. Para sumarlo hay que ampliarla (por ejemplo, con `contador=funcion(usuario)`), calcularlo en
@@ -519,7 +521,7 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
    Antes, revisar el costo (`docs/temas_abiertos.md`). Después, anotar su nombre en `docs/estado.md`. Nace en DIA-01.
 2. **La revisión periódica del IoT (D-71).** `python manage.py revision_iot` cada 5 minutos, **encendido solo para las presentaciones** (un
    rato antes y hasta un rato después; el resto del tiempo, suspendido, por Neon Free). Decidir entonces si es un cron propio o uno solo
-   cada 5 minutos que también corra el proceso diario (idempotente por día). Nace en el lote IoT 0.
+   cada 5 minutos que también corra el proceso diario (idempotente por día). Nace en el lote IoT 0. **`revision_iot` ya existe (IOT-04, hecha el 23/11/2026); falta solo el cron.**
 
 ## Completan el ABM de cliente (COM-01, lote C1)
 
@@ -567,4 +569,11 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando se programe COM-01 o CMP-01 (lo que llegue primero) — nace con el lote 2 de Compras
 
-1. `validar_cuit` y `formatear_cuit` en `maestros/validadores.py` (D-58). La segunda tarea los usa.
+1. ~~`validar_cuit` y `formatear_cuit` en `maestros/validadores.py` (D-58).~~ Hecho el 23/11/2026 en COM-01 (`perfil.py` delega en ellas); CMP-01 las usa.
+
+## Cuando se programen CMP-02a, CMP-02b, CMP-03 y CMP-05 (completan lo que CMP-01 dejó vacío)
+
+1. **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
+2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
+3. **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
+4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).

@@ -595,8 +595,9 @@ transacción**:
 - Cada `AlertaIot` cuya alerta es crítica y activa, con `correo_enviado_en` nulo e `intentos_correo < 5`, en orden de id.
 - Se manda con `core.correo.enviar_correo(cuenta, asunto, "iot/correo/alerta_critica.txt", contexto)` a cada destinatario vigente de la
   alerta.
-- Después, en una transacción corta por alerta: si salió a alguno, `correo_enviado_en = ahora`; si no, `intentos_correo += 1`. Al quinto
-  fallo, `logger.error` con el id de la alerta.
+- **Reserva antes de enviar** *(corregido el 23/11/2026, IOT-04: antes decía «después, en una transacción corta por alerta: si salió a alguno, `correo_enviado_en = ahora`»)*: antes de enviar, la alerta se reserva con un `UPDATE` condicional fuera de la transacción de envío (`correo_enviado_en` nulo y alerta activa →
+  `correo_enviado_en = ahora`); si otra revisión ya la reservó, se salta. Si el envío no salió a ningún destinatario (o lanzó una excepción), se libera la reserva (`UPDATE` condicional a la marca) y `intentos_correo += 1`; al quinto fallo, `logger.error` con el id de la
+  alerta. Así dos revisiones simultáneas no mandan el mismo correo. Costo: si el proceso muere entre reservar y enviar, ese correo se pierde; mientras dura el envío, el panel muestra «Notificada por correo» (D-76 punto 7, corregido).
 - Sin servidor de correo (`core.correo.correo_configurado()` falso), no se intenta nada y la salida lo dice.
 - Una alerta que se resolvió antes de mandarse ya no se manda (solo las activas).
 

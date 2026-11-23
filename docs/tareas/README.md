@@ -86,7 +86,6 @@ por el estudiante el 21/11/2026). Cada tarea espera a las de producción que nec
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| IOT-04 | Revisión periódica, panel de monitoreo y configuración IoT | iot (y la configuración de maestros) | pendiente | IOT-03, USR-10, MAE-02d, MAE-04 | `iot/IOT-04-revision-panel-y-configuracion.md` |
 | IOT-05 | Comandos: emitir, retirar, resolver y cancelar | iot (y un valor en produccion) | pendiente | IOT-03, PRD-01 | `iot/IOT-05-comandos.md` |
 | IOT-06 | Reglas de actuación y ciclo de vida del sistema y del hardware | iot | pendiente | IOT-05 | `iot/IOT-06-reglas-y-ciclo-de-vida.md` |
 | IOT-07 | Orden de mantenimiento automática, su cancelación y el traspaso del Técnico | iot (y migración en produccion) | pendiente | IOT-06, PRD-01 | `iot/IOT-07-orden-de-mantenimiento.md` |
@@ -127,8 +126,7 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CMP-01 | App `compras` y proveedores | compras | pendiente | INV-02 (hecha) | `compras/CMP-01-app-compras-y-proveedores.md` |
-| CMP-02a | Pedido de cotización y portal del proveedor | compras (y una constante en core) | pendiente | CMP-01, USR-10 (hecha) | `compras/CMP-02a-pedido-y-portal-del-proveedor.md` |
+| CMP-02a | Pedido de cotización y portal del proveedor | compras (y una constante en core) | pendiente | CMP-01 (hecha), USR-10 (hecha) | `compras/CMP-02a-pedido-y-portal-del-proveedor.md` |
 | CMP-02b | Cancelar pedido, reenviar invitación y lo que cancela solo | compras | pendiente | CMP-02a | `compras/CMP-02b-cancelar-reenviar-y-bajas.md` |
 | CMP-03 | Orden de compra y pasos diarios 60 a 62 | compras (y el tránsito en inventario) | pendiente | CMP-02b | `compras/CMP-03-orden-de-compra-y-pasos-diarios.md` |
 | CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario) | pendiente | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |

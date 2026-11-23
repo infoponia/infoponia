@@ -703,6 +703,9 @@ class RegistroAuditoria(models.Model):
         # Lo que el nodo central entrega por la API del IoT (IOT-03, postcondición z de IOT-ENT-INF): lecturas, estados, modo y anuncio. Actor ``None``
         # (InfoPonia, como los procesos de D-56). Nunca lleva el token (D-70).
         ENTREGA_INFORMACION_IOT = "entrega_informacion_iot", "Entrega de información del nodo (IoT)"
+        # La revisión periódica del IoT (IOT-04, postcondición z de IOT-ENT-INF; D-71): un registro por sistema y por corrida, solo si generó o
+        # resolvió alertas o borró lecturas. Actor ``None`` (InfoPonia).
+        REVISION_PERIODICA_IOT = "revision_periodica_iot", "Revisión periódica del IoT"
         # Clientes y vehículos (COM-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_CLIENTE = "alta_cliente", "Alta de cliente"
         MODIFICACION_CLIENTE = "modificacion_cliente", "Modificación de cliente"
@@ -714,6 +717,11 @@ class RegistroAuditoria(models.Model):
         REACTIVACION_VEHICULO = "reactivacion_vehiculo", "Reactivación de vehículo"
         # Compra-ventas (COM-02): un solo registro con la venta, sus detalles, reservas, líneas y cosechas (D-36).
         REGISTRO_COMPRA_VENTA = "registro_compra_venta", "Registro de compra-venta"
+        # Proveedores (CMP-01, D-87 punto 8): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
+        ALTA_PROVEEDOR = "alta_proveedor", "Alta de proveedor"
+        MODIFICACION_PROVEEDOR = "modificacion_proveedor", "Modificación de proveedor"
+        BAJA_PROVEEDOR = "baja_proveedor", "Baja de proveedor"
+        REACTIVACION_PROVEEDOR = "reactivacion_proveedor", "Reactivación de proveedor"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -859,6 +867,14 @@ class RegistroAuditoria(models.Model):
         "acciones_modificadas": "Acciones modificadas",
         "acciones_desactivadas": "Acciones desactivadas",
         "acciones_borradas": "Acciones borradas",
+        # Lo que entrega el nodo (IOT-03) y la revisión periódica (IOT-04): «sistema» es una referencia; «ahora», la hora usada (texto ISO).
+        "origen": "Origen",
+        "sistema": "Sistema IoT",
+        "mensaje": "Mensaje del nodo",
+        "identificador": "Identificador",
+        "ahora": "Hora de la revisión",
+        "alertas_generadas": "Alertas generadas",
+        "lecturas_borradas": "Lecturas borradas",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -873,6 +889,21 @@ class RegistroAuditoria(models.Model):
         "porc_tolerancia_cobertura_pedido": "Tolerancia de cobertura del pedido (%)",
         "cant_maxima_entregas_diarias": "Máximo de entregas diarias por transportista",
         "cant_max_ciudades_distintas_diarias": "Máximo de localidades distintas por día",
+        # Módulo IoT de la configuración operativa (IOT-04; docs/casos_de_uso/maestros/configuracion.md, sección «Módulo IoT»).
+        "cant_reintentos_comando": "Reintentos de un comando",
+        "segundos_intervalo_reintento": "Intervalo entre intentos (s)",
+        "hora_inicio_luz": "Horario de luz: inicio (h)",
+        "hora_fin_luz": "Horario de luz: fin (h)",
+        "lux_umbral_fotoperiodo": "Umbral de luz para el fotoperíodo (lux)",
+        "minutos_sin_actividad": "Minutos sin actividad",
+        "minutos_sin_comunicacion": "Minutos sin comunicación",
+        "minutos_antiguedad_lectura": "Antigüedad máxima de una lectura (min)",
+        "cant_lecturas_confirmacion": "Lecturas de confirmación",
+        "histeresis_temperatura": "Histéresis de temperatura (°C)",
+        "histeresis_humedad": "Histéresis de humedad (% HR)",
+        "histeresis_luz": "Histéresis de intensidad lumínica (lux)",
+        "histeresis_temp_solucion": "Histéresis de temperatura de la solución (°C)",
+        "dias_retencion_telemetria": "Días de retención de lecturas",
         # Perfil de la organización (MAE-04).
         "nombre_organizacion": "Nombre de la organización",
         "cuit_organizacion": "CUIT",
@@ -912,6 +943,10 @@ class RegistroAuditoria(models.Model):
         "reservas": "Reservas",
         "lineas": "Líneas de reserva",
         "cosechas": "Cosechas",
+        # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
+        # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
+        "tipo_proveedor": "Tipo de proveedor",
+        "especialidades": "Categorías de insumos",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -922,6 +957,8 @@ class RegistroAuditoria(models.Model):
         # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
         "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
         "clase": {"sensor": "Sensor", "actuador": "Actuador"},
+        # CMP-01: `core` no importa `compras` (A1 de D-37), así que la lista cerrada se repite acá.
+        "tipo_proveedor": {"juridica": "Persona jurídica", "fisica": "Persona física"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
         # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
         "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
@@ -1163,6 +1200,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_HARDWARE,
         RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
         RegistroAuditoria.Accion.ENTREGA_INFORMACION_IOT,
+        RegistroAuditoria.Accion.REVISION_PERIODICA_IOT,
         RegistroAuditoria.Accion.ALTA_CLIENTE,
         RegistroAuditoria.Accion.MODIFICACION_CLIENTE,
         RegistroAuditoria.Accion.BAJA_CLIENTE,
@@ -1172,6 +1210,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.BAJA_VEHICULO,
         RegistroAuditoria.Accion.REACTIVACION_VEHICULO,
         RegistroAuditoria.Accion.REGISTRO_COMPRA_VENTA,
+        RegistroAuditoria.Accion.ALTA_PROVEEDOR,
+        RegistroAuditoria.Accion.MODIFICACION_PROVEEDOR,
+        RegistroAuditoria.Accion.BAJA_PROVEEDOR,
+        RegistroAuditoria.Accion.REACTIVACION_PROVEEDOR,
     }
 )
 

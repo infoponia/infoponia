@@ -104,6 +104,7 @@ La primera que corresponda, en este orden:
 | 2 | El sensor está fuera de servicio | «Fuera de servicio» (rojo) |
 | 3 | El nodo está «sin señal» | «Desactualizado» (amarillo; los valores son los últimos recibidos) |
 | 4 | Tiene activa «dispositivo sin actividad» | «Sin actividad · {n} min» (amarillo) |
+| 4b | Tiene último mensaje pero ya no tiene lecturas (la retención las borró) *(agregada el 23/11/2026, IOT-04)* | «Sin lecturas» (gris) |
 | 5 | La última lectura es inválida | «Lectura inválida» (amarillo) |
 | 6 | Nivel de la solución | «Nivel bajo» (rojo) o «Normal» (verde) |
 | 7 | Intensidad lumínica con la última lectura fuera del horario de luz | «Fuera del horario de luz» (gris, sin comparar) |

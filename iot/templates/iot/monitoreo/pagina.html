@@ -1,0 +1,34 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«IoT» → «Monitoreo» (IOT-CNS-LEC; ``monitoreo`` del prototipo): el panel del invernadero elegido. La página trae la barra de contexto, las pestañas, «Actualizar» y el selector de período, que son un
+formulario GET (sin JavaScript, «Ver» recarga la página con el período elegido; con HTMX reemplaza solo el panel). Todos están FUERA de «#panel», que es lo único que se refresca cada 30 segundos
+(``_panel.html``): así el refresco no cierra un desplegable abierto. Sin JavaScript la pantalla es esta misma página completa y se actualiza recargándola.{% endcomment %}
+{% block titulo %}Monitoreo · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page">
+  <div class="page-h">
+    <h1>IoT</h1>
+    <span class="spacer"></span>
+    {% if elegido and panel.sistema %}<a class="btn btn-ghost" href="{{ url_del_panel }}" hx-get="{{ url_del_panel }}" hx-target="#panel" hx-swap="outerHTML">{% icono "clock" 14 %} Actualizar</a>{% endif %}
+  </div>
+  {% include "iot/_marco_invernadero.html" %}
+  {% if not elegido %}
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para mostrar</h3><p class="muted">Cuando haya un invernadero a tu alcance, vas a ver acá su monitoreo.</p></div></div>
+  {% else %}
+  <p class="muted" style="margin-bottom:14px">Lecturas, estado de los equipos y umbral efectivo del invernadero. Se actualiza solo cada 30 segundos.</p>
+  {% if panel.sistema %}
+  <form id="form-periodo" class="ctxbar" method="get" action="{% url 'iot:monitoreo' %}" aria-label="Período de los gráficos"
+        hx-get="{% url 'iot:monitoreo' %}" hx-target="#panel" hx-swap="outerHTML">
+    <input type="hidden" name="invernadero" value="{{ elegido.pk }}">
+    <label for="periodo-del-grafico" class="lbl">Período</label>
+    <select id="periodo-del-grafico" class="field-input" name="periodo" data-desplegable data-enviar-al-cambiar>
+      {% for p in periodos %}<option value="{{ p.valor }}"{% if p.actual %} selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-ghost btn-sm" type="submit">Ver</button>
+  </form>
+  {% endif %}
+  {% include "iot/monitoreo/_panel.html" %}
+  {% endif %}
+</div>
+{% endblock %}

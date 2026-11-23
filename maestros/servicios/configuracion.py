@@ -8,12 +8,15 @@
 
 import re
 from collections import namedtuple
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from core.models import RegistroAuditoria, Usuario, rol_de
-from maestros.models import PARAMETROS_DE_CONFIGURACION, ConfiguracionOperativa
+from maestros.models import PARAMETROS_DE_CONFIGURACION, PARAMETROS_IOT, ConfiguracionOperativa
 from maestros.servicios.invernaderos import _actor_sigue_activo
 
 # La configuración guardada y las advertencias que no bloquean (regla 5 de ADM-MOD-CFG).
@@ -24,6 +27,14 @@ MENSAJE_HORIZONTE = (
     "El horizonte de cosecha es menor que la pre-reserva de suministros: algunas reservas van a caer fuera del horizonte."
 )
 _PARAMETROS = {campo: (minimo, maximo) for campo, _, _, minimo, maximo in PARAMETROS_DE_CONFIGURACION}
+# IOT-04 (docs/casos_de_uso/maestros/configuracion.md, sección «Módulo IoT»): los 14 parámetros del IoT se validan acá, con el mismo bloqueo, el mismo todo o nada y la misma auditoría.
+_PARAMETROS_IOT = {campo: (minimo, maximo) for campo, _, _, minimo, maximo in PARAMETROS_IOT}
+_CAMPOS_IOT = set(_PARAMETROS_IOT)
+_DECIMALES_IOT = {"histeresis_temperatura", "histeresis_temp_solucion"}  # regla 3b: las dos admiten un decimal; el resto son enteros
+_DECIMAL = re.compile(r"^\d+(\.\d+)?$", re.ASCII)
+UN_DECIMAL = Decimal("0.1")
+MAXIMO_DE_CARACTERES = 30  # un texto más largo no es un número: se rechaza sin intentar convertirlo
+PREFIJO_DE_LA_ADVERTENCIA_5B = "La próxima revisión periódica borrará"
 _ENTERO = re.compile(r"^-?\d+$", re.ASCII)
 
 
@@ -71,7 +82,54 @@ def _error_de_dominio(campo, valor):
     return None
 
 
-def modificar_configuracion(actor, **valores):
+def _entero_iot(campo, valor):
+    """Regla 3b (enteros): ``(entero, None)`` o ``(None, ValidationError)`` con «Ingresá un entero entre {mín} y {máx}.», sea cual sea el defecto (vacío, texto, decimal, fuera del dominio)."""
+    minimo, maximo = _PARAMETROS_IOT[campo]
+    error = ValidationError(f"Ingresá un entero entre {minimo} y {maximo}.", code="dominio")
+    if isinstance(valor, str) and len(valor.strip()) > MAXIMO_DE_CARACTERES:
+        return None, error
+    entero, _ = _como_entero(valor)
+    if entero is None or not minimo <= entero <= maximo:
+        return None, error
+    return entero, None
+
+
+def _decimal_iot(campo, valor):
+    """Regla 3b (las dos histéresis de temperatura): ``(Decimal con un decimal, None)`` o ``(None, ValidationError)``. Acepta coma o punto, como texto o como número, de 0 a 10; con dos decimales («1,55»),
+    texto, vacío, un booleano o un texto enorme da «Ingresá un número entre 0 y 10, con un decimal como máximo.»."""
+    minimo, maximo = _PARAMETROS_IOT[campo]
+    error = ValidationError(f"Ingresá un número entre {minimo} y {maximo}, con un decimal como máximo.", code="decimal")
+    if isinstance(valor, bool) or valor is None:
+        return None, error
+    if isinstance(valor, (int, Decimal)):
+        texto = str(valor)
+    elif isinstance(valor, str):
+        texto = valor.strip().replace(",", ".")
+    else:
+        return None, error
+    if len(texto) > MAXIMO_DE_CARACTERES or not _DECIMAL.match(texto):
+        return None, error
+    try:
+        numero = Decimal(texto)
+    except InvalidOperation:
+        return None, error
+    if numero != numero.quantize(UN_DECIMAL) or not minimo <= numero <= maximo:
+        return None, error
+    return numero.quantize(UN_DECIMAL), None
+
+
+def _auditable(valor):
+    """Un valor para el detalle de la auditoría: un ``Decimal`` no es un valor permitido (D-36), va como texto."""
+    return str(valor) if isinstance(valor, Decimal) else valor
+
+
+def _advertencia_de_la_retencion(nueva, ahora):
+    """Regla 5b: al reducir los días de retención, la próxima revisión periódica borrará las lecturas anteriores a la nueva fecha límite (hoy, en la zona local, menos los días): se advierte y se deja guardar."""
+    limite = timezone.localtime(ahora or timezone.now()).date() - timedelta(days=nueva)
+    return f"{PREFIJO_DE_LA_ADVERTENCIA_5B} las lecturas anteriores al {limite:%d/%m/%Y}, salvo las que originaron una alerta o una regla."
+
+
+def modificar_configuracion(actor, *, ahora=None, **valores):
     """ADM-MOD-CFG: modifica los parámetros indicados (``campo=valor``; lo que no se indica queda como está) y devuelve un
     ``Resultado`` con la configuración y las advertencias.
 
@@ -80,10 +138,13 @@ def modificar_configuracion(actor, **valores):
       pre-reserva (error del campo de la anticipación). Regla 6: todo o nada, con todos los errores juntos, un error por
       campo. Regla 5: el horizonte menor que la pre-reserva es una advertencia que no bloquea.
     - D-28: sin cambios no se escribe ni se audita. Postcondición b (D-36): ``modificacion_configuracion`` con el antes y el
-      después de cada parámetro que cambió.
+      después de cada parámetro que cambió (las histéresis, como texto).
+    - IOT-04 (sección «Módulo IoT», ``configuracion.md``): acepta también los 14 parámetros del IoT. Regla 3b: enteros con «Ingresá un entero entre {mín} y {máx}.»; las dos histéresis de temperatura admiten un
+      decimal (coma o punto). Regla 4b: el fin del horario de luz es posterior a su inicio (error en ``hora_fin_luz``). Regla 5b: bajar la retención advierte la fecha límite y guarda; ``ahora`` es el reloj
+      (un ``datetime`` con zona; por omisión el actual) y solo sirve para esa fecha.
     - Un campo desconocido es un error de programación (``TypeError``), no un dato de la persona.
     """
-    desconocidos = set(valores) - set(_PARAMETROS)
+    desconocidos = set(valores) - set(_PARAMETROS) - _CAMPOS_IOT
     if desconocidos:
         raise TypeError(f"Parámetros desconocidos: {', '.join(sorted(desconocidos))}.")
     _exigir_gerente(actor)
@@ -94,24 +155,36 @@ def modificar_configuracion(actor, **valores):
 
         errores, nuevos = {}, {}
         for campo, valor in valores.items():
-            entero, error = _como_entero(valor)
-            error = error or _error_de_dominio(campo, entero)
+            if campo in _DECIMALES_IOT:
+                entero, error = _decimal_iot(campo, valor)
+            elif campo in _CAMPOS_IOT:
+                entero, error = _entero_iot(campo, valor)
+            else:
+                entero, error = _como_entero(valor)
+                error = error or _error_de_dominio(campo, entero)
             if error:
                 errores[campo] = [error]
             else:
                 nuevos[campo] = entero
-        vigentes = {campo: getattr(fila, campo) for campo in _PARAMETROS} | nuevos
+        vigentes = {campo: getattr(fila, campo) for campo in [*_PARAMETROS, *_PARAMETROS_IOT]} | nuevos
         antic, pre = "dias_anticipacion_cosecha_suministro", "dias_pre_reserva_suministro"
         if antic not in errores and pre not in errores and vigentes[antic] > vigentes[pre]:
             errores[antic] = [ValidationError("No puede superar la pre-reserva de suministros.", code="supera_pre_reserva")]
+        inicio, fin = "hora_inicio_luz", "hora_fin_luz"
+        if inicio not in errores and fin not in errores and vigentes[fin] <= vigentes[inicio]:  # regla 4b
+            errores[fin] = [ValidationError("El fin tiene que ser posterior al inicio.", code="fin_no_posterior")]
         if errores:
             raise ValidationError(errores)
 
         cambios = {
-            campo: {"antes": getattr(fila, campo), "despues": valor}
+            campo: {"antes": _auditable(getattr(fila, campo)), "despues": _auditable(valor)}
             for campo, valor in nuevos.items()
             if getattr(fila, campo) != valor
         }
+        advertencias = advertencias_de(vigentes)
+        retencion = "dias_retencion_telemetria"
+        if retencion in cambios and nuevos[retencion] < getattr(fila, retencion):  # regla 5b
+            advertencias.append(_advertencia_de_la_retencion(nuevos[retencion], ahora))
         if cambios:
             for campo in cambios:
                 setattr(fila, campo, nuevos[campo])
@@ -122,4 +195,4 @@ def modificar_configuracion(actor, **valores):
                 afectados=[fila],
                 detalle={"cambios": cambios},
             )
-        return Resultado(fila, advertencias_de(vigentes))
+        return Resultado(fila, advertencias)

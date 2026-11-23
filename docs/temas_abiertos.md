@@ -485,6 +485,22 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
   D-84, pasó a **D-94** en el mismo paquete (regla de `docs/decisiones/README.md`).
 - **Indicadores de estadísticas (D-93).** Son provisorios: se revisan después de la entrevista a un productor (H26).
 
+## Abiertos desde IOT-04 (23/11/2026)
+
+- **Alertas del Gerente en el panel (regla 7 de IOT-CNS-LEC vs R007 de MAE-02).** El panel arma las alertas con `consultar_alertas(actor, …)`, como dice el documento (opción a); `Alerta.objects.para` le da al Gerente solo las `para_gerente`, y las del IoT van al Agrónomo
+  mientras esté activo: el Gerente que mira un invernadero con Agrónomo ve «0 alertas». Por eso el bloque dice «Las alertas de este invernadero las recibe {Agrónomo}; vos las recibís si no tiene un Agrónomo activo.». **Alternativa (b), a decidir con el análisis:** una consulta propia del panel para que
+  el Gerente vea todas las del invernadero (la regla 7 y la regla 1 dicen que consulta todo).
+- **Paso 9 de la «Verificación a mano» de IOT-04 vs D-76 punto 5.** El paso decía que `--ahora` calculaba «el fotoperíodo de hoy»; manda D-76 (el día en curso nunca se calcula; un día D se calcula desde D+1 a la 01:00). Resuelto en la tarea; queda a modo de registro.
+- **La reserva del correo antes de enviar (D-76 punto 7, corregido el 23/11/2026).** Costo: un proceso que muere entre reservar y enviar pierde ese correo (no hay duplicados). Mientras dura el envío, el panel muestra «Notificada por correo». `intentos_correo` cuenta fallos.
+- **Advertencia 5b de la retención.** Viaja por la sesión y no por `django.contrib.messages`: `core/templates/core/base_con_sesion.html` dibuja todo mensaje que no es de error con el estilo de éxito (un `warning` sale verde). Si se quiere un estilo de advertencia para los mensajes, es un cambio de `core`.
+- **Sin sesión con HTMX.** El proyecto no tiene un patrón para un pedido HTMX sin sesión (solo para la contraseña temporal, con `HX-Redirect`): manda el `LoginRequiredMiddleware` (302 al inicio de sesión) y HTMX mete esa pantalla dentro del panel que se refresca. Decidir un patrón común (por ejemplo, `HX-Redirect`).
+- **Guardados simultáneos desde la pantalla de configuración (límite conocido, igual que MAE-04).** El formulario manda todos los campos: un formulario viejo puede pisar un campo que otra persona acaba de cambiar (gana el último). El servicio solo toca lo que recibe.
+- **El menú lateral de «IoT»** apunta a `/iot/`, que redirige a «Monitoreo»: mejora menor (apuntarlo directo).
+- **Tabla de «Situación de un sensor» (`consultar_lecturas.md`).** Se sumó la fila 4b «Sin lecturas» (el sensor tiene último mensaje pero la retención ya borró sus lecturas); corregida en el extracto el 23/11/2026.
+- **Un Agrónomo dado de baja no recibe el correo** (se pide cuenta activa y con email); si la alerta no tiene a quién mandarse, suma un intento y deja un `logger.warning`. D-76 punto 7 no lo dice: sumarlo a la decisión si se confirma.
+- **Auditoría de la revisión.** Los afectados son solo las alertas (como dice el extracto): una corrida que solo borra lecturas deja `afectados` vacío y el sistema va en `datos`.
+- **Retención.** El «un solo `DELETE` por sistema» es un `queryset.delete()` del ORM (lee los ids y borra por lotes, por las claves `PROTECT`).
+- **Panel.** El identificador de un sensor no es un enlace a su ficha (solo los actuadores tienen «Ver equipo»); el enlace «Registrar este equipo» lleva el identificador en minúsculas (el de la clave de la alerta); los grupos de sensores van siempre abiertos (el botón de plegar del prototipo no se implementa).
 
 ## Abiertos desde COM-01 (23/11/2026)
 
@@ -510,3 +526,14 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **La lista de contratos filtra el cliente también por texto** (`cliente_q`, además de `cliente`).
 - **«Una venta contra la baja del invernadero»** solo prueba que la baja rechaza antes la venta con retiro (`invernadero_no_habilitado`). Que una reserva de cámara impida la baja llega con COM-04 (partidas).
 - **La fábrica `orden_suelta` de `produccion` pone prioridad «media» a la cosecha** (la restricción «cosecha ⇒ prioridad» la exige); ninguna prueba existente cambió.
+
+## Abiertos desde CMP-01 (23/11/2026)
+
+- **El tipo del proveedor no se cambia** (decisión del estudiante en la sesión; el extracto de CMP-MOD-PRV no lo nombra y el prototipo tampoco lo deja cambiar). Como el CUIT es único entre activos e inactivos, un proveedor cargado con el tipo equivocado no tiene corrección posible, ni dándolo de baja y volviendo a cargarlo. Decidir si se permite cambiarlo (y qué pasa con la razón social o el nombre y el apellido).
+- **Categorías dadas de baja:** el vínculo se conserva al modificar (regla 4 de CMP-MOD-PRV), así que el Gerente no puede ver ni quitar esos vínculos: la ficha y el formulario solo muestran las categorías activas. Decidir si hace falta una forma de verlos o quitarlos.
+- **`core/models.py` más allá de «Límites»:** la tarea decía «solo las acciones»; `docs/patrones/auditoria.md` (paso 3) pide también las etiquetas, y se sumaron `tipo_proveedor` y `especialidades` a `ETIQUETAS` (`cuit` y `razon_social` ya las había sumado COM-01) y `tipo_proveedor` a `VALORES_VISIBLES` (aprobado por el estudiante). Conviene que «Límites» de las tareas que auditan por primera vez nombre las etiquetas.
+- **El CUIT se audita con los 11 dígitos**, sin guiones, como `cuit_organizacion` en `perfil.py`; los guiones se agregan al mostrar (D-58).
+- **Hueco de documentación:** «Leer» de CMP-01 no traía los archivos de vistas, formularios y plantillas de cultivos (`maestros/views.py`, `maestros/forms.py`, `maestros/templates/maestros/cultivos/`) que hacen falta para copiar el patrón de pantallas; el estudiante autorizó leerlos. Conviene listarlos en «Leer» de las tareas de pantallas de ABM, o resumir el patrón en `docs/patrones/abm.md`.
+- **Funciones privadas de `maestros` reutilizadas:** `compras` importa `_actor_sigue_activo`, `_error_general` y `_tiene_contenido` de `maestros.servicios.invernaderos`, como ya hace `inventario`. Si se quiere evitar importar nombres privados, hay que hacerlas públicas en una tarea de `maestros`.
+- **Pestañas de «Compras»:** hoy tienen solo «Proveedores» (`compras/templates/compras/proveedores/_pestanas.html`); cada tarea de la ronda suma la suya y, cuando sean varias, conviene mover la barra a una plantilla de `compras/`.
+- **Esquema de verificación nuevo (D-95).** Se retiraron `core/verificacion.py`, el comando `cargar_datos_de_verificacion`, los `<app>/verificacion.py` de `maestros`, `iot`, `produccion` y `comercial` y sus pruebas (incluida `comercial/tests/test_verificacion.py`), y `docs/patrones/datos_de_verificacion.md`. Quedan sin tocar `docs/decisiones/D-56.md` y `docs/decisiones/D-94.md` (históricas; D-94 pide ampliar el cargador de `comercial`: ya no aplica) y las 69 tareas que traen «Verificación a mano» o nombran el cargador: manda `CLAUDE.md` (se ignora y cada paso a mano se convierte en un recorrido). Las secciones de `docs/historial.md` y `docs/revisiones_pendientes.md` que hablan de cargadores son historial.

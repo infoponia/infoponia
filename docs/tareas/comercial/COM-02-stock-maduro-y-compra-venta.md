@@ -215,7 +215,7 @@ otro invernadero del mismo Vendedor **sin Capataz**, con otro lote de esa varied
 **Qué se hizo** (rama `feature/com-02-stock-maduro-y-compra-venta`, 23/11/2026)
 
 - **Modelos y migraciones** (todas sin datos): `produccion/0005` (`Cosecha`, `StockCosechado` y la restricción «cosecha ⇒ prioridad»), `contabilidad/0002` (`contrato`),
-  `core/0025_comercial_compra_venta` (acción `registro_compra_venta`) y `comercial/0002` (`Contrato`, `CompraVenta`, `DetalleVenta`, `ReservaStock`, `DetalleReserva` y
+  `core/0027_comercial_compra_venta` (acción `registro_compra_venta`) y `comercial/0002` (`Contrato`, `CompraVenta`, `DetalleVenta`, `ReservaStock`, `DetalleReserva` y
   la secuencia `comercial_compraventa_numero_seq` con su reverso; depende de las otras tres). Todas las restricciones de la base de las fichas; admin de solo lectura.
 - **`produccion`:** `extensiones.py` (dos puntos, un solo registrante cada uno); `Cosecha` en `ordenes_del_capataz`, en el traspaso del Capataz y en `uso_de_variedad`
   (impide la baja de la variedad); excluida de la bandeja y de la lista (y de la ventana de detalle: 404) con «hasta COM-04a»; condición 1 de las plantas comprometidas
