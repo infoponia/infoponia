@@ -1,0 +1,32 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}La pantalla del token (IOT-REG-SIS pasos 9 y 10 y extensión 9a; IOT-MOD-SIS postcondición b; ventana ``token`` del prototipo): muestra el token UNA sola vez,
+junto con la dirección de la API y el enlace a la guía de integración del nodo. Es la respuesta al POST que registra o regenera (no hay GET: recargarla no vuelve a mostrar
+el token). Sin caché (``Cache-Control: no-store``). «Copiar» y la casilla «Ya guardé el token» (que habilita «Cerrar») son mejoras de JavaScript: sin él, «Cerrar» funciona
+siempre. El token no se guarda ni se audita (D-70). «regenerado» avisa que el anterior dejó de funcionar.{% endcomment %}
+{% block titulo %}{% if regenerado %}Nuevo token del nodo{% else %}Token del nodo{% endif %} · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page narrow" data-token>
+  <div class="page-h"><h1>{% if regenerado %}Nuevo token del nodo{% else %}Sistema IoT registrado{% endif %}</h1></div>
+  <div class="card"><div class="card-b">
+    <p>Copiá el token ahora y cargalo en el nodo <b>{{ nodo.nombre_nodo }}</b>, junto con la dirección de la API. <b>No se vuelve a mostrar</b>: InfoPonia solo guarda un resumen criptográfico.</p>
+    {% if regenerado %}<div class="alert alert-warn" style="margin-bottom:12px">{% icono "warn" 16 %}<div>El token anterior dejó de funcionar. El nodo no se comunicará hasta que cargues este; mientras tanto su conectividad pasará a «sin señal».</div></div>{% endif %}
+    <div class="sm muted">Dirección de la API</div>
+    <div class="tokenbox" id="direccion-de-la-api">{{ url_de_la_api }}</div>
+    <div class="sm muted">Token</div>
+    <div class="tokenbox" id="valor-del-token">{{ token }}</div>
+    <div class="acts" style="margin-bottom:12px;justify-content:flex-start">
+      <button class="btn btn-ghost btn-sm" type="button" data-copiar="#valor-del-token" hidden>Copiar token</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-copiar="#direccion-de-la-api" hidden>Copiar dirección</button>
+      <a class="btn btn-ghost btn-sm" href="{{ url_de_la_guia }}" target="_blank" rel="noopener noreferrer">{% icono "ext" 14 %} Guía de integración del nodo</a>
+    </div>
+    <p class="sm muted">La conectividad del nodo queda «sin señal» hasta su primera comunicación.</p>
+    <label class="sm" style="margin-top:14px;display:flex;gap:8px;align-items:center"><input type="checkbox" data-token-guardado> Ya guardé el token</label>
+    <div class="acts">
+      <a class="btn btn-primary" data-token-cerrar href="{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}">Cerrar</a>
+      {% if not regenerado %}<a class="btn btn-ghost" href="{% url 'iot:hardware_nuevo' %}?invernadero={{ sistema.invernadero_id }}">{% icono "plus" 14 %} Registrar hardware</a>{% endif %}
+    </div>
+  </div></div>
+</div>
+{% endblock %}

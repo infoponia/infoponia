@@ -1,0 +1,8 @@
+{% comment %}Las pestañas del módulo IoT (NAV del prototipo; D-25: el menú muestra solo lo que existe, cada tarea suma la suya). Recibe «pestana» (la activa:
+«hardware», «sistema» o «tipos») y, si hay un invernadero elegido, «elegido»: las pestañas por invernadero llevan ``?invernadero=`` para conservarlo. Son
+enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
+<div class="tabs" role="tablist" aria-label="Secciones de IoT">
+  <a class="tab" role="tab" href="{% url 'iot:hardware' %}{% if elegido %}?invernadero={{ elegido.pk }}{% endif %}"{% if pestana == "hardware" %} aria-selected="true"{% endif %}>Hardware</a>
+  <a class="tab" role="tab" href="{% url 'iot:sistema' %}{% if elegido %}?invernadero={{ elegido.pk }}{% endif %}"{% if pestana == "sistema" %} aria-selected="true"{% endif %}>Sistema IoT</a>
+  <a class="tab" role="tab" href="{% url 'iot:tipos' %}"{% if pestana == "tipos" %} aria-selected="true"{% endif %}>Tipos de actuador</a>
+</div>

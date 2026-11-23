@@ -1,0 +1,27 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Registrar Sistema IoT, paso 2 (IOT-REG-SIS): los invernaderos que quien registra opera y que no tienen un sistema IoT no dado de baja, cada uno con su
+Técnico o la marca «sin Técnico» (extensión 6b); el Gerente ve solo los que no tienen un Agrónomo activo (extensión 1a). Sin insumo de «Repuestos de hardware»
+(precondición c) no ofrece registrar. Cada invernadero es un enlace (``?invernadero=``): funciona sin JavaScript.{% endcomment %}
+{% block titulo %}Registrar sistema IoT · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'iot:sistema' %}">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>Registrar Sistema IoT</h1></div>
+  {% if not hay_insumos %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:14px">{% icono "warn" 16 %}<div>Primero registrá en Compras e Inventario el insumo del nodo, en la categoría «Repuestos de hardware».{% if es_agronomo %} <a href="{% url 'inventario:insumo_nuevo' %}">Registrar el insumo</a>{% endif %}</div></div>
+  {% elif not elegibles %}
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para registrar</h3><p class="muted">Todos los invernaderos que operás ya tienen un sistema IoT.</p></div></div>
+  {% else %}
+  <p class="muted" style="margin-bottom:14px">Elegí el invernadero del que vas a registrar el sistema IoT.</p>
+  <div class="stack tight">
+    {% for e in elegibles %}
+    <a class="gh" href="{% url 'iot:sistema_registrar' %}?invernadero={{ e.invernadero.pk }}">
+      <span class="gh-h"><span class="nm">{{ e.invernadero.nombre_invernadero }}</span>{% if e.tuvo_sistema %}<span class="status-badge status-neutral">Tuvo un sistema dado de baja</span>{% endif %}</span>
+      <span class="gh-a">{% if e.tecnico %}Técnico: {{ e.tecnico.get_full_name|default:e.tecnico.email }}{% else %}<span class="status-badge status-warn">Sin Técnico</span>{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0019_transicion_y_merma'),
+        ('core', '0020_alter_registroauditoria_accion'),
         ('maestros', '0010_parametros_iot'),
         ('produccion', '0001_initial'),
     ]

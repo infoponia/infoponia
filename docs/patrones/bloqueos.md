@@ -81,6 +81,10 @@ prueban `ProdBajInvConcurrenciaTests` (con un creador falso que tiene una FK rea
 Los registrantes de los tres puntos corren dentro de la transacción del servicio, **después** de que este tomó los bloqueos
 de arriba; el que bloquee filas propias lo hace después del invernadero y en orden de id.
 
+**Excepción de D-82 (IoT).** En los flujos de IoT que crean un actuador, le cambian el tipo o lo reactivan, el **tipo de actuador se bloquea antes que el
+invernadero**: IOT-MOD-TAC bloquea el tipo y después los invernaderos de sus actuadores, y con el orden contrario las dos operaciones se cruzan (deadlock). En el
+resto del IoT y en las demás apps sigue valiendo el orden de arriba.
+
 ### El `UPDATE` del invernadero va antes de los traspasos
 
 Cambiar de urbana a rural cambia `Invernadero.direccion_id`, una columna con índice único común (es un `OneToOneField`): ese

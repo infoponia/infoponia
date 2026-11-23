@@ -1,0 +1,12 @@
+{% load iconos %}{% comment %}Marco de las pantallas por invernadero (ctxBar, NAV y opBanner del prototipo; «Para los cinco», «Elección del invernadero»): la barra de contexto con
+el invernadero elegido, las pestañas y el aviso de solo lectura. La barra es un formulario GET: sin JavaScript, «Ver» recarga la página con el invernadero
+elegido; el desplegable propio (D-24) lo envía al cambiar. Recibe «invernaderos», «elegido», «aviso» («ok» o «info» y su texto) y «pestana».{% endcomment %}
+<form class="ctxbar" method="get" action="{{ request.path }}" aria-label="Invernadero">
+  <label for="invernadero-del-contexto" class="lbl">Invernadero</label>
+  <select id="invernadero-del-contexto" class="field-input" name="invernadero" data-desplegable data-enviar-al-cambiar>
+    {% for i in invernaderos %}<option value="{{ i.pk }}"{% if elegido and i.pk == elegido.pk %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+  </select>
+  <button class="btn btn-ghost btn-sm" type="submit">Ver</button>
+</form>
+{% include "iot/_pestanas.html" %}
+{% if aviso %}<div class="alert alert-{{ aviso.0 }}" role="status" style="margin-bottom:14px">{% if aviso.0 == "ok" %}{% icono "check" 16 %}{% else %}{% icono "info" 16 %}{% endif %}<div>{{ aviso.1 }}</div></div>{% endif %}

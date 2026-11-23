@@ -25,3 +25,20 @@ class IotConfig(AppConfig):
             (Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO),
             despues_de="Producción",
         )
+        self._registrar_en_maestros()
+
+    def _registrar_en_maestros(self):
+        """IOT-02 (docs/api/extensiones_de_maestros.md): conecta `iot` con `maestros` por sus puntos de extensión (regla A4 de D-37): el estado del IoT del invernadero, los impedimentos
+        de baja del invernadero y del sector y el contenido del sector. Con guarda: ``ready()`` puede correr más de una vez y estos puntos no deben duplicar sus registrantes
+        (el del estado admite uno solo)."""
+        from maestros import extensiones
+        from iot.servicios import hardware, sistemas
+
+        if not any(registrado[0] is sistemas.estados_de_sistemas for registrado in extensiones._ESTADO_IOT):
+            extensiones.registrar_estado_iot(sistemas.estados_de_sistemas, sistemas.url_de_registro)
+        if sistemas.impedimentos_de_baja_del_invernadero not in extensiones._IMPEDIMENTOS:
+            extensiones.registrar_impedimento_de_baja(sistemas.impedimentos_de_baja_del_invernadero)
+        if hardware.impedimentos_de_baja_del_sector not in extensiones._IMPEDIMENTOS_DE_SECTOR:
+            extensiones.registrar_impedimento_de_baja_de_sector(hardware.impedimentos_de_baja_del_sector)
+        if hardware.contenido_de_sectores not in extensiones._CONTENIDOS:
+            extensiones.registrar_contenido_de_sector(hardware.contenido_de_sectores)

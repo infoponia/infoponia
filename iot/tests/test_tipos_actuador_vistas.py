@@ -91,7 +91,7 @@ class AccesoATiposVistaTests(TiposVistasBase):
         """IOT-CNS-TAC regla 3 e IOT-ALT/MOD/BAJ-TAC regla 1: el Agrónomo solo consulta."""
         self.client.force_login(self.agronomo)
         self.assertEqual(self.client.get(self.lista).status_code, 200)
-        self.assertRedirects(self.client.get(reverse("iot:inicio")), self.lista, fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(reverse("iot:inicio")), reverse("iot:sistema"), fetch_redirect_response=False)
         for ruta in (self.url_nuevo, self.url("tipo_modificar"), self.url("tipo_baja"), self.url("tipo_reactivar")):
             for metodo in (self.client.get, self.client.post):
                 with self.subTest(ruta=ruta, metodo=metodo.__name__):
