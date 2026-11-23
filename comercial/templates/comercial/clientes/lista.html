@@ -1,7 +1,8 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
 {% comment %}«Comercial» → «Clientes» (COM-CNS-CLT, tabClientes del prototipo). Búsqueda por CUIT (desde 2 dígitos, con o sin guiones), razón social o nombre y
 apellido; filtro por estado; 50 por página. Es un formulario GET común: sin JavaScript funciona igual, y no valida nada al tipear. La columna
-«Contratos vigentes» la suma COM-02. Recibe «pagina», «activas_por_cliente», «q», «estado» y «es_gerente».{% endcomment %}
+«Contratos vigentes» (COM-02) cuenta las compra-ventas abiertas y pendientes de decisión del alcance de quien mira. Recibe «pagina», «activas_por_cliente»,
+«vigentes_por_cliente», «q», «estado» y «es_gerente».{% endcomment %}
 {% block titulo %}Clientes · Comercial · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
@@ -24,7 +25,7 @@ apellido; filtro por estado; 50 por página. Es un formulario GET común: sin Ja
 
   <div class="tablewrap">
     <table class="data-table">
-      <thead><tr><th>Cliente</th><th>CUIT</th><th>Contacto</th><th class="right">Direcciones</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>CUIT</th><th>Contacto</th><th class="right">Direcciones</th><th class="right">Contratos vigentes</th><th>Estado</th><th></th></tr></thead>
       <tbody>
       {% for c in pagina.object_list %}
         <tr>
@@ -32,11 +33,12 @@ apellido; filtro por estado; 50 por página. Es un formulario GET común: sin Ja
           <td class="nowrap mono">{{ c.cuit_cliente|cuit }}</td>
           <td>{% if c.email_cliente %}{{ c.email_cliente }}{% else %}<span class="muted">Sin correo</span>{% endif %}<span class="sub2">{% if c.telefono_cliente %}{{ c.telefono_cliente }}{% else %}Sin teléfono{% endif %}</span></td>
           <td class="right">{{ activas_por_cliente|get_item:c.pk|default:0 }}</td>
+          <td class="right">{{ vigentes_por_cliente|get_item:c.pk|default:0 }}</td>
           <td>{% if c.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:cliente' c.pk %}">Ver<span class="sr"> la ficha de {{ c }}</span></a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="muted" style="text-align:center;padding:24px">{% if q or estado %}Ningún cliente coincide con la búsqueda.{% else %}Todavía no hay clientes. Registrá el primero con «Registrar cliente».{% endif %}</td></tr>
+        <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">{% if q or estado %}Ningún cliente coincide con la búsqueda.{% else %}Todavía no hay clientes. Registrá el primero con «Registrar cliente».{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table>

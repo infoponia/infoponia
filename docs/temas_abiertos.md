@@ -514,6 +514,19 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Bloqueos de vehículos.** Cuentas (quien actúa y los transportistas que entran o salen, en una consulta y por id) y después el vehículo. Con un solo Gerente activo (D-09), todo el ABM de vehículos queda serializado por su cuenta: las carreras de patente y de transportista las resuelve el bloqueo y la base queda como respaldo.
 - **Búsqueda sin `unaccent`.** La búsqueda de clientes y de vehículos usa `icontains`, como pide el extracto (la ya anotada falta de `unaccent`).
 
+
+## Abiertos desde COM-02 (23/11/2026)
+
+- **`detalle_de_cosechas` sí se llama en COM-02.** `docs/api/extensiones_de_produccion.md` decía «nadie lo llama en COM-02»; la condición 1 de la merma (`produccion/servicios/mermas.py`, `_alerta_por_reservas_de_cosecha`) lo usa para nombrar en la alerta las cosechas «a realizar» sin cobertura (extensión 10a de PRD-MER). Sin registrante, la alerta sale sin los códigos.
+- **El comprobante lo envía el servicio, no la vista.** `compra_venta.md` (paso 16) decía que la vista llama a `enviar_comprobante`. Lo hace `registrar_compra_venta`, fuera de su `transaction.atomic()`. La venta nace `pendiente_envio` (con correo) o `para_imprimir` (sin correo); el envío la pasa a `enviado`. Si falla y registró el Gerente, el Vendedor responsable recibe «El comprobante de CV-… quedó pendiente de envío.». COM-03 y COM-04b deben seguir este mismo patrón.
+- **`detalle_de_orden` devuelve 404 para una cosecha hasta COM-04a.** La tarea solo pedía ocultarla de la bandeja y de la lista (`exclude(tipo_orden=COSECHA)`); en `produccion/servicios/ordenes.py` se agregó el mismo `exclude` con el comentario «hasta COM-04a» para no abrir una ventana que no existe. COM-04a debe quitar las tres líneas.
+- **«Agregar variedad» no agregaba el renglón (corregido en COM-02).** `_analizar` descartaba los renglones en blanco también en el cálculo de pantalla. Ahora, con `estricto=False`, se conservan sin validar; al resumir y registrar se ignoran. `FormularioDeCompraVenta.cargadas` cuenta los renglones con algo cargado (resumen y `puede_revisar`). COM-03 (suministro) tiene un formulario igual: reutilizar este criterio.
+- **Códigos y campos de error de COM-REG-CVT que fijó el código** (para COM-03 y COM-05): `vendedor_obligatorio|invalido|inactivo`, `cliente_obligatorio|inactivo`, `fecha_obligatoria|invalida|pasada`, `modalidad_invalida`, `direccion_obligatoria|no_valida`, `invernadero_obligatorio|no_habilitado`, `variedad_obligatoria|repetida|inactiva`, `cantidad_invalida`, `supera_disponible`, `precio_invalido`, `sin_renglones`, `stock_insuficiente`, `cambio_simultaneo`, `comprobante_no_pendiente`, `cliente_sin_correo`. Campos: `vendedor`, `cliente`, `fecha_pactada`, `modalidad`, `direccion`, `invernadero`, `renglon-<i>-variedad|cantidad|precio` y `__all__`.
+- **Formatos que aceptan los campos.** Precio con coma o punto decimal («1.500,50» y «1500.50»); fecha `aaaa-mm-dd` o `dd/mm/aaaa`.
+- **La lista de contratos filtra el cliente también por texto** (`cliente_q`, además de `cliente`).
+- **«Una venta contra la baja del invernadero»** solo prueba que la baja rechaza antes la venta con retiro (`invernadero_no_habilitado`). Que una reserva de cámara impida la baja llega con COM-04 (partidas).
+- **La fábrica `orden_suelta` de `produccion` pone prioridad «media» a la cosecha** (la restricción «cosecha ⇒ prioridad» la exige); ninguna prueba existente cambió.
+
 ## Abiertos desde CMP-01 (23/11/2026)
 
 - **El tipo del proveedor no se cambia** (decisión del estudiante en la sesión; el extracto de CMP-MOD-PRV no lo nombra y el prototipo tampoco lo deja cambiar). Como el CUIT es único entre activos e inactivos, un proveedor cargado con el tipo equivocado no tiene corrección posible, ni dándolo de baja y volviendo a cargarlo. Decidir si se permite cambiarlo (y qué pasa con la razón social o el nombre y el apellido).

@@ -1,7 +1,8 @@
-{% comment %}Barra de pestañas de «Comercial» (VIEWS.com del prototipo). En COM-01: «Clientes» y, solo para el Gerente, «Vehículos»; las demás las suma cada
-tarea (D-25: el menú y las pestañas muestran solo lo que existe). Recibe «activa» («clientes» o «vehiculos») y «es_gerente». Son enlaces:
-cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
+{% comment %}Barra de pestañas de «Comercial» (VIEWS.com del prototipo). «Contratos» (COM-02: solo compra-ventas; el selector «Compra-ventas / Suministros» lo agrega COM-03), «Clientes»
+y, solo para el Gerente, «Vehículos»; las demás las suma cada tarea (D-25: el menú y las pestañas muestran solo lo que existe). Recibe «activa» («contratos», «clientes» o
+«vehiculos») y «es_gerente». Son enlaces: cada pestaña es una página y funciona sin JavaScript.{% endcomment %}
 <div class="tabs" role="tablist" aria-label="Comercial">
+  <a class="tab" role="tab" href="{% url 'comercial:contratos' %}" aria-selected="{% if activa == 'contratos' %}true{% else %}false{% endif %}">Contratos</a>
   <a class="tab" role="tab" href="{% url 'comercial:clientes' %}" aria-selected="{% if activa == 'clientes' %}true{% else %}false{% endif %}">Clientes</a>
   {% if es_gerente %}<a class="tab" role="tab" href="{% url 'comercial:vehiculos' %}" aria-selected="{% if activa == 'vehiculos' %}true{% else %}false{% endif %}">Vehículos</a>{% endif %}
 </div>

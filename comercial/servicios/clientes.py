@@ -8,8 +8,8 @@
 # fila que bloquear: dos altas con el mismo CUIT las ordena la restricción única de la base (el ``IntegrityError`` se traduce al
 # mismo error de campo, nunca un 500). Dos modificaciones a la vez del mismo cliente: gana la última (D-40), salvo el CUIT.
 #
-# Lo que completan otras tareas, escrito ya como funciones que hoy devuelven «nada»: ``direcciones_en_uso`` (COM-02 y COM-03),
-# ``impide_quitar_el_correo`` (COM-03) y ``pendientes_del_cliente`` (COM-02, COM-03, COM-06 y COM-08a).
+# Lo que completan otras tareas, escrito ya como funciones: ``direcciones_en_uso`` y ``pendientes_del_cliente`` (COM-02 las completó con
+# las compra-ventas; COM-03, COM-06 y COM-08a suman las suyas) e ``impide_quitar_el_correo`` (COM-03, hoy siempre False).
 
 import re
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ from django.db.models.functions import Coalesce, Concat, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
-from comercial.models import Cliente, DireccionCliente
+from comercial.models import Cliente, CompraVenta, DireccionCliente
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
@@ -116,9 +116,12 @@ class FichaDelCliente:
 
 def direcciones_en_uso(ids):
     """Los ids de ``Direccion`` (de ``ids``) que usa una compra-venta o un detalle de suministro (regla 3 de 8.18, MD-19): esas
-    no se modifican ni se borran. **Se completa en COM-02** (compra-ventas con envío) **y COM-03** (detalles de suministro).
-    En COM-01 todavía no hay contratos: conjunto vacío."""
-    return set()
+    no se modifican ni se borran. Desde COM-02 cuenta las compra-ventas con envío, **en cualquier estado** (una dirección usada nunca se
+    modifica ni se borra, aunque la venta esté cancelada); **COM-03 suma los detalles de suministro**."""
+    ids = list(ids)
+    if not ids:
+        return set()
+    return set(CompraVenta.objects.filter(direccion_envio_id__in=ids).values_list("direccion_envio_id", flat=True))
 
 
 def impide_quitar_el_correo(cliente):
@@ -129,10 +132,65 @@ def impide_quitar_el_correo(cliente):
 
 def pendientes_del_cliente(cliente, actor):
     """Regla 1 de COM-BAJ-CLT: lo que el cliente tiene pendiente, como textos para la ventana de baja (entregas sin cobrar,
-    suministros vigentes, compra-ventas abiertas, quejas y discrepancias pendientes). **Se completa en COM-02** (compra-ventas
-    abiertas), **COM-03** (suministros), **COM-06** (entregas sin cobrar, quejas y discrepancias) **y COM-08a** (estado de
-    pago). En COM-01, lista vacía."""
-    return []
+    suministros vigentes, compra-ventas abiertas, quejas y discrepancias pendientes). Desde COM-02 informa las compra-ventas abiertas o
+    pendientes de decisión (de todos los Vendedores: solo el Gerente da de baja); **COM-03** suma los suministros, **COM-06** las entregas
+    sin cobrar, las quejas y las discrepancias, **COM-08a** el estado de pago."""
+    codigos = [
+        f"CV-{numero:04d}"
+        for numero in CompraVenta.objects.filter(
+            cliente=cliente, estado_venta__in=[CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION]
+        )
+        .order_by("numero")
+        .values_list("numero", flat=True)
+    ]
+    return [f"Compra-ventas abiertas: {len(codigos)} ({', '.join(codigos)})."] if codigos else []
+
+
+def contratos_del_cliente(actor, cliente):
+    """Las compra-ventas del cliente que ``actor`` puede ver (el Vendedor, solo las suyas; el Gerente, todas), con su monto, de la más
+    reciente a la más antigua: para la ficha del cliente (COM-02; COM-03 suma los suministros). Una consulta."""
+    return list(
+        CompraVenta.objects.en_alcance_de(actor)
+        .filter(cliente=cliente)
+        .con_monto()
+        .order_by("-fecha_realizacion", "-numero")
+    )
+
+
+def contratos_vigentes_por_cliente(actor, clientes_):
+    """``{cliente_id: cantidad}`` de compra-ventas abiertas o pendientes de decisión de cada cliente de ``clientes_``, dentro del alcance de
+    ``actor``: la columna «Contratos vigentes» de la lista (COM-02), en una sola consulta."""
+    filas = (
+        CompraVenta.objects.en_alcance_de(actor)
+        .filter(
+            cliente__in=list(clientes_), estado_venta__in=[CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION]
+        )
+        .values("cliente_id")
+        .annotate(cantidad=Count("pk"))
+    )
+    return {fila["cliente_id"]: fila["cantidad"] for fila in filas}
+
+
+def direcciones_activas(cliente):
+    """Las direcciones activas del cliente (las hijas, urbana o rural, con su localidad), por id: las que se ofrecen para un envío (regla 23
+    de 8.6; D-58). Dos consultas."""
+    ids = list(
+        DireccionCliente.objects.filter(cliente=cliente, direccion__estado_direccion=Direccion.Estado.ACTIVO)
+        .order_by("direccion_id")
+        .values_list("direccion_id", flat=True)
+    )
+    hijas = _hijas(ids)
+    return [hijas[i] for i in ids if i in hijas]
+
+
+def ids_de_direcciones(cliente):
+    """Los ids de ``Direccion`` del cliente (activas e inactivas), por id. Una consulta."""
+    return list(DireccionCliente.objects.filter(cliente=cliente).order_by("direccion_id").values_list("direccion_id", flat=True))
+
+
+def direccion_hija(direccion_id):
+    """La hija (urbana o rural) de la ``Direccion`` ``direccion_id`` con su localidad, o ``None``."""
+    return _hijas([direccion_id]).get(direccion_id)
 
 
 # ---- comunes ----

@@ -31,8 +31,7 @@ hoy con las pruebas de `produccion` que no instalan `comercial`.
   en orden de id de lote (`cantidad_cosechada` es `None` hasta concretar).
 - **Lo usa:** `produccion.extensiones.detalle_de_cosechas(cosecha_ids)` (sin registrante: `{}`).
 - **A lo sumo un registrante** (`comercial`).
-- **Quién lo llama:** nadie en COM-02. Lo declara COM-02 para que el contrato quede junto al del punto 1; lo usan desde COM-04 la bandeja del
-  Capataz, la lista de órdenes del Agrónomo y el aviso de baja de la cuenta del Capataz, cuando muestran cosechas.
+- - **Quién lo llama:** desde COM-02, `produccion/servicios/mermas.py` (`_alerta_por_reservas_de_cosecha`, condición 1 de la regla 15 de 8.8) para nombrar en la alerta las cosechas «a realizar» sin cobertura (extensión 10a). Desde COM-04 lo suman la bandeja del Capataz, la lista de órdenes del Agrónomo y el aviso de baja de la cuenta del Capataz, cuando muestran cosechas.  nadie en COM-02. Lo declara COM-02 para que el contrato quede junto al del punto 1; lo usan desde COM-04 la bandeja del Capataz, la lista de órdenes del Agrónomo y el aviso de baja de la cuenta del Capataz, cuando muestran cosechas.
 - Una consulta por tabla, sin consultas por cosecha.
 
 ## 3. `registrar_acciones_de_cosecha(funcion)` (COM-04, D-64 punto 11)

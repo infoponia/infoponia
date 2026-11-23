@@ -23,3 +23,32 @@
 .com-barra{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 .pager a,.pager span{padding:2px 6px}
 .sin-datos{color:var(--faint)}
+
+/* «Nueva compra-venta» (COM-02): los tres pasos y el resumen. */
+.cv-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.cv-pasos{display:flex;flex-direction:column;gap:16px}
+.cv-resumen{position:sticky;top:12px}
+.paso-n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:var(--primary);color:#fff;font-size:12px;font-weight:600}
+.paso-bloqueado{opacity:.7}
+.cli-elegido{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.cli-lista{list-style:none;margin:8px 0 0;padding:0;border:1px solid var(--border);border-radius:var(--radius)}
+.cli-lista li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.cli-lista li:last-child{border-bottom:0}
+.fila-buscar{display:flex;gap:8px}
+.fila-buscar .field-input{flex:1}
+.modalidad{border:0;padding:0;margin:0}
+.modalidad legend{font-size:13px;font-weight:550;margin-bottom:6px}
+.modalidad label{display:inline-flex;align-items:center;gap:6px;margin-right:16px}
+.renglones .num{text-align:right;max-width:120px}
+.monto{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--border);padding-top:10px;margin:12px 0}
+.monto b{font-size:18px}
+.acts-col{display:flex;flex-direction:column;gap:8px}
+.acts-fila{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.modal-ancho{max-width:640px;width:100%}
+@media (max-width:900px){.cv-layout{grid-template-columns:1fr}.cv-resumen{position:static}}
+
+/* El comprobante imprimible: una hoja sola, sin menú. */
+.comprobante{background:#fff;margin:0}
+.comprobante-hoja{max-width:720px;margin:24px auto;padding:0 20px}
+.comprobante .nota{margin-top:18px;font-size:13px;color:var(--muted-foreground)}
+@media print{.no-imprimir{display:none}.comprobante-hoja{margin:0}}

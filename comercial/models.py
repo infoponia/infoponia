@@ -2,13 +2,20 @@
 # Decisiones: D-05 (nombres en snake_case con el sufijo de la clase), D-06 (id automático), D-28 (alcance en un único
 # lugar), D-37 (A2: la FK la declara la app de nivel mayor) y D-58 (DireccionCliente, la tabla de vínculo de R119).
 # Las bajas son lógicas y las claves foráneas son PROTECT (docs/modelo/comercial.md, «Convenciones de esta ficha»).
+#
+# COM-02 suma `Contrato` (hija de `contabilidad.OrigenDocumento`, D-52), `CompraVenta`, `DetalleVenta`, `ReservaStock` y `DetalleReserva`
+# (D-59). Las claves foráneas hacia `produccion` (`ReservaStock.cosecha`, `DetalleReserva.lote` y `.partida`) se declaran acá (A2 de D-37).
 
 from django.db import models
-from django.db.models import Q
+from django.db.models import Case, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When
+from django.db.models.functions import Coalesce
+from django.utils import timezone
 
-from core.models import Transportista, Usuario, rol_de
+from contabilidad.models import OrigenDocumento
+from core.models import Transportista, Usuario, Vendedor, rol_de
 from core.validadores import validar_telefono
-from maestros.models import Direccion
+from maestros.models import Direccion, Invernadero, Variedad
+from produccion.models import Cosecha, Lote, StockCosechado
 
 # La patente argentina: AAA123 (formato viejo) o AA123AA (Mercosur), en mayúsculas y sin espacios (MD-129).
 REGEX_PATENTE = r"^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$"
@@ -197,3 +204,270 @@ class Vehiculo(models.Model):
     def __str__(self):
         """«Camioneta AE123CD»: es el texto de ``referencia()`` en la auditoría."""
         return f"{self.get_tipo_vehiculo_display()} {self.patente}"
+
+
+class ContratoQuerySet(models.QuerySet):
+    """QuerySet de contratos con el alcance por usuario en un único lugar (D-28; docs/modelo/comercial.md, «Contrato»)."""
+
+    def en_alcance_de(self, actor):
+        """Contratos que ``actor`` consulta: el Gerente activo ve todos; el Vendedor activo, solo aquellos de los que es ``vendedor``;
+        cualquier otro actor, o una cuenta inactiva, ninguno."""
+        if actor is None or not getattr(actor, "is_active", False):
+            return self.none()
+        rol = rol_de(actor)
+        if rol == Usuario.Rol.GERENTE:
+            return self.all()
+        if rol == Usuario.Rol.VENDEDOR:
+            return self.filter(vendedor_id=actor.pk)
+        return self.none()
+
+
+class Contrato(OrigenDocumento):
+    """Contrato con un cliente: padre de `CompraVenta` (COM-02) y de `Suministro` (COM-03), con herencia multitabla como `OrdenTrabajo`.
+    Hija directa de `OrigenDocumento` (D-52): ``TIPO_DE_ORIGEN = contrato``; su clave es ``origendocumento_ptr``. ``numero`` es único por
+    tipo y lo asigna el servicio con una secuencia de PostgreSQL por tipo (``comercial_compraventa_numero_seq``). El Vendedor es el
+    responsable (regla 1 de 8.11); quien lo cargó queda en la auditoría. Puede cambiar por un traspaso (D-60)."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.CONTRATO
+
+    class Tipo(models.TextChoices):
+        """Discriminador de la herencia; nunca cambia."""
+
+        COMPRA_VENTA = "compra_venta", "Compra-venta"
+        SUMINISTRO = "suministro", "Suministro"
+
+    class EstadoDelComprobante(models.TextChoices):
+        """Resultado del envío del último comprobante (pasos 16, 16a y 16b de COM-REG-CVT); permite «Reenviar comprobante»."""
+
+        ENVIADO = "enviado", "Enviado"
+        PENDIENTE_ENVIO = "pendiente_envio", "Pendiente de envío"
+        PARA_IMPRIMIR = "para_imprimir", "Para imprimir"
+
+    # El nombre `tipo` ya es del padre (`OrigenDocumento`): el discriminador se llama `tipo_contrato` (mismo caso que `tipo_orden`, D-81).
+    tipo_contrato = models.CharField(max_length=20, choices=Tipo.choices)
+    numero = models.PositiveIntegerField()
+    fecha_realizacion = models.DateField(default=timezone.localdate)
+    estado_comprobante = models.CharField(
+        max_length=20, choices=EstadoDelComprobante.choices, default=EstadoDelComprobante.PENDIENTE_ENVIO
+    )
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="contratos")  # R114
+    vendedor = models.ForeignKey(Vendedor, on_delete=models.PROTECT, related_name="contratos")  # R115
+
+    objects = ContratoQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Contrato"
+        verbose_name_plural = "Contratos"
+        constraints = [
+            models.UniqueConstraint(fields=["tipo_contrato", "numero"], name="contrato_numero_unico_por_tipo"),
+            models.CheckConstraint(condition=Q(tipo_contrato__in=["compra_venta", "suministro"]), name="contrato_tipo_valido"),
+            models.CheckConstraint(
+                condition=Q(estado_comprobante__in=["enviado", "pendiente_envio", "para_imprimir"]), name="contrato_comprobante_valido"
+            ),
+        ]
+
+    @property
+    def codigo(self):
+        """``CV-0001`` o ``SUM-0001``: lo que muestran las pantallas, los avisos y el registro de auditoría."""
+        prefijo = "CV" if self.tipo_contrato == self.Tipo.COMPRA_VENTA else "SUM"
+        return f"{prefijo}-{self.numero:04d}"
+
+    def __str__(self):
+        """El código (texto de ``referencia()`` en la auditoría, D-36)."""
+        return self.codigo
+
+
+class CompraVentaQuerySet(ContratoQuerySet):
+    """El alcance del contrato más el monto de cada venta, calculado en la base (sin consultas por fila)."""
+
+    def con_monto(self):
+        """Anota ``monto``: por detalle, confirmado → entregada × precio; abierto o pendiente de decisión → solicitada × precio; rechazado o
+        cancelado → 0 (COM-CNS-CVT, «Monto»). La etiqueta «final» o «estimado» la da el estado de la venta (``monto_es_final``)."""
+        pesos = DecimalField(max_digits=18, decimal_places=2)
+        entregado = ExpressionWrapper(
+            Coalesce(F("detalles__cant_entregada_venta"), 0) * F("detalles__precio_unitario_de_venta"), output_field=pesos
+        )
+        pedido = ExpressionWrapper(F("detalles__cant_solicitada_venta") * F("detalles__precio_unitario_de_venta"), output_field=pesos)
+        importe = Case(
+            When(detalles__estado_detalle_venta="confirmado", then=entregado),
+            When(detalles__estado_detalle_venta__in=["abierto", "pendiente_decision"], then=pedido),
+            default=Value(0, output_field=pesos),
+            output_field=pesos,
+        )
+        return self.annotate(monto=Coalesce(Sum(importe), Value(0, output_field=pesos), output_field=pesos))
+
+
+class CompraVenta(Contrato):
+    """Venta al contado: al registrarse queda abierta, con el stock reservado y sin pago ni asiento (regla 19 de 8.6). Los datos de la
+    cancelación (MD-130) los suma COM-05b. El monto no se guarda: es derivado (docs/modelo/comercial.md, «CompraVenta»)."""
+
+    class Estado(models.TextChoices):
+        """Regla 21 de 8.6: nace «abierta»."""
+
+        ABIERTA = "abierta", "Abierta"
+        PENDIENTE_DECISION = "pendiente_decision", "Pendiente de decisión del cliente"
+        CONCRETADA = "concretada", "Concretada"
+        CANCELADA = "cancelada", "Cancelada"
+
+    class Modalidad(models.TextChoices):
+        """Cómo recibe el producto el cliente."""
+
+        RETIRO = "retiro", "Retiro en invernadero"
+        ENVIO = "envio", "Envío a domicilio"
+
+    estado_venta = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ABIERTA)
+    fecha_pactada_venta = models.DateField()  # igual o posterior a la de hoy al registrar
+    fecha_concrecion_venta = models.DateField(null=True, blank=True)  # la carga COM-06a
+    modalidad_entrega = models.CharField(max_length=10, choices=Modalidad.choices)
+    # R146: solo con envío, y una dirección ACTIVA del cliente (D-58): la base no puede verificarlo entre dos apps, lo verifica el servicio.
+    direccion_envio = models.ForeignKey(
+        Direccion, null=True, blank=True, on_delete=models.PROTECT, related_name="compra_ventas_con_envio"
+    )
+    # R151: solo con retiro; uno de los invernaderos activos del Vendedor.
+    invernadero_retiro = models.ForeignKey(
+        Invernadero, null=True, blank=True, on_delete=models.PROTECT, related_name="compra_ventas_con_retiro"
+    )
+
+    objects = CompraVentaQuerySet.as_manager()
+
+    @property
+    def monto_es_final(self):
+        """«final» si la venta está concretada o cancelada; «estimado» si no (COM-CNS-CVT, «Monto»)."""
+        return self.estado_venta in (self.Estado.CONCRETADA, self.Estado.CANCELADA)
+
+    class Meta:
+        verbose_name = "Compra-venta"
+        verbose_name_plural = "Compra-ventas"
+        indexes = [models.Index(fields=["estado_venta"], name="compra_venta_estado_idx")]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(estado_venta__in=["abierta", "pendiente_decision", "concretada", "cancelada"]),
+                name="compra_venta_estado_valido",
+            ),
+            # Envío ⇒ dirección y sin invernadero; retiro ⇒ invernadero y sin dirección.
+            models.CheckConstraint(
+                condition=(Q(modalidad_entrega="envio") & Q(direccion_envio__isnull=False) & Q(invernadero_retiro__isnull=True))
+                | (Q(modalidad_entrega="retiro") & Q(invernadero_retiro__isnull=False) & Q(direccion_envio__isnull=True)),
+                name="compra_venta_destino_segun_modalidad",
+            ),
+        ]
+
+
+class DetalleVenta(models.Model):
+    """Una variedad de una compra-venta, con su cantidad, su precio y su estado (R113, R127). La cantidad solicitada no se modifica
+    (regla 20 de 8.6). El subtotal es derivado: cantidad entregada (o solicitada, para el estimado) × precio."""
+
+    class Estado(models.TextChoices):
+        """Nace «abierto»; «cancelado» es de MD-130."""
+
+        ABIERTO = "abierto", "Abierto"
+        PENDIENTE_DECISION = "pendiente_decision", "Pendiente de decisión del cliente"
+        CONFIRMADO = "confirmado", "Confirmado"
+        RECHAZADO = "rechazado", "Rechazado"
+        CANCELADO = "cancelado", "Cancelado"
+
+    compra_venta = models.ForeignKey(CompraVenta, on_delete=models.PROTECT, related_name="detalles")
+    variedad = models.ForeignKey(Variedad, on_delete=models.PROTECT, related_name="detalles_de_venta")  # R127
+    cant_solicitada_venta = models.PositiveIntegerField()
+    precio_unitario_de_venta = models.DecimalField(max_digits=12, decimal_places=2)
+    cant_entregada_venta = models.PositiveIntegerField(null=True, blank=True)  # nula hasta que se fija (reglas 16 y 27 de 8.6)
+    estado_detalle_venta = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ABIERTO)
+    fecha_pendiente_decision = models.DateField(null=True, blank=True)  # la carga COM-04
+
+    class Meta:
+        verbose_name = "Detalle de venta"
+        verbose_name_plural = "Detalles de venta"
+        constraints = [
+            # Regla 2 de 8.11: una variedad por venta.
+            models.UniqueConstraint(fields=["compra_venta", "variedad"], name="detalle_venta_una_variedad_por_venta"),
+            models.CheckConstraint(condition=Q(cant_solicitada_venta__gte=1), name="detalle_venta_cantidad_positiva"),
+            models.CheckConstraint(condition=Q(precio_unitario_de_venta__gt=0), name="detalle_venta_precio_positivo"),
+            models.CheckConstraint(
+                condition=Q(cant_entregada_venta__isnull=True) | Q(cant_entregada_venta__gte=0), name="detalle_venta_entregada_no_negativa"
+            ),
+            models.CheckConstraint(
+                condition=Q(estado_detalle_venta__in=["abierto", "pendiente_decision", "confirmado", "rechazado", "cancelado"]),
+                name="detalle_venta_estado_valido",
+            ),
+        ]
+
+    def __str__(self):
+        """«CV-0001 · Lechuga Crespa» (texto de la auditoría, D-36)."""
+        return f"{self.compra_venta.codigo} · {self.variedad}"
+
+
+class ReservaStock(models.Model):
+    """Producto apartado para un detalle de contrato (o, desde COM-04, para una cosecha manual sin contrato). Toma todo su stock de un
+    único invernadero (regla 1 de 8.8), que se guarda para consultar y bloquear sin recorrer las líneas. No tiene variedad propia: es la
+    del detalle (o la de su cosecha)."""
+
+    class Estado(models.TextChoices):
+        """Estado inicial: regla 12 de 8.6."""
+
+        ACTIVA = "activa", "Activa"
+        LISTA_PARA_ENTREGA = "lista_para_entrega", "Lista para entrega"
+        ENTREGADA = "entregada", "Entregada"
+        LIBERADA = "liberada", "Liberada"
+
+    detalle_venta = models.ForeignKey(
+        DetalleVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="reservas"
+    )  # R123
+    invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="reservas_de_stock")
+    fecha_reserva = models.DateField(default=timezone.localdate)
+    # En una compra-venta, la pactada; nunca cambia (regla 12 de 8.8). Nula solo en la reserva de una cosecha sin contrato (D-64 punto 6).
+    fecha_entrega_reserva = models.DateField(null=True, blank=True)
+    estado_reserva = models.CharField(max_length=20, choices=Estado.choices)
+    # R087: «toda cosecha tiene una reserva» lo garantiza el servicio que la crea.
+    cosecha = models.OneToOneField(Cosecha, null=True, blank=True, on_delete=models.PROTECT, related_name="reserva")
+
+    class Meta:
+        verbose_name = "Reserva de stock"
+        verbose_name_plural = "Reservas de stock"
+        indexes = [models.Index(fields=["estado_reserva"], name="reserva_stock_estado_idx")]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(estado_reserva__in=["activa", "lista_para_entrega", "entregada", "liberada"]),
+                name="reserva_stock_estado_valido",
+            ),
+        ]
+
+    def __str__(self):
+        """«Reserva #N» (texto de la auditoría, D-36)."""
+        return f"Reserva #{self.pk}"
+
+
+class DetalleReserva(models.Model):
+    """Línea de una reserva: de qué origen físico sale una parte (un lote en pie o una partida de cámara)."""
+
+    reserva = models.ForeignKey(ReservaStock, on_delete=models.PROTECT, related_name="lineas")  # R141
+    lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="lineas_de_reserva")  # R142
+    partida = models.ForeignKey(
+        StockCosechado, null=True, blank=True, on_delete=models.PROTECT, related_name="lineas_de_reserva"
+    )  # R143
+    cantidad_reservada = models.PositiveIntegerField()
+    # Solo en líneas de lote; vacío = todavía no se cosechó; un número, incluido 0, es lo que rindió (lo carga COM-04).
+    cantidad_cosechada = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Línea de reserva"
+        verbose_name_plural = "Líneas de reserva"
+        constraints = [
+            # C1: exactamente uno de `lote` y `partida`.
+            models.CheckConstraint(
+                condition=(Q(lote__isnull=False) & Q(partida__isnull=True)) | (Q(lote__isnull=True) & Q(partida__isnull=False)),
+                name="linea_reserva_lote_o_partida",
+            ),
+            # Al menos 1, salvo en una línea de partida, que admite 0 (D-64 punto 7: el recorte de la merma en cámara).
+            models.CheckConstraint(
+                condition=Q(cantidad_reservada__gte=1) | (Q(partida__isnull=False) & Q(cantidad_reservada=0)),
+                name="linea_reserva_cantidad_positiva",
+            ),
+            # Una partida nunca se «cosecha».
+            models.CheckConstraint(
+                condition=Q(partida__isnull=True) | Q(cantidad_cosechada__isnull=True), name="linea_reserva_partida_sin_cosechada"
+            ),
+        ]
+
+    def __str__(self):
+        """«Línea #N» (texto de la auditoría, D-36)."""
+        return f"Línea #{self.pk}"

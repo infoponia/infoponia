@@ -348,8 +348,7 @@ a. Ninguna: es una consulta, no modifica datos ni registra auditoría.
 - **Paso 10 y extensiones 10a a 10c, 9-10a, 9-10b, 11a.** Cantidad: entero, `>= 1` y `<=` disponible (`cantidad_invalida`: «Ingresá un número
   entero de plantas.»; `supera_disponible`: «Hay N plantas disponibles para esa fecha.»). Precio: `> 0`, dos decimales, como máximo
   9.999.999.999,99 (el `DecimalField(12, 2)`), con coma decimal (`precio_invalido`). Variedad repetida: el desplegable no la ofrece y el
-  servicio la rechaza igual (`variedad_repetida`, «La venta ya tiene esa variedad: corregí ese renglón.»). Sin renglones: «Cargá al menos
-  una variedad.» Quitar un renglón no pide confirmación.
+  servicio la rechaza igual (`variedad_repetida`, «La venta ya tiene esa variedad: corregí ese renglón.»). Sin renglones cargados: «Cargá al menos una variedad.» Quitar un renglón no pide confirmación. «Agregar variedad» suma un renglón en blanco sin validar nada y conserva lo cargado; con stock disponible, la sección 3 siempre ofrece al menos un renglón en blanco; los renglones en blanco no cuentan como variedades y se ignoran al resumir y registrar.
 - **Pasos 12, 13 y 13a (resumen y confirmación).** «Revisar y registrar» abre una ventana con el resumen del paso 12 (cliente, Vendedor,
   modalidad con la dirección o el invernadero, fecha, renglones con subtotal estimado y monto estimado) y dos botones: «Confirmar
   compra-venta» (paso 13) y «Volver a la carga» (13a: vuelve al formulario con todo lo cargado). El prototipo registra sin resumen; manda el
@@ -376,7 +375,7 @@ a. Ninguna: es una consulta, no modifica datos ni registra auditoría.
   fábrica en las pruebas), así que el caso no se da con datos reales. COM-05 suma la llamada al final de `registrar_compra_venta` y su paso
   diario 50 planifica también las ventas que ya estaban así (disparador nuevo en «Cuando exista Entrega»).
 - **Paso 16 y extensiones 16a y 16b (comprobante).** Después de confirmar la transacción, **fuera de ella** (D-14, D-54), la vista llama a
-  `comprobantes.enviar_comprobante(contrato)` (una sola función para los dos tipos de contrato: COM-03 suma la plantilla del suministro):
+  `registrar_compra_venta` llama a `comprobantes.enviar_comprobante(contrato)` (no la vista; D-14, D-54) (una sola función para los dos tipos de contrato: COM-03 suma la plantilla del suministro):
   - con correo del cliente y el correo del sistema configurado, envía con `core.correo.enviar_correo` (USR-10) un texto plano con lo de la
     variación de datos 16a. `enviar_correo` espera una cuenta (`.pk` y `.email`): se le pasa `Destinatario(pk=cliente.pk,
     email=cliente.email_cliente)`, un `namedtuple` de `comercial`; el registro de la falla dirá «cuenta N» con el id del cliente (anotado en
@@ -390,6 +389,8 @@ a. Ninguna: es una consulta, no modifica datos ni registra auditoría.
   - **16b** (cliente sin correo): `para_imprimir`, y el aviso final ofrece «Imprimir comprobante».
   - El comprobante imprimible (`compra-ventas/<id>/comprobante/`, una página con estilos de impresión, sin menú) existe para toda venta y se
     abre desde la ficha. Dice «Comprobante interno, sin validez fiscal. El pago se realiza al recibir el producto.»
+
+    La venta nace `pendiente_envio` (con correo) o `para_imprimir` (sin correo); el envío exitoso la pasa a `enviado`.
 - **Paso 17.** Redirige a la ficha de la venta con el aviso breve (D-29) «CV-0044 registrada. Se reservó el stock{ y se programaron N
   cosechas}.» más lo del comprobante.
 - **Auditoría (postcondiciones i y j, D-36).** Un solo registro, acción nueva `registro_compra_venta`, con el actor y su rol (el Gerente queda
@@ -465,6 +466,7 @@ caso de uso.
 | 6 | «Cancelar compra-venta» en la ficha | Lo agrega COM-05b | D-25 |
 | 7 | Vendedor por nombre (`Sofía Ríos`) | Lista de Vendedores activos con invernaderos activos | Extensión 1a, precondición b |
 | 8 | Sin estado del comprobante ni «Reenviar» | Estado y «Reenviar comprobante» | Extensión 16a |
+| 9 | El renglón inicial lo arma el prototipo según la fecha | Con stock, siempre hay un renglón en blanco; «Agregar variedad» suma otro; los vacíos no cuentan | Paso 9 y extensión 9-10a |
 
 ## Para más adelante
 

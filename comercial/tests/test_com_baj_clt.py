@@ -61,8 +61,9 @@ class ComBajCltServicioTests(ConGeoref, TestCase):
         despues = Cliente.objects.values().get(pk=self.cliente.pk)
         self.assertEqual({**antes, "estado_cliente": "inactivo"}, despues)
 
-    def test_regla_1_pendientes_del_cliente_devuelve_una_lista_vacia_en_com_01(self):
-        """Regla 1: lo pendiente (se completa en COM-02, COM-03, COM-06 y COM-08a): en COM-01, ``[]``."""
+    def test_regla_1_pendientes_del_cliente_sin_nada_pendiente_devuelve_una_lista_vacia(self):
+        """Regla 1: un cliente sin compra-ventas abiertas (COM-02 las completó; COM-03, COM-06 y COM-08a suman lo suyo) no tiene pendientes:
+        ``[]``. Con datos: ``test_clientes_con_compra_ventas.py``."""
         self.assertEqual(clientes.pendientes_del_cliente(self.cliente, self.gerente), [])
 
     def test_post_c_audita_la_baja_con_el_cambio_de_estado(self):

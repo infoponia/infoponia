@@ -1,0 +1,18 @@
+{% load comercial %}{% autoescape off %}Hola {{ cliente }},
+
+Registramos tu compra {{ venta.codigo }} en {{ nombre_organizacion }} el {{ venta.fecha_realizacion|date:"d/m/Y" }}.
+
+Fecha pactada: {{ venta.fecha_pactada_venta|date:"d/m/Y" }}
+{% if venta.modalidad_entrega == "envio" %}Modalidad: envío a domicilio
+Dirección de envío: {{ destino }}{% else %}Modalidad: retiro en invernadero
+Invernadero de retiro: {{ destino }}{% endif %}
+
+Detalle:
+{% for fila in filas %}- {{ fila.variedad }}: {{ fila.cantidad }} plantas × {{ fila.precio|pesos }} = {{ fila.subtotal|pesos }}
+{% endfor %}
+Monto estimado: {{ monto|pesos }}
+
+Este es un comprobante interno, sin validez fiscal. El pago se realiza al recibir el producto.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

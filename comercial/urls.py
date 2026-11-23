@@ -1,14 +1,26 @@
 # Rutas de `comercial` (COM-01): la pantalla «Comercial» (clientes y vehículos) y los fragmentos de HTMX de las direcciones. Los
-# vehículos son solo del Gerente (D-37; vehiculos.md, «Quién»). COM-02 cambia el inicio por «Contratos».
+# vehículos son solo del Gerente (D-37; vehiculos.md, «Quién»). COM-02 suma «Contratos» (compra-ventas) y el inicio redirige a ellos.
 
 from django.urls import path
 
-from comercial import views
+from comercial import views, views_contratos
 
 app_name = "comercial"
 
 urlpatterns = [
     path("", views.inicio, name="inicio"),
+    # Contratos (COM-REG-CVT, COM-CNS-CVT): compra-ventas. COM-03 suma los suministros.
+    path("contratos/", views_contratos.contratos, name="contratos"),
+    path("contratos/compra-ventas/nueva/", views_contratos.compra_venta_nueva, name="compra_venta_nueva"),
+    path("contratos/compra-ventas/nueva/calcular/", views_contratos.compra_venta_calcular, name="compra_venta_calcular"),
+    path("contratos/compra-ventas/nueva/revisar/", views_contratos.compra_venta_revisar, name="compra_venta_revisar"),
+    path("contratos/compra-ventas/<int:venta_id>/", views_contratos.compra_venta, name="compra_venta"),
+    path("contratos/compra-ventas/<int:venta_id>/comprobante/", views_contratos.compra_venta_comprobante, name="compra_venta_comprobante"),
+    path(
+        "contratos/compra-ventas/<int:venta_id>/reenviar-comprobante/",
+        views_contratos.compra_venta_reenviar_comprobante,
+        name="compra_venta_reenviar_comprobante",
+    ),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
     path("clientes/", views.clientes, name="clientes"),
     path("clientes/nuevo/", views.cliente_nuevo, name="cliente_nuevo"),
