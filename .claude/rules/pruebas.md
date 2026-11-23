@@ -18,6 +18,10 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   Son obligatorias, como mínimo, en reglas con dinero, stock o alcance por usuario.
 - Integración: una prueba por flujo principal de cada caso de uso (vista con el cliente de
   prueba de Django). No escribas pruebas de navegador.
+- Recorrido: por cada tarea, una prueba larga con el cliente de Django que hace los pasos de punta a punta como una persona, por rol y por estado
+  (`<app>/tests/test_recorrido_<tema>.py`, clase `RecorridoDe<Tema>Tests`). Reemplaza a la «Verificación a mano» (`docs/patrones/verificacion_por_claude.md`).
+- Visual: si la tarea tiene pantallas, `<app>/tests/test_visual_<tema>.py` con Playwright (hereda de `core.tests.visual.PruebaVisual`; etiqueta `visual`). No corre en las
+  corridas normales ni en el CI: se activa con `INFOPONIA_VISUAL=1` y `--tag visual`, sin `--parallel`. Claude Code mira las capturas.
 - Orden en servicios: primero escribí todas las pruebas de las reglas del caso de uso, corrélas y
   mostrá que fallan; esperá que el estudiante las revise; después implementá el servicio.
   En vistas y en pantallas sin reglas de negocio, las pruebas van después.

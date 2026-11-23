@@ -1,0 +1,27 @@
+{% load iconos %}{% comment %}Ventana de la baja de un proveedor (CMP-BAJ-PRV, MODALS.prvbaja del prototipo). Recibe «proveedor» y «impedimentos» (lista de Impedimento con
+código, texto y cómo resolverlo; vacía hasta CMP-03 y CMP-05). Con impedimentos (precondiciones c y d, regla 2) no ofrece confirmar: dice qué lo impide y cómo
+resolverlo. Sin ellos, pide confirmar. Dar de baja es un POST a la misma URL; abrirla (GET) no cambia nada.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    {% if impedimentos %}
+    <h2 id="ventana-titulo">No se puede dar de baja a {{ proveedor.nombre_para_mostrar }}</h2>
+    <p>Primero hay que resolver:</p>
+    <ul class="prv-impedimentos">
+      {% for i in impedimentos %}<li><b>{{ i.texto }}</b> {{ i.como_resolver }}</li>{% endfor %}
+    </ul>
+    <div class="acts">
+      <a class="btn btn-primary" href="{% url 'compras:proveedor_ficha' proveedor.pk %}" data-cerrar-ventana data-foco-inicial>Entendido</a>
+    </div>
+    {% else %}
+    <h2 id="ventana-titulo">¿Dar de baja a {{ proveedor.nombre_para_mostrar }}?</h2>
+    <p>Deja de aparecer para pedir cotizaciones. Su historial se conserva y se puede reactivar cuando haga falta, cargando de nuevo su CUIT.</p>
+    <form method="post" action="{% url 'compras:proveedor_baja' proveedor.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'compras:proveedor_ficha' proveedor.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

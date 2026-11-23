@@ -1,0 +1,57 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Compras» → «Proveedores» (CMP-CNS-PRV, tabPrv del prototipo): una fila por proveedor, los activos primero. De cada uno: su nombre (razón social o
+«Nombre Apellido») con su CUIT y tipo, su contacto (teléfono y correo), las categorías de insumos activas en que se especializa y su estado (regla 3).
+Los filtros (regla 2) se envían con «Filtrar»: sin JavaScript funciona igual. El Agrónomo ve la misma pantalla sin «Nuevo proveedor» ni «Editar»
+(regla 5; D-30). Pedidos y órdenes de cada proveedor se ven en su ficha (CMP-02a a CMP-06).{% endcomment %}
+{% block titulo %}Proveedores · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <div class="page-h">
+    <h1>Compras</h1>
+    <span class="spacer"></span>
+    {% if puede_gestionar %}<a class="btn btn-primary" href="{% url 'compras:proveedor_nuevo' %}">{% icono "plus" 15 %} Nuevo proveedor</a>{% endif %}
+  </div>
+  {% include "compras/proveedores/_pestanas.html" %}
+
+  <form class="filters" method="get" action="{% url 'compras:proveedores' %}">
+    <input class="field-input" type="search" name="q" value="{{ filtros.q }}" placeholder="Buscar por nombre o CUIT" aria-label="Buscar por nombre o CUIT" maxlength="100">
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="activo"{% if filtros.estado == "activo" %} selected{% endif %}>Activos</option>
+      <option value="inactivo"{% if filtros.estado == "inactivo" %} selected{% endif %}>Inactivos</option>
+      <option value=""{% if filtros.estado == "" %} selected{% endif %}>Todos</option>
+    </select>
+    <select class="field-input" name="categoria" data-desplegable aria-label="Categoría de insumos">
+      <option value="">Todas las categorías</option>
+      {% for c in categorias %}<option value="{{ c.pk }}"{% if filtros.categoria == c.pk %} selected{% endif %}>{{ c.nombre_tipo_insumo }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="btn btn-text" href="{% url 'compras:proveedores' %}">Quitar filtros</a>{% endif %}
+  </form>
+
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Proveedor</th><th>Contacto</th><th>Categorías de insumos</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+      {% with p=f.proveedor %}
+      <tr{% if not p.activo %} class="prv-off"{% endif %}>
+        <td><a class="prv-nombre" href="{% url 'compras:proveedor_ficha' p.pk %}"><b>{{ p.nombre_para_mostrar }}</b></a><span class="sub2">CUIT {{ p.cuit_formateado }} · {{ p.get_tipo_proveedor_display }}</span></td>
+        <td>{% if p.telefono_proveedor %}{{ p.telefono_proveedor }}{% else %}<span class="muted">Sin teléfono</span>{% endif %}<span class="sub2">{{ p.email_proveedor }}</span></td>
+        <td>{% for c in p.categorias_activas %}{{ c.nombre_tipo_insumo }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>
+        <td>{% if p.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+        <td class="right nowrap">
+          <a class="btn btn-ghost btn-sm" href="{% url 'compras:proveedor_ficha' p.pk %}" aria-label="Ver a {{ p.nombre_para_mostrar }}">Ver</a>
+          {% if "modificar" in f.acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:proveedor_editar' p.pk %}" aria-label="Editar a {{ p.nombre_para_mostrar }}">{% icono "pencil" 14 %} Editar</a>{% endif %}
+          {% if "reactivar" in f.acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:proveedor_reactivar' p.pk %}" aria-label="Reactivar a {{ p.nombre_para_mostrar }}">Reactivar</a>{% endif %}
+        </td>
+      </tr>
+      {% endwith %}
+      {% empty %}
+      <tr><td colspan="5" class="muted">{% if hay_filtros %}No hay proveedores con esos filtros.{% elif puede_gestionar %}Todavía no hay proveedores. Registrá el primero con «Nuevo proveedor».{% else %}Todavía no hay proveedores. Los carga el Gerente.{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

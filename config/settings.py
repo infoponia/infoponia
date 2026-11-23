@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'inventario',    # nivel 4
     'produccion',    # nivel 5
     'comercial',     # nivel 6
+    'compras',       # nivel 6
     'iot',           # nivel 7
 ]
 

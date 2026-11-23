@@ -569,4 +569,11 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando se programe COM-01 o CMP-01 (lo que llegue primero) — nace con el lote 2 de Compras
 
-1. `validar_cuit` y `formatear_cuit` en `maestros/validadores.py` (D-58). La segunda tarea los usa.
+1. ~~`validar_cuit` y `formatear_cuit` en `maestros/validadores.py` (D-58).~~ Hecho el 23/11/2026 en COM-01 (`perfil.py` delega en ellas); CMP-01 las usa.
+
+## Cuando se programen CMP-02a, CMP-02b, CMP-03 y CMP-05 (completan lo que CMP-01 dejó vacío)
+
+1. **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
+2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
+3. **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
+4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).

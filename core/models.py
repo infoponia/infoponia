@@ -715,6 +715,11 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_VEHICULO = "modificacion_vehiculo", "Modificación de vehículo"
         BAJA_VEHICULO = "baja_vehiculo", "Baja de vehículo"
         REACTIVACION_VEHICULO = "reactivacion_vehiculo", "Reactivación de vehículo"
+        # Proveedores (CMP-01, D-87 punto 8): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
+        ALTA_PROVEEDOR = "alta_proveedor", "Alta de proveedor"
+        MODIFICACION_PROVEEDOR = "modificacion_proveedor", "Modificación de proveedor"
+        BAJA_PROVEEDOR = "baja_proveedor", "Baja de proveedor"
+        REACTIVACION_PROVEEDOR = "reactivacion_proveedor", "Reactivación de proveedor"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -922,6 +927,10 @@ class RegistroAuditoria(models.Model):
         "modelo": "Modelo",
         "capacidad_carga": "Capacidad de carga (kg)",
         "transportista": "Transportista",
+        # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
+        # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
+        "tipo_proveedor": "Tipo de proveedor",
+        "especialidades": "Categorías de insumos",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -932,6 +941,8 @@ class RegistroAuditoria(models.Model):
         # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
         "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
         "clase": {"sensor": "Sensor", "actuador": "Actuador"},
+        # CMP-01: `core` no importa `compras` (A1 de D-37), así que la lista cerrada se repite acá.
+        "tipo_proveedor": {"juridica": "Persona jurídica", "fisica": "Persona física"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
         # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
         "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
@@ -1168,6 +1179,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_VEHICULO,
         RegistroAuditoria.Accion.BAJA_VEHICULO,
         RegistroAuditoria.Accion.REACTIVACION_VEHICULO,
+        RegistroAuditoria.Accion.ALTA_PROVEEDOR,
+        RegistroAuditoria.Accion.MODIFICACION_PROVEEDOR,
+        RegistroAuditoria.Accion.BAJA_PROVEEDOR,
+        RegistroAuditoria.Accion.REACTIVACION_PROVEEDOR,
     }
 )
 

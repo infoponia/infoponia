@@ -46,4 +46,6 @@ urlpatterns = [
     path("produccion/", include("produccion.urls")),
     # COM-01: el menú del Gerente y del Vendedor tiene también «Comercial» (comercial la registra en ready()).
     path("comercial/", include("comercial.urls")),
+    # CMP-01: el menú del Gerente y del Agrónomo tiene también «Compras» (compras la registra en ready()).
+    path("compras/", include("compras.urls")),
 ]

@@ -2,7 +2,6 @@
 # `ready()` registra su entrada del menú y sus funciones en los puntos de extensión de `maestros` y de `core` (regla A4 de D-37).
 from django.apps import AppConfig
 
-
 class ComercialConfig(AppConfig):
     """Registra la app `comercial` (nivel 6 de D-37: importa de `core`, `contabilidad`, `maestros`, `inventario` y `produccion`;
     nunca de `compras` ni de `iot`)."""
@@ -34,14 +33,3 @@ class ComercialConfig(AppConfig):
         # ``registrar_*`` es idempotente.
         extensiones_de_core.registrar_datos_de_cuenta(vehiculos.datos_de_cuenta_del_transportista)
 
-        # Datos para la verificación a mano (core/verificacion.py; docs/patrones/datos_de_verificacion.md): el cargador de `comercial`, orden 20
-        # (después de `maestros`, `iot` y `produccion`). ``registrar_cargador`` no repite un código ya registrado.
-        from comercial import verificacion as verificacion_comercial
-        from core import verificacion
-
-        verificacion.registrar_cargador(
-            verificacion_comercial.CODIGO,
-            "Comercial: clientes en cada estado, un vehículo dado de baja y transportistas con y sin invernadero",
-            20,
-            verificacion_comercial.cargar,
-        )
