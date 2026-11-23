@@ -483,6 +483,4 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 
 - **Numeración de decisiones.** Contabilidad, Compras y Estadísticas usan D-84 a D-93 (aprobadas); la del lote C8 de Comercial, escrita como
   D-84, pasó a **D-94** en el mismo paquete (regla de `docs/decisiones/README.md`).
-- **Fecha del contraasiento.** El prototipo la limita al ejercicio del asiento original; el caso de uso (C3) deja elegir cualquier fecha de un
-  ejercicio abierto o en cierre. Las tareas siguen el caso de uso.
 - **Indicadores de estadísticas (D-93).** Son provisorios: se revisan después de la entrevista a un productor (H26).

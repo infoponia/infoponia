@@ -756,9 +756,9 @@ Decisiones: **D-87**, **D-88**, **D-89**. Modelo: `docs/modelo/compras.md` (`Ped
 
 ### Pantallas (prototipo)
 
-`VIEWS.c_main` (2323) y `tabPed` (2327): «Compras › Pedidos». `VIEWS.c_pednew` (2450): nuevo pedido (con los insumos bajo el mínimo, el buscador
-del catálogo y la lista de proveedores con el filtro propuesto). `VIEWS.c_ped` (2340): ficha del pedido (con «Reenviar invitación» y «Cancelar
-pedido»). `VIEWS.c_pedcnl` (2477): cancelar. `VIEWS.c_cotz` (2689): **portal del proveedor** (en el sistema, sin el selector «enlace de ejemplo»).
+`VIEWS.c_main` (2325) y `tabPed` (2329): «Compras › Pedidos». `VIEWS.c_pednew` (2452): nuevo pedido (con los insumos bajo el mínimo, el buscador
+del catálogo y la lista de proveedores con el filtro propuesto). `VIEWS.c_ped` (2342): ficha del pedido (con «Reenviar invitación» y «Cancelar
+pedido»). `VIEWS.c_pedcnl` (2479): cancelar. `VIEWS.c_cotz` (2691): **portal del proveedor** (en el sistema, sin el selector «enlace de ejemplo»).
 
 ## Solo prototipo
 

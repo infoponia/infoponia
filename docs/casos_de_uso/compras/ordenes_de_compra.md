@@ -717,5 +717,5 @@ terminada** con un detalle a ese `InsumoInvernadero`. Completa `proveedores.impe
 
 ### Pantallas (prototipo)
 
-`VIEWS.c_gen` (2488): comparar y elegir. `tabOdc` (2371) y `VIEWS.c_odc` (2381): «Órdenes de compra» y ficha. `VIEWS.c_apr` (2526): revisar,
-aprobar o rechazar (con el motivo propuesto de P1). Panel del Gerente: `panelGer` (2913), «órdenes por aprobar».
+`VIEWS.c_gen` (2490): comparar y elegir. `tabOdc` (2373) y `VIEWS.c_odc` (2383): «Órdenes de compra» y ficha. `VIEWS.c_apr` (2528): revisar,
+aprobar o rechazar (con el motivo propuesto de P1). Panel del Gerente: `panelGer` (2944), «órdenes por aprobar».

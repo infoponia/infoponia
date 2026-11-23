@@ -2072,6 +2072,7 @@ const PLAN=[
  ['1.1.05','Productos en Proceso','Activo','Costo de los lotes que todavía están en producción.'],
  ['1.1.06','Productos Terminados','Activo','Costo de lo cosechado que está en cámara, listo para entregar.'],
  ['2.1.01','Proveedores','Pasivo','Lo que se les debe a los proveedores por la mercadería recibida.'],
+ ['2.1.02','Indemnizaciones a Pagar','Pasivo','Lo que se le debe a un cliente por la resolución de un suministro. Se paga con un asiento manual.'],
  ['3.1.01','Capital Inicial','Patrimonio neto','Lo que la organización ya tenía al empezar a usar InfoPonia.'],
  ['4.1.01','Ventas','Resultado positivo','Importe de las entregas a clientes.'],
  ['4.1.02','Indemnizaciones por Atraso en el Pago','Resultado positivo','Lo que se cobra a los clientes por pagar fuera de plazo.'],
@@ -2090,7 +2091,7 @@ const ctaN=c=>{const x=cta(c);return x?x[1]:c};
 const ctaT=c=>{const x=cta(c);return x?x[2]:''};
 const deudora=t=>t==='Activo'||t==='Resultado negativo';
 /* origen de los asientos automáticos */
-const ORIG_N={rcp:'Recepción de mercadería',pag:'Pago a proveedor',ent:'Entrega',cob:'Cobro',api:'Aplicación de insumos',mer:'Merma',aju:'Ajuste de insumo',cor:'Corrección de recepción'};
+const ORIG_N={rcp:'Recepción de mercadería',pag:'Pago a proveedor',ent:'Entrega',cob:'Cobro',api:'Aplicación de insumos',mer:'Merma',aju:'Ajuste de insumo',cor:'Corrección de recepción',res:'Resolución de suministro'};
 function seedAsientos(){
  const E1=[],E2=[];
  const A=(arr,f,desc,movs,o)=>{o=o||{};arr.push(Object.assign({n:arr.length+1,f,desc,movs:movs.map(m=>({c:m[0],t:m[1],i:m[2]})),orig:null,por:'',anul:null,anula:null},o))};
@@ -2129,6 +2130,7 @@ function seedAsientos(){
  x('2026-11-15','Recepción RCP-0020',[['1.1.04','D',12400],['2.1.01','H',12400]],{orig:O('rcp','RCP-0020','ODC-0014')});
  x('2026-11-16','Recepción RCP-0021',[['1.1.04','D',1200],['2.1.01','H',1200]],{orig:O('rcp','RCP-0021','ODC-0014')});
  x('2026-11-17','Compra de útiles de oficina',[['5.1.07','D',8500],['1.1.01','H',8500]],{por:'Carolina Vega'});
+ x('2026-11-19','Multa por resolución del suministro SUM-0008',[['5.1.05','D',18000],['2.1.02','H',18000]],{orig:O('res','SUM-0008')});
  x('2026-11-18','Aplicación de insumos · Invernadero A',[['5.1.03','D',24300],['1.1.04','H',24300]],{orig:O('api','AIN-0023')});
  x('2026-10-31','Entrega ENT-0088',[['1.1.03','D',46000],['4.1.01','H',46000]],{orig:O('ent','ENT-0088')});
  x('2026-10-31','Costo de la entrega ENT-0088',[['5.1.01','D',18400],['1.1.06','H',18400]],{orig:O('ent','ENT-0088')});
@@ -2621,15 +2623,15 @@ function tabPag(){const l=pagosPend(),hechos=[];CC().odc.forEach(o=>Object.entri
  const rows=l.map(x=>`<tr><td>${nombrePv(x.pv)}</td><td>${idl(x.o.id,'c_odc')}</td><td class="nowrap">${fmt(x.f)}${sub(rel(x.f))}</td><td class="right nowrap"><b>${m2(x.monto)}</b></td><td class="right nowrap">${puedeConta()?`<button class="btn btn-primary btn-sm" data-act="go" data-v="c_pag" data-id="${x.o.id}" data-pv="${x.pv}">Registrar pago</button>`:''}</td></tr>`);
  return `<p class="muted" style="margin:-6px 0 14px">Proveedores con toda su mercadería recibida o cerrada. Se muestran del que espera hace más tiempo al más reciente.</p>${table([['Proveedor'],['Orden'],['Listo desde'],['Monto a pagar','right'],['','right']],rows,'No hay pagos pendientes.')}
  <h3 style="margin:28px 0 12px">Pagos registrados</h3>${table([['Fecha'],['Proveedor'],['Orden'],['Medio'],['Monto','right']],hechos.map(h=>`<tr><td class="nowrap">${fmt(h.p.f)}</td><td>${nombrePv(h.pv)}</td><td>${idl(h.o.id,'c_odc')}</td><td>${h.p.medio}</td><td class="right nowrap">${m2(h.p.monto)}</td></tr>`),'Todavía no se registró ningún pago.')}`}
-INIT.c_pag=()=>{S.f={medio:'Transferencia',comp:''}};
+INIT.c_pag=()=>{S.f={medio:'',comp:''}};
 VIEWS.c_pag=()=>{const o=odcO(S.p.id),pv=S.p.pv||odcPvs(o).find(x=>pvListo(o,x));
  if(!pv||!pvListo(o,pv)||!puedeConta())return `<div class="page mk mk-cmp">${backBtn('c_main','',' Compras')}${ph('Registrar pago')}${empty('cash','Este pago no se puede registrar','El proveedor ya fue pagado o todavía tiene mercadería por recibir.')}</div>`;
  const ds=odcDets(o).filter(d=>d.pv===pv),m=pagoMonto(o,pv),rcps=o.rcp.filter(r=>r.pv===pv).map(r=>r.id).join(', ');
  return `<div class="page narrow mk mk-cmp">${backBtn('c_main','',' Compras')}${ph('Registrar pago a proveedor')}<div class="stack">
  <section class="sec"><div class="sec-h"><span class="sec-num">1</span>Qué se paga</div>${facts([['Proveedor',nombrePv(pv)],['Orden',idl(o.id,'c_odc')],['Recepciones',rcps||'—']],3)}<div style="margin:16px 0 0">${table([['Insumo'],['Recibido','right'],['Valor','right']],ds.map(d=>`<tr><td>${esc(insN(d.ins))}${d.est==='cerrado'?sub('Cerrada con faltante: '+esc(d.mc)):''}</td><td class="right nowrap">${q2(d.rec)} de ${q2(d.cant)} ${uni(d.ins,d.cant)}</td><td class="right nowrap">${d.rec>0?m2(valLin(d,d.rec)):'—'}</td></tr>`))}</div><div class="totrow"><span>Monto a pagar</span><b>${m2(m)}</b></div></section>
- <section class="sec"><div class="sec-h"><span class="sec-num">2</span>Cómo se paga</div>${seg('medio',[['Transferencia','Transferencia'],['Efectivo','Efectivo'],['Tarjeta','Tarjeta']],'Medio de pago')}<div class="grid2">${ro('Fecha de pago',fmt(HOY))}${fld('comp','Número de comprobante',{ph:'Opcional',hint:'Número de transferencia, recibo o ticket.'})}</div><p class="hint">${fv('medio')==='Efectivo'?'El pago sale de Caja.':'El pago sale del Banco.'}</p></section></div>
+ <section class="sec"><div class="sec-h"><span class="sec-num">2</span>Cómo se paga</div>${seg('medio',[['Transferencia','Transferencia'],['Efectivo','Efectivo'],['Tarjeta','Tarjeta']],'Medio de pago')}${eMsg(fv('medio')?'':'Elija el medio de pago.')}<div class="grid2">${ro('Fecha de pago',fmt(HOY))}${fld('comp','Número de comprobante',{ph:'Opcional',hint:'Número de transferencia, recibo o ticket.'})}</div><p class="hint">${!fv('medio')?'Elija cómo se paga: el efectivo sale de Caja y los demás medios, del Banco.':fv('medio')==='Efectivo'?'El pago sale de Caja.':'El pago sale del Banco.'}</p></section></div>
  <div class="footbar"><button class="btn btn-primary" data-act="pag-ok" data-id="${o.id}" data-pv="${pv}">Registrar pago de ${m2(m)}</button><button class="btn btn-ghost" data-act="go" data-v="c_main">Cancelar</button></div></div>`};
-ACT['pag-ok']=el=>{const o=odcO(el.dataset.id),pv=el.dataset.pv;if(!pvListo(o,pv))return;const m=pagoMonto(o,pv),medio=S.f.medio||'Transferencia';
+ACT['pag-ok']=el=>{const o=odcO(el.dataset.id),pv=el.dataset.pv;if(!pvListo(o,pv))return;if(!S.f.medio){S.att=true;rerender();return}const m=pagoMonto(o,pv),medio=S.f.medio;
  const r=nuevoAsiento(HOY,'Pago a proveedor · '+pvN(pv),[['2.1.01','D',m],[medio==='Efectivo'?'1.1.01':'1.1.02','H',m]],{orig:{t:'pag',ref:'Orden '+o.id,odc:o.id}});
  o.pagos[pv]={f:HOY,medio,monto:m,asi:r?r.e.id+':'+r.a.n:'',comp:(S.f.comp||'').trim()};S.tab.c_main='pag';go('c_main');toast(`Pago de ${m2(m)} a ${esc(pvN(pv))} registrado.`)};
 /* =================== PROVEEDORES =================== */
@@ -2752,11 +2754,11 @@ function libroCta(e,c){
  ${card('',facts([['Cuenta',`${c} · ${esc(ctaN(c))}`],['Tipo',t],['Saldo al inicio',s.ini?m2(s.ini):'—',['Activo','Pasivo','Patrimonio neto'].includes(t)?'Arrastra los ejercicios anteriores':'Empieza en cero cada ejercicio'],['Saldo actual',m2(s.fin)]],4))}
  <div style="margin-top:16px">${table([['Fecha'],['Asiento'],['Descripción'],['Debe','right'],['Haber','right'],['Saldo','right']],s.rows.map(({a,m,s:sa})=>`<tr><td class="nowrap">${fmt(a.f)}</td><td>${idlA(e,a)}</td><td>${esc(a.desc)}${sub(asiBadges(e,a))}</td><td class="right nowrap">${m.t==='D'?m2(m.i):''}</td><td class="right nowrap">${m.t==='H'?m2(m.i):''}</td><td class="right nowrap"><b>${m2(sa)}</b></td></tr>`),'Esta cuenta no tiene movimientos en el ejercicio.')}</div>`}
 /* ---- ficha del asiento ---- */
-VIEWS.k_asi=()=>{const e=ejO(S.p.e),a=e.asi.find(x=>x.n===+S.p.n),orig=a.orig,tot=asiTot(a),ant=a.anula&&e.asi.find(x=>x.n===a.anula),pos=a.anul&&e.asi.find(x=>x.n===a.anul);
+VIEWS.k_asi=()=>{const e=ejO(S.p.e),a=e.asi.find(x=>x.n===+S.p.n),orig=a.orig,tot=asiTot(a),ant=a.anula&&ejO(a.anulaE||e.id).asi.find(x=>x.n===a.anula),antE=a.anulaE||e.id,pos=a.anul&&ejO(a.anulE||e.id).asi.find(x=>x.n===a.anul),posE=a.anulE||e.id;
  const puede=puedeConta()&&!orig&&!a.anula&&!a.anul&&e.est!=='cerrado';
  return `<div class="page mk mk-cmp">${backBtn('k_main','',' Contabilidad')}<div class="page-h"><h1>Asiento N.º ${a.n}</h1>${asiBadges(e,a)}<span class="spacer"></span>${puede?`<button class="btn btn-ghost" data-act="go" data-v="k_contra" data-e="${e.id}" data-n="${a.n}">Contraasentar</button>`:''}</div>
- <div class="stack">${S.p.nuevo?alertBox('ok',`Quedó registrado el contraasiento. ¿Registra ahora el asiento correcto? <button class="link" data-act="go" data-v="k_new" data-e="${e.id}" data-n="${S.p.nuevo}">Registrar el asiento correcto</button>`):''}
- ${a.anul?alertBox('danger',`<b>Anulado.</b> Lo anula el asiento <button class="link" data-act="go" data-v="k_asi" data-e="${e.id}" data-n="${a.anul}">N.º ${a.anul}</button> el ${fmt(pos.f)}.`):''}${ant?alertBox('info',`Este contraasiento anula el asiento <button class="link" data-act="go" data-v="k_asi" data-e="${e.id}" data-n="${ant.n}">N.º ${ant.n}</button>: ${esc(ant.desc)}.`):''}
+ <div class="stack">${S.p.nuevo?alertBox('ok',`Quedó registrado el contraasiento. ¿Registra ahora el asiento correcto? <button class="link" data-act="go" data-v="k_new" data-e="${S.p.ne||e.id}" data-n="${S.p.nuevo}">Registrar el asiento correcto</button>`):''}
+ ${a.anul?alertBox('danger',`<b>Anulado.</b> Lo anula el asiento <button class="link" data-act="go" data-v="k_asi" data-e="${posE}" data-n="${a.anul}">N.º ${a.anul}</button> el ${fmt(pos.f)}.`):''}${ant?alertBox('info',`Este contraasiento anula el asiento <button class="link" data-act="go" data-v="k_asi" data-e="${antE}" data-n="${ant.n}">N.º ${ant.n}</button>: ${esc(ant.desc)}.`):''}
  ${card('',facts([['Fecha',fmt(a.f)],['Ejercicio',`${e.n}`,ejTxt(e)],['Origen',origTxt(a),origLink(a)],a.por?['Registrado por',esc(a.por)]:null,['Importe',m2(tot)]].filter(Boolean)))}
  ${card('Movimientos',table([['Cuenta'],['Debe','right'],['Haber','right']],a.movs.map(m=>`<tr><td>${m.c} · ${esc(ctaN(m.c))}${sub(ctaT(m.c))}</td><td class="right nowrap">${m.t==='D'?m2(m.i):''}</td><td class="right nowrap">${m.t==='H'?m2(m.i):''}</td></tr>`))+`<div class="totrow"><span>Totales</span><b>${m2(tot)} · ${m2(tot)}</b></div>`,'','book')}
  ${orig&&!a.anula?`<p class="hint">Este asiento lo genera el sistema. Si algo está mal, se corrige la operación de origen y el asiento se ajusta solo.</p>`:''}</div></div>`};
@@ -2788,7 +2790,7 @@ ACT['asi-ok']=()=>{S.att=true;const e=asiErr();if(e.n){rerender();const b=docume
  const f=S.f,r=nuevoAsiento(f.f,f.desc.trim(),f.l.map(i=>[f.mv[i].c,f.mv[i].t,parseQ(f.mv[i].i)]),{por:ME().n});S.tab.k_main='lib';go('k_asi',{e:r.e.id,n:r.a.n});toast(`Asiento N.º ${r.a.n} registrado.`)};
 /* ---- contraasentar ---- */
 INIT.k_contra=()=>{S.f={mot:'',fc:HOY}};
-function contraFecha(){const f=S.f.fc;if(!fechaOk(f))return 'Indique la fecha.';if(f>HOY)return 'La fecha no puede ser posterior a hoy.';const e=ejDeFecha(f);if(!e)return 'No hay un ejercicio para esa fecha.';if(!ejOk(e))return `Esa fecha pertenece a ${e.n}, que está cerrado.`;if(e!==ejO(S.p.e))return `Tiene que caer dentro de ${ejO(S.p.e).n.toLowerCase()}, el del asiento original.`;return ''}
+function contraFecha(){const f=S.f.fc;if(!fechaOk(f))return 'Indique la fecha.';if(f>HOY)return 'La fecha no puede ser posterior a hoy.';const e=ejDeFecha(f);if(!e)return 'No hay un ejercicio para esa fecha.';if(!ejOk(e))return `Esa fecha pertenece a ${e.n}, que está cerrado.`;return ''}
 VIEWS.k_contra=()=>{const e=ejO(S.p.e),a=e.asi.find(x=>x.n===+S.p.n),mot=(S.f.mot||'').trim(),fecha=fv('fc',HOY);
  if(!puedeConta()||a.orig||a.anula||a.anul||e.est==='cerrado')return `<div class="page mk mk-cmp">${backBtn('k_asi','data-e="'+e.id+'" data-n="'+a.n+'"',' Asiento N.º '+a.n)}${ph('Contraasentar')}${empty('book','Este asiento no se puede contraasentar','Los asientos automáticos, los ya anulados y los de ejercicios cerrados no se contraasientan.')}</div>`;
  return `<div class="page narrow mk mk-cmp">${backBtn('k_asi','data-e="'+e.id+'" data-n="'+a.n+'"',' Asiento N.º '+a.n)}${ph('Contraasentar el asiento N.º '+a.n)}<div class="stack">
@@ -2799,8 +2801,8 @@ VIEWS.k_contra=()=>{const e=ejO(S.p.e),a=e.asi.find(x=>x.n===+S.p.n),mot=(S.f.mo
  <div class="footbar"><button class="btn btn-danger" data-act="contra-ok" data-e="${e.id}" data-n="${a.n}">Contraasentar</button><button class="btn btn-ghost" data-act="go" data-v="k_asi" data-e="${e.id}" data-n="${a.n}">Volver</button></div></div>`};
 ACT['contra-ok']=el=>{const e=ejO(el.dataset.e),a=e.asi.find(x=>x.n===+el.dataset.n),mot=(S.f.mot||'').trim();S.att=true;if(!mot){rerender();return}
  if(contraFecha()){S.att=true;rerender();return}const fecha=S.f.fc,ej=ejDeFecha(fecha),c={n:ej.asi.length+1,f:fecha,desc:`Contraasiento del asiento N.º ${a.n}: ${mot}`,movs:a.movs.map(m=>({c:m.c,t:m.t==='D'?'H':'D',i:m.i})),orig:null,por:ME().n,anul:null,anula:a.n};
- ej.asi.push(c);if(ej===e)a.anul=c.n;else a.anul=c.n;if(S.role!=='ger')notif('ger',`Asiento contraasentado · N.º ${a.n}`,`${ME().n} anuló el asiento N.º ${a.n} (${a.desc}). Motivo: ${mot}`);
- go('k_asi',{e:e.id,n:c.n,nuevo:a.n});toast(`Asiento N.º ${a.n} anulado.`)};
+ ej.asi.push(c);a.anul=c.n;a.anulE=ej.id;c.anulaE=e.id;if(S.role!=='ger')notif('ger',`Asiento contraasentado · N.º ${a.n}`,`${ME().n} anuló el asiento N.º ${a.n} (${a.desc}). Motivo: ${mot}`);
+ go('k_asi',{e:ej.id,n:c.n,nuevo:a.n,ne:e.id});toast(`Asiento N.º ${a.n} anulado.`)};
 /* ---- ejercicios ---- */
 function tabEje(){const rows=KK().eje.map(e=>{const r=resultadoPeriodo(e.ini,e.fin),n=e.asi.length;
  return `<tr><td><b>${e.n}</b>${sub(ejTxt(e))}</td><td>${bEj(e)}${e.est==='cierre'?sub('Terminó hace '+days(e.fin,HOY)+' días'):e.cerr?sub('Cerrado el '+fmt(e.cerr.f)):''}</td><td class="right">${n}</td><td class="right nowrap">${m2(r.ing)}</td><td class="right nowrap">${m2(r.egr)}</td><td class="right nowrap"><b class="${r.res<0?'warn-t':''}">${m2(r.res)}</b></td><td class="right nowrap">${e.est==='cierre'&&puedeConta()?`<button class="btn btn-primary btn-sm" data-act="go" data-v="k_cierre" data-e="${e.id}">Cerrar ejercicio</button> `:''}<button class="rowlink" data-act="flt" data-k="ke" data-v="${e.id}" data-go="1">Ver libro</button></td></tr>`});
@@ -2868,12 +2870,41 @@ VIEWS.e_main=()=>{const [d,h]=perRango(),er=perErr(d,h),cmp=cmpOn(),pv=perPrev(d
  return `<div class="page mk mk-cmp">${ph('Estadísticas')}${tsb?tabs(k,tsb):''}${per}${body}</div>`};
 ACT.cmptgl=el=>{S.flt.cmp=el.checked?'1':'';rerender()};
 const dl=(c,p,b)=>cmpOn()?dlt(c,p,b):'';
-function stProd(d,h,pd,ph_){const inv=S.role==='agr'?misInvC()[0]:null,A=prodPer(d,h,inv),B=prodPer(pd,ph_,inv),pl=tot(A,'pl'),kg=tot(A,'kg'),me=tot(A,'me');
- const sem=[];for(let x=d;x<=h;x=addD(x,7)){const f=addD(x,6)>h?h:addD(x,6);sem.push({l:fmt(x).slice(0,5),a:tot(prodPer(x,f,inv),'kg'),fmt:v=>q2(Math.round(v))})}
- if(!pl)return empty('leaf','No hay cosechas en este período','Pruebe con otro rango de fechas.');
- return `<div class="kpis" style="margin-top:18px">${kp('Plantas cosechadas',num(pl),dl(pl,tot(B,'pl')))}${kp('Kilos cosechados',q2(kg)+' kg',dl(kg,tot(B,'kg')))}${kp('Plantas perdidas',num(me),dl(me,tot(B,'me'),false),me/pl>.06?'warn':'')}${kp('Pérdida sobre lo cosechado',(me/(pl+me)*100).toFixed(1).replace('.',',')+' %',dl(me/pl,tot(B,'me')/Math.max(1,tot(B,'pl')),false))}</div>
- <div class="stack">${card('Kilos cosechados por semana',`<div class="card-b">${vbars(sem,'Kilos')}</div>`,'','chart')}
- ${card('Por variedad',table([['Variedad'],['Plantas','right'],['Kilos','right'],['Perdidas','right'],['% de pérdida','right']],A.map((x,i)=>`<tr><td>${x.v}</td><td class="right nowrap">${num(x.pl)}${cmpOn()?sub(dlt(x.pl,B[i].pl)):''}</td><td class="right nowrap">${q2(x.kg)}</td><td class="right nowrap">${num(x.me)}</td><td class="right nowrap">${x.pl?(x.me/(x.pl+x.me)*100).toFixed(1).replace('.',','):'0'} %</td></tr>`)),'','leaf')}</div>`}
+/* ---- indicadores de producción (sintéticos y deterministas) ---- */
+const IOT_INV=['A','B'];
+const OTIPOS=[['sie','Siembra',1],['tra','Transición',1],['cos','Cosecha',1],['ent','Entrega',0],['man','Mantenimiento',0]];
+const CAUSAS=[['Enfermedad',.34],['Plaga',.27],['Falla de riego',.21],['Daño en la entrega',.18]];
+const ALERT_T=[['Temperatura alta',.34],['Humedad fuera de rango',.26],['pH fuera de rango',.22],['Falla de bomba',.18]];
+const INS_CONS=[['sem-cre',.9],['sem-ruc',.5],['sem-alb',.3],['nut-a',2.4],['nut-b',2.4],['esp',16],['ban',9],['hipo',.35]];
+const PRECIO_I={'sem-cre':1900,'sem-ruc':1700,'sem-alb':2100,'nut-a':3600,'nut-b':3400,'esp':95,'ban':140,'hipo':1500};
+function prodInd(d,h,inv){const A=prodPer(d,h,inv),pl=tot(A,'pl'),me=tot(A,'me'),k=hsh(d+h+(inv||'*'));
+ const sem=A.map(x=>({v:x.v,pl:x.pl?Math.round(x.pl*(1.06+(hsh(x.v+d)%8)/100)):0})),sm=tot(sem,'pl');
+ const pre=prodPer(d,addD(d,27),inv),ini=Math.round(tot(pre,'pl')*1.1)+Math.round(me*.5);
+ const caus=CAUSAS.map(([n,s],i)=>({n,v:Math.round(me*(i===CAUSAS.length-1?0:s))}));caus[caus.length-1].v=me-sum(caus.slice(0,-1),x=>x.v);
+ const mermaPct=(ini+sm)?me/(ini+sm)*100:null;
+ const cam=Math.round(pl*(.008+(k%5)/1000)),camC=[['Vencimiento en cámara',Math.round(cam*.6)],['Golpe en la manipulación',cam-Math.round(cam*.6)]];
+ const ords=OTIPOS.map(([c,n,pr])=>{const dias=days(d,h)+1,tot_=Math.max(0,Math.round(dias*(c==='sie'?.9:c==='tra'?.7:c==='cos'?.8:c==='ent'?.6:.5)*(inv?SHAREI[inv]*2:1.4)));const t=hsh(c+d+h+(inv||''))%100,venc=Math.round(tot_*(.06+t%9/100));return {c,n,pr,a:tot_-venc,v:venc}});
+ const costo=pl?R2(185+(k%55)+(k%7)/10):0;
+ const cons=INS_CONS.map(([id,r])=>{const q=Math.round(pl/100*r*10)/10,i=insO(id);return {id,n:i.n,cat:i.cat,u:i.u,q,m:R2(q*PRECIO_I[id])}});
+ const iot=(inv?IOT_INV.includes(inv):true)?ALERT_T.map(([n,s],i)=>({n,v:Math.round(days(d,h)*.9*s*(inv?SHAREI[inv]*2:1.3)*(1+(hsh(n+d)%5)/10))})):null;
+ return {A,pl,me,sem,sm,ini,caus,mermaPct,cam,camC,ords,costo,cons,iot}}
+const fp=x=>x==null?'—':x.toFixed(1).replace('.',',')+' %';
+function stProd(d,h,pd,ph_){const ids=misInvC(),f=S.flt.pinv||'',inv=f&&ids.includes(f)?f:(ids.length===1&&S.role==='agr'?ids[0]:null),I=prodInd(d,h,inv),P=prodInd(pd,ph_,inv),cmp=cmpOn();
+ const op=S.flt.ot||'todas',O=I.ords.filter(o=>op==='todas'||o.pr),OP=P.ords.filter(o=>op==='todas'||o.pr);
+ const oa=sum(O,x=>x.a),ov=sum(O,x=>x.v),on=oa+ov,oap=sum(OP,x=>x.a),ovp=sum(OP,x=>x.v),onp=oap+ovp;
+ const selInv=ids.length>1?sel('pinv',[['','Todos los invernaderos']].concat(ids.map(i=>[i,invN(i)])),'Invernadero'):'';
+ const sel_=`<div class="filters" style="margin-top:14px">${selInv}</div>`;
+ if(!I.pl&&!I.sm)return sel_+empty('leaf','No hay actividad en este período','Pruebe con otro rango de fechas.');
+ const costoT=R2(I.costo*I.pl),cant=I.cons,cats=[...new Set(cant.map(x=>x.cat))].map(c=>({c,m:R2(sum(cant.filter(x=>x.cat===c),x=>x.m)),l:cant.filter(x=>x.cat===c)}));
+ const sembrCos=table([['Variedad'],['Sembradas','right'],['Cosechadas','right']],I.A.map((x,i)=>`<tr><td>${x.v}</td><td class="right nowrap">${num(I.sem[i].pl)}</td><td class="right nowrap">${num(x.pl)}${cmp?sub(dlt(x.pl,P.A[i].pl)):''}</td></tr>`));
+ const ordR=O.map(o=>{const t=o.a+o.v;return `<tr><td>${o.n}</td><td class="right nowrap">${num(o.a)}</td><td class="right nowrap">${num(o.v)}</td><td class="right nowrap">${t?Math.round(o.a/t*100):0} %</td></tr>`});
+ return `${sel_}<div class="kpis" style="margin-top:18px">${kp('Plantas sembradas',num(I.sm),dl(I.sm,P.sm))}${kp('Plantas cosechadas',num(I.pl),dl(I.pl,P.pl))}${kp('Merma',fp(I.mermaPct),dl(I.mermaPct||0,P.mermaPct||0,false)||'',I.mermaPct>8?'warn':'')}${kp('Órdenes a tiempo',on?Math.round(oa/on*100)+' %':'—',on?`${num(oa)} de ${num(on)} órdenes`:'',on&&oa/on<.85?'warn':'')}${kp('Costo por planta cosechada',m2(I.costo),dl(I.costo,P.costo,false))}</div>
+ <div class="stack"><div class="split">${card('Plantas sembradas y cosechadas',sembrCos,'','leaf')}
+ ${card('Merma por causa',`<div class="card-b"><p class="muted sm" style="margin:0 0 10px">${num(I.me)} plantas perdidas sobre ${num(I.ini)} en producción al inicio más ${num(I.sm)} sembradas.</p>${hbars(I.caus.map(c=>({l:c.n,v:c.v})),n=>`${num(n)} · ${I.me?Math.round(n/I.me*100):0} %`)}</div>`,'','down')}</div>
+ ${card('Órdenes de trabajo a tiempo y vencidas',`<div class="card-b"><div class="chips">${[['todas','Todas'],['prod','Solo de producción']].map(([a,b])=>`<button class="chip" data-act="flt" data-k="ot" data-v="${a}" aria-pressed="${op===a}">${b}</button>`).join('')}</div></div>${table([['Tipo de orden'],['A tiempo','right'],['Vencidas','right'],['% a tiempo','right']],ordR)}<div class="totrow"><span>Total${cmp&&onp?' · período anterior '+Math.round(oap/onp*100)+' % a tiempo':''}</span><b>${num(oa)} a tiempo · ${num(ov)} vencidas (${on?Math.round(ov/on*100):0} %)</b></div>`,'','check')}
+ ${card('Consumo de insumos',`<div class="card-b"><div class="totrow" style="margin:0 0 12px"><span>Consumo total del período</span><b>${m2(sum(cats,x=>x.m))}</b></div></div>`+table([['Categoría'],['Insumo'],['Cantidad','right'],['Monto','right']],cats.flatMap(c=>c.l.map((x,i)=>`<tr><td>${i?'':'<b>'+catN(c.c)+'</b>'+sub(m2(c.m))}</td><td>${esc(x.n)}</td><td class="right nowrap">${q2(x.q)} ${x.u==='unidad'?'u.':x.u}</td><td class="right nowrap">${m2(x.m)}</td></tr>`))),'','box')}
+ ${I.iot?card('Alertas del IoT',`<div class="card-b">${hbars(I.iot.map(a=>({l:a.n,v:a.v})),n=>plu(n,'alerta','alertas'))}</div>`,'','bolt'):''}
+ ${S.role==='ger'?card('Merma en cámara',`<div class="card-b"><p class="muted sm" style="margin:0 0 10px">Partidas ya cosechadas que se perdieron en cámara. No entran en la merma de las plantas.</p>${hbars(I.camC.map(c=>({l:c[0],v:c[1]})),n=>plu(n,'planta','plantas'))}<div class="totrow" style="margin-top:12px"><span>Valor perdido</span><b>${m2(R2(I.cam*I.costo))}</b></div></div>`,'','box'):''}</div>`}
 function stCom(d,h,pd,ph_){const ent=(a,b)=>movsPer(a,b,(m,x)=>m.c==='4.1.01'&&x.orig&&x.orig.t==='ent'),V=ent(d,h),Vp=ent(pd,ph_),vt=R2(sum(V,x=>x.m.i)),vp=R2(sum(Vp,x=>x.m.i)),cb=sumCta(d,h,'1.1.03','H')-0,cbp=sumCta(pd,ph_,'1.1.03','H'),cobr=R2(movsPer(d,h,(m,a)=>m.c==='1.1.02'&&m.t==='D'&&a.orig&&a.orig.t==='cob').reduce((s,x)=>s+x.m.i,0)),deu=saldoMov('1.1.03',ejAb().id).fin;
  const meses=mesesR(d,h).map(m=>{const a=m<d?d:m,b=finMes(m)>h?h:finMes(m);return {l:mesL(m),a:R2(sum(ent(a,b),x=>x.m.i))}});
  if(!V.length)return empty('cart','No hubo entregas en este período','Pruebe con otro rango de fechas.');
@@ -2885,9 +2916,9 @@ function stCmp(d,h,pd,ph_){const E=comprasEv(d,h),Ep=comprasEv(pd,ph_),t=R2(sum(
  const meses=mesesR(d,h).map(m=>{const a=m<d?d:m,b=finMes(m)>h?h:finMes(m);return {l:mesL(m),a:R2(sum(comprasEv(a,b),x=>x.m))}});
  if(!E.length)return empty('pkg','No se recibió mercadería en este período','Pruebe con otro rango de fechas.');
  const pp=mp(E),cc=mc(E);
- return `<div class="kpis" style="margin-top:18px">${kp('Compras recibidas',m0(t),dl(t,tp,false))}${kp('Pagado a proveedores',m0(pag),'')}${kp('Pendiente de pago hoy',m0(pend),pend?'a '+plu(pagosPend().length,'proveedor','proveedores'):'',pend?'warn':'')}${kp('Entregas a tiempo',tp_.n?Math.round(tp_.ok/tp_.n*100)+' %':'—',tp_.n?`${tp_.ok} de ${plu(tp_.n,'línea','líneas')}`:'Sin líneas completas en el período',tp_.n&&tp_.ok/tp_.n<.8?'warn':'')}</div>
+ return `<div class="kpis" style="margin-top:18px">${kp('Compras recibidas',m0(t),dl(t,tp,false))}${kp('Proveedores con compras',String(mp(E).length),'')}${kp('Rubros comprados',String(mc(E).length),'')}</div>
  <div class="stack"><div class="split">${card('Por proveedor',`<div class="card-b">${hbars(pp)}</div>`,'','users')}${card('Por rubro',`<div class="card-b">${hbars(cc)}</div>`,'','tag')}</div>
- ${card('Compras por mes',`<div class="card-b">${vbars(meses,'Recibido')}</div>`,`<span class="muted sm">${plu(rc,'reclamo','reclamos')} en el período</span>`,'chart')}</div>`}
+ ${card('Compras por mes',`<div class="card-b">${vbars(meses,'Recibido')}</div>`,'','chart')}</div>`}
 function stRtd(d,h,pd,ph_){const r=resultadoPeriodo(d,h),p=resultadoPeriodo(pd,ph_),rc=resCuentas(d,h);
  const meses=mesesR(d,h).map(m=>{const a=m<d?d:m,b=finMes(m)>h?h:finMes(m),x=resultadoPeriodo(a,b);return {l:mesL(m),a:x.ing,b:x.egr}});
  if(!r.ing&&!r.egr)return empty('book','No hay movimientos en este período','Pruebe con otro rango de fechas.');

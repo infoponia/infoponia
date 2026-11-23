@@ -360,9 +360,8 @@ Patrón de bloqueos: `docs/patrones/asientos.md`, sección 2.
 
 Formulario de asiento con filas dinámicas (agregar y quitar línea con HTMX; una fila nueva se pide al servidor), el selector de cuenta **con
 buscador** (el plan tiene 19 cuentas hoy, pero el criterio del estudiante es «buscadores en lugar de desplegables» para datos que crecen: el plan
-puede crecer con el ABM futuro), el resumen y la confirmación en una pantalla separada. **Diferencia a corregir en el prototipo:** el prototipo
-limitó la fecha del contraasiento al mismo ejercicio del asiento original («pendiente de confirmar»); el caso de uso dice que se elige la fecha y
-cae en un ejercicio **abierto o en cierre** (C3). Manda el caso de uso.
+puede crecer con el ABM futuro), el resumen y la confirmación en una pantalla separada. **Corregido en el prototipo (23/11/2026):** la fecha
+del contraasiento se elige y cae en un ejercicio **abierto o en cierre** (C3), no solo en el del asiento original.
 
 ## Solo prototipo
 

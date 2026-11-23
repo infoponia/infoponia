@@ -69,5 +69,5 @@ Si el tiempo apremia, lo último que se recorta es: los atajos de apertura y de 
 
 ## Cierre (M3)
 
-Actualizá README de tareas, el plan de la ronda y `docs/estado.md`. Anotá en el «Cierre» las diferencias con el prototipo (en especial la fecha
-del contraasiento, que el prototipo limita al mismo ejercicio).
+Actualizá README de tareas, el plan de la ronda y `docs/estado.md`. Anotá en el «Cierre» las diferencias con el prototipo (la fecha del
+contraasiento, en cualquier ejercicio abierto o en cierre, ya está corregida en él).
