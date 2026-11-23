@@ -108,22 +108,57 @@ class RegistroDeCargadoresTests(SimpleTestCase):
 class ComandoCargarDatosTests(TestCase):
     """El comando: se niega fuera de la base local, no imprime la contraseña y no toca al Administrador."""
 
-    def _correr(self, *argumentos):
+    def _correr(self, contrasena=None, *argumentos):
+        """Corre el comando con la contraseña en la variable de entorno (la única forma no interactiva: nunca es un argumento)."""
         salida, errores = StringIO(), StringIO()
-        call_command("cargar_datos_de_verificacion", *argumentos, stdout=salida, stderr=errores)
+        entorno = {"INFOPONIA_CONTRASENA_DE_PRUEBA": contrasena} if contrasena else {}
+        with mock.patch.dict("os.environ", entorno):
+            call_command("cargar_datos_de_verificacion", *argumentos, stdout=salida, stderr=errores)
         return salida.getvalue(), errores.getvalue()
 
     @override_settings(DEBUG=False)
     def test_d_verificacion_el_comando_se_niega_con_debug_apagado(self):
         """CLAUDE.md: el comando falla con un `CommandError` claro si la guarda se niega."""
         with _sin_render(), self.assertRaisesMessage(CommandError, "DEBUG está apagado"):
-            self._correr("--contrasena", "secreta")
+            self._correr("secreta")
 
     @override_settings(DEBUG=True)
     def test_d_verificacion_sin_contrasena_el_comando_pide_la_contrasena(self):
         """Sin `--contrasena` ni variable de entorno, el comando lo dice."""
-        with _sin_render(), self.assertRaisesMessage(CommandError, "Falta la contraseña"):
+        with _sin_render(), mock.patch("sys.stdin", StringIO()), self.assertRaisesMessage(CommandError, "Falta la contraseña"):
             self._correr()
+
+    @override_settings(DEBUG=True)
+    def test_d_verificacion_la_contrasena_no_es_un_argumento(self):
+        """La contraseña no viaja como argumento (quedaría en el historial y en la lista de procesos): `--contrasena` ya no existe."""
+        with _sin_render(), self.assertRaises(CommandError):
+            call_command("cargar_datos_de_verificacion", "--contrasena", "secreta")
+
+    @override_settings(DEBUG=True)
+    def test_d_verificacion_en_una_terminal_pide_la_contrasena_sin_mostrarla(self):
+        """Con terminal y sin variable de entorno, la pide con `getpass` (no se ve al escribirla) y no la imprime."""
+        recibida = []
+
+        def cargador(contrasena):
+            recibida.append(contrasena)
+            return verificacion.ResumenDeCarga(creado=("algo",))
+
+        terminal = mock.Mock()
+        terminal.isatty.return_value = True
+        with _sin_render(), mock.patch.object(verificacion, "_CARGADORES", []), mock.patch("sys.stdin", terminal):
+            verificacion.registrar_cargador("x", "Cargador X", 10, cargador)
+            with mock.patch("getpass.getpass", return_value="escrita-a-mano") as pedir:
+                salida, errores = self._correr()
+        pedir.assert_called_once()
+        self.assertEqual(recibida, ["escrita-a-mano"])
+        self.assertNotIn("escrita-a-mano", salida + errores)
+
+    @override_settings(DEBUG=True)
+    def test_d_verificacion_en_una_base_que_no_es_local_no_pide_la_contrasena(self):
+        """La guarda va ANTES de pedir nada: en una base que no es local ni se pregunta (no se tipea una contraseña para nada)."""
+        with _sin_render("ep-algo.neon.tech"), mock.patch("getpass.getpass") as pedir, self.assertRaisesMessage(CommandError, "no es local"):
+            self._correr()
+        pedir.assert_not_called()
 
     @override_settings(DEBUG=True)
     def test_d_verificacion_no_imprime_la_contrasena_y_no_toca_al_administrador(self):
@@ -136,7 +171,7 @@ class ComandoCargarDatosTests(TestCase):
 
         with _sin_render(), mock.patch.object(verificacion, "_CARGADORES", []):
             verificacion.registrar_cargador("x", "Cargador X", 10, cargador)
-            salida, errores = self._correr("--contrasena", "secreta-123")
+            salida, errores = self._correr("secreta-123")
         self.assertNotIn("secreta-123", salida + errores)
         self.assertIn("a@prueba1.local · agronomo", salida)
         self.assertIn("PENDIENTE: hacé esto", salida)

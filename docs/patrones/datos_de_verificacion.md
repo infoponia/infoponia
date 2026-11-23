@@ -5,10 +5,11 @@ Lo creó IOT-03, que unificó el comando que MAE-02d había creado en `maestros`
 
 ## Qué es
 
-**Un solo comando** para todo el proyecto, `python manage.py cargar_datos_de_verificacion --contrasena <contraseña>` (MAE-02d lo había creado con `--clave`, dentro de `maestros`: ya no existe ese comando propio), que deja la base **local** con los datos que pide la
+**Un solo comando** para todo el proyecto, `python manage.py cargar_datos_de_verificacion` (MAE-02d lo había creado con `--clave`, dentro de `maestros`: ya no existe ese comando propio ni esa opción), que deja la base **local** con los datos que pide la
 «Verificación a mano» de cada tarea, en cada estado que haya que probar. El estudiante no carga datos a mano. La contraseña es la de
-quien trabaja y está en su `CLAUDE.local.md` (no se versiona; nunca se escribe en un archivo del repo). También se puede pasar en la variable
-de entorno `INFOPONIA_CONTRASENA_DE_PRUEBA`. `--listar` muestra los cargadores sin cargar nada; `--solo <código>` corre uno.
+quien trabaja y está en su `CLAUDE.local.md` (no se versiona; nunca se escribe en un archivo del repo). **No es un argumento** (quedaría en el historial de la terminal y
+en la lista de procesos): el comando la pide sin mostrarla (`getpass`) o la toma de la variable de entorno `INFOPONIA_CONTRASENA_DE_PRUEBA` (PowerShell:
+`$env:INFOPONIA_CONTRASENA_DE_PRUEBA = "…"` en esa misma terminal; sin terminal interactiva, es la única forma). En una base que no es local, ni siquiera la pide. `--listar` muestra los cargadores sin cargar nada; `--solo <código>` corre uno.
 
 ## Dónde vive
 
@@ -27,7 +28,7 @@ tocar el código de otra app ni el comando. Hoy: `maestros` (orden 5, MAE-02d) e
    `verificacion.registrar_cargador("<app>", "<nombre>", <orden>, <app>.verificacion.cargar)` (`from core import verificacion`). El orden es de 5 en 5: un cargador que
    necesita lo de otro va después (el de `iot` usa lo que arma `maestros`).
 2. La función devuelve `ResumenDeCarga(creado=(…), cuentas=(…), pendiente=(…))` y, si no puede seguir, lanza `core.verificacion.ErrorDeCarga("…")` con un mensaje claro.
-3. **Cuentas con un número propio** para no pisar a otra app: `maestros` usa `prueba1` y `prueba2`; `iot`, `prueba3`. La siguiente app usa el número que siga (`prueba4`, …).
+3. **Cuentas con un número propio** (y solo las que la verificación necesita: cada cuenta de más se justifica en el cargador) para no pisar a otra app: `maestros` usa `prueba1` y `prueba2`; `iot`, `prueba3`. La siguiente app usa el número que siga (`prueba4`, …).
    Antes de crear datos, reutilizá lo que ya exista por su nombre (idempotente).
 4. Pruebas en `<app>/tests/test_verificacion.py` (la guarda ya la prueba `core`).
 
@@ -58,7 +59,7 @@ Los mensajes de rechazo no incluyen el host ni ningún secreto.
 
 ## El cargador de `iot` (IOT-03)
 
-Primera corrida: cuentas `agronomo@prueba3.local` y `capataz@prueba3.local` (si «Norte» ya existe, se sigue con su Agrónomo y no se crean cuentas); el invernadero «Norte» con ese Agrónomo y ese Capataz y **sin
+Primera corrida: cuentas `agronomo@prueba3.local` y `capataz@prueba3.local` (si «Norte» ya existe, se sigue con su Agrónomo y no se crean cuentas). El **Capataz hace falta**: `planificar_siembra` (PROD-PNF-SMB, extensión 3a) no deja planificar una siembra si el invernadero no tiene un Capataz activo que reciba la orden, y sin la siembra «a realizar» no hay umbral efectivo; el invernadero «Norte» con ese Agrónomo y ese Capataz y **sin
 Técnico**; «Sector A» (germinación) y «Sector B» (maduración); un insumo de «Repuestos de hardware»; la variedad «Lechuga Crespa» con su semilla
 habilitada y con stock, y una siembra «a realizar» (da variedades presentes y, con ellas, **umbral efectivo**: temperatura 18 a 26 °C, humedad
 60 a 80 % HR, luz 10.000 a 30.000 lux, fotoperíodo 8 a 14 h).

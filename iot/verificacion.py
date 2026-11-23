@@ -1,6 +1,8 @@
 # Cargador de datos de verificación del IoT (IOT-03; docs/patrones/datos_de_verificacion.md; CLAUDE.md, «Datos para la verificación a mano»).
 # Lo registra ``IotConfig.ready()`` en ``core.verificacion`` (regla A4 de D-37) y lo corre ``manage.py cargar_datos_de_verificacion``.
 #
+# El Capataz (``capataz@prueba3.local``) NO es de adorno: ``planificar_siembra`` exige un Capataz activo en el invernadero para dar la orden (PROD-PNF-SMB, extensión 3a), y sin la
+# siembra «a realizar» no hay umbral efectivo (no se podría verificar «Fuera de umbral efectivo»).
 # PRIMERA CORRIDA: deja la base como la necesita la verificación de la API del nodo, SIEMPRE llamando a los servicios de las apps (nunca
 # con inserciones directas: así quedan la auditoría y las reglas como en una pantalla real):
 #   - cuentas ``agronomo@prueba3.local`` y ``capataz@prueba3.local`` (las prueba1 y prueba2 son de ``maestros``) (la contraseña es la que se pasa al comando);

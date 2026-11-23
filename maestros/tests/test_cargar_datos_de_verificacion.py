@@ -19,14 +19,16 @@ from maestros.models import Alerta, Invernadero
 from maestros.tests.fabricas import ConGeoref, crear_capataz_activo
 
 CLAVE_DE_LA_PRUEBA = "clave-solo-de-esta-prueba"
+# La contraseña entra por la variable de entorno: ya no es un argumento del comando (docs/patrones/datos_de_verificacion.md).
+ENTORNO = {"INFOPONIA_CONTRASENA_DE_PRUEBA": CLAVE_DE_LA_PRUEBA}
 
 
 def cargar(**opciones):
     """Corre el comando como en una base local de desarrollo: DEBUG encendido y host ``localhost`` (el ejecutor de pruebas
     apaga DEBUG por su cuenta). Devuelve lo que imprimió."""
     salida = StringIO()
-    with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
-        call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros", stdout=salida, **opciones)
+    with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}), mock.patch.dict(os.environ, ENTORNO):
+        call_command("cargar_datos_de_verificacion", solo="maestros", stdout=salida, **opciones)
     return salida.getvalue()
 
 
@@ -43,7 +45,7 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         """CLAUDE.md: «se niega a correr si DEBUG está apagado» (sin crear nada)."""
         with override_settings(DEBUG=False), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
             with self.assertRaisesMessage(CommandError, "DEBUG"):
-                call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros")
+                call_command("cargar_datos_de_verificacion", solo="maestros")
         self.assertFalse(Invernadero.objects.exists())
         self.assertEqual(Usuario.objects.count(), 2)
 
@@ -51,7 +53,7 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         """CLAUDE.md: «si la base no es localhost»."""
         with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "ep-algo.neon.tech"}):
             with self.assertRaisesMessage(CommandError, "no es local"):
-                call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros")
+                call_command("cargar_datos_de_verificacion", solo="maestros")
         self.assertFalse(Invernadero.objects.exists())
 
     def test_claude_md_se_niega_con_variables_de_render(self):
@@ -59,12 +61,12 @@ class CargarDatosDeVerificacionTests(ConGeoref, TestCase):
         with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
             with mock.patch.dict(os.environ, {"RENDER_SERVICE_ID": "srv-123"}):
                 with self.assertRaisesMessage(CommandError, "Render"):
-                    call_command("cargar_datos_de_verificacion", contrasena=CLAVE_DE_LA_PRUEBA, solo="maestros")
+                    call_command("cargar_datos_de_verificacion", solo="maestros")
         self.assertFalse(Invernadero.objects.exists())
 
     def test_la_clave_es_obligatoria(self):
-        """La contraseña nunca está en el repo: entra por ``--contrasena``."""
-        with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}):
+        """La contraseña nunca está en el repo ni en un argumento: sin variable de entorno ni terminal, el comando lo dice."""
+        with override_settings(DEBUG=True), mock.patch.dict(connection.settings_dict, {"HOST": "localhost"}), mock.patch.dict(os.environ, {}, clear=True), mock.patch("sys.stdin", StringIO()):
             with self.assertRaises(CommandError):
                 call_command("cargar_datos_de_verificacion")
 
