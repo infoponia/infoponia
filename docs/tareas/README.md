@@ -61,7 +61,7 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| COM-01 | App `comercial`, clientes y vehículos | comercial | pendiente | MAE-05 | `comercial/COM-01-clientes-y-vehiculos.md` |
+| COM-01 | App `comercial`, clientes y vehículos | comercial | hecha (PR #__, 23/11/2026; revisión a mano pendiente) | MAE-05 | `comercial/COM-01-clientes-y-vehiculos.md` |
 | COM-02 | Stock maduro y compra-venta | comercial (y modelos en produccion, D-59) | pendiente | COM-01, USR-10, PRD-04 | `comercial/COM-02-stock-maduro-y-compra-venta.md` |
 | COM-03a | Suministros: pactar y consultar | comercial | pendiente | COM-02 | `comercial/COM-03a-suministros-pactar-y-consultar.md` |
 | COM-03b | Suministros: modificar, rescindir, dejar sin efecto y pre-reservar (pasos 35 y 40) | comercial (y los orígenes de alertas en maestros, D-62) | pendiente | COM-03a, MAE-02d (DIA-01, hecha) | `comercial/COM-03b-suministros-modificar-rescindir-y-pre-reservar.md` |

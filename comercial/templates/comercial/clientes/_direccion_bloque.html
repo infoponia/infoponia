@@ -1,0 +1,20 @@
+{% load iconos %}{% comment %}Los campos de UNA dirección del cliente (regla 6 de COM-ALT-CLT; dirForm del prototipo con «Referencias» en la urbana, D-39). Recibe «dform»
+(un FormularioDireccion con prefijo ``nueva-<i>`` o ``corregida-<id>``). Con HTMX, al cambiar el tipo, la provincia o el departamento se piden
+los fragmentos de lo que depende, sin validar nada y con ``show:none`` (no mueve el scroll ni roba el foco). Sin JavaScript, «Actualizar»
+reenvía el formulario sin guardar.{% endcomment %}
+<div data-direccion>
+  <div class="fld">
+    <span class="lbl">Tipo de dirección</span>
+    <div class="tipo-dir" role="radiogroup" aria-label="Tipo de dirección">
+      {% for radio in dform.tipo_direccion %}<label>{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}
+    </div>
+    {% for error in dform.tipo_direccion.errors %}<div class="err">{{ error }}</div>{% endfor %}
+  </div>
+  <div class="grid3">
+    {% include "core/usuarios/_campo.html" with campo=dform.provincia requerido=True %}
+    <div id="dir-{{ dform.id_base }}-departamento-y-localidad" style="display:contents">{% include "comercial/clientes/_direccion_departamento_y_localidad.html" %}</div>
+  </div>
+  <div id="dir-{{ dform.id_base }}-campos">{% include "comercial/clientes/_direccion_campos.html" %}</div>
+  {% for error in dform.non_field_errors %}<div class="err" role="alert">{{ error }}</div>{% endfor %}
+  <noscript><button class="btn btn-ghost btn-sm" type="submit" name="actualizar" value="1">Actualizar listas y datos de la dirección</button></noscript>
+</div>

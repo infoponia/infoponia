@@ -1,0 +1,46 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}Ficha del vehículo (COM-CNS-VEH, regla 2; el prototipo no la tiene: con el estilo de VIEWS.cli). Datos, transportista, invernadero del transportista y «En ruta
+hoy» o «En el invernadero». La carga asignada frente a la capacidad de los próximos días la suma COM-05 (D-25: no se muestra hasta
+que exista). Los botones son los de «acciones» (D-30). «Dar de baja» abre una ventana (HTMX, o la ficha con la ventana abierta sin
+JavaScript); «Reactivar» es un POST sin ventana.{% endcomment %}
+{% block titulo %}{{ vehiculo.patente }} · Vehículos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:vehiculos' %}">{% icono "back" 15 %} Volver a vehículos</a>
+  <div class="page-h">
+    <h1><span class="mono">{{ vehiculo.patente }}</span></h1>
+    {% if vehiculo.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}
+    {% if ficha.en_ruta %}<span class="status-badge status-info">En ruta hoy</span>{% endif %}
+    <span class="spacer"></span>
+    {% if "modificar" in acciones %}<a class="btn btn-ghost" href="{% url 'comercial:vehiculo_modificar' vehiculo.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+    {% if "reactivar" in acciones %}
+    <form method="post" action="{% url 'comercial:vehiculo_reactivar' vehiculo.pk %}" style="display:inline-flex;margin:0">{% csrf_token %}<button class="btn btn-primary" type="submit" data-enviando="Reactivando…">{% icono "ret" 14 %} Reactivar</button></form>
+    {% endif %}
+    {% if "baja" in acciones %}<a class="btn btn-danger" href="{% url 'comercial:vehiculo_baja' vehiculo.pk %}" hx-get="{% url 'comercial:vehiculo_baja' vehiculo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 14 %} Dar de baja</a>{% endif %}
+  </div>
+
+  <div class="stack">
+    {% if not vehiculo.activo %}
+    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Vehículo dado de baja: no tiene transportista ni participa de las entregas. Al reactivarlo queda activo y sin transportista.</div></div>
+    {% endif %}
+    <div class="card">
+      <div class="card-title">{% icono "truck" 14 %} Datos</div>
+      <dl class="dl">
+        <dt>Tipo</dt><dd>{{ vehiculo.get_tipo_vehiculo_display }}</dd>
+        <dt>Marca y modelo</dt><dd>{{ vehiculo.marca }} {{ vehiculo.modelo }}</dd>
+        <dt>Capacidad de carga</dt><dd>{{ vehiculo.capacidad_carga|kg }} <span class="muted">· Peso máximo que lleva en el día, en un solo viaje.</span></dd>
+        <dt>Transportista</dt><dd>{% if ficha.transportista %}{{ ficha.transportista.get_full_name|default:ficha.transportista.email }}{% else %}<span class="muted">Sin transportista</span>{% endif %}</dd>
+        <dt>Invernadero</dt><dd>{% if ficha.invernadero %}{{ ficha.invernadero.nombre_invernadero }}{% elif ficha.transportista %}<span class="muted">Sin invernadero · No recibe entregas hasta que se lo agregue a uno, en «Logística».</span>{% else %}<span class="muted">—</span>{% endif %}</dd>
+        <dt>Situación</dt><dd>{% if ficha.en_ruta %}En ruta hoy{% elif vehiculo.activo %}En el invernadero{% else %}<span class="muted">—</span>{% endif %}</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}

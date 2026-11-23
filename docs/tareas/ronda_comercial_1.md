@@ -20,7 +20,7 @@ las que registran un paso diario.
 
 | ID | Tarea | App | Casos de uso | Depende de | Lote |
 |---|---|---|---|---|---|
-| COM-01 | App `comercial`, clientes y vehículos | comercial | COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT, COM-ALT-VEH, COM-MOD-VEH, COM-BAJ-VEH, COM-CNS-VEH | MAE-05 (y UI-01, NOT-01, hechas). **Ninguna de producción** | C1 |
+| COM-01 | App `comercial`, clientes y vehículos — **hecha el 23/11/2026** (a la espera de la revisión a mano) | comercial | COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT, COM-ALT-VEH, COM-MOD-VEH, COM-BAJ-VEH, COM-CNS-VEH | MAE-05 (y UI-01, NOT-01, hechas). **Ninguna de producción** | C1 |
 | COM-02 | Stock maduro y compra-venta (crea `Contrato`, `CompraVenta`, las reservas de stock, `Cosecha` y `StockCosechado`) | comercial (y modelos en produccion, D-59) | PROD-ASG-STK, COM-REG-CVT, COM-CNS-CVT | COM-01, USR-10, **PRD-04** (que ya incluye INV-02 e INV-03) | C2 |
 | COM-03a | Suministros: pactar y consultar | comercial | COM-PCT-SUM, COM-CNS-SUM | COM-02 | C3 (partida en C5b) |
 | COM-03b | Suministros: modificar, rescindir, dejar sin efecto y pre-reservar | comercial (y los orígenes de alertas en maestros, D-62) | COM-MOD-SUM, COM-RSC-SUM y COM-ANL-RSC (con el paso diario 35), PROD-PRR-SUM (paso diario 40, D-56) | COM-03a, DIA-01, MAE-02d | C3 (partida en C5b) |

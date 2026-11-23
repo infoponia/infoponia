@@ -44,4 +44,6 @@ urlpatterns = [
     path("iot/", include("iot.urls")),
     # PRD-03: el menú del Gerente tiene también «Bitácora» (produccion la registra en ready()).
     path("produccion/", include("produccion.urls")),
+    # COM-01: el menú del Gerente y del Vendedor tiene también «Comercial» (comercial la registra en ready()).
+    path("comercial/", include("comercial.urls")),
 ]

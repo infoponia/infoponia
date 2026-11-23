@@ -1,0 +1,18 @@
+{% comment %}Los datos de la dirección del tipo elegido (regla 6 de COM-ALT-CLT y regla 2 de PROD-ALT-INV). Urbana: calle y número obligatorios; piso, departamento
+(unidad), barrio y referencias opcionales. Rural: ruta o camino y kilómetro obligatorios; lote opcional. Recibe «dform».{% endcomment %}
+{% if dform.es_urbana %}
+<div class="grid2">
+  {% include "core/usuarios/_campo.html" with campo=dform.calle requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=dform.numero_calle requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=dform.piso %}
+  {% include "core/usuarios/_campo.html" with campo=dform.departamento_unidad %}
+  {% include "core/usuarios/_campo.html" with campo=dform.barrio %}
+  {% include "core/usuarios/_campo.html" with campo=dform.referencias %}
+</div>
+{% elif dform.es_rural %}
+<div class="grid3">
+  {% include "core/usuarios/_campo.html" with campo=dform.ruta requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=dform.kilometro requerido=True %}
+  {% include "core/usuarios/_campo.html" with campo=dform.lote_rural %}
+</div>
+{% endif %}

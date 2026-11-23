@@ -55,3 +55,29 @@ def validar_con_contenido(valor):
             "Ingresá un texto con al menos una letra o un número.",
             code="sin_contenido",
         )
+
+
+# D-58 punto 4: el cálculo de ``cuitOk`` del prototipo y de ADM-MOD-ORG (módulo 11).
+_PESOS_CUIT = (5, 4, 3, 2, 7, 6, 5, 4, 3, 2)
+MENSAJE_CUIT_INVALIDO = "El CUIT no es válido: revisá los números (11 dígitos, con su dígito verificador)."
+
+
+def validar_cuit(valor):
+    """Valida un CUIT (D-58 punto 4; regla 1 de COM-ALT-CLT; docs/api/direcciones.md, «CUIT»). Acepta guiones y espacios y
+    devuelve los 11 dígitos. Si no son 11 dígitos o el verificador no da (módulo 11 con los pesos 5, 4, 3, 2, 7, 6, 5, 4, 3, 2; un
+    resto que da 11 vale 0 y uno que da 10 no es válido), lanza ``ValidationError`` con el código ``cuit_invalido``."""
+    digitos = re.sub(r"[\s-]", "", valor or "")
+    if re.fullmatch(r"\d{11}", digitos, re.ASCII):
+        verificador = 11 - sum(p * int(d) for p, d in zip(_PESOS_CUIT, digitos)) % 11
+        if verificador == 11:
+            verificador = 0
+        if verificador != 10 and verificador == int(digitos[10]):
+            return digitos
+    raise ValidationError(MENSAJE_CUIT_INVALIDO, code="cuit_invalido")
+
+
+def formatear_cuit(valor):
+    """«XX-XXXXXXXX-X» para mostrarlo. Lo que no son 11 dígitos se devuelve igual (no se rompe una pantalla por un dato viejo)."""
+    if re.fullmatch(r"\d{11}", valor or "", re.ASCII):
+        return f"{valor[:2]}-{valor[2:10]}-{valor[10]}"
+    return valor

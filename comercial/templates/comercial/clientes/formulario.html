@@ -1,0 +1,97 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}Registrar, modificar o reactivar un cliente (COM-ALT-CLT, COM-MOD-CLT; VIEWS.cliform del prototipo). «modo» es «alta», «modificar» o «reactivar» (que abre el
+mismo formulario del alta con los datos guardados). Con «novalidate»: las reglas son del servicio y nada se valida al tipear. El tipo de
+cliente muestra la razón social o el nombre y el apellido con CSS, sin JavaScript. Direcciones: las existentes se pueden corregir (se
+mandan siempre; sin cambios no pasa nada), desactivar o borrar (esta última solo si ninguna venta ni suministro la usa); «Agregar
+dirección» suma un bloque nuevo (uno vacío se ignora). Lo que el prototipo no tenía y el caso de uso pide: corregir y borrar una dirección
+(regla 4 de MOD) y «Referencias» en la urbana (D-39). Recibe «form», «cliente», «modo», «nuevas», «existentes», «inactivas», «volver»
+y «cuit_repetido».{% endcomment %}
+{% block titulo %}{% if modo == "alta" %}Registrar cliente{% elif modo == "reactivar" %}Reactivar {{ cliente }}{% else %}Modificar {{ cliente }}{% endif %} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'maestros/css/invernaderos.css' %}">
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% if volver %}{{ volver }}{% elif cliente %}{% url 'comercial:cliente' cliente.pk %}{% else %}{% url 'comercial:clientes' %}{% endif %}">{% icono "back" 15 %} Volver</a>
+  <div class="page-h"><h1>{% if modo == "alta" %}Registrar cliente{% elif modo == "reactivar" %}Reactivar {{ cliente }}{% else %}Modificar {{ cliente }}{% endif %}</h1></div>
+
+  {% if modo == "reactivar" %}
+  <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>Revisá y corregí los datos del cliente. Al confirmar queda activo de nuevo{% if es_vendedor %} y se le avisa al Gerente{% endif %}.</div></div>
+  {% endif %}
+  {% if form.non_field_errors %}
+  <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+  {% endif %}
+  {% if cuit_repetido %}
+  {% if cuit_repetido.codigo == "cuit_de_cliente_activo" %}
+  <div class="alert alert-warn" role="alert" style="margin-bottom:14px">{% icono "warn" 16 %}<div>Ese CUIT ya es de un cliente activo. <a class="link" href="{% url 'comercial:cliente' cuit_repetido.cliente_id %}">Abrir su ficha</a></div></div>
+  {% else %}
+  <div class="alert alert-info" role="alert" style="margin-bottom:14px">{% icono "info" 16 %}<div>Ese CUIT es de un cliente dado de baja. <a class="link" href="{% url 'comercial:cliente_reactivar' cuit_repetido.cliente_id %}">Reactivarlo</a>{% if es_vendedor %} · Se le avisa al Gerente.{% endif %}</div></div>
+  {% endif %}
+  {% endif %}
+
+  <form id="form-cliente" method="post" novalidate>
+    {% csrf_token %}
+    {% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}
+    {# Primer botón del formulario: con Enter en un campo se guarda (si no, Enter dispararía «Agregar dirección»). #}
+    <button class="sr" type="submit" tabindex="-1" aria-hidden="true">Guardar</button>
+
+    <div class="card datos-cli">
+      <div class="card-title">Datos</div>
+      <div class="fld">
+        <span class="lbl">Tipo de cliente</span>
+        <div class="tipo-cli" role="radiogroup" aria-label="Tipo de cliente">
+          {% for radio in form.tipo_cliente %}<label>{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}
+        </div>
+        {% for error in form.tipo_cliente.errors %}<div class="err">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.cuit requerido=True ayuda="Con o sin guiones. Tiene que ser un CUIT válido." %}
+        <div class="solo-juridica">{% include "core/usuarios/_campo.html" with campo=form.razon_social requerido=True %}</div>
+        <div class="solo-fisica">{% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}</div>
+        <div class="solo-fisica">{% include "core/usuarios/_campo.html" with campo=form.apellido requerido=True %}</div>
+        {% include "core/usuarios/_campo.html" with campo=form.email ayuda="Opcional. Sin correo no se puede pactar un suministro." %}
+        {% include "core/usuarios/_campo.html" with campo=form.telefono ayuda="Opcional. De 8 a 15 dígitos." %}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Direcciones</div>
+      <p class="muted" style="margin:-6px 0 14px;font-size:13px">Son opcionales. Se piden recién para una compra-venta con envío o para un suministro. Un cliente puede tener varias (una por sucursal), pero no dos iguales.{% if modo != "alta" %} Si corregís una dirección que ya usa un contrato, se crea una nueva y la anterior queda inactiva.{% endif %}</p>
+
+      {% for fila in existentes %}
+      <details class="dir-bloque" {% if fila.dform.errors or fila.desactivar or fila.borrar %}open{% endif %}>
+        <summary>
+          <span class="dir-fila">
+            <span><b style="font-weight:600">{{ fila.hija.texto }}</b> <span class="muted">· {{ fila.hija.localidad.nombre_localidad }}</span> <span class="status-badge status-ok">Activa</span></span>
+            <span class="muted" style="font-weight:400;font-size:13px">Corregir</span>
+          </span>
+        </summary>
+        <div class="dir-fila quitar" style="margin-bottom:10px">
+          <label><input type="checkbox" name="desactivar" value="{{ fila.hija.pk }}"{% if fila.desactivar %} checked{% endif %}> Desactivar al guardar</label>
+          {% if not fila.en_uso %}<label><input type="checkbox" name="borrar" value="{{ fila.hija.pk }}"{% if fila.borrar %} checked{% endif %}> Borrar al guardar</label>{% else %}<span class="muted">La usa un contrato: no se borra.</span>{% endif %}
+        </div>
+        {% include "comercial/clientes/_direccion_bloque.html" with dform=fila.dform %}
+      </details>
+      {% endfor %}
+
+      {% for d in inactivas %}
+      <div class="dir-bloque dir-inactiva"><span class="dir-fila"><span><b style="font-weight:600">{{ d.texto }}</b> <span class="muted">· {{ d.localidad.nombre_localidad }}</span></span><span class="status-badge status-neutral">Inactiva</span></span></div>
+      {% endfor %}
+
+      {% for dform in nuevas %}
+      <details class="dir-bloque" open>
+        <summary>Dirección nueva</summary>
+        {% include "comercial/clientes/_direccion_bloque.html" %}
+      </details>
+      {% endfor %}
+
+      {% if not existentes and not inactivas and not nuevas %}<p class="muted sm" style="margin-bottom:12px">Sin direcciones.</p>{% endif %}
+      <button class="btn btn-ghost btn-sm" type="submit" name="agregar_direccion" value="1" data-enviando="Agregando…">{% icono "plus" 14 %} Agregar dirección</button>
+    </div>
+
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" data-enviando="Guardando…">{% if modo == "alta" %}Registrar cliente{% elif modo == "reactivar" %}Reactivar cliente{% else %}Guardar cambios{% endif %}</button>
+      <a class="btn btn-ghost" href="{% if volver %}{{ volver }}{% elif cliente %}{% url 'comercial:cliente' cliente.pk %}{% else %}{% url 'comercial:clientes' %}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

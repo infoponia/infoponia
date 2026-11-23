@@ -4,11 +4,15 @@
 # invernadero, en “Logística”.»; para los demás roles, nada. Se registra en ``MaestrosConfig.ready()``: acá se prueba el
 # registrante real (``core.extensiones.datos_de_cuenta``) y las dos pantallas que lo muestran.
 
+from unittest import mock
+
 from django.test import TestCase
 from django.urls import reverse
 
+from core import extensiones
 from core.extensiones import DatoDeCuenta, datos_de_cuenta
 from core.tests.fabricas import crear_cuenta, crear_gerente
+from maestros.servicios import transportistas
 from maestros.tests.fabricas import (
     ConGeoref,
     asignar_transportista,
@@ -24,7 +28,11 @@ NOTA = "Se asigna desde la ficha del invernadero, en “Logística”."
 
 
 class DatosDeCuentaDelTransportistaTests(ConGeoref, TestCase):
-    """El registrante de `maestros`."""
+    """El registrante de `maestros`. Desde COM-01 `comercial` registra además el «Vehículo» del Transportista: estas pruebas son del
+    registrante de `maestros` solo, así que se aíslan con una lista que lo tiene a él únicamente (lo que prueban no cambia)."""
+
+    def setUp(self):
+        self.enterContext(mock.patch.object(extensiones, "_DATOS_DE_CUENTA", [transportistas.datos_de_cuenta]))
 
     def test_regla_3_un_transportista_con_invernadero_ve_su_nombre(self):
         """USR-CNS-USR regla 3: el Transportista con invernadero muestra «Invernadero» con su nombre y la nota."""
