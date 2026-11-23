@@ -8,7 +8,8 @@
 # (FieldError). Mismo caso que `MovimientoInsumo.tipo_movimiento` (INV-01). Decidido por el estudiante en PRD-01; anotado en el
 # cierre y en docs/temas_abiertos.md.
 #
-# NO hay tablas de PRD-02 a PRD-04 (`TransicionEtapa`, `Merma`, `AplicacionInsumos`, `FueraDeServicio`...). `OrdenTrabajo.Tipo` y
+# PRD-02 suma `TransicionEtapa`, `Merma` y `AlertaDeMerma` (al final del archivo). NO hay tablas de PRD-03 y PRD-04 (`AplicacionInsumos`,
+# `FueraDeServicio`...). `OrdenTrabajo.Tipo` y
 # `Bitacora.TipoEvento` ya nacen con los valores de las tareas siguientes (D-67 punto 1 y decisión del estudiante), para que esas
 # tareas no cambien los `choices` ni las restricciones.
 
@@ -19,7 +20,7 @@ from django.utils import timezone
 from contabilidad.models import OrigenDocumento
 from core.models import Agronomo, Capataz, Usuario
 from inventario.models import InsumoInvernadero
-from maestros.models import EtapaProductiva, Invernadero, SectorProduccion, Variedad
+from maestros.models import Alerta, EtapaProductiva, Invernadero, SectorProduccion, Variedad
 
 
 class ConCapataz(models.Model):
@@ -345,3 +346,98 @@ class Consumo(Bitacora):
     def __str__(self):
         """«Consumo #N» (texto de la auditoría, D-36)."""
         return f"Consumo #{self.pk}"
+
+
+class TransicionEtapa(OrdenTrabajo, ConCapataz):
+    """Orden de trasladar el lote ENTERO a la etapa siguiente de su ciclo (`tipo_orden = transicion`; docs/modelo/produccion.md).
+    Su clave es `ordentrabajo_ptr`. El Capataz viene de `ConCapataz` (D-53). La etapa de origen no se guarda (regla 1 de 8.20).
+
+    Un lote tiene a lo sumo UNA transición «a realizar» (regla 4 de 8.21): el estado vive en el padre y una restricción de la base no
+    cruza tablas, así que lo garantiza el servicio con el bloqueo del lote y lo prueba la concurrencia (docs/patrones/bloqueos.md).
+    Por la misma razón, «`cant_transferido` y `fecha_transicion` están cargados si y solo si la orden está concretada» lo cumple el
+    servicio; la base solo exige que se carguen juntos y que la cantidad sea positiva."""
+
+    lote = models.ForeignKey(Lote, on_delete=models.PROTECT, related_name="transiciones")  # R160
+    etapa_destino = models.ForeignKey(EtapaProductiva, on_delete=models.PROTECT, related_name="transiciones")  # R107
+    # Nulos mientras la orden está «a realizar» o «cancelada»; al concretar, la suma de los ocupados y la fecha efectiva (MD-53).
+    cant_transferido = models.PositiveIntegerField(null=True, blank=True)
+    fecha_transicion = models.DateField(null=True, blank=True)
+    # R080: el registro de bitácora que genera al concretarse; nulo hasta entonces. DIFERENCIA CON LA DOCUMENTACIÓN: la ficha lo llama
+    # `bitacora`, pero `OrigenDocumento` ya tiene el accesorio `bitacora` (su hija) y Django no admite el choque (models.E006), como
+    # con `tipo_orden` (D-81). Anotado en el cierre y en docs/temas_abiertos.md.
+    bitacora_de_transicion = models.OneToOneField(Bitacora, null=True, blank=True, on_delete=models.PROTECT, related_name="transicion")
+
+    class Meta:
+        verbose_name = "Transición de etapa"
+        verbose_name_plural = "Transiciones de etapa"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(cant_transferido__isnull=True) | Q(cant_transferido__gt=0), name="transicion_transferido_positivo"
+            ),
+            models.CheckConstraint(
+                condition=Q(cant_transferido__isnull=True, fecha_transicion__isnull=True)
+                | Q(cant_transferido__isnull=False, fecha_transicion__isnull=False),
+                name="transicion_cantidad_y_fecha_juntas",
+            ),
+        ]
+
+
+class Merma(Bitacora):
+    """Plantas de un lote que se perdieron o se descartaron (`tipo_evento = merma`; R082, R106). Hija de `Bitacora`. La crea el núcleo
+    `mermas.aplicar_merma`; que `tipo_evento` sea «merma» lo garantiza el servicio (una restricción de la hija no ve el campo del padre).
+    PRD-03 la completa con la pantalla; COM-04a suma las causas de cámara y de entrega."""
+
+    class Causa(models.TextChoices):
+        """Las del lote en pie (MD-78). El «descarte por selección» no suma a la merma acumulada (regla de PROD-REG-MRM)."""
+
+        PLAGA = "plaga", "Plaga"
+        ENFERMEDAD = "enfermedad", "Enfermedad"
+        FALLA_RIEGO_O_NUTRIENTES = "falla_riego_o_nutrientes", "Falla de riego o nutrientes"
+        CONDICIONES_AMBIENTALES = "condiciones_ambientales", "Condiciones ambientales"
+        DANO_MECANICO = "dano_mecanico", "Daño mecánico"
+        DESCARTE_POR_SELECCION = "descarte_por_seleccion", "Descarte por selección"
+        OTRA = "otra", "Otra"
+
+    cant_merma = models.PositiveIntegerField()
+    causa = models.CharField(max_length=30, choices=Causa.choices)
+
+    class Meta:
+        verbose_name = "Merma"
+        verbose_name_plural = "Mermas"
+        constraints = [
+            models.CheckConstraint(condition=Q(cant_merma__gt=0), name="merma_cantidad_positiva"),
+            models.CheckConstraint(
+                condition=Q(
+                    causa__in=[
+                        "plaga",
+                        "enfermedad",
+                        "falla_riego_o_nutrientes",
+                        "condiciones_ambientales",
+                        "dano_mecanico",
+                        "descarte_por_seleccion",
+                        "otra",
+                    ]
+                ),
+                name="merma_causa_valida",
+            ),
+        ]
+
+    def __str__(self):
+        """«Merma #N» (texto de la auditoría, D-36)."""
+        return f"Merma #{self.pk}"
+
+
+class AlertaDeMerma(models.Model):
+    """Tabla de enlace (A2, restricción C5): una alerta de las dos que puede disparar una merma (umbral y plantas comprometidas) con
+    su merma de origen (docs/api/alertas.md, sección 4). Se crea en la misma transacción que la alerta."""
+
+    merma = models.ForeignKey(Merma, on_delete=models.PROTECT, related_name="alertas_de_merma")  # R089
+    alerta = models.OneToOneField(Alerta, on_delete=models.PROTECT, related_name="de_merma")
+
+    class Meta:
+        verbose_name = "Alerta de merma"
+        verbose_name_plural = "Alertas de merma"
+
+    def __str__(self):
+        """«Alerta de merma #N» (texto de la auditoría, D-36)."""
+        return f"Alerta de merma #{self.pk}"

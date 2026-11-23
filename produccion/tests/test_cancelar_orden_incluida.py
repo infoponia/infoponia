@@ -20,8 +20,16 @@ from django.utils import timezone
 from core.models import Capataz, Notificacion, RegistroAuditoria
 from inventario.tests.fabricas import ConDatosDeInventario, perezoso
 from produccion.errores import ErrorDeProduccion
-from produccion.models import OrdenTrabajo, ReservaInsumo
-from produccion.tests.fabricas import insumo_adicional, invernadero_con_produccion, orden_de_siembra, orden_suelta
+from maestros.servicios import sectores as api_sectores
+from produccion.models import Lote, OrdenTrabajo, ReservaInsumo, TransicionEtapa
+from produccion.tests.fabricas import (
+    insumo_adicional,
+    invernadero_con_produccion,
+    lote_con_ciclo,
+    orden_de_siembra,
+    orden_de_transicion,
+    orden_suelta,
+)
 
 ordenes = perezoso("produccion.servicios.ordenes")
 D = Decimal
@@ -138,3 +146,54 @@ class CancelarOrdenIncluidaDeCualquierTipoTests(Base):
             with self.subTest(tipo=tipo):
                 self.incluir(orden_suelta(self.e.invernadero, tipo), avisar=True)
         self.assertEqual((RegistroAuditoria.objects.count(), Notificacion.objects.count()), (0, 0))
+
+
+class CancelarOrdenIncluidaDeTransicionTests(ConDatosDeInventario, TestCase):
+    """PRD-02, paso 6: `cancelar_orden_incluida` con una transición (la usará PRD-04, PROD-PNR-FDS, que cancela las órdenes que
+    comprometían el sector): sin reservas, con sus sectores destino y con el Capataz de su hija."""
+
+    def setUp(self):
+        self.e = invernadero_con_produccion()
+        self.lote = lote_con_ciclo(self.e, cantidad=50)
+        self.orden = orden_de_transicion(self.e, self.lote)
+        self.destino = self.e.sectores["floracion"]
+
+    def incluir(self, motivo="Sector fuera de servicio: Floración. Se rompió el riego", actor=None, **opciones):
+        return ordenes.cancelar_orden_incluida(actor, self.orden, motivo, **opciones)
+
+    def test_regla_con_actor_none_cancela_la_transicion_y_devuelve_sus_sectores_sin_reservas(self):
+        """«Ejecución desde los casos de uso que lo incluyen»: con `actor=None` la transición queda cancelada con su fecha y su motivo; no
+        hay reservas; los sectores traen el cambio de agujeros comprometidos (50 → 0) para el registro del llamador."""
+        resultado = self.incluir()
+        orden = TransicionEtapa.objects.get(pk=self.orden.pk)
+        self.assertEqual((orden.estado_orden, orden.fecha_resolucion_orden), ("cancelada", hoy()))
+        self.assertEqual(resultado.orden.pk, self.orden.pk)
+        self.assertEqual(resultado.reservas, [])
+        self.assertEqual([(a.sector.pk, a.antes, a.despues) for a in resultado.sectores_afectados], [(self.destino.pk, 50, 0)])
+
+    def test_regla_el_aviso_al_capataz_de_la_transicion_solo_si_se_pide_y_esta_activo(self):
+        """El Capataz sale de la hija `TransicionEtapa` (D-53): con `avisar=False` no se avisa a nadie; con `avisar=True` y Capataz
+        activo, `notificar_a` lo trae; inactivo, vacío. La función no notifica por su cuenta."""
+        self.assertEqual(self.incluir(avisar=False).notificar_a, [])
+        otra = orden_de_transicion(self.e, lote_con_ciclo(self.e, cantidad=5))
+        self.assertEqual([c.pk for c in ordenes.cancelar_orden_incluida(None, otra, "Sector fuera de servicio", avisar=True).notificar_a], [self.e.capataz.pk])
+        self.assertEqual(Notificacion.objects.count(), 0)
+        tercera = orden_de_transicion(self.e, lote_con_ciclo(self.e, cantidad=5))
+        Capataz.objects.filter(pk=self.e.capataz.pk).update(is_active=False)
+        self.assertEqual(ordenes.cancelar_orden_incluida(None, tercera, "Sector fuera de servicio", avisar=True).notificar_a, [])
+
+    def test_regla_no_audita_no_toca_el_lote_y_libera_los_agujeros(self):
+        """No audita (lo hace el llamador en su único registro); el lote conserva etapa, cantidad y costo; los agujeros dejan de estar
+        comprometidos."""
+        antes = Lote.objects.values_list("etapa_id", "cantidad_actual", "costo_acumulado").get(pk=self.lote.pk)
+        self.incluir()
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="cancelacion_orden").count(), 0)
+        self.assertEqual(Lote.objects.values_list("etapa_id", "cantidad_actual", "costo_acumulado").get(pk=self.lote.pk), antes)
+        self.assertEqual(api_sectores.agujeros_de([self.destino])[self.destino.pk].comprometidos, 0)
+
+    def test_ext_8a_una_transicion_que_ya_no_esta_a_realizar_lanza_orden_no_pendiente(self):
+        """Extensión 8a: si el llamador la encuentra cancelada, `orden_no_pendiente` (el llamador decide)."""
+        self.incluir()
+        with self.assertRaises(ErrorDeProduccion) as rechazo_:
+            self.incluir()
+        self.assertEqual(rechazo_.exception.codigo, "orden_no_pendiente")

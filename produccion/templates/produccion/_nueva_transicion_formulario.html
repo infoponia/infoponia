@@ -1,0 +1,92 @@
+{% load iconos produccion %}{% comment %}El formulario de «Nueva transición» (PROD-PNF-TRN): lo que HTMX reemplaza dentro de #transicion-vivo. Recibe «ofrecido» (DatosDePlanificacionDeTransicion: lotes, lote, etapa_destino,
+cantidad, capataz, fecha_propuesta, dias_de_atraso, fecha_estimada_de_fin, diferencia_en_dias, fecha_maxima_de_cosecha, sectores, no_elegibles), «valores» (lo escrito), «lote_id», «hay_trasladables», «motivos»,
+«prioridades», «errores» ({campo: mensaje}), «resumen» (ResumenDeTransicion o None), «firma» y «cambio_la_firma». Reglas de interfaz (.claude/rules/interfaz.md): elegir el lote solo redibuja lo que depende
+de él (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar transición». No hay refresco al escribir. Todo se escapa. Los errores van debajo de su campo; lo que no tiene campo, arriba.{% endcomment %}
+<form id="transicion-form" method="post" action="{% url 'produccion:nueva_transicion' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">1 · Lote</div>
+      {% if not ofrecido.lotes %}
+        <p class="muted sm">No hay lotes activos en tus invernaderos. Los lotes aparecen cuando el Capataz concreta una siembra.</p>
+      {% else %}
+        {% if not hay_trasladables %}<p class="muted sm" role="status">Ningún lote se puede trasladar por ahora: mirá el motivo de cada uno.</p>{% endif %}
+        <div class="fld" role="radiogroup" aria-label="Lote a trasladar">
+          {% for f in ofrecido.lotes %}
+          <label style="display:block;padding:8px 0;border-top:1px solid var(--border){% if not f.trasladable %};opacity:.75{% endif %}">
+            <input type="radio" name="lote" value="{{ f.lote_id }}"{% if f.lote_id == lote_id %} checked{% endif %}{% if not f.trasladable %} disabled{% else %} hx-post="{% url 'produccion:nueva_transicion' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change"{% endif %}>
+            <b class="mono">{{ f.codigo }}</b> · {{ f.variedad_nombre }} <span class="muted">· {{ f.invernadero }} · {{ f.cantidad_actual }} plantas</span>
+            <span class="sm" style="display:block;margin-left:22px">{{ f.etapa_nombre }}{% if f.etapa_siguiente_nombre %} → {{ f.etapa_siguiente_nombre }}{% endif %}{% if f.fecha_estimada_de_fin %} · termina el {{ f.fecha_estimada_de_fin|date:"d/m/Y" }}{% endif %}</span>
+            {% if f.motivo %}<span class="sm" style="display:block;margin-left:22px;color:var(--status-danger)">{% if f.motivo == "transicion_a_realizar" %}Ya tiene la transición {{ f.transicion_pendiente.0 }}, programada para el {{ f.transicion_pendiente.1|date:"d/m/Y" }}.{% else %}{{ motivos|valor:f.motivo }}{% endif %}</span>{% endif %}
+          </label>
+          {% endfor %}
+        </div>
+        <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+      {% endif %}
+    </div>
+
+    {% if ofrecido.lote %}
+    <input type="hidden" name="cantidad_vista" value="{% if valores.cantidad_vista %}{{ valores.cantidad_vista }}{% else %}{{ ofrecido.cantidad }}{% endif %}">
+    <input type="hidden" name="etapa_vista" value="{% if valores.etapa_vista %}{{ valores.etapa_vista }}{% else %}{{ ofrecido.lote.etapa_id }}{% endif %}">
+    <div class="card">
+      <div class="card-title">2 · Fecha</div>
+      <div class="grid2">
+        <div class="fld"><label for="fecha_programada">Fecha programada<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="fecha_programada" name="fecha_programada" type="date" value="{% if valores.fecha_programada %}{{ valores.fecha_programada }}{% else %}{{ ofrecido.fecha_propuesta|date:'Y-m-d' }}{% endif %}"{% if errores.fecha_programada %} aria-invalid="true"{% endif %}>
+          {% if errores.fecha_programada %}<div class="err">{{ errores.fecha_programada }}</div>
+          {% else %}<div class="hint">{{ ofrecido.lote.etapa_nombre }} termina el {{ ofrecido.fecha_estimada_de_fin|date:"d/m/Y" }}.{% if ofrecido.dias_de_atraso %} Ya pasó hace {{ ofrecido.dias_de_atraso }} día{{ ofrecido.dias_de_atraso|pluralize }}: se propone hoy.{% endif %}{% if ofrecido.diferencia_en_dias %} La fecha elegida es {% if ofrecido.diferencia_en_dias > 0 %}{{ ofrecido.diferencia_en_dias }} día{{ ofrecido.diferencia_en_dias|pluralize }} posterior{{ ofrecido.diferencia_en_dias|pluralize:"," }}{% else %}{% widthratio ofrecido.diferencia_en_dias 1 -1 %} día{% if ofrecido.diferencia_en_dias != -1 %}s{% endif %} anterior{% if ofrecido.diferencia_en_dias != -1 %}es{% endif %}{% endif %} al fin estimado de la etapa.{% endif %}{% if ofrecido.fecha_maxima_de_cosecha %} Fecha máxima de cosecha estimada: <b>{{ ofrecido.fecha_maxima_de_cosecha|date:"d/m/Y" }}</b>.{% endif %}</div>{% endif %}</div>
+        <div class="fld"><span class="lbl">Etapa destino</span><span class="sm" style="display:block;padding:8px 0">{{ ofrecido.etapa_destino.nombre }} · {{ ofrecido.etapa_destino.duracion_dias }} días · el Capataz es {{ ofrecido.capataz.get_full_name|default:ofrecido.capataz.email }}</span></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar" data-sin-envio-en-curso hx-post="{% url 'produccion:nueva_transicion' %}" hx-vals='{"accion": "actualizar"}'>Actualizar fechas</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3 · Cuántas plantas en cada sector de {{ ofrecido.etapa_destino.nombre }}</div>
+      <p class="sm">El lote tiene <b>{{ ofrecido.cantidad }}</b> plantas: la suma de los sectores tiene que dar exactamente esa cantidad. Dejá en blanco los sectores que no uses.</p>
+      {% for s in ofrecido.sectores %}
+      <div class="fld"><label for="sector_{{ s.sector_id }}">{{ s.nombre }} <span class="muted">(agujeros libres: {{ s.libres }})</span></label>
+        <input class="field-input" id="sector_{{ s.sector_id }}" name="sector_{{ s.sector_id }}" type="number" min="0" max="{{ s.libres }}" step="1" inputmode="numeric" value="{% campo valores 'sector' s.sector_id %}"></div>
+      {% empty %}<p class="err">El invernadero no tiene sectores de {{ ofrecido.etapa_destino.nombre }} con lugar.</p>{% endfor %}
+      {% for n in ofrecido.no_elegibles %}<div class="hint"><b>{{ n.nombre }}:</b> {{ n.texto }}</div>{% endfor %}
+      {% if errores.distribucion %}<div class="err">{{ errores.distribucion }}</div>{% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">4 · Prioridad y descripción</div>
+      <div class="grid2">
+        <div class="fld"><label for="prioridad">Prioridad (opcional)</label>
+          <select class="field-input" id="prioridad" name="prioridad" data-desplegable>
+            {% for valor, texto in prioridades %}<option value="{{ valor }}"{% if valores.prioridad == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+          </select>
+          {% if errores.prioridad %}<div class="err">{{ errores.prioridad }}</div>{% endif %}</div>
+        <div class="fld"><label for="descripcion">Descripción (opcional)</label>
+          <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="500">{{ valores.descripcion }}</textarea>
+          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+      </div>
+    </div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la transición"><div class="card-title">Resumen</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <p class="sm"><b>Lote:</b> <span class="mono">{{ resumen.lote.codigo }}</span> · {{ resumen.variedad }} · {{ resumen.invernadero.nombre_invernadero }}</p>
+      <p class="sm"><b>Etapa:</b> {{ resumen.etapa_origen.nombre }} → {{ resumen.etapa_destino.nombre }} · <b>Plantas:</b> {{ resumen.cantidad }}</p>
+      <p class="sm"><b>Sale de:</b> {% for sector, ocupados in resumen.sectores_de_origen %}{{ sector.nombre_sector }} ({{ ocupados }}){% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      <p class="sm"><b>Va a:</b> {% for sector, plantas in resumen.distribucion %}{{ sector.nombre_sector }} ({{ plantas }}){% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      <p class="sm"><b>Fecha programada:</b> {{ resumen.fecha_programada|date:"d/m/Y" }}{% if resumen.diferencia_en_dias %} <span class="muted">({% if resumen.diferencia_en_dias > 0 %}{{ resumen.diferencia_en_dias }} día{{ resumen.diferencia_en_dias|pluralize }} después{% else %}{% widthratio resumen.diferencia_en_dias 1 -1 %} día{% if resumen.diferencia_en_dias != -1 %}s{% endif %} antes{% endif %} del fin estimado)</span>{% endif %}</p>
+      {% if resumen.fecha_maxima_de_cosecha %}<p class="sm"><b>Cosecha hasta:</b> {{ resumen.fecha_maxima_de_cosecha|date:"d/m/Y" }} <span class="muted">(fecha máxima estimada; la real se calcula con la fecha del traslado)</span></p>{% endif %}
+      {% if resumen.prioridad %}<p class="sm"><b>Prioridad:</b> {{ resumen.prioridad|capfirst }}</p>{% endif %}
+      {% if resumen.descripcion %}<p class="sm"><b>Descripción:</b> {{ resumen.descripcion }}</p>{% endif %}
+      <p class="sm"><b>Capataz responsable:</b> {{ resumen.capataz.get_full_name|default:resumen.capataz.email }}</p>
+      <input type="hidden" name="firma" value="{{ firma }}">
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…"{% if not ofrecido.lote %} disabled aria-disabled="true"{% endif %}>Ver resumen</button>
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Planificando…">Confirmar transición</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'produccion:ordenes' %}">Cancelar</a>
+    </div>
+  </div>
+</form>

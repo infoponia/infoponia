@@ -13,7 +13,7 @@ está en `docs/historial.md`, `docs/revisiones_pendientes.md`, `docs/temas_abier
 
 ## Formato de una decisión nueva
 
-Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-83**; D-80 es de IOT-01, D-81 de PRD-01 y D-82 de IOT-02; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
+Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-84**; D-80 es de IOT-01, D-81 de PRD-01, D-82 de IOT-02 y D-83 de PRD-02; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
 
 ```
 ## D-NN — Título
@@ -119,3 +119,4 @@ iot, contabilidad.
 | D-80 | El rango de una acción de actuador depende de su unidad | iot | vigente | «%» de 0 a 100; «rpm», «L/min» y «cm» con mínimo 0 o más; «°» sin límite fijo; lo respalda un `CheckConstraint` de `Accion` (IOT-01, revisión a mano) |
 | D-81 | `tipo_orden` en `OrdenTrabajo` y el contrato ampliado de `traspasar` | produccion, maestros | aprobada | El campo se llama `tipo_orden` para no pisar `OrigenDocumento.tipo`; `traspasar` devuelve las instancias tocadas; `Bitacora.TipoEvento` nace con tres valores |
 | D-82 | Hardware: el tipo de actuador se bloquea antes que el invernadero y un actuador no se reactiva con su tipo dado de baja | iot | a validar | Orden tipo, invernadero, sistema y equipo en el alta, el cambio de tipo y la reactivación de un actuador (excepción a D-40 y a `bloqueos.md`); `recalcular_compatibilidad` ordena por invernadero; `tipo_inactivo` al reactivar |
+| D-83 | `bitacora_de_transicion` en `TransicionEtapa` y tres códigos de error | produccion | aprobada | La asociación R080 se llama `bitacora_de_transicion` para no chocar con el accesorio `bitacora` de `OrigenDocumento`; `causa_invalida`, `descripcion_larga` y `lote_sin_plantas` entran en los códigos de `docs/api/produccion.md` |

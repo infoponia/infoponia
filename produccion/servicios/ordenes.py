@@ -21,7 +21,7 @@ from maestros.models import Invernadero
 from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
-from produccion.models import OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra
+from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios.bloqueos import traducir
 
 Tipo = OrdenTrabajo.Tipo
@@ -34,7 +34,13 @@ TIPOS_DE_PRODUCCION = (Tipo.SIEMBRA, Tipo.TRANSICION, Tipo.COSECHA)
 TIPOS_QUE_CANCELA_PRODUCCION = (Tipo.SIEMBRA, Tipo.TRANSICION)
 
 # Las tablas hijas que tienen Capataz (`ConCapataz`, D-53). PRD-02 suma `TransicionEtapa` y COM-02, `Cosecha`.
-_HIJAS_CON_CAPATAZ = [Siembra]
+_HIJAS_CON_CAPATAZ = [Siembra, TransicionEtapa]
+# Lo que cada hija trae cargado para armar sus filas sin consultas por fila: la variedad de una siembra y, en una transición, la
+# del lote (su variedad sale de `lote.siembra`) y la etapa destino.
+_RELACIONES = {
+    Siembra: ("variedad__cultivo",),
+    TransicionEtapa: ("lote__siembra__variedad__cultivo", "etapa_destino__tipo_etapa"),
+}
 
 # Una orden tal como la muestran la lista, la bandeja y los avisos: ya con todo lo que necesitan (sin consultas por fila).
 FilaDeOrden = namedtuple(
@@ -82,6 +88,8 @@ def _resumen_de(hija):
     """El texto corto de lo que hace la orden («Lechuga Crespa · 50 plantines»); vacío si su hija no se conoce."""
     if isinstance(hija, Siembra):
         return f"{hija.variedad} · {hija.cant_plantines_siembra} plantines"
+    if isinstance(hija, TransicionEtapa):
+        return f"{hija.lote.codigo} · {hija.lote.siembra.variedad} → {hija.etapa_destino.tipo_etapa.nombre_etapa}"
     return ""
 
 
@@ -110,7 +118,7 @@ def _filas_de_ordenes(ordenes):
     hijas = {}
     for clase in _HIJAS_CON_CAPATAZ:
         if ids:
-            hijas.update({h.pk: h for h in clase.objects.filter(pk__in=ids).select_related("variedad__cultivo")})
+            hijas.update({h.pk: h for h in clase.objects.filter(pk__in=ids).select_related(*_RELACIONES[clase])})
     return [_fila(orden, hijas.get(orden.pk), getattr(hijas.get(orden.pk), "capataz_id", None)) for orden in ordenes]
 
 
@@ -123,7 +131,7 @@ def _ordenes_del_capataz(capataz, estado, solo_invernaderos_activos):
             consulta = consulta.filter(estado_orden=estado)
         if solo_invernaderos_activos:
             consulta = consulta.filter(invernadero__estado_invernadero=Invernadero.Estado.ACTIVO)
-        for hija in consulta.select_related("invernadero", "variedad__cultivo"):
+        for hija in consulta.select_related("invernadero", *_RELACIONES[clase]):
             filas.append(_fila(hija, hija, hija.capataz_id))
     return sorted(filas, key=_clave_de_bandeja)
 
@@ -203,7 +211,8 @@ CancelacionIncluida = namedtuple("CancelacionIncluida", "orden reservas sectores
 # Un sector cuyos agujeros comprometidos bajan con la cancelación: `antes` y `despues` son los comprometidos.
 SectorAfectado = namedtuple("SectorAfectado", "sector antes despues")
 ReservaQueSeLibera = namedtuple("ReservaQueSeLibera", "nombre cantidad unidad")
-ResumenDeCancelacion = namedtuple("ResumenDeCancelacion", "orden reservas sectores")
+# `lote`, `etapa_origen` y `etapa_destino` (nombres) solo en una transición (extensión 4a); `None` en una siembra.
+ResumenDeCancelacion = namedtuple("ResumenDeCancelacion", "orden reservas sectores lote etapa_origen etapa_destino")
 
 
 def _error(codigo, mensaje, campo=None):
@@ -273,10 +282,18 @@ def resumen_de_cancelacion(actor, orden_id):
     sectores = (
         OcupacionSector.objects.filter(orden=orden).select_related("sector").order_by("pk") if orden.tipo_orden in TIPOS_CON_SECTORES else []
     )
+    lote = etapa_origen = etapa_destino = None
+    if orden.tipo_orden == Tipo.TRANSICION:  # extensión 4a: el lote, su etapa actual y la etapa destino
+        transicion = TransicionEtapa.objects.select_related("lote__etapa__tipo_etapa", "etapa_destino__tipo_etapa").get(pk=orden.pk)
+        lote = transicion.lote
+        etapa_origen, etapa_destino = lote.etapa.tipo_etapa.nombre_etapa, transicion.etapa_destino.tipo_etapa.nombre_etapa
     return ResumenDeCancelacion(
         orden,
         [ReservaQueSeLibera(r.insumo_invernadero.insumo.nombre_insumo, r.cantidad_reservada, r.insumo_invernadero.insumo.unidad_medida_insumo) for r in reservas],
         [(o.sector, o.cant_agujeros_planificados) for o in sectores],
+        lote,
+        etapa_origen,
+        etapa_destino,
     )
 
 
@@ -327,6 +344,9 @@ def _cancelar_en_transaccion(orden, motivo, *, avisar, foto=None):
     existencias_ids = sorted({i for i in ReservaInsumo.objects.filter(orden_id=orden.pk).values_list("insumo_invernadero_id", flat=True)})
     existencias = list(InsumoInvernadero.objects.select_for_update(no_key=True).filter(pk__in=existencias_ids).order_by("pk"))
     list(Insumo.objects.select_for_update(no_key=True).filter(pk__in={e.insumo_id for e in existencias}).order_by("pk"))
+    if orden.tipo_orden == Tipo.TRANSICION:  # nivel 4 de bloqueos.md: el lote, antes que la orden (quien llama ya tiene los sectores)
+        lote_id = TransicionEtapa.objects.filter(pk=orden.pk).values_list("lote_id", flat=True).first()
+        Lote.objects.select_for_update(no_key=True).filter(pk=lote_id).first()
     fila = OrdenTrabajo.objects.select_for_update(no_key=True).filter(pk=orden.pk).first()
     if fila is None:
         raise Http404("No existe esa orden.")
@@ -400,6 +420,7 @@ def cancelar_orden(actor, orden_id, motivo):
     - Postcondiciones m y n y D-36: UN registro `cancelacion_orden`.
     - Bloqueos (`FOR NO KEY UPDATE`): cuentas del Agrónomo y del Capataz (orden de id) → invernadero → variedad → sectores → insumos → la
       orden y sus reservas. Todo o nada (D-22).
+    - Una transición suma, en su lugar de la jerarquía, la variedad del lote (2b) y el lote (4, antes que la orden), sin reservas de insumo.
     """
     orden = _orden_del_agronomo(actor, orden_id)
     motivo = _motivo_valido(motivo)
@@ -407,7 +428,8 @@ def cancelar_orden(actor, orden_id, motivo):
     hija = _hija_con_capataz(orden)
     foto = _foto_de_las_reservas(orden)
     sector_ids = list(OcupacionSector.objects.filter(orden=orden).values_list("sector_id", flat=True)) if orden.tipo_orden in TIPOS_CON_SECTORES else []
-    variedad_id = getattr(hija, "variedad_id", None)
+    # Siembra: su variedad; transición: la del lote (nivel 2b de bloqueos.md).
+    variedad_id = hija.lote.siembra.variedad_id if isinstance(hija, TransicionEtapa) else getattr(hija, "variedad_id", None)
     with transaction.atomic():
         cuentas = {actor.pk, *([hija.capataz_id] if hija is not None else [])}
         list(Usuario.objects.select_for_update(no_key=True).filter(pk__in=cuentas).order_by("pk"))
@@ -457,7 +479,7 @@ def detalle_de_orden(actor, orden_id):
         raise Http404("No existe esa orden.")
     hija = None
     for clase in _HIJAS_CON_CAPATAZ:
-        hija = clase.objects.select_related("capataz", "agronomo", "variedad__cultivo").filter(pk=orden.pk).first()
+        hija = clase.objects.select_related("capataz", "agronomo", *_RELACIONES[clase]).filter(pk=orden.pk).first()
         if hija is not None:
             break
     rol = rol_de(actor)
@@ -473,5 +495,5 @@ def detalle_de_orden(actor, orden_id):
         list(ReservaInsumo.objects.filter(orden=orden).select_related("insumo_invernadero__insumo").order_by("pk")),
         list(OcupacionSector.objects.filter(orden=orden).select_related("sector").order_by("pk")) if orden.tipo_orden in TIPOS_CON_SECTORES else [],
         puede_cancelar=a_realizar and rol == Usuario.Rol.AGRONOMO and orden.tipo_orden in TIPOS_QUE_CANCELA_PRODUCCION,
-        puede_concretar=a_realizar and es_su_capataz and orden.tipo_orden == Tipo.SIEMBRA,
+        puede_concretar=a_realizar and es_su_capataz and orden.tipo_orden in TIPOS_QUE_CANCELA_PRODUCCION,  # siembra y transición
     )

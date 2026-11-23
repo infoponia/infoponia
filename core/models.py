@@ -678,6 +678,11 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_SIEMBRA = "planificacion_siembra", "Planificación de siembra"
         CONCRECION_SIEMBRA = "concrecion_siembra", "Concreción de siembra"
         CANCELACION_ORDEN = "cancelacion_orden", "Cancelación de orden de trabajo"
+        # Transición de etapa y merma (PRD-02, D-36): la merma de una transición va DENTRO de `concrecion_transicion`;
+        # `registro_merma` como acción propia la usa PRD-03 (Registrar Merma).
+        PLANIFICACION_TRANSICION = "planificacion_transicion", "Planificación de transición"
+        CONCRECION_TRANSICION = "concrecion_transicion", "Concreción de transición"
+        REGISTRO_MERMA = "registro_merma", "Registro de merma"
         # Tipos de actuador del IoT (IOT-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_TIPO_ACTUADOR = "alta_tipo_actuador", "Alta de tipo de actuador"
         MODIFICACION_TIPO_ACTUADOR = "modificacion_tipo_actuador", "Modificación de tipo de actuador"
@@ -790,6 +795,18 @@ class RegistroAuditoria(models.Model):
         "lotes_de_insumo": "Lotes de insumo",
         "consumos": "Consumos",
         "bitacoras": "Registros de bitácora",
+        # Transición de etapa y merma (PRD-02): fechas y cantidades van como texto. «lote», «orden», «ocupaciones», «sectores»,
+        # «bitacoras», «agujeros_comprometidos», «agujeros_ocupados» y «alertas_creadas» ya existen.
+        "etapa": "Etapa",
+        "etapa_destino": "Etapa destino",
+        "cantidad_actual": "Plantas del lote",
+        "cantidad_transferida": "Plantas trasladadas",
+        "fecha_resolucion_orden": "Fecha de resolución",
+        "fecha_transicion": "Fecha efectiva de la transición",
+        "costo_acumulado": "Costo acumulado del lote",
+        "merma": "Merma",
+        "cantidad_merma": "Plantas perdidas",
+        "causa_merma": "Causa de la merma",
         # Tipos de actuador (IOT-01): listas de referencias a sus acciones en los datos del caso de uso («nombre» y «estado» ya existen).
         "tiempo_minimo_entre_comandos": "Tiempo mínimo entre comandos (s)",
         # Sistema IoT (IOT-02): el nodo central y el rango de la solución. «invernadero» ya existe.
@@ -1051,6 +1068,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_SIEMBRA,
         RegistroAuditoria.Accion.CONCRECION_SIEMBRA,
         RegistroAuditoria.Accion.CANCELACION_ORDEN,
+        RegistroAuditoria.Accion.PLANIFICACION_TRANSICION,
+        RegistroAuditoria.Accion.CONCRECION_TRANSICION,
+        RegistroAuditoria.Accion.REGISTRO_MERMA,
         RegistroAuditoria.Accion.ALTA_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.REACTIVACION_TIPO_ACTUADOR,

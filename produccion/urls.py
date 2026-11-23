@@ -10,6 +10,7 @@ app_name = "produccion"
 urlpatterns = [
     path("ordenes/", views.lista, name="ordenes"),
     path("ordenes/nueva-siembra/", views.nueva_siembra, name="nueva_siembra"),
+    path("ordenes/nueva-transicion/", views.nueva_transicion, name="nueva_transicion"),
     path("ordenes/<int:orden_id>/", views.orden, name="orden"),
     path("ordenes/<int:orden_id>/cancelar/", views.cancelar, name="cancelar"),
     path("bandeja/", views.bandeja, name="bandeja"),

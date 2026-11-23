@@ -6,17 +6,21 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
 {% with orden=detalle.orden hija=detalle.hija %}
 <div class="page narrow">
   <a class="back" href="{% if request.user.rol == 'capataz' %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "chev" 14 %} {% if request.user.rol == 'capataz' %}Mis órdenes{% else %}Órdenes de trabajo{% endif %}</a>
-  <div class="page-h"><h1><span class="mono">{{ orden.codigo }}</span> · {{ hija.variedad|default:"Orden de trabajo" }}</h1><div class="sub">{{ detalle.invernadero.nombre_invernadero }} · {{ orden.get_tipo_orden_display }} · {{ orden.get_estado_orden_display }}</div></div>
+  <div class="page-h"><h1><span class="mono">{{ orden.codigo }}</span> · {% if orden.tipo_orden == "transicion" %}{{ hija.lote.siembra.variedad }}{% else %}{{ hija.variedad|default:"Orden de trabajo" }}{% endif %}</h1><div class="sub">{{ detalle.invernadero.nombre_invernadero }} · {{ orden.get_tipo_orden_display }} · {{ orden.get_estado_orden_display }}</div></div>
   <div class="card"><div class="card-b">
     <dl class="kv">
       <div><dt>Fecha programada</dt><dd>{{ orden.fecha_programada_orden|date:"d/m/Y" }}</dd></div>
       <div><dt>Creada</dt><dd>{{ orden.fecha_creacion_orden|date:"d/m/Y" }}</dd></div>
-      {% if hija %}<div><dt>Plantines planificados</dt><dd>{{ hija.cant_plantines_siembra }}</dd></div>
+      {% if orden.tipo_orden == "transicion" %}<div><dt>Lote</dt><dd><span class="mono">{{ hija.lote.codigo }}</span></dd></div>
+      <div><dt>Etapa destino</dt><dd>{{ hija.etapa_destino.tipo_etapa.nombre_etapa }}</dd></div>
+      {% if hija.cant_transferido %}<div><dt>Plantas trasladadas</dt><dd>{{ hija.cant_transferido }}</dd></div>{% endif %}{% endif %}
+      {% if hija %}{% if orden.tipo_orden == "siembra" %}<div><dt>Plantines planificados</dt><dd>{{ hija.cant_plantines_siembra }}</dd></div>{% endif %}
       <div><dt>Capataz</dt><dd>{{ hija.capataz.get_full_name|default:hija.capataz.email }}</dd></div>
       <div><dt>Planificó</dt><dd>{% if hija.agronomo %}{{ hija.agronomo.get_full_name|default:hija.agronomo.email }}{% else %}InfoPonia{% endif %}</dd></div>{% endif %}
       <div><dt>Prioridad</dt><dd>{{ orden.prioridad_orden|default:"—"|capfirst }}</dd></div>
       {% if orden.fecha_resolucion_orden %}<div><dt>Resuelta</dt><dd>{{ orden.fecha_resolucion_orden|date:"d/m/Y" }}</dd></div>{% endif %}
       {% if hija.fecha_siembra %}<div><dt>Fecha de siembra</dt><dd>{{ hija.fecha_siembra|date:"d/m/Y" }}</dd></div>{% endif %}
+      {% if hija.fecha_transicion %}<div><dt>Fecha del traslado</dt><dd>{{ hija.fecha_transicion|date:"d/m/Y" }}</dd></div>{% endif %}
     </dl>
     {% if orden.descripcion_orden %}<p class="sm" style="margin-top:10px">{{ orden.descripcion_orden }}</p>{% endif %}
     {% if orden.motivo_cancelacion %}<p class="sm" style="margin-top:10px"><b>Motivo de la cancelación:</b> {{ orden.motivo_cancelacion }}</p>{% endif %}
@@ -35,7 +39,7 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
     </tbody></table></div></div>
   {% endif %}
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-    {% if detalle.puede_concretar %}<a class="btn btn-primary" href="{% url 'produccion:concretar' orden.pk %}">Concretar siembra</a>{% endif %}
+    {% if detalle.puede_concretar %}<a class="btn btn-primary" href="{% url 'produccion:concretar' orden.pk %}">{% if orden.tipo_orden == "transicion" %}Concretar transición{% else %}Concretar siembra{% endif %}</a>{% endif %}
     {% if detalle.puede_cancelar %}<a class="btn btn-ghost" href="{% url 'produccion:cancelar' orden.pk %}">Cancelar orden</a>{% endif %}
   </div>
 </div>
