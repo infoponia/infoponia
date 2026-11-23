@@ -4,6 +4,7 @@
 # baja). Fuentes: D-42, D-14, D-41; regla 7 de 8.18 (lectura); modelo de dominio, ficha ``Alerta``.
 
 import re
+from unittest import mock
 
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -12,6 +13,8 @@ from core import extensiones, notificaciones, servicios
 from core.extensiones import ItemDeAlerta
 from core.models import Notificacion, Usuario
 from core.tests.fabricas import CLAVE, crear_administrador, crear_capataz, crear_gerente
+from maestros import extensiones as extensiones_de_maestros
+from maestros.extensiones import Enlace
 from maestros.models import Alerta
 from maestros.servicios import invernaderos
 from maestros.tests.fabricas import (
@@ -158,6 +161,68 @@ class CampanaAlertasFuenteTests(ConGeoref, TestCase):
 
         # Dentro de «advertencia», la más reciente primero (el orden de ``Alerta``): AAA2 se creó después que AAA1.
         self.assertEqual(titulos, ["CCC", "AAA2", "AAA1", "III"])
+
+    # ---- R10 (MAE-02d, paso 5): el enlace de una app y ``alertas:ir`` ----
+
+    def con_registrante(self, funcion, codigos=("com_falso",)):
+        """Reemplaza los registrantes de enlaces por uno falso mientras dura la prueba."""
+        parche = mock.patch.object(extensiones_de_maestros, "_ENLACES", [])
+        parche.start()
+        self.addCleanup(parche.stop)
+        extensiones_de_maestros.registrar_enlace_de_alerta(codigos, funcion)
+
+    def test_r10_con_registrante_la_url_es_alertas_ir_y_el_detalle_es_el_del_registrante(self):
+        """R10 y D-62 (tercera enmienda, punto 3): el enlace de una app lleva a ``alertas:ir`` y su texto va debajo del título;
+        la alerta que el registrante no devuelve y la de otro tipo quedan como antes (el detalle y el nombre del invernadero)."""
+        de_app = crear_alerta(self.invernadero, "com_falso", descripcion_alerta="De la app")
+        sin_enlace = crear_alerta(self.invernadero, "com_falso", descripcion_alerta="Sin enlace")
+        otra = crear_alerta(self.invernadero, "sin_capataz", descripcion_alerta="De maestros")
+        self.con_registrante(lambda usuario, alertas: {de_app.pk: Enlace("/alertas/", "Faltan 120 plantas")})
+
+        items = {item.titulo: item for item in invernaderos.items_de_campana(self.gerente)}
+
+        self.assertEqual(items["De la app"].url, reverse("alertas:ir", args=[de_app.pk]))
+        self.assertEqual(items["De la app"].detalle, "Faltan 120 plantas")
+        for titulo, alerta in (("Sin enlace", sin_enlace), ("De maestros", otra)):
+            with self.subTest(titulo=titulo):
+                self.assertEqual(items[titulo].url, reverse("alertas:detalle", args=[alerta.pk]))
+                self.assertEqual(items[titulo].detalle, "Invernadero Norte")
+
+    def test_r10_un_registrante_que_devuelve_el_detalle_no_pasa_por_alertas_ir(self):
+        """R10: si el enlace del registrante es el propio detalle, la campana lleva al detalle (no es un enlace de una app) y usa
+        el texto del registrante."""
+        alerta = crear_alerta(self.invernadero, "com_falso")
+        detalle = reverse("alertas:detalle", args=[alerta.pk])
+        self.con_registrante(lambda usuario, alertas: {alerta.pk: Enlace(detalle, "Otro texto")})
+
+        (item,) = invernaderos.items_de_campana(self.gerente)
+
+        self.assertEqual((item.url, item.detalle), (detalle, "Otro texto"))
+
+    def test_r10_las_consultas_son_las_mismas_con_una_que_con_tres_alertas_de_un_tipo_con_registrante(self):
+        """R10 y D-62, punto 2: una llamada a ``enlaces_de_alertas`` para toda la lista; sin consultas por alerta."""
+        self.con_registrante(lambda usuario, alertas: {a.pk: Enlace("/alertas/", "Texto") for a in alertas})
+        crear_alerta(self.invernadero, "com_falso")
+        with self.assertNumQueries(1):
+            self.assertEqual(len(invernaderos.items_de_campana(self.gerente)), 1)
+
+        crear_alerta(self.invernadero, "com_falso")
+        crear_alerta(self.invernadero, "com_falso")
+        with self.assertNumQueries(1):
+            self.assertEqual(len(invernaderos.items_de_campana(self.gerente)), 3)
+
+    def test_r10_el_registrante_se_llama_una_vez_con_el_usuario_y_todas_sus_alertas(self):
+        """D-62, punto 2: ``items_de_campana`` hace una sola llamada por registrante, con ``usuario`` y la lista entera."""
+        registrante = mock.Mock(return_value={})
+        self.con_registrante(registrante)
+        alertas = [crear_alerta(self.invernadero, "com_falso") for _ in range(3)]
+
+        invernaderos.items_de_campana(self.gerente)
+
+        self.assertEqual(registrante.call_count, 1)
+        usuario, recibidas = registrante.call_args.args
+        self.assertEqual(usuario, self.gerente)
+        self.assertCountEqual([a.pk for a in recibidas], [a.pk for a in alertas])
 
 
 class PendientesDeAlertasTests(ConGeoref, TestCase):
@@ -314,3 +379,27 @@ class CampanaConAlertasDeMaestrosTests(ConGeoref, TestCase):
 
         self.assertIn("Alertas (1)", del_agronomo.get(self.url, **HTMX).content.decode())
         self.assertIn("Alertas (0)", del_capataz.get(self.url, **HTMX).content.decode())
+
+    def test_r10_de_punta_a_punta_la_campana_pasa_por_alertas_ir_marca_leida_y_llega_a_la_pantalla_del_registrante(self):
+        """R10 y D-62 (tercera enmienda, punto 3): con el enlace de una app, el enlace de la campana es ``alertas:ir``; al abrirlo,
+        las no leídas bajan en uno, el punto rojo se apaga y la respuesta final es la pantalla del registrante."""
+        alerta = crear_alerta(self.invernadero, "com_falso", descripcion_alerta="De la app")
+        no_leidas = lambda: Alerta.objects.para(self.gerente).activas().no_leidas().count()
+        with mock.patch.object(extensiones_de_maestros, "_ENLACES", []):
+            extensiones_de_maestros.registrar_enlace_de_alerta(
+                ("com_falso",), lambda usuario, alertas: {a.pk: Enlace(reverse("alertas:lista"), "Faltan 120 plantas") for a in alertas}
+            )
+            self.assertEqual(no_leidas(), 1)
+            self.assertIn("dotn", self.cliente.get(reverse("core:inicio")).content.decode())
+
+            contenido = self.cliente.get(self.url, **HTMX).content.decode()
+            enlace = re.search(r'href="(/alertas/\d+/ir/)"', contenido).group(1)
+            respuesta = self.cliente.get(enlace, follow=True)
+
+        self.assertEqual(enlace, reverse("alertas:ir", args=[alerta.pk]))
+        self.assertIn("Faltan 120 plantas", contenido)
+        self.assertEqual(respuesta.redirect_chain, [(reverse("alertas:lista"), 302)])
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTemplateUsed(respuesta, "maestros/alertas/lista.html")
+        self.assertEqual(no_leidas(), 0)
+        self.assertNotIn("dotn", self.cliente.get(reverse("core:inicio")).content.decode())

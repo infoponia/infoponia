@@ -9,7 +9,10 @@ from collections import namedtuple
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.http import Http404
+from django.urls import reverse
 from django.utils import timezone
+
+from maestros import extensiones
 
 from maestros.alertas import (
     Destinatario,
@@ -315,7 +318,7 @@ def _sin_filtro(valor):
     return valor is None or valor == ""
 
 
-def consultar_alertas(actor, *, invernadero_id=None, tipo=None):
+def consultar_alertas(actor, *, invernadero_id=None, tipo=None, tipos=None):
     """CU-46: las alertas ACTIVAS que ``actor`` recibe, más urgentes primero (R2 a R5). Devuelve una lista de ``Alerta`` con
     ``severidad`` y ``nombre_tipo`` ya calculados, y con el invernadero cargado: una sola consulta para toda la lista.
 
@@ -326,8 +329,17 @@ def consultar_alertas(actor, *, invernadero_id=None, tipo=None):
       da una lista vacía, sin error y sin revelar si existe.
     - R4: crítica, advertencia, informativa; dentro de cada nivel, la más reciente primero y, con fechas iguales, la de id
       mayor. La severidad sale del tipo registrado, o de la guardada si ya no lo está (MD-109); el orden por severidad se
-      hace en Python (``sort`` es estable) sobre el orden de fecha de la consulta."""
+      hace en Python (``sort`` es estable) sobre el orden de fecha de la consulta.
+    - R9 (MAE-02d; D-62, tercera enmienda, punto 4): ``tipos`` (lista o tupla de códigos; el panel del IoT) filtra por varios
+      tipos. ``None`` no filtra; una lista vacía no coincide con nada y da ``[]`` sin consultar la base. Con ``tipo`` y
+      ``tipos`` a la vez se cumplen los dos."""
+    if tipos is not None:
+        tipos = tuple(tipos)
+        if not tipos:
+            return []
     consulta = Alerta.objects.para(actor).activas().select_related("invernadero")
+    if tipos is not None:
+        consulta = consulta.filter(tipo_alerta__in=tipos)
     if not _sin_filtro(invernadero_id):
         consulta = consulta.filter(invernadero_id=invernadero_id)
     if not _sin_filtro(tipo):
@@ -357,9 +369,55 @@ def filtros_de_alertas(actor):
     return FiltrosDeAlertas(invernaderos, tipos)
 
 
+# ---- MAE-02d, paso 1: el enlace de cada alerta a la pantalla de su origen (D-62, puntos 2 y 3; segunda enmienda). ----
+
+
+def enlaces_de_alertas(usuario, alertas):
+    """D-62, punto 3: ``{id de alerta: Enlace(url, detalle)}`` para **todas** las ``alertas``, adónde lleva cada una a
+    ``usuario`` y qué texto va debajo de su título. Solo lectura.
+
+    - **Supuesto de quien llama:** cada alerta trae su ``invernadero`` ya cargado (``select_related``), como las de
+      ``consultar_alertas``, ``detalle_de_alerta`` y la campana: el enlace por omisión usa su nombre y esta función no hace
+      una consulta por alerta.
+    - Agrupa las alertas por registrante (según su ``tipo_alerta``) y llama **una vez** a cada uno con su lista
+      (``extensiones.registrar_enlace_de_alerta``).
+    - **Por omisión** (segunda enmienda de D-62): el detalle de la alerta (``alertas:detalle``) con el nombre del invernadero
+      como texto. Lo usa el tipo sin registrante y la alerta que su registrante no devuelve. Un ``detalle=None`` del registrante
+      toma el texto de omisión y conserva el ``url`` del registrante.
+    - Lista vacía: ``{}``, sin llamar a nadie."""
+    alertas = list(alertas)
+    if not alertas:
+        return {}
+    enlaces = {}
+    for alerta in alertas:
+        enlaces[alerta.pk] = extensiones.Enlace(
+            reverse("alertas:detalle", args=[alerta.pk]), alerta.invernadero.nombre_invernadero
+        )
+    for codigos, funcion in extensiones.enlaces_registrados():
+        propias = [alerta for alerta in alertas if alerta.tipo_alerta in codigos]
+        if not propias:
+            continue
+        por_omision = {alerta.pk: enlaces[alerta.pk] for alerta in propias}
+        for alerta_id, enlace in funcion(usuario, propias).items():
+            if alerta_id in por_omision:
+                detalle = enlace.detalle if enlace.detalle is not None else por_omision[alerta_id].detalle
+                enlaces[alerta_id] = extensiones.Enlace(enlace.url, detalle)
+    return enlaces
+
+
 # ---- MAE-02c, paso 2: el detalle de una alerta (R6 y R7). ----
 
-DetalleDeAlerta = namedtuple("DetalleDeAlerta", "alerta nombre_tipo severidad era_nueva destinatarios invernadero_visible")
+# ``enlace`` (MAE-02d, D-62 tercera enmienda, punto 5) va al final: el ``Enlace`` de ``enlaces_de_alertas`` para esa alerta y ese actor.
+DetalleDeAlerta = namedtuple(
+    "DetalleDeAlerta", "alerta nombre_tipo severidad era_nueva destinatarios invernadero_visible enlace"
+)
+
+
+def es_enlace_de_app(alerta, enlace):
+    """D-62 (tercera enmienda, puntos 3 y 5): ``True`` si ``enlace`` lleva a otra pantalla que el detalle de ``alerta``, o sea,
+    si lo registró una app. El criterio es la URL: si un registrante devuelve el detalle con otro texto, se respeta su texto
+    pero la ruta sigue siendo la de omisión (``False``). Lo usan el detalle («Dónde se atiende») y la campana (``alertas:ir``)."""
+    return enlace.url != reverse("alertas:detalle", args=[alerta.pk])
 
 
 def detalle_de_alerta(actor, alerta_id):
@@ -375,6 +433,8 @@ def detalle_de_alerta(actor, alerta_id):
       no del invernadero: si el invernadero cambió de Agrónomo después, la alerta nombra a quien la recibió.
     - ``invernadero_visible``: si el actor tiene acceso a la ficha del invernadero (``Invernadero.objects.en_alcance_de``);
       decide si se muestra «Ver invernadero» (D-30: ningún enlace lleva a un 403).
+    - ``enlace`` (R6, MAE-02d): el ``Enlace`` de ``enlaces_de_alertas`` para esa alerta y ese actor, calculado después de abrir la
+      alerta (un ajeno recibe 403 antes y ningún registrante lo ve, D-62 punto 4).
     - No muestra el origen de la alerta (R6): sus apps todavía no existen (``docs/disparadores.md``)."""
     with transaction.atomic():
         alerta = Alerta.objects.select_related("invernadero", "agronomo").filter(pk=alerta_id).first()
@@ -395,4 +455,5 @@ def detalle_de_alerta(actor, alerta_id):
             era_nueva=era_nueva,
             destinatarios=destinatarios,
             invernadero_visible=Invernadero.objects.en_alcance_de(actor).filter(pk=alerta.invernadero_id).exists(),
+            enlace=enlaces_de_alertas(actor, [alerta])[alerta.pk],
         )

@@ -3,6 +3,7 @@
 # y regla 7 de 8.18), D-28, D-41, D-42 y D-43, y MD-109 (la severidad la define el tipo y se guarda con la alerta).
 
 from datetime import timedelta
+from unittest import mock
 
 from django.apps import apps
 from django.core.exceptions import PermissionDenied
@@ -14,6 +15,8 @@ from django.utils import timezone
 from core.menu import menu_de
 from core.models import RegistroAuditoria, Usuario
 from core.tests.fabricas import CLAVE, crear_administrador, crear_capataz, crear_gerente
+from maestros import extensiones
+from maestros.extensiones import Enlace
 from maestros.models import Alerta
 from maestros.servicios import alertas as api
 from maestros.tests.fabricas import (
@@ -162,6 +165,69 @@ class CnsAlrServicioTests(ConGeoref, TestCase):
         for nombre, filtros in casos.items():
             with self.subTest(caso=nombre):
                 self.assertEqual(list(api.consultar_alertas(self.agronomo, **filtros)), [])
+
+    # ---- R9 (MAE-02d, paso 2): filtro por varios tipos (``tipos``), el del panel del IoT ----
+
+    def test_regla_r9_filtra_por_varios_tipos(self):
+        """R9: con ``tipos`` (lista o tupla de códigos) quedan las alertas de cualquiera de ellos."""
+        capataz = crear_alerta(self.sur, "sin_capataz")
+        vendedor = crear_alerta(self.sur, "sin_vendedor")
+        crear_alerta(self.sur, "sin_tecnico")
+
+        for tipos in (["sin_capataz", "sin_vendedor"], ("sin_capataz", "sin_vendedor")):
+            with self.subTest(tipos=tipos):
+                self.assertCountEqual(ids(api.consultar_alertas(self.gerente, tipos=tipos)), [capataz.pk, vendedor.pk])
+
+    def test_regla_r9_por_varios_tipos_y_un_invernadero(self):
+        """R9 y R5: ``tipos`` e ``invernadero_id`` se combinan: hay que cumplir los dos."""
+        buscada = crear_alerta(self.sur, "sin_capataz")
+        crear_alerta(self.sur, "sin_tecnico")
+        crear_alerta(self.norte, "sin_vendedor")
+
+        resultado = api.consultar_alertas(self.gerente, invernadero_id=self.sur.pk, tipos=["sin_capataz", "sin_vendedor"])
+
+        self.assertEqual(ids(resultado), [buscada.pk])
+
+    def test_regla_r9_tipos_vacio_da_lista_vacia_sin_consultar_la_base(self):
+        """R9: una lista vacía de ``tipos`` no coincide con nada y no consulta la base; ``None`` no filtra."""
+        a = crear_alerta(self.sur, "sin_capataz")
+
+        for vacia in ([], ()):
+            with self.subTest(tipos=vacia):
+                with self.assertNumQueries(0):
+                    self.assertEqual(api.consultar_alertas(self.gerente, tipos=vacia), [])
+        self.assertEqual(ids(api.consultar_alertas(self.gerente, tipos=None)), [a.pk])
+
+    def test_regla_r9_con_tipo_y_tipos_a_la_vez_se_cumplen_los_dos(self):
+        """R9 (tercera enmienda de D-62, punto 4): el código tiene que ser ``tipo`` y estar en ``tipos``."""
+        capataz = crear_alerta(self.sur, "sin_capataz")
+        crear_alerta(self.sur, "sin_vendedor")
+
+        coinciden = api.consultar_alertas(self.gerente, tipo="sin_capataz", tipos=["sin_capataz", "sin_vendedor"])
+        no_coinciden = api.consultar_alertas(self.gerente, tipo="sin_capataz", tipos=["sin_vendedor"])
+
+        self.assertEqual(ids(coinciden), [capataz.pk])
+        self.assertEqual(no_coinciden, [])
+
+    def test_regla_r9_un_codigo_de_tipos_que_no_figura_entre_las_alertas_del_actor_no_trae_nada_ni_falla(self):
+        """R9 y D-28: un código de ``tipos`` ajeno o inexistente no revela nada; el Agrónomo solo ve las suyas."""
+        propia = crear_alerta(self.sur, "prueba_agr", para_gerente=False, agronomo=self.agronomo)
+        crear_alerta(self.norte, "sin_capataz", para_gerente=True)
+
+        self.assertEqual(ids(api.consultar_alertas(self.agronomo, tipos=["sin_capataz", "no_existe"])), [])
+        self.assertEqual(ids(api.consultar_alertas(self.agronomo, tipos=["sin_capataz", "prueba_agr"])), [propia.pk])
+
+    def test_regla_r9_conserva_el_orden_y_la_consulta_unica(self):
+        """R9: el orden por severidad y fecha y la consulta única (``select_related``) no cambian con ``tipos``."""
+        with tipo_de_alerta_de_prueba(
+            tipo_falso("p_critica", severidad=CRITICA), tipo_falso("p_info", severidad=INFORMATIVA)
+        ):
+            info = crear_alerta(self.sur, "p_info")
+            critica = crear_alerta(self.sur, "p_critica")
+            with self.assertNumQueries(1):
+                resultado = api.consultar_alertas(self.gerente, tipos=["p_info", "p_critica"])
+                self.assertEqual([a.invernadero.nombre_invernadero for a in resultado], ["Sur", "Sur"])
+            self.assertEqual(ids(resultado), [critica.pk, info.pk])
 
     # ---- R4: orden y severidad ----
 
@@ -442,6 +508,65 @@ class CnsAlrServicioTests(ConGeoref, TestCase):
 
         self.assertTrue(api.detalle_de_alerta(self.agronomo, activa.pk).invernadero_visible)
         self.assertFalse(api.detalle_de_alerta(self.agronomo, de_inactivo.pk).invernadero_visible)
+
+
+    # ---- R6 (MAE-02d, paso 3): el enlace del detalle ----
+
+    def test_regla_r6_sin_registrante_el_enlace_es_el_de_omision_y_no_es_de_una_app(self):
+        """R6 y D-62 (segunda enmienda): sin registrante, ``DetalleDeAlerta.enlace`` es el detalle de la alerta con el nombre del
+        invernadero, y ``es_enlace_de_app`` da ``False``."""
+        alerta = crear_alerta(self.sur, "sin_capataz")
+
+        with mock.patch.object(extensiones, "_ENLACES", []):
+            detalle = api.detalle_de_alerta(self.gerente, alerta.pk)
+
+        self.assertEqual(detalle.enlace, Enlace(reverse("alertas:detalle", args=[alerta.pk]), "Sur"))
+        self.assertFalse(api.es_enlace_de_app(alerta, detalle.enlace))
+        self.assertEqual(detalle._fields[-1], "enlace")  # el campo nuevo va al final (tercera enmienda de D-62, punto 5)
+
+    def test_regla_r6_con_registrante_el_enlace_es_el_suyo_y_es_de_una_app(self):
+        """R6 y D-62, punto 2: el detalle trae el ``Enlace`` del registrante para ese actor, y ``es_enlace_de_app`` da ``True``."""
+        alerta = crear_alerta(self.sur, "com_falso")
+        recibido = []
+
+        def registrante(usuario, alertas):
+            recibido.append(usuario)
+            return {alerta.pk: Enlace("/comercial/contratos/7/", "Faltan 120 plantas")}
+
+        with mock.patch.object(extensiones, "_ENLACES", []):
+            extensiones.registrar_enlace_de_alerta(("com_falso",), registrante)
+            detalle = api.detalle_de_alerta(self.gerente, alerta.pk)
+
+        self.assertEqual(detalle.enlace, Enlace("/comercial/contratos/7/", "Faltan 120 plantas"))
+        self.assertEqual(recibido, [self.gerente])
+        self.assertTrue(api.es_enlace_de_app(alerta, detalle.enlace))
+
+    def test_regla_r6_un_registrante_que_devuelve_el_detalle_con_otro_texto_no_es_enlace_de_app(self):
+        """Supuesto aprobado de MAE-02d: el criterio es la URL. Si el registrante devuelve el detalle con otro texto, se respeta
+        su texto y la ruta sigue siendo la de omisión (``es_enlace_de_app`` da ``False``)."""
+        alerta = crear_alerta(self.sur, "com_falso")
+        url = reverse("alertas:detalle", args=[alerta.pk])
+
+        with mock.patch.object(extensiones, "_ENLACES", []):
+            extensiones.registrar_enlace_de_alerta(
+                ("com_falso",), lambda usuario, alertas: {alerta.pk: Enlace(url, "Otro texto")}
+            )
+            detalle = api.detalle_de_alerta(self.gerente, alerta.pk)
+
+        self.assertEqual(detalle.enlace, Enlace(url, "Otro texto"))
+        self.assertFalse(api.es_enlace_de_app(alerta, detalle.enlace))
+
+    def test_regla_r6_un_registrante_no_se_llama_si_el_actor_no_recibe_la_alerta(self):
+        """D-62, punto 4 y D-28: ``detalle_de_alerta`` abre primero la alerta; un ajeno recibe 403 y el registrante no se llama."""
+        alerta = crear_alerta(self.sur, "com_falso", para_gerente=True)
+        registrante = mock.Mock(return_value={})
+
+        with mock.patch.object(extensiones, "_ENLACES", []):
+            extensiones.registrar_enlace_de_alerta(("com_falso",), registrante)
+            with self.assertRaises(PermissionDenied):
+                api.detalle_de_alerta(self.agronomo, alerta.pk)
+
+        registrante.assert_not_called()
 
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -731,6 +856,36 @@ class CnsAlrVistaTests(ConGeoref, TestCase):
         self.assertContains(con_enlace, "Ver invernadero")
         self.assertEqual(sin_enlace.status_code, 200)
         self.assertNotContains(sin_enlace, "Ver invernadero")
+
+    # ---- R6 (MAE-02d, paso 3): la fila «Dónde se atiende» ----
+
+    def test_regla_r6_la_fila_donde_se_atiende_aparece_solo_con_un_registrante_y_enlaza_a_su_pantalla(self):
+        """R6 y D-62 (tercera enmienda, punto 5): con el enlace por omisión el detalle queda como hoy, sin la fila; con el enlace
+        de una app, la fila con el texto del registrante como vínculo a su ``url``."""
+        alerta = crear_alerta(self.sur, "com_falso")
+        cliente = self.cliente_de(self.gerente)
+
+        with mock.patch.object(extensiones, "_ENLACES", []):
+            sin_registrante = cliente.get(self.detalle(alerta))
+            extensiones.registrar_enlace_de_alerta(
+                ("com_falso",), lambda usuario, alertas: {alerta.pk: Enlace("/alertas/", "Faltan 120 plantas")}
+            )
+            con_registrante = cliente.get(self.detalle(alerta))
+
+        self.assertNotContains(sin_registrante, "Dónde se atiende")
+        self.assertContains(con_registrante, "Dónde se atiende")
+        self.assertContains(con_registrante, '<a class="link" href="/alertas/">Faltan 120 plantas</a>', html=True)
+
+    def test_regla_r6_un_registrante_que_devuelve_el_detalle_no_muestra_la_fila(self):
+        """R6: si el registrante lleva al propio detalle, no hay fila (el enlace no es de una app)."""
+        alerta = crear_alerta(self.sur, "com_falso")
+        url = self.detalle(alerta)
+
+        with mock.patch.object(extensiones, "_ENLACES", []):
+            extensiones.registrar_enlace_de_alerta(("com_falso",), lambda usuario, alertas: {alerta.pk: Enlace(url, "X")})
+            respuesta = self.cliente_de(self.gerente).get(url)
+
+        self.assertNotContains(respuesta, "Dónde se atiende")
 
     # ---- Menú ----
 

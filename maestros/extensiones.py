@@ -25,6 +25,8 @@
 
 from collections import namedtuple
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Un impedimento de la baja: un código estable, qué pasa y cómo resolverlo (regla 2 de PROD-BAJ-INV).
 Impedimento = namedtuple("Impedimento", "codigo texto como_resolver")
 
@@ -391,3 +393,41 @@ def url_de_registro_iot(actor, invernadero):
     if not _ESTADO_IOT:
         return None
     return _ESTADO_IOT[0][1](actor, invernadero)
+
+
+# ---- MAE-02d: enlace de cada alerta a la pantalla de su origen (D-62, puntos 2 y 3; docs/api/alertas.md, sección 8) ----
+# `maestros` no puede conocer las pantallas de las apps altas (regla A1 de D-37): cada una registra, para sus códigos de tipo,
+# una función que dice adónde lleva cada alerta a ese usuario. Sin registrantes, rige el enlace por omisión (el detalle de la
+# alerta; lo arma ``maestros.servicios.alertas.enlaces_de_alertas``). Patrón: Variaciones protegidas con Indirección (Larman).
+
+# Adónde lleva una alerta y qué texto va debajo de su título. ``detalle`` puede ser ``None``: se usa el de omisión.
+Enlace = namedtuple("Enlace", "url detalle")
+
+_ENLACES = []  # pares (codigos, funcion), en orden de registro
+
+
+def registrar_enlace_de_alerta(codigos, funcion):
+    """Registra ``funcion(usuario, alertas) -> dict[int, Enlace]`` para los códigos de tipo de ``codigos`` (una tupla). Recibe
+    la lista entera de alertas de esos tipos (una llamada por registrante, nunca una por alerta) y devuelve, por id de alerta,
+    adónde lleva **a ese usuario**; nunca a una pantalla que le dé 403 (D-62, punto 4). Una alerta que no devuelve usa el
+    enlace por omisión.
+
+    Un código con otro registrante lanza ``ImproperlyConfigured`` (D-62, punto 2). Se validan **todos** los códigos antes de
+    agregar nada: un registro que falla no deja registrados los demás códigos. Registrar de nuevo la misma función para el mismo
+    código no hace nada (``ready()`` puede correr más de una vez)."""
+    codigos = tuple(codigos)
+    nuevos = []
+    for codigo in codigos:
+        existente = next((f for registrados, f in _ENLACES if codigo in registrados), None)
+        if existente is None:
+            nuevos.append(codigo)
+        elif existente is not funcion:
+            raise ImproperlyConfigured(f"El código de alerta «{codigo}» ya tiene otro registrante de enlaces.")
+    if nuevos:
+        _ENLACES.append((tuple(nuevos), funcion))
+    return funcion
+
+
+def enlaces_registrados():
+    """Los pares ``(codigos, funcion)`` registrados, en orden de registro (una copia: ``enlaces_de_alertas`` los agrupa)."""
+    return list(_ENLACES)
