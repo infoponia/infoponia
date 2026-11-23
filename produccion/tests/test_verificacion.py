@@ -13,7 +13,8 @@ from inventario.models import InsumoInvernadero, LoteInsumo
 from inventario.tests.fabricas import ConDatosDeInventario
 from maestros.models import Invernadero
 from produccion import verificacion as cargador
-from produccion.models import Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
+from maestros.models import SectorProduccion
+from produccion.models import FueraDeServicio, Lote, Merma, OcupacionSector, OrdenTrabajo, Siembra, TransicionEtapa
 from produccion.servicios import aplicaciones, bitacora
 
 CLAVE = "Prueba-98765x"
@@ -88,3 +89,47 @@ class ProduccionVerificacionTests(ConDatosDeInventario, TestCase):
         self.assertTrue({"planificacion_siembra", "concrecion_siembra", "registro_merma", "planificacion_transicion", "ajuste_stock"} <= acciones)
         self.assertNotIn(CLAVE, str(resumen))
         self.assertFalse(any(CLAVE in str(r.detalle) for r in RegistroAuditoria.objects.all()))
+
+    def test_d_verificacion_prd_04_deja_el_escenario_de_poner_fuera_de_servicio(self):
+        """PRD-04, «Verificación a mano»: un invernadero con un lote en un sector de Germinación, otro sector con lugar, uno vacío, una siembra «a realizar» con agujeros comprometidos
+        en el sector y un sector de Maduración ya fuera de servicio con su registro abierto."""
+        cargador.cargar(CLAVE)
+        invernadero = Invernadero.objects.get(nombre_invernadero="Verificación Fuera de Servicio")
+        self.assertEqual((invernadero.agronomo.email, invernadero.capataz.email), ("agronomo@prueba4.local", "capataz@prueba4.local"))
+        sectores = {s.nombre_sector: s for s in SectorProduccion.objects.filter(invernadero=invernadero)}
+        self.assertEqual(
+            {n: s.estado_sector for n, s in sectores.items()},
+            {"FDS Germinación 1": "activo", "FDS Germinación 2": "activo", "FDS Germinación 3": "activo", "FDS Maduración": "fuera_de_servicio"},
+        )
+        lote = Lote.objects.get(invernadero=invernadero)
+        self.assertEqual((lote.cantidad_actual, OcupacionSector.objects.get(lote=lote, cant_agujeros_ocupados__gt=0).sector.nombre_sector), (40, "FDS Germinación 1"))
+        siembra = Siembra.objects.get(invernadero=invernadero, estado_orden="a_realizar")
+        self.assertEqual(sorted(siembra.ocupaciones.values_list("sector__nombre_sector", "cant_agujeros_planificados")), [("FDS Germinación 1", 12), ("FDS Germinación 2", 8)])
+        self.assertFalse(OcupacionSector.objects.filter(sector=sectores["FDS Germinación 3"]).exists())
+        registro = FueraDeServicio.objects.get(sector=sectores["FDS Maduración"])
+        self.assertIsNone(registro.fecha_fin)
+        self.assertTrue(RegistroAuditoria.objects.filter(accion="fuera_de_servicio_sector").exists())  # por el servicio, no por una inserción directa
+
+    def test_d_verificacion_prd_04_deja_un_invernadero_sin_lotes_con_un_sector_fuera_de_servicio_para_darlo_de_baja(self):
+        """Paso 6 de la verificación: la baja de un invernadero sin lotes con sectores fuera de servicio cierra los registros."""
+        from maestros.servicios import invernaderos
+
+        cargador.cargar(CLAVE)
+        baja = Invernadero.objects.get(nombre_invernadero="Verificación Fuera de Servicio Baja")
+        self.assertFalse(Lote.objects.filter(invernadero=baja).exists())
+        registro = FueraDeServicio.objects.get(sector__invernadero=baja)
+        self.assertIsNone(registro.fecha_fin)
+        invernaderos.baja_invernadero(Usuario.objects.get(rol="gerente"), baja.pk)
+        registro.refresh_from_db()
+        self.assertIsNotNone(registro.fecha_fin)
+
+    def test_d_verificacion_prd_04_no_vuelve_a_sacar_de_servicio_un_sector_que_ya_volvio(self):
+        """Idempotencia: si quien verifica ya volvió a activar el sector, una nueva corrida no lo vuelve a poner fuera de servicio."""
+        from maestros.servicios import sectores
+
+        cargador.cargar(CLAVE)
+        sector = SectorProduccion.objects.get(nombre_sector="FDS Maduración")
+        sectores.volver_a_servicio_sector(Usuario.objects.get(email="agronomo@prueba4.local"), sector.pk)
+        cargador.cargar(CLAVE)
+        self.assertEqual(SectorProduccion.objects.get(pk=sector.pk).estado_sector, "activo")
+        self.assertEqual(FueraDeServicio.objects.filter(sector=sector).count(), 1)

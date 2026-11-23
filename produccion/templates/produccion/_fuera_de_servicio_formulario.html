@@ -1,0 +1,118 @@
+{% load iconos produccion %}{% comment %}El formulario de «Poner fuera de servicio» (PROD-PNR-FDS): lo que HTMX reemplaza dentro de #fds-vivo. Recibe «grupos» (InvernaderoConSectores), «hay_sectores», «sector_id», «detalle»
+(DetalleDeSector o None), «filas» ([{lote: LoteEnElSector, destinos: [Destino]}]), «causas», «valores» (lo escrito), «errores» ({campo: mensaje}; los de un destino, «reubicacion_<lote>_<destino>»; los de una causa,
+«causa_<lote>»), «resumen» (ResumenDeFueraDeServicio o None), «firma», «cambio_la_firma» y «vistos» (lo que la persona vio, extensión 14a). Elegir otro sector solo redibuja lo que depende de él (accion «actualizar»),
+SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Sin sectores activos (precondición b) queda deshabilitado con su motivo. Todo se escapa.{% endcomment %}
+<form id="fds-form" method="post" action="{% url 'produccion:fuera_de_servicio' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{{ errores.general }}</div></div>{% endif %}
+  {% if errores.sector %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.sector }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">1 · ¿Qué sector?</div>
+      {% if not hay_sectores %}
+      <div class="empty"><b>No hay sectores activos</b><span>Para poner un sector fuera de servicio tenés que tener a cargo un invernadero activo con al menos un sector activo.</span></div>
+      {% else %}
+      <div class="fld"><label for="sector">Sector<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="sector" name="sector" data-desplegable hx-post="{% url 'produccion:fuera_de_servicio' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for g in grupos %}{% for grupo in g.grupos %}
+          <optgroup label="{{ g.invernadero.nombre_invernadero }} · {{ grupo.tipo_etapa.nombre_etapa }}">
+            {% for s in grupo.sectores %}<option value="{{ s.pk }}"{% if s.pk == sector_id %} selected{% endif %}>{{ s.nombre_sector }} ({{ s.cant_agujeros_total }} agujeros)</option>{% endfor %}
+          </optgroup>
+          {% endfor %}{% endfor %}
+        </select></div>
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+      {% endif %}
+    </div>
+
+    {% if detalle %}
+    {% for aviso in detalle.avisos %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ aviso.texto }}</div></div>{% endfor %}
+
+    <div class="card">
+      <div class="card-title">2 · Qué hay en el sector</div>
+      <p class="sm">{{ detalle.sector.nombre_sector }} · {{ detalle.invernadero.nombre_invernadero }} · {{ detalle.sector.tipo_etapa.nombre_etapa }} · {{ detalle.sector.cant_agujeros_total }} agujeros.</p>
+      {% if detalle.lotes %}
+      <p class="sm"><b>Lotes con plantas en el sector:</b></p>
+      <ul class="sm" style="margin-left:18px">{% for l in detalle.lotes %}<li><span class="mono">{{ l.lote.codigo }}</span> · {{ l.variedad }} · {{ l.plantas }} planta{{ l.plantas|pluralize }} en este sector</li>{% endfor %}</ul>
+      {% else %}<p class="hint">El sector no tiene plantas: solo va a cambiar de estado.</p>{% endif %}
+      {% if detalle.ordenes %}
+      <p class="sm"><b>Órdenes «a realizar» con agujeros reservados (se cancelan al confirmar):</b></p>
+      <ul class="sm" style="margin-left:18px">{% for o in detalle.ordenes %}<li><span class="mono">{{ o.orden.codigo }}</span> · {{ o.tipo }} · {{ o.detalle }} · {{ o.agujeros }} agujeros reservados aquí · programada para el {{ o.fecha_programada|date:"d/m/Y" }}</li>{% endfor %}</ul>
+      <p class="hint">Se libera todo lo que reservaban, también en otros sectores. Vas a tener que volver a planificarlas.</p>
+      {% else %}<p class="hint">Ninguna orden a realizar tiene agujeros reservados en este sector.</p>{% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">3 · Motivo y fecha</div>
+      <div class="grid2">
+        <div class="fld"><label for="motivo">Motivo<span class="req" aria-hidden="true"> *</span></label>
+          <textarea class="field-input" id="motivo" name="motivo" rows="2" maxlength="300" placeholder="Ej. Se rompió el canal de retorno">{{ valores.motivo }}</textarea>
+          {% if errores.motivo %}<div class="err">{{ errores.motivo }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
+        <div class="fld"><label for="fecha">Fuera de servicio desde<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="fecha" name="fecha" type="date" max="{{ hoy|date:'Y-m-d' }}" value="{{ valores.fecha }}">
+          {% if errores.fecha %}<div class="err">{{ errores.fecha }}</div>{% else %}<div class="hint">Puede ser anterior a hoy si la rotura ya pasó: la merma y la reubicación quedan con esa fecha.{% if detalle.fecha_minima.fecha %} La mínima es el {{ detalle.fecha_minima.fecha|date:"d/m/Y" }}: es {{ detalle.fecha_minima.origen }}.{% endif %}</div>{% endif %}</div>
+      </div>
+    </div>
+
+    {% if filas %}
+    <div class="card">
+      <div class="card-title">4 · Qué pasa con las plantas</div>
+      <p class="sm">Por cada lote, indicá cuántas plantas se trasladan a otro sector de {{ detalle.sector.tipo_etapa.nombre_etapa }}. Lo que no se reubica se registra como merma del lote. La etapa del lote y su fecha de entrada no cambian.</p>
+      {% for f in filas %}
+      <div class="blk" style="margin-top:14px">
+        <div class="row" style="margin-bottom:8px"><b class="mono">{{ f.lote.lote.codigo }}</b><b>{{ f.lote.variedad }}</b><span class="muted">{{ f.lote.plantas }} planta{{ f.lote.plantas|pluralize }} en {{ detalle.sector.nombre_sector }}</span></div>
+        {% if f.destinos %}
+        <div class="tablewrap"><table class="data-table"><thead><tr><th>Sector de {{ detalle.sector.tipo_etapa.nombre_etapa }}</th><th>Perfil familiar</th><th class="right">Agujeros libres</th><th class="right">Plantas a reubicar</th></tr></thead><tbody>
+          {% for d in f.destinos %}
+          <tr><td><b>{{ d.sector.nombre_sector }}</b></td><td>{% if d.perfil %}{{ d.perfil|perfil_legible }}{% else %}<span class="muted">Sin plantas</span>{% endif %}</td><td class="right mono">{{ d.libres }}</td>
+            <td class="right"><input class="field-input num" id="reub_{{ f.lote.lote.pk }}_{{ d.sector.pk }}" name="reub_{{ f.lote.lote.pk }}_{{ d.sector.pk }}" type="number" min="0" max="{{ d.libres }}" step="1" inputmode="numeric" placeholder="0" value="{% campo valores 'reub' f.lote.lote.pk d.sector.pk %}" aria-label="Plantas de {{ f.lote.lote.codigo }} a reubicar en {{ d.sector.nombre_sector }}">
+              {% campo errores 'reubicacion' f.lote.lote.pk d.sector.pk as error_del_destino %}{% if error_del_destino %}<div class="err">{{ error_del_destino }}</div>{% endif %}</td></tr>
+          {% endfor %}
+        </tbody></table></div>
+        {% else %}
+        <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>No hay otro sector de {{ detalle.sector.tipo_etapa.nombre_etapa }} activo, compatible y con lugar en {{ detalle.invernadero.nombre_invernadero }}: las plantas no se pueden reubicar y se registran como merma.</div></div>
+        {% endif %}
+        <div class="grid2" style="margin-top:10px">
+          <div class="fld"><label for="causa_{{ f.lote.lote.pk }}">Causa de la merma de lo que no se reubique</label>
+            <select class="field-input" id="causa_{{ f.lote.lote.pk }}" name="causa_{{ f.lote.lote.pk }}" data-desplegable>
+              <option value="">Seleccionar…</option>
+              {% for valor, texto in causas %}<option value="{{ valor }}"{% campo valores 'causa' f.lote.lote.pk as causa_elegida %}{% if causa_elegida == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+            </select>
+            {% campo errores 'causa' f.lote.lote.pk as error_de_la_causa %}{% if error_de_la_causa %}<div class="err">{{ error_de_la_causa }}</div>{% else %}<div class="hint">Obligatoria solo si quedan plantas sin reubicar.</div>{% endif %}</div>
+          <div class="fld"><label for="desc_{{ f.lote.lote.pk }}">Descripción (opcional)</label>
+            <input class="field-input" id="desc_{{ f.lote.lote.pk }}" name="desc_{{ f.lote.lote.pk }}" type="text" maxlength="300" value="{% campo valores 'desc' f.lote.lote.pk %}"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la puesta fuera de servicio"><div class="card-title">Resumen</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <p class="sm"><b>Sector:</b> {{ resumen.sector.nombre_sector }} · {{ resumen.invernadero.nombre_invernadero }}</p>
+      <p class="sm"><b>Motivo:</b> {{ resumen.motivo }}</p>
+      <p class="sm"><b>Fuera de servicio desde el</b> {{ resumen.fecha|date:"d/m/Y" }}{% if resumen.fecha < hoy %} (fecha anterior a hoy){% endif %}</p>
+      {% for f in resumen.lotes %}
+      <p class="sm"><b class="mono">{{ f.lote.codigo }}</b> {{ f.variedad }} · {{ f.plantas }} planta{{ f.plantas|pluralize }}:
+        {% if f.reubicaciones %}{{ f.reubicadas }} se reubican en {% for s, q in f.reubicaciones %}{{ s.nombre_sector }} ({{ q }}){% if not forloop.last %}, {% endif %}{% endfor %}{% else %}ninguna se reubica{% endif %}{% if f.sin_reubicar %}; {{ f.sin_reubicar }} se registran como merma por «{% for valor, texto in causas %}{% if valor == f.causa %}{{ texto|lower }}{% endif %}{% endfor %}» (valor $ {{ f.valor_de_la_merma|floatformat:2 }}){% endif %}.</p>
+      {% empty %}<p class="muted sm">El sector no tiene plantas.</p>
+      {% endfor %}
+      <p class="sm"><b>Órdenes que se cancelan:</b> {% for o in resumen.ordenes %}{{ o.orden.codigo }}{% if not forloop.last %}, {% endif %}{% empty %}ninguna{% endfor %}.{% if resumen.ordenes %} Se libera lo que reservaban y vas a tener que volver a planificarlas.{% endif %}</p>
+      <p class="sm">{% if resumen.hay_capataz %}Se avisa al Capataz del invernadero con una sola notificación.{% else %}El invernadero no tiene un Capataz activo: no se envía ninguna notificación.{% endif %}</p>
+      {% for aviso in resumen.avisos %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ aviso.texto }}</div></div>{% endfor %}
+      <input type="hidden" name="firma" value="{{ firma }}">
+      <input type="hidden" name="visto_plantas" value="{{ vistos.plantas }}">
+      <input type="hidden" name="visto_libres" value="{{ vistos.libres }}">
+      <input type="hidden" name="visto_ordenes" value="{{ vistos.ordenes }}">
+    </div>
+    {% endif %}
+
+    <div class="footbar">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…">Ver resumen</button>
+      {% if resumen %}<button class="btn btn-danger" type="submit" name="accion" value="confirmar" data-enviando="Poniendo fuera de servicio…">Confirmar y poner fuera de servicio</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'maestros:invernadero' detalle.invernadero.pk %}">Cancelar</a>
+    </div>
+    {% endif %}
+  </div>
+</form>

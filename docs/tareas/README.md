@@ -46,11 +46,7 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 Plan completo en `docs/tareas/ronda_produccion_1.md`. «Por escribir» quiere decir que el archivo de la tarea todavía no
 está en el repo: no se puede programar hasta que llegue su lote de documentación.
 
-| ID | Título | App | Estado | Depende de / espera | Archivo |
-|---|---|---|---|---|---|
-| PRD-02 | Transición: planificar, concretar y cancelar | produccion | pendiente | PRD-01 | `produccion/PRD-02-transicion-de-etapa.md` |
-| PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora | produccion | pendiente | PRD-02 | `produccion/PRD-03-eventos-del-lote-merma-aplicacion-bitacora.md` |
-| PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | pendiente | PRD-03 | `produccion/PRD-04-sector-fuera-de-servicio-e-inicio.md` |
+|
 
 ### Ronda «Comercial 1» (D-56, D-57)
 
@@ -103,4 +99,5 @@ No tienen archivo: su registro está en `docs/historial.md`. Los IDs nuevos sirv
 
 ## Tareas agregadas fuera de la ronda «Producción 1»
 
+- **USR-10** (`docs/tareas/core/USR-10-envio-de-correo-publico.md`, D-54): función pública de correo de `core`. Se hace después de la ronda y antes de COM-02 y de IOT-04 (el correo del IoT lo manda la revisión periódica, D-71).
 - **IOT-01 a IOT-07** (módulo `iot`): ver «Ronda «IoT 1»» arriba y `docs/tareas/ronda_iot_1.md`.

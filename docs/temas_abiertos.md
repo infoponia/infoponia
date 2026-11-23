@@ -448,3 +448,19 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
   - **Merma contra poner el sector fuera de servicio:** sin prueba hasta PRD-04 (disparador nuevo).
   - **Cargador de datos de verificación:** la primera corrida habilitó en «Verificación Producción» un insumo «abono» que ya existía en la base del estudiante (sin stock); no se borró. Los insumos de prueba llevan «(prueba)» en el nombre para no chocar con datos propios.
   - **Montos en pantalla** con coma decimal («$160,00»), como el resto del sistema; los de la auditoría, como texto con punto.
+
+
+  ## Abiertos desde PRD-04 (23/11/2026)
+
+- **Agujeros libres de un destino y las órdenes que se cancelan:** la tarea («sin contar los de las órdenes que se cancelan») y el extracto («no se cuentan como libres») admiten dos lecturas. PRD-04 tomó la conservadora: lo que comprometen esas órdenes NO se cuenta como libre, para no depender del orden y no pasarse de la capacidad. Falta confirmarlo y dejar una sola redacción.
+- **Motivo de las órdenes canceladas:** «Sector fuera de servicio: <sector>. <motivo>» (tarea y `cancelar_orden.md`); el extracto de PROD-PNR-FDS dice «Sector <nombre> fuera de servicio: <motivo>». Corregir el extracto.
+- **Inicio del Agrónomo:** sin el filtro por invernadero del prototipo, y «Insumos por vencer» cuenta solo las alertas activas `inv_insumo_por_vencer` (el prototipo suma también los vencidos). Disparador nuevo en `docs/disparadores.md`.
+- **Auditoría de la vuelta a servicio:** `modificacion_sector` (de `maestros`) no incluye el registro «Fuera de servicio» entre sus afectados; incluirlo exige tocar `maestros`.
+- **`maestros`, fuera de lo listado:** se tocaron `sectores/_tarjeta.html` y `sectores/_ventana_baja.html` (entradas pedidas por la tarea) con permiso del estudiante. El punto `registrar_efecto_de_baja_de_sector` ya existía desde MAE-03: corregir el texto de la tarea y de `extensiones_de_maestros.md` («lote 5») que lo presentan como nuevo.
+- **Pruebas ajustadas** sin debilitar reglas: `test_modelos_aplicacion` (tipos de bitácora), `test_extensiones_sectores` (lista vacía a propósito), `test_registrantes_de_core` (solo la sección del Capataz) y `test_prod_cns_bit` (lista del filtro).
+- **`docs/api/produccion.md`:** sumar el código `sector_no_activo`, `DatosDeFueraDeServicio` y los registrantes `efecto_de_vuelta_a_servicio`, `efecto_de_baja_de_sector`, `efecto_de_baja_del_invernadero` y `seccion_de_inicio_del_agronomo`.
+- **Fecha mínima:** sin registro de auditoría de alta o reactivación (datos cargados a mano) ese componente no cuenta.
+- **Descripción de la `Reubicacion`:** lleva las plantas por destino («… a Germinación 2 (25) y Germinación 3 (10).»).
+- **Cargador de verificación:** el sector ya fuera de servicio es de Maduración (el ciclo de la variedad de prueba exige un sector de cada etapa) y no se vuelve a sacar de servicio uno que ya se activó.
+
+

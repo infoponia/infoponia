@@ -13,6 +13,7 @@ es la confirmación de la advertencia (campo oculto advertencia_confirmada). Dar
       <ul style="margin:0;padding-left:18px">{% for impedimento in impedimentos %}<li>{{ impedimento.texto }} {{ impedimento.como_resolver }}</li>{% endfor %}</ul>
     </div></div>
     <div class="acts">
+      {% if sector.estado_sector == "activo" %}<a class="btn btn-ghost" href="{% url 'produccion:fuera_de_servicio' %}?sector={{ sector.pk }}">Poner fuera de servicio</a>{% endif %}
       <a class="btn btn-primary" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
     </div>
     {% else %}

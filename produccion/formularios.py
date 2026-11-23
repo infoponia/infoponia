@@ -7,7 +7,7 @@ from datetime import date
 
 from django.utils import timezone
 
-from produccion.servicios import aplicaciones, bitacora, mermas, siembras, transiciones
+from produccion.servicios import aplicaciones, bitacora, mermas, sectores_fuera_de_servicio, siembras, transiciones
 
 PRIORIDADES = (("", "Sin prioridad (cuenta como media)"), ("alta", "Alta"), ("media", "Media"), ("baja", "Baja"))
 
@@ -226,4 +226,34 @@ def filtros_de_bitacora(datos):
         sector_id=entero(datos.get("sector")),
         desde=fecha(datos.get("desde", "")),
         hasta=fecha(datos.get("hasta", "")),
+    )
+
+
+def fuera_de_servicio_desde_post(datos, con_vistos=True):
+    """`DatosDeFueraDeServicio` desde el formulario de «Poner fuera de servicio» (PROD-PNR-FDS): el sector, el motivo, la fecha, una cantidad por lote y
+    destino (`reub_<lote>_<destino>`; vacía = 0; un texto que no es un número se pasa tal cual y el servicio lo rechaza), la causa y la descripción por
+    lote (`causa_<lote>` y `desc_<lote>`) y, con `con_vistos`, lo que la persona vio (`visto_plantas`, `visto_libres` y `visto_ordenes`, para la extensión
+    14a). «Ver resumen» no los usa (`con_vistos=False`): lo visto es lo que muestra el resumen; solo «Confirmar» lo compara."""
+    reubicaciones = []
+    for clave, texto in sorted(datos.items()):
+        partes = clave.split("_")
+        if len(partes) != 3 or partes[0] != "reub" or entero(partes[1]) is None or entero(partes[2]) is None:
+            continue
+        texto = str(texto).strip()
+        reubicaciones.append((int(partes[1]), int(partes[2]), 0 if texto == "" else (entero(texto) if entero(texto) is not None else texto)))
+    causas = tuple(
+        (lote_id, datos.get(f"causa_{lote_id}", ""), datos.get(f"desc_{lote_id}", ""))
+        for lote_id in sorted(_con_prefijo(datos, "causa"))
+    )
+    plantas, libres = pares(datos.get("visto_plantas")), pares(datos.get("visto_libres"))
+    ordenes = [entero(i) for i in str(datos.get("visto_ordenes", "")).split(",") if i.strip()]
+    return sectores_fuera_de_servicio.DatosDeFueraDeServicio(
+        sector_id=entero(datos.get("sector")),
+        motivo=datos.get("motivo", ""),
+        fecha=fecha(datos.get("fecha")),
+        reubicaciones=tuple(reubicaciones),
+        causas=causas,
+        plantas_vistas=tuple((l, int(p)) for l, p in plantas) if con_vistos and "visto_plantas" in datos and all(entero(p) is not None for _, p in plantas) else None,
+        libres_vistos=tuple((s, int(v)) for s, v in libres) if con_vistos and "visto_libres" in datos and all(entero(v) is not None for _, v in libres) else None,
+        ordenes_vistas=tuple(ordenes) if con_vistos and "visto_ordenes" in datos and None not in ordenes else None,
     )

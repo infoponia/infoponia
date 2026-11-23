@@ -686,6 +686,8 @@ class RegistroAuditoria(models.Model):
         # Aplicación de insumos y otro evento (PRD-03, D-51 punto 9): un registro por caso de uso.
         REGISTRO_APLICACION = "registro_aplicacion", "Registro de aplicación de insumos"
         REGISTRO_EVENTO = "registro_evento", "Registro de evento"
+        # Sector fuera de servicio (PRD-04, D-51 punto 9): un solo registro por caso de uso, con todo lo tocado como afectado.
+        FUERA_DE_SERVICIO_SECTOR = "fuera_de_servicio_sector", "Sector puesto fuera de servicio"
         # Tipos de actuador del IoT (IOT-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_TIPO_ACTUADOR = "alta_tipo_actuador", "Alta de tipo de actuador"
         MODIFICACION_TIPO_ACTUADOR = "modificacion_tipo_actuador", "Modificación de tipo de actuador"
@@ -1086,6 +1088,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REGISTRO_MERMA,
         RegistroAuditoria.Accion.REGISTRO_APLICACION,
         RegistroAuditoria.Accion.REGISTRO_EVENTO,
+        RegistroAuditoria.Accion.FUERA_DE_SERVICIO_SECTOR,
         RegistroAuditoria.Accion.ALTA_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.REACTIVACION_TIPO_ACTUADOR,

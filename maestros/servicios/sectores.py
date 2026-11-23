@@ -391,6 +391,18 @@ def volver_a_servicio_sector(actor, sector_id):
     return sector
 
 
+def pasar_a_fuera_de_servicio(sector):
+    """PROD-PNR-FDS (D-51 punto 7): pasa un sector ACTIVO a «fuera de servicio» y nada más. NO audita, NO valida el rol y NO bloquea: quien la
+    llama (``produccion.servicios.sectores_fuera_de_servicio.poner_fuera_de_servicio``) ya bloqueó el sector con ``bloquear_sectores`` ANTES
+    de llamarla (después del cambio ``bloquear_sectores`` ya no lo acepta, porque solo toma activos) y arma su único registro de auditoría.
+    Con un sector que no está activo lanza ``ValueError`` y no cambia nada."""
+    if sector.estado_sector != Estado.ACTIVO:
+        raise ValueError("Solo un sector activo puede pasar a fuera de servicio.")
+    sector.estado_sector = Estado.FUERA_DE_SERVICIO
+    sector.save(update_fields=["estado_sector"])
+    return sector
+
+
 def _errores_de_impedimentos(impedimentos):
     """Un ``ValidationError`` general con UN error por impedimento (código, qué pasa y cómo resolverlo)."""
     return ValidationError(

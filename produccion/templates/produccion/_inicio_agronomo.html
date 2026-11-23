@@ -1,0 +1,17 @@
+{% comment %}Sección «Mi producción» del Inicio del Agrónomo (`registrar_seccion_de_inicio`, D-43; PRD-04, `VIEWS.inicio` del prototipo). Recibe «datos» con «indicadores»
+(IndicadoresDelAgronomo). Sin invernaderos a cargo dice cómo empezar. Los cuatro indicadores son enlaces a la pantalla de origen. Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Mi producción</h2>
+  {% with i=datos.indicadores %}
+  {% if i.sin_invernaderos %}
+  <div class="empty"><b>Todavía no tenés invernaderos</b><span>Hoy no tenés ningún invernadero a cargo. Cuando el Gerente te deje a cargo de uno (al darlo de alta o al modificarlo), vas a ver acá sus lotes, órdenes, ocupación e insumos por vencer.</span></div>
+  {% else %}
+  <div class="kpis">
+    <a class="kpi" href="{% url 'maestros:invernaderos' %}" style="text-decoration:none;color:inherit"><span class="k">Lotes activos</span><span class="v">{{ i.lotes_activos }}</span><span class="c">{{ i.plantas_en_pie }} planta{{ i.plantas_en_pie|pluralize }} en pie</span></a>
+    <a class="kpi{% if i.ordenes_vencidas %} danger{% endif %}" href="{% url 'produccion:ordenes' %}" style="text-decoration:none;color:inherit"><span class="k">Órdenes vencidas</span><span class="v">{{ i.ordenes_vencidas }}</span><span class="c">de {{ i.ordenes_a_realizar }} a realizar</span></a>
+    <a class="kpi" href="{% url 'maestros:invernaderos' %}" style="text-decoration:none;color:inherit"><span class="k">Ocupación</span><span class="v">{{ i.porcentaje_de_ocupacion }}<small>%</small></span><span class="c">{{ i.agujeros_ocupados }} de {{ i.agujeros_totales }} agujeros activos</span></a>
+    <a class="kpi{% if i.insumos_por_vencer %} warn{% endif %}" href="{% url 'inventario:existencias' %}" style="text-decoration:none;color:inherit"><span class="k">Insumos por vencer</span><span class="v">{{ i.insumos_por_vencer }}</span><span class="c">alerta{{ i.insumos_por_vencer|pluralize }} activa{{ i.insumos_por_vencer|pluralize }}</span></a>
+  </div>
+  {% endif %}
+  {% endwith %}
+</div>

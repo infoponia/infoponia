@@ -9,8 +9,9 @@
 # cierre y en docs/temas_abiertos.md.
 #
 # PRD-02 suma `TransicionEtapa`, `Merma` y `AlertaDeMerma`; PRD-03 suma `AplicacionInsumos` (hija de `Bitacora`), `ImputacionCosto`, el
-# origen `aplicacion` del `Consumo` (D-51 puntos 3 y 4) y los tipos de bitácora `aplicacion`, `otro_evento` y `consumo`. NO hay todavía
-# tablas de PRD-04 (`FueraDeServicio`, `Reubicacion`): sus tipos de evento los suma esa tarea. `OrdenTrabajo.Tipo` ya nace con los cinco
+# origen `aplicacion` del `Consumo` (D-51 puntos 3 y 4) y los tipos de bitácora `aplicacion`, `otro_evento` y `consumo`. PRD-04 suma
+# `FueraDeServicio` y `Reubicacion` (hijas de `Bitacora`), sus tipos de evento y el cambio de `OcupacionSector` (D-51 punto 1: `orden`
+# nula y `reubicacion`, exactamente una de las dos). `OrdenTrabajo.Tipo` ya nace con los cinco
 # valores (D-67 punto 1), para que las tareas siguientes no cambien sus `choices` ni sus restricciones.
 
 from django.db import models
@@ -249,7 +250,10 @@ class OcupacionSector(models.Model):
     """Lo que una orden planifica ocupar en un sector y, una vez concretada, lo que el lote ocupa de verdad (R094, R095, R140).
     Los agujeros comprometidos y ocupados de un sector se DERIVAN de estas filas (D-50 punto 4): no se guardan en el sector."""
 
-    orden = models.ForeignKey(OrdenTrabajo, on_delete=models.PROTECT, related_name="ocupaciones")  # R140; PRD-04 la vuelve nula (D-51)
+    # R140 / R164. Nula si la ocupación nace de una reubicación (PRD-04, D-51 punto 1): exactamente una de `orden` y `reubicacion`.
+    orden = models.ForeignKey(OrdenTrabajo, null=True, blank=True, on_delete=models.PROTECT, related_name="ocupaciones")
+    # MD-76: las ocupaciones de destino de una reubicación (nacen con planificados = ocupados y con lote).
+    reubicacion = models.ForeignKey("Reubicacion", null=True, blank=True, on_delete=models.PROTECT, related_name="ocupaciones")
     sector = models.ForeignKey(SectorProduccion, on_delete=models.PROTECT, related_name="ocupaciones")  # R095
     # Tiene lote si y solo si la orden está concretada y ocupó al menos un agujero al concretar; lo conserva aunque los libere.
     lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="ocupaciones")  # R094
@@ -265,8 +269,21 @@ class OcupacionSector(models.Model):
                 condition=Q(cant_agujeros_ocupados__lte=F("cant_agujeros_planificados")),
                 name="ocupacion_ocupados_hasta_planificados",
             ),
-            # Una orden usa un sector una sola vez (PRD-04 la cambia a condicional, D-51 punto 1).
-            models.UniqueConstraint(fields=["orden", "sector"], name="ocupacion_unica_por_orden_y_sector"),
+            # Una orden usa un sector una sola vez; una reubicación también (D-51 punto 1, restricción C9 de MD-76).
+            models.UniqueConstraint(
+                fields=["orden", "sector"], condition=Q(orden__isnull=False), name="ocupacion_unica_por_orden_y_sector"
+            ),
+            models.UniqueConstraint(
+                fields=["reubicacion", "sector"],
+                condition=Q(reubicacion__isnull=False),
+                name="ocupacion_unica_por_reubicacion_y_sector",
+            ),
+            # Toda ocupación pertenece exactamente a una orden o a una reubicación (C9).
+            models.CheckConstraint(
+                condition=(Q(orden__isnull=False) & Q(reubicacion__isnull=True))
+                | (Q(orden__isnull=True) & Q(reubicacion__isnull=False)),
+                name="ocupacion_orden_o_reubicacion",
+            ),
         ]
 
     def __str__(self):
@@ -290,6 +307,8 @@ class Bitacora(OrigenDocumento):
         APLICACION = "aplicacion", "Aplicación de insumos"
         OTRO_EVENTO = "otro_evento", "Otro evento"
         CONSUMO = "consumo", "Consumo"  # interno: no se lista en la bitácora
+        FUERA_DE_SERVICIO = "fuera_de_servicio", "Sector fuera de servicio"  # PRD-04
+        REUBICACION = "reubicacion", "Reubicación de plantas"  # PRD-04
 
     invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="bitacoras")  # R081
     lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="bitacoras")  # R082
@@ -316,7 +335,18 @@ class Bitacora(OrigenDocumento):
         ]
         constraints = [
             models.CheckConstraint(
-                condition=Q(tipo_evento__in=["siembra", "transicion", "merma", "aplicacion", "otro_evento", "consumo"]),
+                condition=Q(
+                    tipo_evento__in=[
+                        "siembra",
+                        "transicion",
+                        "merma",
+                        "aplicacion",
+                        "otro_evento",
+                        "consumo",
+                        "fuera_de_servicio",
+                        "reubicacion",
+                    ]
+                ),
                 name="bitacora_tipo_evento_valido",
             ),
         ]
@@ -488,3 +518,50 @@ class ImputacionCosto(models.Model):
     def __str__(self):
         """«Imputación #N» (texto de la auditoría, D-36)."""
         return f"Imputación #{self.pk}"
+
+
+class FueraDeServicio(Bitacora):
+    """Constancia de que un sector pasó a «fuera de servicio» (PROD-PNR-FDS; MD-75, D-51). Hija de `Bitacora` con
+    `tipo_evento = fuera_de_servicio` (lo garantiza el servicio: una restricción de la hija no ve el campo del padre). El sector va
+    también en `Bitacora.sectores` (uno, obligatorio). La fecha efectiva es la `fecha_bitacora` y la hora es la actual.
+    A lo sumo un registro abierto (`fecha_fin` nula) por sector; `fecha_fin >= fecha_efectiva` lo verifica el servicio que lo cierra
+    (la restricción de la hija no ve `fecha_bitacora`, que es de la tabla padre)."""
+
+    motivo_fuera_de_servicio = models.CharField(max_length=300)
+    # Nula mientras el sector sigue fuera de servicio; la cargan la vuelta a servicio y las bajas (sector e invernadero).
+    fecha_fin = models.DateField(null=True, blank=True)
+    # Columna propia para respaldar con una restricción de la base que un sector no tenga dos registros abiertos.
+    sector = models.ForeignKey(SectorProduccion, on_delete=models.PROTECT, related_name="registros_fuera_de_servicio")
+
+    class Meta:
+        verbose_name = "Sector fuera de servicio"
+        verbose_name_plural = "Sectores fuera de servicio"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sector"], condition=Q(fecha_fin__isnull=True), name="fuera_de_servicio_un_registro_abierto_por_sector"
+            ),
+        ]
+
+    @property
+    def fecha_efectiva(self):
+        """Desde cuándo está fuera de servicio: la `fecha_bitacora` (no se duplica la columna)."""
+        return self.fecha_bitacora
+
+    def __str__(self):
+        """«Fuera de servicio #N» (texto de la auditoría, D-36)."""
+        return f"Fuera de servicio #{self.pk}"
+
+
+class Reubicacion(Bitacora):
+    """Traslado de las plantas de UN lote desde un sector que sale de servicio hacia otros sectores del mismo tipo de etapa (MD-76,
+    D-51). Hija de `Bitacora` con `tipo_evento = reubicacion`; sin atributos propios: el lote es `Bitacora.lote`, el sector de origen
+    es el único de `Bitacora.sectores`. Se crea una por lote reubicado. Sus ocupaciones de destino son `OcupacionSector.reubicacion`.
+    No cambia la etapa del lote ni su fecha de entrada a la etapa."""
+
+    class Meta:
+        verbose_name = "Reubicación"
+        verbose_name_plural = "Reubicaciones"
+
+    def __str__(self):
+        """«Reubicación #N» (texto de la auditoría, D-36)."""
+        return f"Reubicación #{self.pk}"

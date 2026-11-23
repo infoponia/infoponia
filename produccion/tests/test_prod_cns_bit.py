@@ -5,7 +5,7 @@
 # - invernaderos_de_bitacora(actor) -> list[Invernadero]: el Agrónomo, los que tiene a su cargo (también los dados de baja: regla 2); el Gerente, todos
 #   (también los de baja); cualquier otra cuenta, o una inactiva, ninguno (el Capataz no consulta la bitácora). Por nombre. Si hay uno solo viene elegido
 #   (regla 1: lo decide la pantalla con esta lista).
-# - TIPOS_DE_FILTRO: `[(valor, texto)]` de los tipos que ofrece el filtro: siembra, transición, merma, aplicación y otro evento. No el interno `consumo` ni los
+# - TIPOS_DE_FILTRO: `[(valor, texto)]` de los tipos que ofrece el filtro: siembra, transición, merma, aplicación, otro evento y (PRD-04) sector fuera de servicio y reubicación. No el interno `consumo` ni los
 #   que no existen todavía (cosecha, incumplimiento de cláusula, fuera de servicio, reubicación: los suman sus rondas).
 # - FiltrosDeBitacora(texto="", tipo="", lote_id=None, sector_id=None, desde=None, hasta=None): todos combinables (regla 6); `texto` es `icontains` en la
 #   descripción; el sector encuentra los registros que lo tienen ENTRE los suyos; `desde` y `hasta` son inclusive.
@@ -179,7 +179,7 @@ class ContenidoTests(Base):
         self.evento("aplicacion", tipo="aplicacion", clase=Bitacora)
         textos = {r.tipo: r.tipo_texto for r in self.registros(self.consultar())}
         self.assertEqual(textos, {"siembra": "Siembra", "transicion": "Transición de etapa", "merma": "Merma", "otro_evento": "Otro evento", "aplicacion": "Aplicación de insumos"})
-        self.assertEqual([v for v, _ in bitacora.TIPOS_DE_FILTRO], ["siembra", "transicion", "merma", "aplicacion", "otro_evento"])
+        self.assertEqual([v for v, _ in bitacora.TIPOS_DE_FILTRO], ["siembra", "transicion", "merma", "aplicacion", "otro_evento", "fuera_de_servicio", "reubicacion"])
 
     def test_regla_5_el_consumo_interno_de_una_aplicacion_no_se_lista_pero_se_muestra_dentro_de_su_aplicacion(self):
         """Regla 5 y D-51 punto 3: el consumo de una aplicación es de tipo interno `consumo` y no se lista; se ve dentro de su aplicación (insumo y cantidad)."""

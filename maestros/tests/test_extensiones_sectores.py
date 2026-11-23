@@ -86,8 +86,10 @@ class ExtensionesDeSectoresTests(SimpleTestCase):
             self.assertEqual(extensiones.avisos_registrados_de_cambio_de_tipo(object(), object()), [a, b])
 
     def test_ext_vuelta_a_servicio_sin_registrantes_no_hace_nada(self):
-        """API: sin registrantes, el cambio de estado funciona igual."""
-        extensiones.aplicar_efectos_de_vuelta_a_servicio(object(), _sector(1))
+        """API: sin registrantes, el cambio de estado funciona igual. (Con la lista vacía a propósito: con `produccion` cargada, PRD-04
+        registra el suyo y esperaría un sector real.)"""
+        with mock.patch.object(extensiones, "_VUELTAS_A_SERVICIO", []):
+            extensiones.aplicar_efectos_de_vuelta_a_servicio(object(), _sector(1))
 
     def test_ext_vuelta_a_servicio_llama_a_todos_con_actor_y_sector(self):
         """Postcondición b de PROD-MOD-SCT: cada registrante recibe (actor, sector)."""
@@ -99,8 +101,9 @@ class ExtensionesDeSectoresTests(SimpleTestCase):
         b.assert_called_once_with(actor, sector)
 
     def test_ext_efecto_de_baja_de_sector_sin_registrantes_no_hace_nada(self):
-        """API, lote 5: sin registrantes la baja funciona igual."""
-        extensiones.aplicar_efectos_de_baja_de_sector(object(), _sector(1))
+        """API, lote 5: sin registrantes la baja funciona igual. (Con la lista vacía a propósito, como arriba.)"""
+        with mock.patch.object(extensiones, "_EFECTOS_DE_BAJA_DE_SECTOR", []):
+            extensiones.aplicar_efectos_de_baja_de_sector(object(), _sector(1))
 
     def test_ext_efecto_de_baja_de_sector_llama_a_todos_una_vez(self):
         """Postcondición b de PROD-BAJ-SCT: se llama una vez por registrante, con (actor, sector)."""

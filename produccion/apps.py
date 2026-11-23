@@ -32,12 +32,16 @@ class ProduccionConfig(AppConfig):
                 registrantes.avisos_de_cambio_de_tipo,
                 extensiones_de_maestros.registrar_aviso_de_cambio_de_tipo,
             ),
-            # `maestros`: invernadero. PRD-01 no registra efecto de baja: con lotes u órdenes la baja no se hace (PRD-04 sí).
+            # `maestros`: invernadero. PRD-01 no registra efecto de baja: con lotes u órdenes la baja no se hace (PRD-04 sí, abajo).
             (
                 extensiones_de_maestros._IMPEDIMENTOS,
                 registrantes.impedimentos_de_baja_del_invernadero,
                 extensiones_de_maestros.registrar_impedimento_de_baja,
             ),
+            # PRD-04: el cierre del registro «Fuera de servicio» (vuelta a servicio, baja del sector y baja del invernadero).
+            (extensiones_de_maestros._VUELTAS_A_SERVICIO, registrantes.efecto_de_vuelta_a_servicio, extensiones_de_maestros.registrar_efecto_de_vuelta_a_servicio),
+            (extensiones_de_maestros._EFECTOS_DE_BAJA_DE_SECTOR, registrantes.efecto_de_baja_de_sector, extensiones_de_maestros.registrar_efecto_de_baja_de_sector),
+            (extensiones_de_maestros._EFECTOS_DE_BAJA, registrantes.efecto_de_baja_del_invernadero, extensiones_de_maestros.registrar_efecto_de_baja),
             # `inventario`.
             (extensiones_de_inventario._RESERVAS, registrantes.reservas_de_insumo, extensiones_de_inventario.registrar_reservas_de_insumo),
             (
@@ -112,3 +116,4 @@ class ProduccionConfig(AppConfig):
         # `core`: ``registrar_*`` es idempotente.
         extensiones_de_core.registrar_asignaciones_de_cuenta(registrantes.asignaciones_de_cuenta)
         extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_inicio)
+        extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_inicio_del_agronomo)  # PRD-04

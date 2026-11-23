@@ -3,7 +3,7 @@
 # `inventario.urls_variedades`.
 from django.urls import path
 
-from produccion import views, views_bitacora
+from produccion import views, views_bitacora, views_fuera_de_servicio
 
 app_name = "produccion"
 
@@ -21,4 +21,6 @@ urlpatterns = [
     path("registrar/merma/", views_bitacora.registrar_merma, name="registrar_merma"),
     path("registrar/aplicacion/", views_bitacora.registrar_aplicacion, name="registrar_aplicacion"),
     path("registrar/evento/", views_bitacora.registrar_evento, name="registrar_evento"),
+    # PRD-04: poner un sector fuera de servicio (PROD-PNR-FDS). `?sector=<id>` lo deja elegido (entrada desde la ficha del sector).
+    path("sectores/fuera-de-servicio/", views_fuera_de_servicio.poner_fuera_de_servicio, name="fuera_de_servicio"),
 ]

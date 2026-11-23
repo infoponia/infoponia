@@ -11,6 +11,13 @@
 #     (como costo de los lotes, con vencimiento y DOS lotes: 4 L que vencen en 10 días y 10 L que vencen en 40) para el reparto FEFO y su corrección;
 #   - «Verificación Producción Vacío»: otro invernadero del mismo Agrónomo, sin sectores, lotes ni insumos (extensiones 4a, 4b y 6b: formularios deshabilitados con su motivo).
 # La bitácora tiene entonces la siembra, la transición y la merma para mirar la pestaña «Bitácora». No carga eventos ni aplicaciones: esos los registra quien verifica.
+#
+# PRD-04 suma lo que pide su «Verificación a mano» (pasos 2 a 9), con los mismos servicios:
+#   - «Verificación Fuera de Servicio» (Agrónomo y Capataz de prueba): tres sectores de Germinación (el primero con un LOTE de 40 plantas y una siembra «a realizar» con agujeros
+#     comprometidos en él y en el segundo; el segundo con lugar, para reubicar; el tercero vacío, sin plantas ni órdenes: solo cambia de estado) y un sector de Maduración YA
+#     puesto fuera de servicio con `poner_fuera_de_servicio` (para volver a servicio o darlo de baja y ver cómo se cierra su registro);
+#   - «Verificación Fuera de Servicio Baja»: otro invernadero del mismo Agrónomo, sin lotes ni órdenes ni insumos, con un sector fuera de servicio (para dar de baja el invernadero,
+#     que cierra el registro abierto). Se da de baja con la cuenta del Gerente.
 
 from datetime import timedelta
 
@@ -27,8 +34,8 @@ from maestros.models import Cultivo, Invernadero, Localidad, SectorProduccion, T
 from maestros.servicios import cultivos as servicio_cultivos
 from maestros.servicios import invernaderos as servicio_invernaderos
 from maestros.servicios import sectores as servicio_sectores
-from produccion.models import Lote, Merma, OrdenTrabajo, Siembra, TransicionEtapa
-from produccion.servicios import mermas, siembras, transiciones
+from produccion.models import FueraDeServicio, Lote, Merma, OrdenTrabajo, Siembra, TransicionEtapa
+from produccion.servicios import mermas, sectores_fuera_de_servicio, siembras, transiciones
 
 CODIGO = "produccion"
 SUFIJO = "prueba4.local"
@@ -50,6 +57,15 @@ INSUMOS = (
     ("Nutriente líquido (prueba)", "Nutrientes (prueba)", "l", True, "6.00", [("4", 10), ("10", 40)]),
 )
 MERMA_PREVIA = 14  # de 100 plantas: 14 % (el umbral se cruza con más de 15 %)
+# PRD-04: los dos invernaderos de la verificación de «Poner fuera de servicio».
+INVERNADERO_FDS = "Verificación Fuera de Servicio"
+INVERNADERO_FDS_BAJA = "Verificación Fuera de Servicio Baja"
+SECTORES_FDS = (
+    ("FDS Germinación 1", "germinacion", 100),  # con el lote y la siembra «a realizar»
+    ("FDS Germinación 2", "germinacion", 100),  # destino con lugar
+    ("FDS Germinación 3", "germinacion", 100),  # vacío: solo cambia de estado
+    ("FDS Maduración", "maduracion", 50),  # ya fuera de servicio
+)
 
 
 def _gerente_activo():
@@ -94,10 +110,10 @@ def _invernadero(gerente, nombre, agronomo, capataz, creado):
     return invernadero
 
 
-def _sectores(agronomo, invernadero, creado):
-    """Los tres sectores de «Verificación Producción» (``alta_sector``). Devuelve `{nombre: sector}`."""
+def _sectores(agronomo, invernadero, creado, definiciones=SECTORES):
+    """Los sectores de un invernadero de prueba (``alta_sector``; por omisión los tres de «Verificación Producción»). Devuelve `{nombre: sector}`."""
     resultado = {}
-    for nombre, tipo, agujeros in SECTORES:
+    for nombre, tipo, agujeros in definiciones:
         sector = SectorProduccion.objects.filter(invernadero=invernadero, nombre_sector__iexact=nombre).first()
         if sector is None:
             sector = servicio_sectores.alta_sector(
@@ -232,6 +248,58 @@ def _merma_previa_y_transicion(agronomo, capataz, lote, sectores, creado):
         creado.append(f"Transición «a realizar» de {lote.cantidad_actual} plantas: una merma más la deja sin cobertura.")
 
 
+def _fuera_de_servicio(agronomo, sector, motivo, creado):
+    """Pone el sector fuera de servicio con el caso de uso (``poner_fuera_de_servicio``) si nunca estuvo: si ya tiene un registro (abierto o cerrado) no se repite, para no
+    volver a sacar de servicio un sector que quien verifica ya volvió a activar."""
+    if FueraDeServicio.objects.filter(sector=sector).exists():
+        return
+    sector.refresh_from_db()
+    if sector.estado_sector != SectorProduccion.Estado.ACTIVO:
+        return
+    sectores_fuera_de_servicio.poner_fuera_de_servicio(
+        agronomo, sectores_fuera_de_servicio.DatosDeFueraDeServicio(sector_id=sector.pk, motivo=motivo, fecha=timezone.localdate())
+    )
+    creado.append(f"Sector «{sector.nombre_sector}» puesto fuera de servicio (motivo: {motivo}).")
+
+
+def _escenario_fds(agronomo, capataz, gerente, variedad, creado):
+    """El invernadero «Verificación Fuera de Servicio» (ver el encabezado) y el que sirve para la baja del invernadero (PRD-04)."""
+    invernadero = _invernadero(gerente, INVERNADERO_FDS, agronomo, capataz, creado)
+    sectores = _sectores(agronomo, invernadero, creado, SECTORES_FDS)
+    _semilla_con_stock(agronomo, invernadero, variedad, creado)
+    origen = sectores["FDS Germinación 1"]
+    if not Lote.objects.filter(invernadero=invernadero).exists():
+        orden = siembras.planificar_siembra(
+            agronomo,
+            siembras.DatosDeSiembra(
+                invernadero_id=invernadero.pk,
+                variedad_id=variedad.pk,
+                cantidad=40,
+                fecha_programada=timezone.localdate() + timedelta(days=1),
+                distribucion=((origen.pk, 40),),
+            ),
+        )
+        lote = siembras.concretar_siembra(capataz, orden.pk, siembras.DatosDeConcrecion())
+        creado.append(f"Lote {lote.codigo} de 40 plantas en «FDS Germinación 1».")
+    if not Siembra.objects.filter(invernadero=invernadero, estado_orden=OrdenTrabajo.Estado.A_REALIZAR).exists():
+        siembras.planificar_siembra(
+            agronomo,
+            siembras.DatosDeSiembra(
+                invernadero_id=invernadero.pk,
+                variedad_id=variedad.pk,
+                cantidad=20,
+                fecha_programada=timezone.localdate() + timedelta(days=2),
+                distribucion=((origen.pk, 12), (sectores["FDS Germinación 2"].pk, 8)),
+            ),
+        )
+        creado.append("Siembra «a realizar» de 20 plantines con agujeros comprometidos en «FDS Germinación 1» (12) y «FDS Germinación 2» (8).")
+    _fuera_de_servicio(agronomo, sectores["FDS Maduración"], "Se rompió el canal de retorno (dato de prueba)", creado)
+
+    baja = _invernadero(gerente, INVERNADERO_FDS_BAJA, agronomo, None, creado)
+    para_baja = _sectores(agronomo, baja, creado, (("FDS Baja Germinación", "germinacion", 30),))
+    _fuera_de_servicio(agronomo, para_baja["FDS Baja Germinación"], "Reparación prolongada (dato de prueba)", creado)
+
+
 def cargar(contrasena):
     """El cargador de `produccion`: ver el encabezado del archivo. Devuelve un ``ResumenDeCarga``. Nunca imprime ni devuelve la contraseña."""
     creado, cuentas = [], []
@@ -246,4 +314,5 @@ def cargar(contrasena):
     _semilla_con_stock(agronomo, invernadero, variedad, creado)
     lote = _lote(agronomo, capataz, invernadero, sectores, variedad, creado)
     _merma_previa_y_transicion(agronomo, capataz, lote, sectores, creado)
+    _escenario_fds(agronomo, capataz, gerente, variedad, creado)
     return verificacion.ResumenDeCarga(creado=tuple(creado), cuentas=tuple(cuentas), pendiente=())

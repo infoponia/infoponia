@@ -17,6 +17,7 @@ capacidad pero no recibe plantas ni órdenes; uno dado de baja, que no cuenta y 
         {% if "modificar" in t.acciones %}<a role="menuitem" href="{% url 'maestros:sector_modificar' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_modificar' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "pencil" 15 %}Modificar</a>{% endif %}
         {% if "volver_a_servicio" in t.acciones %}<a role="menuitem" href="{% url 'maestros:sector_volver_a_servicio' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_volver_a_servicio' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 15 %}Volver a activar</a>{% endif %}
         {% if "reactivar" in t.acciones %}<a role="menuitem" href="{% url 'maestros:sector_reactivar' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_reactivar' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 15 %}Reactivar</a>{% endif %}
+        {% if "baja" in t.acciones and s.estado_sector == "activo" %}<a role="menuitem" href="{% url 'produccion:fuera_de_servicio' %}?sector={{ s.pk }}">{% icono "tool" 15 %}Poner fuera de servicio</a>{% endif %}
         {% if "baja" in t.acciones %}<hr><a class="danger" role="menuitem" href="{% url 'maestros:sector_baja' invernadero.pk s.pk %}" hx-get="{% url 'maestros:sector_baja' invernadero.pk s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 15 %}Dar de baja</a>{% endif %}
       </div>
     </details>
