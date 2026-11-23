@@ -5,7 +5,9 @@
 
 from datetime import date
 
-from produccion.servicios import siembras
+from django.utils import timezone
+
+from produccion.servicios import siembras, transiciones
 
 PRIORIDADES = (("", "Sin prioridad (cuenta como media)"), ("alta", "Alta"), ("media", "Media"), ("baja", "Baja"))
 
@@ -86,4 +88,44 @@ def concrecion_desde_post(datos, reservas):
         sembrado=sembrado or None,
         motivo_diferencia=datos.get("motivo_diferencia", ""),
         ajustes=tuple(ajustes),
+    )
+
+
+def transicion_desde_post(datos):
+    """Los `DatosDeTransicion` de «Nueva transición»: los campos `sector_<id>` (plantas por sector destino) que traen algo escrito (un sector
+    en blanco o en 0 no entra: «quitar un sector», extensión 8-9a), y lo que la persona VIO del lote (`cantidad_vista` y `etapa_vista`), para
+    que el servicio detecte si cambió (extensiones 13a y 13b)."""
+    distribucion = []
+    for clave, valor in datos.items():
+        if clave.startswith("sector_") and clave[len("sector_"):].isdigit() and valor.strip():
+            plantas = entero(valor)
+            if plantas != 0:  # 0 quita el sector; un valor que no es número pasa como -1 y lo rechaza el servicio
+                distribucion.append((int(clave[len("sector_"):]), plantas if plantas is not None else -1))
+    return transiciones.DatosDeTransicion(
+        lote_id=entero(datos.get("lote")),
+        fecha_programada=fecha(datos.get("fecha_programada")),
+        distribucion=tuple(distribucion),
+        prioridad=datos.get("prioridad") or None,
+        descripcion=datos.get("descripcion", ""),
+        cantidad=entero(datos.get("cantidad_vista")),
+        etapa_actual_id=entero(datos.get("etapa_vista")),
+    )
+
+
+def concrecion_de_transicion_desde_post(datos):
+    """Los `DatosDeConcrecionDeTransicion` de «Concretar transición»: la fecha (en blanco, hoy), los `ubicadas_<id>` que traen algo
+    (los demás toman lo propuesto, paso 8), la causa y la descripción de la merma, y la cantidad actual que la persona vio."""
+    texto = datos.get("fecha_efectiva", "").strip()
+    fecha_efectiva = (fecha(texto) or date.max) if texto else timezone.localdate()  # una fecha inválida la rechaza el servicio
+    cantidades = tuple(
+        (int(clave[len("ubicadas_"):]), entero(valor) if entero(valor) is not None else -1)
+        for clave, valor in datos.items()
+        if clave.startswith("ubicadas_") and clave[len("ubicadas_"):].isdigit() and valor.strip()
+    )
+    return transiciones.DatosDeConcrecionDeTransicion(
+        fecha_efectiva=fecha_efectiva,
+        cantidades=cantidades,
+        causa=datos.get("causa", ""),
+        descripcion=datos.get("descripcion", ""),
+        cantidad=entero(datos.get("cantidad_vista")),
     )

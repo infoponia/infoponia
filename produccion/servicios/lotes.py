@@ -2,8 +2,8 @@
 # sector. Solo lee: no escribe ni bloquea. Los datos de más de un lote se piden con listas de ids y una consulta por tabla.
 # Fuente: docs/api/produccion.md (sección 2) y docs/modelo/produccion.md («Lo que se calcula de un lote» y de las ocupaciones).
 #
-# Se completa en PRD-02: la fecha de entrada a una etapa que NO es la primera sale de la transición concretada (`TransicionEtapa`),
-# que todavía no existe; en PRD-01 ningún lote sale de Germinación, así que esas fechas valen `None` (decisión del estudiante, PRD-01).
+# PRD-02 completa las fechas de las etapas que NO son la primera: salen de la transición concretada (`TransicionEtapa`, reglas 2 y 5
+# de 8.21 y 8.20). Un lote sin esa transición (dato inconsistente) da `None`.
 
 from collections import namedtuple
 from datetime import timedelta
@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.db.models.functions import Coalesce
 
 from inventario.servicios import ciclos
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo
+from produccion.models import Lote, OcupacionSector, OrdenTrabajo, TransicionEtapa
 from produccion.servicios import costos
 
 # Una fila de «Lotes activos» (ficha del invernadero y bandeja).
@@ -28,11 +28,36 @@ def _es_primera_etapa(etapa_id, etapas_del_ciclo):
     return bool(etapas_del_ciclo) and etapas_del_ciclo[0].etapa_id == etapa_id
 
 
+def entradas_a_la_etapa(lotes, etapas):
+    """`{lote_id: fecha de entrada a su etapa actual}` (regla 5 de 8.21). `lotes` vienen con `siembra` cargada y `etapas` es
+    `ciclos.etapas_de` de sus variedades. En la primera etapa del ciclo: `siembra.fecha_siembra`; en las demás, la `fecha_transicion` de
+    la transición concretada del lote cuya etapa destino es la etapa actual (la más reciente si hubiera más de una). Una consulta."""
+    lotes = list(lotes)
+    entradas, pendientes = {}, []
+    for lote in lotes:
+        if _es_primera_etapa(lote.etapa_id, etapas[lote.siembra.variedad_id]):
+            entradas[lote.pk] = lote.siembra.fecha_siembra
+        else:
+            pendientes.append(lote)
+    if pendientes:
+        concretadas = {}
+        filas = (
+            TransicionEtapa.objects.filter(lote_id__in=[l.pk for l in pendientes], estado_orden=OrdenTrabajo.Estado.CONCRETADA)
+            .order_by("fecha_transicion", "pk")
+            .values_list("lote_id", "etapa_destino_id", "fecha_transicion")
+        )
+        for lote_id, etapa_id, fecha in filas:
+            concretadas[(lote_id, etapa_id)] = fecha  # la última pisa a las anteriores
+        for lote in pendientes:
+            entradas[lote.pk] = concretadas.get((lote.pk, lote.etapa_id))
+    return entradas
+
+
 def fecha_de_entrada_a_la_etapa(lote):
-    """Regla 5 de 8.21. En la primera etapa del ciclo: `siembra.fecha_siembra`. En las demás sale de la transición concretada
-    (PRD-02): hasta entonces, `None`."""
-    etapas = ciclos.etapas_de([lote.siembra.variedad_id])[lote.siembra.variedad_id]
-    return lote.siembra.fecha_siembra if _es_primera_etapa(lote.etapa_id, etapas) else None
+    """Regla 5 de 8.21: la primera etapa, la fecha de siembra; las demás, la fecha efectiva de la transición concretada que la
+    tuvo de destino (PRD-02). `None` si no se conoce."""
+    etapas = ciclos.etapas_de([lote.siembra.variedad_id])
+    return entradas_a_la_etapa([lote], etapas)[lote.pk]
 
 
 def fecha_estimada_de_fin_de_etapa(lote):
@@ -41,15 +66,32 @@ def fecha_estimada_de_fin_de_etapa(lote):
     return None if entrada is None else entrada + timedelta(days=lote.etapa.duracion_estimada_dias)
 
 
+def _etapa_de_maduracion(variedad_id):
+    """La etapa de Maduración del ciclo de la variedad (`EtapaDelCiclo`), o `None` si su ciclo no la tiene."""
+    return next((e for e in ciclos.etapas_de([variedad_id])[variedad_id] if e.codigo == ciclos.MADURACION), None)
+
+
 def fecha_de_entrada_a_maduracion(lote):
-    """Regla 2 de 8.20: la `fecha_transicion` de la transición concretada con destino Maduración; `None` si no entró.
-    Se completa en PRD-02 (hoy ningún lote sale de Germinación)."""
-    return None
+    """Regla 2 de 8.20: la `fecha_transicion` de la transición concretada con destino Maduración; `None` si no entró."""
+    maduracion = _etapa_de_maduracion(lote.siembra.variedad_id)
+    if maduracion is None:
+        return None
+    return (
+        TransicionEtapa.objects.filter(
+            lote=lote, etapa_destino_id=maduracion.etapa_id, estado_orden=OrdenTrabajo.Estado.CONCRETADA
+        )
+        .order_by("-fecha_transicion", "-pk")
+        .values_list("fecha_transicion", flat=True)
+        .first()
+    )
 
 
 def fecha_maxima_de_cosecha(lote):
-    """Regla 3 de 8.20: entrada a Maduración + duración de esa etapa; `None` si no entró. Se completa en PRD-02."""
-    return None
+    """Regla 3 de 8.20: entrada a Maduración + `duracion_dias` de esa etapa; `None` si no entró."""
+    entrada = fecha_de_entrada_a_maduracion(lote)
+    if entrada is None:
+        return None
+    return entrada + timedelta(days=_etapa_de_maduracion(lote.siembra.variedad_id).duracion_dias)
 
 
 def sectores_de_origen(lote):
@@ -68,7 +110,12 @@ def perfil_de_sector(sector_ids):
         OcupacionSector.objects.filter(sector_id__in=ids)
         .filter(Q(cant_agujeros_ocupados__gt=0) | Q(orden__estado_orden=OrdenTrabajo.Estado.A_REALIZAR))
         .annotate(
-            perfil=Coalesce("lote__siembra__variedad__perfil_familia", "orden__siembra__variedad__perfil_familia")
+            # Un lote con plantas, una siembra «a realizar» o (PRD-02) una transición «a realizar» hacia el sector.
+            perfil=Coalesce(
+                "lote__siembra__variedad__perfil_familia",
+                "orden__siembra__variedad__perfil_familia",
+                "orden__transicionetapa__lote__siembra__variedad__perfil_familia",
+            )
         )
         .values_list("sector_id", "perfil")
         .order_by("id")
@@ -89,10 +136,11 @@ def lotes_activos_de(invernadero_ids):
         .order_by("id")
     )
     etapas = ciclos.etapas_de({lote.siembra.variedad_id for lote in lotes}) if lotes else {}
+    entradas = entradas_a_la_etapa(lotes, etapas) if lotes else {}
     filas = []
     for lote in lotes:
         variedad = lote.siembra.variedad
-        entrada = lote.siembra.fecha_siembra if _es_primera_etapa(lote.etapa_id, etapas[variedad.pk]) else None
+        entrada = entradas[lote.pk]
         filas.append(
             FilaDeLote(
                 lote_id=lote.pk,

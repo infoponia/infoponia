@@ -4,8 +4,7 @@ from django.apps import AppConfig
 
 
 class ProduccionConfig(AppConfig):
-    """Registra la app `produccion` y sus registrantes (PRD-01). Los dos tipos de alerta (`produccion_merma_umbral` y
-    `produccion_plantas_comprometidas`) los registra PRD-02."""
+    """Registra la app `produccion`, sus registrantes (PRD-01) y los dos tipos de alerta de la merma (PRD-02)."""
 
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'produccion'
@@ -66,6 +65,32 @@ class ProduccionConfig(AppConfig):
             extensiones_de_maestros.registrar_traspaso(registrantes.contar_traspaso, registrantes.traspasar_ordenes)
         if not any(clave == "lotes" for clave, _, _ in extensiones_de_maestros._PESTANAS):
             extensiones_de_maestros.registrar_pestana_de_invernadero("lotes", "Lotes activos", registrantes.pestana_de_lotes)
+
+        # `maestros.alertas`: los dos tipos de alerta de la merma (PRD-02; docs/api/produccion.md, sección 3). Nombres y severidades
+        # del prototipo (decisión del estudiante, 22/11/2026). Registrar dos veces la misma definición no hace nada.
+        from maestros.alertas import Clase, Destinatario, Origen, TipoAlerta, registrar_tipo_de_alerta
+        from maestros.models import Alerta
+
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo="produccion_merma_umbral",
+                nombre="Merma sobre el umbral",
+                destinatario=Destinatario.AGRONOMO_Y_GERENTE,
+                severidad=Alerta.Severidad.CRITICA,
+                clase=Clase.EVENTO,
+                origen=Origen.MERMA,
+            )
+        )
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo="produccion_plantas_comprometidas",
+                nombre="Plantas comprometidas por una transición",
+                destinatario=Destinatario.AGRONOMO_O_GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.EVENTO,
+                origen=Origen.MERMA,
+            )
+        )
 
         # `core`: ``registrar_*`` es idempotente.
         extensiones_de_core.registrar_asignaciones_de_cuenta(registrantes.asignaciones_de_cuenta)

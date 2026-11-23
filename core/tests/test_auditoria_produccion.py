@@ -45,3 +45,24 @@ class AuditoriaDeProduccionTests(TestCase):
         self.assertEqual(RegistroAuditoria.ETIQUETAS["agujeros_comprometidos"], "Agujeros comprometidos")
         self.assertEqual(RegistroAuditoria.ETIQUETAS["agujeros_ocupados"], "Agujeros ocupados")
         self.assertEqual(RegistroAuditoria.VALORES_VISIBLES["prioridad_orden"]["media"], "Media")
+
+
+class AuditoriaDeTransicionTests(TestCase):
+    """Acciones que suma PRD-02 (D-36): `planificacion_transicion`, `concrecion_transicion` y `registro_merma`."""
+
+    ACCIONES = (Accion.PLANIFICACION_TRANSICION, Accion.CONCRECION_TRANSICION, Accion.REGISTRO_MERMA)
+
+    def test_d36_las_tres_acciones_son_de_negocio_y_no_de_cuentas(self):
+        """D-36: están en ``ACCIONES_DE_NEGOCIO`` y en ninguna otra clasificación (la ve el Gerente)."""
+        for accion in self.ACCIONES:
+            with self.subTest(accion=accion):
+                self.assertIn(accion, modelos.ACCIONES_DE_NEGOCIO)
+                self.assertNotIn(accion, modelos.ACCIONES_DE_CUENTAS)
+
+    def test_d36_las_acciones_y_los_datos_tienen_nombre_visible(self):
+        """D-36: cada acción y cada dato nuevo se muestra con su texto, no con su clave."""
+        self.assertEqual(Accion.PLANIFICACION_TRANSICION.label, "Planificación de transición")
+        self.assertEqual(Accion.CONCRECION_TRANSICION.label, "Concreción de transición")
+        self.assertEqual(Accion.REGISTRO_MERMA.label, "Registro de merma")
+        for clave in ("etapa_destino", "cantidad_transferida", "fecha_transicion", "cantidad_actual", "costo_acumulado", "merma"):
+            self.assertIn(clave, RegistroAuditoria.ETIQUETAS)

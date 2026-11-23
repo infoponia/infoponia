@@ -203,7 +203,7 @@ como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porq
 
 MAE-03 creó los puntos de extensión de sectores y cultivos (`docs/api/extensiones_de_maestros.md`) el 20/11/2026 **sin registrantes** (probados con registrantes falsos). Cada tarea que crea lo que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
 
-1. **PRD-01 y PRD-02 (`produccion`) — PRD-01 hecho el 22/11/2026 (los cinco puntos, con lotes y siembras); PRD-02 suma las transiciones:** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
+1. **PRD-01 y PRD-02 (`produccion`) — hecho el 22/11/2026 (PRD-01: los cinco puntos, con lotes y siembras; PRD-02: las transiciones, en los agujeros comprometidos, el contenido, el perfil y los avisos de cambio de tipo):** `registrar_agujeros_de_sector` (ocupados y comprometidos), `registrar_impedimento_de_baja_de_sector`
    (agujeros ocupados y comprometidos, con los lotes y órdenes), `registrar_contenido_de_sector` (lotes y órdenes),
    `registrar_perfil_de_sector` y `registrar_aviso_de_cambio_de_tipo` (lotes que deben pasar por la etapa y siembras a realizar).
    Al reservar agujeros (`PRD-01` y `PRD-02`), llamar a `bloquear_sectores`, que ya bloquea el invernadero activo y después los sectores activos, y rechaza con `sector_no_disponible`.
@@ -221,7 +221,7 @@ INV-03 crea los tres puntos de variedades de `docs/api/extensiones_de_inventario
 ninguna variedad tiene lotes, órdenes ni contratos, y todas pueden modificarse y darse de baja sin impedimentos. Cada tarea que crea lo
 que falta se registra en el `AppConfig.ready()` de su app y prueba su registrante:
 
-1. ~~**PRD-01 (`produccion`):**~~ Hecho el 22/11/2026 en PRD-01 (las órdenes de transición las suma PRD-02 en `uso_de_variedad`). Texto original: `registrar_uso_de_variedad` (lotes de la variedad, lotes activos por invernadero, órdenes de siembra y de
+1. ~~**PRD-01 (`produccion`):**~~ Hecho el 22/11/2026 en PRD-01 (las órdenes de transición las sumó PRD-02 en `uso_de_variedad`, también el 22/11/2026). Texto original: `registrar_uso_de_variedad` (lotes de la variedad, lotes activos por invernadero, órdenes de siembra y de
    transición a realizar), `registrar_variedades_presentes` (variedades de lotes activos y de órdenes de siembra a realizar por
    invernadero: la misma definición del «umbral efectivo» de PROD-PNF-SMB) y `registrar_impedimento_de_baja_de_variedad` con los códigos
    `lotes_activos` y `ordenes_a_realizar`. PRD-01 también llama a `inventario.servicios.variedades` (`docs/api/variedades.md`) para
@@ -415,7 +415,7 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
    cuentas, ni crean `AsientoContable`: PROD-CNC-SMB y PROD-CNC-TRN (precondiciones c y d y su asiento), PROD-REG-MRM,
    PROD-PNR-FDS, CMP-AJT-STK y PROD-REG-APL (el asiento y las precondiciones contables que cada uno tenga en «CU
    extendidos»; el extracto de cada caso de uso las marca «Fuera de la ronda (D-45)»). Hay que reabrir sus servicios (PRD-01,
-   PRD-02, PRD-03, PRD-04 e INV-02) y sus pruebas, incluidas las de concurrencia, y respetar el orden de bloqueos del
+   PRD-02, PRD-03, PRD-04 e INV-02; en PRD-02, `concretar_transicion` y `aplicar_merma`, que suman el ejercicio, las cuentas «Pérdidas por Mermas» y «Productos en Proceso» y el asiento de la merma) y sus pruebas, incluidas las de concurrencia, y respetar el orden de bloqueos del
    patrón. Anotar lo mismo en pendientes_CU (Drive).
 
 ## Cuando se retome la cámara de frío (D-45)
@@ -455,15 +455,23 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
 
 1. **Restricciones de `Variedad`.** MAE-03 la creó con columnas mínimas. INV-03 agrega la restricción única `(cultivo, lower(nombre_variedad))`, los rangos y el resto, con una migración propia en `maestros` (`docs/modelo/maestros.md`, «Variedad»).
 
-## Cuando exista TransicionEtapa (PRD-02) — nace con PRD-01 (22/11/2026)
+## ~~Cuando exista TransicionEtapa (PRD-02)~~ (cerrado el 22/11/2026, PRD-02)
 
-1. **Fechas de etapas posteriores a la primera.** `lotes.fecha_de_entrada_a_la_etapa` devuelve `None` fuera de la primera etapa, y
+1. ~~**Fechas de etapas posteriores a la primera.**~~ Hecho el 22/11/2026 en PRD-02 (`lotes.entradas_a_la_etapa`, `fecha_de_entrada_a_maduracion` y `fecha_maxima_de_cosecha` salen de la transición concretada; `lotes_activos_de` y `fecha_estimada_de_fin_de_etapa` ya no dan `None`). Texto original: `lotes.fecha_de_entrada_a_la_etapa` devuelve `None` fuera de la primera etapa, y
    `fecha_de_entrada_a_maduracion` y `fecha_maxima_de_cosecha` siempre `None` (reglas 2, 3 y 5 de 8.20 y 8.21): PRD-02 las completa con la
    transición concretada. Con ellas se completan `lotes_activos_de` y `fecha_estimada_de_fin_de_etapa`.
-2. **Dónde suma `TransicionEtapa`.** PRD-02 la agrega a `_HIJAS_CON_CAPATAZ` de `produccion/servicios/ordenes.py` (bandeja, `ordenes_del_capataz`,
+2. ~~**Dónde suma `TransicionEtapa`.**~~ Hecho el 22/11/2026 en PRD-02 (`_HIJAS_CON_CAPATAZ` con sus relaciones por clase, `uso_de_variedad`, `perfil_de_sector`, los avisos de cambio de tipo y la cancelación, que bloquea la variedad y el lote). Texto original: PRD-02 la agrega a `_HIJAS_CON_CAPATAZ` de `produccion/servicios/ordenes.py` (bandeja, `ordenes_del_capataz`,
    traspaso del Capataz, asignaciones de cuenta y cancelación), al conteo de órdenes de `registrantes.uso_de_variedad` y a los registrantes de
    sectores (ocupaciones y avisos de cambio de tipo). `cancelar_orden` ya acepta `transicion` (`TIPOS_QUE_CANCELA_PRODUCCION`).
-3. **Prueba pendiente.** «Cancelar contra planificar otra transición del mismo lote» (`test_cancelar_concurrencia.py`).
+3. ~~**Prueba pendiente.**~~ Hecho el 22/11/2026 en PRD-02 (`CancelarTransicionConcurrenciaTests` de `test_cancelar_concurrencia.py`). Texto original: «Cancelar contra planificar otra transición del mismo lote» (`test_cancelar_concurrencia.py`).
+
+## Cuando exista PRD-03 o PRD-04 (merma, bitácora y sector fuera de servicio) — nace con PRD-02 (22/11/2026)
+
+1. **El núcleo de la merma ya existe, no se reescribe.** PRD-03 (Registrar Merma) llama a `produccion/servicios/mermas.aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por_sector=…, sector_ids=…, ordenes_excluidas=…)` dentro de su transacción y con el lote ya bloqueado; con `por_sector` baja los agujeros ocupados de cada ocupación y deja las ocupaciones en cero conservando el lote. PRD-04 usa `sector_ids` y `ordenes_excluidas`. Códigos de error: `cantidad_invalida`, `causa_obligatoria`, `causa_invalida`, `descripcion_larga` y `fecha_invalida`.
+2. **La condición 2 de plantas comprometidas solo está probada llamando a la función.** Desde Concretar Transición no puede dispararse (se excluye la orden que se concreta): PRD-03 agrega la prueba de punta a punta desde la pantalla de merma, con una transición «a realizar» ajena (`test_mermas_nucleo.py` ya tiene la de función).
+3. **Nombres que PRD-03 y PRD-04 tienen que respetar (D-83):** `TransicionEtapa.bitacora_de_transicion` (no `bitacora`) y los códigos `causa_invalida`, `descripcion_larga` y `lote_sin_plantas`. La bitácora de una transición es una `Bitacora` de tipo `transicion` con la etapa destino; la de una merma, una `Merma` de tipo `merma` en la etapa de origen: PRD-03 las lista en PROD-CNS-BIT.
+4. **`registro_merma`** (acción de auditoría ya creada por PRD-02) la usa PRD-03 como acción propia; en una transición la merma va dentro de `concrecion_transicion`.
+5. **PRD-04 y `cancelar_orden_incluida`:** ahora, con una transición, toma el lote (nivel 4 de `bloqueos.md`) antes de la orden: quien la llama ya tiene que haber bloqueado cuentas, invernadero, variedad, sectores y lotes en ese orden. `notificar_a` trae al Capataz de la hija `TransicionEtapa`.
 
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 

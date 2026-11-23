@@ -1,5 +1,5 @@
-# Vistas de `produccion` (PRD-01, paso 8): «Producción y órdenes» (lista y detalle), «Nueva siembra», la bandeja del Capataz, «Concretar
-# siembra» (para celular) y «Cancelar orden». Las vistas SOLO orquestan: validan la entrada con los formularios, llaman al servicio y
+# Vistas de `produccion` (PRD-01, paso 8; PRD-02, paso 7): «Producción y órdenes» (lista y detalle), «Nueva siembra» y «Nueva transición», la
+# bandeja del Capataz, «Concretar siembra» y «Concretar transición» (para celular) y «Cancelar orden». Las vistas SOLO orquestan: validan la entrada con los formularios, llaman al servicio y
 # renderizan; todas las reglas y los cálculos son de `produccion/servicios/`. Todo funciona sin JavaScript (cada pantalla es una página y
 # cada acción, un POST); con HTMX solo se redibuja el bloque que cambia, SIN validar ni calcular al escribir (.claude/rules/interfaz.md):
 # validar y calcular se hace únicamente con «Ver resumen» y «Confirmar». Quién ve qué (D-30): el Agrónomo a cargo planifica y cancela, el
@@ -21,8 +21,8 @@ from core.models import Usuario, rol_de
 from maestros.models import Invernadero
 from produccion import formularios
 from produccion.errores import ErrorDeProduccion
-from produccion.models import OrdenTrabajo
-from produccion.servicios import ordenes, siembras
+from produccion.models import Merma, OrdenTrabajo
+from produccion.servicios import ordenes, siembras, transiciones
 
 AGRONOMO, CAPATAZ, GERENTE = Usuario.Rol.AGRONOMO, Usuario.Rol.CAPATAZ, Usuario.Rol.GERENTE
 # Los campos que no entran en la «firma» de lo que se calculó.
@@ -187,7 +187,10 @@ def concretar(request, orden_id):
     """«Concretar siembra» (PROD-CNC-SMB, `VIEWS['c-siembra']`), pensada para el celular: fecha, lo sembrado por sector, el motivo de la
     diferencia, lo utilizado y devuelto de cada insumo y los lotes de los que sale. El sistema propone todo; el Capataz solo cambia lo que
     difiere. «Ver resumen» valida y no escribe; «Confirmar concreción» vuelve a verificar bajo bloqueo y escribe. Una orden que ya no está
-    «a realizar» (extensión 19a) no se abre: se informa su estado y se vuelve a la bandeja."""
+    «a realizar» (extensión 19a) no se abre: se informa su estado y se vuelve a la bandeja. Una transición se concreta con «Concretar
+    transición» (misma dirección: la bandeja no distingue)."""
+    if OrdenTrabajo.objects.filter(pk=orden_id, tipo_orden=OrdenTrabajo.Tipo.TRANSICION).exists():
+        return _concretar_transicion(request, orden_id)
     try:
         propuesta = _servicio(siembras.datos_de_concrecion, request.user, orden_id)
     except ErrorDeProduccion as error:
@@ -252,3 +255,119 @@ def cancelar(request, orden_id):
             messages.success(request, f"La orden {resumen.orden.codigo} quedó cancelada. Se liberaron sus reservas y sus agujeros.")
             return redirect("produccion:ordenes")
     return render(request, "produccion/cancelar.html", contexto)
+
+
+# ---- Nueva transición (PROD-PNF-TRN) ----
+
+CAUSAS_DE_LA_MERMA = [(valor, texto) for valor, texto in Merma.Causa.choices]
+CODIGOS_DE_LA_CAUSA = ("causa_obligatoria", "causa_invalida", "descripcion_larga")
+
+
+@rol_requerido(AGRONOMO, GERENTE)
+@never_cache
+@vary_on_headers("HX-Request")
+@require_http_methods(["GET", "HEAD", "POST"])
+def nueva_transicion(request):
+    """«Nueva transición» (PROD-PNF-TRN, `VIEWS.transicion`): lote trasladable → fecha → distribución por sector destino → resumen. Elegir
+    el lote (HTMX o «Continuar» sin JavaScript) solo redibuja lo que depende de él, sin validar. «Ver resumen» valida todo y no escribe;
+    «Confirmar transición» vuelve a verificar bajo bloqueo y escribe. La cantidad y la etapa que se vieron viajan en campos ocultos: si
+    cambiaron al confirmar, el servicio lo informa (extensiones 13a y 13b). El Gerente, 404."""
+    _ocultar_al_gerente(request)
+    datos = request.POST if request.method == "POST" else request.GET
+    accion = datos.get("accion", "") if request.method == "POST" else ""
+    lote_id = formularios.entero(datos.get("lote"))
+    errores = {}
+    try:
+        ofrecido = _servicio(transiciones.datos_de_planificacion, request.user, lote_id, formularios.fecha(datos.get("fecha_programada")))
+    except ErrorDeProduccion as error:  # el lote ya no se puede elegir (3a, 3b o 3c): se vuelve a la lista de lotes con el motivo
+        errores = _errores_por_campo(error)
+        lote_id = None
+        ofrecido = transiciones.datos_de_planificacion(request.user)
+    valores = dict(datos.items())
+    resumen, firma, cambio_la_firma = None, "", False
+    if accion in ("calcular", "confirmar"):
+        if not ofrecido.lote:
+            errores = errores or {"general": "Elegí el lote antes de seguir."}
+        else:
+            planificacion = formularios.transicion_desde_post(datos)
+            firma = _firma(datos)
+            try:
+                if accion == "confirmar" and datos.get("firma") == firma:
+                    orden = _servicio(transiciones.planificar_transicion, request.user, planificacion)
+                    messages.success(request, f"La orden {orden.codigo} quedó planificada. El Capataz ya recibió el aviso.")
+                    return redirect("produccion:ordenes")
+                cambio_la_firma = accion == "confirmar"
+                resumen = _servicio(transiciones.resumen_de_planificacion, request.user, planificacion)
+            except ErrorDeProduccion as error:
+                errores = _errores_por_campo(error)
+                if error.codigo == "cambio_simultaneo":  # 13a y 13b: se descarta la distribución y se muestra lo nuevo
+                    valores = {c: v for c, v in valores.items() if not c.startswith("sector_") and c not in ("cantidad_vista", "etapa_vista")}
+                firma = ""
+    contexto = {
+        "ofrecido": ofrecido,
+        "valores": valores,
+        "lote_id": ofrecido.lote.lote_id if ofrecido.lote else None,
+        "hay_trasladables": any(f.trasladable for f in ofrecido.lotes),
+        "motivos": transiciones.MOTIVOS,
+        "prioridades": formularios.PRIORIDADES,
+        "errores": errores,
+        "resumen": resumen,
+        "firma": firma,
+        "cambio_la_firma": cambio_la_firma,
+        "activa": "ordenes",
+    }
+    plantilla = "produccion/_nueva_transicion_formulario.html" if _en_vivo(request) else "produccion/nueva_transicion.html"
+    return render(request, plantilla, contexto)
+
+
+# ---- «Concretar transición» (PROD-CNC-TRN) ----
+
+
+def _concretar_transicion(request, orden_id):
+    """«Concretar transición» (PROD-CNC-TRN, `VIEWS['c-trans']`), pensada para el celular: fecha del traslado, plantas ubicadas en cada sector
+    destino (el sistema propone lo planificado, o su parte proporcional si el lote perdió plantas), y, solo si faltan plantas, la causa de
+    la merma. «Ver resumen» valida y no escribe; «Confirmar transición» vuelve a verificar bajo bloqueo y escribe. Una orden que ya no está
+    «a realizar» (13b) o un lote sin plantas (4a) no se abre: se informa y se vuelve a la bandeja."""
+    try:
+        propuesta = _servicio(transiciones.datos_de_concrecion, request.user, orden_id)
+    except ErrorDeProduccion as error:
+        messages.warning(request, error.mensaje)
+        return redirect("produccion:bandeja")
+    datos = request.POST if request.method == "POST" else request.GET
+    accion = datos.get("accion", "") if request.method == "POST" else ""
+    valores = dict(datos.items())
+    errores, resumen, firma, cambio_la_firma = {}, None, "", False
+    if accion in ("calcular", "confirmar"):
+        concrecion = formularios.concrecion_de_transicion_desde_post(datos)
+        firma = _firma(datos)
+        try:
+            if accion == "confirmar" and datos.get("firma") == firma:
+                orden = _servicio(transiciones.concretar_transicion, request.user, orden_id, concrecion)
+                messages.success(
+                    request, f"La transición quedó concretada: el lote {orden.lote.codigo} pasó a {orden.etapa_destino.tipo_etapa.nombre_etapa}."
+                )
+                return redirect("produccion:bandeja")
+            cambio_la_firma = accion == "confirmar"
+            resumen = _servicio(transiciones.resumen_de_concrecion, request.user, orden_id, concrecion)
+        except ErrorDeProduccion as error:
+            if error.codigo in ("orden_no_pendiente", "lote_sin_plantas"):
+                messages.warning(request, error.mensaje)
+                return redirect("produccion:bandeja")
+            errores = _errores_por_campo(error)
+            firma = ""
+            if error.codigo == "cambio_simultaneo":  # 13a y 13c: se vuelve a proponer con lo que hay ahora
+                valores = {c: v for c, v in valores.items() if not c.startswith("ubicadas_") and c != "cantidad_vista"}
+    contexto = {
+        "propuesta": propuesta,
+        "valores": valores,
+        "errores": errores,
+        "resumen": resumen,
+        "firma": firma,
+        "cambio_la_firma": cambio_la_firma,
+        "causas": CAUSAS_DE_LA_MERMA,
+        "causas_legibles": dict(CAUSAS_DE_LA_MERMA),
+        # La causa solo aparece cuando faltan plantas: lo sabe el servicio al validar (10a), no la pantalla al escribir.
+        "pide_causa": any(c in errores for c in ("causa", "descripcion")) or bool(resumen and resumen.plantas_sin_trasladar) or bool(valores.get("causa")),
+        "activa": "ordenes",
+    }
+    return render(request, "produccion/concretar_transicion.html", contexto)

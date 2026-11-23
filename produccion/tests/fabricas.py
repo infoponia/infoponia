@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from inventario.models import TipoInsumo
+from inventario.servicios import ciclos
 from inventario.tests.fabricas import existencia, insumo, lote as lote_de_insumo, tipo_de_insumo, variedad_con_semilla
 from maestros.models import EtapaProductiva
 from maestros.tests.fabricas import (
@@ -20,7 +21,7 @@ from maestros.tests.fabricas import (
     crear_sector,
 )
 from produccion.errores import ErrorDeProduccion
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra
+from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import ordenes
 
 CODIGOS_DE_ETAPA = ("germinacion", "crecimiento", "floracion", "fructificacion", "maduracion")
@@ -149,6 +150,84 @@ def lote_activo(escenario, cantidad=50, sector="germinacion", costo="100.00", et
     )
     OcupacionSector.objects.filter(orden=siembra).update(lote=nuevo, cant_agujeros_ocupados=cantidad)
     return nuevo
+
+
+def _etapa_siguiente(lote):
+    """La etapa siguiente del ciclo de la variedad del lote (regla 1 de 8.20), o `None` si está en la última."""
+    etapas = ciclos.etapas_de([lote.siembra.variedad_id])[lote.siembra.variedad_id]
+    posicion = next(i for i, e in enumerate(etapas) if e.etapa_id == lote.etapa_id)
+    return etapas[posicion + 1] if posicion + 1 < len(etapas) else None
+
+
+def orden_de_transicion(
+    escenario, lote, *, distribucion=None, estado="a_realizar", dias=0, prioridad=None, capataz=None, fecha_efectiva=None,
+    agronomo=True,
+):
+    """Una `TransicionEtapa` del `lote` a la etapa siguiente de su ciclo, con sus ocupaciones de destino. Escribe directo en la base:
+    no pasa por `planificar_transicion`. `distribucion` es `{codigo de sector del escenario: agujeros planificados}` (por defecto,
+    todo el lote en el sector del tipo de etapa destino). `dias` es cuántos días desde hoy se programa. Con `estado="concretada"`
+    la orden queda como si se hubiera concretado con `fecha_efectiva` (por defecto hoy): ocupaciones de destino con su lote y las de
+    origen en cero, el lote en la etapa destino. Con `estado="cancelada"`, con su motivo. No cambia la etapa del lote salvo concretada."""
+    destino = _etapa_siguiente(lote)
+    assert destino is not None, "El lote está en la última etapa: no tiene transición."
+    hoy = timezone.localdate()
+    distribucion = distribucion or {destino.codigo: lote.cantidad_actual}
+    extra = {}
+    if estado != "a_realizar":
+        extra["fecha_resolucion_orden"] = hoy
+    if estado == "cancelada":
+        extra["motivo_cancelacion"] = "Motivo de prueba"
+    if estado == "concretada":
+        extra["fecha_transicion"] = fecha_efectiva or hoy
+        extra["cant_transferido"] = sum(distribucion.values())
+    orden = TransicionEtapa.objects.create(
+        tipo_orden=OrdenTrabajo.Tipo.TRANSICION,
+        numero=ordenes.siguiente_numero(),
+        fecha_creacion_orden=min(hoy, hoy + timedelta(days=dias)),
+        fecha_programada_orden=hoy + timedelta(days=dias),
+        estado_orden=estado,
+        prioridad_orden=prioridad,
+        agronomo=escenario.agronomo if agronomo else None,
+        invernadero=lote.invernadero,
+        capataz=capataz or escenario.capataz,
+        lote=lote,
+        etapa_destino_id=destino.etapa_id,
+        **extra,
+    )
+    for codigo, agujeros in distribucion.items():
+        OcupacionSector.objects.create(
+            orden=orden,
+            sector=escenario.sectores[codigo],
+            cant_agujeros_planificados=agujeros,
+            **({"lote": lote, "cant_agujeros_ocupados": agujeros} if estado == "concretada" else {}),
+        )
+    if estado == "concretada":
+        OcupacionSector.objects.filter(lote=lote).exclude(orden=orden).update(cant_agujeros_ocupados=0)
+        Lote.objects.filter(pk=lote.pk).update(etapa_id=destino.etapa_id, cantidad_actual=sum(distribucion.values()))
+        lote.refresh_from_db()
+    return orden
+
+
+def lote_con_ciclo(escenario, cantidad=50, etapa="crecimiento", dias_en_etapa=0, costo="100.00", variedad=None):
+    """Un lote «activo» de `cantidad` plantas que ya está en la etapa `etapa` de su ciclo (por defecto Crecimiento) desde hace
+    `dias_en_etapa` días, con su ocupación vigente en el sector de esa etapa. Para llegar ahí pasa por una transición «concretada»
+    por cada etapa anterior (regla 5 de 8.21: la entrada a una etapa es la fecha efectiva de la transición que la tuvo de destino),
+    con 10 días entre una y otra. Sirve para probar transiciones: los sectores de las etapas que siguen están libres en el escenario.
+    Para que Maduración sea el destino hay que armar el escenario con `etapas=("germinacion", "crecimiento", "maduracion")`."""
+    variedad = variedad or escenario.variedad
+    etapas = ciclos.etapas_de([variedad.pk])[variedad.pk]
+    codigos = [e.codigo for e in etapas]
+    pasos = codigos.index(etapa)
+    hoy = timezone.localdate()
+    lote = lote_activo(escenario, cantidad=cantidad, sector=codigos[0], costo=costo, etapa=codigos[0], variedad=variedad)
+    inicio = hoy - timedelta(days=dias_en_etapa + 10 * pasos)
+    Siembra.objects.filter(pk=lote.siembra_id).update(fecha_siembra=inicio)
+    for paso in range(1, pasos + 1):
+        orden_de_transicion(
+            escenario, lote, estado="concretada", fecha_efectiva=inicio + timedelta(days=10 * paso), dias=0
+        )
+    lote.refresh_from_db()
+    return lote
 
 
 def variedad_con_stock(escenario, nombre="Otra", perfil="hoja_verde", stock=100, habilitar=True, **columnas):
