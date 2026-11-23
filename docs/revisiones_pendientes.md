@@ -1,5 +1,8 @@
 # Revisiones a mano pendientes — InfoPonia
 
+> **Congelado desde el 23/11/2026** (pedido del estudiante): ya no se agregan secciones ni se tachan pasos (la regla M5 quedó en desuso). La verificación la hace Claude Code antes de cerrar cada tarea
+> (`docs/patrones/verificacion_por_claude.md`). Lo que hay abajo es historial de lo que se verificó a mano hasta entonces.
+
 Pasos que una persona tiene que hacer a mano (en el navegador, en Render o en GitHub) y que las pruebas no cubren.
 Claude Code no lee este archivo salvo que el estudiante lo pida; `docs/estado.md` tiene una línea por sección.
 

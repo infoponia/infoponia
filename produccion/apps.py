@@ -2,7 +2,6 @@
 # `maestros`, `inventario` y `core` (regla A4 de D-37; docs/api/produccion.md, sección 3).
 from django.apps import AppConfig
 
-
 class ProduccionConfig(AppConfig):
     """Registra la app `produccion`, sus registrantes (PRD-01) y los dos tipos de alerta de la merma (PRD-02)."""
 
@@ -103,14 +102,6 @@ class ProduccionConfig(AppConfig):
                 clase=Clase.EVENTO,
                 origen=Origen.MERMA,
             )
-        )
-
-        # PRD-03: el cargador de datos para la verificación a mano (core/verificacion.py; docs/patrones/datos_de_verificacion.md). Orden 15: después de `maestros` (5) e `iot` (10).
-        from core import verificacion
-        from produccion import verificacion as verificacion_produccion
-
-        verificacion.registrar_cargador(
-            verificacion_produccion.CODIGO, "Producción: lote con merma previa, transición a realizar e insumos", 15, verificacion_produccion.cargar
         )
 
         # `core`: ``registrar_*`` es idempotente.

@@ -1,0 +1,91 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Formulario del proveedor (CMP-ALT-PRV, CMP-MOD-PRV y la reactivación; VIEWS.c_prvform del prototipo). «modo»: «alta», «modificar» o «reactivar».
+Tres bloques: quién es (tipo, CUIT y razón social o nombre y apellido), cómo contactarlo (correo obligatorio y teléfono opcional) y qué vende
+(categorías de insumos, con buscador). En el alta el tipo se elige (con JavaScript se muestra solo lo que corresponde; sin él se ven los dos grupos y
+se completa el que corresponde); al modificar o reactivar el tipo no cambia, y el CUIT solo se puede corregir sin pedidos ni órdenes (regla 2 de
+CMP-MOD-PRV) y no al reactivar. Si el CUIT es el de un proveedor dado de baja («inactivo»), se ofrece reactivarlo con estos datos (post. c de CMP-ALT-PRV).
+Las reglas las aplica el servicio: los errores vuelven por campo, y el formulario conserva lo escrito.{% endcomment %}
+{% block titulo %}{% if modo == "alta" %}Nuevo proveedor{% elif modo == "reactivar" %}Reactivar proveedor{% else %}Editar proveedor{% endif %} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<script src="{% static_v 'compras/js/proveedores.js' %}" defer></script>
+<div class="page narrow">
+  {% if proveedor %}
+  <a class="btn btn-text" href="{% url 'compras:proveedor_ficha' proveedor.pk %}">{% icono "back" 14 %} {{ proveedor.nombre_para_mostrar }}</a>
+  {% else %}
+  <a class="btn btn-text" href="{% url 'compras:proveedores' %}">{% icono "back" 14 %} Compras</a>
+  {% endif %}
+  <div class="page-h"><h1>{% if modo == "alta" %}Nuevo proveedor{% elif modo == "reactivar" %}Reactivar a {{ proveedor.nombre_para_mostrar }}{% else %}Editar proveedor{% endif %}</h1></div>
+  {% if modo == "reactivar" %}
+  <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>Está dado de baja. Revisá sus datos y confirmá: vuelve a poder recibir pedidos de cotización y conserva todo su historial.</div></div>
+  {% endif %}
+  {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>{% endif %}
+
+  <form method="post" novalidate action="{% if modo == 'modificar' %}{% url 'compras:proveedor_editar' proveedor.pk %}{% elif modo == 'reactivar' %}{% url 'compras:proveedor_reactivar' proveedor.pk %}{% else %}{% url 'compras:proveedor_nuevo' %}{% endif %}">
+    {% csrf_token %}
+    <div class="stack">
+      <section class="sec" aria-labelledby="sec-1">
+        <div class="sec-h" id="sec-1"><span class="sec-num">1</span>Quién es</div>
+        {% if modo == "alta" %}
+        <div class="fld" role="radiogroup" aria-label="Tipo de proveedor">
+          <label class="prv-tipo"><input type="radio" name="tipo" value="juridica" data-tipo{% if form.tipo_elegido == "juridica" %} checked{% endif %}> Persona jurídica</label>
+          <label class="prv-tipo"><input type="radio" name="tipo" value="fisica" data-tipo{% if form.tipo_elegido == "fisica" %} checked{% endif %}> Persona física</label>
+          {% for error in form.tipo.errors %}<div class="err">{{ error }}</div>{% endfor %}
+        </div>
+        {% else %}
+        <p class="muted sm" style="margin:0 0 10px">{{ proveedor.get_tipo_proveedor_display }}. El tipo no se cambia.</p>
+        {% endif %}
+        <div class="grid2">
+          {% if cuit_fijo %}
+          <div class="fld"><label>CUIT</label><div class="mono prv-solo-lectura">{{ proveedor.cuit_formateado }}</div><div class="hint">{% if modo == "reactivar" %}El CUIT identifica al proveedor y no se cambia.{% else %}El CUIT no se puede cambiar: el proveedor tiene pedidos u órdenes de compra.{% endif %}</div></div>
+          {% else %}
+          {% include "core/usuarios/_campo.html" with campo=form.cuit requerido=True ayuda="Se controla que sea un CUIT válido." %}
+          {% endif %}
+          {% if form.tipo_elegido == "juridica" or modo == "alta" %}
+          <div data-grupo-tipo="juridica">{% include "core/usuarios/_campo.html" with campo=form.razon_social requerido=True %}</div>
+          {% endif %}
+        </div>
+        {% if form.tipo_elegido == "fisica" or modo == "alta" %}
+        <div class="grid2" data-grupo-tipo="fisica">
+          {% include "core/usuarios/_campo.html" with campo=form.nombre requerido=True %}
+          {% include "core/usuarios/_campo.html" with campo=form.apellido requerido=True %}
+        </div>
+        {% endif %}
+        {% if inactivo %}
+        <div class="alert alert-info" role="status" style="margin-top:12px">{% icono "info" 16 %}<div><b>{{ inactivo.nombre_para_mostrar }}</b> está dado de baja. Reactivarlo conserva todo su historial.
+          <div style="margin-top:8px"><button class="btn btn-primary btn-sm" type="submit" name="reactivar_id" value="{{ inactivo.pk }}" data-enviando="Reactivando…">Reactivar con estos datos</button></div></div></div>
+        {% endif %}
+      </section>
+
+      <section class="sec" aria-labelledby="sec-2">
+        <div class="sec-h" id="sec-2"><span class="sec-num">2</span>Cómo contactarlo</div>
+        <div class="grid2">
+          {% include "core/usuarios/_campo.html" with campo=form.email requerido=True ayuda="Ahí recibe los pedidos de cotización." %}
+          {% include "core/usuarios/_campo.html" with campo=form.telefono %}
+        </div>
+      </section>
+
+      <section class="sec" aria-labelledby="sec-3">
+        <div class="sec-h" id="sec-3"><span class="sec-num">3</span>Qué vende <span class="muted sm">(opcional)</span></div>
+        <div data-buscador-categorias>
+          <input class="field-input" type="search" data-buscar-categoria placeholder="Buscar una categoría…" aria-label="Buscar una categoría de insumos" hidden>
+          <div class="prv-categorias" role="group" aria-label="Categorías de insumos">
+            {% for c in categorias %}
+            <label class="prv-categoria" data-nombre="{{ c.nombre|lower }}"><input type="checkbox" name="especialidades" value="{{ c.id }}"{% if c.marcada %} checked{% endif %}> {{ c.nombre }}</label>
+            {% empty %}
+            <span class="muted sm">Todavía no hay categorías de insumos activas.</span>
+            {% endfor %}
+          </div>
+          <p class="prv-sin-resultados muted sm" data-sin-resultados hidden>Ninguna categoría coincide con la búsqueda.</p>
+        </div>
+        {% for error in form.especialidades.errors %}<div class="err">{{ error }}</div>{% endfor %}
+        <p class="hint" style="margin-top:10px">Ayudan a elegir a quién pedirle cada insumo.</p>
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" data-enviando="Guardando…">{% if modo == "alta" %}Registrar proveedor{% elif modo == "reactivar" %}Reactivar proveedor{% else %}Guardar cambios{% endif %}</button>
+      <a class="btn btn-ghost" href="{% if proveedor %}{% url 'compras:proveedor_ficha' proveedor.pk %}{% else %}{% url 'compras:proveedores' %}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

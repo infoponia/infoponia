@@ -1,7 +1,6 @@
 # Configuración de la app `maestros` (nivel 3 de D-37): registra su entrada del menú de `core` (regla A4 de D-37).
 from django.apps import AppConfig
 
-
 class MaestrosConfig(AppConfig):
     """Registra la app `maestros`. En ``ready()`` agrega «Producción» (la lista de invernaderos, MAE-01) al menú del
     Gerente y del Agrónomo, cada uno con su alcance (regla 1 de PROD-CNS-INV), después de «Panel de control»: ``core`` no
@@ -55,10 +54,3 @@ class MaestrosConfig(AppConfig):
         )
         # MAE-04: «Configuración» (parámetros operativos y perfil de la organización), solo del Gerente, al final del menú.
         registrar_entrada(("Configuración", "configuracion:pantalla", "gear"), (Usuario.Rol.GERENTE,), despues_de="Auditoría")
-        # Datos para la verificación a mano (CLAUDE.md; docs/patrones/datos_de_verificacion.md): el cargador de ``maestros`` (MAE-02d) en el comando único de ``core``.
-        from core import verificacion
-        from maestros import verificacion as verificacion_de_maestros
-
-        verificacion.registrar_cargador(
-            verificacion_de_maestros.CODIGO, "Maestros: invernaderos de verificación y alerta «sin Capataz»", 5, verificacion_de_maestros.cargar
-        )

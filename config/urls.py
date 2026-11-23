@@ -22,6 +22,8 @@ urlpatterns = [
     path("iot/", include("iot.urls")),
     # COM-01: «Comercial» (clientes y vehículos; Gerente y Vendedor).
     path("comercial/", include("comercial.urls")),
+    # CMP-01: «Compras» → «Proveedores» (Gerente y Agrónomo).
+    path("compras/", include("compras.urls")),
     # IOT-03: API HTTPS del nodo central (contrato en docs/api/nodo/; D-70). Sin sesión ni CSRF: la protege el token.
     path("api/iot/v1/", include("iot.api.urls")),
 
