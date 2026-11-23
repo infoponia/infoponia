@@ -1,0 +1,100 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Ficha del pedido (CMP-CNS-PED reglas 4 a 6; ``VIEWS.c_ped`` del prototipo): el Agrónomo que lo realizó, las fechas y el monto estimado; si está cancelado, el motivo, la fecha de cierre y si
+fue automática; lo pedido agrupado por invernadero de destino con el precio de referencia y el subtotal; los proveedores invitados (si cotizaron y el estado de su enlace, «No se pudo enviar» si el
+correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. Todavía sin acciones: «Cancelar» y «Reenviar invitación» son de CMP-02b y «Generar orden», de CMP-03.{% endcomment %}
+{% block titulo %}Pedido {{ pedido }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <a class="btn btn-text" href="{% url 'compras:pedidos' %}">{% icono "back" 14 %} Compras</a>
+  <div class="page-h">
+    <h1>Pedido {{ pedido }}</h1>
+    <span class="status-badge {% if pedido.estado_pedido == 'en_cotizacion' %}status-info{% else %}status-neutral{% endif %}">{{ pedido.get_estado_pedido_display }}</span>
+    {% if ficha.por_resolver %}<span class="status-badge status-warn">Fecha límite vencida</span>{% endif %}
+  </div>
+
+  {% if ficha.por_resolver %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div>Venció la fecha límite el {{ pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}. {% if es_gerente %}Lo resuelve el Agrónomo que hizo el pedido.{% else %}Hay {{ ficha.cotizaciones|length }} cotización{{ ficha.cotizaciones|length|pluralize:"es" }} para revisar.{% endif %}</div></div>
+  {% endif %}
+  {% if pedido.estado_pedido == "cancelado" %}
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div><b>Motivo de la cancelación:</b> {{ pedido.motivo_cancelacion|default:"—" }}</div></div>
+  {% endif %}
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">Datos</div>
+      <dl class="dl two">
+        <dt>Realizado por</dt><dd>{{ pedido.agronomo.get_full_name|default:pedido.agronomo.email }}</dd>
+        <dt>Fecha del pedido</dt><dd>{{ pedido.fecha_pedido|date:"d/m/Y" }}</dd>
+        <dt>Fecha límite de cotizaciones</dt><dd>{{ pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}</dd>
+        <dt>Monto estimado</dt><dd><b>{{ ficha.monto|pesos }}</b> <span class="muted">según los precios de referencia</span></dd>
+        {% if pedido.estado_pedido == "cancelado" %}<dt>Cancelado el</dt><dd>{{ pedido.fecha_cierre_pedido|date:"d/m/Y" }} · {% if ficha.automatica %}Cancelación automática{% else %}Cancelado por el Agrónomo{% endif %}</dd>{% endif %}
+        {% if pedido.estado_pedido == "cerrado" %}<dt>Cerrado el</dt><dd>{{ pedido.fecha_cierre_pedido|date:"d/m/Y" }}</dd>{% endif %}
+      </dl>
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><b>Qué se pidió</b><span class="spacer"></span><b class="mono">{{ ficha.monto|pesos }}</b></div>
+      {% for invernadero, detalles in ficha.grupos %}
+      <div class="grp-h" style="padding:12px 20px 4px"><b>{{ invernadero.nombre_invernadero }}</b> <span class="muted sm">{{ invernadero.direccion }}</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th class="right">Cantidad</th><th class="right">Precio de referencia</th><th class="right">Subtotal</th></tr></thead>
+          <tbody>
+          {% for d in detalles %}
+          <tr><td>{{ d.insumo_invernadero.insumo.nombre_insumo }}</td><td class="right mono">{{ d.cantidad_detalle|cant:d.insumo_invernadero.insumo.unidad_medida_insumo }}</td><td class="right mono">{{ d.precio_unitario_de_pedido|pesos }}</td><td class="right mono">{{ d.subtotal|pesos }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><b>Proveedores invitados</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Proveedor</th><th>Cotización</th><th>Enlace</th></tr></thead>
+          <tbody>
+          {% for i in ficha.invitados %}
+          <tr>
+            <td>{{ i.proveedor.nombre_para_mostrar }}<span class="sub2">{{ i.proveedor.email_proveedor }}</span>{% if not i.proveedor.activo %} <span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+            <td>{% if i.cotizo %}<span class="status-badge status-ok">Cotizó</span>{% else %}<span class="status-badge status-neutral">No cotizó</span>{% endif %}</td>
+            <td><span class="status-badge {% if i.estado_del_enlace == 'vigente' %}status-ok{% elif i.estado_del_enlace == 'vencido' %}status-danger{% else %}status-neutral{% endif %}">{{ i.estado_del_enlace|capfirst|default:"Sin enlace" }}</span>{% if i.sin_enviar %} <span class="status-badge status-danger">No se pudo enviar</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if ficha.cotizaciones %}
+    <div class="card seg">
+      <div class="card-h"><b>Cotizaciones recibidas</b><span class="spacer"></span><span class="muted sm">Solo se pueden ver</span></div>
+      {% for c in ficha.cotizaciones %}
+      <div class="cotro" style="padding:14px 20px;border-top:1px solid var(--border)">
+        <div class="cotro-h" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px">
+          <b>{{ c.cotizacion.proveedor.nombre_para_mostrar }}</b>
+          <span class="status-badge status-info">{{ c.cotizacion.get_estado_cotizacion_display }}</span>
+          <span class="spacer"></span>
+          <span class="muted sm">Enviada el {{ c.cotizacion.fecha_cotizacion|date:"d/m/Y" }} · válida hasta el {{ c.cotizacion.fecha_validez_cotizacion|date:"d/m/Y" }}</span>
+          <b class="mono">{{ c.monto|pesos }}</b>
+        </div>
+        <div class="tablewrap">
+          <table class="data-table">
+            <thead><tr><th>Insumo</th><th>Destino</th><th class="right">Cantidad</th><th class="right">Total de la línea</th><th class="right">Precio unitario</th><th class="right">Plazo</th></tr></thead>
+            <tbody>
+            {% for l in c.lineas %}
+            <tr><td>{{ l.insumo }}</td><td>{{ l.invernadero }}</td><td class="right mono">{{ l.cantidad|num:l.unidad_medida }} {{ l.unidad }}</td><td class="right mono">{{ l.total|pesos }}</td><td class="right mono">{% if l.unitario %}{{ l.unitario|pesos }}{% else %}—{% endif %}</td><td class="right mono">{{ l.plazo }} {% if l.plazo == 1 %}día{% else %}días{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if c.cotizacion.observaciones_cotizacion %}<p class="hint" style="margin-top:8px"><b>Observaciones del proveedor:</b> {{ c.cotizacion.observaciones_cotizacion }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

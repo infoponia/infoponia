@@ -1,0 +1,53 @@
+{% extends "compras/proveedor/base.html" %}{% load iconos formato_inventario %}
+{% comment %}Resumen de la cotización antes de enviarla (CMP-ENV-COT paso 9; MODALS.cotzok del prototipo): cada línea con insumo, destino, cantidad, precio unitario (con
+dos decimales; solo el total si el redondeo no cierra, D-89 punto 7), subtotal y plazo; el monto, la validez y las observaciones, y la advertencia de que se envía una sola
+vez. Los botones: «Enviar cotización» (paso 10) y «Volver a corregir» (10a, sin validar). Los datos escritos viajan en campos ocultos.{% endcomment %}
+{% block titulo %}Revisar la cotización · {{ nombre_organizacion }}{% endblock %}
+{% block contenido %}
+<div class="portal-h">
+  <h1>Revise su cotización</h1>
+  <p class="muted">Pedido {{ pedido }} · {{ proveedor.nombre_para_mostrar }}</p>
+</div>
+<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>La cotización se envía una sola vez</b> y no podrá modificarse ni reemplazarse. Revise que los datos sean correctos.</div></div>
+
+<section class="sec portal-resumen" aria-label="Resumen de la cotización">
+  <div class="tabla-responsive">
+  <table class="data-table">
+    <thead><tr><th>Insumo</th><th>Destino</th><th class="right">Cantidad</th><th class="right">Precio unitario</th><th class="right">Total</th><th class="right">Plazo</th></tr></thead>
+    <tbody>
+    {% for f in filas %}
+      <tr>
+        <td data-etiqueta="Insumo">{{ f.insumo }}</td>
+        <td data-etiqueta="Destino">{{ f.invernadero }}</td>
+        <td class="right mono" data-etiqueta="Cantidad">{{ f.linea.cantidad|num:f.unidad_medida }} {{ f.unidad }}</td>
+        <td class="right mono" data-etiqueta="Precio unitario">{% if f.unitario %}{{ f.unitario|pesos }}{% else %}—{% endif %}</td>
+        <td class="right mono" data-etiqueta="Total">{{ f.linea.total|pesos }}</td>
+        <td class="right mono" data-etiqueta="Plazo">{{ f.linea.plazo }} {% if f.linea.plazo == 1 %}día{% else %}días{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <dl class="dl two portal-condiciones">
+    <dt>Monto de la cotización</dt><dd><b>{{ resumen.monto|pesos }}</b></dd>
+    <dt>Válida hasta</dt><dd>{{ resumen.validez|date:"d/m/Y" }}</dd>
+    {% if resumen.observaciones %}<dt>Observaciones</dt><dd>{{ resumen.observaciones }}</dd>{% endif %}
+  </dl>
+</section>
+
+<form method="post" action="/proveedor/enlace/" novalidate class="portal-form">
+  {% csrf_token %}
+  <input type="hidden" name="modo" value="{{ modo }}">
+  <input type="hidden" name="validez" value="{{ validez }}">
+  <input type="hidden" name="observaciones" value="{{ observaciones }}">
+  {% for t in todas %}
+  <input type="hidden" name="cantidad_{{ t.id }}" value="{{ t.cantidad }}">
+  <input type="hidden" name="precio_{{ t.id }}" value="{{ t.precio }}">
+  <input type="hidden" name="plazo_{{ t.id }}" value="{{ t.plazo }}">
+  {% endfor %}
+  <div class="footbar">
+    <button class="btn btn-primary" type="submit" name="accion" value="enviar" data-enviando="Enviando…">Enviar cotización</button>
+    <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a corregir</button>
+  </div>
+</form>
+{% endblock %}

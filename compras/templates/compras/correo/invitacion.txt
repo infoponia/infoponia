@@ -1,0 +1,17 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+{{ nombre_organizacion }} lo invita a cotizar el pedido {{ pedido }}.
+
+Para cargar su cotización entre a este enlace, sin necesidad de crear una cuenta (es personal: no lo comparta):
+
+{{ url }}
+
+Puede cotizar hasta el {{ fecha_limite|date:"d/m/Y" }} inclusive. Solo se puede enviar una vez.
+
+Lo que se pide:
+{% for linea in lineas %}
+- {{ linea.insumo }}{% if linea.descripcion %} ({{ linea.descripcion }}){% endif %}: {{ linea.cantidad }} {{ linea.unidad }}
+  Entrega en {{ linea.invernadero }}, {{ linea.direccion }}
+{% endfor %}
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

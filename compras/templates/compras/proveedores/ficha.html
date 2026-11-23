@@ -26,9 +26,27 @@ La baja abre una ventana con HTMX; sin JavaScript, su enlace lleva a esta págin
         <dt>Categorías de insumos</dt><dd>{% for c in proveedor.categorias_activas %}<span class="chip-fijo">{{ c.nombre_tipo_insumo }}</span>{% empty %}<span class="muted">—</span>{% endfor %}</dd>
       </dl>
     </div>
-    <div class="card">
-      <div class="card-title">Pedidos y órdenes de compra</div>
-      <p class="muted" style="margin:0">Todavía no se le pidieron cotizaciones ni se le compró. Cuando haya pedidos y órdenes, se ven acá.</p>
+    <div class="card seg">
+      <div class="card-h"><b>Pedidos y órdenes de compra</b></div>
+      {% if pedidos %}
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Pedido</th><th>Fecha límite</th><th>Estado</th><th>Cotización</th></tr></thead>
+          <tbody>
+          {% for f in pedidos %}
+          <tr>
+            <td><a class="prv-nombre" href="{% url 'compras:pedido_ficha' f.pedido.pk %}"><b>{{ f.pedido }}</b></a><span class="sub2">{{ f.pedido.fecha_pedido|date:"d/m/Y" }}</span></td>
+            <td class="nowrap">{{ f.pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}</td>
+            <td>{{ f.pedido.get_estado_pedido_display }}</td>
+            <td>{% if f.cotizo %}<span class="status-badge status-ok">Cotizó</span>{% else %}<span class="status-badge status-neutral">No cotizó</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0;padding:16px 20px">Todavía no se le pidieron cotizaciones ni se le compró. Cuando haya pedidos y órdenes, se ven acá.</p>
+      {% endif %}
     </div>
   </div>
 </div>

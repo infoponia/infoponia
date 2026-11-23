@@ -1,0 +1,73 @@
+{% extends "compras/proveedor/base.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Portal del proveedor: el pedido y el formulario para cotizar (CMP-ENV-COT paso 2 a 8; VIEWS.c_cotz del prototipo, sin el selector «enlace de ejemplo»).
+Una sola pantalla, para celular y computadora. Por cada detalle: el insumo (nombre, descripción y unidad), lo pedido y dónde se entrega; el proveedor completa
+cantidad, precio y plazo, o lo deja en blanco si no lo cotiza. Elige si carga el total de cada línea o el precio unitario (D-89 punto 2): el otro valor se
+calcula en el resumen. Sin el precio de referencia. Sin validar ni recalcular mientras escribe (interfaz.md): los errores vuelven por campo al revisar.{% endcomment %}
+{% block contenido %}
+<script src="{% static_v 'compras/js/portal.js' %}" defer></script>
+<div class="portal-h">
+  <h1>Pedido de cotización</h1>
+  <p class="muted">{{ nombre_organizacion }} solicita cotización a <b>{{ proveedor.nombre_para_mostrar }}</b> · Pedido {{ pedido }}</p>
+</div>
+<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Puede cotizar hasta el <b>{{ pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}</b> inclusive. Si algún insumo no lo tiene, déjelo en blanco. Solo se puede enviar una vez.</div></div>
+
+<form method="post" action="/proveedor/enlace/" novalidate class="portal-form">
+  {% csrf_token %}
+  <input type="hidden" name="accion" value="revisar">
+  <div class="stack">
+    <section class="sec" aria-labelledby="sec-cotizacion">
+      <div class="sec-h" id="sec-cotizacion"><span class="sec-num">1</span>Su cotización</div>
+      <fieldset class="fld portal-modo">
+        <legend class="lbl">Cómo carga el precio</legend>
+        <label class="portal-radio"><input type="radio" name="modo" value="total"{% if modo == "total" %} checked{% endif %}> Precio total de cada línea</label>
+        <label class="portal-radio"><input type="radio" name="modo" value="unitario"{% if modo == "unitario" %} checked{% endif %}> Precio unitario</label>
+        <div class="hint">El otro valor se calcula y lo ve en el resumen antes de enviar.</div>
+      </fieldset>
+      {% if errores.lineas %}<div class="err" role="alert">{{ errores.lineas.0 }}</div>{% endif %}
+      {% for l in lineas %}
+      <div class="rline" id="linea-{{ l.id }}">
+        <div class="rl-h">
+          <div><b>{{ l.insumo }}</b>{% if l.descripcion %}<span class="muted sm"> · {{ l.descripcion }}</span>{% endif %}
+            <span class="muted sm"> · pedido: {{ l.pedida|num:l.unidad_medida }} {{ l.unidad }}</span></div>
+          <span class="muted sm">Entrega en {{ l.invernadero }}{% if l.direccion %} · {{ l.direccion }}{% endif %}</span>
+        </div>
+        {% if l.errores.detalle %}<div class="err" role="alert">{{ l.errores.detalle.0 }}</div>{% endif %}
+        <div class="rl-in">
+          <div class="fld">
+            <label for="cantidad_{{ l.id }}">Cantidad que ofrece ({{ l.unidad }})</label>
+            <input class="field-input num{% if l.errores.cantidad %} bad{% endif %}" id="cantidad_{{ l.id }}" name="cantidad_{{ l.id }}" inputmode="decimal" autocomplete="off" placeholder="{{ l.pedida|num:l.unidad_medida }}" value="{{ l.escrito.cantidad }}">
+            {% for e in l.errores.cantidad %}<div class="err">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="fld">
+            <label for="precio_{{ l.id }}" data-etiqueta-precio>{% if modo == "unitario" %}Precio unitario ($){% else %}Precio total de la línea ($){% endif %}</label>
+            <input class="field-input num{% if l.errores.precio %} bad{% endif %}" id="precio_{{ l.id }}" name="precio_{{ l.id }}" inputmode="decimal" autocomplete="off" value="{{ l.escrito.precio }}">
+            {% for e in l.errores.precio %}<div class="err">{{ e }}</div>{% endfor %}
+          </div>
+          <div class="fld">
+            <label for="plazo_{{ l.id }}">Plazo de entrega (días)</label>
+            <input class="field-input num{% if l.errores.plazo %} bad{% endif %}" id="plazo_{{ l.id }}" name="plazo_{{ l.id }}" inputmode="numeric" autocomplete="off" value="{{ l.escrito.plazo }}">
+            {% for e in l.errores.plazo %}<div class="err">{{ e }}</div>{% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="sec" aria-labelledby="sec-condiciones">
+      <div class="sec-h" id="sec-condiciones"><span class="sec-num">2</span>Condiciones</div>
+      <div class="fld">
+        <label for="validez">Su cotización vale hasta <span class="req">*</span></label>
+        <input type="date" class="field-input{% if errores.validez %} bad{% endif %}" id="validez" name="validez" value="{{ validez }}">
+        {% for e in errores.validez %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">Hasta qué fecha sostiene sus precios. No puede ser anterior al {{ pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}.</div>
+      </div>
+      <div class="fld">
+        <label for="observaciones">Observaciones</label>
+        <textarea class="field-input{% if errores.observaciones %} bad{% endif %}" id="observaciones" name="observaciones" rows="3" maxlength="1000" placeholder="Opcional. Si ofrece un insumo equivalente, aclare a qué detalle se refiere.">{{ observaciones }}</textarea>
+        {% for e in errores.observaciones %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+    </section>
+  </div>
+  <div class="footbar"><button class="btn btn-primary" type="submit" data-enviando="Revisando…">Revisar y enviar</button></div>
+</form>
+{% endblock %}

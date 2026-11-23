@@ -1,0 +1,14 @@
+{% load formato_inventario %}{% autoescape off %}Hola, {{ proveedor }}:
+
+Recibimos su cotización del pedido {{ pedido }} el {{ enviada_el|date:"d/m/Y" }} a las {{ enviada_el|date:"H:i" }}. Ya no se puede modificar ni enviar otra.
+
+Su cotización:
+{% for linea in lineas %}
+- {{ linea.insumo }} · entrega en {{ linea.invernadero }}: {{ linea.cantidad|num:linea.unidad_medida }} {{ linea.unidad }}{% if linea.unitario %} a {{ linea.unitario|pesos }} cada una{% endif %}, total {{ linea.total|pesos }}; plazo de entrega: {{ linea.plazo }} {% if linea.plazo == 1 %}día{% else %}días{% endif %}
+{% endfor %}
+Monto de la cotización: {{ monto|pesos }}
+Válida hasta el {{ validez|date:"d/m/Y" }}
+{% if observaciones %}Observaciones: {{ observaciones }}
+{% endif %}
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

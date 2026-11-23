@@ -1,0 +1,32 @@
+{% load iconos formato_inventario %}
+{% comment %}Sección «Compras» del Inicio del Agrónomo (`registrar_seccion_de_inicio`, D-43; CMP-02a, ``panelAgr`` del prototipo). Recibe «datos» con «indicadores» (IndicadoresDeCompras): los insumos bajo el mínimo
+con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Compras</h2>
+  {% with i=datos.indicadores %}
+  <div class="kpis">
+    <a class="kpi{% if i.cantidad_bajo_el_minimo %} warn{% endif %}" href="{% url 'compras:pedido_nuevo' %}" style="text-decoration:none;color:inherit"><span class="k">Insumos bajo el mínimo</span><span class="v" data-kpi="bajo-el-minimo">{{ i.cantidad_bajo_el_minimo }}</span><span class="c">{% if i.cantidad_bajo_el_minimo %}conviene hacer un pedido{% else %}todos al día{% endif %}</span></a>
+    <a class="kpi" href="{% url 'compras:pedidos' %}" style="text-decoration:none;color:inherit"><span class="k">Esperando cotizaciones</span><span class="v" data-kpi="esperando">{{ i.esperando_cotizaciones }}</span><span class="c">pedido{{ i.esperando_cotizaciones|pluralize }} abierto{{ i.esperando_cotizaciones|pluralize }}</span></a>
+  </div>
+  {% if i.bajo_el_minimo %}
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Insumos bajo el mínimo</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:pedido_nuevo' %}">Nuevo pedido</a></div>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Insumo</th><th class="right">Disponible</th><th class="right">Mínimo</th><th></th></tr></thead>
+        <tbody>
+        {% for f in i.bajo_el_minimo %}
+        <tr>
+          <td>{{ f.iin.insumo.nombre_insumo }}<span class="sub2">{{ f.iin.invernadero.nombre_invernadero }}</span></td>
+          <td class="right mono">{{ f.existencia.libre|cant:f.iin.insumo.unidad_medida_insumo }}{% if f.existencia.transito %}<span class="sub2">+ {{ f.existencia.transito|num:f.iin.insumo.unidad_medida_insumo }} en camino</span>{% endif %}</td>
+          <td class="right mono">{{ f.existencia.minimo|num:f.iin.insumo.unidad_medida_insumo }}</td>
+          <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'compras:pedido_nuevo' %}?iin={{ f.iin.pk }}">Pedir<span class="sr"> {{ f.iin.insumo.nombre_insumo }}</span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+  {% endwith %}
+</div>

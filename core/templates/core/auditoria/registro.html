@@ -16,7 +16,7 @@ que tenían en el momento del cambio (D-36); un valor nulo, como «—». Nunca 
     <dl class="dl">
       <dt>Fecha y hora</dt><dd class="mono" style="font-size:12px">{{ registro.fecha_hora|date:"d/m/Y H:i:s" }}</dd>
       <dt>Quién actuó</dt>
-      <dd>{% if registro.usuario_id is None %}InfoPonia <span class="muted">(el Sistema)</span>{% else %}{{ registro.usuario.get_full_name|default:registro.usuario.email }}<div class="mono muted" style="font-size:11px">{{ registro.usuario.email }}</div>{% endif %}</dd>
+      <dd>{% if registro.es_de_actor_externo %}{{ registro.rol_visible }}{% elif registro.usuario_id is None %}InfoPonia <span class="muted">(el Sistema)</span>{% else %}{{ registro.usuario.get_full_name|default:registro.usuario.email }}<div class="mono muted" style="font-size:11px">{{ registro.usuario.email }}</div>{% endif %}</dd>
       {% if registro.usuario_id is not None %}<dt>Rol en ese momento</dt><dd>{{ registro.rol_visible }}</dd>{% endif %}
       <dt>Acción</dt><dd>{{ registro.get_accion_display }}</dd>
       <dt>Afectados</dt>

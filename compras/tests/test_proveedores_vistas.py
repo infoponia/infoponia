@@ -104,16 +104,18 @@ class MenuDeComprasVistaTests(ProveedoresVistasBase):
     """«Compras» en el menú lateral (D-25: el menú muestra solo lo que existe)."""
 
     def test_el_gerente_y_el_agronomo_ven_compras_en_el_menu(self):
-        """D-87 punto 6: «Compras» para Agrónomo y Gerente; apunta a «Proveedores»."""
+        """D-87 punto 6: «Compras» para Agrónomo y Gerente; abre en su primera pestaña, «Pedidos» (CMP-02a; con CMP-01 apuntaba a «Proveedores», la única que había,
+        y el estudiante aprobó el cambio el 23/11/2026). «Proveedores» sigue a un clic: es la otra pestaña."""
         for cuenta in (self.gerente, self.agronomo):
             self.client.force_login(cuenta)
             respuesta = self.client.get(reverse("core:inicio"))
-            self.assertContains(respuesta, reverse("compras:proveedores"))
+            self.assertContains(respuesta, reverse("compras:pedidos"))
+            self.assertContains(self.client.get(reverse("compras:pedidos")), reverse("compras:proveedores"))
 
     def test_otros_roles_no_ven_compras_en_el_menu(self):
         """El Vendedor no tiene «Compras»."""
         self.client.force_login(crear_vendedor())
-        self.assertNotContains(self.client.get(reverse("core:inicio")), reverse("compras:proveedores"))
+        self.assertNotContains(self.client.get(reverse("core:inicio")), reverse("compras:pedidos"))
 
 
 class ListaDeProveedoresVistaTests(ProveedoresVistasBase):

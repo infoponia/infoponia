@@ -565,7 +565,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando se programe COM-04c o CMP-02a (lo que llegue primero) — nace con el lote 2 de Compras
 
-1. Crear `rol_externo` en `core` con `ROL_CLIENTE_ENLACE` y `ROL_PROVEEDOR_ENLACE` (D-65 punto 8; D-88 punto 5). La segunda tarea solo suma su constante.
+1. ~~Crear `rol_externo` en `core` con `ROL_CLIENTE_ENLACE` y `ROL_PROVEEDOR_ENLACE` (D-65 punto 8; D-88 punto 5). La segunda tarea solo suma su constante.~~ Hecho el 23/11/2026 en CMP-02a: las dos constantes, `RegistroAuditoria.objects.registrar(..., rol_externo=)` y su texto visible («Cliente (mediante enlace)» ya está en `VALORES_VISIBLES["rol"]`). **COM-04c solo lo usa** con `ROL_CLIENTE_ENLACE`, y tiene que responder con `Referrer-Policy: same-origin` y no `no-referrer` (D-65 y D-88, corregidas: con `no-referrer` el navegador manda `Origin: null` y el CSRF rechaza los POST del portal; `compras/views_proveedor.py` y `compras/tests/test_visual_pedidos.py` son el modelo). Para las etiquetas de la auditoría, no repetir claves de `ETIQUETAS` que ya existen (`detalles`, `lineas`, `monto_estimado`): la última pisa a la primera.
 
 ## Cuando se programe COM-01 o CMP-01 (lo que llegue primero) — nace con el lote 2 de Compras
 
@@ -573,7 +573,14 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando se programen CMP-02a, CMP-02b, CMP-03 y CMP-05 (completan lo que CMP-01 dejó vacío)
 
-1. **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
+1. **Hecho el 23/11/2026 en CMP-02a** (`tiene_pedidos_u_ordenes` y la tarjeta de pedidos de la ficha, `proveedores.pedidos_del_proveedor`); las órdenes, pagos y reclamos de la ficha se suman de CMP-03 a CMP-06. Texto original: **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
 2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
 3. **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
 4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).
+
+## Cuando se programe CMP-03 (completa lo que CMP-02a dejó a medias) — nace con CMP-02a
+
+1. **Regla 4c de CMP-RLZ-PED:** `pedidos.ya_pedido` cuenta hoy solo los pedidos «en cotización»; sumar los pedidos «cerrados» cuya orden de compra está «pendiente de aprobación» (regla 14 de 8.15), con el texto de la advertencia («su orden de compra está pendiente de aprobación»).
+2. **Inicio del Agrónomo:** `compras/servicios/inicio.py` trae «Insumos bajo el mínimo» y «Esperando cotizaciones»; CMP-03 suma «Pedidos por resolver» (con su lista y el botón «Resolver») y «Órdenes rechazadas»; CMP-04, «Por recibir».
+3. **Ficha del pedido** (`compras/templates/compras/pedidos/ficha.html`): hoy sin acciones. CMP-02b suma «Cancelar pedido» y «Reenviar invitación»; CMP-03, «Comparar cotizaciones y generar orden» y la orden que generó un pedido «cerrado» (regla 4 de CMP-CNS-PED).
+4. **El paso diario 60** pone «vencido» a los enlaces vigentes: la ficha ya muestra «vencido» un enlace vigente con la fecha límite pasada, así que el paso no cambia lo que se ve (`pedidos._estado_del_enlace`).
