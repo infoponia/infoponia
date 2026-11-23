@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos %}
 {% comment %}Detalle de una alerta (CU-46, R6): tipo, severidad, descripción, invernadero, fecha y hora, estado, lectura y a quién le llegó. Abrirlo
 marca la alerta «leída» (R7, regla 7 de 8.18): «Nueva» se muestra solo en la primera visita (``era_nueva``). Una alerta resuelta se abre y
-dice «Resuelta». No muestra el origen (R6: sus apps todavía no existen). «Ver invernadero» solo aparece si el usuario tiene acceso a la
+dice «Resuelta». No muestra el origen (R6: sus apps todavía no existen). «Dónde se atiende» (MAE-02d, D-62) solo aparece si la app de la alerta registró un enlace (``enlace_de_app``). «Ver invernadero» solo aparece si el usuario tiene acceso a la
 ficha (D-30: ningún enlace lleva a un 403).{% endcomment %}
 {% block titulo %}Alerta · InfoPonia{% endblock %}
 {% block contenido %}
@@ -20,6 +20,7 @@ ficha (D-30: ningún enlace lleva a un 403).{% endcomment %}
       <dt>Descripción</dt><dd>{{ a.descripcion_alerta }}</dd>
       <dt>Invernadero</dt>
       <dd>{{ a.invernadero.nombre_invernadero }}{% if detalle.invernadero_visible %} · <a class="link" href="{% url 'maestros:invernadero' a.invernadero_id %}">Ver invernadero</a>{% endif %}</dd>
+      {% if enlace_de_app %}<dt>Dónde se atiende</dt><dd><a class="link" href="{{ detalle.enlace.url }}">{{ detalle.enlace.detalle }}</a></dd>{% endif %}
       <dt>Fecha y hora</dt><dd>{{ a.fecha_hora_alerta|date:"d/m/Y H:i" }}</dd>
       <dt>Estado</dt>
       <dd>{% if a.estado_alerta == "activa" %}<span class="status-badge status-warn">Activa</span>{% else %}<span class="status-badge status-ok">Resuelta</span>{% endif %}</dd>

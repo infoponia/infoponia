@@ -1124,19 +1124,27 @@ def items_de_campana(usuario):
     - ``severidad``: la del tipo registrado; si el código ya no está registrado, la que se guardó con la alerta (MD-109), para
       que una alerta vieja no rompa la campana de toda la pantalla. Es la misma regla de la pantalla de consulta
       (``api_alertas.severidad_efectiva``, MAE-02c).
-    - ``titulo``: la descripción de la alerta («Invernadero sin Capataz activo»); ``detalle``: el nombre del invernadero.
-    - ``url``: el detalle de la alerta (``/alertas/<id>/``, MAE-02c, CU-46): abrirla desde la campana llama a ``abrir_alerta``,
-      la marca «leída» y apaga el punto rojo (antes llevaba a la ficha del invernadero y no la marcaba). ``leida``: según ``estado_lectura_alerta`` (regla 7 de 8.18).
+    - ``titulo``: la descripción de la alerta («Invernadero sin Capataz activo»).
+    - ``detalle`` y ``url`` salen del enlace de la alerta (MAE-02d, R10; D-62, tercera enmienda, punto 3): una sola llamada a
+      ``api_alertas.enlaces_de_alertas`` para toda la lista (una consulta por registrante, nunca una por alerta). ``detalle``: el
+      texto del enlace (por omisión, el nombre del invernadero). ``url``: ``alertas:ir`` cuando el enlace es de una app
+      (``es_enlace_de_app``): abre la alerta, la marca «leída» y lleva a donde se atiende; con el enlace por omisión, el detalle de
+      la alerta (``/alertas/<id>/``, MAE-02c), que ya la abre y muestra «Nueva» en esa visita.
+    - ``leida``: según ``estado_lectura_alerta`` (regla 7 de 8.18).
     El orden es el de ``Alerta`` (la más reciente primero): ``core`` ordena por severidad y lo conserva dentro de cada nivel.
     """
+    alertas = list(Alerta.objects.para(usuario).activas().select_related("invernadero"))
+    enlaces = api_alertas.enlaces_de_alertas(usuario, alertas)
     items = []
-    for alerta in Alerta.objects.para(usuario).activas().select_related("invernadero"):
+    for alerta in alertas:
+        enlace = enlaces[alerta.pk]
+        ruta = "alertas:ir" if api_alertas.es_enlace_de_app(alerta, enlace) else "alertas:detalle"
         items.append(
             ItemDeAlerta(
                 severidad=api_alertas.severidad_efectiva(alerta),
                 titulo=alerta.descripcion_alerta,
-                detalle=alerta.invernadero.nombre_invernadero,
-                url=reverse("alertas:detalle", args=[alerta.pk]),
+                detalle=enlace.detalle,
+                url=reverse(ruta, args=[alerta.pk]),
                 leida=alerta.estado_lectura_alerta == Alerta.Lectura.LEIDA,
             )
         )

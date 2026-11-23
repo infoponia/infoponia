@@ -1,6 +1,6 @@
 # MAE-02d · Enlace de cada alerta a la pantalla de su origen y filtro por varios tipos (D-62)
 
-Estado: pendiente | App: maestros | Rama: feature/mae-02d-enlace-de-alertas | Ronda: — (la usan «Comercial 1» e «IoT 1»)
+Estado: hecha | App: maestros | Rama: feature/mae-02d-enlace-de-alertas | Ronda: — (la usan «Comercial 1» e «IoT 1»)
 
 Depende de: **MAE-02c** (hecha, PR #47: `consultar_alertas`, `detalle_de_alerta`, las rutas `alertas:lista` y `alertas:detalle`, y la
 campana que lleva al detalle). Si no está en `main`, frená.
@@ -126,13 +126,72 @@ recortan: COM-03b e IOT-04 los necesitan.
 ## Verificación a mano (la completa Claude Code al cerrar)
 
 No hay migraciones: el despliegue de Render no cambia la base. Todavía ninguna app registra un enlace (lo hacen COM-03b en adelante e IOT-04),
-así que la verificación a mano comprueba que **nada cambió** y que la ruta nueva funciona con el enlace por omisión.
+así que la verificación a mano comprueba que **nada cambió** y que la ruta nueva funciona con el enlace por omisión. Que una app con enlace
+lleve a su pantalla (la fila «Dónde se atiende» y el paso por `alertas:ir` desde la campana) lo cubren las pruebas con registrantes falsos;
+a mano se verifica con COM-03b o IOT-04.
 
-1. Como Gerente, generá la alerta «Invernadero sin Capataz activo» (dando de baja a un Capataz a cargo). Desde la campana, abrila: te lleva al
-   detalle (como antes), que muestra «Nueva», y el punto rojo se apaga. El detalle **no** tiene la fila «Dónde se atiende».
-2. Escribí en la barra `/alertas/<id>/ir/` con el id de esa alerta: te redirige al detalle.
-3. Con un Agrónomo de otro invernadero, la misma URL: 403. Con un id inexistente: 404.
-4. «Alertas» y sus filtros funcionan igual que antes.
-5. `python manage.py test maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` pasa.
+**Datos cargados** (`python manage.py cargar_datos_de_verificacion --clave <la de CLAUDE.local.md>`, ya corrido en la base local; se puede
+volver a correr para repetir la prueba: deja la alerta de nuevo «no leída»):
+el Gerente de la base (`hernanbenitez@gmail.com`, con su propia contraseña: el comando no crea ni toca ningún Gerente, D-09);
+`agronomo@prueba1.local` (a cargo de «Invernadero Verificación 1»), `agronomo@prueba2.local` (a cargo de «Invernadero Verificación 2») y
+`capataz@prueba1.local`, los tres con la contraseña de `CLAUDE.local.md`. «Invernadero Verificación 1» no tiene Capataz: tiene la alerta
+«Invernadero sin Capataz activo» (id 51 en esta base), activa y no leída, para el Gerente.
 
-## Cierre (la completa Claude Code al cerrar)
+1. Como Gerente, abrí la campana: figura «Invernadero sin Capataz activo» con «Invernadero Verificación 1» debajo y su punto rojo. Abrila desde
+   la campana: te lleva al detalle (`/alertas/<id>/`, como antes), que muestra «Nueva», y el punto rojo de **esa** alerta se apaga. El detalle
+   **no** tiene la fila «Dónde se atiende».
+2. Escribí en la barra `/alertas/<id>/ir/` con el id de esa alerta: te redirige al detalle (ahora sin «Nueva»).
+3. Con `agronomo@prueba2.local` (el Agrónomo de otro invernadero), la misma URL: 403. Con un id inexistente (`/alertas/999999/ir/`): 404.
+4. Con `capataz@prueba1.local`, la misma URL: 403. Sin sesión (otro navegador), te manda a iniciar sesión.
+5. «Alertas» y sus filtros (por invernadero y por tipo) funcionan igual que antes: filtrá por «Invernadero Verificación 1» y por «Invernadero
+   sin Capataz activo»; «Limpiar filtros» vuelve a la lista completa.
+6. Volvé a correr el comando de carga: la alerta vuelve a «no leída» y no se duplica nada (mismo id).
+7. `python manage.py test maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion` pasa.
+
+## Cierre
+
+Hecha el 22/11/2026 en la rama `feature/mae-02d-enlace-de-alertas`. Sin migraciones, sin modelos y sin dependencias nuevas
+(`makemigrations --check --dry-run`: sin cambios).
+
+**Qué se hizo**
+
+- `maestros/extensiones.py`: `Enlace`, `registrar_enlace_de_alerta(codigos, funcion)` (valida todos los códigos antes de agregar el par: un
+  registro con un código ya tomado lanza `ImproperlyConfigured` sin dejar los demás registrados; registrar de nuevo la misma función para el
+  mismo código no hace nada) y `enlaces_registrados()`.
+- `maestros/servicios/alertas.py`: `enlaces_de_alertas(usuario, alertas)` (una llamada por registrante; enlace por omisión = el detalle y el
+  nombre del invernadero; **supone el invernadero ya cargado en cada alerta**), `es_enlace_de_app(alerta, enlace)` (compara la URL con la del
+  detalle), `consultar_alertas(..., tipos=None)` y `DetalleDeAlerta.enlace` (al final).
+- `maestros/views.py` y `maestros/urls_alertas.py`: `alerta_ir` (`alertas:ir`, `/alertas/<id>/ir/`): solo GET y `never_cache`, mismos permisos
+  que el detalle, `abrir_alerta` y redirección al `url` del enlace; un `url` que no empieza con una sola `/` o que no es del mismo host lleva al
+  detalle. La vista `alerta` pasa `enlace_de_app` a la plantilla, que suma la fila «Dónde se atiende».
+- `maestros/servicios/invernaderos.py`: `items_de_campana` toma `detalle` y `url` de `enlaces_de_alertas` (una sola consulta, como antes);
+  `alertas:ir` solo con el enlace de una app, y el detalle como hoy con el de omisión.
+- `maestros/management/commands/cargar_datos_de_verificacion.py` (ver «Diferencias»).
+
+**Pruebas:** 48 nuevas, ninguna existente modificada ni quitada: `test_enlaces_de_alertas.py` (10), `test_alerta_ir.py` (11),
+`test_cargar_datos_de_verificacion.py` (10), 12 más en `test_cns_alr.py` (6 de `tipos`, 4 del enlace en el servicio y 2 de la fila en la vista) y
+5 en `test_campana_alertas.py`. `maestros core` sin concurrencia ni migración: 1853, OK. Con `produccion` (para confirmar PRD-01 y PRD-02): 2362,
+OK. No hay bloqueos nuevos (`abrir_alerta` no cambió): no corrí `--tag concurrencia`; `--tag migracion` no aplica.
+
+**Decisiones aprobadas al planificar (22/11/2026):** registrar de nuevo la misma función para el mismo código es idempotente (`ready()` puede
+correr dos veces) y otra función para un código tomado es `ImproperlyConfigured`; «enlace de una app» es que su `url` sea distinto del detalle
+(un registrante que devuelve el detalle con otro texto: se respeta su texto y la ruta sigue siendo la de omisión); con el enlace por omisión,
+`alertas:ir` redirige al detalle.
+
+**Diferencias con lo escrito (para `docs/temas_abiertos.md`)**
+
+1. **El comando `cargar_datos_de_verificacion`** (y su paquete `maestros/management/`) no estaba en «Permitido fuera de la app» ni en ningún
+   documento: CLAUDE.md pide que lo cree la primera tarea que lo necesite, y fue esta. Va en `maestros` porque `core` no puede importar sus
+   modelos (A1); decidido con el estudiante. No crea ni toca ningún Gerente (D-09: la base local ya tiene uno): el estudiante entra con su cuenta.
+   Los correos son `agronomo@prueba1.local`, `agronomo@prueba2.local` y `capataz@prueba1.local` (el número va siempre, aunque haya un solo rol).
+   Las próximas tareas lo amplían; si una app de nivel mayor tiene que hacerlo, decidir si se muda.
+2. **`maestros/servicios/invernaderos.py`** (fuera de lo que los pasos nombraban, pero es donde vive `items_de_campana`: paso 5).
+3. **Docstring de `enlaces_de_alertas` y `docs/api/alertas.md`:** queda anotado que quien llama pasa las alertas con el invernadero cargado.
+4. **Comentario viejo en `core/extensiones.py`:** el de `ItemDeAlerta` dice que `url` lleva «a la ficha del invernadero» (ya no es cierto desde
+   MAE-02c). No lo toqué (nada de `core`); corregir cuando se toque ese archivo.
+5. **La base de pruebas `test_infoponia`** tuvo que recrearse una vez (sin `--keepdb`, autorizado): su historial de migraciones quedó
+   inconsistente tras la integración de PRD-02 (`produccion.0002` aplicada antes de `core.0020`).
+6. **Un registrante repetido con códigos distintos** (la misma función registrada para `("a",)` y después para `("a", "b")`) queda como dos
+   pares y se la llama dos veces. No pasa con el uso previsto (una llamada por app); anotado por si una app registra en dos pasos.
+7. **Sin verificar:** el paso por `alertas:ir` desde la campana con una app real (no hay ninguna que registre enlaces todavía): lo cubren las
+   pruebas con registrantes falsos, incluida la de punta a punta.
