@@ -311,24 +311,6 @@ Los 15 pasos están en «Verificación a mano» de `docs/tareas/iot/IOT-02-siste
 
 ---
 
-## IOT-03 · Tarea IOT-03 (API del nodo I)
-
-Los 13 pasos (0 a 12) están en «Verificación a mano» de `docs/tareas/iot/IOT-03-api-del-nodo-lecturas.md`. Hay una migración nueva (`core` 0021, solo `choices`): `python manage.py migrate` (y `produccion` 0002 si no estaba). Datos: `python manage.py cargar_datos_de_verificacion` (pide la contraseña de `CLAUDE.local.md`); deja a «Norte» con `agronomo@prueba3.local` y `capataz@prueba3.local`, sin Técnico, y la siembra que da el umbral efectivo. Hace falta Node-RED con los flujos importados. Verificada en parte a mano por el autor el 23/11/2026. El último paso se hace después del despliegue.
-
-- [ ] 0. Con el Agrónomo, registrar el sistema IoT de «Norte» y copiar el token; volver a correr `cargar_datos_de_verificacion --solo iot`: carga el rango de la solución y los siete equipos del flujo.
-- [ ] 1. Node-RED con `INFOPONIA_URL` e `INFOPONIA_TOKEN`, flujo importado: «Configuración de equipos» en verde. En IoT · Hardware están los siete equipos, «Sin confirmar».
-- [ ] 2. En menos de un minuto: el nodo «En línea» y los sensores con su última lectura y hace cuánto.
-- [ ] 3. «Anunciar ahora» y «Ventana sin FIJAR_POSICION (anuncio)»: la ventana pasa a incompatible con la alerta «Configuración incompatible»; «Volver a lo normal» + «Anunciar ahora» la resuelve.
-- [ ] 4. «Temperatura alta (35 °C)»: «Fuera de umbral» en el sensor y la alerta en la campana, con el valor y el máximo efectivo; «Volver a lo normal» la resuelve a más de 1 °C dentro.
-- [ ] 5. «Lectura inválida (999 °C)»: alerta «Lectura inválida»; se resuelve con la lectura siguiente.
-- [ ] 6. «Nivel de solución bajo»: alerta crítica y «Nivel bajo» en el sensor (sin correo hasta IOT-04); «Solución caliente (27 °C)»: «Solución fuera de rango».
-- [ ] 7. «Equipo no registrado (co2)»: lectura rechazada y alerta «Dispositivo no registrado», desde la que se puede registrar el equipo.
-- [ ] 8. «Humedad en falla»: sensor «Fuera de servicio» con «Dispositivo en falla». «Ventilador encendido» y luego «apagado»: la ficha muestra el estado con la hora y «Cambiado en el invernadero».
-- [ ] 9. Detener `runserver` dos minutos y volver a arrancarlo: Node-RED reintenta, vacía la cola y las lecturas de esos minutos llegan atrasadas, sin alertas.
-- [ ] 10. Regenerar el token: Node-RED recibe 401 y no reintenta; con el nuevo token y Node-RED reiniciado, vuelve a «En línea».
-- [ ] 11. En «Auditoría» están los registros `entrega_informacion_iot`, sin token, y los registros del servidor no lo muestran.
-- [ ] 12. Después del merge, en Render: la dirección de la API empieza con `https://` y Node-RED apuntado a ella recibe 200.
-
 ## MAE-02d · Tarea MAE-02d (enlace de alertas)
 
 Los 7 pasos están en «Verificación a mano» de `docs/tareas/maestros/MAE-02d-enlace-de-alertas.md`. Sin migraciones. Datos: `python manage.py cargar_datos_de_verificacion` (pide la contraseña de `CLAUDE.local.md`; ya no existe `--clave`; ya corrido, se puede repetir). Cuentas: el Gerente de la base (su propia contraseña), `agronomo@prueba1.local`, `agronomo@prueba2.local` y `capataz@prueba1.local`. Todavía ninguna app registra un enlace: se verifica que nada cambió y que `alertas:ir` anda con el enlace por omisión.

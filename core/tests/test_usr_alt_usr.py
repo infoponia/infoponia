@@ -673,7 +673,7 @@ class UsrAltUsrServicioTests(TestCase):
         queda en los registros de errores, con el id de la cuenta y sin el enlace."""
         gerente = crear_gerente()
 
-        with self.assertLogs("core.servicios", level="ERROR") as registros:
+        with self.assertLogs("core.correo", level="ERROR") as registros:
             cuenta, resultado = self.alta_con(gerente, INVITACION)
 
         self.assertFalse(resultado.invitacion_enviada)
@@ -1517,7 +1517,7 @@ class UsrAltUsrAccesoVistaTests(TestCase):
         lo avisa a quien hizo el alta con un aviso de error (no dice que se envió) que ofrece «Restablecer acceso»."""
         self.entrar_como_gerente()
 
-        with self.assertLogs("core.servicios", level="ERROR"):
+        with self.assertLogs("core.correo", level="ERROR"):
             respuesta = self.enviar_alta(acceso=INVITACION)
 
         cuenta = Usuario.objects.get(email="laura@infoponia.com")
