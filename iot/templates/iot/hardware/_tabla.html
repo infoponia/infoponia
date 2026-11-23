@@ -1,9 +1,9 @@
 {% load iconos %}{% comment %}La tabla de equipos de «Hardware» (IOT-CNS-HDW regla 3 y «Consulta»): equipo, identificador, sector («General» si no tiene), estado y situación («Sin confirmar», «Fuera de servicio»,
-«Configuración incompatible», «Comando pendiente»). Es el fragmento que HTMX reemplaza al filtrar. Orden: sensores y después actuadores, por identificador. «Ver ficha» es un enlace.{% endcomment %}
+«Configuración incompatible», «Comando pendiente» y, por las alertas activas, «Sin actividad», «Lectura inválida», «Fuera de umbral», «Fuera de rango» y «Nivel bajo») y el último dato (IOT-03: la última lectura de un sensor y hace cuánto; de un actuador, el estado que informó el nodo, desde cuándo y si cambió en el invernadero). Es el fragmento que HTMX reemplaza al filtrar. Orden: sensores y después actuadores, por identificador. «Ver ficha» es un enlace.{% endcomment %}
 <div class="tablewrap">
   <table class="data-table">
     <caption class="sr-only">Equipos del sistema IoT</caption>
-    <thead><tr><th>Equipo</th><th>Identificador</th><th>Sector</th><th>Estado</th><th>Situación</th><th><span class="sr-only">Ficha</span></th></tr></thead>
+    <thead><tr><th>Equipo</th><th>Identificador</th><th>Sector</th><th>Estado</th><th>Situación</th><th>Último dato</th><th><span class="sr-only">Ficha</span></th></tr></thead>
     <tbody>
       {% for f in filas %}{% with e=f.equipo %}
       <tr{% if e.estado_hardware == "inactivo" %} class="hw-fila-off"{% endif %}>
@@ -11,11 +11,12 @@
         <td><span class="id">{{ e.identificador_equipo }}</span></td>
         <td>{% if e.sector %}{{ e.sector.nombre_sector }}{% else %}General{% endif %}</td>
         <td>{% if e.estado_hardware == "activo" %}<span class="status-badge status-ok">Activo</span>{% elif e.estado_hardware == "fuera_de_servicio" %}<span class="status-badge status-danger">Fuera de servicio</span>{% else %}<span class="status-badge status-neutral">Dado de baja</span>{% endif %}</td>
-        <td>{% if e.estado_hardware == "inactivo" %}—{% else %}<span class="status-badge {% if f.situacion.clave == 'operativo' %}status-ok{% elif f.situacion.clave == 'comando_pendiente' %}status-info{% elif f.situacion.clave == 'fuera_de_servicio' %}status-danger{% else %}status-warn{% endif %}">{{ f.situacion.texto }}</span>{% endif %}</td>
+        <td>{% if e.estado_hardware == "inactivo" %}—{% else %}<span class="status-badge {% if f.situacion.clave == 'operativo' %}status-ok{% elif f.situacion.clave == 'comando_pendiente' %}status-info{% elif f.situacion.clave == 'fuera_de_servicio' or f.situacion.clave == 'nivel_bajo' %}status-danger{% else %}status-warn{% endif %}">{{ f.situacion.texto }}</span>{% endif %}</td>
+        <td>{% if e.estado_hardware == "inactivo" %}—{% elif f.ultimo %}<b>{{ f.ultimo }}</b><span class="sub2">{% if e.clase == "sensor" %}hace {{ f.ultimo_en|timesince }}{% else %}desde las {{ f.ultimo_en|date:"H:i" }}{% endif %}</span>{% if e.clase == "actuador" and e.cambiado_en_invernadero %}<span class="sub2 warn-t">{% icono "warn" 12 %} Cambiado en el invernadero</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="right"><a class="rowlink" href="{% url 'iot:hardware_ficha' e.pk %}" aria-label="Ver la ficha de {{ e.identificador_equipo }}">Ver ficha</a></td>
       </tr>
       {% endwith %}{% empty %}
-      <tr><td colspan="6" class="muted">{% if hay_equipos %}Ningún equipo coincide con los filtros.{% else %}Sin equipos registrados.{% endif %}</td></tr>
+      <tr><td colspan="7" class="muted">{% if hay_equipos %}Ningún equipo coincide con los filtros.{% else %}Sin equipos registrados.{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

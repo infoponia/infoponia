@@ -8,7 +8,7 @@
 # cambio de su tipo) llama a ``bloquear_tipo_activo`` ANTES de insertar: el ``INSERT`` solo toma ``FOR KEY SHARE``, que no frena la baja del tipo
 # (contrato de IOT-BAJ-TAC). Las alertas se crean y se resuelven con el invernadero ya bloqueado.
 #
-# «Se completa en IOT-NN»: ``tiene_lecturas`` (IOT-03), ``tiene_comandos`` y ``tiene_comando_pendiente`` (IOT-05), ``tiene_reglas`` (IOT-06) y
+# «Se completa en IOT-NN»: ``tiene_lecturas`` (hecha en IOT-03), ``tiene_comandos`` y ``tiene_comando_pendiente`` (IOT-05), ``tiene_reglas`` (IOT-06) y
 # ``mantenimientos_a_realizar`` (IOT-07). Consultan sus tablas, vacías hasta entonces. La baja del equipo es de IOT-06.
 
 from collections import namedtuple
@@ -108,7 +108,7 @@ class DatosDeEquipo:
 
 
 def tiene_lecturas(sensor):
-    """Regla 3 de IOT-MOD-HDW: el sensor ya tiene lecturas (la variable no se cambia). **Se completa en IOT-03**: consulta la tabla de lecturas."""
+    """Regla 3 de IOT-MOD-HDW: el sensor ya tiene lecturas (la variable no se cambia). Con IOT-03 las escribe la API del nodo: consulta la tabla de lecturas."""
     return Telemetria.objects.filter(sensor_id=sensor.pk).exists()
 
 
@@ -694,10 +694,45 @@ def ficha_del_equipo(actor, equipo_id):
     return Actuador.objects.select_related("sistema__invernadero", "sector", "insumo", "tipo_actuador").get(pk=equipo_id)
 
 
-def situacion_de(equipo):
+# La situación por las alertas activas de un sensor o de un actuador, en orden de prioridad (IOT-ENT-INF, «Lo que completa en Hardware»): (tipo de alerta, clave, texto).
+SITUACIONES_POR_ALERTA = (
+    ("iot_nivel_solucion_bajo", "nivel_bajo", "Nivel bajo"),
+    ("iot_lectura_invalida", "lectura_invalida", "Lectura inválida"),
+    ("iot_fuera_de_umbral", "fuera_de_umbral", "Fuera de umbral"),
+    ("iot_solucion_fuera_de_rango", "fuera_de_rango", "Fuera de rango"),
+    ("iot_dispositivo_sin_actividad", "sin_actividad", "Sin actividad"),
+)
+# Lo que muestra la lista de cada equipo: la última lectura (``Telemetria`` o ``None``) y los códigos de sus alertas activas.
+ResumenDeEquipo = namedtuple("ResumenDeEquipo", "ultima_lectura alertas")
+
+
+def _consulta_de_alertas_activas(ids):
+    """Los vínculos de alertas activas de los equipos ``ids``: las de origen en el equipo (R052) y las de origen en una de sus lecturas (R053)."""
+    return AlertaIot.objects.filter(
+        Q(hardware_id__in=ids) | Q(telemetria__sensor_id__in=ids), alerta__estado_alerta=Alerta.Estado.ACTIVA
+    )
+
+
+def resumen_de_equipos(equipos):
+    """``{equipo.pk: ResumenDeEquipo}`` de todos los ``equipos`` con DOS consultas, sin consultas por fila: la última lectura de cada sensor (``DISTINCT ON``) y
+    los códigos de sus alertas activas (las de origen en el equipo o en una de sus lecturas)."""
+    ids = [equipo.pk for equipo in equipos]
+    resumen = {i: ResumenDeEquipo(None, set()) for i in ids}
+    if not ids:
+        return resumen
+    ultimas = Telemetria.objects.filter(sensor_id__in=ids).order_by("sensor_id", "-medida_en", "-id").distinct("sensor_id")
+    for lectura in ultimas:
+        resumen[lectura.sensor_id] = ResumenDeEquipo(lectura, resumen[lectura.sensor_id].alertas)
+    for hardware_id, sensor_id, tipo in _consulta_de_alertas_activas(ids).values_list("hardware_id", "telemetria__sensor_id", "alerta__tipo_alerta"):
+        resumen[hardware_id if hardware_id is not None else sensor_id].alertas.add(tipo)
+    return resumen
+
+
+def situacion_de(equipo, alertas=None):
     """La «Situación» de un equipo (regla 4 de IOT-CNS-HDW y «Cómo se aplica»): dado de baja, fuera de servicio, comando pendiente (actuador), sin confirmar
-    (``ultimo_mensaje_en`` nulo), configuración incompatible (actuador) y, si nada de eso, operativo. **Se completa en IOT-03 e IOT-04** con lo que depende
-    de lecturas y alertas («En rango», «Sin actividad»)."""
+    (``ultimo_mensaje_en`` nulo), configuración incompatible (actuador) y después, por sus alertas activas (IOT-03): «Nivel bajo», «Lectura inválida», «Fuera de
+    umbral», «Fuera de rango» y «Sin actividad»; si nada de eso, operativo. ``alertas`` son los códigos de sus alertas activas (de ``resumen_de_equipos``, para no
+    consultar por fila); sin ellos, se consultan."""
     if equipo.estado_hardware == EstadoHw.INACTIVO:
         return Situacion("baja", "Dado de baja")
     if equipo.estado_hardware == EstadoHw.FUERA_DE_SERVICIO:
@@ -712,17 +747,17 @@ def situacion_de(equipo):
         return Situacion("sin_confirmar", "Sin confirmar")
     if equipo.clase == "actuador" and equipo.compatibilidad == Actuador.Compatibilidad.INCOMPATIBLE:
         return Situacion("incompatible", "Configuración incompatible")
+    if alertas is None:
+        alertas = set(_consulta_de_alertas_activas([equipo.pk]).values_list("alerta__tipo_alerta", flat=True))
+    for tipo, clave, texto in SITUACIONES_POR_ALERTA:
+        if tipo in alertas:
+            return Situacion(clave, texto)
     return Situacion("operativo", "Operativo")
 
 
 def alertas_activas_del_equipo(equipo):
-    """Regla 6 de IOT-CNS-HDW: las alertas activas vinculadas al equipo (``AlertaIot.hardware``), por id."""
-    return [
-        vinculo.alerta
-        for vinculo in AlertaIot.objects.filter(hardware_id=equipo.pk, alerta__estado_alerta=Alerta.Estado.ACTIVA)
-        .select_related("alerta")
-        .order_by("alerta_id")
-    ]
+    """Regla 6 de IOT-CNS-HDW: las alertas activas del equipo, por id: las vinculadas a él (``AlertaIot.hardware``) y, en un sensor, las de sus lecturas (``AlertaIot.telemetria``)."""
+    return [vinculo.alerta for vinculo in _consulta_de_alertas_activas([equipo.pk]).select_related("alerta").order_by("alerta_id")]
 
 
 def acciones_permitidas(actor, equipo):
@@ -763,7 +798,7 @@ def baja_con_identificador(sistema, identificador):
 
 def identificadores_anunciados_libres(sistema):
     """Regla 14 de IOT-ALT-HDW: los identificadores que el nodo anunció y todavía no están registrados (ningún equipo no dado de baja los usa), por
-    identificador, marcando con ``era_de`` el equipo dado de baja que los tenía. **Los escribe la API de IOT-03**: hasta entonces la lista está vacía."""
+    identificador, marcando con ``era_de`` el equipo dado de baja que los tenía. Los escribe la API del nodo (IOT-03, ``anuncios.py``)."""
     en_uso = {
         i.lower()
         for i in Hardware.objects.filter(sistema=sistema)

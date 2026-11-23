@@ -408,8 +408,8 @@ AnuncioDelNodo = namedtuple("AnuncioDelNodo", "cantidad anunciado_en sin_registr
 
 def anuncio_del_nodo(sistema):
     """Lo que muestra la ficha del sistema del último anuncio de equipos del nodo (IOT-ENT-INF, extensión 1c): cuántos equipos anunció, cuándo y cuántos
-    todavía no están registrados; ``None`` si el nodo no anuncia sus equipos (la compatibilidad queda «sin verificar»). **Los anuncios los escribe la API
-    de IOT-03**: hasta entonces siempre es ``None``."""
+    todavía no están registrados; ``None`` si el nodo no anuncia sus equipos (la compatibilidad queda «sin verificar»). Los anuncios los escribe la API
+    del nodo (IOT-03); sin anuncio, ``None``."""
     from iot.models import EquipoAnunciado
     from iot.servicios.hardware import identificadores_anunciados_libres
 
@@ -423,7 +423,7 @@ def anuncio_del_nodo(sistema):
 def conectividad(nodo, ahora):
     """«Para los cinco», «Conectividad» (regla 3 de IOT-ACT-SIS): ``en_linea`` si la última comunicación del nodo es MÁS reciente que
     ``minutos_sin_comunicacion`` (parámetro de la Configuración Operativa, leído en cada uso); si no, ``sin_senal``. Con ``ultima_comunicacion``
-    nula, ``sin_senal`` con el texto «Todavía no se comunicó». No se guarda: la actualiza la API (IOT-03)."""
+    nula, ``sin_senal`` con el texto «Todavía no se comunicó». No se guarda: la actualiza la API del nodo (IOT-03, ``nodo.registrar_comunicacion``)."""
     if nodo.ultima_comunicacion is None:
         return Conectividad("sin_senal", "Todavía no se comunicó")
     plazo = timedelta(minutes=configuracion.obtener().minutos_sin_comunicacion)

@@ -1,7 +1,7 @@
 # Los 11 tipos de alerta del IoT (docs/modelo/iot.md, «Tipos de alerta del IoT», MD-108 y MD-109; docs/api/alertas.md, sección 1).
 # Todos van al Agrónomo del invernadero o, sin Agrónomo activo, al Gerente, y son de clase ESTADO (a lo sumo una activa por
 # invernadero, tipo y clave; se resuelven solas, nunca a mano). Los registra ``IotConfig.ready()`` (regla A4 de D-37).
-# La clave de cada alerta (``sensor:<id>``, ``hw:<id>``, ``id:<identificador>``, ``nodo:<id>``) la arma quien la crea (IOT-03 en adelante).
+# La clave de cada alerta (``sensor:<id>``, ``hw:<id>``, ``id:<identificador>``, ``nodo:<id>``) la arma quien la crea (``iot/servicios/alertas_iot.py``, desde IOT-03).
 
 from maestros.alertas import Clase, Destinatario, Origen, TipoAlerta, registrar_tipo_de_alerta
 from maestros.models import Alerta

@@ -22,7 +22,7 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
 
   Excepción a la regla de no borrar: para esto podés limpiar los datos de negocio de la base local sin preguntar. Se borran filas, nunca tablas ni migraciones. No toques al Administrador (ni su usuario ni su contraseña). La auditoría es inmutable (D-22): si hace falta limpiarla, frená y preguntá.
 
-  Solo la base local. La carga se hace con un comando propio, manage.py cargar_datos_de_verificacion, idempotente, que cada tarea amplía. Si todavía no existe, lo crea la primera tarea que lo necesite, con pruebas de que se niega a correr si DEBUG está apagado, si la base no es localhost o si hay variables de Render, y de que no toca al Administrador.
+  Solo la base local. La carga se hace con un comando propio, manage.py cargar_datos_de_verificacion, idempotente, que cada tarea amplía. Vive en `core/verificacion.py` (registro de cargadores y guarda: se niega a correr si DEBUG está apagado, si la base no es localhost o si hay variables de Render) y en `core/management/commands/cargar_datos_de_verificacion.py`; cada app registra su cargador en `<app>/verificacion.py` desde `AppConfig.ready()` (la contraseña va en `--contrasena`). Cómo se escribe un cargador: `docs/patrones/datos_de_verificacion.md`.
 
   Cuentas: el correo es <rol>@prueba<N>.local (N = 1, 2… si hay más de una del mismo rol). La contraseña es la de quien trabaja y está en su CLAUDE.local.md, que no se versiona. Si no está, preguntá. Nunca escribas una contraseña en un archivo versionado: el repo es público.
 
