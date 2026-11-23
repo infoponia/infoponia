@@ -1,0 +1,4 @@
+{% comment %}Los campos de departamento y localidad de la provincia elegida (regla 6 de COM-ALT-CLT y regla 3 de PROD-ALT-INV). Con HTMX, al cambiar la
+provincia se reemplaza este bloque; al cambiar el departamento, solo la localidad. Recibe «dform».{% endcomment %}
+{% include "core/usuarios/_campo.html" with campo=dform.departamento requerido=True %}
+<div id="dir-{{ dform.id_base }}-localidad" style="display:contents">{% include "comercial/clientes/_direccion_localidad.html" %}</div>

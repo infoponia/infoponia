@@ -20,6 +20,8 @@ urlpatterns = [
     path("produccion/", include("produccion.urls")),
     # IOT-01: módulo IoT (Gerente y Agrónomo); empieza por los tipos de actuador.
     path("iot/", include("iot.urls")),
+    # COM-01: «Comercial» (clientes y vehículos; Gerente y Vendedor).
+    path("comercial/", include("comercial.urls")),
     # IOT-03: API HTTPS del nodo central (contrato en docs/api/nodo/; D-70). Sin sesión ni CSRF: la protege el token.
     path("api/iot/v1/", include("iot.api.urls")),
 

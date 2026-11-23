@@ -1,0 +1,25 @@
+/* Estilos de «Comercial» (COM-01), sobre el Diseño v2 (D-47): solo lo que la hoja del sistema no trae. Sin paleta propia. */
+
+/* Dos fichas de radio para el tipo de cliente; con :has se muestran la razón social (jurídica) o el nombre y el apellido (física), sin
+   JavaScript y sin pedir nada al servidor. Los dos grupos están siempre en el formulario: se envían todos y el servicio descarta los del
+   tipo que no se eligió (regla 3 de COM-ALT-CLT). */
+.tipo-cli{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.tipo-cli label{display:inline-flex;align-items:center;gap:6px}
+.datos-cli:has(input[name="tipo_cliente"][value="fisica"]:checked) .solo-juridica{display:none}
+.datos-cli:not(:has(input[name="tipo_cliente"][value="fisica"]:checked)) .solo-fisica{display:none}
+
+/* Un bloque de dirección dentro del formulario del cliente. */
+.dir-bloque{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;background:#fff}
+.dir-bloque > summary{cursor:pointer;font-weight:600;font-size:14px;list-style:none}
+.dir-bloque > summary::-webkit-details-marker{display:none}
+.dir-bloque > summary:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.dir-bloque[open] > summary{margin-bottom:12px}
+.dir-fila{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}
+.dir-fila .quitar{display:flex;gap:16px;flex-wrap:wrap;font-size:13.5px}
+.dir-fila .quitar label{display:inline-flex;align-items:center;gap:6px}
+.dir-inactiva{opacity:.75}
+
+/* Pestañas de «Comercial» y paginación. */
+.com-barra{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.pager a,.pager span{padding:2px 6px}
+.sin-datos{color:var(--faint)}

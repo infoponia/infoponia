@@ -98,7 +98,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    realizar de cada transportista. Con el registrante, «Logística» muestra las tres columnas de `logistica(inv, ger, true)` del
    prototipo `docs/prototipos/produccion/logistica_transportista.html`.
    **Planificado (lote C1):** COM-01 registra el punto con el vehículo y la situación (en ruta) y `entregas_a_realizar = 0`; COM-05a completa
-   las entregas a realizar y `url_entregas` (la lista de entregas con `?transportista=<id>`) en el mismo registrante (admite uno solo).
+   las entregas a realizar y `url_entregas` (la lista de entregas con `?transportista=<id>`) en el mismo registrante (admite uno solo).    **Hecho el 23/11/2026 en COM-01 (parte de COM-01):** `comercial` registra el punto con el vehículo y la situación (en ruta) y `entregas_a_realizar = 0` y `url_entregas = None`; sigue abierto lo de COM-05a (las entregas a realizar y su URL, en el mismo registrante).
 4. **Venta que sale toda de cámara (nace en COM-02, lote C2).** Postcondición g de COM-REG-CVT: si todas las reservas de una compra-venta
    quedan «lista para entrega», InfoPonia planifica la entrega (COM-PNF-ENT). COM-05 suma esa llamada al final de `registrar_compra_venta` y
    su paso diario 50 planifica también las ventas que ya estaban así.
@@ -391,13 +391,13 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
 
 ## Cuando exista Cliente o CompraVenta
 
-1. **Dirección usada.** Regla 3 de 8.18: una dirección que usa una compra-venta o un detalle de suministro no se modifica
+1. ~~**Dirección usada.**~~ Hecho el 23/11/2026 en COM-01 (D-58, con la nota de C6). Texto original: Regla 3 de 8.18: una dirección que usa una compra-venta o un detalle de suministro no se modifica
    ni se elimina; se registra una nueva y la anterior pasa a inactiva. `modificar_invernadero` (MAE-01b) crea la dirección nueva al cambiar de
    urbana a rural y borra la anterior con `Direccion.objects.filter(pk=...).delete()`: cuando existan esas clases hay que
    cambiarlo por «pasa a inactiva», o el borrado falla por PROTECT. Nació en MAE-01a.
    **Se cierra en COM-01 (D-58):** por la restricción C6 una dirección de invernadero nunca es de un cliente, así que ningún contrato la usa y
    `modificar_invernadero` puede seguir borrando la anterior. Lo que sí queda: COM-02 valida que la dirección de envío de una compra-venta sea
-   una dirección **activa del cliente** (y COM-03, la de cada detalle de suministro).
+   una dirección **activa del cliente** (y COM-03, la de cada detalle de suministro). Lo que queda para COM-02 y COM-03 (la dirección de envío y la de cada detalle son direcciones activas del cliente) sigue en «Completan el ABM de cliente».
 
 ## Cuando se actualicen los datos de Georef
 
@@ -528,6 +528,8 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
 COM-01 deja escritas, con un resultado neutro, las funciones de `comercial/servicios/clientes.py` que dependen de clases que todavía no
 existen. Cada tarea que crea la clase les pone la consulta real y la prueba (`docs/casos_de_uso/comercial/clientes.md`, «Para más adelante»).
 
+COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, `direcciones_en_uso` ya trae escrita (y probada con `mock.patch`) la rama «crear otra y dejar inactiva la anterior»: la tarea que cuente usos solo reescribe esa función.
+
 1. **COM-02 (compra-venta; escrito en el lote C2, paso 6 de la tarea):** `direcciones_en_uso` cuenta las compra-ventas con envío (en cualquier estado); `pendientes_del_cliente`, las compra-ventas
    abiertas o pendientes de decisión; la ficha y la lista muestran sus contratos (el Vendedor, solo los suyos); el formulario usa
    `volver` para regresar a COM-REG-CVT (regla 7 de COM-ALT-CLT, regla 5 de COM-MOD-CLT).
@@ -544,6 +546,8 @@ existen. Cada tarea que crea la clase les pone la consulta real y la prueba (`do
 1. **COM-05a (entregas; planificado en el lote C5a):** `entregas_a_realizar_del_transportista` y `carga_maxima_asignada` de `comercial/servicios/vehiculos.py` reciben su
    consulta (reglas 2 y 3 de COM-MOD-VEH, precondición c y regla 1 de COM-BAJ-VEH); la lista suma «Entregas a realizar» y la ficha, la carga
    de los próximos días frente a la capacidad (regla 2 de COM-CNS-VEH).
+
+   COM-01 está hecha (23/11/2026): `entregas_a_realizar_del_transportista` (lista vacía) y `carga_maxima_asignada` (`(0, None)`) ya existen y sus llamadores están probados con `mock.patch`: COM-05a solo les pone la consulta.
 
 ## Cuando exista el rol Contador (USR-11) — nace con el lote 1 de Contabilidad
 

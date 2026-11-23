@@ -1,0 +1,46 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Registrar o modificar un vehículo (COM-ALT-VEH, COM-MOD-VEH; VIEWS.vehform del prototipo, líneas 1136 y 1807). Con «novalidate»: las reglas son del
+servicio y nada se valida al tipear. Correcciones al prototipo (manda el CU): la patente se puede cambiar al modificar (precondición c) y la
+marca y el modelo son dos campos obligatorios (MD-129). El transportista sale de «transportistas_disponibles»; si el elegido no tiene
+invernadero, el aviso lo dice (con «Actualizar», sin JavaScript, o al volver a mostrar el formulario). Recibe «form» y «vehiculo».{% endcomment %}
+{% block titulo %}{% if vehiculo %}Modificar {{ vehiculo.patente }}{% else %}Registrar vehículo{% endif %} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% if vehiculo %}{% url 'comercial:vehiculo' vehiculo.pk %}{% else %}{% url 'comercial:vehiculos' %}{% endif %}">{% icono "back" 15 %} Volver</a>
+  <div class="page-h"><h1>{% if vehiculo %}Modificar {{ vehiculo.patente }}{% else %}Registrar vehículo{% endif %}</h1></div>
+  {% if form.non_field_errors %}
+  <div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ form.non_field_errors.0 }}</div></div>
+  {% endif %}
+
+  <form id="form-vehiculo" method="post" novalidate>
+    {% csrf_token %}
+    <div class="card">
+      <div class="card-title">{% icono "truck" 14 %} Datos</div>
+      <div class="grid3">
+        {% include "core/usuarios/_campo.html" with campo=form.patente requerido=True ayuda="AAA123 o AA123AA; con o sin espacios." %}
+        {% include "core/usuarios/_campo.html" with campo=form.tipo_vehiculo requerido=True %}
+        {% include "core/usuarios/_campo.html" with campo=form.capacidad_carga requerido=True ayuda="Peso máximo que lleva en el día, en un solo viaje. Los envases no cuentan." %}
+      </div>
+      <div class="grid2">
+        {% include "core/usuarios/_campo.html" with campo=form.marca requerido=True %}
+        {% include "core/usuarios/_campo.html" with campo=form.modelo requerido=True %}
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">Transportista</div>
+      {% include "core/usuarios/_campo.html" with campo=form.transportista_id ayuda="Opcional. Solo transportistas activos sin otro vehículo. El vehículo trabaja para el invernadero de su transportista." %}
+      {% if form.transportista_sin_invernadero %}
+      <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>No recibe entregas hasta que se lo agregue a un invernadero, en «Logística».</div></div>
+      {% endif %}
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="actualizar" value="1">Actualizar avisos</button></noscript>
+    </div>
+
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" data-enviando="Guardando…">{% if vehiculo %}Guardar cambios{% else %}Registrar vehículo{% endif %}</button>
+      <a class="btn btn-ghost" href="{% if vehiculo %}{% url 'comercial:vehiculo' vehiculo.pk %}{% else %}{% url 'comercial:vehiculos' %}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

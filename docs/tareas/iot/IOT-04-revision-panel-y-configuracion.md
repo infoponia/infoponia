@@ -223,7 +223,7 @@ en la base del autor). Necesitás Node-RED con el flujo de lecturas (`docs/api/n
   falla (los dos mandan). Se volvió al orden correcto.
 `test_infoponia` se recreó una vez con `--noinput` por la migración de `core`.
 
-**Migración.** `core/migrations/0024_iot_revision_periodica_accion.py` (solo `choices`). Ninguna en `iot` ni en `maestros`; ningún modelo nuevo; ninguna dependencia.
+**Migración.** `core/migrations/0025_iot_revision_periodica_accion.py` (solo `choices`). Ninguna en `iot` ni en `maestros`; ningún modelo nuevo; ninguna dependencia.
 
 **Fuera de «Permitido» (avisado en el control previo y aprobado):** en `core/models.py`, además de la acción, `ACCIONES_DE_NEGOCIO` (lo exige `test_d36_cada_accion_esta_clasificada_…`) y las `ETIQUETAS` de las claves de la revisión y de los 14 parámetros del IoT (las de IOT-03 que faltaban: `origen`,
 `sistema`, `mensaje`, `identificador`, `alertas_generadas`); en `maestros/forms.py`, `GRUPOS_IOT` (las etiquetas y ayudas de los 14, una sola fuente para la pantalla de configuración y el panel); los cambios de `assertRedirects` de dos pruebas de `iot` (destino de `/iot/`; en la de sistema también el nombre y el docstring,
