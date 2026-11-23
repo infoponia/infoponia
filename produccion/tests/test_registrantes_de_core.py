@@ -64,7 +64,7 @@ class SeccionDeInicioTests(Base):
     """`registrar_seccion_de_inicio`: la bandeja del Capataz."""
 
     def seccion(self, usuario):
-        secciones = [s for s in extensiones.secciones_de_inicio(usuario) if s.plantilla.startswith("produccion/")]
+        secciones = [s for s in extensiones.secciones_de_inicio(usuario) if s.plantilla == "produccion/_seccion_de_inicio.html"]  # la del Agrónomo (PRD-04) se prueba en test_inicio_agronomo.py
         return secciones[0] if secciones else None
 
     def test_ext_con_datos_el_capataz_recibe_su_bandeja(self):

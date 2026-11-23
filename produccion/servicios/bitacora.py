@@ -162,6 +162,8 @@ TIPOS_DE_FILTRO = [
         Bitacora.TipoEvento.MERMA,
         Bitacora.TipoEvento.APLICACION,
         Bitacora.TipoEvento.OTRO_EVENTO,
+        Bitacora.TipoEvento.FUERA_DE_SERVICIO,  # PRD-04 (docs/disparadores.md, «Cuando exista PROD-PNR-FDS»)
+        Bitacora.TipoEvento.REUBICACION,
     )
 ]
 

@@ -15,15 +15,16 @@ from decimal import Decimal
 from django.db.models import Count, F, Q, Sum
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 
 from core.extensiones import Asignacion, SeccionDeInicio
 from core.models import Usuario, rol_de
 from inventario.extensiones import USO_NEUTRO, OrdenQueReserva, UsoDeVariedad
 from maestros.extensiones import Aviso, Contenido, Impedimento
 from maestros.models import Invernadero
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
+from produccion.models import Bitacora, FueraDeServicio, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import lotes as api_lotes
-from produccion.servicios import bitacora, ordenes
+from produccion.servicios import bitacora, inicio, ordenes
 
 Estado = OrdenTrabajo.Estado
 Tipo = OrdenTrabajo.Tipo
@@ -377,7 +378,7 @@ def asignaciones_de_cuenta(cuenta):
 
 def seccion_de_inicio(usuario):
     """`registrar_seccion_de_inicio`: la bandeja del Capataz (vencidas, hoy y próximas) en su Inicio; `None` para los demás roles.
-    La del Agrónomo la suma PRD-04."""
+    La del Agrónomo es `seccion_de_inicio_del_agronomo` (PRD-04)."""
     if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.CAPATAZ:
         return None
     return SeccionDeInicio("produccion/_seccion_de_inicio.html", {"bandeja": ordenes.bandeja_del_capataz(usuario)})
@@ -394,3 +395,66 @@ def pestana_de_bitacora(actor, invernadero):
     if invernadero.pk not in {i.pk for i in bitacora.invernaderos_de_bitacora(actor)}:
         return None
     return render_to_string("produccion/_pestana_bitacora.html", contexto_de_la_consulta(actor, invernadero.pk, {}))
+
+
+# ---- maestros: el registro «Fuera de servicio» (PRD-04; docs/casos_de_uso/produccion/sector_fuera_de_servicio.md, «Vuelta a servicio y baja») ----
+# Los tres corren dentro de la transacción del servicio de `maestros`, con el invernadero y el sector ya bloqueados: sus filas de
+# `FueraDeServicio` se bloquean después, en orden de id (docs/patrones/bloqueos.md, «Lote 5»). Cierran el registro abierto con `fecha_fin = hoy`
+# (la MISMA fila: no se crea otra); sin registro abierto no hacen nada. `fecha_fin >= fecha_efectiva` vale siempre: la fecha efectiva nunca es
+# posterior a la fecha en que se puso fuera de servicio.
+
+
+def _cerrar_registros_abiertos(**filtro):
+    """Bloquea (`FOR NO KEY UPDATE`, por id) los registros «Fuera de servicio» abiertos que cumplen `filtro`, los cierra con `fecha_fin = hoy` y los
+    devuelve. Una consulta para bloquear y una para cerrarlos, sin importar cuántos sean."""
+    abiertos = list(
+        FueraDeServicio.objects.select_for_update(no_key=True, of=("self",)).filter(fecha_fin__isnull=True, **filtro).order_by("id")
+    )
+    if abiertos:
+        FueraDeServicio.objects.filter(pk__in=[r.pk for r in abiertos]).update(fecha_fin=timezone.localdate())
+        for registro in abiertos:
+            registro.fecha_fin = timezone.localdate()
+    return abiertos
+
+
+def seccion_de_inicio_del_agronomo(usuario):
+    """`registrar_seccion_de_inicio` (PRD-04, D-51 punto 10): los indicadores de producción del Agrónomo (lotes activos, órdenes vencidas,
+    ocupación e insumos por vencer) de TODOS sus invernaderos activos juntos; `None` para los demás roles. Sin el filtro por invernadero del
+    prototipo: el punto de extensión solo recibe al usuario (diferencia anotada en `docs/temas_abiertos.md`)."""
+    if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.AGRONOMO:
+        return None
+    ids = list(Invernadero.objects.filter(agronomo_id=usuario.pk, estado_invernadero=Invernadero.Estado.ACTIVO).values_list("pk", flat=True))
+    return SeccionDeInicio("produccion/_inicio_agronomo.html", {"indicadores": inicio.indicadores_del_agronomo(usuario, ids)})
+
+
+def efecto_de_vuelta_a_servicio(actor, sector):
+    """`registrar_efecto_de_vuelta_a_servicio` (postcondición b de PROD-MOD-SCT): cierra el registro «Fuera de servicio» abierto del sector y escribe
+    en la bitácora (`otro_evento`: la lista de tipos de PROD-CNS-BIT no tiene uno propio) que el sector vuelve a estar activo, con las fechas y los
+    días que estuvo fuera. Sin registro abierto, no hace nada."""
+    for registro in _cerrar_registros_abiertos(sector=sector):
+        dias = (registro.fecha_fin - registro.fecha_efectiva).days
+        texto = (
+            f"El sector {sector.nombre_sector} vuelve a estar activo. Estuvo fuera de servicio desde {registro.fecha_efectiva:%d/%m/%Y} "
+            f"hasta {registro.fecha_fin:%d/%m/%Y}, {dias} {'día' if dias == 1 else 'días'}."
+        )
+        evento = Bitacora.objects.create(
+            invernadero=sector.invernadero,
+            responsable=actor,
+            fecha_bitacora=registro.fecha_fin,
+            hora_bitacora=timezone.localtime().time(),
+            tipo_evento=Bitacora.TipoEvento.OTRO_EVENTO,
+            descripcion_evento=texto[:500],
+        )
+        evento.sectores.add(sector)
+
+
+def efecto_de_baja_de_sector(actor, sector):
+    """`registrar_efecto_de_baja_de_sector` (postcondición b de PROD-BAJ-SCT, D-51 punto 7): cierra el registro «Fuera de servicio» abierto del
+    sector. No escribe bitácora: el sector no vuelve a servicio."""
+    _cerrar_registros_abiertos(sector=sector)
+
+
+def efecto_de_baja_del_invernadero(actor, invernadero):
+    """`registrar_efecto_de_baja` (baja del invernadero): cierra los registros «Fuera de servicio» abiertos de todos sus sectores, en una consulta
+    por tabla. PRD-01 sigue exigiendo que no haya lotes ni órdenes: acá solo se cierran los registros de sectores que ya están vacíos."""
+    _cerrar_registros_abiertos(sector__invernadero=invernadero)

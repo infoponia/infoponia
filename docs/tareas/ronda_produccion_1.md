@@ -23,7 +23,7 @@ no dependen entre sí pueden hacerse en paralelo.
 | PRD-01 | Siembra: planificar, concretar, cancelar orden y bandeja del Capataz — **hecha el 22/11/2026** (a la espera de la revisión a mano) | produccion |PROD-PNF-SMB, PROD-CNC-SMB, PROD-CNL-ORD (órdenes de siembra) | MAE-03, MAE-04, INV-02, INV-03, NOT-01, CON-01 | 4 |
 | PRD-02 | Transición: planificar, concretar y cancelar — **hecha el 22/11/2026** (PR #53, a la espera de la revisión a mano) | produccion | PROD-PNF-TRN, PROD-CNC-TRN, PROD-CNL-ORD (órdenes de transición) | PRD-01 | 4 |
 | PRD-03 | Eventos del lote: merma, aplicación de insumos, otro evento y bitácora — **hecha el 23/11/2026** (a la espera de la revisión a mano) | produccion |PROD-REG-MRM, PROD-REG-APL, PROD-REG-EVT, PROD-CNS-BIT | PRD-02 | 5 |
-| PRD-04 | Sector fuera de servicio e Inicio del Agrónomo | produccion | PROD-PNR-FDS | PRD-03 | 5 |
+| PRD-04 | Sector fuera de servicio e Inicio del Agrónomo — **hecha el 23/11/2026** (a la espera de la revisión a mano); **con ella la ronda «Producción 1» queda completa** | produccion | PROD-PNR-FDS | PRD-03 | 5 |
 
 Ya hechas o en curso fuera de la ronda: MAE-01 y MAE-01b (invernadero), MAE-02a (alerta, hecha), MAE-02b (baja y
 reactivación de cuenta, Inicio del Gerente y `abrir_alerta`, mergeada el 19/11/2026) y MAE-02c (consulta de alertas, CU-46, implementada el 22/11/2026, en su rama; archivo `docs/tareas/maestros/MAE-02c-alerta-consulta.md`).

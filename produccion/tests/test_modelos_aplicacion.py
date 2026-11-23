@@ -71,13 +71,13 @@ class ModelosDeAplicacionTests(ConDatosDeInventario, TestCase):
 
     def test_regla_tipos_de_bitacora_de_la_ronda_se_aceptan_y_uno_ajeno_se_rechaza(self):
         """docs/modelo/produccion.md («Bitacora.TipoEvento»): `aplicacion`, `otro_evento` y `consumo` valen desde PRD-03; los de PRD-04
-        todavía no (`fuera_de_servicio`), y un tipo cualquiera tampoco."""
-        for tipo in ("aplicacion", "otro_evento", "consumo", "siembra", "transicion", "merma"):
+        (`fuera_de_servicio` y `reubicacion`) valen desde PRD-04 (cambio por esa tarea), y un tipo cualquiera no."""
+        for tipo in ("aplicacion", "otro_evento", "consumo", "siembra", "transicion", "merma", "fuera_de_servicio", "reubicacion"):
             Bitacora.objects.create(
                 invernadero=self.e.invernadero, tipo_evento=tipo,
                 fecha_bitacora=timezone.localdate(), hora_bitacora=timezone.localtime().time(),
             )
-        for tipo in ("fuera_de_servicio", "inventado"):
+        for tipo in ("inventado",):
             viola(self, lambda tipo=tipo: Bitacora.objects.create(
                 invernadero=self.e.invernadero, tipo_evento=tipo,
                 fecha_bitacora=timezone.localdate(), hora_bitacora=timezone.localtime().time(),
