@@ -13,7 +13,7 @@ está en `docs/historial.md`, `docs/revisiones_pendientes.md`, `docs/temas_abier
 
 ## Formato de una decisión nueva
 
-Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-82**; D-80 es de IOT-01 y D-81 de PRD-01; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
+Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-83**; D-80 es de IOT-01, D-81 de PRD-01 y D-82 de PRD-02; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
 
 ```
 ## D-NN — Título
@@ -118,3 +118,4 @@ iot, contabilidad.
 | D-79 | La orden de mantenimiento automática en el código: dónde se cancela, quién, textos y lo que ve el Técnico | iot, producción | vigente (puntos 1 a 4); a validar (5 a 9) | Solo desde la ficha del equipo, con el alcance del IoT (excepción a PROD-CNL-ORD); sufijos de la alerta «comando fallido» con el código de la orden; aviso y sección «Mantenimientos a realizar» en el Inicio del Técnico; largo de 200 con el sufijo entero; avisos solo con la cuenta activa; regla 8 con «Cancelarla» marcada; traspaso de todas las órdenes a realizar del invernadero y asignaciones de la cuenta | programás la orden de mantenimiento, su cancelación, el traspaso del Técnico o su Inicio |
 | D-80 | El rango de una acción de actuador depende de su unidad | iot | vigente | «%» de 0 a 100; «rpm», «L/min» y «cm» con mínimo 0 o más; «°» sin límite fijo; lo respalda un `CheckConstraint` de `Accion` (IOT-01, revisión a mano) |
 | D-81 | `tipo_orden` en `OrdenTrabajo` y el contrato ampliado de `traspasar` | produccion, maestros | aprobada | El campo se llama `tipo_orden` para no pisar `OrigenDocumento.tipo`; `traspasar` devuelve las instancias tocadas; `Bitacora.TipoEvento` nace con tres valores |
+| D-82 | `bitacora_de_transicion` en `TransicionEtapa` y tres códigos de error | produccion | aprobada | La asociación R080 se llama `bitacora_de_transicion` para no chocar con el accesorio `bitacora` de `OrigenDocumento`; `causa_invalida`, `descripcion_larga` y `lote_sin_plantas` entran en los códigos de `docs/api/produccion.md` |

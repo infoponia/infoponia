@@ -12,7 +12,7 @@
 from collections import defaultdict
 from decimal import Decimal
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -21,7 +21,7 @@ from core.models import Usuario, rol_de
 from inventario.extensiones import USO_NEUTRO, OrdenQueReserva, UsoDeVariedad
 from maestros.extensiones import Aviso, Contenido, Impedimento
 from maestros.models import Invernadero
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra
+from produccion.models import Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import lotes as api_lotes
 from produccion.servicios import ordenes
 
@@ -153,6 +153,20 @@ def avisos_de_cambio_de_tipo(invernadero, tipo_etapa):
                 len(siembras),
             )
         )
+    # PRD-02: las transiciones «a realizar» cuyo destino es una etapa de ese tipo.
+    transiciones = list(
+        TransicionEtapa.objects.filter(
+            invernadero=invernadero, estado_orden=Estado.A_REALIZAR, etapa_destino__tipo_etapa=tipo_etapa
+        ).order_by("id")
+    )
+    if transiciones:
+        nombres = ", ".join(t.codigo for t in transiciones)
+        avisos.append(
+            Aviso(
+                f"{_plural(len(transiciones), 'transición a realizar va', 'transiciones a realizar van')} a {tipo_etapa.nombre_etapa}: {nombres}.",
+                len(transiciones),
+            )
+        )
     return avisos
 
 
@@ -269,8 +283,8 @@ def ordenes_que_reservan(ids):
 
 def uso_de_variedad(variedad_ids):
     """`registrar_uso_de_variedad`: `{variedad_id: UsoDeVariedad}`: si tiene lotes (aunque estén terminados), cuántos activos,
-    cuántas órdenes «a realizar» (siembras de la variedad; las transiciones de sus lotes las suma PRD-02) y en qué invernaderos
-    hay lotes activos. Dos consultas."""
+    cuántas órdenes «a realizar» (siembras de la variedad y, desde PRD-02, las transiciones de sus lotes) y en qué invernaderos
+    hay lotes activos. Tres consultas."""
     ids = list(variedad_ids)
     con_lotes, activos, invernaderos = set(), defaultdict(int), defaultdict(set)
     for variedad_id, estado, invernadero_id in Lote.objects.filter(siembra__variedad_id__in=ids).values_list(
@@ -286,6 +300,12 @@ def uso_de_variedad(variedad_ids):
         .values("variedad_id")
         .annotate(n=Count("pk"))
     }
+    for fila in (
+        TransicionEtapa.objects.filter(lote__siembra__variedad_id__in=ids, estado_orden=Estado.A_REALIZAR)
+        .values(variedad_id=F("lote__siembra__variedad_id"))
+        .annotate(n=Count("pk"))
+    ):
+        pendientes[fila["variedad_id"]] = pendientes.get(fila["variedad_id"], 0) + fila["n"]
     resultado = {}
     for variedad_id in ids:
         uso = UsoDeVariedad(

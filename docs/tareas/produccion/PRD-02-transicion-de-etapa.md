@@ -1,6 +1,6 @@
 # PRD-02 · Transición de etapa: planificar, concretar y cancelar (con el núcleo de la merma)
 
-Estado: pendiente | App: produccion | Rama: feature/prd-02-transicion-de-etapa | Ronda: Producción 1
+Estado: hecha el 22/11/2026 (a la espera de su PR y de su revisión) | App: produccion | Rama: feature/prd-02-transicion-de-etapa | Ronda: Producción 1
 
 Depende de: PRD-01 (modelos, lectura, bloqueos, bandeja, `cancelar_orden` y `cancelar_orden_incluida`; si no está hecha y mergeada, frená), y por ella todas las de PRD-01.
 
@@ -71,19 +71,92 @@ Si el tiempo apremia, lo último que se recorta es: la rama de transición de la
   python manage.py test produccion --keepdb --tag concurrencia
   python manage.py test produccion --keepdb --tag migracion
 
-## Verificación a mano (la completa Claude Code al cerrar)
+## Verificación a mano
 
-Hay una migración nueva: `python manage.py migrate` (en `produccion` y `core`). Hace falta lo de PRD-01 más un lote activo en Germinación (concretá una siembra), sectores de Crecimiento con lugar (o los de la etapa que siga en el ciclo), un Agrónomo a cargo y el Capataz del invernadero.
+Hay dos migraciones nuevas: `python manage.py migrate` (en `produccion` y `core`). Hace falta lo de PRD-01 más un lote activo (concretá una siembra y, si querés
+probar el paso a Maduración, un ciclo de tres etapas: Germinación, Crecimiento y Maduración), sectores de las etapas que siguen con lugar, un Agrónomo a cargo
+y el Capataz del invernadero. Un lote recién sembrado está en Germinación: «Nueva transición» lo lleva a Crecimiento.
 
 1. `migrate` pasa sin errores.
-2. «Nueva transición»: se ofrecen solo los lotes trasladables; la etapa destino la fija el sistema; la fecha propuesta es el fin estimado de la etapa actual (o hoy si ya pasó, con los días de atraso). Con otra fecha, se informa la diferencia sin bloquear.
-3. La distribución por sector no deja pasar más que la capacidad libre; con sectores de otro perfil familiar o fuera de servicio, no se ofrecen. Confirmar crea la orden; el Capataz recibe la notificación; «Auditoría» tiene **un** registro `planificacion_transicion`. El lote ya no se puede elegir para otra transición.
-4. Como Capataz: «Concretar transición» propone la fecha de hoy y las cantidades planificadas. Poner una fecha anterior a la fecha mínima da el error con su explicación; una anterior a la creación de la orden se acepta y la notificación lo avisa.
-5. Ubicar menos plantas que las del lote: pide la causa (obligatoria) y el resumen muestra las plantas perdidas. Con 0, error. Confirmar: el lote pasa a la etapa nueva con la cantidad ubicada, el origen queda libre, y el Agrónomo recibe la notificación. «Auditoría» tiene **un** registro `concrecion_transicion`.
-6. En «Lotes activos» de la ficha, el lote tiene la etapa nueva y el costo por planta **igual** que antes de la merma (cambió el costo total, no el unitario). Si la merma superó el 15 % de la cantidad inicial, el Agrónomo y el Gerente tienen la alerta de umbral (una sola vez); con la causa «descarte por selección» no suma.
-7. Cancelar una transición «a realizar» (como Agrónomo): pide el motivo, libera los agujeros y deja al lote disponible para planificar otra.
-8. Dos Agrónomos planifican a la vez la misma transición: uno gana; el otro ve el error, sin 500. Concretar y cancelar a la vez: una sola gana y la otra ve el estado actual.
-9. Sin JavaScript, los pasos 2, 3, 4, 5 y 7 funcionan igual.
-10. Después del merge: verificar en el log de Render que se aplicó la migración nueva.
+2. «Nueva transición» (en «Órdenes de trabajo»): se listan los lotes de tus invernaderos; los que no se pueden trasladar (en la última etapa, con otra transición «a
+   realizar» —dice cuál y para cuándo— o sin Capataz activo) aparecen deshabilitados con su motivo. Al elegir uno, la etapa destino la fija el sistema y la fecha propuesta
+   es el fin estimado de la etapa actual (o hoy, con los días de atraso). Con otra fecha, «Actualizar fechas» informa la diferencia sin bloquear.
+3. La distribución por sector no deja pasar más que la capacidad libre ni menos ni más que las plantas del lote; con sectores de otro perfil familiar o fuera de servicio,
+   no se ofrecen y se dice por qué. «Ver resumen» no escribe; «Confirmar transición» crea la orden; el Capataz recibe la notificación; «Auditoría» tiene **un** registro
+   `planificacion_transicion`. El lote ya no se puede elegir para otra transición.
+4. Como Capataz (celular): «Concretar transición» propone la fecha de hoy y las cantidades planificadas. Una fecha anterior a la mínima da el error con su explicación; una
+   anterior a la creación de la orden se acepta y la notificación lo avisa.
+5. Ubicar menos plantas que las del lote: al pedir el resumen aparece el campo «Causa» (obligatoria) y el resumen muestra las plantas perdidas. Con 0, error. Confirmar: el lote
+   pasa a la etapa nueva con la cantidad ubicada, el origen queda libre, y el Agrónomo recibe la notificación. «Auditoría» tiene **un** registro `concrecion_transicion`.
+6. En «Lotes activos» de la ficha, el lote tiene la etapa nueva y el costo por planta **igual** que antes de la merma (cambió el costo total, no el unitario). Si la merma
+   superó el 15 % de la cantidad inicial, el Agrónomo y el Gerente tienen la alerta de umbral (una sola vez); con la causa «descarte por selección» no suma.
+7. Cancelar una transición «a realizar» (como Agrónomo): muestra el lote, las etapas y los agujeros que libera, pide el motivo y deja al lote disponible para planificar otra.
+8. Dos Agrónomos (dos pestañas) planifican la misma transición a la vez: uno gana; el otro ve el error, sin 500. Concretar y cancelar a la vez: una sola gana y la otra
+   ve el estado actual.
+9. Sin JavaScript, los pasos 2, 3, 4, 5 y 7 funcionan igual (botones «Continuar», «Ver resumen» y «Confirmar»).
+10. Después del merge: verificar en el log de Render que se aplicaron las migraciones nuevas.
 
-## Cierre (la completa Claude Code al cerrar)
+## Cierre
+
+**Qué se hizo.** Se implementaron PROD-PNF-TRN, PROD-CNC-TRN, el núcleo de la merma de un lote en pie (`aplicar_merma`) y la cancelación de una transición
+(extensión 4a de PROD-CNL-ORD), con sus pantallas.
+
+- **Modelos** (migración `produccion/0002_transicion_y_merma`): `TransicionEtapa(OrdenTrabajo, ConCapataz)`, `Merma(Bitacora)` y `AlertaDeMerma`. En `core`, la migración de
+  `choices` `0019` con `planificacion_transicion`, `concrecion_transicion` y `registro_merma` (esta última, de uso propio desde PRD-03). Ninguna migración de datos.
+- **Servicios**: `produccion/servicios/transiciones.py` (lectura, planificar y concretar) y `produccion/servicios/mermas.py` (`aplicar_merma` con la firma completa de D-51,
+  `merma_acumulada`). Los dos tipos de alerta se registran en `ProduccionConfig.ready()`. `lotes.py` completa las fechas de entrada a la etapa, a Maduración y máxima de
+  cosecha; `ordenes.py` y `registrantes.py` suman `TransicionEtapa` a la bandeja, la lista, el traspaso del Capataz, las asignaciones de cuenta, el uso de variedades, el
+  perfil de los sectores y los avisos de cambio de tipo; `cancelar_orden` y `cancelar_orden_incluida` bloquean la variedad y el lote de una transición.
+- **Pantallas**: «Nueva transición» (`/produccion/ordenes/nueva-transicion/`), «Concretar transición» (la misma dirección que «Concretar siembra»: despacha por tipo), la
+  rama de transición del detalle, la lista, la bandeja y «Cancelar orden».
+
+**Pruebas.** `python manage.py test produccion maestros inventario core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: 3408 pruebas, OK.
+`python manage.py test produccion --keepdb --tag concurrencia`: 26 pruebas, OK. `python manage.py test produccion --keepdb --tag migracion`: 0 pruebas (la tarea no tiene
+migraciones de datos). `manage.py check` y `makemigrations --check --dry-run`, sin observaciones. Pruebas nuevas: `test_modelos_transicion` (12), `test_transiciones_lectura` (30),
+`test_repartir_proporcional` (9), `test_mermas_nucleo` (36), `test_prod_pnf_trn` (54), `test_prod_cnc_trn` (46), `test_transiciones_concurrencia` (11), `test_transicion_vistas` (28) y
+ampliaciones de `test_prod_cnl_ord` (12), `test_cancelar_orden_incluida` (4), `test_cancelar_concurrencia` (2) y `core/tests/test_auditoria_produccion` (2).
+La condición 2 de plantas comprometidas queda probada solo llamando a `aplicar_merma` con una transición ajena «a realizar» (desde Concretar Transición no puede dispararse)
+hasta que PRD-03 le dé la pantalla.
+
+**Lo que se implementó distinto de lo escrito** (también en `docs/temas_abiertos.md`):
+
+1. **`TransicionEtapa.bitacora_de_transicion`**, no `bitacora` (como `tipo_orden` en D-81): `OrigenDocumento` ya tiene el accesorio `bitacora` hacia su hija `Bitacora` y Django lo
+   rechaza (`models.E006`). Confirmado por el estudiante.
+2. **Códigos de error que no estaban en `docs/api/produccion.md`**: `causa_invalida` y `descripcion_larga` (el núcleo de la merma y la concreción) y `lote_sin_plantas` (extensión 4a
+   de CNC-TRN).
+3. **Restricciones de base**: `cant_transferido` y `fecha_transicion` se cargan juntas y la cantidad es positiva; que sean nulas si y solo si la orden no está concretada (el
+   estado vive en el padre) y que `Merma.tipo_evento` sea «merma» (una restricción de la hija no ve el padre) lo garantizan los servicios y lo prueban `test_modelos_transicion` y
+   `test_mermas_nucleo`.
+4. **Alertas** (la documentación no daba nombre ni severidad): `produccion_merma_umbral` = «Merma sobre el umbral» (crítica) y `produccion_plantas_comprometidas` = «Plantas
+   comprometidas por una transición» (advertencia), los del prototipo. Las descripciones nunca pasan de 200 caracteres (se acorta el nombre de la variedad con «…»).
+5. **Umbral de merma**: se alerta si la merma acumulada **supera** el porcentaje y el lote **no tuvo** una alerta de umbral (decisión del estudiante), en vez de «cruza por primera
+   vez»: así un lote que ya estaba por encima la recibe aunque el Gerente haya bajado el porcentaje después. «Con el porcentaje en 0» se probó como merma acumulada en 0 %
+   (solo descarte por selección) y umbral en 1 %, porque la configuración admite de 1 a 100.
+6. **`Bitacora.descripcion_evento` de la merma** = «Merma de 12 plantas por plaga.» más la descripción del Capataz (hasta 300 caracteres).
+7. **`lotes_trasladables(actor)`** devuelve todos los lotes del Agrónomo con su `motivo` si no se pueden trasladar (`ultima_etapa`, `transicion_a_realizar` o `sin_capataz`), no
+   solo los trasladables: la pantalla los muestra deshabilitados con su explicación (extensiones 3a y 3b).
+8. **`DatosDeTransicion`** suma `cantidad` y `etapa_actual_id` (lo que la persona vio) y **`DatosDeConcrecionDeTransicion`**, `cantidad`: si cambiaron al confirmar,
+   `cambio_simultaneo` con el dato nuevo (extensiones 13a, 13b y 13c). Se comparan después de bloquear el lote.
+9. **Planificar**: la pasada liviana de antes de bloquear no mira «otra transición a realizar»; se mira con el lote bloqueado, para que planificar otra transición no se rechace
+   de más mientras la cancelación de la anterior está por confirmarse.
+10. **Auditoría de la cancelación**: el lote no figura entre los afectados de `cancelacion_orden` (no cambia). **`concrecion_transicion`** solo registra `cantidad_actual` y
+    `costo_acumulado` del lote cuando hubo merma (D-36 rechaza un cambio sin diferencia).
+11. **`perfil_de_sector`** cuenta las transiciones «a realizar» hacia el sector, `avisos_de_cambio_de_tipo` las transiciones que van a ese tipo de etapa y `uso_de_variedad`
+    las de los lotes de la variedad (disparadores de PRD-01).
+12. **`resumen_de_cancelacion`** suma `lote`, `etapa_origen` y `etapa_destino` (nombres; `None` en una siembra).
+13. **`aplicar_merma`** devuelve `ResultadoMerma(merma, costo, alertas)`; `mermas.plantas` (texto «1 planta» / «12 plantas») es público y lo usa también `transiciones.py`.
+14. **Notificación de la concreción**: al Agrónomo a cargo del invernadero (el CU dice «responsable del invernadero»), aunque la haya planificado InfoPonia; sin Agrónomo activo no
+    se avisa a nadie.
+
+**Pantallas: lo que se corrigió del prototipo** (D-61):
+
+- El prototipo recalculaba la distribución, los errores y la fecha máxima al escribir (`trCalc`, `ctCalc`): se reemplazó por «Continuar», «Actualizar fechas», «Ver resumen» y
+  «Confirmar» (`.claude/rules/interfaz.md`); elegir el lote solo redibuja lo que depende de él, con `hx-swap="innerHTML show:none"` y con respaldo sin JavaScript.
+- «Repartir por mí» (`tr-auto`) **no se implementó**: repartir automáticamente entre sectores al planificar necesita una regla de reparto que ningún caso de uso define (el CU
+  dice que el Agrónomo distribuye). Si se quiere, hace falta documentarla (L9).
+- El prototipo exigía descripción con la causa «Otra»; el CU la deja opcional (L7: manda el caso de uso).
+- La causa de la merma aparece solo cuando faltan plantas, y quien lo sabe es el servicio (10a), no la pantalla al escribir: aparece al pedir el resumen.
+- Se sumaron lo que el CU pide y el prototipo no tenía: el resumen del paso 11 de «Concretar» con la diferencia con la fecha programada, los sectores que se liberan y la
+  advertencia de Maduración vencida (11a); el motivo de cada lote que no se puede elegir (3a y 3b); el resumen de «Cancelar orden» con el lote y las etapas (4a); la
+  distribución real frente a la planificada.
+- «Concretar transición» usa campos numéricos con la propuesta como texto de ayuda (no «steppers»): en el celular abre el teclado numérico y sin JavaScript funciona igual.

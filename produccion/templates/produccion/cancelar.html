@@ -7,6 +7,7 @@ POST: funciona sin JavaScript. Recibe «resumen» (ResumenDeCancelacion: orden, 
   <a class="back" href="{% url 'produccion:orden' resumen.orden.pk %}">{% icono "chev" 14 %} Orden {{ resumen.orden.codigo }}</a>
   <div class="page-h"><h1>Cancelar la orden <span class="mono">{{ resumen.orden.codigo }}</span></h1><div class="sub">{{ resumen.orden.invernadero.nombre_invernadero }} · para el {{ resumen.orden.fecha_programada_orden|date:"d/m/Y" }}</div></div>
   <div class="card" style="margin-bottom:12px"><div class="card-h"><h3>Lo que libera la cancelación</h3></div><div class="card-b">
+    {% if resumen.lote %}<p class="sm"><b>Lote:</b> <span class="mono">{{ resumen.lote.codigo }}</span> · {{ resumen.etapa_origen }} → {{ resumen.etapa_destino }}. El lote conserva su etapa y queda sin transición a realizar.</p>{% endif %}
     {% if resumen.reservas %}<p class="sm"><b>Reservas de insumo que se cancelan</b></p><ul>{% for r in resumen.reservas %}<li>{{ r.nombre }}: <span class="mono">{{ r.cantidad|cantidad }}</span></li>{% endfor %}</ul>{% else %}<p class="muted sm">No tiene reservas de insumo.</p>{% endif %}
     {% if resumen.sectores %}<p class="sm" style="margin-top:10px"><b>Agujeros que se liberan</b></p><ul>{% for sector, agujeros in resumen.sectores %}<li>{{ sector.nombre_sector }}: <span class="mono">{{ agujeros }}</span></li>{% endfor %}</ul>{% endif %}
   </div></div>

@@ -1,0 +1,14 @@
+## D-82 — `TransicionEtapa.bitacora_de_transicion` y tres códigos de error de la transición y la merma
+
+- Fecha: 22/11/2026
+- Decidió: el estudiante, al cerrar PRD-02 (aprobada el 22/11/2026, a propuesta de Claude Code); sin reabrir D-81.
+- Antes:
+  - `docs/modelo/produccion.md` llama `bitacora` (R080) a la asociación uno a uno de `TransicionEtapa` con su registro de bitácora; `contabilidad.OrigenDocumento` ya tiene el accesorio inverso `bitacora` hacia su hija `Bitacora`, y Django rechaza el mismo nombre en la hija (`models.E006`). Es el mismo tipo de choque que resolvió D-81 con `tipo_orden`.
+  - `docs/api/produccion.md`, sección 1, no tenía código para una causa de merma inválida, una descripción de merma demasiado larga ni un lote sin plantas al concretar una transición.
+- Decisión:
+  1. La asociación R080 se llama `TransicionEtapa.bitacora_de_transicion` (`OneToOneField` nula a `Bitacora`, nula hasta concretar). El resto de la ficha no cambia.
+  2. Se agregan tres códigos de `ErrorDeProduccion`: `causa_invalida` (la causa de una merma no es una de las de un lote en pie; campo `causa`), `descripcion_larga` (la descripción de una merma pasa de 300 caracteres; campo `descripcion`) y `lote_sin_plantas` (extensión 4a de PROD-CNC-TRN: el lote no tiene plantas, la orden sigue «a realizar» y el Agrónomo debe cancelarla).
+- Por qué: con el nombre del modelo la migración ni siquiera se puede armar; los tres códigos hacen que la pantalla muestre el error de su campo y que las pruebas lo distingan de otros rechazos, y son los que PRD-03 y PRD-04 vuelven a usar.
+- Fuentes: `docs/modelo/produccion.md` (`TransicionEtapa`, R080); PROD-CNC-TRN (extensión 4a) y PROD-REG-MRM (regla «Causa», extensión 10a.3a); D-50; D-81.
+- Consecuencias: corregir `docs/modelo/produccion.md` (ficha `TransicionEtapa`) y `docs/api/produccion.md` (sección 1: los tres códigos); las tareas posteriores que nombren R080 (PRD-03 y PRD-04) usan `bitacora_de_transicion`.
+- Estado: aprobada (22/11/2026)

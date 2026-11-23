@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Nueva transición» (PRD-02, PROD-PNF-TRN, `VIEWS.transicion`): página completa. El bloque que cambia con el lote elegido es «_nueva_transicion_formulario.html» (HTMX lo reemplaza dentro de #transicion-vivo,
+sin mover el scroll ni validar; sin JavaScript, cada botón es un POST común con su «accion»). Solo el Agrónomo a cargo llega acá; el Gerente, 404.{% endcomment %}
+{% block titulo %}Nueva transición · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <div class="page-h"><h1>Planificar transición de etapa</h1><div class="sub">Se traslada el lote entero a la etapa que sigue en su ciclo. Si al trasladar se pierden plantas, el Capataz lo declara cuando concreta la orden. Antes de confirmar vas a ver un resumen.</div></div>
+  <div id="transicion-vivo" hx-target="#transicion-vivo" hx-swap="innerHTML show:none">{% include "produccion/_nueva_transicion_formulario.html" %}</div>
+</div>
+{% endblock %}
