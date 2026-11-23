@@ -259,13 +259,14 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). IOT-06: desactivar, activar y dar de baja; IOT-07:
    `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
 3. **Hardware** (`docs/casos_de_uso/iot/hardware.md`).
-   - IOT-03: la última lectura y la situación por lecturas en la lista y la ficha; los identificadores anunciados (`EquipoAnunciado`) y la
+   - ~~IOT-03: la última lectura y la situación por lecturas en la lista y la ficha; los identificadores anunciados (`EquipoAnunciado`) y la
      compatibilidad contra anuncios reales; `tiene_lecturas(sensor)` con lecturas reales. **Al anunciar equipos, la API llama a
      `recalcular_compatibilidad`** (`iot/servicios/compatibilidad.py`) con los actuadores del sistema: es la única función que calcula y escribe la compatibilidad (D-82: bloquea
-     los invernaderos en orden, después del tipo).
+     los invernaderos en orden, después del tipo).~~ (hecho el 23/11/2026, IOT-03: `resumen_de_equipos` y `situacion_de` por alertas, «Último dato» en la lista y la ficha, `anuncios.registrar_anuncio` y `tiene_lecturas`)
    - IOT-05: `tiene_comandos(actuador)`, `tiene_comando_pendiente(actuador)`, «Comando pendiente» y el historial de comandos de la ficha.
    - IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
-     (`iot/servicios/hardware.py`: hoy no ofrece «Dar de baja», para que ningún botón lleve a un 403).
+     (`iot/servicios/hardware.py`: hoy no ofrece «Dar de baja», para que ningún botón lleve a un 403); y sumar `temp-vieja` (un sensor dado de baja) al cargador de datos de verificación
+     de `iot` (`iot/verificacion.py`) con ese servicio.
    - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.
      **Planificado en el lote I4** (`mantenimiento_automatico.md`).
 4. **Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el

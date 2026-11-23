@@ -149,7 +149,7 @@ apuntando a la alerta.
 
 - R052 y R053 (Hardware y Telemetría): **el IoT usa una sola tabla de vínculo**, `iot.AlertaIot` (D-72, `docs/modelo/iot.md`), con
   `alerta = OneToOneField("maestros.Alerta")`, el sistema y una FK nula a `Hardware` y otra a `Telemetria` (a lo sumo una), como
-  `AlertaComercial` (D-63). `Telemetria` no lleva columna `alerta`.
+  `AlertaComercial` (D-63). `Telemetria` no lleva columna `alerta`. Desde IOT-03, el IoT las crea y las resuelve con `iot/servicios/alertas_iot.py` (`asegurar_alerta_iot` y `resolver_alerta_iot`), que llaman a las funciones de la sección 2 y dejan el `AlertaIot`.
 
 **Orígenes de comercial (D-62, D-63).** `comercial` no agrega columnas a sus clases: guarda el vínculo en su tabla `AlertaComercial`
 (`docs/modelo/comercial.md`), con una FK por origen y exactamente una cargada. C5 quedó reescrita como «a lo sumo un origen por alerta», con

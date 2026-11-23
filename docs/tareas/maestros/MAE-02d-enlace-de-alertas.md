@@ -130,7 +130,7 @@ así que la verificación a mano comprueba que **nada cambió** y que la ruta nu
 lleve a su pantalla (la fila «Dónde se atiende» y el paso por `alertas:ir` desde la campana) lo cubren las pruebas con registrantes falsos;
 a mano se verifica con COM-03b o IOT-04.
 
-**Datos cargados** (`python manage.py cargar_datos_de_verificacion --clave <la de CLAUDE.local.md>`, ya corrido en la base local; se puede
+**Datos cargados** (`python manage.py cargar_datos_de_verificacion` (pide la contraseña de `CLAUDE.local.md`; desde IOT-03 ya no existe `--clave`), ya corrido en la base local; se puede
 volver a correr para repetir la prueba: deja la alerta de nuevo «no leída»):
 el Gerente de la base (`hernanbenitez@gmail.com`, con su propia contraseña: el comando no crea ni toca ningún Gerente, D-09);
 `agronomo@prueba1.local` (a cargo de «Invernadero Verificación 1»), `agronomo@prueba2.local` (a cargo de «Invernadero Verificación 2») y
@@ -166,7 +166,7 @@ Hecha el 22/11/2026 en la rama `feature/mae-02d-enlace-de-alertas`. Sin migracio
   detalle. La vista `alerta` pasa `enlace_de_app` a la plantilla, que suma la fila «Dónde se atiende».
 - `maestros/servicios/invernaderos.py`: `items_de_campana` toma `detalle` y `url` de `enlaces_de_alertas` (una sola consulta, como antes);
   `alertas:ir` solo con el enlace de una app, y el detalle como hoy con el de omisión.
-- `maestros/management/commands/cargar_datos_de_verificacion.py` (ver «Diferencias»).
+- `maestros/management/commands/cargar_datos_de_verificacion.py` (ver «Diferencias»). *(Desde IOT-03, 23/11/2026, el comando es uno solo, en `core`; su lógica vive en `maestros/verificacion.py`, registrada en `MaestrosConfig.ready()`.)*
 
 **Pruebas:** 48 nuevas, ninguna existente modificada ni quitada: `test_enlaces_de_alertas.py` (10), `test_alerta_ir.py` (11),
 `test_cargar_datos_de_verificacion.py` (10), 12 más en `test_cns_alr.py` (6 de `tipos`, 4 del enlace en el servicio y 2 de la fila en la vista) y

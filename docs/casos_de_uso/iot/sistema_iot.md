@@ -344,7 +344,7 @@ Tareas: **IOT-02** (IOT-REG-SIS e IOT-MOD-SIS) e **IOT-06** (IOT-DSC-SIS, IOT-AC
   el primero de `invernaderos_que_consulta` por nombre. Con un invernadero fuera del alcance, 404.
 - **Conectividad (regla «Estado inicial, conectividad y modo» de REG-SIS; regla 3 de IOT-ACT-SIS).** No se guarda:
   `conectividad(nodo, ahora)` devuelve `en_linea` si `nodo.ultima_comunicacion` es más reciente que `minutos_sin_comunicacion`, y
-  `sin_senal` si no; con `ultima_comunicacion` nula, `sin_senal` con el texto «Todavía no se comunicó». La actualiza la API (IOT-03).
+  `sin_senal` si no; con `ultima_comunicacion` nula, `sin_senal` con el texto «Todavía no se comunicó». La actualiza la API del nodo (IOT-03, `nodo.registrar_comunicacion`).
 - **Estado del IoT en la ficha del invernadero.** Punto de extensión nuevo en `maestros` (`docs/api/extensiones_de_maestros.md`, «Estado del
   IoT del invernadero»): `iot` registra `estados_de_sistemas(invernadero_ids)` y `url_de_registro(actor, invernadero)` con
   `registrar_estado_iot` (en `iot/servicios/sistemas.py`); `maestros` los consulta con `estados_iot(ids)`. Con él, `Invernadero.tiene_sistema_iot()` devuelve verdadero si hay un

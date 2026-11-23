@@ -13,7 +13,7 @@ está en `docs/historial.md`, `docs/revisiones_pendientes.md`, `docs/temas_abier
 
 ## Formato de una decisión nueva
 
-Archivo `docs/decisiones/D-NN.md`, con la próxima libre (hoy **D-84**; D-80 es de IOT-01, D-81 de PRD-01, D-82 de IOT-02 y D-83 de PRD-02; las reservas ya se usaron todas: D-55 a D-69 la ronda «Comercial 1», que usó D-66 en el lote C5a, D-67 en el C5b, D-68 en el C6 y **D-69 en el C7**, y **D-70 a D-79 la ronda «IoT 1»**):
+Archivo `docs/decisiones/D-NN.md`. **Numeración:** los números se asignan por orden de creación, no por reserva. Una decisión planificada se nombra por su lote o tarea («la decisión del lote C8», «la de IOT-06») y no lleva número hasta que se escribe. El número se toma **al final**, justo antes de abrir el PR: `git fetch`, mirar `docs/decisiones/` en `main` y usar el siguiente libre. Si dos PR toman el mismo, **renumera el que se mergea segundo** (su archivo, su fila y las citas). Una decisión ya mergeada **no se renumera nunca**. Una prueba lleva el número de una decisión en su nombre solo si esa decisión ya está en `main`; si es nueva en este PR, se nombra por su tarea o su regla. La plantilla de una decisión es esta:
 
 ```
 ## D-NN — Título

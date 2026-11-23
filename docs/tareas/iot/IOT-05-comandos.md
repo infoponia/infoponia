@@ -45,6 +45,13 @@ reglas que emiten solas, de IOT-06.
 - Código a leer: todo `iot/` (lo que dejaron IOT-01 a IOT-03, y IOT-04 si está); `produccion/models.py` (`Bitacora` y su herencia) y sus
   fábricas; `core/models.py` (acciones de auditoría).
 
+## Lo que dejó IOT-03 (cambia lo escrito arriba)
+
+- `explica_un_comando(actuador, estado)` está en `iot/servicios/estados.py` y devuelve falso: completala (D-75, punto 1).
+- Las rutas `comandos` y `comandos/<id>/resultado` hoy caen en la ruta que atrapa todo (`iot/api/urls.py`) y responden 404 `ruta_inexistente`: agregalas **antes** de ella.
+- Seguí el patrón `docs/patrones/api_de_dispositivos.md` (`_atender`, `_recibir`, el orden de `docs/api/nodo/respuestas_y_errores.md`, sección 3) y la auditoría de `iot/servicios/auditoria_nodo.py`.
+- El modo del nodo está en `NodoCentral.modo` (`remoto` o `local`): en `local` no se entregan comandos.
+
 ## Límites
 
 - Crea modelos: **`RegistroComando`** (hija de `produccion.Bitacora`, `docs/modelo/iot.md`), con su migración de `iot`
