@@ -1,0 +1,10 @@
+{% load iconos %}{% comment %}Pestaña «Bitácora» de la ficha del invernadero (PRD-03, `bitTab`): los botones de registro (solo el Agrónomo a cargo, con el invernadero ya elegido: extensión 1a de PROD-REG-APL) y el listado con sus filtros
+(«_bitacora_listado.html»). Recibe lo de `contexto_de_la_consulta`: «pagina», «tipos», «valores», «consulta», «puede_registrar». Se arma sin `request`: los filtros y las páginas van por la ruta de la bitácora
+(GET), con HTMX dentro de #bitacora-resultados y, sin JavaScript, abriendo la página completa. Todo se escapa.{% endcomment %}
+{% if puede_registrar %}
+<div class="row" style="margin-top:12px;gap:8px">
+  <a class="btn btn-ghost" href="{% url 'produccion:registrar_evento' %}?invernadero={{ pagina.invernadero.pk }}">{% icono "plus" 15 %} Registrar evento</a>
+  <a class="btn btn-primary" href="{% url 'produccion:registrar_aplicacion' %}?invernadero={{ pagina.invernadero.pk }}">{% icono "plus" 15 %} Registrar aplicación</a>
+</div>
+{% endif %}
+{% include "produccion/_bitacora_listado.html" %}

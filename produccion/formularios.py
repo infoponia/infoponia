@@ -7,7 +7,7 @@ from datetime import date
 
 from django.utils import timezone
 
-from produccion.servicios import siembras, transiciones
+from produccion.servicios import aplicaciones, bitacora, mermas, siembras, transiciones
 
 PRIORIDADES = (("", "Sin prioridad (cuenta como media)"), ("alta", "Alta"), ("media", "Media"), ("baja", "Baja"))
 
@@ -128,4 +128,102 @@ def concrecion_de_transicion_desde_post(datos):
         causa=datos.get("causa", ""),
         descripcion=datos.get("descripcion", ""),
         cantidad=entero(datos.get("cantidad_vista")),
+    )
+
+
+# ---- Registrar merma, aplicación de insumos y evento, y consultar la bitácora (PRD-03) ----
+
+
+def pares(texto):
+    """`"3:10,4:2"` → `((3, "10"), (4, "2"))`: lo que las pantallas guardan en un campo oculto de «lo que se vio» (12a y 10d). Vacío → `()`."""
+    resultado = []
+    for parte in str(texto or "").split(","):
+        izquierda, _, derecha = parte.partition(":")
+        if entero(izquierda) is not None:
+            resultado.append((entero(izquierda), derecha.strip()))
+    return tuple(resultado)
+
+
+def _con_prefijo(datos, prefijo):
+    """`{id: valor}` de los campos `<prefijo>_<id>` del formulario."""
+    resultado = {}
+    for clave, valor in datos.items():
+        if clave.startswith(prefijo + "_") and entero(clave[len(prefijo) + 1 :]) is not None:
+            resultado[entero(clave[len(prefijo) + 1 :])] = valor
+    return resultado
+
+
+def merma_desde_post(datos, con_vistos=True):
+    """`DatosDeMerma` desde el formulario: una cantidad por sector (`cant_<sector>`; vacía = 0; un texto que no es un número se pasa tal cual y el
+    servicio lo rechaza), la causa, la descripción y, con `con_vistos`, lo que la persona vio (`visto_cantidad` y `visto_ocupados`, para la extensión 10d).
+    «Ver resumen» no los usa (`con_vistos=False`): lo visto es lo que mostró el resumen; solo «Confirmar» lo compara."""
+    cantidades = []
+    for sector_id, texto in sorted(_con_prefijo(datos, "cant").items()):
+        texto = str(texto).strip()
+        cantidades.append((sector_id, 0 if texto == "" else (entero(texto) if entero(texto) is not None else texto)))
+    visto = pares(datos.get("visto_ocupados"))
+    return mermas.DatosDeMerma(
+        lote_id=entero(datos.get("lote")),
+        cantidades=tuple(cantidades),
+        causa=datos.get("causa", ""),
+        descripcion=datos.get("descripcion", ""),
+        cantidad_actual=entero(datos.get("visto_cantidad")) if con_vistos else None,
+        ocupados=(
+            tuple((s, int(v)) for s, v in visto)
+            if con_vistos and "visto_ocupados" in datos and all(entero(v) is not None for _, v in visto)
+            else None
+        ),
+    )
+
+
+def aplicacion_desde_post(datos, existencia_ids, con_vistos=True):
+    """`DatosDeAplicacion` desde el formulario: el alcance (`alcance` y `sectores`), una cantidad por insumo (`cantidad_<existencia>`; vacía = no se usó), el
+    reparto corregido de un insumo con vencimiento (`reparto_<existencia>_<lote>`), la descripción y lo que la persona vio (`vistos_<existencia>` y
+    `plantas_vistas`, para la extensión 12a; solo con `con_vistos`, como en la merma). Un número que no es un número lo rechaza el servicio."""
+    lineas = []
+    for existencia_id in existencia_ids:
+        texto = str(datos.get(f"cantidad_{existencia_id}", "")).strip()
+        if texto == "":
+            continue
+        reparto = tuple(
+            (lote_id, cantidad(valor))
+            for lote_id, valor in sorted(_con_prefijo(datos, f"reparto_{existencia_id}").items())
+            if str(valor).strip() != ""
+        )
+        vistos = datos.get(f"vistos_{existencia_id}") if con_vistos else None
+        lineas.append(
+            aplicaciones.LineaDeAplicacion(
+                existencia_id, cantidad(texto), reparto or None, None if vistos is None else tuple((l, d) for l, d in pares(vistos))
+            )
+        )
+    plantas = datos.get("plantas_vistas") if con_vistos else None
+    return aplicaciones.DatosDeAplicacion(
+        invernadero_id=entero(datos.get("invernadero")),
+        alcance=datos.get("alcance", "todo"),
+        sector_ids=tuple(i for i in (entero(s) for s in datos.getlist("sectores")) if i is not None),
+        lineas=tuple(lineas),
+        descripcion=datos.get("descripcion", ""),
+        plantas_vistas=None if plantas is None else tuple((l, int(v)) for l, v in pares(plantas) if entero(v) is not None),
+    )
+
+
+def evento_desde_post(datos):
+    """`DatosDeEvento` desde el formulario."""
+    return bitacora.DatosDeEvento(
+        invernadero_id=entero(datos.get("invernadero")),
+        descripcion=datos.get("descripcion", ""),
+        lote_id=entero(datos.get("lote")),
+        sector_id=entero(datos.get("sector")),
+    )
+
+
+def filtros_de_bitacora(datos):
+    """`FiltrosDeBitacora` desde la consulta (`q`, `tipo`, `lote`, `sector`, `desde`, `hasta`)."""
+    return bitacora.FiltrosDeBitacora(
+        texto=datos.get("q", ""),
+        tipo=datos.get("tipo", ""),
+        lote_id=entero(datos.get("lote")),
+        sector_id=entero(datos.get("sector")),
+        desde=fecha(datos.get("desde", "")),
+        hasta=fecha(datos.get("hasta", "")),
     )

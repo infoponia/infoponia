@@ -21,7 +21,7 @@ Los servicios están en `produccion/servicios/<entidad>.py`; un caso de uso = un
 Cada par `resumen_de_…` / `datos_de_…` **no escribe** y devuelve lo que muestra la pantalla (valores propuestos, advertencias, errores por campo).
 
 Todas: reciben al actor, verifican su rol y que siga activo **después de bloquear**, y lanzan `produccion.errores.ErrorDeProduccion(codigo, mensaje, campo=None)` para cualquier rechazo de negocio. Códigos que usan en común con las otras apps: `cambio_simultaneo`, `sin_permiso`, `invernadero_inactivo`.
-Códigos propios: `orden_no_pendiente`, `sin_capataz_activo`, `variedad_incompatible`, `semilla_no_habilitada`, `stock_insuficiente`, `capacidad_insuficiente`, `distribucion_incompleta`, `orden_duplicada`, `fecha_invalida`, `cantidad_invalida`, `causa_obligatoria`, `motivo_obligatorio`, `motivo_largo`, `lote_con_transicion`, `lote_no_trasladable`, `sector_no_elegible`, `orden_no_cancelable` (PRD-01, D-67 punto 1: `cancelar_orden` con un tipo que no cancela `produccion`).
+Códigos propios: `orden_no_pendiente`, `sin_capataz_activo`, `variedad_incompatible`, `semilla_no_habilitada`, `stock_insuficiente`, `capacidad_insuficiente`, `distribucion_incompleta`, `orden_duplicada`, `fecha_invalida`, `cantidad_invalida`, `causa_obligatoria`, `motivo_obligatorio`, `motivo_largo`, `lote_con_transicion`, `lote_no_trasladable`, `sector_no_elegible`, `orden_no_cancelable` (PRD-01, D-67 punto 1: `cancelar_orden` con un tipo que no cancela `produccion`), `causa_invalida`, `descripcion_larga` y `lote_sin_plantas` (PRD-02, D-83), y los de PRD-03: `lote_no_activo`, `descripcion_obligatoria`, `sin_sectores`, `sin_insumos`, `insumo_no_aplicable`, `insumo_repetido`, `reparto_supera_lote`, `distribucion_incompleta` y `filtro_invalido`. `cantidad_invalida` y `cambio_simultaneo` también llevan `datos` (los valores vigentes: lo ocupado por sector, los lotes y las plantas que cambiaron).).
 
 ### `cancelar_orden_incluida`
 
@@ -101,7 +101,7 @@ Un registro por CU, con todo lo tocado como afectado. Decimales y fechas **como 
 | Función | CU | Quién actúa | Resultado |
 |---|---|---|---|
 | `mermas.registrar_merma(actor, datos) -> Merma` | PROD-REG-MRM (lote en pie) | Capataz asignado o Agrónomo a cargo | La merma |
-| `aplicaciones.registrar_aplicacion(actor, datos) -> AplicacionInsumos` | PROD-REG-APL | Agrónomo o Capataz | La aplicación, con sus consumos |
+| `aplicaciones.registrar_aplicacion(actor, datos) -> ResultadoDeAplicacion(aplicacion, lineas)` | PROD-REG-APL | Agrónomo o Capataz | La aplicación y, por insumo, una `LineaDeResumen` (cantidad, lotes de insumo de los que salió y, **solo si actúa un Agrónomo**, faltante, valor, destino, reparto y aviso; al Capataz, `None`) |
 | `bitacora.registrar_evento(actor, datos) -> Bitacora` | PROD-REG-EVT | Agrónomo o Capataz | El registro |
 | `sectores_fuera_de_servicio.poner_fuera_de_servicio(actor, datos) -> FueraDeServicio` | PROD-PNR-FDS | Agrónomo a cargo | El registro «Fuera de servicio» |
 
@@ -119,6 +119,10 @@ Un registro por CU, con todo lo tocado como afectado. Decimales y fechas **como 
 |---|---|
 | `bitacora.consultar_bitacora(actor, invernadero_id, filtros, pagina)` | Página de 50 registros, del más reciente al más antiguo; una consulta por tabla |
 | `bitacora.invernaderos_de_bitacora(actor)` | Agrónomo, los suyos; Gerente, todos (también de baja) |
+| `alcance.invernaderos_del_actor(actor)`, `alcance.invernadero_del_actor(actor, id)` | Los invernaderos activos donde el Capataz está asignado o el Agrónomo está a cargo; `sin_permiso`, `invernadero_inactivo` o 404 |
+| `mermas.lotes_con_merma_posible(actor, invernadero_id)`, `datos_de_merma(actor, lote_id)`, `resumen_de_merma(actor, datos)` | Los lotes activos (lista vacía = extensión 4b), la propuesta del paso 6 y el resumen del paso 8 (sin escribir) |
+| `aplicaciones.sectores_de_aplicacion`, `insumos_aplicables(actor, invernadero_id)` (`precio` y `destino`, `None` para el Capataz), `resumen_de_aplicacion(actor, datos)`, `plantas_del_alcance(actor, datos)` | Lo de los pasos 4, 6 y 10, y las plantas por lote del alcance para la extensión 12a |
+| `bitacora.datos_de_evento(actor, invernadero_id=None)`, `bitacora.TIPOS_DE_FILTRO`, `FiltrosDeBitacora` | La propuesta de «Otro evento» y los tipos que ofrece el filtro; `PaginaDeBitacora` trae `lotes` y `sectores` para los filtros |
 | `aplicaciones.insumos_aplicables(actor, invernadero_id)` | Insumos con consumo directo, habilitados, activos y con stock libre; sin valores si actúa un Capataz |
 | `mermas.merma_acumulada(lote)` | Porcentaje sobre la cantidad inicial, sin «descarte por selección» |
 | `costos.repartir_en_centavos(monto, plantas_por_lote)` | Parte de cada lote (`docs/patrones/costo_del_lote.md`) |

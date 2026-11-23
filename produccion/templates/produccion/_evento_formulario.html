@@ -1,0 +1,40 @@
+{% load iconos produccion %}{% comment %}El formulario de «Otro evento»: lo que HTMX reemplaza dentro de #evento-vivo. Recibe «propuesta» (PropuestaDeEvento: invernaderos, invernadero, lotes, sectores), «invernadero_id», «valores» y «errores» ({campo: mensaje}).
+Con un solo invernadero, viene elegido (regla 1). Cambiar el invernadero solo redibuja lotes y sectores, sin validar. «Registrar evento» valida y escribe. Todo se escapa.{% endcomment %}
+<form id="evento-form" method="post" action="{% url 'produccion:registrar_evento' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general or errores.invernadero %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.invernadero }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      {% if not propuesta.invernaderos %}
+      <div class="empty"><b>No tenés invernaderos activos</b><span>Cuando tengas uno a tu cargo o asignado, vas a poder registrar eventos.</span></div>
+      {% else %}
+      <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+        {% if propuesta.invernaderos|length == 1 %}<b class="lockedval">{{ propuesta.invernaderos.0.nombre_invernadero }}</b><input type="hidden" name="invernadero" value="{{ propuesta.invernaderos.0.pk }}">
+        {% else %}
+        <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'produccion:registrar_evento' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for i in propuesta.invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>{% endif %}</div>
+      {% if propuesta.invernadero %}
+      <div class="fld"><label for="lote">Lote (opcional)</label>
+        <select class="field-input" id="lote" name="lote" data-desplegable>
+          <option value="">Ninguno: es del invernadero</option>
+          {% for lote_id, codigo, variedad in propuesta.lotes %}<option value="{{ lote_id }}"{% if valores.lote == lote_id|stringformat:"s" %} selected{% endif %}>{{ codigo }} · {{ variedad }}</option>{% endfor %}
+        </select>
+        {% if errores.lote %}<div class="err">{{ errores.lote }}</div>{% else %}<div class="hint">Si el evento afecta a un lote en particular.</div>{% endif %}</div>
+      <div class="fld"><label for="sector">Sector (opcional)</label>
+        <select class="field-input" id="sector" name="sector" data-desplegable>
+          <option value="">Ninguno: es del invernadero</option>
+          {% for sector_id, nombre in propuesta.sectores %}<option value="{{ sector_id }}"{% if valores.sector == sector_id|stringformat:"s" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+        </select>
+        {% if errores.sector %}<div class="err">{{ errores.sector }}</div>{% else %}<div class="hint">Solo un sector. Si afecta a más de uno, registralo sin sector y contalo en la descripción.</div>{% endif %}</div>
+      <div class="fld"><label for="descripcion">Descripción<span class="req" aria-hidden="true"> *</span></label>
+        <textarea class="field-input" id="descripcion" name="descripcion" rows="4" placeholder="Ej. Corte de energía de 40 minutos; el riego se restableció con el generador."{% if errores.descripcion %} aria-invalid="true"{% endif %}>{{ valores.descripcion }}</textarea>
+        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 500 caracteres.</div>{% endif %}</div>
+      {% endif %}
+      {% endif %}
+    </div>
+    {% if propuesta.invernadero %}<div class="footbar"><button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Registrar evento</button><a class="btn btn-ghost" href="{% url 'produccion:registrar' %}">Cancelar</a></div>{% endif %}
+  </div>
+</form>

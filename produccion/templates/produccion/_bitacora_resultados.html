@@ -1,0 +1,37 @@
+{% load iconos produccion %}{% comment %}Los registros de la bitácora de un invernadero, agrupados por día y de a 50 (PROD-CNS-BIT, reglas 3 a 8): lo que HTMX reemplaza dentro de #bitacora-resultados. Recibe «pagina» (PaginaDeBitacora: dias, total,
+pagina, paginas, hay_filtros), «consulta» (los filtros como texto de URL, para paginar) y «error_de_filtro». Toda la información de un registro se ve acá: no hay pantalla de detalle (regla 7). Sin registros, o sin coincidencias, se
+informa y se ofrece «Quitar filtros» (regla 8). Todo se escapa: las descripciones las escribió una persona.{% endcomment %}
+{% if error_de_filtro %}<div class="err" role="alert">{{ error_de_filtro }}</div>{% endif %}
+{% if pagina.total == 0 %}
+  {% if pagina.hay_filtros %}
+  <div class="empty"><b>Ningún registro coincide con los filtros</b><span>Probá con otros filtros o <a href="{% url 'produccion:bitacora' %}?invernadero={{ pagina.invernadero.pk }}" hx-get="{% url 'produccion:bitacora' %}?invernadero={{ pagina.invernadero.pk }}" hx-target="#bitacora-resultados" hx-swap="innerHTML show:none">quitá los filtros</a>.</span></div>
+  {% else %}
+  <div class="empty">{% icono "clock" 28 %}<b>Sin eventos registrados</b><span>La bitácora se arma con cada siembra, transición, merma, aplicación de insumos y evento registrado.</span></div>
+  {% endif %}
+{% else %}
+  <p class="sm muted" role="status">{{ pagina.total }} registro{{ pagina.total|pluralize }}{% if pagina.paginas > 1 %} · página {{ pagina.pagina }} de {{ pagina.paginas }}{% endif %}</p>
+  {% for dia in pagina.dias %}
+  <h2 class="sm" style="margin:14px 0 6px">{{ dia.fecha|date:"l j \d\e F \d\e Y" }}</h2>
+  <div class="card"><div class="card-b flush"><table class="data-table">
+    <thead><tr><th>Hora</th><th>Tipo</th><th>Lote</th><th>Sectores</th><th>Descripción</th><th>Registró</th></tr></thead>
+    <tbody>
+    {% for r in dia.registros %}
+    <tr>
+      <td class="mono">{{ r.hora|time:"H:i" }}</td>
+      <td>{{ r.tipo_texto }}</td>
+      <td class="mono">{{ r.lote|default:"—" }}</td>
+      <td>{{ r.sectores|join:", "|default:"—" }}</td>
+      <td>{{ r.descripcion|default:"—" }}{% if r.consumos %}<ul class="sm" style="margin:4px 0 0 16px">{% for c in r.consumos %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}</td>
+      <td>{{ r.responsable }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div></div>
+  {% endfor %}
+  {% if pagina.paginas > 1 %}
+  <nav class="row" style="margin-top:12px;gap:8px" aria-label="Páginas de la bitácora">
+    {% if pagina.pagina > 1 %}<a class="btn btn-ghost btn-sm" href="{% url 'produccion:bitacora' %}?{{ consulta }}&pagina={{ pagina.pagina|add:'-1' }}" hx-get="{% url 'produccion:bitacora' %}?{{ consulta }}&pagina={{ pagina.pagina|add:'-1' }}" hx-target="#bitacora-resultados" hx-swap="innerHTML show:none">Anterior</a>{% endif %}
+    {% if pagina.pagina < pagina.paginas %}<a class="btn btn-ghost btn-sm" href="{% url 'produccion:bitacora' %}?{{ consulta }}&pagina={{ pagina.pagina|add:'1' }}" hx-get="{% url 'produccion:bitacora' %}?{{ consulta }}&pagina={{ pagina.pagina|add:'1' }}" hx-target="#bitacora-resultados" hx-swap="innerHTML show:none">Siguiente</a>{% endif %}
+  </nav>
+  {% endif %}
+{% endif %}

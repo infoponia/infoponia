@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Registrar merma» (PRD-03, PROD-REG-MRM, `VIEWS.merma`): página completa. El bloque que cambia con el invernadero y el lote es «_merma_formulario.html» (HTMX lo reemplaza dentro de #merma-vivo, sin mover el
+scroll ni validar; sin JavaScript, cada botón es un POST común con su «accion»). Solo el Agrónomo a cargo y el Capataz asignado llegan acá; el Gerente, 404.{% endcomment %}
+{% block titulo %}Registrar merma · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:registrar' %}">{% icono "chev" 14 %} Registrar en bitácora</a>
+  <div class="page-h"><h1>Registrar merma</h1><div class="sub">Elegí el invernadero y el lote, indicá cuántas plantas se perdieron en cada sector y la causa. Antes de confirmar vas a ver un resumen.</div></div>
+  <div id="merma-vivo" hx-target="#merma-vivo" hx-swap="innerHTML show:none">{% include "produccion/_merma_formulario.html" %}</div>
+</div>
+{% endblock %}

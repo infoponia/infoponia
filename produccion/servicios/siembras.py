@@ -586,10 +586,13 @@ def planificar_siembra(actor, datos):
             equivalencias={"sector_no_disponible": ("sector_no_elegible", "distribucion")},
         )
         ids_de_existencias = sorted({pronto.existencia_semilla.pk, *(e.pk for e, _ in pronto.adicionales)})
+        # Orden de docs/patrones/stock.md, sección 5: `Insumo` antes que `InsumoInvernadero` (corregido en PRD-03: la aplicación de
+        # insumos sigue ese orden y, con el inverso, una aplicación y una siembra sobre el mismo insumo podían trabarse entre sí).
+        insumo_ids = set(InsumoInvernadero.objects.filter(pk__in=ids_de_existencias).values_list("insumo_id", flat=True))
+        list(Insumo.objects.select_for_update(no_key=True).filter(pk__in=insumo_ids).order_by("pk"))
         existencias = list(
             InsumoInvernadero.objects.select_for_update(no_key=True).filter(pk__in=ids_de_existencias).order_by("pk")
         )
-        list(Insumo.objects.select_for_update(no_key=True).filter(pk__in={e.insumo_id for e in existencias}).order_by("pk"))
         plan = _verificar(actor, datos)  # extensión 18b: todo de nuevo, con lo bloqueado
         if plan.capataz.pk != capataz_id:
             raise _error("cambio_simultaneo", "Mientras se confirmaba, cambió el Capataz del invernadero. Volvé a intentarlo.")
@@ -952,8 +955,9 @@ def concretar_siembra(actor, orden_id, datos):
         _bloquear(variedades.bloquear_variedad, siembra.variedad_id, equivalencias={"variedad_inactiva": ("variedad_inactiva", "variedad")})
         _bloquear(api_sectores.bloquear_sectores, siembra.invernadero_id, [o.sector_id for o, _ in pronto.sembrado])
         existencias_ids = sorted({l.existencia.pk for l in pronto.lineas})
-        list(InsumoInvernadero.objects.select_for_update(no_key=True).filter(pk__in=existencias_ids).order_by("pk"))
+        # `Insumo` antes que `InsumoInvernadero` (stock.md, sección 5; corregido en PRD-03, ver arriba).
         list(Insumo.objects.select_for_update(no_key=True).filter(pk__in={l.existencia.insumo_id for l in pronto.lineas}).order_by("pk"))
+        list(InsumoInvernadero.objects.select_for_update(no_key=True).filter(pk__in=existencias_ids).order_by("pk"))
         list(Siembra.objects.select_for_update(no_key=True).filter(pk=orden_id))
         list(ReservaInsumo.objects.select_for_update(no_key=True).filter(orden_id=orden_id).order_by("pk"))
         list(OcupacionSector.objects.select_for_update(no_key=True).filter(orden_id=orden_id).order_by("pk"))

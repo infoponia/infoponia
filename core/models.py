@@ -683,6 +683,9 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_TRANSICION = "planificacion_transicion", "Planificación de transición"
         CONCRECION_TRANSICION = "concrecion_transicion", "Concreción de transición"
         REGISTRO_MERMA = "registro_merma", "Registro de merma"
+        # Aplicación de insumos y otro evento (PRD-03, D-51 punto 9): un registro por caso de uso.
+        REGISTRO_APLICACION = "registro_aplicacion", "Registro de aplicación de insumos"
+        REGISTRO_EVENTO = "registro_evento", "Registro de evento"
         # Tipos de actuador del IoT (IOT-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_TIPO_ACTUADOR = "alta_tipo_actuador", "Alta de tipo de actuador"
         MODIFICACION_TIPO_ACTUADOR = "modificacion_tipo_actuador", "Modificación de tipo de actuador"
@@ -807,6 +810,16 @@ class RegistroAuditoria(models.Model):
         "merma": "Merma",
         "cantidad_merma": "Plantas perdidas",
         "causa_merma": "Causa de la merma",
+        # Aplicación de insumos y otro evento (PRD-03): montos y cantidades van como texto. «invernadero», «sectores», «consumos»,
+        # «bitacoras», «lotes_de_insumo», «lote», «costo_acumulado», «alertas_creadas» y «movimientos» ya existen.
+        "aplicacion": "Aplicación de insumos",
+        "evento": "Evento",
+        "alcance": "Alcance",
+        "imputaciones": "Imputaciones de costo",
+        "descripcion_evento": "Descripción",
+        "monto_consumo": "Valor del consumo",
+        "cantidad_consumida": "Cantidad usada",
+        "faltante_sin_lote": "Faltante sin lote",
         # Tipos de actuador (IOT-01): listas de referencias a sus acciones en los datos del caso de uso («nombre» y «estado» ya existen).
         "tiempo_minimo_entre_comandos": "Tiempo mínimo entre comandos (s)",
         # Sistema IoT (IOT-02): el nodo central y el rango de la solución. «invernadero» ya existe.
@@ -1071,6 +1084,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_TRANSICION,
         RegistroAuditoria.Accion.CONCRECION_TRANSICION,
         RegistroAuditoria.Accion.REGISTRO_MERMA,
+        RegistroAuditoria.Accion.REGISTRO_APLICACION,
+        RegistroAuditoria.Accion.REGISTRO_EVENTO,
         RegistroAuditoria.Accion.ALTA_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.MODIFICACION_TIPO_ACTUADOR,
         RegistroAuditoria.Accion.REACTIVACION_TIPO_ACTUADOR,

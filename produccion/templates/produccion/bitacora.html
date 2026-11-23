@@ -1,0 +1,25 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Bitácora» (PRD-03, PROD-CNS-BIT, `bitTab`): página completa. Recibe «invernaderos» (los que puede consultar la cuenta, también los de baja), «invernadero_id» y, con uno elegido, lo de `contexto_de_la_consulta`
+(«pagina», «tipos», «valores», «consulta», «puede_registrar», «error_de_filtro»). El invernadero se elige con un GET común (funciona sin JavaScript); si hay uno solo, viene elegido (regla 1). Los registros, los filtros y la
+paginación están en «_bitacora_listado.html», que también usa la pestaña de la ficha del invernadero.{% endcomment %}
+{% block titulo %}Bitácora · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page">
+  <div class="page-h"><h1>Bitácora</h1>{% if puede_registrar %}<span class="spacer"></span><a class="btn btn-ghost" href="{% url 'produccion:registrar_evento' %}?invernadero={{ invernadero_id }}">{% icono "plus" 15 %} Registrar evento</a> <a class="btn btn-primary" href="{% url 'produccion:registrar_aplicacion' %}?invernadero={{ invernadero_id }}">{% icono "plus" 15 %} Registrar aplicación</a>{% endif %}</div>
+  {% if not invernaderos %}
+  <div class="empty"><b>No hay invernaderos para consultar</b><span>La bitácora se consulta de un invernadero por vez.</span></div>
+  {% else %}
+  {% if invernaderos|length > 1 or not invernadero_id %}
+  <form class="card" method="get" action="{% url 'produccion:bitacora' %}" style="margin-bottom:12px" aria-label="Elegir invernadero">
+    <div class="fld" style="margin:0"><label for="invernadero">Invernadero</label>
+      <select class="field-input" id="invernadero" name="invernadero" data-desplegable>
+        <option value="">Seleccionar…</option>
+        {% for i in invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}{% if not i.activo %} (dado de baja){% endif %}</option>{% endfor %}
+      </select></div>
+    <button class="btn btn-ghost btn-sm" type="submit" style="margin-top:8px">Ver bitácora</button>
+  </form>
+  {% endif %}
+  {% if pagina %}{% include "produccion/_bitacora_listado.html" %}{% elif not invernadero_id %}<div class="empty"><b>Elegí un invernadero</b><span>Se muestran los registros de uno por vez.</span></div>{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

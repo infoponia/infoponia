@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Otro evento» (PRD-03, PROD-REG-EVT, `VIEWS.evento`): página completa. El bloque que cambia con el invernadero es «_evento_formulario.html» (HTMX lo reemplaza dentro de #evento-vivo, sin validar; sin JavaScript,
+«Continuar» es un POST común). Un registro de bitácora no se edita ni se borra: si hay un error, se registra otro evento que lo aclare.{% endcomment %}
+{% block titulo %}Otro evento · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:registrar' %}">{% icono "chev" 14 %} Registrar en bitácora</a>
+  <div class="page-h"><h1>Otro evento</h1><div class="sub">Para dejar constancia de un hecho que no es una merma ni una aplicación de insumos. Se registra con la fecha y la hora actuales.</div></div>
+  <div id="evento-vivo" hx-target="#evento-vivo" hx-swap="innerHTML show:none">{% include "produccion/_evento_formulario.html" %}</div>
+</div>
+{% endblock %}
