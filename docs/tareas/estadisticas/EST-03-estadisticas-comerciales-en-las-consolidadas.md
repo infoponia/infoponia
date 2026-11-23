@@ -20,7 +20,7 @@ funciones de `comercial`** (H25: no se recalculan acá), con el período y la co
 
 - Casos de uso: el extracto (EST-CNS-CNS, regla 3.2) y `docs/casos_de_uso/comercial/estadisticas.md` (COM-CNS-EST, su «Servicio»).
 - Decisiones: D-93 (puntos 2 y 4), D-94 (las estadísticas comerciales), D-44.
-- Pantallas: `stCom` (2877), como referencia de lugar; mandan los indicadores de COM-CNS-EST.
+- Pantallas: `stCom` (2908), como referencia de lugar; mandan los indicadores de COM-CNS-EST.
 - Código a leer: lo de EST-02; `comercial/servicios/estadisticas.py` (`filtros_de_estadisticas`, `estadisticas`).
 
 ## Límites

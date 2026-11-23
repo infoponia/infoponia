@@ -28,7 +28,7 @@ especialidades (tipos de insumo) y su baja lógica con reactivación. Lo adminis
 - API: docs/api/direcciones.md (solo la sección «CUIT»).
 - Patrones: docs/patrones/abm.md, docs/patrones/bloqueos.md, docs/patrones/auditoria.md.
 - Pantallas: docs/prototipos/compras_contabilidad/ — leé primero su `README.md`. Funciones: `tabPrv`, `VIEWS.c_prv`, `VIEWS.c_prvform`, `NAV.ger` y
-  `NAV.agr` (líneas 2275 a 2277).
+  `NAV.agr` (líneas 2277 a 2279).
 - Reglas: .claude/rules/pruebas.md, .claude/rules/interfaz.md.
 - Código a leer: el ABM de cliente si ya existe (`comercial/servicios/clientes.py`); si no, `maestros/servicios/cultivos.py` (el ABM más
   parecido); `maestros/validadores.py`, `maestros/servicios/perfil.py` (`_cuit_valido`); `inventario/models.py` (`TipoInsumo`); `inventario/apps.py`

@@ -513,5 +513,5 @@ Modelo: `docs/modelo/compras.md` (`Recepcion`, `DetalleRecepcion`, `DetalleRecep
 
 ### Pantallas (prototipo)
 
-`tabRec` (2409) «Por recibir», `VIEWS.c_rcp` (2559) registrar recepción (con lotes, vencimientos e inconvenientes), `VIEWS.c_flt` (2588) cerrar con
+`tabRec` (2411) «Por recibir», `VIEWS.c_rcp` (2561) registrar recepción (con lotes, vencimientos e inconvenientes), `VIEWS.c_flt` (2590) cerrar con
 faltante. El prototipo ya usa los tipos de inconveniente de P4 (línea 2545) y muestra el atraso sin declararlo.

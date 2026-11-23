@@ -22,8 +22,8 @@ la fila de su tarea al cerrar (M3).
 
 ## 3. Pantallas
 
-Prototipo: `docs/prototipos/compras_contabilidad/` (su README, sección «Estadísticas»). Mandan el caso de uso y D-93 donde el prototipo muestra
-otros números (kilos, pendientes de pago, entregas a tiempo).
+Prototipo: `docs/prototipos/compras_contabilidad/` (su README, sección «Estadísticas»). Ya sigue el caso de uso y D-93; si
+algo difiere, mandan ellos.
 
 ## 4. Lo que queda fuera
 

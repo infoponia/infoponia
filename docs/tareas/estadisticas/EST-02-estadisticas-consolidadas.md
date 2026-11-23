@@ -23,8 +23,8 @@ categoría, y ventas, costos y resultado del libro de gestión. Lo comercial (in
 - Decisiones: D-93, D-86 (lecturas del libro), D-89 (valor recibido), D-90 (correcciones), D-44, D-61.
 - API: docs/api/asientos.md («Lectura»).
 - Modelo: docs/modelo/compras.md (`Recepcion`, `DetalleRecepcion`, `CorreccionRecepcion`), docs/modelo/contabilidad.md (tipos de cuenta).
-- Pantallas: `statsTabs`, `stRes` (2899), `stCmp` (2883), `stRtd` (2891). **Cuidado:** `stCmp` muestra «pendiente de pago hoy» y «entregas a
-  tiempo», que no son del caso de uso (lo primero es del Panel, H27): no van.
+- Pantallas: `statsTabs`, `stRes` (2930), `stCmp` (2914), `stRtd` (2922). `stCmp` ya muestra solo lo del caso de uso (lo recibido por
+  proveedor, por rubro y por mes); «pendiente de pago hoy» es del Panel (H27).
 - Reglas: .claude/rules/pruebas.md, .claude/rules/interfaz.md.
 - Código a leer: lo de EST-01; `contabilidad/servicios/libro.py`; `compras/servicios/` (las lecturas de recepciones y correcciones) y `compras/precios.py`.
 

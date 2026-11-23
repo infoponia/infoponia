@@ -25,8 +25,8 @@ en cero.
 - Decisiones: D-91 (la del pago), D-89 (monto = suma del valor final), D-87 (menú «Pagos a proveedores»), D-84 a D-86, USR-11 (rol Contador), D-44.
 - API: docs/api/asientos.md (`registrar_asiento`, `ejercicio_para`, `puede_registrar_asientos`), docs/api/notificaciones.md.
 - Patrones: docs/patrones/asientos.md, docs/patrones/bloqueos.md.
-- Pantallas: `tabPag` (pestaña «Pagos» de Compras), `VIEWS.c_pag`, `panelCon` y `panelGer` (pagos pendientes). El prototipo preselecciona
-  «Transferencia»: no lo copies, el medio va sin preselección (H23).
+- Pantallas: `tabPag` (pestaña «Pagos» de Compras), `VIEWS.c_pag`, `panelCon` y `panelGer` (pagos pendientes). El medio va sin
+  preselección (H23; el prototipo ya lo corrige: sin elegir, «Elija el medio de pago.»).
 - Reglas: .claude/rules/pruebas.md, .claude/rules/interfaz.md.
 - Código a leer: lo de CMP-04; `contabilidad/servicios/asientos.py`, `contabilidad/apps.py` (el menú «Contabilidad»); `core/acceso.py` (cómo se
   verifica el permiso del responsable contable).

@@ -22,8 +22,8 @@ producción en un período elegido, comparado con el anterior.
 - Casos de uso: el extracto, solo EST-CNS-PRD y «Cómo se aplica (código)».
 - Decisiones: D-93 (la de la ronda), D-37 (con su enmienda), D-14, D-50, D-51, D-92 (punto 12: la carga inicial no es una siembra del período), D-44, D-61.
 - Modelo: docs/modelo/produccion.md (`OrdenTrabajo`, `Siembra`, `Lote`, `Merma`, `Consumo`), docs/modelo/inventario.md (`TipoInsumo`, `Insumo`).
-- Pantallas: docs/prototipos/compras_contabilidad/ — `VIEWS.e_main` (2864, el selector de período y «Comparar»), `stProd` (2871). **Cuidado:** el
-  prototipo muestra kilos y «pérdida sobre lo cosechado»; mandan los seis indicadores del caso de uso y las fórmulas de D-93.
+- Pantallas: docs/prototipos/compras_contabilidad/ — `VIEWS.e_main` (2866, el selector de período y «Comparar»), `stProd` (2892). Ya sigue los seis
+  indicadores del caso de uso y las fórmulas de D-93 (con el selector «Todas / Solo de producción»); sus datos de producción son sintéticos.
 - Reglas: .claude/rules/pruebas.md, .claude/rules/interfaz.md.
 - Código a leer: `produccion/models.py`, `produccion/servicios/lotes.py` y `ordenes.py` (lecturas existentes), `inventario/models.py`
   (`Consumo` está en produccion; `TipoInsumo`, `Insumo`, `InsumoInvernadero`), `iot/alertas.py` (`TIPOS_DE_ALERTA_DE_IOT`), `maestros/models.py`
