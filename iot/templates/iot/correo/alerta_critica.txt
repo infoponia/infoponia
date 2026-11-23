@@ -1,0 +1,13 @@
+{% autoescape off %}Hola,
+
+InfoPonia registró una alerta crítica en {{ invernadero }}.
+
+Tipo: {{ tipo }}
+Invernadero: {{ invernadero }}
+Detalle: {{ descripcion }}
+Fecha y hora: {{ fecha }}
+
+Para verla, entrá a InfoPonia: menú «Alertas».
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

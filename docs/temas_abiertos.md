@@ -485,6 +485,22 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
   D-84, pasó a **D-94** en el mismo paquete (regla de `docs/decisiones/README.md`).
 - **Indicadores de estadísticas (D-93).** Son provisorios: se revisan después de la entrevista a un productor (H26).
 
+## Abiertos desde IOT-04 (23/11/2026)
+
+- **Alertas del Gerente en el panel (regla 7 de IOT-CNS-LEC vs R007 de MAE-02).** El panel arma las alertas con `consultar_alertas(actor, …)`, como dice el documento (opción a); `Alerta.objects.para` le da al Gerente solo las `para_gerente`, y las del IoT van al Agrónomo
+  mientras esté activo: el Gerente que mira un invernadero con Agrónomo ve «0 alertas». Por eso el bloque dice «Las alertas de este invernadero las recibe {Agrónomo}; vos las recibís si no tiene un Agrónomo activo.». **Alternativa (b), a decidir con el análisis:** una consulta propia del panel para que
+  el Gerente vea todas las del invernadero (la regla 7 y la regla 1 dicen que consulta todo).
+- **Paso 9 de la «Verificación a mano» de IOT-04 vs D-76 punto 5.** El paso decía que `--ahora` calculaba «el fotoperíodo de hoy»; manda D-76 (el día en curso nunca se calcula; un día D se calcula desde D+1 a la 01:00). Resuelto en la tarea; queda a modo de registro.
+- **La reserva del correo antes de enviar (D-76 punto 7, corregido el 23/11/2026).** Costo: un proceso que muere entre reservar y enviar pierde ese correo (no hay duplicados). Mientras dura el envío, el panel muestra «Notificada por correo». `intentos_correo` cuenta fallos.
+- **Advertencia 5b de la retención.** Viaja por la sesión y no por `django.contrib.messages`: `core/templates/core/base_con_sesion.html` dibuja todo mensaje que no es de error con el estilo de éxito (un `warning` sale verde). Si se quiere un estilo de advertencia para los mensajes, es un cambio de `core`.
+- **Sin sesión con HTMX.** El proyecto no tiene un patrón para un pedido HTMX sin sesión (solo para la contraseña temporal, con `HX-Redirect`): manda el `LoginRequiredMiddleware` (302 al inicio de sesión) y HTMX mete esa pantalla dentro del panel que se refresca. Decidir un patrón común (por ejemplo, `HX-Redirect`).
+- **Guardados simultáneos desde la pantalla de configuración (límite conocido, igual que MAE-04).** El formulario manda todos los campos: un formulario viejo puede pisar un campo que otra persona acaba de cambiar (gana el último). El servicio solo toca lo que recibe.
+- **El menú lateral de «IoT»** apunta a `/iot/`, que redirige a «Monitoreo»: mejora menor (apuntarlo directo).
+- **Tabla de «Situación de un sensor» (`consultar_lecturas.md`).** Se sumó la fila 4b «Sin lecturas» (el sensor tiene último mensaje pero la retención ya borró sus lecturas); corregida en el extracto el 23/11/2026.
+- **Un Agrónomo dado de baja no recibe el correo** (se pide cuenta activa y con email); si la alerta no tiene a quién mandarse, suma un intento y deja un `logger.warning`. D-76 punto 7 no lo dice: sumarlo a la decisión si se confirma.
+- **Auditoría de la revisión.** Los afectados son solo las alertas (como dice el extracto): una corrida que solo borra lecturas deja `afectados` vacío y el sistema va en `datos`.
+- **Retención.** El «un solo `DELETE` por sistema» es un `queryset.delete()` del ORM (lee los ids y borra por lotes, por las claves `PROTECT`).
+- **Panel.** El identificador de un sensor no es un enlace a su ficha (solo los actuadores tienen «Ver equipo»); el enlace «Registrar este equipo» lleva el identificador en minúsculas (el de la clave de la alerta); los grupos de sensores van siempre abiertos (el botón de plegar del prototipo no se implementa).
 
 ## Abiertos desde COM-01 (23/11/2026)
 

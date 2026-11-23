@@ -70,3 +70,6 @@ equipos de `docs/api/nodo/node-red/README.md`, sección 4, punto 2.
 **Pendiente para IOT-06:** el sensor `norte/sectorA/temp-vieja` (dado de baja, para probar a mano el motivo `equipo_dado_de_baja`). No se carga
 hasta que IOT-06 traiga el servicio de baja de hardware (`baja_hardware`): hoy no existe y la regla es no cargarlo con el ORM. Mientras tanto
 el motivo lo cubren las pruebas automáticas (`iot/tests/test_api_ejemplos.py`).
+
+**Lo que suma IOT-04** (23/11/2026): el invernadero «Sur» (sin Agrónomo y sin sistema IoT: lo opera el Gerente) en la primera corrida; y, en la segunda, las lecturas de **ayer** y de **anteayer** de la temperatura y de **ayer** de la luz de «Norte»: un día entero, una cada 5 minutos (288 por día y sensor), por el servicio de la API de IOT-03
+con su `ahora` simulado (`iot/verificacion.py`: `PASO_EN_MINUTOS`, `DIAS_DE_TEMPERATURA`). Si el día ya tiene lecturas (de una corrida anterior o reales de Node-RED), solo se completan los instantes que faltan. No se carga ninguna comunicación del nodo (evita una alerta crítica y un correo antes de empezar). **El cargador no borra nada.**

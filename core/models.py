@@ -703,6 +703,9 @@ class RegistroAuditoria(models.Model):
         # Lo que el nodo central entrega por la API del IoT (IOT-03, postcondición z de IOT-ENT-INF): lecturas, estados, modo y anuncio. Actor ``None``
         # (InfoPonia, como los procesos de D-56). Nunca lleva el token (D-70).
         ENTREGA_INFORMACION_IOT = "entrega_informacion_iot", "Entrega de información del nodo (IoT)"
+        # La revisión periódica del IoT (IOT-04, postcondición z de IOT-ENT-INF; D-71): un registro por sistema y por corrida, solo si generó o
+        # resolvió alertas o borró lecturas. Actor ``None`` (InfoPonia).
+        REVISION_PERIODICA_IOT = "revision_periodica_iot", "Revisión periódica del IoT"
         # Clientes y vehículos (COM-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_CLIENTE = "alta_cliente", "Alta de cliente"
         MODIFICACION_CLIENTE = "modificacion_cliente", "Modificación de cliente"
@@ -857,6 +860,14 @@ class RegistroAuditoria(models.Model):
         "acciones_modificadas": "Acciones modificadas",
         "acciones_desactivadas": "Acciones desactivadas",
         "acciones_borradas": "Acciones borradas",
+        # Lo que entrega el nodo (IOT-03) y la revisión periódica (IOT-04): «sistema» es una referencia; «ahora», la hora usada (texto ISO).
+        "origen": "Origen",
+        "sistema": "Sistema IoT",
+        "mensaje": "Mensaje del nodo",
+        "identificador": "Identificador",
+        "ahora": "Hora de la revisión",
+        "alertas_generadas": "Alertas generadas",
+        "lecturas_borradas": "Lecturas borradas",
         # Configuración operativa (MAE-04): el orden es el de la pantalla.
         "porc_merma_maxima": "Merma máxima tolerada por lote (%)",
         "dias_horizonte_cosecha": "Horizonte de planificación de cosecha (días)",
@@ -871,6 +882,21 @@ class RegistroAuditoria(models.Model):
         "porc_tolerancia_cobertura_pedido": "Tolerancia de cobertura del pedido (%)",
         "cant_maxima_entregas_diarias": "Máximo de entregas diarias por transportista",
         "cant_max_ciudades_distintas_diarias": "Máximo de localidades distintas por día",
+        # Módulo IoT de la configuración operativa (IOT-04; docs/casos_de_uso/maestros/configuracion.md, sección «Módulo IoT»).
+        "cant_reintentos_comando": "Reintentos de un comando",
+        "segundos_intervalo_reintento": "Intervalo entre intentos (s)",
+        "hora_inicio_luz": "Horario de luz: inicio (h)",
+        "hora_fin_luz": "Horario de luz: fin (h)",
+        "lux_umbral_fotoperiodo": "Umbral de luz para el fotoperíodo (lux)",
+        "minutos_sin_actividad": "Minutos sin actividad",
+        "minutos_sin_comunicacion": "Minutos sin comunicación",
+        "minutos_antiguedad_lectura": "Antigüedad máxima de una lectura (min)",
+        "cant_lecturas_confirmacion": "Lecturas de confirmación",
+        "histeresis_temperatura": "Histéresis de temperatura (°C)",
+        "histeresis_humedad": "Histéresis de humedad (% HR)",
+        "histeresis_luz": "Histéresis de intensidad lumínica (lux)",
+        "histeresis_temp_solucion": "Histéresis de temperatura de la solución (°C)",
+        "dias_retencion_telemetria": "Días de retención de lecturas",
         # Perfil de la organización (MAE-04).
         "nombre_organizacion": "Nombre de la organización",
         "cuit_organizacion": "CUIT",
@@ -1133,6 +1159,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_HARDWARE,
         RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
         RegistroAuditoria.Accion.ENTREGA_INFORMACION_IOT,
+        RegistroAuditoria.Accion.REVISION_PERIODICA_IOT,
         RegistroAuditoria.Accion.ALTA_CLIENTE,
         RegistroAuditoria.Accion.MODIFICACION_CLIENTE,
         RegistroAuditoria.Accion.BAJA_CLIENTE,

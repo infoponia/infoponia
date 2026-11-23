@@ -3,11 +3,12 @@
 # vista pasa sus errores al formulario. Provincia, departamento y localidad son listas encadenadas de Georef (regla 3).
 
 import re
+from decimal import Decimal
 
 from django import forms
 from django.urls import reverse_lazy
 
-from maestros.models import PARAMETROS_DE_CONFIGURACION, TipoEtapa
+from maestros.models import PARAMETROS_DE_CONFIGURACION, PARAMETROS_IOT, TipoEtapa
 from maestros.servicios import geografia
 from maestros.servicios import perfil as perfil_servicio
 from maestros.servicios.invernaderos import NOMBRE_DEL_ROL, cuentas_asignables, datos_de_la_direccion
@@ -285,6 +286,37 @@ GRUPOS_DE_PARAMETROS = [
 ]
 
 
+# IOT-04 (docs/casos_de_uso/maestros/configuracion.md, sección «Módulo IoT»): los 14 parámetros del IoT en sus cinco subgrupos de ``CFGP`` del prototipo, con su etiqueta y su ayuda.
+# (grupo, [(campo, etiqueta, ayuda)]). Los usan la sección «Módulo IoT» de la configuración y el bloque de parámetros del panel de monitoreo (una sola fuente de los textos).
+GRUPOS_IOT = [
+    ("Comandos", [
+        ("cant_reintentos_comando", "Reintentos de un comando", "Después del primer intento (0 a 10)."),
+        ("segundos_intervalo_reintento", "Intervalo entre intentos (s)", "Espera de respuesta y tiempo mínimo entre intentos (10 a 3600)."),
+    ]),
+    ("Luz y fotoperíodo", [
+        ("hora_inicio_luz", "Horario de luz: inicio (h)", "Desde esta hora se compara la intensidad lumínica (0 a 23)."),
+        ("hora_fin_luz", "Horario de luz: fin (h)", "Hasta esta hora (1 a 24)."),
+        ("lux_umbral_fotoperiodo", "Umbral de luz para el fotoperíodo (lux)",
+         "Las horas por encima de este valor cuentan como luz. Valor inicial: ajustalo según el cultivo."),
+    ]),
+    ("Actividad y comunicación", [
+        ("minutos_sin_actividad", "Minutos sin actividad", "Un sensor que ya reportó y deja de informar genera alerta."),
+        ("minutos_sin_comunicacion", "Minutos sin comunicación", "Un nodo que ya se comunicó y deja de hacerlo genera alerta y correo."),
+        ("minutos_antiguedad_lectura", "Antigüedad máxima de una lectura (min)", "Las más viejas se guardan, pero no generan alertas ni disparan reglas."),
+    ]),
+    ("Reglas y alertas", [
+        ("cant_lecturas_confirmacion", "Lecturas de confirmación", "Lecturas seguidas que deben cumplir la condición para disparar una regla."),
+        ("histeresis_temperatura", "Histéresis de temperatura (°C)", "Una alerta o regla se libera recién al alejarse del límite este valor."),
+        ("histeresis_humedad", "Histéresis de humedad (% HR)", "Ídem, para la humedad."),
+        ("histeresis_luz", "Histéresis de intensidad lumínica (lux)", "Ídem, para la intensidad lumínica."),
+        ("histeresis_temp_solucion", "Histéresis de temperatura de la solución (°C)", "Ídem, para el rango de la solución."),
+    ]),
+    ("Retención", [
+        ("dias_retencion_telemetria", "Días de retención de lecturas", "Se conservan las que originaron una alerta o una regla. Los resúmenes horarios no se borran."),
+    ]),
+]
+
+
 class FormularioConfiguracion(forms.Form):
     """Pestaña «Parámetros operativos» (ADM-MOD-CFG): un campo numérico por parámetro. Solo normaliza lo que se escribe; los
     dominios y las reglas 4 y 5 son del servicio (``maestros/servicios/configuracion.py``), que devuelve los errores por campo."""
@@ -312,6 +344,41 @@ class FormularioConfiguracion(forms.Form):
     def datos_del_servicio(self):
         """Los argumentos de ``modificar_configuracion`` (sin el actor): todos los parámetros, tal como se escribieron."""
         return {campo: self.cleaned_data.get(campo, "") for campo, *_ in PARAMETROS_DE_CONFIGURACION}
+
+
+DECIMALES_IOT = ("histeresis_temperatura", "histeresis_temp_solucion")  # las dos histéresis de temperatura admiten un decimal (regla 3b)
+
+
+def _texto_inicial(valor):
+    """El valor guardado como se muestra en el campo: las histéresis (``Decimal``) con coma decimal («1,5»), el resto tal cual."""
+    return str(valor).replace(".", ",") if isinstance(valor, Decimal) else valor
+
+
+class FormularioConfiguracionIot(forms.Form):
+    """Sección «Módulo IoT» de la pantalla de configuración (IOT-04; ADM-MOD-CFG, reglas 2b a 7b): un campo por cada uno de los 14 parámetros, agrupados como ``CFGP`` del prototipo. Va dentro del mismo
+    ``<form>`` que ``FormularioConfiguracion`` (que sigue con sus 13 campos). Solo normaliza lo que se escribe; los dominios, la regla 4b y la advertencia 5b son del servicio. ``datos_del_servicio`` devuelve solo
+    los campos que vinieron en el POST, así un envío con los 13 de producción no toca los del IoT."""
+
+    def __init__(self, *args, configuracion=None, **kwargs):
+        if configuracion is not None and not args and "data" not in kwargs:
+            kwargs.setdefault("initial", {campo: _texto_inicial(getattr(configuracion, campo)) for campo, *_ in PARAMETROS_IOT})
+        super().__init__(*args, **kwargs)
+        for _, parametros in GRUPOS_IOT:
+            for campo, etiqueta, _ayuda in parametros:
+                decimal = campo in DECIMALES_IOT
+                widget = (forms.TextInput if decimal else forms.NumberInput)(
+                    attrs={"class": "field-input num", "inputmode": "decimal" if decimal else "numeric", "autocomplete": "off"}
+                )
+                self.fields[campo] = forms.CharField(label=etiqueta, required=False, widget=widget)
+
+    @property
+    def grupos(self):
+        """``[(título, [(campo, ayuda)])]`` para dibujar una tarjeta por subgrupo."""
+        return [(grupo, [(self[campo], ayuda) for campo, _, ayuda in parametros]) for grupo, parametros in GRUPOS_IOT]
+
+    def datos_del_servicio(self):
+        """Los argumentos de ``modificar_configuracion`` (sin el actor): los parámetros del IoT que vinieron en el POST, tal como se escribieron."""
+        return {campo: self.cleaned_data.get(campo, "") for campo in self.fields if campo in self.data}
 
 
 class FormularioPerfil(forms.Form):

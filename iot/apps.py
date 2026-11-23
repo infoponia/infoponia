@@ -49,3 +49,8 @@ class IotConfig(AppConfig):
             extensiones.registrar_impedimento_de_baja_de_sector(hardware.impedimentos_de_baja_del_sector)
         if hardware.contenido_de_sectores not in extensiones._CONTENIDOS:
             extensiones.registrar_contenido_de_sector(hardware.contenido_de_sectores)
+        # IOT-04 (D-62): adónde lleva cada alerta del IoT en la campana y en «Alertas». ``registrar_enlace_de_alerta`` es idempotente con la misma función.
+        from iot.alertas import CODIGOS_DE_ALERTAS_IOT
+        from iot.servicios import alertas_iot
+
+        extensiones.registrar_enlace_de_alerta(CODIGOS_DE_ALERTAS_IOT, alertas_iot.enlaces_de_alertas_iot)

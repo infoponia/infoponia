@@ -13,9 +13,15 @@
 # SEGUNDA CORRIDA (después de registrar a mano el sistema IoT de «Norte» por la pantalla): carga el rango de la solución (18,0 a 24,0 °C)
 # y los equipos de ``docs/api/nodo/node-red/README.md``, sección 4, punto 2. El sistema IoT NO se carga acá y el token nunca pasa por este
 # archivo: se muestra una sola vez en la pantalla (D-70).
+# IOT-04 suma, para su verificación a mano (docs/tareas/iot/IOT-04-revision-panel-y-configuracion.md):
+#   - el invernadero «Sur», SIN Agrónomo y SIN sistema IoT: el Gerente lo opera y ve «Registrar Sistema IoT» (el Gerente que mira «Norte», que tiene Agrónomo, solo consulta);
+#   - en la segunda corrida, las lecturas de AYER y de ANTEAYER de la temperatura y la luz de «Norte», una cada 5 minutos y de día entero (``registrar_lectura``, el servicio de la API, con su ``ahora`` simulado):
+#     dan el gráfico de 7 días con resúmenes y, con la primera revisión, el fotoperíodo de ayer (10 h, dentro del rango del umbral). Las de ayer terminan a las 23:55, así que el nodo queda «sin señal» y los
+#     sensores «sin actividad» hasta que Node-RED mande: no se carga ninguna comunicación del nodo (evita una alerta crítica y un correo antes de empezar).
 # No borra nada. Idempotente: lo que ya existe se reutiliza. ``temp-vieja`` (un sensor dado de baja) lo suma IOT-06, que trae la baja.
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from decimal import Decimal
 
 from django.utils import timezone
 
@@ -29,7 +35,9 @@ from inventario.servicios import ajustes
 from inventario.servicios import insumos as servicio_insumos
 from inventario.servicios import insumos_invernadero
 from inventario.servicios.variedades import DatosDeVariedad, alta_variedad
-from iot.models import Actuador, Hardware, NodoCentral, SistemaIoT, TipoActuador
+from iot.api.traduccion import LecturaRecibida
+from iot.models import Actuador, Hardware, NodoCentral, Sensor, SistemaIoT, Telemetria, TipoActuador
+from iot.servicios import lecturas as servicio_lecturas
 from iot.servicios import hardware as servicio_hardware
 from iot.servicios import sistemas as servicio_sistemas
 from maestros.models import Cultivo, Invernadero, Localidad, SectorProduccion, TipoEtapa, Variedad
@@ -46,6 +54,9 @@ NOMBRE_DEL_SECTOR_DE_MADURACION = "Sector B"  # la siembra pide un sector por ca
 NOMBRE_DEL_CULTIVO = "Lechuga"
 NOMBRE_DE_LA_VARIEDAD = "Crespa"
 NOMBRE_DEL_REPUESTO = "Repuesto de sensor"
+NOMBRE_DEL_INVERNADERO_SIN_AGRONOMO = "Sur"
+PASO_EN_MINUTOS = 5  # una lectura cada 5 minutos: el máximo que no marca «incompleto» el fotoperíodo (minutos sin actividad = 5)
+DIAS_DE_TEMPERATURA = 2  # ayer y anteayer; la luz, solo ayer (para el fotoperíodo)
 CUENTAS = (("agronomo", "Agrónomo"), ("capataz", "Capataz"))  # (rol, nombre) de las cuentas <rol>@prueba1.local
 SUFIJO = "prueba3.local"  # prueba1 y prueba2 son de ``maestros`` (MAE-02d): cada cargador usa su propio número de cuenta
 
@@ -275,6 +286,59 @@ def _equipos(agronomo, sistema, sector, creado):
         creado.append(f"Actuador {identificador} ({tipo}).")
 
 
+def _invernadero_sin_agronomo(gerente, creado):
+    """«Sur» (IOT-04): sin Agrónomo y sin sistema IoT, para que el Gerente lo opere y vea «Registrar Sistema IoT» (``alta_invernadero``). Si ya existe, se reutiliza."""
+    invernadero = Invernadero.objects.filter(nombre_invernadero__iexact=NOMBRE_DEL_INVERNADERO_SIN_AGRONOMO).first()
+    if invernadero is None:
+        localidad = Localidad.objects.filter(nombre_localidad="Garupá").first() or Localidad.objects.first()
+        invernadero = servicio_invernaderos.alta_invernadero(
+            gerente,
+            NOMBRE_DEL_INVERNADERO_SIN_AGRONOMO,
+            tipo_direccion="urbana",
+            localidad_id=localidad.pk,
+            calle="Calle 2",
+            numero_calle="200",
+        )
+        creado.append(f"Invernadero «{NOMBRE_DEL_INVERNADERO_SIN_AGRONOMO}» (sin Agrónomo y sin sistema IoT: lo opera el Gerente).")
+    return invernadero
+
+
+def _valor_de_la_lectura(sensor, minuto_del_dia):
+    """Una temperatura de 20 a 23 °C (dentro del umbral efectivo) o, en la luz, 15.000 lux de 8 a 18 h y 100 lux el resto (de noche no se compara)."""
+    if sensor.tipo_variable_sensor == "intensidad_luz":
+        return Decimal(15000 if 8 * 60 <= minuto_del_dia < 18 * 60 else 100)
+    return Decimal(20 + (minuto_del_dia // PASO_EN_MINUTOS) % 4)
+
+
+def _lecturas_de_los_dias(sistema, creado):
+    """Las lecturas de ayer (temperatura y luz) y de anteayer (temperatura) de «Norte»: un día entero, una cada ``PASO_EN_MINUTOS`` minutos, por el servicio de la API de IOT-03 con su ``ahora`` simulado (10 s
+    después de cada medición, así nunca está atrasada ni es futura). Si el día ya tiene lecturas (de una corrida anterior o reales de Node-RED), solo se completan los instantes que faltan."""
+    zona = timezone.get_current_timezone()
+    hoy = timezone.localdate()
+    contexto = servicio_lecturas.contexto_del_mensaje(sistema, timezone.now())
+    por_cargar = [
+        (sensor, hoy - timedelta(days=atras))
+        for atras in range(1, DIAS_DE_TEMPERATURA + 1)
+        for sensor in Sensor.objects.filter(sistema=sistema, estado_hardware="activo", tipo_variable_sensor__in=["temperatura", "intensidad_luz"]).order_by("pk")
+        if atras == 1 or sensor.tipo_variable_sensor == "temperatura"
+    ]
+    for sensor, dia in sorted(por_cargar, key=lambda par: (par[1], par[0].pk)):  # en orden cronológico: el último mensaje de cada sensor queda en la última lectura
+        inicio = datetime.combine(dia, time.min, tzinfo=zona)
+        existentes = set(Telemetria.objects.filter(sensor=sensor, medida_en__gte=inicio, medida_en__lt=inicio + timedelta(days=1)).values_list("medida_en", flat=True))
+        cargadas = 0
+        for minuto in range(0, 24 * 60, PASO_EN_MINUTOS):
+            medida = inicio + timedelta(minutes=minuto)
+            if medida in existentes:
+                continue  # completa el día: lo que ya hay (una corrida anterior o lecturas reales de Node-RED) no se repite
+            lectura = LecturaRecibida(cargadas, sensor.identificador_equipo, sensor.identificador_equipo, _valor_de_la_lectura(sensor, minuto), medida.isoformat())
+            resultado = servicio_lecturas.registrar_lectura(contexto, lectura, medida + timedelta(seconds=10))
+            if resultado.resultado != "aceptada":
+                raise ErrorDeCarga(f"La lectura de {sensor.identificador_equipo} del {dia:%d/%m} a las {medida:%H:%M} no se aceptó: {resultado.motivo}.")
+            cargadas += 1
+        if cargadas:
+            creado.append(f"{cargadas} lecturas de {sensor.identificador_equipo} del {dia:%d/%m}.")
+
+
 def cargar(contrasena):
     """El cargador del IoT: ver el encabezado del archivo. Devuelve un ``ResumenDeCarga``. Nunca imprime ni devuelve la contraseña ni un token."""
     creado, cuentas, pendiente = [], [], []
@@ -304,4 +368,6 @@ def cargar(contrasena):
         )
     else:
         _equipos(agronomo, sistema, sector, creado)
+        _lecturas_de_los_dias(sistema, creado)
+    _invernadero_sin_agronomo(gerente, creado)
     return verificacion.ResumenDeCarga(creado=tuple(creado), cuentas=tuple(cuentas), pendiente=tuple(pendiente))

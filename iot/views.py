@@ -33,8 +33,8 @@ def _es_htmx(request):
 
 @rol_requerido(GERENTE, AGRONOMO)
 def inicio(request):
-    """``/iot/``: lleva a «Sistema IoT» (IOT-02; IOT-04 lo cambia por «Monitoreo»)."""
-    return redirect("iot:sistema")
+    """``/iot/``: lleva a «Monitoreo», la primera pestaña del módulo (IOT-04; IOT-02 la llevaba a «Sistema IoT»)."""
+    return redirect("iot:monitoreo")
 
 
 # ---- consulta (IOT-CNS-TAC) ----
