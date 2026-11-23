@@ -23,7 +23,7 @@ docs/
 ├── revisiones_pendientes.md      listas completas de verificación a mano. Solo si el estudiante lo pide
 ├── temas_abiertos.md             temas sin tarea ni disparador. Al planificar
 ├── disparadores.md               «cuando exista X, hay que hacer Y». Cuando la tarea crea modelos
-├── api/                          contratos entre apps: alertas, notificaciones, puntos de extensión de maestros, de inventario y de producción, stock, variedades, producción y direcciones; `nodo/`, el contrato con el nodo central del IoT (v1: guía, mensajes, errores, ejemplos y el flujo de Node-RED; lote I2a)
+├── api/                          contratos entre apps: alertas, notificaciones, correo (`core/correo.py`, D-54), puntos de extensión de maestros, de inventario y de producción, stock, variedades, producción y direcciones; `nodo/`, el contrato con el nodo central del IoT (v1: guía, mensajes, errores, ejemplos y el flujo de Node-RED; lote I2a)
 ├── tareas/
 │   ├── README.md                 índice de tareas pendientes de todas las apps. Al elegir la próxima
 │   ├── ronda_produccion_1.md     plan completo de la ronda: tareas, orden, casos de uso, pantallas y lotes de documentación

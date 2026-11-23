@@ -964,7 +964,7 @@ class UsrModUsrServicioTests(TestCase):
         gerente = crear_gerente()
         cuenta = crear_cuenta(Capataz, **LAURA)
 
-        with self.assertLogs("core.servicios", level="ERROR") as registros:
+        with self.assertLogs("core.correo", level="ERROR") as registros:
             resultado = self.restablecer_con(gerente, cuenta, INVITACION)
 
         self.assertFalse(resultado.invitacion_enviada)
@@ -1580,7 +1580,7 @@ class UsrModUsrAccesoVistaTests(TestCase):
         self.entrar_como_gerente()
         cuenta = crear_cuenta(Capataz, **LAURA)
 
-        with self.assertLogs("core.servicios", level="ERROR"):
+        with self.assertLogs("core.correo", level="ERROR"):
             respuesta = self.enviar("usuario_restablecer", cuenta, acceso=INVITACION)
 
         self.assertTrue(Usuario.objects.get(pk=cuenta.pk).tiene_invitacion_pendiente)
