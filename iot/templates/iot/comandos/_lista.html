@@ -1,0 +1,38 @@
+{% load iconos %}{% comment %}La tabla de comandos del invernadero y su paginación (``comandos`` del prototipo): código, actuador y acción, origen, estado, intentos («n de máx»), último intento y «Cancelar» en los pendientes
+de quien opera (regla 6 de IOT-CNL-CMD). Si el nodo puede estar ejecutándolo (regla 2), «Cancelar» se ve deshabilitado y dice cuánto falta. Bajo un comando fallido, qué pasó. Es el fragmento que HTMX
+reemplaza al filtrar o cambiar de página. Con HTMX («fuera_de_banda») también actualiza «Limpiar filtros», que está en el formulario y no se reemplaza. Recibe «lista», «opera», «elegido», «hay_filtros» y «consulta_base».{% endcomment %}
+{% if fuera_de_banda %}<span id="limpiar-filtros" hx-swap-oob="true">{% if hay_filtros %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}">Limpiar filtros</a>{% endif %}</span>{% endif %}
+<div class="tablewrap">
+  <table class="data-table">
+    <caption class="sr-only">Comandos del invernadero</caption>
+    <thead><tr><th>Código</th><th>Actuador y acción</th><th>Origen</th><th>Estado</th><th>Intentos</th><th>Último intento</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+    <tbody>
+      {% for f in lista.filas %}
+      <tr>
+        <td><span class="id">{{ f.codigo }}</span></td>
+        <td><b>{{ f.actuador.tipo_actuador.nombre_actuador }}</b> <span class="muted sm">{{ f.actuador.identificador_equipo }}</span><span class="sub2">{{ f.accion_texto }} <span class="code">{{ f.codigo_del_comando }}</span></span></td>
+        <td class="sm nw">{{ f.origen }}</td>
+        <td><span class="status-badge status-{{ f.estado_tono }}">{{ f.estado }}</span></td>
+        <td>{{ f.intentos }}</td>
+        <td class="muted nw">{% if f.ultimo_intento %}{{ f.ultimo_intento|date:"d/m H:i:s" }}{% else %}—{% endif %}</td>
+        <td class="right">{% if opera and f.comando.estado_comando == "pendiente" %}
+          {% if f.cancelable %}<a class="rowlink" href="{% url 'iot:comando_cancelar' f.comando.pk %}?volver=comandos" hx-get="{% url 'iot:comando_cancelar' f.comando.pk %}?volver=comandos" hx-target="#ventana-confirmar" hx-swap="innerHTML">Cancelar</a>
+          {% else %}<span class="rowlink disabled" aria-disabled="true" title="El nodo puede estar ejecutándolo: podés cancelarlo en {{ f.segundos }} s.">Cancelar</span><span class="sub2">Cancelable en {{ f.segundos }}&nbsp;s</span>{% endif %}
+        {% endif %}</td>
+      </tr>
+      {% if f.nota %}<tr class="sub"><td colspan="7"><div class="alert {% if f.comando.resultado_comando == 'rechazado' %}alert-warn{% else %}alert-danger{% endif %}">{% icono "warn" 16 %}<div>{{ f.nota }}</div></div></td></tr>{% endif %}
+      {% empty %}
+      <tr><td colspan="7" class="muted">{% if hay_filtros %}No hay comandos con estos filtros.{% else %}Todavía no se emitió ningún comando en este invernadero.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if lista.total %}
+<nav class="pager" aria-label="Páginas de los comandos">
+  <span class="muted">{{ lista.total }} comando{{ lista.total|pluralize }}</span>
+  <span class="spacer"></span>
+  {% if lista.pagina > 1 %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:comandos' %}?{{ consulta_base }}&amp;pagina={{ lista.pagina|add:-1 }}" hx-get="{% url 'iot:comandos' %}?{{ consulta_base }}&amp;pagina={{ lista.pagina|add:-1 }}" hx-target="#tabla-de-comandos" hx-push-url="true">Anterior</a>{% endif %}
+  <span class="muted">Página {{ lista.pagina }} de {{ lista.paginas }}</span>
+  {% if lista.pagina < lista.paginas %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:comandos' %}?{{ consulta_base }}&amp;pagina={{ lista.pagina|add:1 }}" hx-get="{% url 'iot:comandos' %}?{{ consulta_base }}&amp;pagina={{ lista.pagina|add:1 }}" hx-target="#tabla-de-comandos" hx-push-url="true">Siguiente</a>{% endif %}
+</nav>
+{% endif %}

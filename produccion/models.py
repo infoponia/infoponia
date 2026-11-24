@@ -313,6 +313,7 @@ class Bitacora(OrigenDocumento):
         CONSUMO = "consumo", "Consumo"  # interno: no se lista en la bitácora
         FUERA_DE_SERVICIO = "fuera_de_servicio", "Sector fuera de servicio"  # PRD-04
         REUBICACION = "reubicacion", "Reubicación de plantas"  # PRD-04
+        COMANDO = "comando", "Comando"  # IOT-05 (MD-110): lo escribe la hija `iot.RegistroComando`
 
     invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="bitacoras")  # R081
     lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="bitacoras")  # R082
@@ -349,6 +350,7 @@ class Bitacora(OrigenDocumento):
                         "consumo",
                         "fuera_de_servicio",
                         "reubicacion",
+                        "comando",
                     ]
                 ),
                 name="bitacora_tipo_evento_valido",

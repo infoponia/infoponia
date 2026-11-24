@@ -8,7 +8,7 @@
 # cambio de su tipo) llama a ``bloquear_tipo_activo`` ANTES de insertar: el ``INSERT`` solo toma ``FOR KEY SHARE``, que no frena la baja del tipo
 # (contrato de IOT-BAJ-TAC). Las alertas se crean y se resuelven con el invernadero ya bloqueado.
 #
-# «Se completa en IOT-NN»: ``tiene_lecturas`` (hecha en IOT-03), ``tiene_comandos`` y ``tiene_comando_pendiente`` (IOT-05), ``tiene_reglas`` (IOT-06) y
+# «Se completa en IOT-NN»: ``tiene_lecturas`` (hecha en IOT-03), ``tiene_comandos`` y ``tiene_comando_pendiente`` (hechas en IOT-05), ``tiene_reglas`` (IOT-06) y
 # ``mantenimientos_a_realizar`` (IOT-07). Consultan sus tablas, vacías hasta entonces. La baja del equipo es de IOT-06.
 
 from collections import namedtuple
@@ -113,12 +113,12 @@ def tiene_lecturas(sensor):
 
 
 def tiene_comandos(actuador):
-    """Regla 3 de IOT-MOD-HDW: el actuador ya tiene comandos, en cualquier estado (el tipo no se cambia). **Se completa en IOT-05.**"""
+    """Regla 3 de IOT-MOD-HDW: el actuador ya tiene comandos, en cualquier estado (el tipo no se cambia). Completa IOT-05: consulta los comandos reales."""
     return Comando.objects.filter(actuador_id=actuador.pk).exists()
 
 
 def tiene_comando_pendiente(actuador):
-    """Precondición c de IOT-MOD-HDW: el actuador tiene un comando pendiente (no se modifica). **Se completa en IOT-05.**"""
+    """Precondición c de IOT-MOD-HDW: el actuador tiene un comando pendiente (no se modifica). Completa IOT-05: consulta los comandos reales."""
     return Comando.objects.filter(actuador_id=actuador.pk, estado_comando=Comando.Estado.PENDIENTE).exists()
 
 

@@ -7,7 +7,7 @@
 # Quien cree un actuador de un tipo (IOT-02) tiene que llamar antes a ``bloquear_tipo_activo`` (mismo contrato que
 # ``bloquear_invernadero_activo``, D-40): el ``INSERT`` solo toma ``FOR KEY SHARE``, que no choca con el de la baja.
 #
-# «Se completa en IOT-NN»: ``acciones_en_uso`` (IOT-05 y IOT-06), ``acciones_con_historial`` (IOT-05) y la compatibilidad de los
+# «Se completa en IOT-NN»: ``acciones_en_uso`` (comandos: IOT-05; reglas: IOT-06), ``acciones_con_historial`` (hecha en IOT-05) y la compatibilidad de los
 # actuadores del tipo (``recalcular_compatibilidad``, ya completo desde IOT-02).
 
 import re
@@ -23,7 +23,7 @@ from django.shortcuts import get_object_or_404
 
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from iot.catalogo import RANGO_DEL_PORCENTAJE, UNIDAD_PORCENTAJE, UNIDADES_CON_MINIMO_CERO, UNIDADES_POR_COMANDO
-from iot.models import Accion, Actuador, Capacidad, ComandoCatalogo, TipoActuador
+from iot.models import Accion, Actuador, Capacidad, Comando, ComandoCatalogo, TipoActuador
 from iot.servicios.compatibilidad import recalcular_compatibilidad
 from maestros.models import Invernadero
 from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general, _tiene_contenido
@@ -280,16 +280,20 @@ def _crear_acciones(tipo, filas):
 
 
 def acciones_en_uso(tipo):
-    """``{id de acción: [UsoDeAccion, ...]}``: las acciones del tipo usadas por una regla de actuación ACTIVA o por un comando
-    PENDIENTE, con cada uso (regla 4 de IOT-MOD-TAC; marca «en uso» de IOT-CNS-TAC). **Se completa en IOT-05** (comandos pendientes)
-    **e IOT-06** (reglas activas): hasta entonces no hay ninguna."""
-    return {}
+    """``{id de acción: [UsoDeAccion, ...]}``: las acciones del tipo (o de cada tipo de una lista: una sola consulta para toda la lista) usadas por una regla de actuación ACTIVA o por un comando
+    PENDIENTE, con cada uso (regla 4 de IOT-MOD-TAC; marca «en uso» de IOT-CNS-TAC). IOT-05 completó los comandos pendientes (código ``CMD-n`` y
+    valor); **IOT-06 suma las reglas activas** (código ``RGL-n``): hasta entonces no hay ninguna."""
+    usos = {}
+    tipos = list(tipo) if isinstance(tipo, (list, tuple)) else [tipo]
+    pendientes = Comando.objects.filter(accion__tipo_actuador__in=tipos, estado_comando=Comando.Estado.PENDIENTE).order_by("pk")
+    for accion_id, pk, valor in pendientes.values_list("accion_id", "pk", "valor_comando"):
+        usos.setdefault(accion_id, []).append(UsoDeAccion(f"CMD-{pk}", valor))
+    return usos
 
 
 def acciones_con_historial(tipo):
-    """Los ids de las acciones del tipo con algún comando en su historial (regla 4 de IOT-MOD-TAC). **Se completa en IOT-05**
-    (comandos): hasta entonces no hay ninguna."""
-    return set()
+    """Los ids de las acciones del tipo con algún comando en su historial, en cualquier estado (regla 4 de IOT-MOD-TAC). Completo desde IOT-05."""
+    return set(Comando.objects.filter(accion__tipo_actuador=tipo).values_list("accion_id", flat=True))
 
 
 def equipos_afectados(tipo):
@@ -609,8 +613,8 @@ def _consultados(consulta):
         )
         .order_by("estado", Lower("nombre_actuador"), "id")
     )
+    usos = acciones_en_uso(tipos)  # una sola consulta para toda la lista (no una por tipo)
     for tipo in tipos:
-        usos = acciones_en_uso(tipo)
         for accion in tipo.acciones_activas:
             accion.en_uso = accion.pk in usos
     return tipos

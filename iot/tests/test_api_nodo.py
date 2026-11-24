@@ -61,9 +61,12 @@ class ApiNodoVistaTests(fabricas.ConCatalogoIot, TestCase):
         respuesta = self.enviar("telemetria", token=None)
         self.assertEqual((respuesta.status_code, self.error(respuesta)), (404, "ruta_inexistente"))
 
-    def test_regla_404_las_rutas_de_comandos_todavia_no_existen(self):
-        """El retiro y el resultado de comandos son de IOT-05: por ahora, `ruta_inexistente`."""
-        self.assertEqual(self.error(self.enviar("comandos", metodo="get")), "ruta_inexistente")
+    def test_regla_404_las_rutas_de_comandos_existen_desde_iot_05_y_las_demas_siguen_sin_existir(self):
+        """IOT-05 sumó `comandos` y `comandos/<id>/resultado` (antes eran `ruta_inexistente`): ya no lo son; una ruta parecida, sí."""
+        self.assertEqual(self.enviar("comandos", metodo="get").status_code, 200)
+        self.assertNotEqual(self.error(self.enviar("comandos/1/resultado", b'{"resultado": "ejecutado"}')), "ruta_inexistente")
+        self.assertEqual(self.error(self.enviar("comandos/abc/resultado", b"{}")), "ruta_inexistente")
+        self.assertEqual(self.error(self.enviar("comandos/1/otra", b"{}")), "ruta_inexistente")
 
     def test_regla_405_un_metodo_que_no_es_el_de_la_ruta_lleva_allow(self):
         respuesta = self.enviar("lecturas", metodo="get")

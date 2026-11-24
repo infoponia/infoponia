@@ -725,6 +725,11 @@ class RegistroAuditoria(models.Model):
         # La revisión periódica del IoT (IOT-04, postcondición z de IOT-ENT-INF; D-71): un registro por sistema y por corrida, solo si generó o
         # resolvió alertas o borró lecturas. Actor ``None`` (InfoPonia).
         REVISION_PERIODICA_IOT = "revision_periodica_iot", "Revisión periódica del IoT"
+        # Comandos del IoT (IOT-05, D-36): emitir y cancelar los hace una persona; resolver (retiro y resultado del nodo) lo hace InfoPonia por el nodo
+        # central (actor ``None``, origen «nodo_central», postcondición q de IOT-RSV-CMD).
+        EMISION_COMANDO = "emision_comando", "Emisión de comando"
+        CANCELACION_COMANDO = "cancelacion_comando", "Cancelación de comando"
+        RESOLUCION_COMANDO_IOT = "resolucion_comando_iot", "Resolución de comando (IoT)"
         # Clientes y vehículos (COM-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_CLIENTE = "alta_cliente", "Alta de cliente"
         MODIFICACION_CLIENTE = "modificacion_cliente", "Modificación de cliente"
@@ -970,6 +975,16 @@ class RegistroAuditoria(models.Model):
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
         "tipo_proveedor": "Tipo de proveedor",
         "especialidades": "Categorías de insumos",
+        # Comandos del IoT (IOT-05): lo que audita emitir, cancelar y resolver un comando. «mensaje» e «identificador» ya existen.
+        "actuador": "Actuador",
+        "accion": "Acción",
+        "valor": "Valor",
+        "estado_comando": "Estado del comando",
+        "resultado_comando": "Resultado del comando",
+        "estado_informado": "Estado informado por el nodo",
+        "estado_hardware": "Estado del equipo",
+        "compatibilidad": "Compatibilidad con el nodo",
+        "hechos": "Qué pasó con los comandos",
         # Pedidos y cotizaciones (CMP-02a): cantidades, importes y fechas van como texto (D-36). «estado», «invernadero»,
         # «insumo» y «agronomo» ya existen, y también «monto_estimado», «detalles» y «lineas» (los de la compra-venta de COM-02): no se repiten, porque en
         # un diccionario la clave de más abajo pisa a la de arriba y cambiaría el texto de aquellas pantallas. Las líneas de la cotización llevan su clave propia.
@@ -1257,6 +1272,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
         RegistroAuditoria.Accion.ENTREGA_INFORMACION_IOT,
         RegistroAuditoria.Accion.REVISION_PERIODICA_IOT,
+        RegistroAuditoria.Accion.EMISION_COMANDO,
+        RegistroAuditoria.Accion.CANCELACION_COMANDO,
+        RegistroAuditoria.Accion.RESOLUCION_COMANDO_IOT,
         RegistroAuditoria.Accion.ALTA_CLIENTE,
         RegistroAuditoria.Accion.MODIFICACION_CLIENTE,
         RegistroAuditoria.Accion.BAJA_CLIENTE,

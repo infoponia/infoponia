@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}La ficha de un equipo (IOT-CNS-HDW regla 6; ``hw-ficha`` del prototipo): identificador, tipo, sector, situación, modelo, número de serie, fecha de instalación e insumo; de un sensor, su
 calibración; de un actuador, el estado que informó el nodo, la compatibilidad y el tiempo mínimo entre comandos; y sus alertas activas. Los botones salen de «acciones» (D-30): modificar, volver a
-activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (el historial de comandos, las reglas y las órdenes de mantenimiento) no se muestra; lo suman IOT-05 a IOT-07. La última lectura y el estado informado, con su hora, son de IOT-03.
+activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (las reglas y las órdenes de mantenimiento) no se muestra; lo suman IOT-06 e IOT-07. IOT-05 suma «Emitir comando», el historial de comandos y «Cancelar». La última lectura y el estado informado, con su hora, son de IOT-03.
 Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
 {% block titulo %}{{ nombre }} {{ equipo.identificador_equipo }} · Hardware · IoT · InfoPonia{% endblock %}
 {% block contenido %}
@@ -13,6 +13,7 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
     <h1>{{ nombre }}</h1>
     {% if equipo.estado_hardware == "activo" %}<span class="status-badge status-ok">Activo</span>{% elif equipo.estado_hardware == "fuera_de_servicio" %}<span class="status-badge status-danger">Fuera de servicio</span>{% else %}<span class="status-badge status-neutral">Dado de baja</span>{% endif %}
     <span class="spacer"></span>
+    {% if puede_emitir %}<a class="btn btn-primary" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;actuador={{ equipo.pk }}">{% icono "send" 14 %} Emitir comando</a>{% endif %}
     {% if "modificar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:hardware_modificar' equipo.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
     {% if "volver_a_activar" in acciones %}<a class="btn btn-primary" href="{% url 'iot:hardware_volver_a_activar' equipo.pk %}" hx-get="{% url 'iot:hardware_volver_a_activar' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Volver a activar</a>{% endif %}
     {% if "reactivar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:hardware_reactivar' equipo.pk %}" hx-get="{% url 'iot:hardware_reactivar' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 14 %} Reactivar</a>{% endif %}
@@ -47,6 +48,21 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
     </div>
     {% endif %}
   </div>
+  {% if equipo.clase == "actuador" %}
+  <div class="card" style="margin-top:14px">
+    <div class="card-h"><h3>{% icono "send" 16 %} Comandos</h3><span class="spacer"></span>{% if historial_total > historial|length %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;filtro_actuador={{ equipo.pk }}">Ver todos ({{ historial_total }})</a>{% endif %}</div>
+    <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
+      <caption class="sr-only">Últimos comandos del actuador</caption>
+      <thead><tr><th>Código</th><th>Acción</th><th>Origen</th><th>Estado</th><th>Intentos</th><th>Último intento</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+      <tbody>{% for f in historial %}
+        <tr><td><span class="id">{{ f.codigo }}</span></td><td>{{ f.accion_texto }} <span class="code muted">{{ f.codigo_del_comando }}</span></td><td class="sm nw">{{ f.origen }}</td>
+          <td><span class="status-badge status-{{ f.estado_tono }}">{{ f.estado }}</span></td><td>{{ f.intentos }}</td><td class="muted nw">{% if f.ultimo_intento %}{{ f.ultimo_intento|date:"d/m H:i:s" }}{% else %}—{% endif %}</td>
+          <td class="right">{% if opera and f.comando.estado_comando == "pendiente" %}{% if f.cancelable %}<a class="rowlink" href="{% url 'iot:comando_cancelar' f.comando.pk %}?volver=ficha" hx-get="{% url 'iot:comando_cancelar' f.comando.pk %}?volver=ficha" hx-target="#ventana-confirmar" hx-swap="innerHTML">Cancelar</a>{% else %}<span class="rowlink disabled" aria-disabled="true" title="El nodo puede estar ejecutándolo: podés cancelarlo en {{ f.segundos }} s.">Cancelar</span><span class="sub2">Cancelable en {{ f.segundos }}&nbsp;s</span>{% endif %}{% endif %}</td></tr>
+        {% if f.nota %}<tr class="sub"><td colspan="7"><div class="alert {% if f.comando.resultado_comando == 'rechazado' %}alert-warn{% else %}alert-danger{% endif %}">{% icono "warn" 16 %}<div>{{ f.nota }}</div></div></td></tr>{% endif %}
+      {% empty %}<tr><td colspan="7" class="muted">Este actuador todavía no recibió comandos.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 

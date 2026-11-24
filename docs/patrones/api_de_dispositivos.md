@@ -11,6 +11,12 @@ es `docs/api/nodo/`; esto explica cómo se programa. Lo creó IOT-03. Si algo de
 - `traduccion.py`: convierte el JSON en objetos simples y verifica **solo la forma** (claves exactas, tipos de la envoltura, forma del identificador). No consulta la base.
 - `autenticacion.py` (solo calcula el resumen SHA-256 del token), `limites.py` (el contador de pedidos), `respuestas.py` (el cuerpo y los encabezados) y `reloj.py` (la hora).
 
+## Las rutas de comandos (IOT-05)
+
+- `GET comandos` (el retiro; sin cuerpo) y `POST comandos/<int:id>/resultado` (un resultado), las dos **antes** de la ruta que atrapa todo. El retiro usa `_atender(request, tratar, metodo="GET", con_cuerpo=False)` y salta las verificaciones 7 a 11.
+- **La comunicación del nodo la registra el servicio** (`retirar_comandos`, `registrar_resultado`), no `_comunicacion`: el retiro tiene que leer la comunicación **anterior** antes de actualizarla (D-78 punto 2, el «sin señal» de 2a.1a). Un resultado de un comando que no existe o no es del nodo (4e) no registra la comunicación; uno de un comando nunca entregado (D-78 punto 12) sí.
+- Los servicios lanzan `SistemaDesconectado` (403) y `ComandoInexistente` (404 `comando_inexistente`); un resultado repetido es 200 `ya_resuelto` y queda en el registro técnico.
+
 ## El orden de verificación
 
 Es el de **`docs/api/nodo/respuestas_y_errores.md`, sección 3**: no se copia acá (si cambia, cambia allá primero, D-70 punto 1). En el código lo hacen `_recibir` (las verificaciones de método, token,

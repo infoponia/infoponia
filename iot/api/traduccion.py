@@ -9,7 +9,9 @@
 # objeto de arriba, el mensaje entero (400 ``mensaje_mal_formado``).
 
 import json
+import re
 from collections import namedtuple
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from iot import catalogo
@@ -22,12 +24,21 @@ EstadoRecibido = namedtuple("EstadoRecibido", "indice identificador_enviado iden
 EquipoRecibido = namedtuple("EquipoRecibido", "identificador clase comandos")
 # Un elemento de una lista que no tiene la forma del contrato: la vista lo responde ``rechazada``/``rechazado`` con este motivo y detalle.
 ElementoMalFormado = namedtuple("ElementoMalFormado", "indice identificador_enviado motivo detalle")
+# El resultado de un comando (IOT-05): ``informado_en`` ya es un ``datetime`` con zona (o ``None``); ``detalle`` es texto (vacío si no vino).
+ResultadoDeComandoRecibido = namedtuple("ResultadoDeComandoRecibido", "resultado detalle estado informado_en")
 
 CAMPOS_DE_LECTURA = {"identificador", "valor", "medida_en"}
 CAMPOS_DE_ESTADO = {"identificador", "estado", "informado_en"}
 CAMPOS_DE_EQUIPO = {"identificador", "clase", "comandos"}
 CLASES_DE_EQUIPO = ("sensor", "actuador")
 MODOS = ("remoto", "local")
+RESULTADOS_DE_COMANDO = ("ejecutado", "fallo", "rechazado")
+CAMPOS_DE_RESULTADO = {"resultado", "detalle", "estado", "informado_en"}
+LARGO_DEL_DETALLE = 300
+TOLERANCIA_FUTURA = timedelta(minutes=5)  # la misma que las lecturas y los estados (extensión 3d, D-74 punto 5)
+# Los estados operativos de un actuador (mensajes.md, sección 2; D-75, punto 6): solo la forma, sin consultar nada.
+ESTADOS_OPERATIVOS = ("encendido", "apagado", "abierto", "cerrado")
+ESTADO_CON_VALOR = re.compile(r"^(nivel|posicion):-?\d{1,6}$")
 # Los códigos del catálogo de comandos (docs/api/nodo/README.md, sección 9): parte del contrato, no se consulta la base.
 COMANDOS_DEL_CATALOGO = tuple(catalogo.ESTADO_QUE_DEJA)
 
@@ -206,3 +217,33 @@ def traducir_anuncio(lista):
             comandos.append(comando)
         equipos.append(EquipoRecibido(identificador, "actuador", tuple(comandos)))
     return equipos
+
+
+def traducir_resultado(objeto, ahora):
+    """Envoltura de ``POST comandos/<id>/resultado`` (mensajes.md, sección 6): ``resultado`` (``ejecutado``, ``fallo`` o ``rechazado``) y, optativos, ``detalle`` (hasta 300
+    caracteres), ``estado`` (operativo) e ``informado_en`` (ISO 8601 con zona, no más de 5 minutos en el futuro). Cualquier error rechaza el mensaje entero con 400
+    ``mensaje_mal_formado`` y su ``campo`` (verificación 10). Devuelve un ``ResultadoDeComandoRecibido``. Lanza ``MensajeMalFormado``."""
+    _verificar_claves(objeto, CAMPOS_DE_RESULTADO, ("resultado",))
+    if not isinstance(objeto["resultado"], str) or objeto["resultado"] not in RESULTADOS_DE_COMANDO:
+        raise MensajeMalFormado("resultado", "tiene que ser «ejecutado», «fallo» o «rechazado»")
+    detalle = objeto.get("detalle", "")
+    if detalle is None:
+        detalle = ""
+    if not isinstance(detalle, str):
+        raise MensajeMalFormado("detalle", "tiene que ser un texto")
+    if len(detalle) > LARGO_DEL_DETALLE:
+        raise MensajeMalFormado("detalle", f"tiene más de {LARGO_DEL_DETALLE} caracteres")
+    estado = objeto.get("estado")
+    if estado is not None and not (isinstance(estado, str) and (estado in ESTADOS_OPERATIVOS or ESTADO_CON_VALOR.fullmatch(estado))):
+        raise MensajeMalFormado("estado", "no es un estado operativo de un actuador")
+    informado_en = objeto.get("informado_en")
+    if informado_en is not None:
+        try:
+            informado_en = datetime.fromisoformat(informado_en) if isinstance(informado_en, str) else None
+        except ValueError:
+            informado_en = None
+        if informado_en is None or informado_en.tzinfo is None:
+            raise MensajeMalFormado("informado_en", "tiene que ser una fecha ISO 8601 con zona horaria")
+        if informado_en > ahora + TOLERANCIA_FUTURA:
+            raise MensajeMalFormado("informado_en", "es más de 5 minutos posterior a la hora de InfoPonia")
+    return ResultadoDeComandoRecibido(objeto["resultado"], detalle.strip(), estado, informado_en)

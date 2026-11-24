@@ -56,3 +56,8 @@
 .parametros-lista{display:grid;grid-template-columns:max-content 1fr;gap:4px 18px;margin:0 0 8px}
 .parametros-lista dt{color:var(--muted-foreground);font-size:13px}
 .parametros-lista dd{margin:0;font-weight:550;font-variant-numeric:tabular-nums}
+/* IOT-05: «Cancelar» deshabilitado mientras el nodo puede estar ejecutando el comando; indicador «Comandos pendientes» */
+.rowlink.disabled{opacity:.5;cursor:not-allowed;color:var(--muted-foreground)}
+.kpi.info .k::before{background:var(--status-info,#1d4f9c)}
+.kpi.info .v{color:var(--status-info,#1d4f9c)}
+.nw{white-space:nowrap}

@@ -13,7 +13,7 @@ from django.test import Client, TestCase
 
 from core.enlaces import resumen_de
 from core.tests.fabricas import crear_gerente
-from iot.models import TipoActuador
+from iot.models import Actuador, Comando, NodoCentral, TipoActuador
 from iot.tests import fabricas
 from maestros.tests.fabricas import crear_agronomo, crear_invernadero, crear_sector
 
@@ -151,3 +151,80 @@ class ApiEjemplosTests(fabricas.ConCatalogoIot, TestCase):
 
     def test_ejemplo_error_ruta_inexistente(self):
         self.comparar(self.cliente.post(f"{URL}telemetria", data=b"{}", content_type="application/json"), "error_ruta_inexistente", 404)
+
+    # ---- los de comandos (IOT-05): el escenario de «Para los ejemplos de comandos» ----
+
+    def escenario_de_comandos(self, retirado=False):
+        """Comando 101 (ventilador, «Fijar velocidad» 60, pendiente, nunca retirado, del Agrónomo) y 102 (ventana, «Cerrar», 1 intento a las 17:03:30Z: su espera venció a las
+        17:04:30Z); el nodo se comunicó a las 17:04:55Z. Con ``retirado``, 101 ya está en su intento 1, retirado a las 17:04:50Z."""
+        ventilador = Actuador.objects.get(identificador_equipo="norte/sectorA/ventilador")
+        ventana = Actuador.objects.get(identificador_equipo="norte/sectorA/ventana")
+        NodoCentral.objects.filter(sistema=self.sistema).update(ultima_comunicacion=datetime(2026, 11, 21, 17, 4, 55, tzinfo=timezone.utc))
+        Comando.objects.create(
+            pk=101, actuador=ventilador, accion=ventilador.tipo_actuador.acciones.get(nombre_accion="Fijar velocidad"), valor_comando=60,
+            agronomo=self.norte.agronomo, emitido_en=datetime(2026, 11, 21, 17, 0, 0, tzinfo=timezone.utc),
+        )
+        Comando.objects.create(
+            pk=102, actuador=ventana, accion=ventana.tipo_actuador.acciones.get(nombre_accion="Cerrar"), agronomo=self.norte.agronomo,
+            emitido_en=datetime(2026, 11, 21, 17, 0, 0, tzinfo=timezone.utc), cantidad_intentos=1, ultimo_intento_en=datetime(2026, 11, 21, 17, 3, 30, tzinfo=timezone.utc),
+        )
+        if retirado:
+            Comando.objects.filter(pk=101).update(cantidad_intentos=1, ultimo_intento_en=datetime(2026, 11, 21, 17, 4, 50, tzinfo=timezone.utc))
+
+    def test_ejemplo_comandos_retiro(self):
+        """101 por primera vez (intento 1); 102 en su segundo intento (el primero venció con el nodo «en línea»)."""
+        self.escenario_de_comandos()
+        self.comparar(self.enviar("comandos", metodo="get"), "comandos_retiro")
+
+    def test_ejemplo_comandos_retiro_vacio_el_mismo_retiro_repetido_enseguida(self):
+        """El mismo retiro, repetido enseguida: los dos están dentro de su espera."""
+        self.escenario_de_comandos()
+        self.enviar("comandos", metodo="get")
+        self.comparar(self.enviar("comandos", metodo="get"), "comandos_retiro_vacio")
+
+    def test_ejemplo_comandos_retiro_local_con_el_nodo_en_modo_local(self):
+        """Lista vacía, sin consumir intentos."""
+        self.escenario_de_comandos()
+        NodoCentral.objects.filter(sistema=self.sistema).update(modo="local")
+        self.comparar(self.enviar("comandos", metodo="get"), "comandos_retiro_local")
+        self.assertEqual(Comando.objects.get(pk=101).cantidad_intentos, 0)
+
+    def test_ejemplo_comando_resultado_ejecutado(self):
+        self.escenario_de_comandos(retirado=True)
+        self.comparar(self.pedido("comando_resultado_ejecutado", "comandos/101/resultado"), "comando_resultado_ejecutado")
+        self.assertEqual(Actuador.objects.get(identificador_equipo="norte/sectorA/ventilador").estado_informado, "nivel:60")
+
+    def test_ejemplo_comando_resultado_ya_resuelto_la_segunda_respuesta(self):
+        """El pedido de `comando_resultado_ejecutado`, mandado dos veces: la segunda respuesta."""
+        self.escenario_de_comandos(retirado=True)
+        self.pedido("comando_resultado_ejecutado", "comandos/101/resultado")
+        self.comparar(self.pedido("comando_resultado_ejecutado", "comandos/101/resultado"), "comando_resultado_ya_resuelto")
+
+    def test_ejemplo_comando_resultado_fallo_sigue_pendiente(self):
+        self.escenario_de_comandos(retirado=True)
+        self.comparar(self.pedido("comando_resultado_fallo", "comandos/101/resultado"), "comando_resultado_fallo")
+
+    def test_ejemplo_comando_resultado_fallo_ultimo_es_fallido(self):
+        """El pedido de `comando_resultado_fallo`, en el cuarto intento: escalamiento."""
+        self.escenario_de_comandos(retirado=True)
+        Comando.objects.filter(pk=101).update(cantidad_intentos=4)
+        self.comparar(self.pedido("comando_resultado_fallo", "comandos/101/resultado"), "comando_resultado_fallo_ultimo")
+        self.assertEqual(Actuador.objects.get(identificador_equipo="norte/sectorA/ventilador").estado_hardware, "fuera_de_servicio")
+
+    def test_ejemplo_comando_resultado_rechazado(self):
+        self.escenario_de_comandos(retirado=True)
+        self.comparar(self.pedido("comando_resultado_rechazado", "comandos/102/resultado"), "comando_resultado_rechazado")
+
+    def test_ejemplo_comando_resultado_inexistente(self):
+        self.escenario_de_comandos(retirado=True)
+        self.comparar(self.enviar("comandos/999/resultado", b'{"resultado": "ejecutado"}'), "comando_resultado_inexistente", 404)
+
+    def test_ejemplo_comando_resultado_mal_formado(self):
+        self.escenario_de_comandos(retirado=True)
+        self.comparar(self.pedido("comando_resultado_mal_formado", "comandos/101/resultado"), "comando_resultado_mal_formado", 400)
+
+    def test_ejemplo_error_metodo_no_permitido_comandos(self):
+        """El retiro solo acepta GET."""
+        respuesta = self.enviar("comandos", b"{}")
+        self.comparar(respuesta, "error_metodo_no_permitido_comandos", 405)
+        self.assertEqual(respuesta["Allow"], "GET")
