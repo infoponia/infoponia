@@ -1,7 +1,8 @@
 # Lecturas del nodo (IOT-03; IOT-ENT-INF pasos 3 a 5 y extensiones 3a a 5g; docs/casos_de_uso/iot/entregar_informacion.md, «Una lectura»; D-74 y D-75).
 # ``registrar_lectura`` hace los 11 pasos de «Una lectura» dentro de UNA transacción por lectura. ``contexto_del_mensaje`` calcula UNA vez por pedido los
 # parámetros de la Configuración Operativa y el umbral efectivo (una sola función del dominio: ``inventario.servicios.variedades.umbral_efectivo``).
-# Bloqueos (``FOR NO KEY UPDATE``): invernadero → sistema (releído) → sensor. Todas las funciones reciben ``ahora``: nunca leen la hora por su cuenta.
+# Bloqueos (``FOR NO KEY UPDATE``): invernadero → sistema (releído) → sensor y, si una regla confirma, los actuadores de las reglas (en orden de id: D-78, punto 11). El disparo
+# de las reglas (paso 6, IOT-06) corre en la transacción de la lectura. Todas las funciones reciben ``ahora``: nunca leen la hora por su cuenta.
 
 from collections import namedtuple
 from datetime import datetime, timedelta
@@ -12,14 +13,15 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from inventario.servicios.variedades import umbral_efectivo
-from iot.models import AlertaIot, Hardware, Sensor, SistemaIoT, Telemetria
-from iot.servicios import alertas_iot
+from iot.models import Actuador, AlertaIot, Comando, Hardware, NodoCentral, RegistroComando, ReglaActuacion, Sensor, SistemaIoT, Telemetria
+from iot.servicios import alertas_iot, comandos, reglas
 from iot.servicios.auditoria_nodo import auditar_entrega
 from iot.textos import valor_legible
 from maestros.servicios import alertas as api_alertas
 from maestros.servicios import configuracion
 
 TOLERANCIA_FUTURA = timedelta(minutes=5)  # extensión 3d
+LARGO_DE_LA_DESCRIPCION = Comando._meta.get_field("descripcion_comando").max_length
 LIMITE_DEL_VALOR = Decimal("9999999.99")  # D-74, punto 7
 DOS_DECIMALES = Decimal("0.01")
 # Variable del sensor -> variable del umbral efectivo y parámetro de histéresis de la Configuración Operativa.
@@ -45,9 +47,114 @@ def tiene_lecturas(sensor):
     return Telemetria.objects.filter(sensor_id=sensor.pk).exists()
 
 
-def evaluar_reglas_de_la_lectura(contexto, sensor, telemetria):
-    """Paso 6 y extensiones 6a a 6d: evalúa las reglas de actuación del sensor con esta lectura. **Se completa en IOT-06**: hasta entonces no hace nada."""
+def _cumple(regla, valor, minimo, maximo, histeresis):
+    """D-78, punto 8, «Cuándo se cumple»: si la regla venía «cumplida», sigue cumpliéndose hasta que la lectura se aleja del límite más que la histéresis; si no, se cumple con
+    la lectura del otro lado del límite (en «vuelve al rango», a más de la histéresis de cada límite)."""
+    venia = regla.ultima_evaluacion == ReglaActuacion.Evaluacion.CUMPLIDA
+    if regla.condicion == ReglaActuacion.Condicion.SUPERA_MAXIMO:
+        return valor >= maximo - histeresis if venia else valor > maximo
+    if regla.condicion == ReglaActuacion.Condicion.BAJA_DEL_MINIMO:
+        return valor <= minimo + histeresis if venia else valor < minimo
+    return minimo <= valor <= maximo if venia else minimo + histeresis <= valor <= maximo - histeresis
+
+
+def _motivo_de_ocupado(actuador, accion, valor, ahora):
+    """Extensión 6a.1a y regla «Actuador ocupado»: por qué la regla no puede emitir ahora (el actuador tiene un comando pendiente, no está activo, la acción ya no es válida o es
+    incompatible con el nodo —``validar_comando``— o no pasó el tiempo mínimo entre comandos de su tipo desde el último comando EJECUTADO, D-78 punto 7), o ``None`` si está libre."""
+    if Comando.objects.filter(actuador=actuador, estado_comando=Comando.Estado.PENDIENTE).exists():
+        return "El actuador tiene un comando pendiente."
+    if actuador.estado_hardware != Actuador.Estado.ACTIVO:
+        return "El actuador no está activo."
+    errores = comandos.validar_comando(actuador, accion, valor)
+    if errores:
+        return next(iter(errores.values()))[0].message
+    ultimo = Comando.objects.filter(actuador=actuador, estado_comando=Comando.Estado.EJECUTADO).order_by("-resuelto_en").first()
+    minimo = actuador.tipo_actuador.tiempo_minimo_entre_comandos
+    if ultimo is not None and minimo > 0 and (ahora - ultimo.resuelto_en).total_seconds() < minimo:
+        return "No pasó el tiempo mínimo entre comandos del actuador."
     return None
+
+
+def _descripcion_del_comando(regla):
+    """D-78, punto 9: «Regla {id}: cuando {sensor} {condición}, {acción}[ {valor} {unidad}].», hasta 300 caracteres."""
+    sensor, accion = regla.sensor, regla.accion
+    valor = f" {regla.aplicar_valor} {accion.unidad_valor}" if regla.aplicar_valor is not None else ""
+    condicion = reglas.TEXTO_DE_CONDICION[regla.condicion]
+    texto = f"Regla {regla.pk}: cuando {sensor.get_tipo_variable_sensor_display()} {sensor.identificador_equipo} {condicion}, {accion.nombre_accion}{valor}."
+    return texto[:LARGO_DE_LA_DESCRIPCION]
+
+
+def _emitir(regla, actuador, telemetria, ahora):
+    """Postcondiciones j a l: el comando automático, su registro de bitácora y la lectura en ``regla.telemetrias``. Devuelve ``(comando, registro)`` o ``None`` si la base rechazó el
+    pendiente (otra regla o una persona emitió a la vez: el índice único «un pendiente por actuador» respalda al chequeo, y la regla queda ocupada)."""
+    try:
+        with transaction.atomic():  # punto de guardado: el IntegrityError no rompe la transacción de la lectura
+            comando = Comando.objects.create(
+                actuador=actuador,
+                accion=regla.accion,
+                regla=regla,
+                agronomo=None,
+                emitido_en=ahora,
+                estado_comando=Comando.Estado.PENDIENTE,
+                valor_comando=regla.aplicar_valor,
+                descripcion_comando=_descripcion_del_comando(regla),
+                cantidad_intentos=0,
+            )
+    except IntegrityError as error:
+        if "comando_un_pendiente_por_actuador" in str(error):
+            return None
+        raise
+    registro = comandos.registrar_hecho(comando, RegistroComando.Resultado.EMITIDO, ahora, responsable=None, que_paso=f"emitido por la regla RGL-{regla.pk}")
+    regla.telemetrias.add(telemetria)
+    return comando, registro
+
+
+def evaluar_reglas_de_la_lectura(contexto, sensor, telemetria, ahora):
+    """Paso 6 y extensiones 6a a 6d (D-78, puntos 8 y 9): evalúa, lectura por lectura, las reglas ACTIVAS del sensor, en orden de id, con la histéresis de la variable acotada como en
+    D-75 (punto 2), y guarda su última evaluación y su contador (postcondición i). Devuelve los comandos y registros de bitácora creados, para la auditoría de la lectura.
+
+    - 6d: con el nodo en modo «local» no toca nada.
+    - 6c: la condición se cumple y falta confirmar: suma uno al contador. 6b: ya se cumplía: no emite. Una lectura que no cumple vuelve el contador a cero.
+    - 6a: al completar la confirmación, bloquea los actuadores de esas reglas (en orden de id) y emite si no están ocupados (``_motivo_de_ocupado``). 6a.1a: si lo están, la regla
+      queda «no cumplida» con el contador EN la confirmación, para volver a intentarlo con la lectura siguiente sin otra confirmación.
+    Se llama solo si la lectura llegó hasta la comparación: válida, reciente, sensor activo, sector en servicio, con umbral (y, en la luz, dentro del horario)."""
+    if NodoCentral.objects.filter(sistema_id=contexto.sistema_id, modo=NodoCentral.Modo.LOCAL).exists():  # 6d
+        return []
+    activas = list(ReglaActuacion.objects.filter(sensor=sensor, estado_regla=ReglaActuacion.Estado.ACTIVA).select_related("accion__comando", "sensor").order_by("pk"))
+    if not activas:
+        return []
+    nombre_umbral, parametro = VARIABLES_DEL_UMBRAL[sensor.tipo_variable_sensor]
+    limites = getattr(contexto.umbral, nombre_umbral)
+    histeresis = _histeresis(getattr(contexto.config, parametro), limites.minimo, limites.maximo)
+    confirmacion = contexto.config.cant_lecturas_confirmacion
+    valor = telemetria.valor_medido
+    confirmadas = []
+    for regla in activas:
+        cumple = _cumple(regla, valor, limites.minimo, limites.maximo, histeresis)
+        if cumple and regla.ultima_evaluacion == ReglaActuacion.Evaluacion.CUMPLIDA:  # 6b: ya se cumplía
+            continue
+        regla.ultima_evaluacion = ReglaActuacion.Evaluacion.NO_CUMPLIDA
+        regla.contador_confirmacion = regla.contador_confirmacion + 1 if cumple else 0  # 6c, o una lectura que no cumple
+        if cumple and regla.contador_confirmacion >= confirmacion:
+            confirmadas.append(regla)
+    actuadores = {}
+    if confirmadas:  # 6a: los actuadores se bloquean en orden de id (D-78, punto 11)
+        consulta = Actuador.objects.select_for_update(no_key=True, of=("self",)).select_related("tipo_actuador").filter(pk__in={r.actuador_id for r in confirmadas}).order_by("pk")
+        actuadores = {actuador.pk: actuador for actuador in consulta}
+    creados = []
+    for regla in confirmadas:
+        actuador = actuadores[regla.actuador_id]
+        emitido = None
+        if _motivo_de_ocupado(actuador, regla.accion, regla.aplicar_valor, ahora) is None:
+            emitido = _emitir(regla, actuador, telemetria, ahora)
+        if emitido is None:  # 6a.1a: ocupada; el contador queda EN la confirmación
+            regla.contador_confirmacion = confirmacion
+        else:  # postcondiciones j a l y 6a.3
+            regla.ultima_evaluacion, regla.contador_confirmacion = ReglaActuacion.Evaluacion.CUMPLIDA, 0
+            creados.extend(emitido)
+    for regla in activas:
+        ReglaActuacion.objects.filter(pk=regla.pk).update(ultima_evaluacion=regla.ultima_evaluacion, contador_confirmacion=regla.contador_confirmacion)
+    return creados
 
 
 def _ya_existe_la_lectura(sensor, medida_en):
@@ -113,6 +220,7 @@ class _Cambios:
     def __init__(self, invernadero_id, sistema):
         self.invernadero_id, self.sistema = invernadero_id, sistema
         self.generadas, self.resueltas = [], []
+        self.extras = []  # comandos automáticos y sus registros de bitácora (postcondiciones j y l), para la auditoría de la lectura
 
     def asegurar(self, tipo, clave, descripcion, hardware=None, telemetria=None):
         resultado = alertas_iot.asegurar_alerta_iot(self.invernadero_id, self.sistema, tipo, clave, descripcion, hardware, telemetria)
@@ -174,10 +282,13 @@ def _despues_de_guardar(contexto, sistema, sensor, telemetria, valor, medida_en,
         limites = getattr(contexto.umbral, nombre_umbral) if contexto.umbral is not None else None
         if limites is None:  # 5c y D-75 puntos 3 y 4
             cambios.resolver("iot_fuera_de_umbral", clave_sensor)
+            # Extensión 5c: las reglas del sensor vuelven a «sin evaluar» con el contador en 0. También con la variable del umbral vacía (D-75, punto 3: «no se compara, igual
+            # que en 5c»): hueco de «Reglas de actuación» de entregar_informacion.md, que solo nombra el caso «sin umbral» (decisión del estudiante del 23/11/2026).
+            reglas.reiniciar_reglas(list(ReglaActuacion.objects.filter(sensor=sensor, estado_regla=ReglaActuacion.Estado.ACTIVA).values_list("pk", flat=True)))
             return valida, atrasada
         h = _histeresis(getattr(config, parametro), limites.minimo, limites.maximo)
         _comparar(cambios, sensor, telemetria, valor, limites.minimo, limites.maximo, h, "iot_fuera_de_umbral", clave_sensor, "efectivo", sensor.unidad_medida)
-        evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)  # paso 6 (IOT-06)
+        cambios.extras.extend(evaluar_reglas_de_la_lectura(contexto, sensor, telemetria, ahora))  # paso 6 (IOT-06)
     return valida, atrasada
 
 
@@ -220,8 +331,8 @@ def registrar_lectura(contexto, lectura, ahora):
         Hardware.objects.filter(pk=sensor.pk).update(ultimo_mensaje_en=ahora)  # paso 6
         cambios.resolver("iot_dispositivo_sin_actividad", f"hw:{sensor.pk}")
         valida, atrasada = _despues_de_guardar(contexto, sistema, sensor, telemetria, valor, medida_en, ahora, cambios)
-        if cambios.generadas or cambios.resueltas:  # paso 11
-            auditar_entrega(sistema, "lectura", lectura.identificador, [sensor], None, cambios.generadas, cambios.resueltas)
+        if cambios.generadas or cambios.resueltas or cambios.extras:  # paso 11 (los comandos automáticos y su bitácora cuentan: postcondición z)
+            auditar_entrega(sistema, "lectura", lectura.identificador, [sensor, *cambios.extras], None, cambios.generadas, cambios.resueltas)
         return ResultadoDeLectura("aceptada", valida, atrasada)
 
 
