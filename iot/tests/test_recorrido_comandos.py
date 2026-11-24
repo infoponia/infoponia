@@ -19,7 +19,7 @@ from django.utils import timezone
 from core.enlaces import resumen_de
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_capataz, crear_gerente
-from iot.models import Actuador, AlertaIot, Comando, NodoCentral, RegistroComando, TipoActuador
+from iot.models import Actuador, AlertaIot, Comando, MantenimientoTecnico, NodoCentral, RegistroComando, TipoActuador
 from iot.servicios import revision
 from iot.tests import fabricas
 from maestros.models import Alerta
@@ -207,7 +207,9 @@ class RecorridoDeComandosTests(fabricas.ConCatalogoIot, TestCase):
         self.assertIn("Volvé a activarlo desde Hardware antes de emitir comandos.", self.ver(self.cliente.get(self.url("comandos", invernadero=self.norte.pk, actuador=self.ventilador.pk))))
         self.assertNotIn("Emitir comando", self.ver(self.cliente.get(self.url("hardware_ficha", self.ventilador.pk))))
         # IOT-MOD-HDW: volver a activar el actuador (resuelve la alerta) para seguir
-        self.cliente.post(self.url("hardware_volver_a_activar", self.ventilador.pk))
+        # IOT-07 (regla 8 de IOT-MOD-HDW): el escalamiento creó la orden de mantenimiento del Técnico; al volver a activar hay que elegir qué hacer con ella (D-79, punto 8).
+        orden = MantenimientoTecnico.objects.get()
+        self.cliente.post(self.url("hardware_volver_a_activar", self.ventilador.pk), {f"decision_{orden.pk}": "cancelar"})
         self.recargar(self.ventilador)
         self.assertEqual(self.ventilador.estado_hardware, "activo")
         self.assertIsNone(self.alerta("iot_comando_fallido"))

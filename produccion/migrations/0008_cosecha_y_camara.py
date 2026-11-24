@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         ('core', '0033_comercial_suministros_2'),
         ('inventario', '0003_semilla'),
         ('maestros', '0010_parametros_iot'),
-        ('produccion', '0006_bitacora_tipo_comando'),
+        ('produccion', '0007_ordentrabajo_prioridad_en_mantenimiento'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

@@ -181,7 +181,7 @@ recortan las restricciones de la base, los bloqueos, la huella de PROD-MOD-CSC n
 
 **Antes de empezar**
 
-1. Abrí una terminal con el entorno virtual activo y corré `python manage.py migrate` (aplica `contabilidad` 0003, `produccion` 0007, `comercial` 0005 y `core` 0034) y `python manage.py runserver`. Abrí `http://127.0.0.1:8000/`. No hay datos cargados: los creás vos (los cargadores no existen, D-95).
+1. Abrí una terminal con el entorno virtual activo y corré `python manage.py migrate` (aplica `contabilidad` 0003, `produccion` 0008, `comercial` 0005 y `core` 0034) y `python manage.py runserver`. Abrí `http://127.0.0.1:8000/`. No hay datos cargados: los creás vos (los cargadores no existen, D-95).
 2. Cuentas (todas con la contraseña de tus cuentas de prueba): un **Gerente**, un **Agrónomo**, un **Capataz** y un **Vendedor**; el Agrónomo, el Capataz y el Vendedor tienen que estar asignados al mismo invernadero (en «Invernaderos» › ficha › personal). Creá además, en otra ventana de navegador, una segunda cuenta de **Capataz** y otra de **Agrónomo** (sin invernadero) para probar permisos.
 3. Datos mínimos, en este orden (si venís de COM-03b ya los tenés: invernadero con Agrónomo, Capataz y Vendedor, y un lote de «Lechuga Crespa» en Maduración):
    - un invernadero (por ejemplo «Norte») con **dos sectores de Maduración** de 100 agujeros cada uno y la variedad «Lechuga Crespa» con ciclo hasta Maduración (postcosecha de 7 días);
@@ -229,14 +229,14 @@ recortan las restricciones de la base, los bloqueos, la huella de PROD-MOD-CSC n
 
 **Después del merge**
 
-18. Revisar en el log de Render que se aplicaron las cuatro migraciones nuevas (`contabilidad` 0003, `produccion` 0007, `comercial` 0005 y `core` 0034) y que «Producción» › «Órdenes» abre.
+18. Revisar en el log de Render que se aplicaron las cuatro migraciones nuevas (`contabilidad` 0003, `produccion` 0008, `comercial` 0005 y `core` 0034) y que «Producción» › «Órdenes» abre.
 
 ## Cierre (la completa Claude Code al cerrar)
 
 **Qué se hizo** (rama `feature/com-04a-cosechas`, 24/11/2026)
 
 - **Migraciones** (ninguna de datos; `sqlmigrate` leído: solo `CREATE TABLE`, `ADD COLUMN`, `ADD`/`DROP CONSTRAINT` de restricciones `CHECK` que se recrean con más valores; ningún `DELETE` ni `UPDATE` ni `DROP` de datos):
-  - `produccion/0007_cosecha_y_camara`: `MovimientoStock` (hija de `OrigenDocumento`; 6 restricciones, entre ellas C2), `Bitacora.cosecha` (con «tipo `cosecha` ⇔ cosecha») y los tipos `cosecha`, `incumplimiento_de_clausula` y `anulacion_de_resolucion` (con su restricción
+  - `produccion/0008_cosecha_y_camara`: `MovimientoStock` (hija de `OrigenDocumento`; 6 restricciones, entre ellas C2), `Bitacora.cosecha` (con «tipo `cosecha` ⇔ cosecha») y los tipos `cosecha`, `incumplimiento_de_clausula` y `anulacion_de_resolucion` (con su restricción
     «sin lote, etapa ni cosecha»), `Cosecha.origen_cosecha` (default `automatica`, con su restricción), `Merma.orden` (⇔ `dano_en_entrega`) y las tres causas nuevas, `Consumo.orden` con `consumo_un_solo_origen` ampliada a tres orígenes. Las restricciones `bitacora_tipo_evento_valido` y
     `merma_causa_valida` se reemplazan por la lista completa.
   - `contabilidad/0003_movimiento_de_stock` (solo `choices`; SQL vacío), `comercial/0005_cosechas` (`reserva_stock_fecha_segun_detalle`: fecha de entrega nula ⇔ sin detalle) y `core/0034_comercial_cosechas` (solo `choices`: `planificacion_cosecha`, `modificacion_cosecha`, `concrecion_cosecha`).

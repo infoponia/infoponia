@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('comercial', '0004_alerta_comercial'),
         ('maestros', '0010_parametros_iot'),
-        ('produccion', '0007_cosecha_y_camara'),
+        ('produccion', '0008_cosecha_y_camara'),
     ]
 
     operations = [

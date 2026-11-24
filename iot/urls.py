@@ -37,6 +37,7 @@ urlpatterns = [
     path("hardware/<int:equipo_id>/modificar/", views_hardware.hardware_modificar, name="hardware_modificar"),
     path("hardware/<int:equipo_id>/volver-a-activar/", views_hardware.hardware_volver_a_activar, name="hardware_volver_a_activar"),
     path("hardware/<int:equipo_id>/reactivar/", views_hardware.hardware_reactivar, name="hardware_reactivar"),
+    path("hardware/<int:equipo_id>/ordenes/<int:orden_id>/cancelar/", views_hardware.hardware_cancelar_orden, name="hardware_cancelar_orden"),  # IOT-07
     path("hardware/<int:equipo_id>/baja/", views_hardware.hardware_baja, name="hardware_baja"),
     # IOT-01: Tipos de actuador
     path("tipos/", views.tipos, name="tipos"),

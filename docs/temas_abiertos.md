@@ -636,7 +636,6 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Panel de monitoreo:** el enlace a las reglas de actuación (punto 7 de «Cuando existan actuadores, comandos y reglas del IoT», de `docs/disparadores.md`) quedó sin hacer: la tarea no lo pedía.
 - **Migración renumerada:** la de IOT-06 era `core` 0031 y pasó a 0032 al traer `main` (CMP-02b trajo la suya).
 
-
 ## COM-04a (24/11/2026): lo que se implementó distinto de lo escrito
 - **Máximo al concretar (8b de PROD-CNC-CSC):** el texto dice «reservada + stock libre sin contar esta reserva», que cuenta dos veces las plantas de la propia reserva. Se implementó **cantidad actual − lo que reservan las demás órdenes**. Corregir el extracto (`cosecha.md`) y el documento de Drive.
 - **Plantas no cosechadas ni perdidas:** quedan como stock libre y `asignar` puede volver a reservarlas al cubrir el faltante (no excluye los lotes de la cosecha, a diferencia de la cancelación). Confirmar si es lo querido.
@@ -648,3 +647,13 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Cancelar cosecha** es una página, no una ventana (D-47). `detalle_de_orden` abre las cosechas (API, sección 9).
 - **Invariantes de las fábricas:** lo cubierto de un lote cosechado es `min(cosechada, reservada)` (regla 9 de 8.8); en producción `cantidad_sin_cubrir` ya lo hacía.
 
+## Abiertos desde IOT-07 (24/11/2026)
+
+- **Claves de auditoría del extracto.** `mantenimiento_automatico.md` y la tarea decían `desde` y `equipos` para la cancelación; esas claves ya existen con otro sentido (reactivación y baja del sistema). Se usaron `cancelada_desde` y `equipos_de_la_orden` (más `orden_mantenimiento`, `sin_orden`, `ordenes_canceladas` y `ordenes_mantenidas`). Hay que corregir el extracto y la tarea. Tocó `core/models.py` (solo `ETIQUETAS` y `VALORES_VISIBLES`, sin migración), fuera de «Permitido fuera de la app»: autorizado por el estudiante.
+- **`produccion/tests/fabricas.py`** (fuera de «Permitido fuera de la app», autorizado): `orden_suelta` pone prioridad `media` también al mantenimiento, porque la restricción nueva `ordentrabajo_prioridad_en_mantenimiento` la exige. Sumarlo a «Permitido fuera de la app» de la tarea.
+- **El Inicio del Técnico muestra solo el identificador de cada equipo** (el extracto pedía «identificador y descripción»: la descripción vive en cada subtipo y costaría una consulta por equipo).
+- **El Inicio usa `timezone.localdate()`** para marcar las órdenes vencidas: el punto de extensión de `core` solo recibe al usuario, no la fecha.
+- **El orden de bloqueo del traspaso y de dos operaciones del mismo actor no se puede probar con barrera.** Todas empiezan por las cuentas, y el Agrónomo es común, así que se serializan antes del invernadero: invertir el orden no las hace fallar. Solo la prueba de escalamiento contra cancelación (`test_d78_el_escalamiento_corre_entero_antes_de_que_la_cancelacion_tome_el_invernadero`) discrimina (con el orden invertido, bloqueo mutuo). Se descartó la prueba de barrera del traspaso.
+- **Restricción `ordentrabajo_prioridad_en_mantenimiento` en Neon.** No hay mantenimientos anteriores a IOT-07, pero conviene confirmar antes del despliegue que ninguna orden de tipo mantenimiento tenga la prioridad vacía (la migración 0007 fallaría).
+- **La baja con varias órdenes** da un impedimento por orden en el equipo y uno solo con la lista en el sistema; los códigos de error nuevos (`decisiones_incompletas`, `orden_no_cancelable`, `ordenes_cambiaron`, `orden_no_pendiente`, `cambio_simultaneo`, `motivo_obligatorio`, `motivo_largo`) no estaban en el extracto.
+- **Si la alerta ya tiene otra orden (R048, 0..1)**, la orden nueva se crea sin alerta.
