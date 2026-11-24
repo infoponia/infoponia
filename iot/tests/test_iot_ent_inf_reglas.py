@@ -352,7 +352,7 @@ class IotEntInfReglasServicioTests(fabricas.ConCatalogoIot, TestCase):
         regla = self.regla()
         fabricas.comando(self.ventilador, self.apagar)  # el pendiente que el chequeo «no ve»
         self.lecturas_seguidas("25", 2)
-        with mock.patch.object(lecturas, "_motivo_de_ocupado", return_value=None):
+        with mock.patch("iot.servicios.lecturas._motivo_de_ocupado", return_value=None):
             resultado = self.lectura("25")
         self.assertEqual(resultado.resultado, "aceptada")
         self.assertEqual((self.estado(regla), self.comandos().count(), Telemetria.objects.count()), (("no_cumplida", 3), 1, 3))

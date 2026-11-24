@@ -207,7 +207,7 @@ class IotAltRglServicioTests(ConEscenaDeReglas, TestCase):
     def test_regla_6_si_la_base_rechaza_la_regla_igual_el_error_es_el_mismo_y_no_un_500(self):
         """Dos altas a la vez: si el chequeo del servicio no la ve, el índice único parcial de la base respalda y su ``IntegrityError`` se traduce al mismo error."""
         self.alta()
-        with mock.patch.object(reglas, "_regla_igual_activa", return_value=None):
+        with mock.patch("iot.servicios.reglas._regla_igual_activa", return_value=None):
             error = error_de(self.alta)
         self.assertEqual(codigos_de(error, NON_FIELD_ERRORS), ["regla_repetida"])
         self.assertEqual(ReglaActuacion.objects.count(), 1)

@@ -168,7 +168,7 @@ class IotModRglServicioTests(ConEscenaDeReglas, TestCase):
     def test_regla_5_si_la_base_rechaza_el_cambio_el_error_es_el_mismo_y_no_un_500(self):
         """Dos cambios a la vez: el índice único parcial respalda y su ``IntegrityError`` se traduce a ``regla_repetida``."""
         otra = self.alta(condicion="baja_del_minimo")
-        with mock.patch.object(reglas, "_regla_igual_activa", return_value=None):
+        with mock.patch("iot.servicios.reglas._regla_igual_activa", return_value=None):
             error = error_de(lambda: self.modificar(regla=otra, condicion="supera_maximo"))
         self.assertEqual(codigos_de(error, NON_FIELD_ERRORS), ["regla_repetida"])
 
