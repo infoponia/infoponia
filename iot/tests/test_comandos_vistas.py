@@ -90,7 +90,7 @@ class AccesoAComandosVistaTests(ComandosVistasBase):
     def test_la_pestana_comandos_esta_en_el_modulo_y_activa(self):
         html = self.texto(self.pagina())
         pestanas = re.findall(r'<a class="tab"[^>]*>([^<]+)</a>', html)
-        self.assertEqual(pestanas, ["Monitoreo", "Comandos", "Hardware", "Sistema IoT", "Tipos de actuador"])
+        self.assertEqual(pestanas, ["Monitoreo", "Comandos", "Reglas de actuación", "Hardware", "Sistema IoT", "Tipos de actuador"])
         self.assertIn('aria-selected="true"', re.search(r'<a class="tab"[^>]*>Comandos</a>', html).group(0))
 
     def test_el_gerente_con_agronomo_activo_solo_consulta_sin_formulario_ni_botones(self):
@@ -507,3 +507,36 @@ class ComandosEnLaFichaYElPanelVistaTests(ComandosVistasBase):
         html = self.panel()
         self.assertIn("El nodo puede estar ejecutándolo: podés cancelarlo en", html)
         self.assertIn('id="ventana-confirmar"', html)
+
+
+class ReglasEnEmitirComandoVistaTests(ComandosVistasBase):
+    """IOT-EMT-CMD paso 4 y 6b (IOT-06): las reglas de actuación activas del actuador elegido, en el formulario y como advertencia del resumen."""
+
+    def setUp(self):
+        super().setUp()
+        self.sensor = fabricas.sensor(self.sistema, "norte/temp")
+
+    def test_paso_4_el_formulario_muestra_las_reglas_activas_del_actuador_elegido(self):
+        """Paso 4: al elegir el actuador, el formulario lista sus reglas activas (código con enlace a la ficha y la frase); sin reglas no muestra el recuadro."""
+        regla = fabricas.regla(self.sensor, self.actuador, self.encender)
+        self.entrar(self.laura)
+        con = self.client.get(self.url("comandos", invernadero=self.norte, actuador=self.actuador.pk))
+        self.assertContains(con, "Este actuador tiene 1 regla de actuación activa")
+        self.assertContains(con, f"RGL-{regla.pk}")
+        self.assertContains(con, "Cuando Temperatura norte/temp supera el máximo del umbral efectivo, Extractor norte/extractor: Encender")
+        self.assertContains(con, self.url("regla_ficha", regla.pk))
+        sin = self.client.get(self.url("comandos", invernadero=self.norte))
+        self.assertNotContains(sin, "regla de actuación activa")
+
+    def test_paso_4_las_reglas_dadas_de_baja_no_se_muestran(self):
+        """Paso 4: solo las reglas activas."""
+        fabricas.regla(self.sensor, self.actuador, self.encender, estado_regla="inactiva")
+        self.entrar(self.laura)
+        self.assertNotContains(self.client.get(self.url("comandos", invernadero=self.norte, actuador=self.actuador.pk)), "regla de actuación activa")
+
+    def test_ext_6b_el_resumen_advierte_que_el_comando_puede_contradecir_las_reglas(self):
+        """Extensión 6b: con reglas activas, el resumen advierte (en azul) y deja continuar."""
+        fabricas.regla(self.sensor, self.actuador, self.encender)
+        respuesta = self.paso("resumen")
+        self.assertContains(respuesta, "El actuador tiene 1 regla(s) activa(s): este comando puede contradecirlas.")
+        self.assertContains(respuesta, "Confirmar y emitir")

@@ -1,0 +1,17 @@
+{% load iconos %}{% comment %}Ventana de dar de baja una regla (IOT-BAJ-RGL; ventana ``rbaj:<id>`` del prototipo, con los textos de «Cómo se aplica»). La regla deja de evaluarse y su historial se conserva; sus comandos pendientes siguen su curso
+(regla 2) y, si hay, la ventana lo dice. Abrirla (GET) no cambia nada; dar de baja es un POST. Recibe «regla», «fila» y «pendientes».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Dar de baja {{ fila.codigo }}</h2>
+    <p>{{ fila.texto }}.</p>
+    <p>La regla deja de evaluarse. Su historial se conserva y se puede reactivar más adelante.</p>
+    {% if pendientes %}<div class="alert alert-info" role="status" style="margin-bottom:10px">{% icono "info" 16 %}<div>Sus comandos pendientes ({% for c in pendientes %}CMD-{{ c.pk }}{% if not forloop.last %}, {% endif %}{% endfor %}) siguen su curso y se ejecutan igual. Si no los querés, cancelalos desde Comandos.</div></div>{% endif %}
+    <form method="post" action="{% url 'iot:regla_baja' regla.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:regla_ficha' regla.pk %}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+  </div>
+</div>

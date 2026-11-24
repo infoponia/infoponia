@@ -200,13 +200,33 @@ def datos_para_regla(actor, invernadero_id, actuador_id=None):
         Sensor.objects.filter(sistema=sistema, estado_hardware="activo", tipo_variable_sensor__in=VARIABLES_CON_REGLAS).select_related("sector").order_by("identificador_equipo", "pk")
     )
     actuadores = list(Actuador.objects.filter(sistema=sistema, estado_hardware="activo").select_related("tipo_actuador").order_by("identificador_equipo", "pk"))
-    acciones = []
     elegido = next((a for a in actuadores if str(a.pk) == str(actuador_id)), None)
-    if elegido is not None:
-        marcadas = set(elegido.acciones_incompatibles.values_list("pk", flat=True))
-        todas = elegido.tipo_actuador.acciones.filter(estado=Accion.Estado.ACTIVA).select_related("comando").order_by("id")
-        acciones = [a for a in todas if a.pk not in marcadas]
-    return DatosParaRegla(sensores, actuadores, acciones)
+    return DatosParaRegla(sensores, actuadores, acciones_ofrecidas(elegido) if elegido is not None else [])
+
+
+def acciones_ofrecidas(actuador):
+    """Las acciones activas del tipo de ``actuador`` que el nodo soporta (regla 4 de ALT; prototipo ``accsOk``): lo que ofrece el formulario. También sirve para modificar una regla
+    cuyo actuador ya no está activo (el actuador de una regla no se cambia)."""
+    marcadas = set(actuador.acciones_incompatibles.values_list("pk", flat=True))
+    todas = actuador.tipo_actuador.acciones.filter(estado=Accion.Estado.ACTIVA).select_related("comando").order_by("id")
+    return [a for a in todas if a.pk not in marcadas]
+
+
+def texto_previo(sensor, condicion, actuador, accion, valor):
+    """La frase de vista previa del formulario (prototipo ``rglText`` con lo que se va eligiendo): el mismo texto que tendrá la regla. ``""`` si falta algo para armarla (el sensor, la
+    condición, el actuador, la acción o, si la acción lleva valor, un valor entero). Solo lee: no valida (las reglas son del servicio)."""
+    if sensor is None or actuador is None or accion is None or condicion not in Condicion.values:
+        return ""
+    if accion.comando.lleva_valor:
+        try:
+            valor = _normalizar_valor(valor)
+        except (TypeError, ValueError, ValidationError):
+            return ""
+        if valor is None:
+            return ""
+    else:
+        valor = None
+    return _texto(sensor, condicion, actuador, accion, valor)
 
 
 # ---- alta (IOT-ALT-RGL) ----

@@ -606,3 +606,13 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **«Actuadores operativos» del panel no resta a un actuador que espera un comando:** cuenta su situación sin el comando pendiente (la fila sí muestra «Comando pendiente»). Confirmar con `consultar_lecturas.md`.
 - **El retiro audita una vez por retiro**, con los hechos juntos (`datos.hechos`), y no un registro por comando (D-97).
 - **Prueba paralela intermitente:** un primer intento de `python manage.py test iot produccion core --keepdb --parallel …` terminó con `TypeError: cannot pickle 'traceback' object` (el runner no puede mostrar un fallo). No se reprodujo en cuatro corridas más; si reaparece, correr en serie para ver el fallo.
+
+## Abiertos desde IOT-06 (24/11/2026)
+
+- **`iot/verificacion.py` y el cargador de datos de verificación** (la tarea pedía sumar `norte/sectorA/temp-vieja` y un paso del motivo `equipo_dado_de_baja`): no se hizo, porque D-95 los retiró. El paso del motivo `equipo_dado_de_baja` se cubre en las pruebas (`test_iot_baj_hdw.py`) y en los pasos 26 y 27 de la «Verificación a mano».
+- **`comandos.filas_de_comandos`** es un nombre público nuevo sobre `_filas_de` (IOT-05), para reutilizar el aspecto de la lista de comandos en la ficha de la regla. Está fuera de «Permitido fuera de la app»: confirmar o moverlo.
+- **El historial de la ficha de una regla muestra los últimos 25 comandos** y enlaza a «Comandos» con el origen «Regla de actuación» (el extracto no fija un límite).
+- **«Activar» el sistema es un botón directo** (un POST, sin ventana, como `sys-activar` del prototipo); desactivar y dar de baja llevan ventana. El extracto no dice cuál.
+- **Las pantallas de Hardware, Comandos y Reglas de un sistema dado de baja** dicen «no tiene Sistema IoT» (`sistema_del_invernadero` solo ve el vigente): el historial de un sistema dado de baja no tiene pantalla propia.
+- **Panel de monitoreo:** el enlace a las reglas de actuación (punto 7 de «Cuando existan actuadores, comandos y reglas del IoT», de `docs/disparadores.md`) quedó sin hacer: la tarea no lo pedía.
+- **Migración renumerada:** la de IOT-06 era `core` 0031 y pasó a 0032 al traer `main` (CMP-02b trajo la suya).

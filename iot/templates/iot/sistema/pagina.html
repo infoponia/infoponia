@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}«IoT» → «Sistema IoT» (IOT-CNS-HDW regla 2 y «Para los cinco»; ``sistema`` del prototipo): la ficha del nodo central del invernadero elegido (estado,
 conectividad, modo, modelo, serie, rango de la solución, último anuncio, dirección de la API y guía) o «no tiene Sistema IoT» con «Registrar sistema IoT»
-a quien lo opera. Los botones salen de «acciones» (D-30): modificar y regenerar el token; la desactivación, la activación y la baja las suma IOT-06. El
+a quien lo opera. Los botones salen de «acciones» (D-30): modificar y regenerar el token; desconectar, activar y dar de baja (IOT-06; las dos ventanas con confirmación y «Activar», un POST directo). El
 token no se muestra nunca: la base guarda solo su resumen. La ventana de regenerar se abre con HTMX; sin JavaScript, el enlace lleva a esta página con
 la ventana abierta («plantilla_de_ventana»).{% endcomment %}
 {% block titulo %}Sistema IoT · IoT · InfoPonia{% endblock %}
@@ -32,7 +32,10 @@ la ventana abierta («plantilla_de_ventana»).{% endcomment %}
     <div class="card-h">
       <h3>{% icono "router" 16 %} {{ nodo.nombre_nodo }}</h3><span class="spacer"></span>
       {% if "modificar" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_modificar' sistema.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+      {% if "desactivar" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_desactivar' sistema.pk %}" hx-get="{% url 'iot:sistema_desactivar' sistema.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Desconectar</a>{% endif %}
+      {% if "activar" in acciones %}<form method="post" action="{% url 'iot:sistema_activar' sistema.pk %}" style="display:inline">{% csrf_token %}<button class="btn btn-primary btn-sm" type="submit" data-enviando="Activando…">Activar</button></form>{% endif %}
       {% if "regenerar_token" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_regenerar_token' sistema.pk %}" hx-get="{% url 'iot:sistema_regenerar_token' sistema.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "lock" 14 %} Regenerar token</a>{% endif %}
+      {% if "baja" in acciones %}<a class="btn btn-danger btn-sm" href="{% url 'iot:sistema_baja' sistema.pk %}" hx-get="{% url 'iot:sistema_baja' sistema.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 14 %} Dar de baja</a>{% endif %}
     </div>
     <div class="facts">
       <div><span class="k">Estado</span><span class="v">{% if sistema.estado_sistema == "activo" %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-warn">Desconectado</span>{% endif %}</span></div>

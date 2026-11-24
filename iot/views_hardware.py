@@ -1,5 +1,5 @@
 # Vistas del Hardware (IOT-02): «IoT» → «Hardware» (lista con filtros y ficha del equipo; IOT-CNS-HDW), registrar (IOT-ALT-HDW), modificar, volver a activar y
-# reactivar (IOT-MOD-HDW). Las vistas solo orquestan (docs/patrones/abm.md, sección 1): validan la entrada, llaman al servicio y renderizan. Consultan el
+# reactivar (IOT-MOD-HDW) y dar de baja (IOT-BAJ-HDW, IOT-06). Las vistas solo orquestan (docs/patrones/abm.md, sección 1): validan la entrada, llaman al servicio y renderizan. Consultan el
 # Gerente y el Agrónomo; opera quien lo dice ``iot/alcance.py`` y quien solo consulta no ve botones de escritura (D-30).
 #
 # Los formularios son una página con HTMX y respaldo sin JavaScript: el cambio del tipo de equipo, de la variable o del tipo de actuador manda el formulario
@@ -10,6 +10,7 @@
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.http import Http404, HttpResponseNotAllowed
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -21,16 +22,18 @@ from django.views.decorators.vary import vary_on_headers
 from core.acceso import rol_requerido
 from core.models import Usuario
 from iot.contexto import codigos_del_servicio, contexto_del_modulo, errores_del_servicio, es_htmx
-from iot.models import Sensor, TipoActuador
+from iot.models import ReglaActuacion, Sensor, TipoActuador
 from iot.servicios import comandos as api_comandos
 from iot.servicios import compatibilidad as api_compatibilidad
 from iot.servicios import hardware as api
+from iot.servicios import reglas as api_reglas
 from iot.servicios import sistemas as api_sistemas
 from iot.textos import estado_legible, lectura_legible
 
 GERENTE, AGRONOMO = Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO
 VENTANA_VOLVER_A_ACTIVAR = "iot/hardware/_ventana_volver_a_activar.html"
 VENTANA_REACTIVAR = "iot/hardware/_ventana_reactivar.html"
+VENTANA_BAJA = "iot/hardware/_ventana_baja.html"
 # Los errores generales que mandan de vuelta a la lista: ya no se puede operar (extensiones 8a y 8b, precondición b).
 ERRORES_QUE_SACAN_DEL_FORMULARIO = {"fuera_de_alcance", "sistema_dado_de_baja", "invernadero_inactivo", "equipo_dado_de_baja", "comando_pendiente"}
 
@@ -91,6 +94,13 @@ def _fila(equipo, resumen):
     return {"equipo": equipo, "situacion": api.situacion_de(equipo, resumen.alertas), "ultimo": texto, "ultimo_en": fecha}
 
 
+def _reglas_activas_del_equipo(equipo):
+    """Las reglas de actuación activas que usan el equipo, como sensor o como actuador (IOT-CNS-HDW, regla 6; prototipo «Reglas activas que lo usan»): ``[{pk, codigo, texto}]``."""
+    usan = ReglaActuacion.objects.filter(Q(sensor_id=equipo.pk) | Q(actuador_id=equipo.pk), estado_regla=ReglaActuacion.Estado.ACTIVA)
+    usan = usan.select_related("sensor", "actuador__tipo_actuador", "accion").order_by("pk")
+    return [{"pk": r.pk, "codigo": f"RGL-{r.pk}", "texto": api_reglas.texto_de_regla(r)} for r in usan]
+
+
 def _contexto_de_la_ficha(request, equipo, **extra):
     """Lo que dibuja la ficha del equipo (regla 6 de IOT-CNS-HDW): el marco del invernadero del equipo, sus datos, su situación, sus alertas activas y sus botones."""
     contexto = contexto_del_modulo(request, "hardware", equipo.sistema.invernadero_id)
@@ -101,6 +111,7 @@ def _contexto_de_la_ficha(request, equipo, **extra):
         filas, total = api_comandos.historial_del_actuador(request.user, equipo, timezone.now())
         comandos = {"historial": filas, "historial_total": total, "puede_emitir": api_comandos.puede_emitir_a(request.user, equipo)}
     return contexto | comandos | {
+        "reglas_activas": _reglas_activas_del_equipo(equipo),
         "equipo": equipo,
         "situacion": api.situacion_de(equipo, resumen.alertas),
         "ultimo": ultimo,
@@ -343,3 +354,36 @@ def hardware_reactivar(request, equipo_id):
     if impedimento is None and equipo.clase == "actuador":
         compatibilidad = api_compatibilidad.calcular_compatibilidad(equipo.sistema, equipo.identificador_equipo, equipo.tipo_actuador)
     return _ventana(request, equipo, VENTANA_REACTIVAR, impedimento=impedimento, error=error, compatibilidad=compatibilidad)
+
+
+# ---- dar de baja (IOT-BAJ-HDW; IOT-06) ----
+
+
+@rol_requerido(GERENTE, AGRONOMO)
+@never_cache
+@vary_on_headers("HX-Request")
+def hardware_baja(request, equipo_id):
+    """Dar de baja un equipo (IOT-BAJ-HDW, reglas 2 y 7; ventana ``baj:<id>`` del prototipo), con confirmación previa. Si hay un comando pendiente, una orden de mantenimiento a realizar o una regla
+    activa que lo usa (precondiciones c a e), la ventana lo dice con cómo resolverlo y no ofrece confirmar; de un actuador, advierte su último estado informado. Abrirla (GET) no cambia nada;
+    la baja es un POST."""
+    if request.method not in ("GET", "HEAD", "POST"):
+        return HttpResponseNotAllowed(["GET", "HEAD", "POST"])
+    equipo = api.ficha_del_equipo(request.user, equipo_id)
+    if api.ACCION_BAJA not in api.acciones_permitidas(request.user, equipo):
+        messages.error(request, "Este equipo no se puede dar de baja: ya está dado de baja o solo lo consultás.")
+        return _a_la_ficha(equipo)
+    error = []
+    if request.method == "POST":
+        try:
+            api.baja_hardware(request.user, equipo.pk, timezone.now())
+        except ValidationError as rechazo:
+            error = rechazo.messages  # los impedimentos o «ya está dado de baja»: la ventana los vuelve a mostrar con el estado de ahora
+        else:
+            messages.success(request, f"{api.nombre_del_equipo(equipo)} {equipo.identificador_equipo} dado de baja: su historial se conserva y su identificador quedó libre.")
+            return _a_la_ficha(equipo)
+    try:
+        datos = api.datos_de_baja_del_equipo(request.user, equipo.pk)
+    except ValidationError as rechazo:  # lo dieron de baja entre la pantalla y la ventana
+        messages.error(request, rechazo.messages[0])
+        return _a_la_ficha(equipo)
+    return _ventana(request, equipo, VENTANA_BAJA, datos=datos, error=error)

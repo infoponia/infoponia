@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
 {% comment %}La ficha de un equipo (IOT-CNS-HDW regla 6; ``hw-ficha`` del prototipo): identificador, tipo, sector, situación, modelo, número de serie, fecha de instalación e insumo; de un sensor, su
 calibración; de un actuador, el estado que informó el nodo, la compatibilidad y el tiempo mínimo entre comandos; y sus alertas activas. Los botones salen de «acciones» (D-30): modificar, volver a
-activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (las reglas y las órdenes de mantenimiento) no se muestra; lo suman IOT-06 e IOT-07. IOT-05 suma «Emitir comando», el historial de comandos y «Cancelar». La última lectura y el estado informado, con su hora, son de IOT-03.
+activar (ventana) y reactivar (ventana). D-25: lo que todavía no existe (las órdenes de mantenimiento) no se muestra; lo suma IOT-07. IOT-06 suma «Dar de baja» (ventana) y las reglas activas que usan el equipo. IOT-05 suma «Emitir comando», el historial de comandos y «Cancelar». La última lectura y el estado informado, con su hora, son de IOT-03.
 Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
 {% block titulo %}{{ nombre }} {{ equipo.identificador_equipo }} · Hardware · IoT · InfoPonia{% endblock %}
 {% block contenido %}
@@ -17,6 +17,7 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
     {% if "modificar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:hardware_modificar' equipo.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
     {% if "volver_a_activar" in acciones %}<a class="btn btn-primary" href="{% url 'iot:hardware_volver_a_activar' equipo.pk %}" hx-get="{% url 'iot:hardware_volver_a_activar' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Volver a activar</a>{% endif %}
     {% if "reactivar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:hardware_reactivar' equipo.pk %}" hx-get="{% url 'iot:hardware_reactivar' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "ret" 14 %} Reactivar</a>{% endif %}
+    {% if "baja" in acciones %}<a class="btn btn-danger" href="{% url 'iot:hardware_baja' equipo.pk %}" hx-get="{% url 'iot:hardware_baja' equipo.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 14 %} Dar de baja</a>{% endif %}
   </div>
   {% include "iot/_marco_invernadero.html" %}
   {% for a in alertas %}<div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div><b>{{ a.descripcion_alerta }}</b></div></div>{% endfor %}
@@ -47,6 +48,12 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
       <div><span class="k">Descripción</span><span class="v">{% if equipo.descripcion_actuador %}{{ equipo.descripcion_actuador }}{% else %}—{% endif %}</span></div>
     </div>
     {% endif %}
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="card-h"><h3>{% icono "sliders" 16 %} Reglas activas que lo usan</h3></div>
+    {% if reglas_activas %}<div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table"><caption class="sr-only">Reglas de actuación activas que usan el equipo</caption><tbody>
+      {% for r in reglas_activas %}<tr><td><a class="id" href="{% url 'iot:regla_ficha' r.pk %}">{{ r.codigo }}</a></td><td>{{ r.texto }}</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<div class="card-b muted">Ninguna.</div>{% endif %}
   </div>
   {% if equipo.clase == "actuador" %}
   <div class="card" style="margin-top:14px">

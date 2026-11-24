@@ -23,6 +23,7 @@ from core.models import Usuario
 from iot.contexto import contexto_del_modulo, errores_del_servicio, es_htmx
 from iot.models import Actuador
 from iot.servicios import comandos as api
+from iot.servicios import reglas as api_reglas
 from iot.servicios import sistemas as api_sistemas
 from maestros.servicios import configuracion
 
@@ -84,6 +85,8 @@ def _la_emision(request, elegido, ahora, errores=None, general=None):
         "accion": accion,
         "actuador_id": actuador_id,
         "pendiente": pendiente,
+        # Paso 4 de IOT-EMT-CMD: las reglas de actuación activas del actuador elegido (IOT-06), con su frase.
+        "reglas": [{"pk": r.pk, "codigo": f"RGL-{r.pk}", "texto": api_reglas.texto_de_regla(r)} for r in para.reglas],
         "errores": errores or {},
         "general": general or [],
         "resumen": None,

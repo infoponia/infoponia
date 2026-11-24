@@ -724,6 +724,11 @@ def _nota_de(comando):
     return f"El actuador falló en {comando.cantidad_intentos} intentos (último resultado{detalle or ': sin detalle'})."
 
 
+def filas_de_comandos(comandos, ahora):
+    """Las filas de lista (``FilaDeComando``) de ``comandos``: la usa la ficha de una regla (IOT-CNS-RGL, regla 4) para mostrar los comandos que generó con el mismo aspecto que la lista."""
+    return _filas_de(comandos, ahora)
+
+
 def _filas_de(comandos_de_la_pagina, ahora):
     """Las filas de la lista con todo lo que dibuja la pantalla, sin consultas por fila (una para los emisores)."""
     maximo = 1 + configuracion.obtener().cant_reintentos_comando
