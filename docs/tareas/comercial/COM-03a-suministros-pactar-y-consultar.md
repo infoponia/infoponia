@@ -132,28 +132,8 @@ concurrencia.
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
-al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
-`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
-cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
-siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
-
-Hay migraciones nuevas (`comercial`, `core`): `python manage.py migrate`. Datos: los de la verificación de COM-02 (un invernadero con
-Agrónomo, Capataz y Vendedor y un lote de «Lechuga Crespa» en Maduración con, por ejemplo, 300 plantas libres); un cliente **sin correo**
-y otro con correo y dos direcciones. En «Configuración», pre-reserva de 14 días.
-
-1. Con el Vendedor: «Contratos» › «Suministros» › «Pactar suministro». Elegí el cliente sin correo: las secciones 2 y 3 quedan bloqueadas y
-   aparece «Cargar el correo». Cargalo y volvé: el cliente sigue elegido.
-2. Duración 6 meses: «Termina el …» (mismo día del mes, 6 meses después). Tolerados 0: se acepta. Multa 50000, plazo de pago 15, atraso 100.
-3. Detalle 1: Lechuga Crespa, dirección 1, 200 plantas cada 7 días, primera entrega en 3 días, precio fijo 1500. El calendario muestra dos
-   fechas «se reserva ahora» y la segunda dice que no alcanza (hay 300 para 400). Cambiá a 150 plantas: las dos alcanzan.
-4. Agregá el mismo par (variedad y dirección 1): error «El contrato ya tiene…». Cambiá a la dirección 2, ajuste periódico 3 % cada 2 meses:
-   el calendario muestra los tramos de precio. Cláusulas de los dos detalles, con mínimo mayor que la cantidad: error; corregilo.
-5. «Revisar y pactar»: el resumen; confirmá. La ficha: `SUM-0001` vigente, la cláusula, los dos detalles y el calendario con los períodos
-   «Reservado» y los «Fuera de la ventana». Las cosechas notificadas al Capataz y al Agrónomo. En «Auditoría», un `pacto_suministro`.
-6. Con otro cliente, pactá el mismo par: aviso de superposición con `SUM-0001`; sin marcar «Continuar igual» no deja confirmar.
-7. Sin JavaScript, el pacto funciona con «Actualizar» y el resumen como página.
-8. Después del merge: revisar en el log de Render que se aplicaron las migraciones nuevas.
+Está en el «Cierre», sección «Verificación a mano» (D-96): los datos se crean a mano, no hay cargador (`comercial/verificacion.py` se retiró en D-95 y no vuelve). Hay migraciones nuevas
+(`comercial` 0003 y `core` 0030): `python manage.py migrate`.
 
 ## Cierre (la completa Claude Code al cerrar)
 
@@ -185,13 +165,13 @@ y otro con correo y dos direcciones. En «Configuración», pre-reserva de 14 d�
 
 **Pruebas** (M1; comandos de «Hecho cuando»)
 
-- `manage.py test comercial core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **1513 pruebas, OK** (6 omitidas: las visuales, que se corren aparte).
+- `manage.py test comercial core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **1513 pruebas, OK** (ya sin las 6 pruebas visuales, que D-96 retiró).
 - `manage.py test comercial --keepdb --tag concurrencia`: **27 pruebas, OK** (22 de antes y las 5 nuevas).
 - Además, por haber tocado los puntos de extensión que usan otras apps: `maestros`, `inventario` y `produccion` (3223 pruebas, en serie): **un solo fallo, ajeno a la tarea**:
   `produccion.tests.test_prod_reg_apl…consumo_originado_en_el_consumo` espera la fecha local y el movimiento de insumo toma la de UTC; falla después de las 21 h en Argentina
   (UTC−3), con o sin esta tarea (no se tocó `produccion` ni `inventario`). Anotado en `docs/temas_abiertos.md`.
 - Nuevas: `test_modelos_suministros.py` (30), `test_calendario.py` (35), `test_simular.py` (13), `test_com_pct_sum.py` (70), `test_suministros_concurrencia.py` (5), `test_com_cns_sum.py` (29),
-  `test_suministros_vistas.py` (38), `test_recorrido_suministros.py` (2) y `test_visual_suministros.py` (6, Playwright). Ampliadas: `test_prod_asg_stk.py` (+23, en la clase de períodos),
+  `test_suministros_vistas.py` (38), `test_recorrido_suministros.py` (2). Ampliadas: `test_prod_asg_stk.py` (+23, en la clase de períodos),
   `test_extensiones_de_produccion.py` (+1), `test_impedimento_de_variedad.py` (+6), `test_traspaso_de_vendedor.py` (+8), `test_clientes_con_compra_ventas.py` (+7) y `test_com_mod_clt.py` (+3).
 - **Pruebas de COM-01 y COM-02 reemplazadas** (para anotar en el PR; ninguna se borró ni se debilitó: cambió la regla):
   - `test_prod_asg_stk.py`: «Hasta COM-03 el detalle es un `DetalleVenta`» → ahora acepta también un `Periodo` y rechaza cualquier otra cosa.
@@ -227,8 +207,8 @@ el plan y los desvíos (para `docs/temas_abiertos.md`; no los corregí en silenc
 11. **Fuera de lo que decía «Permitido fuera de la app»**: nada de `maestros`, `produccion` ni `inventario`. En `comercial` se tocaron cosas de COM-01 y COM-02 que el cierre lista arriba y esto:
     `contratos/lista.html` (el selector), `clientes/ficha.html` (suministros), `contratos/comprobante.html` (le faltaba la hoja de estilos del sistema: salía con el estilo del navegador) y
     `comercial.css` (reglas nuevas y tres correcciones: la unidad de un campo, el CUIT y el resumen del formulario de COM-02).
-12. **La tarea nombraba `comercial/verificacion.py` y el cargador** de datos de verificación: se ignoraron (D-95). Los pasos de «Verificación a mano» se convirtieron en el recorrido.
-13. **Playwright**: no estaba instalado en el entorno de desarrollo; se instaló desde `requirements-dev.txt` (ya listado; no se tocó `requirements.txt`) y Chromium con `python -m playwright install chromium`.
+12. **La tarea nombraba `comercial/verificacion.py` y el cargador** de datos de verificación: se ignoraron (D-95 y D-96: no vuelven). Los pasos de la «Verificación a mano» se escriben en el «Cierre» y el recorrido los cubre por prueba.
+13. **Pruebas visuales retiradas (D-96).** El primer cierre de la tarea traía `test_visual_suministros.py` (Playwright, 6 pruebas) y apoyaba en `core/tests/visual.py`, que nunca se versionó: el CI falló al importarlo (`ModuleNotFoundError`). Se borró el archivo; no queda Playwright ni `requirements-dev.txt`. Las correcciones de aspecto que esa verificación encontró siguen en la tabla de arriba.
 
 **Pantallas: lo que se corrigió del prototipo** (D-61)
 
@@ -248,26 +228,22 @@ el plan y los desvíos (para `docs/temas_abiertos.md`; no los corregí en silenc
 | `VIEWS.sum` | «Registrar cobro» y solicitudes en la ficha | No se muestran (las suman COM-07 y COM-08); tampoco «Modificar», «Rescindir» ni «Ver historial» (COM-03b) | D-25 |
 | `VIEWS.sum` | Sin estado del comprobante | Estado, «Ver comprobante» imprimible y «Reenviar comprobante» | Extensión 15a |
 | `VIEWS.sum` | Sin estado vacío ni secciones bloqueadas | Estado vacío de la lista, «Pactar suministro» deshabilitado con su motivo (b y c), pasos bloqueados con lo que falta | Precondiciones b y c |
-| *Verificación visual* | La unidad de un campo («meses», «$ por día») quedaba debajo del campo | Unidad junto al campo (`.suf`) | Criterio de interfaz |
-| *Verificación visual* | CUIT pegado al nombre del cliente; resumen angosto con textos cortados (también en COM-02) | Línea propia para el CUIT y el resumen en una columna | Criterio de interfaz |
-| *Verificación visual* | En un celular la grilla ensanchaba la página; en la ficha los enlaces eran azules del navegador | `minmax(0, 1fr)` y `min-width: 0`; enlaces en el verde primario | Interfaz; celular |
-| *Verificación visual* | «Ajuste» y «Cada» aplastados en la cuarta columna | Fila propia para el ajuste periódico | Extensión 8b |
-| *Verificación visual* | El comprobante imprimible salía con el estilo por defecto del navegador (también el de COM-02) | Se carga la hoja de estilos del sistema | Variación 15a |
-| *Verificación visual* | El precio del calendario se partía en dos líneas en un celular | Sin cortes (`nowrap`) | Celular |
-| *Verificación visual* | El resumen mostraba «50000 $» tal como se tipeó | Importes en pesos con formato («$ 50.000,00») | Reglas «Datos del contrato» |
+| *Revisión visual (D-95, retirada por D-96)* | La unidad de un campo («meses», «$ por día») quedaba debajo del campo | Unidad junto al campo (`.suf`) | Criterio de interfaz |
+| *Revisión visual (D-95, retirada por D-96)* | CUIT pegado al nombre del cliente; resumen angosto con textos cortados (también en COM-02) | Línea propia para el CUIT y el resumen en una columna | Criterio de interfaz |
+| *Revisión visual (D-95, retirada por D-96)* | En un celular la grilla ensanchaba la página; en la ficha los enlaces eran azules del navegador | `minmax(0, 1fr)` y `min-width: 0`; enlaces en el verde primario | Interfaz; celular |
+| *Revisión visual (D-95, retirada por D-96)* | «Ajuste» y «Cada» aplastados en la cuarta columna | Fila propia para el ajuste periódico | Extensión 8b |
+| *Revisión visual (D-95, retirada por D-96)* | El comprobante imprimible salía con el estilo por defecto del navegador (también el de COM-02) | Se carga la hoja de estilos del sistema | Variación 15a |
+| *Revisión visual (D-95, retirada por D-96)* | El precio del calendario se partía en dos líneas en un celular | Sin cortes (`nowrap`) | Celular |
+| *Revisión visual (D-95, retirada por D-96)* | El resumen mostraba «50000 $» tal como se tipeó | Importes en pesos con formato («$ 50.000,00») | Reglas «Datos del contrato» |
 
-**Recorrido de verificación y verificación** (D-95: la hizo Claude Code; el estudiante no cargó datos ni verificó a mano)
+**Recorrido y verificación** (D-96: Claude Code hace el recorrido y la revisión de migraciones; el estudiante verifica a mano con los pasos de más abajo)
 
-*Recorrido* (`comercial/tests/test_recorrido_suministros.py`, `RecorridoDeSuministrosTests`): los pasos 1 a 7 de la antigua «Verificación a mano», de punta a punta con el cliente de Django:
+*Recorrido* (`comercial/tests/test_recorrido_suministros.py`, `RecorridoDeSuministrosTests`): los pasos 1 a 7 de la verificación, de punta a punta con el cliente de Django:
 (1) un cliente sin correo bloquea las secciones y «Cargar el correo» vuelve con el cliente elegido; (2) la fecha de fin y tolerados 0; (3) con 300 plantas, dos períodos de 200 en la ventana: el segundo no alcanza;
 con 150, sí; (4) par repetido, ajuste periódico con sus tramos, mínimo mayor que la cantidad; (5) resumen, pacto, reservas, notificaciones al Capataz y al Agrónomo, auditoría `pacto_suministro` y comprobante;
 (6) superposición con y sin la casilla; (7) todo sin JavaScript. Y por rol: el Gerente elige al Vendedor, el Vendedor ajeno recibe 403 (con mensaje) y no lo ve en su lista, el Agrónomo recibe 403 en todo.
 
-*Visual* (`test_visual_suministros.py`, Playwright + Chromium, 6 pruebas, 19 capturas que miré una por una): la lista con el selector, el formulario con HTMX (recálculo, ajuste periódico, opciones de período,
-error de stock, ventana del resumen), la ficha con todas las situaciones del calendario, el calendario completo, el comprobante, el Gerente, el Agrónomo (403), cuatro pantallas en un celular (sin scroll horizontal)
-y el pacto entero sin JavaScript. Sin errores de JavaScript ni de consola. Lo que vi mal se corrigió (tabla de arriba).
-
-*Migraciones*: `makemigrations --check` sin cambios; `sqlmigrate comercial 0003` leído (solo `CREATE`; la secuencia con su reverso) y `core 0030` (sin SQL); aplicadas en la base de pruebas (se recreó dos veces); `manage.py check` sin problemas.
+*Migraciones*: `makemigrations --check` sin cambios; `sqlmigrate comercial 0003` leído (solo `CREATE`; la secuencia con su reverso) y `core 0030` (sin SQL); aplicadas en la base de pruebas; `manage.py check` sin problemas.
 
 **Verifiqué:** todo lo anterior, con su resultado. Además, medí que `disponible` y `asignar` de compra-venta mantienen sus consultas (9 y 23) contra el módulo de `HEAD`.
 
@@ -278,16 +254,17 @@ las pantallas y el `volver` (`test_suministros_vistas.py`); el flujo completo (`
 **No pude verificar:**
 - El envío real de un correo (las pruebas usan `enviar_correo` simulado): con SMTP real, que el comprobante llegue y se lea bien.
 - Que Render aplicó `comercial/0003` y `core/0030` (log del despliegue) y que las pantallas abren en producción (Neon).
-- Impresión real del comprobante (el botón «Imprimir» y el papel) y navegadores que no sean Chromium (Firefox, Edge).
+- Lo que solo un navegador real ve (CSRF y `Origin`, JavaScript y HTMX, aspecto, celular): D-96 retiró la verificación visual automática; va en los pasos 11 y 12 de la «Verificación a mano».
+- Impresión real del comprobante (el botón «Imprimir» y el papel).
 - Georef real de producción (las pruebas usan los datos de la migración): que las direcciones del cliente se listen con su localidad.
 - Criterio de producto: si la pantalla «Pactar suministro» (con muchos detalles) se siente cómoda para el Jardín Botánico.
 
-**Pasos para replicar** (opcionales; para el estudiante, autocontenidos)
+**Verificación a mano** (para el estudiante, autocontenida; se copia a `docs/revisiones_pendientes.md`, M5)
 
 *Antes de empezar.* Con el entorno virtual activo: `python manage.py migrate` (aplica `comercial` 0003 y `core` 0030) y `python manage.py runserver`; abrí `http://127.0.0.1:8000/`. No hay datos
 cargados: hay que crearlos a mano, en este orden. (1) Con el Gerente, en «Usuarios y seguridad», creá un Agrónomo, un Capataz y dos Vendedores (el segundo, para el paso 11); la contraseña es la que definas.
 (2) En «Producción», creá un invernadero con ese Agrónomo, ese Capataz y el primer Vendedor, sus sectores y una variedad («Lechuga Crespa») con su ciclo; sembrá y avanzá un lote hasta «Maduración» con
-**300 plantas**, como en las rondas de producción (las pruebas lo arman por código, así que este paso es el único que no pude recorrer en el navegador). (3) En «Comercial» › «Clientes», creá «Verdulería Los Pinos S.R.L.» (CUIT de ejemplo 30-71234567-1) **con** correo
+**300 plantas**, como en las rondas de producción (las pruebas lo arman por código). (3) En «Comercial» › «Clientes», creá «Verdulería Los Pinos S.R.L.» (CUIT de ejemplo 30-71234567-1) **con** correo
 (`compras@lospinos.com`) y dos direcciones («San Martín 123, Garupá» y «Belgrano 45, Garupá»), y «Verdulería Sin Correo S.A.» (CUIT 30-71234568-9) **sin** correo y con una dirección. (4) En «Configuración», la
 pre-reserva de suministros en 14 días (viene así). Entrá con el primer Vendedor.
 
@@ -311,8 +288,11 @@ pre-reserva de suministros en 14 días (viene así). Entrá con el primer Vended
 9. **Roles.** Entrá con el Agrónomo y escribí `/comercial/contratos/?tipo=suministro` en la barra: 403. Entrá con el segundo Vendedor: la lista no trae el `SUM-0001` y `/comercial/contratos/suministros/<id>/` da 403.
 10. **Baja de variedad y cambio de Vendedor.** Con el Agrónomo, intentá dar de baja «Lechuga Crespa»: «Tiene contratos abiertos: 2 suministros.». Con el Gerente, en el invernadero, cambiá su Vendedor por el
     segundo: el aviso dice «Suministros vigentes: 2» y después los contratos son del Vendedor nuevo (las reservas no se mueven).
-11. *(opcional)* **Sin JavaScript** (desactivalo en el navegador): el pacto funciona con «Actualizar» y el resumen como página. **En un celular** (ancho de 390 px): la lista, el formulario, la ficha y el
+11. **Navegador real (D-96).** Abrí el sistema en una **ventana privada**, entrá con el Vendedor y pactá un suministro **hasta el final**: elegir el cliente, completar las tres secciones, «Actualizar», «Revisar y pactar»
+    y «Confirmar suministro»; después probá «Reenviar comprobante». Tiene que mostrar la ficha con `SUM-…`, sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola del navegador (F12).
+    Si aparece alguno, avisá: lo más probable es un encabezado que el cliente de Django no ve.
+12. *(opcional)* **Sin JavaScript** (desactivalo en el navegador): el pacto funciona con «Actualizar» y el resumen como página. **En un celular** (ancho de 390 px): la lista, el formulario, la ficha y el
     calendario no se desbordan.
-12. *(después del merge)* En el log de Render, que se aplicaron `comercial/0003_suministros` y `core/0030_comercial_suministros`.
+13. *(después del merge)* En el log de Render, que se aplicaron `comercial/0003_suministros` y `core/0030_comercial_suministros`.
 
-*Lo que ya cubre el recorrido*: los pasos 2 a 8 (con el cliente de Django) y las capturas del navegador; si tenés poco tiempo, concentrate en el 4 (tabla de stock), el 6 (ficha y avisos) y el 9.
+*Lo que ya cubre el recorrido*: los pasos 2 a 8 (con el cliente de Django); si tenés poco tiempo, concentrate en el 4 (tabla de stock), el 6 (ficha y avisos), el 9 y el 11 (navegador real).

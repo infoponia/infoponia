@@ -553,7 +553,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **El comprobante de COM-02** se tocó solo en su plantilla (le faltaba la hoja de estilos del sistema); también `comercial.css` (el CUIT del cliente y el resumen angosto del formulario de COM-02).
 - **Selector «Compra-ventas / Suministros»** como dos enlaces en vez de un `<select>` (D-61). El prototipo lo tenía como `<select>`.
 - **Prueba ajena a la tarea:** `produccion…test_prod_reg_apl…consumo_originado_en_el_consumo` falla después de las 21 h en Argentina (compara la fecha UTC del movimiento con la local). Arreglarla en una tarea de `produccion` o `inventario`.
-- **Entorno.** Playwright y Chromium se instalaron en el entorno de desarrollo desde `requirements-dev.txt` (no se tocó `requirements.txt`).
+- **Prueba visual retirada.** `comercial/tests/test_visual_suministros.py` (Playwright) importaba `core.tests.visual`, que nunca se versionó, y rompía el descubrimiento de pruebas del CI. Se borró por D-96; las correcciones de aspecto que encontró siguen en el «Cierre».
 - **Pendientes de Drive.** pendientes_CU: COM-CNS-SUM (regla 9 y el aviso con 0 tolerados). pendientes_MD: nada nuevo.
 
 ## Abiertos desde CMP-02a (23/11/2026)
