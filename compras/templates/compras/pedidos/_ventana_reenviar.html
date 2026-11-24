@@ -1,0 +1,15 @@
+{% load iconos %}{% comment %}Ventana «Reenviar invitación» (regla 7 de CMP-CNS-PED, ``MODALS.reenviar`` del prototipo). Recibe «pedido», «invitacion» y «proveedor». Pide confirmar: se genera un enlace nuevo, el anterior
+deja de servir y se le envía el correo al proveedor. Reenviar es un POST a la misma URL; abrirla (GET) no cambia nada. Sin JavaScript, el enlace lleva a la ficha del pedido con la ventana abierta.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Reenviar invitación a {{ proveedor.nombre_para_mostrar }}</h2>
+    <p>Generamos un enlace nuevo para <b>{{ proveedor.nombre_para_mostrar }}</b> y se lo enviamos a <b>{{ proveedor.email_proveedor }}</b>. El enlace anterior deja de servir.</p>
+    <form method="post" action="{% url 'compras:invitacion_reenviar' invitacion.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-ghost" href="{% url 'compras:pedido_ficha' pedido.pk %}" data-cerrar-ventana>Volver</a>
+        <button class="btn btn-primary" type="submit" data-foco-inicial data-enviando="Reenviando…">Reenviar invitación</button>
+      </div>
+    </form>
+  </div>
+</div>

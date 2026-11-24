@@ -14,7 +14,7 @@ resolverlo. Sin ellos, pide confirmar. Dar de baja es un POST a la misma URL; ab
     </div>
     {% else %}
     <h2 id="ventana-titulo">¿Dar de baja a {{ proveedor.nombre_para_mostrar }}?</h2>
-    <p>Deja de aparecer para pedir cotizaciones. Su historial se conserva y se puede reactivar cuando haga falta, cargando de nuevo su CUIT.</p>
+    <p>Deja de aparecer para pedir cotizaciones y sus enlaces vigentes de pedidos en cotización dejan de servir. Su historial se conserva y se puede reactivar cuando haga falta, cargando de nuevo su CUIT.</p>
     <form method="post" action="{% url 'compras:proveedor_baja' proveedor.pk %}">
       {% csrf_token %}
       <div class="acts">

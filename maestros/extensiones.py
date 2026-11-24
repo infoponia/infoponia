@@ -27,13 +27,15 @@ from collections import namedtuple
 
 from django.core.exceptions import ImproperlyConfigured
 
-# Un impedimento de la baja: un código estable, qué pasa y cómo resolverlo (regla 2 de PROD-BAJ-INV).
-Impedimento = namedtuple("Impedimento", "codigo texto como_resolver")
+# Un impedimento de la baja: un código estable, qué pasa y cómo resolverlo (regla 2 de PROD-BAJ-INV). ``url`` (CMP-02b, opcional) lleva a lo que lo
+# impide, por ejemplo la ficha del pedido en curso: las ventanas la muestran como «Ver detalle». Los que se construyen con tres valores quedan en ``None``.
+Impedimento = namedtuple("Impedimento", "codigo texto como_resolver url", defaults=(None,))
 
 # Registrantes. Listas de módulo: las pruebas las reemplazan con ``mock.patch.object``.
 _IMPEDIMENTOS = []
 _EFECTOS_DE_BAJA = []
 _TRASPASOS = []  # pares (contar, traspasar)
+_AVISOS_DE_TRASPASO = []
 
 
 def registrar_impedimento_de_baja(funcion):
@@ -81,6 +83,22 @@ def contar_traspaso(invernadero, rol, saliente, entrante):
     for contar, _ in list(_TRASPASOS):
         recibe.extend(contar(invernadero, rol, saliente, entrante))
     return recibe
+
+
+def registrar_aviso_de_traspaso(funcion):
+    """Registra ``funcion(invernadero, rol, saliente, entrante) -> list[str]`` (CMP-02b): lo que se CANCELA o se pierde al cambiar a la persona del rol, para
+    la ventana de la regla 2 de PROD-MOD-INV. A diferencia de ``contar`` (lo que RECIBE quien entra), se informa aunque no haya entrante y no va a la
+    notificación de quien entra. Solo lectura. Lo registra `compras` (los pedidos del Agrónomo saliente)."""
+    _AVISOS_DE_TRASPASO.append(funcion)
+    return funcion
+
+
+def avisos_de_traspaso(invernadero, rol, saliente, entrante):
+    """Los textos de todos los registrantes, juntos y en el orden de registro (sin registrantes, lista vacía)."""
+    textos = []
+    for funcion in list(_AVISOS_DE_TRASPASO):
+        textos.extend(funcion(invernadero, rol, saliente, entrante))
+    return textos
 
 
 def traspasar(actor, invernadero, rol, saliente, entrante):

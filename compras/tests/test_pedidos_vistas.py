@@ -418,3 +418,208 @@ class InicioYFichaDelProveedorTests(PedidosVistasBase):
         invitar(pedido, self.sur)
         respuesta = self.client.get(reverse("compras:proveedor_editar", args=[self.sur.pk]))
         self.assertTrue(respuesta.context["cuit_fijo"])
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-02b, paso 5: «Cancelar pedido» (``compras:pedido_cancelar``: GET el formulario; POST con ``accion`` = ``revisar`` el resumen del paso 4, ``confirmar`` cancela
+# y ``editar`` vuelve al formulario con lo escrito; campo ``motivo``) y «Reenviar invitación» (``compras:invitacion_reenviar``: GET la ventana, con HTMX el fragmento y
+# sin él la ficha con la ventana abierta; POST reenvía). Solo el Agrónomo del pedido: el Gerente y otro Agrónomo reciben 403 y ningún botón lleva a un 403 (D-30).
+# Las reglas ya las prueban ``test_cmp_cnl_ped.py`` y ``test_cmp_cns_ped.py``.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+HX = {"HTTP_HX_REQUEST": "true"}
+
+
+def con_on_commit_inmediato():
+    """En un ``TestCase`` ``on_commit`` nunca corre solo: lo reemplaza por una llamada inmediata, que es lo que pasa en producción (ver ``PedidosVistasBase.pedir``)."""
+    return mock.patch.object(transaction, "on_commit", lambda funcion, **kwargs: funcion())
+
+
+@override_settings(CORREO_CONFIGURADO=True)
+class CancelarYReenviarVistaTests(PedidosVistasBase):
+    """Un pedido de Ana a Norte con dos invitados: Semillas del Sur cotizó (enlace «usado») y Viveros del Este no (enlace «vigente»)."""
+
+    def setUp(self):
+        super().setUp()
+        self.pedido = armar_pedido(self.ana, dias_al_limite=3)
+        self.detalle = detalle_de_pedido(self.pedido, self.lechuga, cantidad="20")
+        self.invitacion_sur = invitar(self.pedido, self.sur)
+        self.invitacion_este = invitar(self.pedido, self.este)
+        self.enlace_sur, _ = enlace_de(self.invitacion_sur, estado="usado")
+        self.enlace_este, _ = enlace_de(self.invitacion_este)
+        self.cotizacion = cotizacion_de(self.pedido, self.sur, [(self.detalle, 20, "250.00", 3)])
+        self.ficha = reverse("compras:pedido_ficha", args=[self.pedido.pk])
+        self.cancelar = reverse("compras:pedido_cancelar", args=[self.pedido.pk])
+        self.reenviar = reverse("compras:invitacion_reenviar", args=[self.invitacion_este.pk])
+
+    def estado(self, objeto):
+        objeto.refresh_from_db()
+        return getattr(objeto, "estado_pedido", None) or getattr(objeto, "estado", None)
+
+    # ---- la ficha ofrece las acciones solo a quien puede hacerlas ----
+
+    def test_la_ficha_ofrece_cancelar_y_reenviar_a_la_agronoma_del_pedido(self):
+        """Reglas 7 y 8 de CMP-CNS-PED: «Cancelar pedido» y «Reenviar invitación» solo para el invitado que no cotizó."""
+        respuesta = self.client.get(self.ficha)
+        self.assertContains(respuesta, self.cancelar)
+        self.assertContains(respuesta, self.reenviar)
+        self.assertNotContains(respuesta, reverse("compras:invitacion_reenviar", args=[self.invitacion_sur.pk]))
+
+    def test_la_ficha_no_ofrece_acciones_al_gerente_ni_con_el_pedido_cancelado(self):
+        """D-30: ningún botón lleva a un 403 ni a una acción que ya no corresponde."""
+        self.client.force_login(self.gerente)
+        respuesta = self.client.get(self.ficha)
+        self.assertNotContains(respuesta, self.cancelar)
+        self.assertNotContains(respuesta, self.reenviar)
+        self.client.force_login(self.ana)
+        Pedido.objects.filter(pk=self.pedido.pk).update(
+            estado_pedido="cancelado", causa_cancelacion="manual", motivo_cancelacion="x", fecha_cierre_pedido=en(0)
+        )
+        respuesta = self.client.get(self.ficha)
+        self.assertNotContains(respuesta, self.cancelar)
+        self.assertNotContains(respuesta, self.reenviar)
+
+    # ---- cancelar ----
+
+    def test_cancelar_el_formulario_dice_que_se_cancela_y_que_no_se_deshace_sin_cambiar_nada(self):
+        """Pasos 1 y 2: qué se cancela, la advertencia y el campo del motivo; abrirlo (GET) no cambia nada."""
+        respuesta = self.client.get(self.cancelar)
+        self.assertContains(respuesta, f"Cancelar el pedido {self.pedido}")
+        self.assertContains(respuesta, "Qué se cancela")
+        self.assertContains(respuesta, "no se puede deshacer")
+        self.assertContains(respuesta, 'name="motivo"')
+        self.assertEqual(self.estado(self.pedido), "en_cotizacion")
+
+    def test_ext_3a_sin_motivo_el_error_sale_junto_al_campo_y_no_se_cancela(self):
+        """Extensión 3a: «el motivo es obligatorio»; se vuelve al formulario y nada cambia."""
+        for accion in ("revisar", "confirmar"):
+            with self.subTest(accion=accion):
+                respuesta = self.client.post(self.cancelar, {"accion": accion, "motivo": "   "})
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertContains(respuesta, "Contá por qué se cancela el pedido.")
+                self.assertContains(respuesta, 'name="motivo"')
+        self.assertEqual(self.estado(self.pedido), "en_cotizacion")
+
+    def test_paso_4_el_resumen_dice_cuantas_cotizaciones_se_descartan_enlaces_se_anulan_y_a_quien_se_avisa(self):
+        """Paso 4: el resumen, con el motivo escrito, y nada cancelado todavía."""
+        respuesta = self.client.post(self.cancelar, {"accion": "revisar", "motivo": "Ya no hace falta."})
+        self.assertContains(respuesta, f"Confirmá la cancelación del pedido {self.pedido}")
+        self.assertContains(respuesta, "Ya no hace falta.")
+        self.assertContains(respuesta, "Semillas del Sur S. A.")
+        self.assertContains(respuesta, "info@este.com")
+        self.assertContains(respuesta, "Confirmar cancelación")
+        self.assertEqual(respuesta.context["resumen"].descartadas, 1)
+        self.assertEqual(respuesta.context["resumen"].enlaces, 1)
+        self.assertEqual(self.estado(self.pedido), "en_cotizacion")
+        self.assertEqual(mail.outbox, [])
+
+    def test_ext_a_volver_a_corregir_conserva_el_motivo_y_no_cancela(self):
+        """Extensión *a: «Volver a corregir» vuelve al formulario con lo escrito."""
+        respuesta = self.client.post(self.cancelar, {"accion": "editar", "motivo": "Lo escrito."})
+        self.assertContains(respuesta, "Lo escrito.")
+        self.assertContains(respuesta, "Revisar cancelación")
+        self.assertEqual(self.estado(self.pedido), "en_cotizacion")
+
+    def test_flujo_principal_confirmar_cancela_avisa_a_los_proveedores_y_vuelve_a_la_ficha(self):
+        """Pasos 5 a 8: se cancela, salen los correos y la ficha muestra el motivo, sin botones de acción."""
+        with con_on_commit_inmediato():
+            respuesta = self.client.post(self.cancelar, {"accion": "confirmar", "motivo": "Ya no hace falta."}, follow=True)
+        self.assertRedirects(respuesta, self.ficha)
+        self.assertContains(respuesta, f"Pedido {self.pedido} cancelado.")
+        self.assertContains(respuesta, "Motivo de la cancelación:")
+        self.assertContains(respuesta, "Ya no hace falta.")
+        self.assertNotContains(respuesta, self.cancelar)
+        self.assertEqual(self.estado(self.pedido), "cancelado")
+        self.assertEqual(sorted(m.to[0] for m in mail.outbox), ["info@este.com", "ventas@sur.com"])
+        self.assertEqual((self.estado(self.enlace_este), self.cotizacion.__class__.objects.get().estado_cotizacion), ("anulado", "descartada"))
+
+    def test_ext_6a_un_pedido_que_ya_no_esta_en_cotizacion_vuelve_a_la_ficha_con_el_motivo(self):
+        """Extensión 6a y D-30: con el pedido ya cancelado o cerrado no se abre el formulario ni se cancela; se informa el estado actual."""
+        Pedido.objects.filter(pk=self.pedido.pk).update(estado_pedido="cerrado", fecha_cierre_pedido=en(0))
+        for metodo, datos in (("get", None), ("post", {"accion": "confirmar", "motivo": "x"})):
+            with self.subTest(metodo=metodo):
+                respuesta = getattr(self.client, metodo)(self.cancelar, datos, follow=True) if datos else self.client.get(self.cancelar, follow=True)
+                self.assertRedirects(respuesta, self.ficha)
+                self.assertContains(respuesta, "ya no está en cotización")
+        self.assertEqual(self.estado(self.pedido), "cerrado")
+
+    def test_cancelar_solo_la_agronoma_del_pedido(self):
+        """Precondiciones a y b: el Gerente, otro Agrónomo y los demás reciben 403; sin sesión, el inicio de sesión. No se cancela nada."""
+        otra, _ = crear_agronomo_con_invernadero("Invernadero Sur", email="beto@infoponia.com")
+        for cuenta in (self.gerente, otra, crear_capataz(), crear_vendedor()):
+            self.client.force_login(cuenta)
+            with self.subTest(cuenta=cuenta.email):
+                self.assertEqual(self.client.get(self.cancelar).status_code, 403)
+                self.assertEqual(self.client.post(self.cancelar, {"accion": "confirmar", "motivo": "x"}).status_code, 403)
+        self.client.logout()
+        self.assertEqual(self.client.get(self.cancelar).status_code, 302)
+        self.assertEqual(self.estado(self.pedido), "en_cotizacion")
+
+    def test_cancelar_un_pedido_inexistente_es_404(self):
+        """D-28."""
+        self.assertEqual(self.client.get(reverse("compras:pedido_cancelar", args=[987654])).status_code, 404)
+
+    # ---- reenviar ----
+
+    def test_reenviar_la_ventana_pide_confirmar_y_no_cambia_nada(self):
+        """Regla 7: la ventana dice a quién se le envía y que el enlace anterior deja de servir; abrirla (GET) no cambia nada."""
+        respuesta = self.client.get(self.reenviar, **HX)
+        self.assertContains(respuesta, "Reenviar invitación a Viveros del Este S. R. L.")
+        self.assertContains(respuesta, "info@este.com")
+        self.assertContains(respuesta, "El enlace anterior deja de servir")
+        self.assertNotContains(respuesta, "<html")
+        self.assertEqual((self.estado(self.enlace_este), self.invitacion_este.enlaces.count(), mail.outbox), ("vigente", 1, []))
+
+    def test_reenviar_sin_javascript_la_ficha_trae_la_ventana_abierta(self):
+        """Respaldo sin JavaScript: el enlace lleva a la ficha del pedido con la ventana abierta."""
+        respuesta = self.client.get(self.reenviar)
+        self.assertContains(respuesta, f"Pedido {self.pedido}")
+        self.assertContains(respuesta, "Reenviar invitación a Viveros del Este S. R. L.")
+
+    def test_flujo_principal_reenviar_deja_un_enlace_nuevo_reemplaza_al_viejo_y_envia_el_correo(self):
+        """Regla 7: el enlace anterior pasa a «reemplazado», hay uno nuevo vigente y el correo sale al proveedor."""
+        with con_on_commit_inmediato():
+            respuesta = self.client.post(self.reenviar, follow=True)
+        self.assertRedirects(respuesta, self.ficha)
+        self.assertContains(respuesta, "Enviamos la invitación nueva a Viveros del Este S. R. L.")
+        self.assertEqual(self.estado(self.enlace_este), "reemplazado")
+        self.assertEqual(self.invitacion_este.enlaces.filter(estado="vigente").count(), 1)
+        self.assertEqual([m.to for m in mail.outbox], [["info@este.com"]])
+
+    def test_ext_reenviar_si_el_correo_falla_avisa_que_le_pida_al_gerente_que_revise_el_correo(self):
+        """D-88 punto 6 y H15.1: el reenvío queda registrado y la pantalla dice qué hacer; sin notificación de campana (H21)."""
+        with con_on_commit_inmediato(), override_settings(EMAIL_BACKEND=BACKEND_QUE_FALLA):
+            respuesta = self.client.post(self.reenviar, follow=True)
+        self.assertContains(respuesta, "No se pudo enviar la invitación a Viveros del Este S. R. L.: pedile al Gerente que revise su correo y reenviá la invitación.")
+        self.assertEqual(self.invitacion_este.enlaces.get(estado="vigente").estado_envio, "pendiente_envio")
+        self.assertEqual(Notificacion.objects.count(), 0)
+
+    def test_reenviar_a_quien_ya_cotizo_vuelve_a_la_ficha_con_el_motivo(self):
+        """Regla 7: «un proveedor que todavía no cotizó»; la ventana no se abre y nada cambia."""
+        url = reverse("compras:invitacion_reenviar", args=[self.invitacion_sur.pk])
+        for metodo in ("get", "post"):
+            with self.subTest(metodo=metodo):
+                respuesta = getattr(self.client, metodo)(url, follow=True)
+                self.assertRedirects(respuesta, self.ficha)
+                self.assertContains(respuesta, "No se le puede reenviar la invitación a Semillas del Sur S. A.")
+        self.assertEqual((self.estado(self.enlace_sur), mail.outbox), ("usado", []))
+
+    def test_reenviar_pasada_la_fecha_limite_no_se_ofrece(self):
+        """D-88 punto 2: con la fecha límite vencida no hay botón ni ventana."""
+        Pedido.objects.filter(pk=self.pedido.pk).update(fecha_pedido=en(-8), fecha_limite_cotizaciones=en(-1))
+        self.assertNotContains(self.client.get(self.ficha), self.reenviar)
+        self.assertRedirects(self.client.get(self.reenviar, follow=True), self.ficha)
+
+    def test_reenviar_solo_la_agronoma_del_pedido(self):
+        """Regla 7: el Gerente, otro Agrónomo y los demás reciben 403; sin sesión, el inicio de sesión; una invitación inexistente es 404."""
+        otra, _ = crear_agronomo_con_invernadero("Invernadero Sur", email="beto@infoponia.com")
+        for cuenta in (self.gerente, otra, crear_capataz()):
+            self.client.force_login(cuenta)
+            with self.subTest(cuenta=cuenta.email):
+                self.assertEqual(self.client.get(self.reenviar).status_code, 403)
+                self.assertEqual(self.client.post(self.reenviar).status_code, 403)
+        self.client.force_login(self.ana)
+        self.assertEqual(self.client.get(reverse("compras:invitacion_reenviar", args=[987654])).status_code, 404)
+        self.client.logout()
+        self.assertEqual(self.client.get(self.reenviar).status_code, 302)
+        self.assertEqual((self.estado(self.enlace_este), mail.outbox), ("vigente", []))

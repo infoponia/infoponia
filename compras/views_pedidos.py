@@ -11,11 +11,13 @@ from datetime import date, timedelta
 from django.contrib import messages
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.db.models.functions import Lower
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
+from django.views.decorators.vary import vary_on_headers
 
-from compras.models import EnlaceProveedor, Proveedor
+from compras.errores import ErrorDeCompras
+from compras.models import EnlaceProveedor, InvitacionPedido, Proveedor
 from compras.servicios import pedidos as api
 from core.acceso import rol_requerido
 from core.models import Agronomo, Usuario
@@ -76,9 +78,10 @@ def pedidos(request):
 @require_safe
 def pedido_ficha(request, pedido_id):
     """Ficha del pedido (CMP-CNS-PED reglas 4 a 6, ``VIEWS.c_ped``): el pedido, lo pedido por invernadero, los proveedores invitados y las cotizaciones recibidas, en solo
-    lectura. Cancelar, reenviar la invitación (CMP-02b) y generar la orden (CMP-03) se suman a cada tarea. Un pedido ajeno es 403 y uno inexistente, 404 (D-28)."""
+    lectura, con «Cancelar pedido» y «Reenviar invitación» (CMP-02b) para el Agrónomo del pedido; generar la orden (CMP-03) se suma a su tarea. Un pedido ajeno es 403 y uno
+    inexistente, 404 (D-28)."""
     ficha = api.ficha_de_pedido(request.user, pedido_id)
-    return render(request, "compras/pedidos/ficha.html", {"ficha": ficha, "pedido": ficha.pedido, "es_gerente": request.user.rol == GERENTE})
+    return render(request, "compras/pedidos/ficha.html", _contexto_de_la_ficha(request, ficha))
 
 
 # ---- nuevo pedido ----
@@ -300,3 +303,81 @@ def pedido_nuevo(request):
             },
         )
     return _dibujar(request, filas, marcados, fecha_limite, filtro, habilitar=habilitar)
+
+
+# ---- cancelar y reenviar (CMP-02b) ----
+
+PLANTILLA_DE_REENVIO = "compras/pedidos/_ventana_reenviar.html"
+
+
+def _contexto_de_la_ficha(request, ficha, **extra):
+    """Lo que la ficha del pedido necesita para dibujarse (la usan la ficha y, con la ventana abierta, el respaldo sin JavaScript de «Reenviar invitación»)."""
+    return {"ficha": ficha, "pedido": ficha.pedido, "es_gerente": request.user.rol == GERENTE, **extra}
+
+
+@rol_requerido(AGRONOMO)
+@never_cache
+def pedido_cancelar(request, pedido_id):
+    """«Cancelar pedido» (CMP-CNL-PED, ``VIEWS.c_pedcnl``). GET: qué se cancela y el motivo. POST con ``revisar``: valida el motivo y muestra el resumen del paso 4
+    (cuántas cotizaciones se descartan, cuántos enlaces se anulan y a quién se avisa); con ``confirmar``, cancela (paso 6); con ``editar``, vuelve al formulario con
+    lo escrito. Solo el Agrónomo del pedido y con el pedido «en cotización»: si no, se vuelve a la ficha con el motivo (extensión 6a); un ajeno es 403 (D-28)."""
+    ficha = api.ficha_de_pedido(request.user, pedido_id)
+    pedido = ficha.pedido
+    if not ficha.puede_cancelar:
+        messages.error(request, f"El pedido {pedido} ya no está en cotización: {pedido.get_estado_pedido_display().lower()}. No se puede cancelar.")
+        return redirect("compras:pedido_ficha", pedido_id=pedido.pk)
+    motivo = request.POST.get("motivo", "") if request.method == "POST" else ""
+    accion = request.POST.get("accion", "") if request.method == "POST" else ""
+    contexto = {"ficha": ficha, "pedido": pedido, "motivo": motivo, "errores": []}
+    if accion in ("revisar", "confirmar"):
+        try:
+            if accion == "confirmar":
+                api.cancelar_pedido(request.user, pedido.pk, motivo)
+            else:
+                resumen = api.resumir_cancelacion(request.user, pedido.pk, motivo)
+        except ValidationError as error:
+            contexto["errores"] = [m for lista in error.message_dict.values() for m in lista]
+        except ErrorDeCompras as error:  # 6a: otra operación cambió el pedido
+            messages.error(request, error.mensaje)
+            return redirect("compras:pedido_ficha", pedido_id=pedido.pk)
+        else:
+            if accion == "confirmar":
+                messages.success(request, f"Pedido {pedido} cancelado. Se avisó por correo a los proveedores invitados.")
+                return redirect("compras:pedido_ficha", pedido_id=pedido.pk)
+            return render(request, "compras/pedidos/cancelar_resumen.html", {**contexto, "resumen": resumen})
+    return render(request, "compras/pedidos/cancelar.html", contexto)
+
+
+@rol_requerido(AGRONOMO)
+@never_cache
+@vary_on_headers("HX-Request")
+def invitacion_reenviar(request, invitacion_id):
+    """«Reenviar invitación» (regla 7 de CMP-CNS-PED, ``MODALS.reenviar``), con confirmación previa. GET abre la ventana (no cambia nada; sin JavaScript, la ficha con la
+    ventana abierta); POST reenvía. Si el servicio lo rechaza (el pedido se cerró, el proveedor cotizó o se dio de baja, venció la fecha límite) vuelve a la ficha con el
+    motivo. Si el correo no sale, avisa qué hacer (D-88 punto 6; sin notificación de campana, H21). Solo el Agrónomo del pedido: otro es 403."""
+    invitacion = get_object_or_404(InvitacionPedido.objects.select_related("pedido", "proveedor"), pk=invitacion_id)
+    ficha = api.ficha_de_pedido(request.user, invitacion.pedido_id)
+    volver = redirect("compras:pedido_ficha", pedido_id=invitacion.pedido_id)
+    invitado = next((i for i in ficha.invitados if i.invitacion.pk == invitacion.pk), None)
+    if invitado is None or not invitado.puede_reenviar:
+        messages.error(request, f"No se le puede reenviar la invitación a {invitacion.proveedor.nombre_para_mostrar}: el pedido ya no admite cotizaciones o el proveedor ya cotizó.")
+        return volver
+    if request.method == "POST":
+        try:
+            nuevo = api.reenviar_invitacion(request.user, invitacion.pk, request.build_absolute_uri)
+        except ErrorDeCompras as error:
+            messages.error(request, error.mensaje)
+            return volver
+        nuevo.refresh_from_db()  # el correo salió en ``on_commit``, antes de volver acá
+        if nuevo.estado_envio == EnlaceProveedor.EstadoEnvio.ENVIADO:
+            messages.success(request, f"Enviamos la invitación nueva a {invitacion.proveedor.nombre_para_mostrar}. El enlace anterior ya no sirve.")
+        else:
+            messages.error(
+                request,
+                f"No se pudo enviar la invitación a {invitacion.proveedor.nombre_para_mostrar}: pedile al Gerente que revise su correo y reenviá la invitación.",
+            )
+        return volver
+    contexto = {"pedido": invitacion.pedido, "invitacion": invitacion, "proveedor": invitacion.proveedor}
+    if request.headers.get("HX-Request") == "true":
+        return render(request, PLANTILLA_DE_REENVIO, contexto)
+    return render(request, "compras/pedidos/ficha.html", _contexto_de_la_ficha(request, ficha, plantilla_de_ventana=PLANTILLA_DE_REENVIO, **contexto))

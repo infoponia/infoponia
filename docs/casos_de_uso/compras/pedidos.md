@@ -734,10 +734,11 @@ Decisiones: **D-87**, **D-88**, **D-89**. Modelo: `docs/modelo/compras.md` (`Ped
   pedidos en cotización (`agronomo_inactivo`); el traspaso del rol `agronomo` de un invernadero (`maestros.registrar_traspaso`: `contar` dice
   cuántos pedidos se cancelarían, `traspasar` los cancela) cancela los del saliente con algún detalle a ese invernadero
   (`agronomo_sin_invernadero`). Los pasos 60 y 62 usan la misma función (CMP-03).
+- **Aclaraciones de CMP-02b (D-98):** las automáticas se auditan como InfoPonia (`usuario=None`) aunque haya quien dio la baja o hizo el traspaso (figura en el registro de la baja o de `modificacion_invernadero`, que lista los pedidos); la extensión 7a no reintenta el correo (D-88 punto 6); «Reenviar invitación» solo hasta la fecha límite (`fecha_limite_vencida`).
 - **Concurrencia:** la cancelación contra la generación de la orden (los dos bloquean el pedido; uno gana y el otro ve el estado nuevo, 6a y 11a)
   y contra un proveedor que envía su cotización (el envío bloquea el pedido después del proveedor y antes del enlace: espera y ve «cancelado»).
 
-### Impedimentos (H20, CMP-02b)
+### Impedimentos (H20, CMP-02b; hecho el 24/11/2026)
 
 `inventario.registrar_impedimento_de_deshabilitacion`: un pedido «en cotización» con ese `InsumoInvernadero` → código `pedido_en_curso`, texto
 «Está en el pedido P-0031, en cotización hasta el 28/11» con su enlace (no se cancela solo).

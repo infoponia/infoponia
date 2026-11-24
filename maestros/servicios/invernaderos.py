@@ -469,6 +469,8 @@ def _aviso_de_personal(invernadero, cambiados):
                 "saliente": saliente,
                 "entrante": entrante,
                 "recibe": recibe,
+                # CMP-02b: lo que se cancela o se pierde con el cambio (pedidos del Agrónomo saliente), aunque no haya entrante.
+                "avisos": extensiones.avisos_de_traspaso(invernadero, atributo, saliente, entrante),
                 "queda_vacio": entrante is None,
             }
         )

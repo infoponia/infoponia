@@ -761,6 +761,9 @@ class RegistroAuditoria(models.Model):
         # sin cuenta, con ``rol_externo`` (D-88 punto 5). Cancelar y reenviar son de CMP-02b.
         ALTA_PEDIDO = "alta_pedido", "Alta de pedido de cotización"
         ALTA_COTIZACION = "alta_cotizacion", "Alta de cotización"
+        # CMP-02b: cancelar un pedido (a mano o solo) y reenviar la invitación a un proveedor.
+        CANCELACION_PEDIDO = "cancelacion_pedido", "Cancelación de pedido de cotización"
+        REENVIO_INVITACION = "reenvio_invitacion", "Reenvío de invitación a un proveedor"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1029,6 +1032,14 @@ class RegistroAuditoria(models.Model):
         "monto_cotizacion": "Monto de la cotización",
         "lineas_cotizadas": "Líneas de la cotización",
         "pedido_cubierto": "El pedido quedó cubierto",
+        # CMP-02b: cancelación del pedido y reenvío de la invitación («motivo_cancelacion» ya existe, de otra tarea).
+        "fecha_cierre_pedido": "Fecha de cierre",
+        "causa_cancelacion": "Causa de la cancelación",
+        "cotizaciones_descartadas": "Cotizaciones descartadas",
+        "enlaces_anulados": "Enlaces anulados",
+        "pedidos_cancelados": "Pedidos cancelados",
+        "enlace_anterior": "Enlace anterior",
+        "enlace_nuevo": "Enlace nuevo",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1050,6 +1061,14 @@ class RegistroAuditoria(models.Model):
             "cancelado": "Cancelado",
         },
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
+        # CMP-02b: causas de la cancelación de un pedido (`core` no importa `compras`, A1 de D-37).
+        "causa_cancelacion": {
+            "manual": "Cancelado por el Agrónomo",
+            "nadie_cotizo": "Nadie cotizó",
+            "sin_cotizaciones_elegibles": "Sin cotizaciones elegibles",
+            "agronomo_inactivo": "Agrónomo inactivo",
+            "agronomo_sin_invernadero": "Agrónomo sin el invernadero de destino",
+        },
         # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
         "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
         "clase": {"sensor": "Sensor", "actuador": "Actuador"},
@@ -1341,6 +1360,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_PROVEEDOR,
         RegistroAuditoria.Accion.ALTA_PEDIDO,
         RegistroAuditoria.Accion.ALTA_COTIZACION,
+        RegistroAuditoria.Accion.CANCELACION_PEDIDO,
+        RegistroAuditoria.Accion.REENVIO_INVITACION,
     }
 )
 
