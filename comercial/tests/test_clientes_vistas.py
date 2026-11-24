@@ -174,7 +174,7 @@ class ClientesListaYFichaTests(ConGeoref, TestCase):
         self.assertContains(respuesta, "30-71234567-1")
         self.assertContains(respuesta, "compras@pinos.com")
         self.assertContains(respuesta, "San Martín 123")
-        self.assertContains(respuesta, "Todavía no tiene compra-ventas.")
+        self.assertContains(respuesta, "Todavía no tiene contratos.")  # COM-03a: antes decía «compra-ventas» (ahora la ficha lista también suministros)
         self.assertNotContains(respuesta, "Deuda")
 
     def test_regla_5_sin_correo_la_ficha_dice_necesario_para_pactar_suministros(self):

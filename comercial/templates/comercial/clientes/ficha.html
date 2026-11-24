@@ -39,9 +39,18 @@ del alta con los datos guardados.{% endcomment %}
       {% if contratos %}
       <div class="card-b flush">
         <table class="data-table">
-          <thead><tr><th>Compra-venta</th><th>Entrega</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Contrato</th><th>Entrega o vigencia</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
           <tbody>
           {% for v in contratos %}
+            {% if v.tipo_contrato == "suministro" %}
+            <tr>
+              <td class="nowrap mono"><b style="font-weight:600">{{ v.codigo }}</b><span class="sub2">{{ v.fecha_realizacion|date:"d/m/Y" }}</span></td>
+              <td>Suministro<span class="sub2">{{ v.fecha_realizacion|date:"d/m/Y" }} al {{ v.fecha_fin|date:"d/m/Y" }} · {{ v.detalles_vigentes }} detalle{{ v.detalles_vigentes|pluralize }}</span></td>
+              <td class="right nowrap muted">—</td>
+              <td>{% include "comercial/suministros/_estado.html" with estado=v.estado_suministro texto=v.get_estado_suministro_display %}</td>
+              <td class="right"><a class="rowlink" href="{% url 'comercial:suministro' v.pk %}">Ver<span class="sr"> el suministro {{ v.codigo }}</span></a></td>
+            </tr>
+            {% else %}
             <tr>
               <td class="nowrap mono"><b style="font-weight:600">{{ v.codigo }}</b><span class="sub2">{{ v.fecha_realizacion|date:"d/m/Y" }}</span></td>
               <td>{% if v.modalidad_entrega == "envio" %}Envío{% else %}Retiro{% endif %}<span class="sub2">{{ v.fecha_pactada_venta|date:"d/m/Y" }}</span></td>
@@ -49,12 +58,13 @@ del alta con los datos guardados.{% endcomment %}
               <td>{% include "comercial/contratos/_estado.html" with estado=v.estado_venta texto=v.get_estado_venta_display %}</td>
               <td class="right"><a class="rowlink" href="{% url 'comercial:compra_venta' v.pk %}">Ver<span class="sr"> la compra-venta {{ v.codigo }}</span></a></td>
             </tr>
+            {% endif %}
           {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-      <div class="card-b muted">Todavía no tiene compra-ventas.</div>
+      <div class="card-b muted">Todavía no tiene contratos.</div>
       {% endif %}
     </div>
 

@@ -1,0 +1,25 @@
+{% comment %}Los datos del pacto como campos ocultos, para confirmar o volver a la carga desde el resumen (con HTMX la ventana está sobre el formulario; sin JavaScript, el resumen es otra
+página y estos campos llevan todo de vuelta). Recibe «datos».{% endcomment %}
+{% if datos.vendedor_id %}<input type="hidden" name="vendedor" value="{{ datos.vendedor_id }}">{% endif %}
+<input type="hidden" name="cliente" value="{{ datos.cliente_id }}">
+<input type="hidden" name="duracion" value="{{ datos.duracion }}">
+<input type="hidden" name="tolerados" value="{{ datos.tolerados }}">
+<input type="hidden" name="multa" value="{{ datos.multa }}">
+<input type="hidden" name="plazo_pago" value="{{ datos.plazo_pago }}">
+<input type="hidden" name="indemnizacion_pago" value="{{ datos.indemnizacion_pago }}">
+{% for r in datos.renglones %}
+<input type="hidden" name="detalle-{{ r.indice }}-variedad" value="{{ r.variedad_id }}">
+<input type="hidden" name="detalle-{{ r.indice }}-direccion" value="{{ r.direccion_id }}">
+<input type="hidden" name="detalle-{{ r.indice }}-cantidad" value="{{ r.cantidad }}">
+<input type="hidden" name="detalle-{{ r.indice }}-periodo" value="{{ r.periodo }}">
+<input type="hidden" name="detalle-{{ r.indice }}-primera_entrega" value="{{ r.primera_entrega }}">
+<input type="hidden" name="detalle-{{ r.indice }}-mecanismo" value="{{ r.mecanismo }}">
+<input type="hidden" name="detalle-{{ r.indice }}-precio" value="{{ r.precio }}">
+<input type="hidden" name="detalle-{{ r.indice }}-porcentaje" value="{{ r.porcentaje }}">
+<input type="hidden" name="detalle-{{ r.indice }}-meses" value="{{ r.meses }}">
+<input type="hidden" name="detalle-{{ r.indice }}-plazo_entrega" value="{{ r.plazo_entrega }}">
+<input type="hidden" name="detalle-{{ r.indice }}-indemnizacion_retraso" value="{{ r.indemnizacion_retraso }}">
+<input type="hidden" name="detalle-{{ r.indice }}-cantidad_minima" value="{{ r.cantidad_minima }}">
+<input type="hidden" name="detalle-{{ r.indice }}-indemnizacion_faltante" value="{{ r.indemnizacion_faltante }}">
+{% if r.continuar_superpuesto %}<input type="hidden" name="detalle-{{ r.indice }}-continuar" value="1">{% endif %}
+{% endfor %}

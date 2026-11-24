@@ -1,0 +1,6 @@
+{% comment %}El selector «Compra-ventas / Suministros» de la pestaña «Contratos» (`ctrSel` del prototipo; COM-03a). En el prototipo es un <select>; acá son dos enlaces: cada tipo es
+una página con sus filtros y funciona sin JavaScript (D-61: se corrigió un control que no hacía falta). Recibe «tipo» («compra_venta» o «suministro»).{% endcomment %}
+<nav class="sel-tipo" aria-label="Tipo de contrato">
+  <a href="{% url 'comercial:contratos' %}"{% if tipo == "compra_venta" %} aria-current="page"{% endif %}>Compra-ventas</a>
+  <a href="{% url 'comercial:contratos' %}?tipo=suministro"{% if tipo == "suministro" %} aria-current="page"{% endif %}>Suministros</a>
+</nav>

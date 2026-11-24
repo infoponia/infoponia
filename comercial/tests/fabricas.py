@@ -355,3 +355,148 @@ def verificar_invariantes_de_reservas():
             problemas.append(f"{d}: cubierto {cubierto} > solicitado {d.cant_solicitada_venta}")
     if problemas:
         raise AssertionError("Invariantes de reservas rotos: " + "; ".join(problemas))
+    verificar_invariantes_de_suministros()
+
+
+# ---- COM-03a: suministros, detalles y períodos ----
+
+
+def _sumar_meses(fecha, n):
+    """El mismo día del mes, ``n`` meses después (el último del mes si no existe). Copia mínima para armar ``fecha_fin`` sin depender del
+    servicio que se prueba (``calendario.sumar_meses``)."""
+    import calendar
+
+    mes = fecha.month - 1 + n
+    anio, mes = fecha.year + mes // 12, mes % 12 + 1
+    return fecha.replace(year=anio, month=mes, day=min(fecha.day, calendar.monthrange(anio, mes)[1]))
+
+
+def suministro(
+    escenario, *, cliente_=None, vendedor=None, duracion=6, tolerados=3, incumplimientos=0, multa="50000.00", plazo_pago=15,
+    indemnizacion_pago="100.00", estado="vigente", comprobante="pendiente_envio", fecha_realizacion=None, con_clausula=True,
+):
+    """Un `Suministro` «vigente» (o en el `estado` pedido) con su cláusula del suministrado, creado directo, sin detalles. ``estado`` distinto
+    de «vigente» solo vale para «finalizado»: «resuelto» y «rescindido» exigen sus fechas y las pone cada prueba con `update`."""
+    from django.db import connection
+
+    from comercial.models import ClausulaSuministrado, Suministro
+
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT nextval('comercial_suministro_numero_seq')")
+        numero = cursor.fetchone()[0]
+    realizacion = fecha_realizacion or timezone.localdate()
+    contrato = Suministro.objects.create(
+        tipo_contrato="suministro",
+        numero=numero,
+        cliente=cliente_ or escenario.cliente,
+        vendedor=vendedor or escenario.vendedor,
+        estado_comprobante=comprobante,
+        fecha_realizacion=realizacion,
+        duracion_meses=duracion,
+        estado_suministro=estado,
+        fecha_fin=_sumar_meses(realizacion, duracion),
+        incumplimientos_tolerados=tolerados,
+        cantidad_incumplimientos=incumplimientos,
+        multa_resolucion=Decimal(multa),
+    )
+    if con_clausula:
+        ClausulaSuministrado.objects.create(
+            suministro=contrato, plazo_pago_dias=plazo_pago, indemnizacion_retraso_pago=Decimal(indemnizacion_pago)
+        )
+    return contrato
+
+
+def detalle_suministro(
+    suministro_, variedad, *, direccion=None, cantidad=10, periodo=7, primera_en_dias=3, mecanismo="fijo", precio="100.00", porcentaje=None,
+    meses=None, estado="vigente", fecha_fin_detalle=None, reemplaza_a=None, fecha_base_ajuste=None, minima=1, plazo_entrega=0,
+    indemnizacion_retraso="10.00", indemnizacion_faltante="5.00",
+):
+    """Un `DetalleSuministro` de ``suministro_`` con su cláusula del suministrante, sin reservas. ``primera_en_dias`` es cuántos días desde
+    hoy cae la primera entrega. Con ``mecanismo="ajuste_periodico"`` hacen falta ``porcentaje`` y ``meses``. La dirección por defecto es la
+    del cliente del contrato (hace falta que la tenga)."""
+    from comercial.models import ClausulaSuministrante, DetalleSuministro, DireccionCliente
+
+    if direccion is None:
+        direccion = DireccionCliente.objects.filter(cliente=suministro_.cliente).order_by("pk").first().direccion
+    detalle_ = DetalleSuministro.objects.create(
+        suministro=suministro_,
+        direccion=direccion,
+        variedad=variedad,
+        periodo_entrega_dias=periodo,
+        fecha_primer_entrega=timezone.localdate() + timedelta(days=primera_en_dias),
+        cantidad_por_periodo=cantidad,
+        mecanismo_precio=mecanismo,
+        estado_detalle_suministro=estado,
+        precio_unitario_suministro=Decimal(precio),
+        porcentaje_ajuste=Decimal(porcentaje) if porcentaje is not None else None,
+        meses_ajuste=meses,
+        fecha_fin_detalle=fecha_fin_detalle,
+        fecha_base_ajuste=fecha_base_ajuste or suministro_.fecha_realizacion,
+        reemplaza_a=reemplaza_a,
+    )
+    ClausulaSuministrante.objects.create(
+        detalle=detalle_,
+        plazo_entrega_dias=plazo_entrega,
+        indemnizacion_retraso_entrega=Decimal(indemnizacion_retraso),
+        cantidad_minima=minima,
+        indemnizacion_faltante=Decimal(indemnizacion_faltante),
+    )
+    return detalle_
+
+
+def periodo(detalle_, fecha):
+    """Un `Periodo` (detalle, fecha) de ``detalle_`` (sección 7 de `docs/patrones/stock_maduro.md`)."""
+    from comercial.servicios.stock_maduro import Periodo
+
+    return Periodo(detalle_, fecha)
+
+
+def reserva_de_periodo(detalle_, fecha, lineas, estado=None, con_cosecha=True):
+    """Una `ReservaStock` del período (``detalle_``, ``fecha``) con una línea por cada ``(lote_o_partida, cantidad)``; igual que `reserva`,
+    pero para un detalle de suministro."""
+    reserva_ = reserva(None, lineas, estado=estado, fecha_entrega=fecha, con_cosecha=con_cosecha)
+    reserva_.detalle_venta = None
+    reserva_.detalle_suministro = detalle_
+    reserva_.save(update_fields=["detalle_venta", "detalle_suministro"])
+    return reserva_
+
+
+def verificar_invariantes_de_suministros():
+    """Invariantes de la sección 7 de `docs/patrones/stock_maduro.md` (COM-03a): ningún período con más cubierto que su cantidad; ninguna
+    reserva de un período fuera del calendario de su detalle; ninguna reserva con los dos detalles a la vez; ``fecha_fin`` de cada
+    suministro igual a ``sumar_meses(fecha_realizacion, duracion)``; un detalle finalizado tiene ``fecha_fin_detalle`` y uno vigente la
+    tiene solo si su suministro tiene una rescisión acordada. (El de la rescisión lo suma COM-03b.) Lanza `AssertionError`."""
+    from django.db.models import Sum
+
+    from comercial.models import DetalleReserva, DetalleSuministro, ReservaStock, Suministro
+    problemas = []
+    for r in ReservaStock.objects.filter(detalle_venta__isnull=False, detalle_suministro__isnull=False):
+        problemas.append(f"Reserva #{r.pk}: con detalle de venta y de suministro a la vez")
+    cubierto = (
+        DetalleReserva.objects.filter(reserva__detalle_suministro__isnull=False)
+        .exclude(reserva__estado_reserva="liberada")
+        .values("reserva__detalle_suministro_id", "reserva__fecha_entrega_reserva")
+        .annotate(total=Sum("cantidad_reservada"))
+    )
+    detalles = {d.pk: d for d in DetalleSuministro.objects.select_related("suministro")}
+    if detalles:
+        from comercial.servicios import calendario
+    for fila in cubierto:
+        d = detalles[fila["reserva__detalle_suministro_id"]]
+        fecha = fila["reserva__fecha_entrega_reserva"]
+        if fila["total"] > d.cantidad_por_periodo:
+            problemas.append(f"{d}: período {fecha} con {fila['total']} cubiertas > {d.cantidad_por_periodo}")
+        if fecha not in set(calendario.calendario(d)):
+            problemas.append(f"{d}: reserva del {fecha}, que no es un período de su calendario")
+    for s in Suministro.objects.all():
+        from comercial.servicios import calendario
+
+        if s.fecha_fin != calendario.sumar_meses(s.fecha_realizacion, s.duracion_meses):
+            problemas.append(f"{s.codigo}: fecha de fin {s.fecha_fin} no coincide con su duración")
+    for d in detalles.values():
+        if d.estado_detalle_suministro == "finalizado" and d.fecha_fin_detalle is None:
+            problemas.append(f"{d}: finalizado sin fecha de fin del detalle")
+        if d.estado_detalle_suministro == "vigente" and d.fecha_fin_detalle is not None and not d.suministro.tiene_rescision_acordada:
+            problemas.append(f"{d}: vigente con fecha de fin del detalle y sin rescisión acordada")
+    if problemas:
+        raise AssertionError("Invariantes de suministros rotos: " + "; ".join(problemas))

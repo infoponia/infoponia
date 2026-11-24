@@ -1,6 +1,6 @@
 # Pruebas de COM-MOD-CLT, Modificar Cliente (COM-01, paso 3; docs/casos_de_uso/comercial/clientes.md): datos, CUIT, tipo, cliente
 # inactivo, direcciones (agregar, corregir en el lugar, cambio de zona, desactivar, borrar, dirección en uso e idéntica), el
-# correo con suministro vigente (se completa en COM-03, acá con ``mock.patch``) y la auditoría.
+# correo con suministro vigente (en COM-01, con ``mock.patch``; COM-03a le suma la consulta real y su prueba, al final) y la auditoría.
 #
 # ``modificar_cliente(actor, cliente_id, datos)``: ``datos`` es el mismo ``DatosDeCliente`` del alta. ``direcciones_corregidas``
 # son pares (id de la ``Direccion``, datos nuevos); ``desactivadas`` y ``borradas``, ids de ``Direccion``. Errores de una
@@ -15,7 +15,16 @@ from django.test import TestCase
 
 from comercial.models import Cliente, DireccionCliente
 from comercial.servicios import clientes
-from comercial.tests.fabricas import cliente, datos_de_cliente_de, datos_de_direccion, direccion_de_cliente
+from comercial.tests.fabricas import (
+    cliente,
+    datos_de_cliente_de,
+    datos_de_direccion,
+    detalle_suministro,
+    direccion_de_cliente,
+    escenario_comercial,
+    suministro,
+)
+from inventario.tests.fabricas import ConDatosDeInventario
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from maestros.models import Direccion, DireccionRural, DireccionUrbana
@@ -313,8 +322,9 @@ class ComModCltServicioTests(ConGeoref, TestCase):
             self.modificar(cliente_=self.cliente, email="otro@pinos.com")
             impide.assert_not_called()
 
-    def test_regla_3_impide_quitar_el_correo_devuelve_false_en_com_01(self):
-        """«Correo con suministro vigente»: en COM-01 devuelve siempre ``False`` (COM-03 le suma la consulta)."""
+    def test_regla_3_impide_quitar_el_correo_sin_suministros_devuelve_false(self):
+        """«Correo con suministro vigente»: un cliente sin suministros no lo impide (COM-03a le suma la consulta; la prueba de COM-01, que
+        esperaba ``False`` siempre, pasa a probar solo el caso sin suministros)."""
         self.assertIs(clientes.impide_quitar_el_correo(self.cliente), False)
 
     def test_regla_2_modificar_un_inactivo_no_cambia_su_estado_ni_su_cuit(self):
@@ -359,3 +369,39 @@ class ComModCltRetiradasTests(ConGeoref, TestCase):
             datos_de_cliente_de(self.cliente, direcciones_corregidas=[(self.vinculo.direccion_id, datos_de_direccion())]),
         )
         self.assertFalse(RegistroAuditoria.objects.filter(accion="modificacion_cliente").exists())
+
+
+class ComModCltConSuministrosTests(ConDatosDeInventario, TestCase):
+    """Regla 3 de COM-MOD-CLT con datos reales (COM-03a): el correo de un cliente con un suministro vigente no se quita."""
+
+    def setUp(self):
+        self.e = escenario_comercial()
+        self.gerente = crear_gerente()
+
+    def sin_correo(self):
+        return clientes.modificar_cliente(self.gerente, self.e.cliente.pk, datos_de_cliente_de(self.e.cliente, email=""))
+
+    def test_regla_3_con_un_suministro_vigente_no_se_puede_quitar_el_correo(self):
+        """Regla 3: `correo_con_suministro_vigente` en el campo `email`; el correo queda como estaba y no se audita nada."""
+        s = suministro(self.e)
+        detalle_suministro(s, self.e.variedad)
+        antes = RegistroAuditoria.objects.filter(accion="modificacion_cliente").count()
+        errores = errores_de(self, self.sin_correo)
+        self.assertEqual(codigos(errores, "email"), ["correo_con_suministro_vigente"])
+        self.e.cliente.refresh_from_db()
+        self.assertEqual(self.e.cliente.email_cliente, "cliente@ejemplo.com")
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="modificacion_cliente").count(), antes)
+
+    def test_regla_3_sin_suministro_vigente_el_correo_se_quita(self):
+        """Regla 3: con un suministro finalizado (o ninguno) el correo se puede quitar."""
+        suministro(self.e, estado="finalizado")
+        self.sin_correo()
+        self.e.cliente.refresh_from_db()
+        self.assertEqual(self.e.cliente.email_cliente, "")
+
+    def test_regla_3_se_puede_cambiar_el_correo_aunque_haya_un_suministro_vigente(self):
+        """Regla 3: solo impide **quitarlo**; cambiarlo por otro se puede."""
+        suministro(self.e)
+        clientes.modificar_cliente(self.gerente, self.e.cliente.pk, datos_de_cliente_de(self.e.cliente, email="nuevo@ejemplo.com"))
+        self.e.cliente.refresh_from_db()
+        self.assertEqual(self.e.cliente.email_cliente, "nuevo@ejemplo.com")

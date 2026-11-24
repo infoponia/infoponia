@@ -234,7 +234,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
    invernadero: la misma definición del «umbral efectivo» de PROD-PNF-SMB) y `registrar_impedimento_de_baja_de_variedad` con los códigos
    `lotes_activos` y `ordenes_a_realizar`. PRD-01 también llama a `inventario.servicios.variedades` (`docs/api/variedades.md`) para
    leer la variedad, su ciclo y su semilla; no consulta las tablas a mano.
-2. **`comercial` (ronda futura):** `registrar_impedimento_de_baja_de_variedad` con el código `contratos_abiertos` (contratos vigentes
+2. ~~**`comercial` (ronda futura):**~~ **Hecho el 23/11/2026 en COM-02 (compra-ventas) y COM-03a (suministros vigentes; texto «Tiene contratos abiertos: N compra-ventas y M suministros.»).** Texto original: `registrar_impedimento_de_baja_de_variedad` con el código `contratos_abiertos` (contratos vigentes
    o abiertos con un detalle de la variedad; precondición f de PROD-BAJ-VAR). **Hasta entonces la precondición f no se verifica** (no
    hay contratos): se anota en el cierre de INV-03 y en `docs/temas_abiertos.md`.
    **Lo programa COM-02 (lote C2)** para las compra-ventas abiertas o pendientes de decisión; COM-03 suma los suministros vigentes. (COM-03, lote C3: detalles vigentes de la variedad).
@@ -378,7 +378,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    **Hecho el 22/11/2026 en PRD-01 (el Capataz):** `produccion` registra el suyo, filtra por `TIPOS_DE_PRODUCCION` y devuelve las instancias tocadas,
    que quedan entre los afectados de `modificacion_invernadero` (D-81: `traspasar` ahora devuelve lo que tocó). Siguen los de COM-02, COM-03 e IOT-07.
    **COM-02 (lote C2)** suma las cosechas al traspaso del Capataz (por `ordenes_del_capataz`, D-53) y registra el del Vendedor con la regla de
-   D-60 (compra-ventas); COM-03 (lote C3) suma los suministros vigentes con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
+   D-60 (compra-ventas); **Hecho el 23/11/2026 en COM-03a:** los suministros vigentes, con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
    **IOT-07 (lote I4)** registra el del Técnico: pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
 
 ## Cuando exista un caso de uso que planifique, haga pedidos, asigne stock o reintente entregas
@@ -533,7 +533,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 1. **COM-02 (compra-venta; escrito en el lote C2, paso 6 de la tarea):** `direcciones_en_uso` cuenta las compra-ventas con envío (en cualquier estado); `pendientes_del_cliente`, las compra-ventas
    abiertas o pendientes de decisión; la ficha y la lista muestran sus contratos (el Vendedor, solo los suyos); el formulario usa
    `volver` para regresar a COM-REG-CVT (regla 7 de COM-ALT-CLT, regla 5 de COM-MOD-CLT).
-2. **COM-03 (suministro; escrito en el lote C3, paso 8 de la tarea):** `direcciones_en_uso` cuenta los detalles de suministro (en cualquier estado); `impide_quitar_el_correo` mira los suministros
+2. ~~**COM-03 (suministro; escrito en el lote C3, paso 8 de la tarea):**~~ **Hecho el 23/11/2026 en COM-03a.** Texto original: `direcciones_en_uso` cuenta los detalles de suministro (en cualquier estado); `impide_quitar_el_correo` mira los suministros
    vigentes (regla 3 de COM-MOD-CLT); `pendientes_del_cliente` y la ficha suman los suministros; `volver` regresa a COM-PCT-SUM.
 3. **COM-06 (entregas concretadas, quejas y discrepancias):** la ficha y la baja muestran las entregas sin cobrar, con el monto a cobrar y
    el vencimiento, y las quejas o discrepancias pendientes. **Planificado (lote C6):** las entregas sin cobrar y las discrepancias, COM-06a;
@@ -577,3 +577,8 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
 3. **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
 4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).
+
+
+## Cuando se programen COM-03b y COM-04 — nace con COM-03a (23/11/2026)
+
+1. **Calendario de la ficha con detalles finalizados.** Un período de un detalle finalizado que cae dentro de la ventana se muestra «Reservado» (los finalizados no tienen cantidad sin cubrir hasta D-64, punto 8). COM-04 le da la cantidad sin cubrir y COM-03b, los períodos posteriores a la rescisión; revisar `comercial/servicios/suministros.py`, `_filas_de_calendario`.

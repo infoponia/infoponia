@@ -1,0 +1,90 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}Ficha del suministro (COM-CNS-SUM, reglas 4 a 6, 9 y 10, en lo que existe hoy; VIEWS.sum del prototipo, segunda definición): los datos del contrato con su cláusula del suministrado, el aviso de
+límite, los detalles (una línea por cadena «reemplaza a», con el precio vigente hoy y la cláusula del suministrante), el calendario con la situación de cada período («Fuera de la ventana», «Reservado»,
+«Sin cobertura completa», «Pasado») y el comprobante con «Ver comprobante» y «Reenviar comprobante». Todavía NO (D-25): «Modificar», «Rescindir», «Ver historial de cambios» (COM-03b), las entregas, las
+solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha», «s» y «es_gerente».{% endcomment %}
+{% block titulo %}{{ s.codigo }} · Contratos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <a class="back" href="{% url 'comercial:contratos' %}?tipo=suministro">{% icono "back" 15 %} Volver a suministros</a>
+  <div class="page-h">
+    <h1 class="mono">{{ s.codigo }}</h1>
+    {% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}
+    <span class="spacer"></span>
+    <a class="btn btn-ghost" href="{% url 'comercial:cliente' s.cliente.pk %}">{% icono "user" 14 %} Ver cliente</a>
+  </div>
+
+  <div class="stack">
+    {% if ficha.aviso_de_limite %}
+    <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ ficha.aviso_de_limite }}</div></div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-title">Contrato</div>
+      <dl class="dl">
+        <dt>Cliente</dt><dd><a href="{% url 'comercial:cliente' s.cliente.pk %}">{{ s.cliente }}</a> <span class="muted">· CUIT {{ s.cliente.cuit_cliente|cuit }}</span></dd>
+        <dt>Vendedor</dt><dd>{{ s.vendedor.get_full_name }}</dd>
+        <dt>Vigencia</dt><dd>{{ s.fecha_realizacion|date:"d/m/Y" }} al {{ s.fecha_fin|date:"d/m/Y" }} <span class="muted">· {{ s.duracion_meses }} meses</span></dd>
+        <dt>Incumplimientos</dt><dd>{{ s.cantidad_incumplimientos }} de {{ s.incumplimientos_tolerados }} <span class="muted">tolerados</span></dd>
+        <dt>Multa por resolución</dt><dd class="mono">{{ s.multa_resolucion|pesos }}</dd>
+        <dt>Pago de cada entrega</dt><dd>dentro de {{ ficha.clausula.plazo_pago_dias }} días <span class="muted">· atraso: {{ ficha.clausula.indemnizacion_retraso_pago|pesos }} por día</span></dd>
+        {% if s.fecha_resolucion_suministro %}<dt>Fecha de resolución</dt><dd>{{ s.fecha_resolucion_suministro|date:"d/m/Y" }}</dd>{% endif %}
+      </dl>
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><h3>{% icono "leaf" 14 %} Detalles</h3><span class="spacer"></span><span class="xs muted">Por variedad</span></div>
+      <div class="card-b flush">
+        <table class="data-table">
+          <thead><tr><th>Variedad y destino</th><th class="right">Cantidad</th><th class="right">Precio vigente</th><th>Cláusula del suministrante</th><th>Estado</th></tr></thead>
+          <tbody>
+          {% for fila in ficha.detalles %}
+            {% with d=fila.detalle c=fila.detalle.clausula_suministrante %}
+            <tr>
+              <td><b style="font-weight:600">{{ d.variedad }}</b><span class="sub2">{{ fila.direccion }}</span></td>
+              <td class="right mono">{{ d.cantidad_por_periodo }}<span class="sub2">cada {{ d.periodo_entrega_dias }} días</span></td>
+              <td class="right mono">{{ fila.precio_hoy|pesos }}<span class="sub2">{% if d.mecanismo_precio == "fijo" %}fijo{% else %}+{{ d.porcentaje_ajuste }} % cada {{ d.meses_ajuste }} meses{% endif %}</span></td>
+              <td>Mín. {{ c.cantidad_minima }} plantas<span class="sub2">Tolerancia {{ c.plazo_entrega_dias }} días · retraso {{ c.indemnizacion_retraso_entrega|pesos }}/día · faltante {{ c.indemnizacion_faltante|pesos }}/planta</span></td>
+              <td>{% include "comercial/suministros/_estado.html" with estado=d.estado_detalle_suministro texto=d.get_estado_detalle_suministro_display %}{% if fila.con_cambios_desde %}<span class="sub2">Con cambios desde el {{ fila.con_cambios_desde|date:"d/m/Y" }}</span>{% endif %}</td>
+            </tr>
+            {% endwith %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><h3>{% icono "cal" 14 %} Calendario</h3><span class="spacer"></span><span class="xs muted">Ventana de pre-reserva: hasta el {{ ficha.ventana|date:"d/m/Y" }}</span></div>
+      <div class="card-b">
+        <p class="cal-nota">{% icono "info" 15 %} <span>Los períodos del {{ ficha.desde|date:"d/m/Y" }} al {{ ficha.hasta|date:"d/m/Y" }}, por fecha pactada. Una entrega puede concretarse otro día.</span></p>
+      </div>
+      <div class="card-b flush">
+        {% include "comercial/suministros/_calendario_tabla.html" with filas=ficha.calendario %}
+      </div>
+      {% if ficha.hay_mas_calendario %}
+      <div class="card-b"><a class="btn btn-ghost btn-sm" href="{% url 'comercial:suministro_calendario' s.pk %}">Ver todo el calendario</a></div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Comprobante</div>
+      <p>
+        {% if s.estado_comprobante == "enviado" %}<span class="status-badge status-ok">Enviado</span> a {{ s.cliente.email_cliente }}.
+        {% elif s.estado_comprobante == "pendiente_envio" %}<span class="status-badge status-warn">Pendiente de envío</span> a {{ s.cliente.email_cliente }}.
+        {% else %}<span class="status-badge status-neutral">Para imprimir</span> El cliente no tiene correo: se entrega impreso.{% endif %}
+      </p>
+      <div class="acts-fila">
+        <a class="btn btn-ghost" href="{% url 'comercial:suministro_comprobante' s.pk %}" target="_blank" rel="noopener">{% icono "ext" 14 %} Ver comprobante</a>
+        {% if "reenviar_comprobante" in ficha.acciones %}
+        <form method="post" action="{% url 'comercial:suministro_reenviar_comprobante' s.pk %}">
+          {% csrf_token %}
+          <button class="btn btn-primary" type="submit" data-enviando="Enviando…">Reenviar comprobante</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

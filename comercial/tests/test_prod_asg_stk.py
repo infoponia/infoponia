@@ -16,10 +16,15 @@ from comercial.servicios import stock_maduro
 from comercial.tests.fabricas import (
     compra_venta,
     detalle,
+    detalle_suministro,
+    direccion_de_cliente,
     escenario_comercial,
     partida,
+    periodo,
     reserva,
+    reserva_de_periodo,
     segundo_invernadero,
+    suministro,
     verificar_invariantes_de_reservas,
 )
 from core.models import Notificacion, RegistroAuditoria
@@ -140,8 +145,8 @@ class PreCondicionesTests(BaseDeAsignacion):
         with self.assertRaises(ValueError):
             self.asignar(fecha=None, parametro="otro")
 
-    def test_pre_b_un_objeto_que_no_es_un_detalle_de_venta_lanza_value_error(self):
-        """Hasta COM-03 el detalle es un `DetalleVenta`."""
+    def test_pre_b_un_objeto_que_no_es_un_detalle_de_venta_ni_un_periodo_lanza_value_error(self):
+        """Desde COM-03 `asignar` acepta un `DetalleVenta` o un `Periodo`; cualquier otra cosa (acá, la venta) es un error de programación."""
         with self.assertRaises(ValueError):
             self.asignar(detalle_=self.venta)
 
@@ -662,3 +667,221 @@ class ReservadoDeLotesTests(BaseDeAsignacion):
         with CaptureQueriesContext(connection) as con_tres:
             stock_maduro.reservado_de_lotes([l.pk for l in lotes])
         self.assertEqual(len(con_uno), len(con_tres))
+
+
+# ---- COM-03a (paso 3): un período de un detalle de suministro ----
+
+
+class BaseDePeriodo(BaseDeAsignacion):
+    """El escenario de `BaseDeAsignacion` más un suministro de 6 meses con un detalle de 30 plantas cada 7 días, cuya primera entrega es
+    dentro de 3 días (períodos: dentro de 3, 10, 17… días)."""
+
+    def setUp(self):
+        super().setUp()
+        self.sum = suministro(self.e, duracion=6)
+        self.dsum = detalle_suministro(self.sum, self.e.variedad, cantidad=30, periodo=7, primera_en_dias=3)
+        self.p3 = periodo(self.dsum, dias(3))
+        self.p10 = periodo(self.dsum, dias(10))
+
+    def asignar_periodo(self, p=None, cantidad=30, parametro="suministro", **extra):
+        """PROD-ASG-STK para un período, como lo llama COM-PCT-SUM (paso 14)."""
+        p = p or self.p3
+        return stock_maduro.asignar(self.e.vendedor, p, cantidad, p.fecha, parametro, **extra)
+
+
+class AsignarPeriodoTests(BaseDePeriodo):
+    """PROD-ASG-STK con un `Periodo` (patrón, sección 7): la reserva lleva el detalle de suministro y la fecha del período."""
+
+    def test_post_d_la_reserva_de_un_periodo_lleva_el_detalle_y_la_fecha_del_periodo(self):
+        """Postcondición d de COM-PCT-SUM: cada reserva queda asociada al detalle de suministro (no al de venta), con `fecha_entrega_reserva`
+        igual a la fecha del período y la cantidad reservada igual a la cantidad por período."""
+        lote_maduro(self.e, 100)
+        resultado = self.asignar_periodo()
+        self.assertEqual((resultado.cubierta, resultado.sin_cubrir), (30, 0))
+        reserva_ = resultado.reservas[0]
+        self.assertEqual(reserva_.detalle_suministro_id, self.dsum.pk)
+        self.assertIsNone(reserva_.detalle_venta_id)
+        self.assertEqual(reserva_.fecha_entrega_reserva, dias(3))
+        self.assertEqual(reserva_.estado_reserva, ReservaStock.Estado.ACTIVA)
+        self.assertEqual(sum(l.cantidad_reservada for l in reserva_.lineas.all()), 30)
+
+    def test_post_e_un_periodo_con_lotes_programa_su_cosecha_con_el_capataz_del_invernadero(self):
+        """Postcondición e de COM-PCT-SUM: la reserva con líneas de lote tiene su cosecha «a realizar», prioridad media y el Capataz como
+        responsable (regla 3 de 8.11)."""
+        lote_maduro(self.e, 100)
+        resultado = self.asignar_periodo()
+        cosecha = resultado.cosechas[0]
+        self.assertEqual((cosecha.prioridad_orden, cosecha.capataz_id), ("media", self.e.capataz.pk))
+        self.assertEqual(resultado.reservas[0].cosecha_id, cosecha.pk)
+
+    def test_post_f_un_periodo_cubierto_solo_con_camara_queda_lista_para_entrega_sin_cosecha(self):
+        """Postcondición f de COM-PCT-SUM: una reserva con todas sus líneas de cámara queda «lista para entrega» y sin cosecha."""
+        lote = lote_maduro(self.e, 10)
+        partida(lote, disponible=40, fecha_limite=dias(30))
+        resultado = self.asignar_periodo()
+        self.assertEqual(resultado.cosechas, [])
+        self.assertEqual(resultado.reservas[0].estado_reserva, ReservaStock.Estado.LISTA_PARA_ENTREGA)
+
+    def test_ext_3b_un_periodo_usa_la_anticipacion_de_suministro(self):
+        """Regla 3 de 8.11 (anticipación de suministro, 3 días por defecto): la cosecha de un período del día 10 se programa el día 7."""
+        lote_maduro(self.e, 100)
+        resultado = self.asignar_periodo(self.p10)
+        self.assertEqual(resultado.cosechas[0].fecha_programada_orden, dias(7))
+
+    def test_regla_8_11_3_la_anticipacion_efectiva_es_la_menor_con_la_postcosecha(self):
+        """Regla 3 de 8.11: con parámetro 3 y postcosecha 1, la anticipación efectiva es 1: la cosecha del día 10 se programa el día 9."""
+        type(self.e.variedad).objects.filter(pk=self.e.variedad.pk).update(duracion_post_cosecha=1)
+        lote_maduro(self.e, 100)
+        self.assertEqual(self.asignar_periodo(self.p10).cosechas[0].fecha_programada_orden, dias(9))
+
+    def test_regla_la_cosecha_de_un_periodo_cercano_no_se_programa_en_el_pasado(self):
+        """Regla 3 de 8.11: la fecha programada es la mayor entre hoy y (fecha − anticipación): un período de dentro de 2 días, hoy + 0."""
+        lote_maduro(self.e, 100)
+        cercano = periodo(detalle_suministro(self.sum, self.e.variedad, direccion=direccion_de_cliente(self.e.cliente).direccion, cantidad=5, primera_en_dias=2), dias(2))
+        self.assertEqual(self.asignar_periodo(cercano, cantidad=5).cosechas[0].fecha_programada_orden, HOY)
+
+    def test_regla_un_periodo_ya_cubierto_en_parte_reserva_solo_lo_que_falta(self):
+        """Regla «Cantidad a reservar» y regla 10 de 8.8: se reserva la menor entre lo pedido y lo que el período todavía no tiene cubierto."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 20)])
+        resultado = self.asignar_periodo()
+        self.assertEqual(resultado.cubierta, 10)
+
+    def test_regla_un_periodo_totalmente_cubierto_no_crea_nada(self):
+        """Extensión 2a: sin nada sin cubrir, no crea reservas ni cosechas."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 30)])
+        resultado = self.asignar_periodo()
+        self.assertEqual((resultado.cubierta, resultado.reservas, resultado.cosechas), (0, [], []))
+
+    def test_regla_invernaderos_considerados_son_los_del_vendedor_actual_del_contrato(self):
+        """Patrón, sección 7: los invernaderos activos del Vendedor **actual** del contrato; si el contrato pasó a otro Vendedor (D-60), el
+        stock del invernadero del nuevo se considera y el del anterior no."""
+        otro = escenario_comercial(sufijo="2")
+        lote_maduro(otro, 100, variedad=self.e.variedad)
+        self.assertEqual(self.asignar_periodo().cubierta, 0)  # el stock es de otro Vendedor
+        type(self.sum).objects.filter(pk=self.sum.pk).update(vendedor=otro.vendedor)
+        resultado = self.asignar_periodo()
+        self.assertEqual(resultado.cubierta, 30)
+        self.assertEqual([r.invernadero_id for r in resultado.reservas], [otro.invernadero.pk])
+
+    def test_ext_5a_un_periodo_sin_capataz_activo_no_considera_los_lotes_del_invernadero_y_deja_la_alerta(self):
+        """Extensión 5a de PROD-ASG-STK, también para un período: los lotes de un invernadero sin Capataz activo no se consideran y queda la
+        alerta `sin_capataz` de `maestros` (D-41), sin romper la transacción del caso de uso base."""
+        sur = segundo_invernadero(self.e, con_capataz=False)
+        lote_maduro(sur, 40)
+        resultado = self.asignar_periodo()
+        self.assertEqual((resultado.cubierta, resultado.sin_cubrir), (0, 30))
+        self.assertEqual(
+            Alerta.objects.filter(invernadero=sur.invernadero, tipo_alerta="sin_capataz", estado_alerta="activa").count(), 1
+        )
+
+    def test_post_h_la_notificacion_al_agronomo_nombra_el_suministro_y_la_fecha_del_periodo(self):
+        """Paso 10: el Agrónomo recibe «Para SUM-…, entrega el dd/mm/aaaa. Podés modificarla o cancelarla desde Órdenes de trabajo.»"""
+        lote_maduro(self.e, 100)
+        self.asignar_periodo()
+        texto = Notificacion.objects.get(destinatario=self.e.agronomo).detalle
+        self.assertIn(f"Para {self.sum.codigo}, entrega el {dias(3):%d/%m/%Y}.", texto)
+
+    def test_pre_a_un_periodo_sin_transaccion_lanza_runtime_error(self):
+        """Precondición a: sin transacción abierta, `RuntimeError`, también con un período."""
+        with mock.patch.object(transaction, "get_autocommit", return_value=True), self.assertRaises(RuntimeError):
+            self.asignar_periodo()
+
+    def test_pre_b_con_un_periodo_el_parametro_tiene_que_ser_suministro(self):
+        """Patrón, sección 7: con un `Periodo`, `parametro` es siempre «suministro»."""
+        with self.assertRaises(ValueError):
+            self.asignar_periodo(parametro="compra_venta")
+
+    def test_pre_b_un_detalle_finalizado_o_resuelto_no_se_asigna(self):
+        """Precondición b: el detalle tiene que estar «vigente» (un finalizado recién se asigna desde COM-04, D-64 punto 8)."""
+        for estado in ("finalizado", "resuelto"):
+            with self.subTest(estado=estado):
+                type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro=estado)
+                with self.assertRaises(ValueError):
+                    self.asignar_periodo()
+        type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro="vigente")
+
+    def test_pre_b_un_suministro_que_no_esta_vigente_no_se_asigna(self):
+        """Precondición b: el suministro tiene que estar «vigente»."""
+        type(self.sum).objects.filter(pk=self.sum.pk).update(estado_suministro="finalizado")
+        with self.assertRaises(ValueError):
+            self.asignar_periodo()
+
+    def test_pre_b_una_fecha_que_no_es_del_calendario_del_detalle_lanza_value_error(self):
+        """Patrón, sección 7: una fecha fuera del calendario del detalle (dentro de 4 días, cuando las entregas son en 3, 10…) no es un período."""
+        with self.assertRaises(ValueError):
+            self.asignar_periodo(periodo(self.dsum, dias(4)))
+
+    def test_regla_un_periodo_no_cambia_el_estado_del_detalle_ni_del_suministro_ni_audita(self):
+        """`asignar` no cambia estados y no audita (D-36): lo hace el caso de uso base."""
+        lote_maduro(self.e, 100)
+        antes = RegistroAuditoria.objects.count()
+        self.asignar_periodo()
+        self.dsum.refresh_from_db()
+        self.sum.refresh_from_db()
+        self.assertEqual((self.dsum.estado_detalle_suministro, self.sum.estado_suministro), ("vigente", "vigente"))
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
+
+
+class CantidadSinCubrirDePeriodoTests(BaseDePeriodo):
+    """Regla 10 de 8.8 (MD-126) para un período: `cantidad_sin_cubrir(periodo)` y `sin_cubrir_de_periodos(periodos)`."""
+
+    def test_regla_10_de_8_8_un_periodo_sin_reservas_tiene_toda_su_cantidad_sin_cubrir(self):
+        """Cantidad por período − cubierto (0)."""
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 30)
+
+    def test_regla_10_de_8_8_resta_lo_cubierto_por_las_reservas_no_liberadas_de_esa_fecha(self):
+        """Solo cuentan las reservas del detalle **con esa `fecha_entrega_reserva`** y no liberadas."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 12)])
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 5)], estado="liberada")
+        reserva_de_periodo(self.dsum, dias(10), [(lote, 30)])
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 18)
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p10), 0)
+
+    def test_regla_9_de_8_8_un_lote_cosechado_cubre_lo_menor_entre_lo_cosechado_y_lo_reservado(self):
+        """Regla 9 de 8.8: línea de lote cosechado, `min(cosechada, reservada)`; sin cosechar, la reservada; de cámara, la reservada."""
+        lote = lote_maduro(self.e, 100)
+        r = reserva_de_periodo(self.dsum, dias(3), [(lote, 20)])
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 10)
+        DetalleReserva.objects.filter(reserva=r).update(cantidad_cosechada=5)
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 25)
+
+    def test_regla_un_detalle_resuelto_no_tiene_cantidad_sin_cubrir(self):
+        """MD-126: un detalle resuelto no tiene cantidad sin cubrir."""
+        type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro="resuelto")
+        self.dsum.refresh_from_db()
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(periodo(self.dsum, dias(3))), 0)
+
+    def test_regla_nunca_es_menor_que_cero(self):
+        """Regla 10 de 8.8: nunca menor que 0."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 30)])
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 0)
+
+    def test_regla_de_muchos_periodos_coincide_con_la_de_cada_uno(self):
+        """`sin_cubrir_de_periodos` da, para cada período, lo mismo que `cantidad_sin_cubrir`."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 12)])
+        otro = detalle_suministro(self.sum, self.e.variedad, direccion=direccion_de_cliente(self.e.cliente).direccion, cantidad=8, periodo=14, primera_en_dias=5)
+        periodos = [self.p3, self.p10, periodo(otro, dias(5)), periodo(otro, dias(19))]
+        esperado = {p: stock_maduro.cantidad_sin_cubrir(p) for p in periodos}
+        self.assertEqual(stock_maduro.sin_cubrir_de_periodos(periodos), esperado)
+        self.assertEqual(esperado[self.p3], 18)
+
+    def test_regla_de_muchos_periodos_hace_las_mismas_consultas_con_uno_que_con_cuatro(self):
+        """«Una consulta» para muchos períodos: la cantidad de consultas no crece con la de períodos."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 12)])
+        cuatro = [periodo(self.dsum, dias(3 + 7 * k)) for k in range(4)]
+        with CaptureQueriesContext(connection) as con_uno:
+            stock_maduro.sin_cubrir_de_periodos(cuatro[:1])
+        with CaptureQueriesContext(connection) as con_cuatro:
+            stock_maduro.sin_cubrir_de_periodos(cuatro)
+        self.assertEqual(len(con_uno), len(con_cuatro))
+
+    def test_regla_de_una_lista_vacia_no_consulta(self):
+        """Sin períodos, `{}` sin consultar la base."""
+        with self.assertNumQueries(0):
+            self.assertEqual(stock_maduro.sin_cubrir_de_periodos([]), {})

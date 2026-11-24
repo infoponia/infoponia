@@ -1,0 +1,17 @@
+{% load iconos comercial %}{% comment %}La ventana del resumen del pacto (COM-PCT-SUM, pasos 12 y 13; extensión 13a): cliente, Vendedor responsable, duración, fecha de fin, cláusulas y cada detalle con su calendario y su
+precio. «Confirmar suministro» pacta (POST a «Pactar suministro» con «confirmar»); «Volver a la carga» cierra la ventana y deja el formulario como estaba. Recibe «resumen», «f», «datos» y
+«es_gerente». El prototipo pactaba sin resumen: manda el caso de uso.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal modal-ancho" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Resumen del suministro</h2>
+    {% include "comercial/suministros/_resumen_datos.html" %}
+    <form method="post" action="{% url 'comercial:suministro_nuevo' %}">
+      {% csrf_token %}
+      {% include "comercial/suministros/_campos_ocultos.html" %}
+      <div class="acts">
+        <a class="btn btn-ghost" href="{% url 'comercial:suministro_nuevo' %}" data-cerrar-ventana>Volver a la carga</a>
+        <button class="btn btn-primary" type="submit" name="confirmar" value="1" data-enviando="Pactando…" data-foco-inicial>Confirmar suministro</button>
+      </div>
+    </form>
+  </div>
+</div>

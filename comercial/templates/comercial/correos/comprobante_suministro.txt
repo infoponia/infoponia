@@ -1,0 +1,24 @@
+{% load comercial %}{% autoescape off %}Hola {{ cliente }},
+
+Registramos tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }} el {{ suministro.fecha_realizacion|date:"d/m/Y" }}.
+
+Vigencia: del {{ suministro.fecha_realizacion|date:"d/m/Y" }} al {{ suministro.fecha_fin|date:"d/m/Y" }} ({{ suministro.duracion_meses }} meses)
+Vendedor responsable: {{ vendedor.get_full_name }}
+Incumplimientos tolerados: {{ suministro.incumplimientos_tolerados }}
+Multa por resolución: {{ suministro.multa_resolucion|pesos }}
+
+Pago de cada entrega: dentro de {{ clausula.plazo_pago_dias }} días de entregada. Indemnización por atraso en el pago: {{ clausula.indemnizacion_retraso_pago|pesos }} por día.
+
+Detalles:
+{% for fila in filas %}
+- {{ fila.variedad }}, a {{ fila.direccion }}
+  {{ fila.cantidad }} plantas cada {{ fila.periodo }} días: {{ fila.cantidad_de_entregas }} entregas, la primera el {{ fila.primera_fecha|date:"d/m/Y" }} y la última el {{ fila.ultima_fecha|date:"d/m/Y" }}.
+  Precio ({{ fila.mecanismo|lower }}): {{ fila.precio_inicial|pesos }} por planta{% if fila.porcentaje %}, con un ajuste de {{ fila.porcentaje }} % cada {{ fila.meses }} meses{% endif %}.
+{% for desde, precio in fila.tramos_de_precio %}{% if fila.tramos_de_precio|length > 1 %}  Desde el {{ desde|date:"d/m/Y" }}: {{ precio|pesos }}
+{% endif %}{% endfor %}  Tolerancia de entrega: {{ fila.clausula.plazo_entrega_dias }} días; retraso: {{ fila.clausula.indemnizacion_retraso_entrega|pesos }} por día.
+  Cantidad mínima por entrega: {{ fila.clausula.cantidad_minima }} plantas; faltante: {{ fila.clausula.indemnizacion_faltante|pesos }} por planta.
+{% endfor %}
+Comprobante interno, sin validez fiscal.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

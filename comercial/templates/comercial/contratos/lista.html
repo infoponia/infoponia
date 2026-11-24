@@ -1,6 +1,6 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
-{% comment %}«Comercial» → «Contratos» (COM-CNS-CVT, reglas 1 a 3; tabContratos con «cv» del prototipo). Solo compra-ventas (el selector «Compra-ventas / Suministros» lo agrega
-COM-03). Filtros en la URL (formulario GET común: sin JavaScript funciona igual, y no valida nada al tipear): cliente, estado, rango de fechas (pactada o de realización) y,
+{% comment %}«Comercial» → «Contratos» (COM-CNS-CVT, reglas 1 a 3; tabContratos con «cv» del prototipo). Compra-ventas (el selector «Compra-ventas / Suministros» es de COM-03a;
+los suministros están en «suministros/lista.html»). Filtros en la URL (formulario GET común: sin JavaScript funciona igual, y no valida nada al tipear): cliente, estado, rango de fechas (pactada o de realización) y,
 solo para el Gerente, Vendedor. El monto es «estimado» si la venta no está concretada ni cancelada. «Nueva compra-venta» se muestra deshabilitado con su motivo
 (precondición b). Recibe «pagina», «filtros», «estados», «es_gerente», «vendedores», «puede_registrar», «motivo» y «consulta».{% endcomment %}
 {% block titulo %}Contratos · Comercial · InfoPonia{% endblock %}
@@ -11,6 +11,7 @@ solo para el Gerente, Vendedor. El monto es «estimado» si la venta no está co
   {% include "comercial/_pestanas.html" with activa="contratos" %}
 
   <form class="filters" method="get" action="{% url 'comercial:contratos' %}" role="search">
+    {% include "comercial/contratos/_selector.html" with tipo="compra_venta" %}
     <input class="field-input q" type="search" name="cliente_q" value="{{ filtros.cliente_texto }}" placeholder="Cliente: nombre o CUIT" aria-label="Buscar por cliente" autocomplete="off">
     <select class="field-input" name="estado" data-desplegable aria-label="Estado">
       <option value="">Todos los estados</option>
