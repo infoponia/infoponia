@@ -18,6 +18,12 @@ def campo(valores, prefijo, *ids):
 
 
 @register.filter
+def de(diccionario, clave):
+    """`diccionario[clave]` o `None`: lo que un punto de extensión (acciones o detalle de una cosecha) devolvió para esa orden."""
+    return (diccionario or {}).get(clave)
+
+
+@register.filter
 def cantidad(valor_numerico):
     """Una cantidad sin ceros de más: `Decimal('50.000')` → `50`; `None` → `—`."""
     if valor_numerico is None:

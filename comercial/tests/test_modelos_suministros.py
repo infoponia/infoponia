@@ -288,8 +288,8 @@ class ModelosDeSuministrosTests(ConDatosDeInventario, TestCase):
         detalle_venta = detalle(venta, self.e.variedad, cantidad=10)
         r = reserva(detalle_venta, [(lote, 5)])
         viola(self, lambda: ReservaStock.objects.filter(pk=r.pk).update(detalle_suministro=self.det))
-        ReservaStock.objects.filter(pk=r.pk).update(detalle_venta=None)
-        no_viola(lambda: ReservaStock.objects.filter(pk=r.pk).update(detalle_suministro=self.det))
+        # COM-04a (D-64 punto 6): sin detalle la fecha de entrega sería nula, así que el cambio de contrato se hace en un solo `update`.
+        no_viola(lambda: ReservaStock.objects.filter(pk=r.pk).update(detalle_venta=None, detalle_suministro=self.det))
         self.assertEqual(list(self.det.reservas.all()), [r])
 
 

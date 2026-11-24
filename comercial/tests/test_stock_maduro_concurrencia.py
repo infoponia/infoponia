@@ -141,11 +141,11 @@ class StockMaduroConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
 
     def test_regla_una_venta_contra_la_baja_del_invernadero_la_baja_primero_rechaza_la_venta(self):
         """Contrato de D-40 (`bloquear_invernadero_activo`): con la baja del invernadero primero, la venta con retiro en él espera, lo ve
-        inactivo y se rechaza con `invernadero_no_habilitado`; no queda ninguna reserva. (Que una venta con stock de cámara impida la baja
-        llega con COM-04, que registra las partidas como impedimento: ver `docs/disparadores.md`.)"""
+        inactivo y se rechaza con `invernadero_no_habilitado`; no queda ninguna reserva. COM-04a (D-64 punto 12) registra las partidas «disponibles»
+        como impedimento de la baja, así que la partida de esta prueba está agotada: ya no hay manera de tener stock de cámara y dar de baja el invernadero.)"""
         self.armar()
         sur = segundo_invernadero(self.e, nombre="Invernadero Sur", geografia_propia=True)
-        self.con_lote_finalizado_y_partida(sur)
+        self.con_lote_finalizado_y_partida(sur, disponible=0)
         resultados = correr_a_la_vez(
             self.vender(10, sur.invernadero), lambda: invernaderos.baja_invernadero(self.gerente, sur.invernadero.pk), primera="b"
         )
@@ -154,6 +154,8 @@ class StockMaduroConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual(baja[2], [])
         if baja[0]:  # la baja se concretó: la venta no puede haber reservado nada en un invernadero inactivo
             self.assertEqual(len(venta[1]), 1)
-            self.assertIn("invernadero_no_habilitado", codigos_del_rechazo(venta[1][0]))
+            # Sin stock de cámara (la partida está agotada, ver arriba) la venta también puede rechazarse por `supera_disponible`: lo que importa es
+            # que no se registre nada en un invernadero inactivo.
+            self.assertTrue({"invernadero_no_habilitado", "supera_disponible"} & set(codigos_del_rechazo(venta[1][0])))
             self.assertEqual(Invernadero.objects.get(pk=sur.invernadero.pk).estado_invernadero, "inactivo")
             self.assertEqual(CompraVenta.objects.count(), 0)

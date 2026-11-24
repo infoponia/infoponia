@@ -20,8 +20,8 @@
 #     ``alertas_creadas`` y ``alertas_resueltas`` (textos con el número).
 #   - Registro en `ComercialConfig.ready()`: el tipo, el enlace (`registrar_enlace_de_alerta`) y el paso diario `pre_reservar_suministros`
 #     (orden 40, «Pre-reservar suministros»).
-#   - Decisión del estudiante (24/11/2026): los períodos de un detalle «finalizado» (D-64, punto 8) los retoma COM-04a; hasta entonces la
-#     pre-reserva toma solo detalles «vigentes» y la prueba correspondiente lo documenta.
+#   - D-64 punto 8 (COM-04a, decisión del estudiante del 24/11/2026): la pre-reserva también retoma los períodos de un detalle «finalizado»
+#     cuya fecha no supera `fecha_fin_detalle` (todavía se deben); los posteriores no.
 
 from datetime import timedelta
 from unittest import mock
@@ -223,12 +223,31 @@ class ReglaDelPeriodoTests(BaseDePrereserva):
         self.correr()
         self.assertEqual(self.fechas_reservadas(), [en(3)])
 
-    def test_regla_un_detalle_finalizado_no_se_pre_reserva_hasta_com_04a(self):
-        """Decisión del 24/11/2026: D-64, punto 8 (el período con fecha ≤ `fecha_fin_detalle` de un detalle finalizado todavía se debe) lo programa
-        COM-04a. Hasta entonces la pre-reserva toma solo detalles «vigentes»: un detalle «finalizado» no se toca."""
+    def test_regla_d64_8_un_detalle_finalizado_se_pre_reserva_hasta_su_fecha_de_fin(self):
+        """D-64, punto 8 (COM-04a): el período con fecha ≤ `fecha_fin_detalle` de un detalle «finalizado» todavía se debe, así que la pre-reserva lo toma
+        (los días 3 y 10); uno posterior (el día 17, fuera de la ventana de 14 días, o cualquiera después de la fecha de fin) no."""
         DetalleSuministro.objects.filter(pk=self.d.pk).update(estado_detalle_suministro="finalizado", fecha_fin_detalle=en(10))
-        self.assertEqual(self.correr(), ResumenDePaso(0, 0, 0, "0 períodos siguen sin cobertura completa"))
-        self.assertEqual(ReservaStock.objects.count(), 0)
+        resumen = self.correr()
+        self.assertEqual(resumen.procesados, 2)
+        self.assertEqual(self.fechas_reservadas(), [en(3), en(10)])
+
+    def test_regla_d64_8_un_periodo_posterior_a_la_fecha_de_fin_de_un_detalle_finalizado_no_se_toma(self):
+        """Con `fecha_fin_detalle` en el día 3, el período del día 10 ya no se debe: no se pre-reserva."""
+        DetalleSuministro.objects.filter(pk=self.d.pk).update(estado_detalle_suministro="finalizado", fecha_fin_detalle=en(3))
+        self.correr()
+        self.assertEqual(self.fechas_reservadas(), [en(3)])
+
+    def test_regla_d64_8_el_periodo_de_un_detalle_terminado_que_pierde_su_reserva_se_vuelve_a_tomar(self):
+        """D-64 punto 8: si la reserva de un período de un detalle terminado se libera (cosecha cancelada), el período vuelve a tener cantidad sin
+        cubrir y la pre-reserva del día siguiente lo cubre de nuevo."""
+        DetalleSuministro.objects.filter(pk=self.d.pk).update(estado_detalle_suministro="finalizado", fecha_fin_detalle=en(10))
+        self.correr()
+        ReservaStock.objects.filter(detalle_suministro=self.d, fecha_entrega_reserva=en(3)).update(estado_reserva="liberada")
+        resumen = self.correr()
+        self.assertEqual(resumen.procesados, 1)
+        self.assertEqual(
+            ReservaStock.objects.filter(detalle_suministro=self.d, fecha_entrega_reserva=en(3)).exclude(estado_reserva="liberada").count(), 1
+        )
 
     def test_regla_un_suministro_que_no_esta_vigente_no_se_pre_reserva(self):
         """Regla «Período a pre-reservar»: de un suministro «vigente»; uno «finalizado» no aporta períodos."""

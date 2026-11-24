@@ -1,8 +1,8 @@
-{% load iconos %}{% comment %}La tabla de «Producción y órdenes» (lo que HTMX reemplaza al filtrar). Recibe «filas» (FilaDeOrden, ya ordenadas: primero las «a realizar»). Todo se escapa. Sin filas, el estado vacío.{% endcomment %}
+{% load iconos produccion %}{% comment %}(COM-04a: con el filtro «Cosecha» suma las columnas «Origen» y «Contrato», y cada fila de cosecha lleva los botones de `comercial` que la cuenta puede usar, nunca uno que dé 403.) La tabla de «Producción y órdenes» (lo que HTMX reemplaza al filtrar). Recibe «filas» (FilaDeOrden, ya ordenadas: primero las «a realizar»). Todo se escapa. Sin filas, el estado vacío.{% endcomment %}
 {% if filas %}
 <div class="card"><div class="card-b flush">
   <table class="data-table">
-    <thead><tr><th>Orden</th><th>Tipo</th><th>Invernadero</th><th>Qué</th><th>Fecha</th><th>Prioridad</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Orden</th><th>Tipo</th><th>Invernadero</th><th>Qué</th><th>Fecha</th><th>Prioridad</th>{% if ver_cosechas %}<th>Origen</th><th>Contrato</th>{% endif %}<th>Estado</th><th></th></tr></thead>
     <tbody>
     {% for f in filas %}
     <tr>
@@ -12,8 +12,9 @@
       <td>{{ f.resumen|default:"—" }}</td>
       <td>{{ f.fecha_programada_orden|date:"d/m/Y" }}</td>
       <td>{% if f.prioridad_orden %}{{ f.prioridad_orden|capfirst }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      {% if ver_cosechas %}<td>{{ origenes|de:f.orden_id|default:"—" }}</td><td>{% with d=detalles|de:f.orden_id %}{% if d.contrato %}<span class="mono">{{ d.contrato }}</span>{% if d.fecha_entrega %} · {{ d.fecha_entrega|date:"d/m/Y" }}{% endif %}{% else %}<span class="muted">Sin contrato</span>{% endif %}{% endwith %}</td>{% endif %}
       <td><span class="status-badge {% if f.estado_orden == 'a_realizar' %}status-info{% elif f.estado_orden == 'concretada' %}status-ok{% else %}status-warn{% endif %}">{% if f.estado_orden == 'a_realizar' %}a realizar{% else %}{{ f.estado_orden }}{% endif %}</span></td>
-      <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'produccion:orden' f.orden_id %}">Ver</a></td>
+      <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'produccion:orden' f.orden_id %}">Ver</a>{% if f.tipo_orden == 'cosecha' %}{% with a=acciones|de:f.orden_id %}{% if a.modificar %} <a class="btn btn-ghost btn-sm" href="{{ a.modificar }}">Modificar</a>{% endif %}{% if a.cancelar %} <a class="btn btn-ghost btn-sm" href="{{ a.cancelar }}">Cancelar</a>{% endif %}{% endwith %}{% endif %}</td>
     </tr>
     {% endfor %}
     </tbody>

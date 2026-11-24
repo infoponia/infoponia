@@ -18,6 +18,9 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
       <div><dt>Capataz</dt><dd>{{ hija.capataz.get_full_name|default:hija.capataz.email }}</dd></div>
       <div><dt>Planificó</dt><dd>{% if hija.agronomo %}{{ hija.agronomo.get_full_name|default:hija.agronomo.email }}{% else %}InfoPonia{% endif %}</dd></div>{% endif %}
       <div><dt>Prioridad</dt><dd>{{ orden.prioridad_orden|default:"—"|capfirst }}</dd></div>
+      {% if orden.tipo_orden == "cosecha" %}<div><dt>Origen</dt><dd>{{ origen_de_cosecha|default:"—" }}</dd></div>
+      <div><dt>Contrato</dt><dd>{% if detalle_de_cosecha.contrato %}<span class="mono">{{ detalle_de_cosecha.contrato }}</span>{% if detalle_de_cosecha.fecha_entrega %} · entrega {{ detalle_de_cosecha.fecha_entrega|date:"d/m/Y" }}{% endif %}{% else %}Sin contrato{% endif %}</dd></div>
+      {% if hija.fecha_cosecha %}<div><dt>Fecha de cosecha</dt><dd>{{ hija.fecha_cosecha|date:"d/m/Y" }}</dd></div>{% endif %}{% endif %}
       {% if orden.fecha_resolucion_orden %}<div><dt>Resuelta</dt><dd>{{ orden.fecha_resolucion_orden|date:"d/m/Y" }}</dd></div>{% endif %}
       {% if hija.fecha_siembra %}<div><dt>Fecha de siembra</dt><dd>{{ hija.fecha_siembra|date:"d/m/Y" }}</dd></div>{% endif %}
       {% if hija.fecha_transicion %}<div><dt>Fecha del traslado</dt><dd>{{ hija.fecha_transicion|date:"d/m/Y" }}</dd></div>{% endif %}
@@ -32,6 +35,12 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
     {% for o in detalle.ocupaciones %}<tr><td>{{ o.sector.nombre_sector }}</td><td class="right mono">{{ o.cant_agujeros_planificados }}</td><td class="right mono">{{ o.cant_agujeros_ocupados }}</td></tr>{% endfor %}
     </tbody></table></div></div>
   {% endif %}
+  {% if orden.tipo_orden == "cosecha" and detalle_de_cosecha.lotes %}
+  <div class="card" style="margin-top:12px"><div class="card-h"><h3>Lotes</h3></div><div class="card-b flush">
+    <table class="data-table"><thead><tr><th>Lote</th><th class="right">Reservadas</th><th class="right">Cosechadas</th></tr></thead><tbody>
+    {% for lote_id, reservada, cosechada in detalle_de_cosecha.lotes %}<tr><td class="mono">L-{{ lote_id }}</td><td class="right mono">{{ reservada }}</td><td class="right mono">{% if cosechada is None %}—{% else %}{{ cosechada }}{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  {% endif %}
   {% if detalle.reservas %}
   <div class="card" style="margin-top:12px"><div class="card-h"><h3>Insumos reservados</h3></div><div class="card-b flush">
     <table class="data-table"><thead><tr><th>Insumo</th><th class="right">Reservado</th><th class="right">Utilizado</th><th class="right">Devuelto</th><th>Estado</th></tr></thead><tbody>
@@ -41,6 +50,9 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
     {% if detalle.puede_concretar %}<a class="btn btn-primary" href="{% url 'produccion:concretar' orden.pk %}">{% if orden.tipo_orden == "transicion" %}Concretar transición{% else %}Concretar siembra{% endif %}</a>{% endif %}
     {% if detalle.puede_cancelar %}<a class="btn btn-ghost" href="{% url 'produccion:cancelar' orden.pk %}">Cancelar orden</a>{% endif %}
+    {% if acciones_de_cosecha.concretar %}<a class="btn btn-primary" href="{{ acciones_de_cosecha.concretar }}">Concretar cosecha</a>{% endif %}
+    {% if acciones_de_cosecha.modificar %}<a class="btn btn-ghost" href="{{ acciones_de_cosecha.modificar }}">Modificar cosecha</a>{% endif %}
+    {% if acciones_de_cosecha.cancelar %}<a class="btn btn-ghost" href="{{ acciones_de_cosecha.cancelar }}">Cancelar cosecha</a>{% endif %}
   </div>
 </div>
 {% endwith %}

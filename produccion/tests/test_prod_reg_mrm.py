@@ -202,7 +202,7 @@ class DatosDeMermaTests(Base):
     def test_regla_causa_ofrece_las_del_lote_en_pie_incluido_el_descarte_por_seleccion(self):
         """Regla «Causa»: plaga, enfermedad, falla de riego o nutrientes, condiciones ambientales, daño mecánico, descarte por selección y otra."""
         valores = [v for v, _ in mermas.datos_de_merma(self.e.capataz, self.lote().pk).causas]
-        self.assertEqual(valores, [c.value for c in Merma.Causa])
+        self.assertEqual(valores, list(Merma.CAUSAS_EN_PIE))  # COM-04a: `Merma.Causa` suma tres de cámara y entrega
         self.assertIn("descarte_por_seleccion", valores)
 
     def test_regla_ambito_lote_ajeno_sin_permiso_inexistente_404_y_finalizado_se_rechaza(self):
@@ -564,3 +564,31 @@ class CambioSimultaneoTests(Base):
         sector = self.e.sectores["crecimiento"]
         self.registrar(lote, cantidad_actual=100, ocupados=((sector.pk, 100),))
         self.assertEqual(Merma.objects.count(), 1)
+
+
+class MovimientoDeStockDeLaMermaTests(Base):
+    """COM-04a (D-64 punto 2, API sección 8): `aplicar_merma` suma el movimiento «salida por merma» del lote (origen: la merma;
+    `costo_unitario` = el costo por planta de antes) y `merma_acumulada` cuenta solo las mermas con etapa."""
+
+    def test_post_d_la_merma_de_un_lote_en_pie_crea_el_movimiento_salida_por_merma(self):
+        """Postcondición d de PROD-REG-MRM (D-64 punto 2): `salida_por_merma` con la cantidad, el lote, la merma como origen y el costo por
+        planta de antes de la merma (100,00 ÷ 100 = 1,0000)."""
+        from produccion.models import MovimientoStock
+
+        lote = self.lote(cantidad=100, costo="100.00")
+        self.registrar(lote, {self.e.sectores["crecimiento"]: 5})
+        merma = Merma.objects.get()
+        m = MovimientoStock.objects.get()
+        self.assertEqual(
+            (m.tipo_movimiento, m.cantidad, m.lote_id, m.partida_id, m.origen_id, m.costo_unitario),
+            ("salida_por_merma", 5, lote.pk, None, merma.pk, Decimal("1.0000")),
+        )
+
+    def test_regla_una_merma_de_camara_no_suma_a_la_merma_acumulada_del_lote(self):
+        """Regla 7 de 8.9 (API, sección 8): `merma_acumulada` cuenta solo las mermas con etapa; una merma de partida (sin etapa) no suma."""
+        lote = self.lote(cantidad=100)
+        Merma.objects.create(
+            invernadero=lote.invernadero, lote=lote, etapa=None, tipo_evento="merma", fecha_bitacora=timezone.localdate(),
+            hora_bitacora=timezone.localtime().time(), cant_merma=50, causa="dano_en_camara",
+        )
+        self.assertEqual(mermas.merma_acumulada(lote), Decimal("0.00"))

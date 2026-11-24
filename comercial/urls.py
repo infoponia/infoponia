@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_contratos, views_suministros
+from comercial import views, views_contratos, views_cosechas, views_suministros
 
 app_name = "comercial"
 
@@ -41,6 +41,18 @@ urlpatterns = [
         "contratos/suministros/<int:suministro_id>/dejar-sin-efecto-rescision/", views_suministros.suministro_dejar_sin_efecto, name="suministro_dejar_sin_efecto"
     ),
     path("contratos/suministros/<int:suministro_id>/historial/", views_suministros.suministro_historial, name="suministro_historial"),
+    # Cosechas (COM-04a): planificar y modificar (Agrónomo), concretar (Capataz, para celular) y cancelar (Agrónomo). Cada pantalla tiene su `calcular/` (redibuja
+    # sin validar) y su `revisar/` (el resumen): ninguna de las dos escribe. Se llega desde las pantallas de `produccion` (lista de órdenes y bandeja).
+    path("cosechas/planificar/", views_cosechas.planificar, name="cosecha_planificar"),
+    path("cosechas/planificar/calcular/", views_cosechas.planificar_calcular, name="cosecha_planificar_calcular"),
+    path("cosechas/planificar/revisar/", views_cosechas.planificar_revisar, name="cosecha_planificar_revisar"),
+    path("cosechas/<int:cosecha_id>/modificar/", views_cosechas.modificar, name="cosecha_modificar"),
+    path("cosechas/<int:cosecha_id>/modificar/calcular/", views_cosechas.modificar_calcular, name="cosecha_modificar_calcular"),
+    path("cosechas/<int:cosecha_id>/modificar/revisar/", views_cosechas.modificar_revisar, name="cosecha_modificar_revisar"),
+    path("cosechas/<int:cosecha_id>/concretar/", views_cosechas.concretar, name="cosecha_concretar"),
+    path("cosechas/<int:cosecha_id>/concretar/calcular/", views_cosechas.concretar_calcular, name="cosecha_concretar_calcular"),
+    path("cosechas/<int:cosecha_id>/concretar/revisar/", views_cosechas.concretar_revisar, name="cosecha_concretar_revisar"),
+    path("cosechas/<int:cosecha_id>/cancelar/", views_cosechas.cancelar, name="cosecha_cancelar"),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
     path("clientes/", views.clientes, name="clientes"),
     path("clientes/nuevo/", views.cliente_nuevo, name="cliente_nuevo"),

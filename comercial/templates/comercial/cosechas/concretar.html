@@ -1,0 +1,12 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Concretar cosecha» (COM-04a, PROD-CNC-CSC, `VIEWS.capcsc` del prototipo), pensada para el celular (marco angosto del Capataz, D-25): una columna de pasos. Recibe lo que arma `_contexto_de_concrecion`. El prototipo no
+validaba la fecha de creación (6b), ni el máximo del lote (8b), ni las perdidas por sector (10a.3a), y no tenía el resumen final con el destino de lo cosechado: se completa acá (D-61).{% endcomment %}
+{% block titulo %}Concretar cosecha {{ cosecha.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "chev" 14 %} Mis órdenes</a>
+  <div class="page-h"><h1>Concretar <span class="mono">{{ cosecha.codigo }}</span></h1>
+    <div class="sub">{{ cosecha.variedad }} · {{ cosecha.invernadero.nombre_invernadero }} · para el {{ cosecha.fecha_programada_orden|date:"d/m/Y" }}{% if ficha.contrato %} · {{ ficha.contrato }}, entrega el {{ ficha.fecha_entrega|date:"d/m/Y" }}{% else %} · sin contrato: todo va a la cámara{% endif %}</div></div>
+  <div id="cosecha-formulario">{% include "comercial/cosechas/_concretar_formulario.html" %}</div>
+</div>
+{% endblock %}

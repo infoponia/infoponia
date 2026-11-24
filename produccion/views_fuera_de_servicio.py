@@ -23,7 +23,7 @@ from produccion.views_bitacora import _firma_de
 
 def _causas():
     """Las causas que se ofrecen: las de un lote en pie, sin «descarte por selección» (regla «Causa de la merma»)."""
-    return [(valor, texto) for valor, texto in Merma.Causa.choices if valor != Merma.Causa.DESCARTE_POR_SELECCION]
+    return [(c.value, c.label) for c in Merma.CAUSAS_EN_PIE if c != Merma.Causa.DESCARTE_POR_SELECCION]
 
 
 def _vistos(detalle, filas):

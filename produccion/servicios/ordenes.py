@@ -125,13 +125,10 @@ def _filas_de_ordenes(ordenes):
     return [_fila(orden, hijas.get(orden.pk), getattr(hijas.get(orden.pk), "capataz_id", None)) for orden in ordenes]
 
 
-def _ordenes_del_capataz(capataz, estado, solo_invernaderos_activos, sin_cosechas=False):
-    """La unión de las hijas con Capataz, filtrada por `TIPOS_DE_PRODUCCION`; una consulta por tabla hija. Con `sin_cosechas` (la bandeja),
-    no consulta la tabla de cosechas: hasta COM-04a la bandeja no las muestra."""
+def _ordenes_del_capataz(capataz, estado, solo_invernaderos_activos):
+    """La unión de las hijas con Capataz, filtrada por `TIPOS_DE_PRODUCCION`; una consulta por tabla hija."""
     filas = []
     for clase in _HIJAS_CON_CAPATAZ:
-        if sin_cosechas and clase is Cosecha:  # hasta COM-04a
-            continue
         consulta = clase.objects.filter(capataz_id=capataz.pk, tipo_orden__in=list(TIPOS_DE_PRODUCCION))
         if estado:
             consulta = consulta.filter(estado_orden=estado)
@@ -153,7 +150,7 @@ def bandeja_del_capataz(capataz):
     """Las órdenes «a realizar» del Capataz en invernaderos activos, ordenadas por fecha programada, prioridad e id, en los grupos
     «vencidas» (antes de hoy), «hoy» y «próximas» (después de hoy)."""
     hoy = timezone.localdate()
-    filas = _ordenes_del_capataz(capataz, Estado.A_REALIZAR, solo_invernaderos_activos=True, sin_cosechas=True)  # cosechas: hasta COM-04a
+    filas = _ordenes_del_capataz(capataz, Estado.A_REALIZAR, solo_invernaderos_activos=True)
     return Bandeja(
         vencidas=[f for f in filas if f.fecha_programada_orden < hoy],
         hoy=[f for f in filas if f.fecha_programada_orden == hoy],
@@ -165,9 +162,7 @@ def lista_de_ordenes(actor, filtros):
     """Las órdenes visibles para `actor` (el Agrónomo, de sus invernaderos; el Gerente, de todos, en solo lectura; cualquier otro,
     ninguna), solo de los tipos de `TIPOS_DE_PRODUCCION`. Las «a realizar» van primero, en el orden de la bandeja; el resto, de la
     más reciente a la más antigua."""
-    ordenes = OrdenTrabajo.objects.filter(
-        invernadero__in=Invernadero.objects.en_alcance_de(actor), tipo_orden__in=list(TIPOS_DE_PRODUCCION)
-    ).exclude(tipo_orden=Tipo.COSECHA)  # hasta COM-04a: la lista del Agrónomo todavía no muestra cosechas
+    ordenes = OrdenTrabajo.objects.filter(invernadero__in=Invernadero.objects.en_alcance_de(actor), tipo_orden__in=list(TIPOS_DE_PRODUCCION))
     if filtros.invernadero_id:
         ordenes = ordenes.filter(invernadero_id=filtros.invernadero_id)
     if filtros.tipo:
@@ -180,13 +175,26 @@ def lista_de_ordenes(actor, filtros):
     return pendientes + historial
 
 
+def contexto_de_cosechas(usuario, filas):
+    """Lo que las pantallas de `produccion` piden a `comercial` (COM-04a, D-64 punto 11) para las filas que son cosechas, sin consultas por fila:
+    `{"acciones": {orden_id: AccionesDeCosecha}, "detalles": {orden_id: DetalleDeCosecha}, "origenes": {orden_id: texto}}`. Sin cosechas o sin
+    registrante, todo vacío (la pantalla no muestra botones)."""
+    from produccion import extensiones
+
+    ids = [f.orden_id for f in filas if f.tipo_orden == Tipo.COSECHA]
+    if not ids:
+        return {"acciones": {}, "detalles": {}, "origenes": {}}
+    origenes = {pk: Cosecha.OrigenCosecha(valor).label for pk, valor in Cosecha.objects.filter(pk__in=ids).values_list("pk", "origen_cosecha")}
+    return {"acciones": extensiones.acciones_de_cosechas(usuario, ids), "detalles": extensiones.detalle_de_cosechas(ids), "origenes": origenes}
+
+
 def ordenes_cancelables(actor):
-    """Las órdenes «a realizar» de los invernaderos del Agrónomo `actor`, agrupadas por invernadero y tipo. Solo de los tipos que
-    muestra `produccion` Y que `cancelar_orden` acepta (`TIPOS_DE_PRODUCCION` y `TIPOS_QUE_CANCELA_PRODUCCION`): una cosecha se
-    cancela desde `comercial`. El Gerente no cancela: para él no hay nada."""
+    """Las órdenes «a realizar» de los invernaderos del Agrónomo `actor`, agrupadas por invernadero y tipo, de todos los `TIPOS_DE_PRODUCCION`
+    (desde COM-04a, D-67 punto 1e, también las cosechas: `cancelar_orden` las sigue rechazando, y la fila de una cosecha lleva la acción
+    «Cancelar» de `comercial`). El Gerente no cancela: para él no hay nada."""
     if actor is None or not getattr(actor, "is_active", False) or rol_de(actor) != Usuario.Rol.AGRONOMO:
         return []
-    tipos = [t for t in TIPOS_DE_PRODUCCION if t in TIPOS_QUE_CANCELA_PRODUCCION]
+    tipos = list(TIPOS_DE_PRODUCCION)
     ordenes = OrdenTrabajo.objects.filter(
         invernadero__in=Invernadero.objects.en_alcance_de(actor), tipo_orden__in=tipos, estado_orden=Estado.A_REALIZAR
     ).select_related("invernadero")
@@ -483,7 +491,6 @@ def detalle_de_orden(actor, orden_id):
     orden = (
         OrdenTrabajo.objects.select_related("invernadero")
         .filter(pk=orden_id, tipo_orden__in=list(TIPOS_DE_PRODUCCION))
-        .exclude(tipo_orden=Tipo.COSECHA)  # hasta COM-04a: su ventana de detalle todavía no existe
         .first()
     )
     if orden is None or actor is None or not getattr(actor, "is_active", False):

@@ -1,0 +1,12 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Planificar cosecha» (COM-04a, PROD-PNF-CSC, `VIEWS.cscnew` del prototipo). Una página con los pasos: invernadero → con o sin contrato → detalle o variedad → fecha y prioridad → lotes → resumen. Recibe lo que arma
+`_contexto_de_planificacion`. Los selectores redibujan sin validar (HTMX o «Actualizar» sin JavaScript); «Ver resumen» valida y «Confirmar planificación» escribe. El prototipo no mostraba la primera fecha admitida, la
+advertencia de retraso, la búsqueda, el error de 11b ni el resumen: se completan acá (D-61).{% endcomment %}
+{% block titulo %}Planificar cosecha · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page">
+  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <div class="page-h"><h1>Planificar cosecha</h1><div class="sub">Elegí el invernadero, el contrato (si cubre uno) y de qué lotes se cosecha.</div></div>
+  <div id="cosecha-formulario">{% include "comercial/cosechas/_planificar_formulario.html" %}</div>
+</div>
+{% endblock %}

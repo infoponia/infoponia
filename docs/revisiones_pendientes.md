@@ -479,6 +479,30 @@ Los 14 pasos son los de «Verificación a mano» (en el «Cierre») de `docs/tar
 - [ ] 13. (Opcional) Sin JavaScript y en un ancho de celular (390 px): modificar funciona con «Actualizar» y el resumen como página; las ventanas son la ficha con la ventana abierta; nada se desborda.
 - [ ] 14. (Opcional) **Después del despliegue:** en el log de Render, que se aplicaron `comercial/0004_alerta_comercial` y `core/0033_comercial_suministros_2`, y que `proceso_diario --listar` en la «Shell» muestra los pasos 35 y 40.
 
+## COM-04a · Tarea COM-04a (cosechas: núcleo en produccion; planificar, modificar, concretar y cancelar)
+
+Los 18 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-04a-cosechas.md`, copiados acá para ir tachándolos (M5). Hay cuatro migraciones nuevas (`contabilidad` 0003, `produccion` 0008, `comercial` 0005 y `core` 0034): `python manage.py migrate`; después `python manage.py runserver`. No hay datos cargados: creá un Gerente, un Agrónomo, un Capataz y un Vendedor (los tres últimos en el mismo invernadero «Norte»), un segundo Capataz y un segundo Agrónomo sin invernadero, un lote de «Lechuga Crespa» en Maduración con 300 plantas repartidas en dos sectores (200 y 100) y un cliente con correo y una dirección activa.
+
+- [ ] 1. **Contrato.** Vendedor: compra-venta con envío de 100 plantas, entrega dentro de 10 días: queda «abierta» y se programa una cosecha automática.
+- [ ] 2. **Lista del Agrónomo.** «Producción» › «Órdenes» › «Tipo: Cosecha»: la cosecha con «Origen: Automática», el contrato y «Ver», «Modificar» y «Cancelar»; arriba, «Planificar cosecha»; el Capataz tiene la notificación «Nueva cosecha OT-…».
+- [ ] 3. **Modificar.** Fecha posterior a la entrega: aviso de retraso; anterior a la primera admitida: error con esa fecha; total distinto (90 de 100): no deja terminar; solo la prioridad a «Alta»: el resumen muestra antes y después y el Capataz recibe «Cosecha OT-… modificada».
+- [ ] 4. **Planificar sin contrato.** 40 plantas del lote, fecha de mañana: en la lista queda «Manual» y «Sin contrato».
+- [ ] 5. **Concretar la automática (celular).** Propuesta por sector como texto de ayuda (67 y 33); 10 menos en un sector y 4 perdidas por «Plaga»: el resumen dice los que faltan; al confirmar, la cosecha sale de la bandeja y aparece una «Encadenada» (o la venta pasa a «Pendiente de decisión del cliente»).
+- [ ] 6. **Concretar la sin contrato.** Con 40: en «Auditoría» queda «Concreción de cosecha» con la partida `P-…` de 40 plantas; en la bitácora, los registros de tipo «Cosecha».
+- [ ] 7. **Cancelar.** Con contrato: lo que se libera, el contrato, la estimación de recobertura y el recordatorio de «Modificar cosecha»; motivo vacío: error; con motivo se cancela y el Capataz recibe el aviso.
+- [ ] 8. **Errores de planificar.** Fecha pasada, cantidad mayor que el stock libre y lote sin cantidad: cada error debajo de su campo.
+- [ ] 9. **Dos pestañas.** Modificar dos veces la misma cosecha, y cancelar mientras se concreta: la segunda operación vuelve a abrir con un aviso y no registra nada.
+- [ ] 10. **Errores de concretar.** Más plantas que los agujeros del sector, fecha futura y perdidas sin causa: errores por campo, sin resumen.
+- [ ] 11. **Gerente.** Ve la lista sin botones de cosecha; `/comercial/cosechas/planificar/`, `/modificar/`, `/cancelar/` y `/concretar/` escritos a mano: 403.
+- [ ] 12. **Otros roles.** Vendedor: 403 en las cuatro; Capataz: solo «Concretar» en las suyas; segundo Capataz y segundo Agrónomo: no ven la cosecha y las direcciones dan 403.
+- [ ] 13. **Inicio del Agrónomo.** Grupo «Cosechas» (a realizar, vencidas, sin Capataz); con el invernadero sin Capataz activo, «Sin Capataz» sube y «Planificar cosecha» deshabilita el invernadero.
+- [ ] 14. **Inicio del Capataz.** La cosecha de hoy con «Concretar cosecha».
+- [ ] 15. **Navegador real (D-96).** En una ventana privada, con el Agrónomo planificá una cosecha hasta el final y con el Capataz concretá otra: sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin error en la consola (F12); los desplegables redibujan sin mover la pantalla.
+- [ ] 16. (Opcional) Sin JavaScript: planificar, modificar y concretar con «Actualizar», «Ver resumen» y «Confirmar»; cancelar es una página.
+- [ ] 17. (Opcional) En un celular (o a 360 px): «Concretar cosecha» en una columna, con el resumen al final.
+- [ ] 18. (Opcional) **Después del despliegue:** en el log de Render, que se aplicaron las cuatro migraciones y que «Producción» › «Órdenes» abre.
+
+
 ## IOT-05 · Tarea IOT-05 (comandos: emitir, retirar, resolver con reintentos y cancelar)
 
 Los 17 pasos son los de «Verificación a mano» de `docs/tareas/iot/IOT-05-comandos.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay tres migraciones nuevas (`iot` 0004, `produccion` 0006 y `core` 0029): `python manage.py migrate`; después `python manage.py runserver` y abrí `http://localhost:8000`. No hay datos cargados: creá a mano, en este orden, (a) un **Agrónomo** (Laura) a cargo del invernadero «Norte», un **Gerente** y un **Técnico**; un segundo invernadero «Libre» **sin Agrónomo**; (b) en «IoT · Sistema IoT» de «Norte», el sistema (anotá el token); (c) en «IoT · Hardware» de «Norte», dos actuadores con un insumo de «Repuestos de hardware» cada uno: `norte/sectorA/ventilador` (tipo «Ventilador», con un sector) y `norte/sectorA/ventana` (tipo «Ventana»); (d) en «Libre», un sistema y `libre/ventilador` (tipo «Ventilador»). Con el Gerente, «Configuración · Módulo IoT»: **1 reintento y 10 s de intervalo** (al final, volver a 3 y 60). Node-RED con los dos flujos (`docs/api/nodo/node-red/README.md`, secciones 1 a 4) y, en otra terminal, `python manage.py revision_iot --cada 30`. Si no tenés Node-RED, los pasos 5 a 12 se pueden cubrir con la API (`GET comandos` y `POST comandos/<id>/resultado`, con `Authorization: Bearer <token>`).

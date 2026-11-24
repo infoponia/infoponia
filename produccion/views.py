@@ -7,6 +7,7 @@
 
 import hashlib
 import json
+from types import SimpleNamespace
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
@@ -21,6 +22,7 @@ from core.models import Usuario, rol_de
 from maestros.models import Invernadero
 from produccion import formularios
 from produccion.errores import ErrorDeProduccion
+from produccion import extensiones
 from produccion.models import Merma, OrdenTrabajo
 from produccion.servicios import ordenes, siembras, transiciones
 
@@ -64,6 +66,17 @@ def _en_vivo(request):
 # ---- Producción y órdenes ----
 
 
+def _hay_periodos_sin_cobertura(usuario):
+    """El aviso de la vista «Cosecha» (prototipo `tabCosechas`): el Agrónomo tiene una alerta activa «período sin cobertura completa» en sus invernaderos."""
+    from maestros.models import Alerta
+
+    if rol_de(usuario) != AGRONOMO:
+        return False
+    return Alerta.objects.filter(
+        tipo_alerta="comercial_periodo_sin_cobertura", estado_alerta=Alerta.Estado.ACTIVA, invernadero__in=Invernadero.objects.en_alcance_de(usuario)
+    ).exists()
+
+
 @rol_requerido(AGRONOMO, GERENTE)
 @require_safe
 @vary_on_headers("HX-Request")
@@ -77,8 +90,13 @@ def lista(request):
         tipo=tipo if tipo in dict(TIPOS_DEL_FILTRO) else None,
         estado=estado if estado in dict(ESTADOS_DEL_FILTRO) else None,
     )
+    filas = ordenes.lista_de_ordenes(request.user, filtros)
     contexto = {
-        "filas": ordenes.lista_de_ordenes(request.user, filtros),
+        "filas": filas,
+        **ordenes.contexto_de_cosechas(request.user, filas),
+        "entradas": extensiones.entradas_de_comercial(request.user),
+        "ver_cosechas": filtros.tipo == OrdenTrabajo.Tipo.COSECHA,
+        "periodos_sin_cobertura": filtros.tipo == OrdenTrabajo.Tipo.COSECHA and _hay_periodos_sin_cobertura(request.user),
         "invernaderos": Invernadero.objects.en_alcance_de(request.user).order_by("nombre_invernadero", "id"),
         "tipos": TIPOS_DEL_FILTRO,
         "estados": ESTADOS_DEL_FILTRO,
@@ -96,7 +114,19 @@ def orden(request, orden_id):
     """La ventana de detalle de una orden (`MODALS.orden`): sus datos, sus reservas y sus sectores, y lo que la cuenta puede hacer con
     ella (ningún botón lleva a un 403, D-30). Una orden que la cuenta no ve da 404."""
     detalle = ordenes.detalle_de_orden(request.user, orden_id)
-    return render(request, "produccion/detalle.html", {"detalle": detalle, "activa": "ordenes", "es_gerente": rol_de(request.user) == GERENTE})
+    de_cosecha = ordenes.contexto_de_cosechas(request.user, [SimpleNamespace(orden_id=detalle.orden.pk, tipo_orden=detalle.orden.tipo_orden)])
+    return render(
+        request,
+        "produccion/detalle.html",
+        {
+            "detalle": detalle,
+            "activa": "ordenes",
+            "es_gerente": rol_de(request.user) == GERENTE,
+            "acciones_de_cosecha": de_cosecha["acciones"].get(detalle.orden.pk),
+            "detalle_de_cosecha": de_cosecha["detalles"].get(detalle.orden.pk),
+            "origen_de_cosecha": de_cosecha["origenes"].get(detalle.orden.pk),
+        },
+    )
 
 
 # ---- Nueva siembra (PROD-PNF-SMB) ----
@@ -176,7 +206,12 @@ def nueva_siembra(request):
 @require_safe
 def bandeja(request):
     """La bandeja del Capataz (`VIEWS.bandeja`): sus órdenes «a realizar», en «vencidas», «hoy» y «próximas», por fecha y prioridad."""
-    return render(request, "produccion/bandeja.html", {"bandeja": ordenes.bandeja_del_capataz(request.user)})
+    bandeja_ = ordenes.bandeja_del_capataz(request.user)
+    return render(
+        request,
+        "produccion/bandeja.html",
+        {"bandeja": bandeja_, **ordenes.contexto_de_cosechas(request.user, [*bandeja_.vencidas, *bandeja_.hoy, *bandeja_.proximas])},
+    )
 
 
 @rol_requerido(CAPATAZ)
@@ -259,7 +294,7 @@ def cancelar(request, orden_id):
 
 # ---- Nueva transición (PROD-PNF-TRN) ----
 
-CAUSAS_DE_LA_MERMA = [(valor, texto) for valor, texto in Merma.Causa.choices]
+CAUSAS_DE_LA_MERMA = [(c.value, c.label) for c in Merma.CAUSAS_EN_PIE]  # COM-04a: sin las de cámara y entrega
 CODIGOS_DE_LA_CAUSA = ("causa_obligatoria", "causa_invalida", "descripcion_larga")
 
 

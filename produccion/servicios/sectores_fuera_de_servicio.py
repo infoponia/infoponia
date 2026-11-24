@@ -437,7 +437,7 @@ def _planear(actor, datos):
             causa, descripcion = causas.get(l.lote.pk, ("", ""))
             if not causa:
                 raise _error("causa_obligatoria", f"Indicá la causa de la merma del lote {l.lote.codigo}.", campo)
-            if causa not in Merma.Causa.values or causa == Merma.Causa.DESCARTE_POR_SELECCION:
+            if causa not in Merma.CAUSAS_EN_PIE or causa == Merma.Causa.DESCARTE_POR_SELECCION:
                 raise _error("causa_invalida", "Esa causa no corresponde a la merma de un lote en pie.", campo)
             descripcion = (descripcion or "").strip()
             if len(descripcion) > LARGO_DE_LA_DESCRIPCION:

@@ -147,3 +147,54 @@ class SimularTests(ConDatosDeInventario, TestCase):
             reservado.append(stock_maduro.asignar(self.e.vendedor, periodo(d, f), 10, f, "suministro").cubierta)
         self.assertEqual(reservado, [c.cubierta for c in simulado])
         self.assertEqual(reservado, [10, 9])
+
+
+class SimularConLotesExcluidosYSinReservasTests(ConDatosDeInventario, TestCase):
+    """COM-04a (sección 8 del patrón de stock): `simular(..., lotes_excluidos=(), sin_reservas=())` para la estimación de PROD-CNL-ORD (6b): no
+    considera esos lotes y cuenta como libre lo que reservan esas reservas (las de la cosecha que se cancelaría)."""
+
+    def setUp(self):
+        self.e = escenario_comercial()
+        self.ids = [self.e.invernadero.pk]
+        configuracion.obtener()
+        self.addCleanup(verificar_invariantes_de_reservas)
+
+    def simular(self, pedidos, **extra):
+        return stock_maduro.simular(self.e.variedad.pk, self.ids, pedidos, "suministro", **extra)
+
+    def test_regla_los_lotes_excluidos_no_aportan_stock(self):
+        """Con dos lotes de 10 y uno excluido, el pedido de 15 ve solo 10."""
+        a, b = lote_maduro(self.e, 10), lote_maduro(self.e, 10)
+        self.assertEqual(self.simular([(dias(3), 15)])[0].disponible, 20)
+        self.assertEqual(self.simular([(dias(3), 15)], lotes_excluidos=[a.pk])[0].disponible, 10)
+
+    def test_regla_las_reservas_indicadas_cuentan_como_libres(self):
+        """Un lote de 20 con 20 reservados por la cosecha que se cancelaría: sin `sin_reservas` no queda nada; con ella, queda todo."""
+        lote = lote_maduro(self.e, 20)
+        det = detalle_suministro(suministro(self.e), self.e.variedad, cantidad=20, primera_en_dias=3)
+        reserva_ = reserva_de_periodo(det, dias(3), [(lote, 20)])
+        self.assertEqual(self.simular([(dias(3), 10)])[0].disponible, 0)
+        self.assertEqual(self.simular([(dias(3), 10)], sin_reservas=[reserva_])[0].disponible, 20)
+
+    def test_regla_las_partidas_de_la_reserva_liberada_pueden_volver_a_usarse(self):
+        """Una reserva «lista para entrega» que ocupa una partida de 12: con `sin_reservas`, la partida vuelve a estar libre."""
+        lote = lote_maduro(self.e, 1)
+        det = detalle_suministro(suministro(self.e), self.e.variedad, cantidad=12, primera_en_dias=3)
+        reserva_ = reserva_de_periodo(det, dias(3), [(partida(lote, 12), 12)])
+        self.assertEqual(self.simular([(dias(3), 12)])[0].disponible, 1)
+        self.assertEqual(self.simular([(dias(3), 12)], sin_reservas=[reserva_])[0].disponible, 13)
+
+    def test_regla_la_estimacion_coincide_con_lo_que_despues_reserva_asignar(self):
+        """Una prueba compara la estimación con lo que después reserva `asignar` (patrón, sección 8): se excluye un lote, se libera la reserva y
+        lo que `simular` dice que se cubre es lo que `asignar` reserva."""
+        excluido, bueno = lote_maduro(self.e, 10), lote_maduro(self.e, 8)
+        det = detalle_suministro(suministro(self.e), self.e.variedad, cantidad=30, primera_en_dias=3)
+        cobertura = self.simular([(dias(3), 30)], lotes_excluidos=[excluido.pk])[0]
+        resultado = stock_maduro.asignar(None, periodo(det, dias(3)), 30, dias(3), "suministro", lotes_excluidos=[excluido.pk])
+        self.assertEqual(cobertura.cubierta, resultado.cubierta)
+        self.assertEqual(resultado.cubierta, 8)
+
+    def test_regla_sin_los_argumentos_nuevos_todo_sigue_igual(self):
+        """Compatibilidad: sin `lotes_excluidos` ni `sin_reservas`, la simulación es la de COM-03a."""
+        lote_maduro(self.e, 15)
+        self.assertEqual([c.disponible for c in self.simular([(dias(3), 10), (dias(10), 10)])], [15, 5])

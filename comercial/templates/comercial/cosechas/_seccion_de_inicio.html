@@ -1,0 +1,15 @@
+{% comment %}El grupo «Cosechas» del Inicio del Agrónomo (`secCosecha` del prototipo, `registrar_seccion_de_inicio`, COM-04a): a realizar hoy, vencidas y de invernaderos sin Capataz; cada indicador lleva a la lista de órdenes filtrada por «Cosecha». Recibe «datos» con «cosechas» (a_realizar, hoy, vencidas, sin_capataz). Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Cosechas</h2>
+  {% with c=datos.cosechas %}
+  {% if c.a_realizar %}
+  <div class="kpis">
+    <a class="kpi" href="{% url 'produccion:ordenes' %}?tipo=cosecha&estado=a_realizar" style="text-decoration:none;color:inherit"><span class="k">A realizar</span><span class="v">{{ c.a_realizar }}</span><span class="c">{{ c.hoy }} para hoy</span></a>
+    <a class="kpi{% if c.vencidas %} danger{% endif %}" href="{% url 'produccion:ordenes' %}?tipo=cosecha&estado=a_realizar" style="text-decoration:none;color:inherit"><span class="k">Vencidas</span><span class="v">{{ c.vencidas }}</span><span class="c">sin concretar</span></a>
+    <a class="kpi{% if c.sin_capataz %} warn{% endif %}" href="{% url 'produccion:ordenes' %}?tipo=cosecha&estado=a_realizar" style="text-decoration:none;color:inherit"><span class="k">Sin Capataz</span><span class="v">{{ c.sin_capataz }}</span><span class="c">en invernaderos sin Capataz activo</span></a>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay cosechas por realizar</b><span>Las cosechas automáticas de los contratos y las que planifiques aparecen acá.</span></div>
+  {% endif %}
+  {% endwith %}
+</div>

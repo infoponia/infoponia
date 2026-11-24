@@ -253,23 +253,81 @@ def detalle(venta, variedad, cantidad=10, precio="100.00", estado="abierto"):
     )
 
 
-def partida(lote_, disponible=10, fecha_limite=None, estado="disponible", costo="1.0000"):
-    """Una partida de cámara (`StockCosechado`) del ``lote_`` con ``disponible`` plantas y su fecha límite (por defecto, dentro de 30
-    días). Las partidas reales las crea COM-04: acá solo existen en las pruebas."""
+def partida_cosechada(lote_, disponible=10, fecha_limite=None, estado="disponible", costo="1.0000", *, origen=None, motivo="excedente_de_cosecha"):
+    """Una partida de cámara (`StockCosechado`) del ``lote_`` con ``disponible`` plantas, su fecha límite (por defecto, dentro de 30 días) y su
+    movimiento `ingreso_a_camara` (invariante de COM-04a: toda partida nace con el suyo), escrita directo en la base. ``origen`` es el
+    documento que la origina (por defecto, una orden suelta de cosecha del invernadero del lote)."""
+    from produccion.models import MovimientoStock
+    from produccion.tests.fabricas import orden_suelta
+
     hoy = timezone.localdate()
-    return StockCosechado.objects.create(
+    nueva = StockCosechado.objects.create(
         lote=lote_,
         cantidad_ingreso_cosechado=max(1, disponible),
         cantidad_disponible_cosechado=disponible,
         fecha_ingreso=hoy,
         fecha_limite=fecha_limite or hoy + timedelta(days=30),
-        motivo_cosechado="excedente_de_cosecha",
+        motivo_cosechado=motivo,
         estado_stock_cosechado=estado if disponible else "agotado",
         costo_unitario_cosechado=Decimal(costo),
     )
+    MovimientoStock.objects.create(
+        origen_id=(origen or orden_suelta(lote_.invernadero, "cosecha", estado="concretada")).pk,
+        partida=nueva,
+        tipo_movimiento="ingreso_a_camara",
+        cantidad=max(1, disponible),
+        costo_unitario=Decimal(costo),
+    )
+    return nueva
 
 
-def reserva(detalle_, lineas, estado=None, fecha_entrega=None, con_cosecha=True):
+def partida(lote_, disponible=10, fecha_limite=None, estado="disponible", costo="1.0000"):
+    """Una partida de cámara (`StockCosechado`) del ``lote_`` (COM-02): ver `partida_cosechada`, que desde COM-04a también crea su movimiento."""
+    return partida_cosechada(lote_, disponible, fecha_limite, estado, costo)
+
+
+def cosecha_manual(escenario, lineas, *, detalle_=None, periodo_=None, dias=0, prioridad="media", descripcion="", origen="manual", fecha_entrega=None):
+    """Una `Cosecha` «a realizar» de origen ``origen`` (por defecto `manual`, la que planifica el Agrónomo) con su reserva «activa» y una línea por
+    cada ``(lote, cantidad)`` de ``lineas``, escrita directo en la base (sin pasar por `planificar_cosecha`). Con ``detalle_`` (un `DetalleVenta`)
+    o ``periodo_`` (un `Periodo`) cubre ese contrato, con su fecha de entrega; sin ninguno, es una cosecha sin contrato (reserva sin detalle ni fecha)."""
+    from comercial.models import DetalleReserva, ReservaStock
+    from produccion.models import Cosecha
+    from produccion.servicios import ordenes
+
+    hoy = timezone.localdate()
+    lote_ = lineas[0][0]
+    entrega = fecha_entrega
+    if detalle_ is not None:
+        entrega = entrega or detalle_.compra_venta.fecha_pactada_venta
+    if periodo_ is not None:
+        entrega = entrega or periodo_.fecha
+    cosecha_ = Cosecha.objects.create(
+        tipo_orden="cosecha",
+        numero=ordenes.siguiente_numero(),
+        fecha_creacion_orden=min(hoy, hoy + timedelta(days=dias)),
+        fecha_programada_orden=hoy + timedelta(days=dias),
+        prioridad_orden=prioridad,
+        descripcion_orden=descripcion,
+        agronomo=escenario.agronomo if origen == "manual" else None,
+        invernadero=lote_.invernadero,
+        capataz=lote_.invernadero.capataz,
+        variedad=lote_.siembra.variedad,
+        origen_cosecha=origen,
+    )
+    reserva_ = ReservaStock.objects.create(
+        detalle_venta=detalle_,
+        detalle_suministro=periodo_.detalle if periodo_ is not None else None,
+        invernadero=lote_.invernadero,
+        fecha_entrega_reserva=entrega if (detalle_ is not None or periodo_ is not None) else None,
+        estado_reserva="activa",
+        cosecha=cosecha_,
+    )
+    for lote_de_la_linea, cantidad in lineas:
+        DetalleReserva.objects.create(reserva=reserva_, lote=lote_de_la_linea, cantidad_reservada=cantidad)
+    return cosecha_
+
+
+def reserva(detalle_, lineas, estado=None, fecha_entrega=None, con_cosecha=True, detalle_suministro=None):
     """Una `ReservaStock` del ``detalle_`` con una línea por cada ``(lote_o_partida, cantidad)`` de ``lineas``. El invernadero es el del
     primer origen. Con algún lote y ``con_cosecha``, crea también su `Cosecha` «a realizar». El estado, si no se pide: «activa» con
     algún lote y «lista para entrega» si todo es de cámara (regla 12 de 8.6)."""
@@ -294,6 +352,7 @@ def reserva(detalle_, lineas, estado=None, fecha_entrega=None, con_cosecha=True)
         )
     reserva_ = ReservaStock.objects.create(
         detalle_venta=detalle_,
+        detalle_suministro=detalle_suministro,
         invernadero=invernadero,
         fecha_entrega_reserva=fecha_entrega or detalle_.compra_venta.fecha_pactada_venta,
         estado_reserva=estado or ("activa" if hay_lote else "lista_para_entrega"),
@@ -316,7 +375,7 @@ def verificar_invariantes_de_reservas():
 
     from comercial.models import DetalleReserva, DetalleVenta, ReservaStock
     from comercial.servicios import stock_maduro
-    from produccion.models import Cosecha, Lote
+    from produccion.models import Bitacora, Cosecha, Lote, MovimientoStock
 
     problemas = []
     # 1. Stock libre nunca negativo.
@@ -347,12 +406,41 @@ def verificar_invariantes_de_reservas():
             problemas.append(f"{c.codigo}: cosecha con lotes de otra variedad")
     # 4. Ningún detalle con más cubierto que lo pedido.
     for d in DetalleVenta.objects.all():
-        cubierto = (
-            DetalleReserva.objects.filter(reserva__detalle_venta=d).exclude(reserva__estado_reserva="liberada").aggregate(t=Sum("cantidad_reservada"))["t"]
-            or 0
+        # Regla 9 de 8.8 (COM-04a): una línea de lote ya cosechada cubre `min(cosechada, reservada)`.
+        cubierto = sum(
+            min(c, r) if lote_id and c is not None else r
+            for r, c, lote_id in DetalleReserva.objects.filter(reserva__detalle_venta=d)
+            .exclude(reserva__estado_reserva="liberada")
+            .values_list("cantidad_reservada", "cantidad_cosechada", "lote_id")
         )
         if cubierto > d.cant_solicitada_venta:
             problemas.append(f"{d}: cubierto {cubierto} > solicitado {d.cant_solicitada_venta}")
+    # COM-04a (sección 8 de `docs/patrones/stock_maduro.md`):
+    # 5. Ninguna reserva sin detalle que no sea de una cosecha `manual`; ninguna con detalle y sin fecha de entrega, ni al revés.
+    for r in ReservaStock.objects.filter(detalle_venta__isnull=True, detalle_suministro__isnull=True).select_related("cosecha"):
+        if r.cosecha is None or r.cosecha.origen_cosecha != "manual":
+            problemas.append(f"Reserva #{r.pk}: sin contrato y sin ser de una cosecha manual")
+        if r.fecha_entrega_reserva is not None:
+            problemas.append(f"Reserva #{r.pk}: sin contrato y con fecha de entrega")
+    for r in ReservaStock.objects.exclude(detalle_venta__isnull=True, detalle_suministro__isnull=True).filter(fecha_entrega_reserva__isnull=True):
+        problemas.append(f"Reserva #{r.pk}: con contrato y sin fecha de entrega")
+    # 6. Toda partida tiene su movimiento «ingreso a cámara».
+    for p in StockCosechado.objects.all():
+        if not MovimientoStock.objects.filter(partida=p, tipo_movimiento="ingreso_a_camara").exists():
+            problemas.append(f"{p}: partida sin su ingreso a cámara")
+    # 7. Toda cosecha concretada tiene un registro de bitácora por lote y sus líneas de lote con la cantidad cosechada.
+    for c in Cosecha.objects.filter(estado_orden="concretada"):
+        reserva_ = ReservaStock.objects.filter(cosecha=c).first()
+        if reserva_ is None:
+            continue
+        for linea in reserva_.lineas.filter(lote__isnull=False):
+            if linea.cantidad_cosechada is None:
+                problemas.append(f"{c.codigo}: línea #{linea.pk} concretada sin cantidad cosechada")
+            if not Bitacora.objects.filter(cosecha=c, lote_id=linea.lote_id, tipo_evento="cosecha").exists():
+                problemas.append(f"{c.codigo}: sin registro de bitácora del lote {linea.lote_id}")
+    # 8. Ninguna reserva «lista para entrega» con una línea de lote sin cosechar.
+    for linea in DetalleReserva.objects.filter(reserva__estado_reserva="lista_para_entrega", lote__isnull=False, cantidad_cosechada__isnull=True):
+        problemas.append(f"Reserva #{linea.reserva_id}: «lista para entrega» con la línea #{linea.pk} sin cosechar")
     if problemas:
         raise AssertionError("Invariantes de reservas rotos: " + "; ".join(problemas))
     verificar_invariantes_de_suministros()
@@ -454,11 +542,7 @@ def periodo(detalle_, fecha):
 def reserva_de_periodo(detalle_, fecha, lineas, estado=None, con_cosecha=True):
     """Una `ReservaStock` del período (``detalle_``, ``fecha``) con una línea por cada ``(lote_o_partida, cantidad)``; igual que `reserva`,
     pero para un detalle de suministro."""
-    reserva_ = reserva(None, lineas, estado=estado, fecha_entrega=fecha, con_cosecha=con_cosecha)
-    reserva_.detalle_venta = None
-    reserva_.detalle_suministro = detalle_
-    reserva_.save(update_fields=["detalle_venta", "detalle_suministro"])
-    return reserva_
+    return reserva(None, lineas, estado=estado, fecha_entrega=fecha, con_cosecha=con_cosecha, detalle_suministro=detalle_)
 
 
 def alerta_de_periodo(detalle_, fecha, *, cantidad_sin_cubrir=5, invernadero=None, resuelta=False, para_gerente=False, agronomo=None):
@@ -492,12 +576,15 @@ def verificar_invariantes_de_suministros():
     problemas = []
     for r in ReservaStock.objects.filter(detalle_venta__isnull=False, detalle_suministro__isnull=False):
         problemas.append(f"Reserva #{r.pk}: con detalle de venta y de suministro a la vez")
-    cubierto = (
+    totales = {}
+    for detalle_id, fecha_, r, c, lote_id in (
         DetalleReserva.objects.filter(reserva__detalle_suministro__isnull=False)
         .exclude(reserva__estado_reserva="liberada")
-        .values("reserva__detalle_suministro_id", "reserva__fecha_entrega_reserva")
-        .annotate(total=Sum("cantidad_reservada"))
-    )
+        .values_list("reserva__detalle_suministro_id", "reserva__fecha_entrega_reserva", "cantidad_reservada", "cantidad_cosechada", "lote_id")
+    ):
+        clave = (detalle_id, fecha_)
+        totales[clave] = totales.get(clave, 0) + (min(c, r) if lote_id and c is not None else r)  # COM-04a: regla 9 de 8.8
+    cubierto = [{"reserva__detalle_suministro_id": d_, "reserva__fecha_entrega_reserva": f_, "total": t} for (d_, f_), t in totales.items()]
     detalles = {d.pk: d for d in DetalleSuministro.objects.select_related("suministro")}
     if detalles:
         from comercial.servicios import calendario

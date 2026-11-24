@@ -320,6 +320,10 @@ class Bitacora(OrigenDocumento):
         FUERA_DE_SERVICIO = "fuera_de_servicio", "Sector fuera de servicio"  # PRD-04
         REUBICACION = "reubicacion", "Reubicación de plantas"  # PRD-04
         COMANDO = "comando", "Comando"  # IOT-05 (MD-110): lo escribe la hija `iot.RegistroComando`
+        COSECHA = "cosecha", "Cosecha"  # COM-04a (D-64 punto 4): uno por cada lote de la cosecha concretada
+        # COM-04a (D-69 punto 3; los usa COM-07a): sin lote, etapa ni cosecha.
+        INCUMPLIMIENTO_DE_CLAUSULA = "incumplimiento_de_clausula", "Incumplimiento de cláusula suministrante"
+        ANULACION_DE_RESOLUCION = "anulacion_de_resolucion", "Anulación de una resolución"
 
     invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="bitacoras")  # R081
     lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="bitacoras")  # R082
@@ -336,6 +340,8 @@ class Bitacora(OrigenDocumento):
     hora_bitacora = models.TimeField()
     tipo_evento = models.CharField(max_length=30, choices=TipoEvento.choices)
     descripcion_evento = models.CharField(max_length=500, blank=True, default="")
+    # R152 (COM-04a, D-64 punto 4): la cosecha que lo generó; `tipo_evento = cosecha` si y solo si no es nula.
+    cosecha = models.ForeignKey("Cosecha", null=True, blank=True, on_delete=models.PROTECT, related_name="registros_de_bitacora")
 
     class Meta:
         verbose_name = "Registro de bitácora"
@@ -357,9 +363,23 @@ class Bitacora(OrigenDocumento):
                         "fuera_de_servicio",
                         "reubicacion",
                         "comando",
+                        "cosecha",
+                        "incumplimiento_de_clausula",
+                        "anulacion_de_resolucion",
                     ]
                 ),
                 name="bitacora_tipo_evento_valido",
+            ),
+            # COM-04a (D-64 punto 4): `tipo_evento = cosecha` ⇔ `cosecha` no nula.
+            models.CheckConstraint(
+                condition=(Q(tipo_evento="cosecha") & Q(cosecha__isnull=False)) | (~Q(tipo_evento="cosecha") & Q(cosecha__isnull=True)),
+                name="bitacora_cosecha_segun_tipo",
+            ),
+            # COM-04a (D-69 punto 3): un hecho de contrato no tiene lote, etapa ni cosecha.
+            models.CheckConstraint(
+                condition=~Q(tipo_evento__in=["incumplimiento_de_clausula", "anulacion_de_resolucion"])
+                | (Q(lote__isnull=True) & Q(etapa__isnull=True) & Q(cosecha__isnull=True)),
+                name="bitacora_contrato_sin_lote_etapa_ni_cosecha",
             ),
         ]
 
@@ -395,6 +415,8 @@ class Consumo(Bitacora):
     # R105. Exactamente uno de `siembra` y `aplicacion` (D-51 punto 3, regla 7 de 8.4 con MD-28); COM-04a suma el tercero, `orden`.
     siembra = models.ForeignKey(Siembra, null=True, blank=True, on_delete=models.PROTECT, related_name="consumos")
     aplicacion = models.ForeignKey(AplicacionInsumos, null=True, blank=True, on_delete=models.PROTECT, related_name="consumos")
+    # R148 (COM-04a, D-68 punto 3): el consumo de los envases de una entrega (y, en la etapa 2 del IoT, el de un mantenimiento).
+    orden = models.ForeignKey(OrdenTrabajo, null=True, blank=True, on_delete=models.PROTECT, related_name="consumos_de_orden")
 
     class Meta:
         verbose_name = "Consumo"
@@ -402,10 +424,11 @@ class Consumo(Bitacora):
         constraints = [
             models.CheckConstraint(condition=Q(monto_consumo__gte=0), name="consumo_monto_no_negativo"),
             models.CheckConstraint(condition=Q(cant_consumo__gt=0), name="consumo_cantidad_positiva"),
-            # Un solo origen (D-51 punto 3): reemplaza a la de PRD-01 («`siembra` no nula», `consumo_origen_es_siembra`).
+            # Un solo origen (D-51 punto 3; COM-04a suma el tercero, `orden`, D-68 punto 3): exactamente uno de los tres.
             models.CheckConstraint(
-                condition=(Q(siembra__isnull=False) & Q(aplicacion__isnull=True))
-                | (Q(siembra__isnull=True) & Q(aplicacion__isnull=False)),
+                condition=(Q(siembra__isnull=False) & Q(aplicacion__isnull=True) & Q(orden__isnull=True))
+                | (Q(siembra__isnull=True) & Q(aplicacion__isnull=False) & Q(orden__isnull=True))
+                | (Q(siembra__isnull=True) & Q(aplicacion__isnull=True) & Q(orden__isnull=False)),
                 name="consumo_un_solo_origen",
             ),
         ]
@@ -464,9 +487,26 @@ class Merma(Bitacora):
         DANO_MECANICO = "dano_mecanico", "Daño mecánico"
         DESCARTE_POR_SELECCION = "descarte_por_seleccion", "Descarte por selección"
         OTRA = "otra", "Otra"
+        # COM-04a (D-64 y D-68 punto 3): no se ofrecen en un lote en pie (`CAUSAS_EN_PIE`).
+        DANO_EN_CAMARA = "dano_en_camara", "Daño en cámara"
+        VENCIMIENTO_EN_CAMARA = "vencimiento_en_camara", "Vencimiento en cámara"
+        DANO_EN_ENTREGA = "dano_en_entrega", "Daño en la entrega"
+
+    # Las que valen en un lote en pie (PROD-REG-MRM): las siete de PRD-02. Los servicios validan contra esta lista, no contra `Causa`.
+    CAUSAS_EN_PIE = (
+        Causa.PLAGA,
+        Causa.ENFERMEDAD,
+        Causa.FALLA_RIEGO_O_NUTRIENTES,
+        Causa.CONDICIONES_AMBIENTALES,
+        Causa.DANO_MECANICO,
+        Causa.DESCARTE_POR_SELECCION,
+        Causa.OTRA,
+    )
 
     cant_merma = models.PositiveIntegerField()
     causa = models.CharField(max_length=30, choices=Causa.choices)
+    # R084 (COM-04a, D-68 punto 3): la entrega que presenta la merma; solo con la causa `dano_en_entrega`.
+    orden = models.ForeignKey(OrdenTrabajo, null=True, blank=True, on_delete=models.PROTECT, related_name="mermas_de_orden")
 
     class Meta:
         verbose_name = "Merma"
@@ -483,9 +523,17 @@ class Merma(Bitacora):
                         "dano_mecanico",
                         "descarte_por_seleccion",
                         "otra",
+                        "dano_en_camara",
+                        "vencimiento_en_camara",
+                        "dano_en_entrega",
                     ]
                 ),
                 name="merma_causa_valida",
+            ),
+            # COM-04a (D-68 punto 3): `orden` no nula ⇔ `causa = dano_en_entrega`.
+            models.CheckConstraint(
+                condition=(Q(causa="dano_en_entrega") & Q(orden__isnull=False)) | (~Q(causa="dano_en_entrega") & Q(orden__isnull=True)),
+                name="merma_orden_segun_causa",
             ),
         ]
 
@@ -585,12 +633,24 @@ class Cosecha(OrdenTrabajo, ConCapataz):
     reserva. `variedad` se guarda porque una cosecha abarca una sola variedad (regla 2 de 8.8) y `produccion` la necesita sin preguntarle a
     `comercial`. Su clave es `ordentrabajo_ptr`; el Capataz viene de `ConCapataz` (D-53). La prioridad obligatoria es una restricción de `OrdenTrabajo`."""
 
-    fecha_cosecha = models.DateField(null=True, blank=True)  # la efectiva; la carga COM-04 al concretar
+    class OrigenCosecha(models.TextChoices):
+        """D-64 punto 5: quién la creó. `automatica`: PROD-ASG-STK y la pre-reserva; `manual`: PROD-PNF-CSC; `encadenada`: 13a de PROD-CNC-CSC."""
+
+        AUTOMATICA = "automatica", "Automática"
+        MANUAL = "manual", "Manual"
+        ENCADENADA = "encadenada", "Encadenada"
+
+    fecha_cosecha = models.DateField(null=True, blank=True)  # la efectiva; la carga COM-04a al concretar
     variedad = models.ForeignKey(Variedad, on_delete=models.PROTECT, related_name="cosechas")
+    # COM-04a (D-64 punto 5): `default="automatica"` porque hasta COM-04a solo había automáticas.
+    origen_cosecha = models.CharField(max_length=20, choices=OrigenCosecha.choices, default=OrigenCosecha.AUTOMATICA)
 
     class Meta:
         verbose_name = "Cosecha"
         verbose_name_plural = "Cosechas"
+        constraints = [
+            models.CheckConstraint(condition=Q(origen_cosecha__in=["automatica", "manual", "encadenada"]), name="cosecha_origen_valido"),
+        ]
 
 
 class StockCosechado(models.Model):
@@ -657,3 +717,61 @@ class StockCosechado(models.Model):
     def codigo(self):
         """`P-7`: lo que muestran las pantallas y los avisos."""
         return f"P-{self.pk}"
+
+
+class MovimientoStock(OrigenDocumento):
+    """Movimiento de producto de un lote o de una partida (COM-04a, D-64 punto 1; docs/modelo/produccion.md). Hija directa de `OrigenDocumento`
+    (`TIPO_DE_ORIGEN = movimiento_de_stock`), con el mismo esquema que `MovimientoInsumo` (D-52). Su tipo se llama `tipo_movimiento` porque
+    `tipo` es del padre. Solo lo crean las funciones de núcleo de `produccion` (`cosechas`, `camara`, `mermas`). Sin carga retroactiva."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.MOVIMIENTO_DE_STOCK
+
+    class TipoMovimiento(models.TextChoices):
+        INGRESO_A_CAMARA = "ingreso_a_camara", "Ingreso a cámara"
+        EGRESO_DE_CAMARA = "egreso_de_camara", "Egreso de cámara"
+        MERMA_EN_CAMARA = "merma_en_camara", "Merma en cámara"
+        SALIDA_POR_COSECHA = "salida_por_cosecha", "Salida por cosecha"
+        SALIDA_POR_MERMA = "salida_por_merma", "Salida por merma"
+
+    # La fecha de la operación con la hora actual; en la salida por cosecha, la fecha efectiva.
+    fecha = models.DateTimeField(default=timezone.now)
+    cantidad = models.PositiveIntegerField()  # siempre positiva: el sentido lo da el tipo
+    tipo_movimiento = models.CharField(max_length=30, choices=TipoMovimiento.choices)
+    # Costo por planta del lote ANTES del movimiento, o el de la partida (D-64 puntos 1 y 3).
+    costo_unitario = models.DecimalField(max_digits=14, decimal_places=4)
+    # R017: el documento que lo origina (la cosecha, la merma, la orden de entrega...). Lo verifica la función que lo crea.
+    origen = models.ForeignKey(OrigenDocumento, on_delete=models.PROTECT, related_name="movimientos_de_stock")
+    lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="movimientos_de_stock")  # R086
+    partida = models.ForeignKey(StockCosechado, null=True, blank=True, on_delete=models.PROTECT, related_name="movimientos")  # R145
+
+    class Meta:
+        verbose_name = "Movimiento de stock"
+        verbose_name_plural = "Movimientos de stock"
+        constraints = [
+            models.CheckConstraint(condition=Q(cantidad__gt=0), name="movimiento_stock_cantidad_positiva"),
+            models.CheckConstraint(condition=Q(costo_unitario__gte=0), name="movimiento_stock_costo_no_negativo"),
+            models.CheckConstraint(
+                condition=Q(
+                    tipo_movimiento__in=["ingreso_a_camara", "egreso_de_camara", "merma_en_camara", "salida_por_cosecha", "salida_por_merma"]
+                ),
+                name="movimiento_stock_tipo_valido",
+            ),
+            # C2: exactamente uno de `lote` y `partida`.
+            models.CheckConstraint(
+                condition=(Q(lote__isnull=False) & Q(partida__isnull=True)) | (Q(lote__isnull=True) & Q(partida__isnull=False)),
+                name="movimiento_stock_lote_o_partida",
+            ),
+            # Las salidas son del lote; los movimientos de cámara, de la partida.
+            models.CheckConstraint(
+                condition=~Q(tipo_movimiento__in=["salida_por_cosecha", "salida_por_merma"]) | Q(lote__isnull=False),
+                name="movimiento_stock_salida_de_lote",
+            ),
+            models.CheckConstraint(
+                condition=~Q(tipo_movimiento__in=["ingreso_a_camara", "egreso_de_camara", "merma_en_camara"]) | Q(partida__isnull=False),
+                name="movimiento_stock_camara_de_partida",
+            ),
+        ]
+
+    def __str__(self):
+        """«Movimiento de stock #N» (texto de la auditoría, D-36)."""
+        return f"Movimiento de stock #{self.pk}"

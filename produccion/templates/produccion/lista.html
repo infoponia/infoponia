@@ -2,12 +2,12 @@
 {% comment %}«Producción y órdenes» (PRD-01, `VIEWS.prod` y `ordenesTab` del prototipo): página completa. Recibe «filas» (FilaDeOrden), «invernaderos», «tipos» (solo los de
 producción, D-67 punto 1), «estados», «filtros» y «es_gerente». El filtro es un formulario GET que funciona sin JavaScript; con HTMX cada selector reemplaza solo la tabla
 (sin validar nada: es una consulta). El Gerente la ve en solo lectura, sin «Nueva siembra» ni «Nueva transición».{% endcomment %}
-{% block titulo %}Producción y órdenes · InfoPonia{% endblock %}
+{% load produccion %}{% block titulo %}Producción y órdenes · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page">
   <div class="page-h">
     <h1>Producción</h1>
-    {% if not es_gerente %}<span class="spacer"></span><a class="btn btn-primary" href="{% url 'produccion:nueva_siembra' %}">{% icono "plus" 15 %} Nueva siembra</a> <a class="btn btn-ghost" href="{% url 'produccion:nueva_transicion' %}">{% icono "plus" 15 %} Nueva transición</a> <a class="btn btn-ghost" href="{% url 'produccion:registrar' %}">{% icono "plus" 15 %} Registrar en bitácora</a>{% endif %}<a class="btn btn-ghost" href="{% url 'produccion:bitacora' %}">{% icono "clock" 15 %} Bitácora</a>
+    {% if not es_gerente %}<span class="spacer"></span><a class="btn btn-primary" href="{% url 'produccion:nueva_siembra' %}">{% icono "plus" 15 %} Nueva siembra</a> <a class="btn btn-ghost" href="{% url 'produccion:nueva_transicion' %}">{% icono "plus" 15 %} Nueva transición</a>{% if entradas.planificar_cosecha %} <a class="btn btn-ghost" href="{{ entradas.planificar_cosecha }}">{% icono "plus" 15 %} Planificar cosecha</a>{% endif %} <a class="btn btn-ghost" href="{% url 'produccion:registrar' %}">{% icono "plus" 15 %} Registrar en bitácora</a>{% endif %}<a class="btn btn-ghost" href="{% url 'produccion:bitacora' %}">{% icono "clock" 15 %} Bitácora</a>
   </div>
   {% include "maestros/cultivos/_pestanas_de_produccion.html" %}
   <form class="card" style="margin:12px 0" method="get" action="{% url 'produccion:ordenes' %}" aria-label="Filtros de órdenes">
@@ -30,6 +30,7 @@ producción, D-67 punto 1), «estados», «filtros» y «es_gerente». El filtro
     </div>
     <noscript><div class="card-b"><button class="btn btn-ghost btn-sm" type="submit">Filtrar</button></div></noscript>
   </form>
+  {% if periodos_sin_cobertura %}<div class="hint" role="status" style="margin-bottom:8px">Tenés al menos un período de suministro sin cobertura completa: revisá las alertas del panel.</div>{% endif %}
   <div id="tabla-de-ordenes">{% include "produccion/_tabla_de_ordenes.html" %}</div>
 </div>
 {% endblock %}

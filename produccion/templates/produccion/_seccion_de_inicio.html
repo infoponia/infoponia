@@ -3,8 +3,10 @@ vencidas y las de hoy (lo urgente) y lleva a la bandeja completa. Cada tarjeta e
 <div class="page narrow" style="margin-top:16px">
   <div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin-bottom:8px">Mis órdenes</h2><a class="sm" href="{% url 'produccion:bandeja' %}">Ver todas</a></div>
   {% if datos.bandeja.vencidas or datos.bandeja.hoy %}
+    {% with acciones=datos.acciones %}
     {% for f in datos.bandeja.vencidas %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}
     {% for f in datos.bandeja.hoy %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}
+    {% endwith %}
   {% elif datos.bandeja.proximas %}
     <div class="empty"><b>Nada para hoy</b><span>Tenés {{ datos.bandeja.proximas|length }} orden{{ datos.bandeja.proximas|length|pluralize:",es" }} próxima{{ datos.bandeja.proximas|length|pluralize }}.</span></div>
   {% else %}

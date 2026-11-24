@@ -311,3 +311,22 @@ def codigos_del_rechazo(rechazo):
     if hasattr(rechazo, "error_dict"):
         return [e.code for errores in rechazo.error_dict.values() for e in errores]
     return [e.code for e in rechazo.error_list]
+
+
+def partida_de(lote, disponible=10, *, ingreso=None, dias_limite=5, motivo="excedente_de_cosecha", costo="2.0000", estado="disponible"):
+    """Una `StockCosechado` del `lote`, escrita directo en la base (COM-04a): `disponible` plantas, con `ingreso` plantas ingresadas (por
+    omisión, las mismas), límite dentro de `dias_limite` días (negativo = ya venció), `costo` por planta y `estado`. Sin movimiento: para
+    las pruebas de las funciones de cámara que parten de una partida ya existente."""
+    from produccion.models import StockCosechado
+
+    hoy = timezone.localdate()
+    return StockCosechado.objects.create(
+        lote=lote,
+        cantidad_ingreso_cosechado=ingreso if ingreso is not None else max(disponible, 1),
+        cantidad_disponible_cosechado=disponible,
+        fecha_ingreso=hoy,
+        fecha_limite=hoy + timedelta(days=dias_limite),
+        motivo_cosechado=motivo,
+        costo_unitario_cosechado=Decimal(costo),
+        estado_stock_cosechado=estado,
+    )

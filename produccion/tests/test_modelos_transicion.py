@@ -128,13 +128,14 @@ class ModelosDeTransicionTests(ConDatosDeInventario, TestCase):
         self.assertEqual(str(merma), f"Merma #{merma.pk}")
 
     def test_regla_merma_cantidad_positiva_y_causa_dentro_de_la_lista(self):
-        """«Merma»: `cant_merma > 0` y la causa es una de las siete del lote en pie."""
+        """«Merma»: `cant_merma > 0` y la causa es una de la lista; COM-04a suma tres (cámara y entrega), así que las del lote en pie son
+        `Merma.CAUSAS_EN_PIE` (se ajustó esta prueba: antes la lista era de siete y rechazaba `vencimiento_en_camara`)."""
         lote = lote_con_ciclo(self.e)
         viola(self, lambda: self.merma_de(lote, cant_merma=0))
-        viola(self, lambda: self.merma_de(lote, causa="vencimiento_en_camara"))
-        for causa in Merma.Causa.values:
+        viola(self, lambda: self.merma_de(lote, causa="inventada"))
+        for causa in Merma.CAUSAS_EN_PIE:
             self.merma_de(lote, causa=causa)
-        self.assertEqual(len(Merma.Causa.values), 7)
+        self.assertEqual(len(Merma.CAUSAS_EN_PIE), 7)
 
     # ---- AlertaDeMerma ----
 
