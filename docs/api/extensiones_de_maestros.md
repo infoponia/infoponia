@@ -119,3 +119,13 @@ al registrante por lista o por ficha**, que deja el estado en cada instancia (si
 Prueba mínima en `maestros` (registrante falso con `mock.patch.object`): sin registrante,
 `tiene_sistema_iot()` es `False` y la ficha dice «Sin registrar» sin enlace; con uno, la ficha muestra el estado y el enlace; la lista
 no hace una consulta por fila; una segunda llamada a `registrar_estado_iot` lanza `RuntimeError`.
+
+## Traspaso: lo que se cancela (CMP-02b, D-98)
+
+`ventana de PROD-MOD-INV` (regla 2) informa lo que **recibe** quien entra (`registrar_traspaso`, `contar`). Para lo que se **cancela** o se pierde hay un punto aparte, en `maestros/extensiones.py`:
+
+| Registro | Firma de la función registrada | Qué hace `maestros` con ella | Quién se registra |
+|---|---|---|---|
+| `registrar_aviso_de_traspaso(funcion)` | `funcion(invernadero, rol, saliente, entrante) -> list[str]`: lo que se cancela o se pierde al cambiar a la persona de ese rol, con o sin entrante. Solo lectura | `avisos_de_traspaso(...)`; `_aviso_de_personal` lo suma como `avisos` de cada cambio y la ventana lo muestra. No llega a la notificación de quien entra | `compras` (los pedidos del Agrónomo saliente) |
+
+`Impedimento` suma `url` (opcional, `None`): las ventanas de baja y de deshabilitación muestran «Ver detalle» si la hay. Prueba mínima: sin registrantes, lista vacía; con uno, se llama una vez por cambio; el aviso aparece con y sin entrante.

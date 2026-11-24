@@ -48,7 +48,7 @@ RESTRICCION_NOMBRE_UNICO = "insumo_nombre_unico"
 TIPO_DE_ALERTA_BAJO_MINIMO = "inv_insumo_bajo_minimo"
 
 # Un impedimento de la baja del insumo, de UN invernadero (regla 2 de CMP-BAJ-INS): qué pasa y cómo resolverlo.
-ImpedimentoDeBaja = namedtuple("ImpedimentoDeBaja", "invernadero codigo texto como_resolver")
+ImpedimentoDeBaja = namedtuple("ImpedimentoDeBaja", "invernadero codigo texto como_resolver url", defaults=(None,))
 
 
 # ---- quién usa el insumo y quién lo gestiona (regla 1 de CMP-MOD-INS) ----
@@ -516,7 +516,7 @@ def _impedimentos(existencias):
             continue
         for impedimento in extensiones.impedimentos_de_deshabilitacion(existencia):
             juntos.append(
-                ImpedimentoDeBaja(existencia.invernadero, impedimento.codigo, impedimento.texto, impedimento.como_resolver)
+                ImpedimentoDeBaja(existencia.invernadero, impedimento.codigo, impedimento.texto, impedimento.como_resolver, impedimento.url)
             )
     return juntos
 

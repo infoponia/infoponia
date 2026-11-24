@@ -21,6 +21,9 @@ guardar» manda personal_confirmado. Recibe «aviso» (FaltaConfirmarPersonal.av
         {% else %}
           El invernadero queda <b>sin {{ cambio.nombre_rol }}</b>: no se podrán realizar las tareas que dependen de ese rol hasta que se asigne a alguien. Lo que tenía {{ cambio.saliente.get_full_name|default:cambio.saliente.email }} en este invernadero queda sin responsable y pasa a quien se asigne después.
         {% endif %}
+        {% if cambio.avisos %}
+        <ul class="cambios-avisos">{% for texto in cambio.avisos %}<li>{{ texto }}</li>{% endfor %}</ul>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>

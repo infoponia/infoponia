@@ -429,6 +429,28 @@ class DeshabilitarVistaTests(ExistenciasBase):
         self.assertEqual(self.iin.estado_insumo_invernadero, "activo")
         self.assertGreaterEqual(respuesta.content.decode().count("<li>"), 2)
 
+    def test_regla_2_un_impedimento_con_url_se_muestra_con_su_enlace(self):
+        """CMP-02b (H20): el impedimento ``pedido_en_curso`` trae la URL del pedido y la ventana la muestra como «Ver detalle»; uno sin URL sigue siendo solo texto."""
+        con_url = Impedimento("pedido_en_curso", "Está en el pedido P-0031, en cotización hasta el 28/11.", "Esperá a que se cierre.", "/compras/pedidos/31/")
+        sin_url = Impedimento("orden_de_compra", "Hay una orden de compra sin recibir.", "Recibila.")
+        with reservas_de_prueba(impedimentos={self.iin.pk: [con_url, sin_url]}):
+            respuesta = self.client.get(self.ruta, **HX)
+        self.assertContains(respuesta, "Está en el pedido P-0031, en cotización hasta el 28/11. Esperá a que se cierre.")
+        self.assertContains(respuesta, 'href="/compras/pedidos/31/"')
+        self.assertEqual(respuesta.content.decode().count("Ver detalle"), 1)
+        self.assertContains(respuesta, "Hay una orden de compra sin recibir. Recibila.")
+
+    def test_regla_2_el_enlace_tambien_sale_si_el_impedimento_aparece_en_el_post(self):
+        """El POST que se rechaza (entró el impedimento con la ventana abierta) vuelve a mostrar el enlace, sin error 500 y sin cambiar nada."""
+        con_url = Impedimento("pedido_en_curso", "Está en el pedido P-0031.", "Esperá.", "/compras/pedidos/31/")
+        self.assertEqual(self.client.get(self.ruta, **HX).status_code, 200)
+        with reservas_de_prueba(impedimentos={self.iin.pk: [con_url]}):
+            respuesta = self.client.post(self.ruta)
+        self.assertContains(respuesta, "Está en el pedido P-0031.")
+        self.assertContains(respuesta, 'href="/compras/pedidos/31/"')
+        self.iin.refresh_from_db()
+        self.assertEqual(self.iin.estado_insumo_invernadero, "activo")
+
     def test_regla_2_si_aparece_un_impedimento_con_la_ventana_abierta_el_post_vuelve_a_mostrarlo(self):
         """El POST se rechaza si entre tanto entró stock: la ventana vuelve con los impedimentos, sin error 500 y sin cambiar nada."""
         self.assertEqual(self.client.get(self.ruta, **HX).status_code, 200)

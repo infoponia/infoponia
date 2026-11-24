@@ -320,6 +320,18 @@ class CatalogoVistaTests(VistasDeInventarioBase):
             respuesta = self.client.get(self.url("insumo_baja", objetivo), **HX)
         self.assertContains(respuesta, "Hay un pedido en curso.")
 
+    def test_regla_2_baja_ins_muestra_el_enlace_de_un_impedimento_con_url(self):
+        """CMP-02b (H20): un impedimento con ``url`` (el pedido en curso) se lista con su enlace «Ver detalle», por invernadero; uno sin ``url`` sigue como texto."""
+        objetivo = insumo("Detergente", tipo=self.tipo)
+        habilitado = existencia(objetivo, self.invernadero)
+        con_url = Impedimento("pedido_en_curso", "Está en el pedido P-0031.", "Esperá a que se cierre.", "/compras/pedidos/31/")
+        with reservas_de_prueba(impedimentos={habilitado.pk: [con_url]}):
+            respuesta = self.client.get(self.url("insumo_baja", objetivo), **HX)
+        self.assertContains(respuesta, "Invernadero Uno:")
+        self.assertContains(respuesta, "Está en el pedido P-0031. Esperá a que se cierre.")
+        self.assertContains(respuesta, 'href="/compras/pedidos/31/"')
+        self.assertEqual(respuesta.content.decode().count("Ver detalle"), 1)
+
     def test_flujo_principal_baja_ins_sin_impedimentos_confirma_pasa_a_inactivo_y_se_reactiva(self):
         """CMP-BAJ-INS y CMP-MOD-INS (c): sin impedimentos la baja pide confirmar y deja el insumo inactivo; reactivarlo no lo vuelve a habilitar."""
         objetivo = insumo("Detergente", tipo=self.tipo)

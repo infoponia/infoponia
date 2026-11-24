@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
 {% comment %}Ficha del pedido (CMP-CNS-PED reglas 4 a 6; ``VIEWS.c_ped`` del prototipo): el Agrónomo que lo realizó, las fechas y el monto estimado; si está cancelado, el motivo, la fecha de cierre y si
 fue automática; lo pedido agrupado por invernadero de destino con el precio de referencia y el subtotal; los proveedores invitados (si cotizaron y el estado de su enlace, «No se pudo enviar» si el
-correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. Todavía sin acciones: «Cancelar» y «Reenviar invitación» son de CMP-02b y «Generar orden», de CMP-03.{% endcomment %}
+correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. Acciones del Agrónomo del pedido (CMP-02b): «Cancelar pedido» y, por cada invitado que todavía no cotizó, «Reenviar invitación» (ventana con HTMX; sin JavaScript, su enlace lleva a esta página con la ventana abierta, «plantilla_de_ventana»). El Gerente no las ve (D-30). «Generar orden» es de CMP-03.{% endcomment %}
 {% block titulo %}Pedido {{ pedido }} · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
@@ -11,6 +11,7 @@ correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. 
     <h1>Pedido {{ pedido }}</h1>
     <span class="status-badge {% if pedido.estado_pedido == 'en_cotizacion' %}status-info{% else %}status-neutral{% endif %}">{{ pedido.get_estado_pedido_display }}</span>
     {% if ficha.por_resolver %}<span class="status-badge status-warn">Fecha límite vencida</span>{% endif %}
+    {% if ficha.puede_cancelar %}<span class="spacer"></span><a class="btn btn-danger" href="{% url 'compras:pedido_cancelar' pedido.pk %}">Cancelar pedido</a>{% endif %}
   </div>
 
   {% if ficha.por_resolver %}
@@ -54,13 +55,14 @@ correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. 
       <div class="card-h"><b>Proveedores invitados</b></div>
       <div class="tablewrap">
         <table class="data-table">
-          <thead><tr><th>Proveedor</th><th>Cotización</th><th>Enlace</th></tr></thead>
+          <thead><tr><th>Proveedor</th><th>Cotización</th><th>Enlace</th><th class="right"><span class="sr">Acciones</span></th></tr></thead>
           <tbody>
           {% for i in ficha.invitados %}
           <tr>
             <td>{{ i.proveedor.nombre_para_mostrar }}<span class="sub2">{{ i.proveedor.email_proveedor }}</span>{% if not i.proveedor.activo %} <span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
             <td>{% if i.cotizo %}<span class="status-badge status-ok">Cotizó</span>{% else %}<span class="status-badge status-neutral">No cotizó</span>{% endif %}</td>
             <td><span class="status-badge {% if i.estado_del_enlace == 'vigente' %}status-ok{% elif i.estado_del_enlace == 'vencido' %}status-danger{% else %}status-neutral{% endif %}">{{ i.estado_del_enlace|capfirst|default:"Sin enlace" }}</span>{% if i.sin_enviar %} <span class="status-badge status-danger">No se pudo enviar</span>{% endif %}</td>
+            <td class="right nowrap">{% if i.puede_reenviar %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:invitacion_reenviar' i.invitacion.pk %}" hx-get="{% url 'compras:invitacion_reenviar' i.invitacion.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "send" 14 %} Reenviar invitación</a>{% endif %}</td>
           </tr>
           {% endfor %}
           </tbody>
@@ -96,5 +98,11 @@ correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. 
     </div>
     {% endif %}
   </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
 </div>
 {% endblock %}

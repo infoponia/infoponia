@@ -1,0 +1,43 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Cancelar pedido» (CMP-CNL-PED pasos 1 a 3; ``VIEWS.c_pedcnl`` del prototipo). Recibe «pedido», «ficha» (los destinos, las cotizaciones recibidas y los invitados), «motivo» (lo escrito) y
+«errores» (los del motivo). Sección 1: qué se cancela y que no se puede deshacer; sección 2: el motivo (obligatorio, hasta 500 caracteres). «Revisar cancelación» muestra el resumen del paso 4; nada se cancela
+hasta confirmar ahí. Las cotizaciones recibidas se descartan (el prototipo decía «se conservan como consulta»: la postcondición b dice que pasan a «descartada»).{% endcomment %}
+{% block titulo %}Cancelar el pedido {{ pedido }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <a class="btn btn-text" href="{% url 'compras:pedido_ficha' pedido.pk %}">{% icono "back" 14 %} Pedido {{ pedido }}</a>
+  <div class="page-h"><h1>Cancelar el pedido {{ pedido }}</h1></div>
+
+  <form method="post" action="{% url 'compras:pedido_cancelar' pedido.pk %}" novalidate>
+    {% csrf_token %}
+    <div class="stack">
+      <section class="sec card">
+        <div class="card-title"><span class="sec-num">1</span> Qué se cancela</div>
+        <dl class="dl two">
+          <dt>Pedido</dt><dd>{{ pedido }}</dd>
+          <dt>Destino</dt><dd>{% for invernadero, detalles in ficha.grupos %}{{ invernadero.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+          <dt>Cotizaciones recibidas</dt><dd>{{ ficha.cotizaciones|length }}</dd>
+          <dt>Monto estimado</dt><dd>{{ ficha.monto|pesos }}</dd>
+        </dl>
+        <div class="alert alert-info" role="status" style="margin-top:14px">{% icono "info" 16 %}<div>Los proveedores que todavía no cotizaron ya no podrán hacerlo: sus enlaces dejan de funcionar. Las cotizaciones recibidas se descartan. A todos los proveedores invitados les avisamos por correo, sin el motivo.</div></div>
+        <div class="alert alert-warn" role="status" style="margin-top:10px">{% icono "warn" 16 %}<div><b>La cancelación no se puede deshacer.</b> Si después hace falta, tenés que armar un pedido nuevo.</div></div>
+      </section>
+
+      <section class="sec card">
+        <div class="card-title"><span class="sec-num">2</span> Motivo</div>
+        <div class="field">
+          <label class="field-label" for="motivo">Motivo de la cancelación <span class="req" aria-hidden="true">*</span></label>
+          <textarea class="field-input{% if errores %} bad{% endif %}" id="motivo" name="motivo" rows="3" maxlength="500" required placeholder="Por ejemplo: ya no hace falta, o las cotizaciones no alcanzan." aria-describedby="motivo-ayuda{% if errores %} motivo-error{% endif %}">{{ motivo }}</textarea>
+          {% for e in errores %}<div class="err" id="motivo-error" role="alert">{{ e }}</div>{% endfor %}
+          <div class="hint" id="motivo-ayuda">Hasta 500 caracteres. Se guarda con el pedido; los proveedores no lo ven.</div>
+        </div>
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…">Revisar cancelación</button>
+      <a class="btn btn-ghost" href="{% url 'compras:pedido_ficha' pedido.pk %}">Volver</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

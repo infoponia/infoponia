@@ -6,6 +6,8 @@
 # Ventanas (D-47, patrón ABM §7): como en el catálogo, cada una es una vista con dos formas. Con HTMX devuelve solo la ventana; sin
 # JavaScript, la pestaña completa con la ventana abierta (``plantilla_de_ventana``). Los formularios envían con un POST común.
 
+from collections import namedtuple
+
 from django.contrib import messages
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
@@ -208,11 +210,28 @@ def existencia_modificar(request, iin_id):
 # ---- Deshabilitar (CMP-DSH-IIN) ----
 
 
-def _impedimentos(error):
-    """Los mensajes de un ``ValidationError`` general del servicio de deshabilitar: uno por impedimento (``_error_de_impedimentos``)."""
+# Lo que la ventana muestra de un impedimento: el texto («qué pasa» y «cómo resolverlo») y, si lo trae, la URL de lo que lo impide (CMP-02b, H20).
+ImpedimentoVisible = namedtuple("ImpedimentoVisible", "texto url")
+
+
+def _visibles(impedimentos):
+    """Los impedimentos de ``api_iin.impedimentos_para_deshabilitar`` como ``ImpedimentoVisible``."""
+    return [ImpedimentoVisible(f"{i.texto} {i.como_resolver}", i.url) for i in impedimentos]
+
+
+def _impedimentos(error, actor=None, iin=None):
+    """Los impedimentos de un ``ValidationError`` general del servicio de deshabilitar (uno por impedimento, ``_error_de_impedimentos``). Con ``actor`` e ``iin`` se vuelven
+    a pedir al servicio para conservar sus URL (el error solo trae los textos); si eso falla, se usan los mensajes del error."""
+    if actor is not None and iin is not None:
+        try:
+            visibles = _visibles(api_iin.impedimentos_para_deshabilitar(actor, iin.pk))
+        except ValidationError:
+            visibles = []
+        if visibles:
+            return visibles
     if hasattr(error, "error_dict") and NON_FIELD_ERRORS in error.error_dict:
-        return [e.messages[0] for e in error.error_dict[NON_FIELD_ERRORS]]
-    return error.messages
+        return [ImpedimentoVisible(e.messages[0], None) for e in error.error_dict[NON_FIELD_ERRORS]]
+    return [ImpedimentoVisible(texto, None) for texto in error.messages]
 
 
 @rol_requerido(AGRONOMO)
@@ -227,14 +246,14 @@ def existencia_deshabilitar(request, iin_id):
         return _volver(request)
     impedimentos, error = [], ""
     try:
-        impedimentos = [i.texto + " " + i.como_resolver for i in api_iin.impedimentos_para_deshabilitar(request.user, iin.pk)]
+        impedimentos = _visibles(api_iin.impedimentos_para_deshabilitar(request.user, iin.pk))
     except ValidationError as rechazo:
         error = rechazo.messages[0]
     if request.method == "POST" and not impedimentos and not error:
         try:
             api_iin.deshabilitar_insumo(request.user, iin.pk)
         except ValidationError as rechazo:  # apareció un impedimento con la ventana abierta: se vuelve a mostrar
-            impedimentos = _impedimentos(rechazo)
+            impedimentos = _impedimentos(rechazo, request.user, iin)
         else:
             messages.success(request, f"{iin.insumo.nombre_insumo} quedó deshabilitado en {iin.invernadero.nombre_invernadero}.")
             return _volver(request)

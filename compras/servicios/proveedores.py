@@ -19,6 +19,7 @@ from django.http import Http404
 
 from compras.errores import ErrorDeCompras
 from compras.models import Cotizacion, Pedido, Proveedor
+from compras.servicios import enlaces
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
 from inventario.models import TipoInsumo
@@ -408,7 +409,7 @@ def baja_proveedor(actor, proveedor_id):
     - Precondición a: Gerente activo. Precondición b: el proveedor está activo (``proveedor_inactivo``).
     - Precondiciones c y d y regla 2: sin órdenes no terminadas ni pagos pendientes (``impedimentos_de_baja``; hoy vacía). Si hay, se rechaza
       con ``baja_con_impedimentos`` y TODOS juntos (qué lo impide y cómo resolverlo). Se calculan con el proveedor ya bloqueado.
-    - Regla 1 y postcondición a: queda «inactivo» y conserva todo. Regla 3 (anular sus enlaces vigentes): se completa en CMP-02b.
+    - Regla 1 y postcondición a: queda «inactivo» y conserva todo. Regla 3 (CMP-02b): sus enlaces vigentes de pedidos en cotización pasan a «anulado» (``enlaces.anular_enlaces_de_proveedor``) y van en la auditoría.
     - Postcondición b: un registro ``baja_proveedor`` con el cambio de estado.
     """
     _exigir_gerente(actor)
@@ -424,11 +425,16 @@ def baja_proveedor(actor, proveedor_id):
             )
         proveedor.estado_proveedor = Estado.INACTIVO
         proveedor.save(update_fields=["estado_proveedor"])
+        # Regla 3 (CMP-02b): sus enlaces vigentes de pedidos en cotización dejan de servir; la cotización «propuesta» no se toca.
+        anulados = enlaces.anular_enlaces_de_proveedor(proveedor)
+        detalle = {"cambios": {"estado": {"antes": Estado.ACTIVO.value, "despues": Estado.INACTIVO.value}}}
+        if anulados:
+            detalle["datos"] = {"enlaces_anulados": [referencia(e) for e in anulados]}
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.BAJA_PROVEEDOR,
-            afectados=[proveedor],
-            detalle={"cambios": {"estado": {"antes": Estado.ACTIVO.value, "despues": Estado.INACTIVO.value}}},
+            afectados=[proveedor, *anulados],
+            detalle=detalle,
         )
     return proveedor
 
