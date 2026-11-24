@@ -18,6 +18,7 @@ import sys
 import dj_database_url
 
 from config.correo import correo_configurado, correo_por_consola
+from config.seguridad import ajustes_https, debug_encendido
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,7 +33,8 @@ load_dotenv(BASE_DIR / ".env")
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+# USR-09a: apagado por defecto. Solo DJANGO_DEBUG=1 (el .env de desarrollo) lo enciende.
+DEBUG = debug_encendido(os.environ)
 
 # SEG-18, D-16 y D-30: el panel de administración de Django solo existe con DEBUG encendido (desarrollo). En
 # producción (DJANGO_DEBUG=0) la ruta /admin/ no existe y responde 404: las cuentas se administran con las
@@ -195,6 +197,16 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# SEG-16 y USR-09a: con DEBUG apagado, redirección a https, cookies de sesión y CSRF seguras y HSTS de un día. Con
+# DEBUG encendido nada de esto (el desarrollo corre por http). La cookie de sesión ya es HttpOnly por defecto en Django
+# y no se redefine. Con ``manage.py test`` la redirección no se aplica (si no, el cliente de Django, que pide por http,
+# recibiría un 301 en todas las pruebas); ``check --deploy``, runserver y gunicorn reciben los cuatro ajustes completos.
+_AJUSTES_HTTPS = ajustes_https(DEBUG, sys.argv[1:2] == ["test"])
+SECURE_SSL_REDIRECT = _AJUSTES_HTTPS["SECURE_SSL_REDIRECT"]
+SESSION_COOKIE_SECURE = _AJUSTES_HTTPS["SESSION_COOKIE_SECURE"]
+CSRF_COOKIE_SECURE = _AJUSTES_HTTPS["CSRF_COOKIE_SECURE"]
+SECURE_HSTS_SECONDS = _AJUSTES_HTTPS["SECURE_HSTS_SECONDS"]
 
 # ---- Correo (D-33, SEG-12, USR-RCP-CTR) ----
 # Gmail por SMTP con la cuenta exclusiva para el correo del sistema. La contraseña es una contraseña de aplicación

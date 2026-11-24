@@ -610,3 +610,6 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 2. **«Pérdida en cámara» y pestaña «Cámara» (COM-04b).** `entradas_de_comercial` devuelve `merma_en_camara = None`: COM-04b lo completa junto con la pantalla.
 3. **Enlace y correo del camino de faltante (COM-04c).** `faltantes.seguir_camino_de_faltante` no crea el enlace del cliente ni manda el correo (ni el aviso «registrá vos la decisión» sin correo): COM-04c los suma en la misma función; también la prueba de concurrencia «cancelar contra la decisión del cliente».
 4. **Planificar la entrega (COM-05a1)** cuando una cosecha deja lista una venta o un período (postcondición n de PROD-CNC-CSC) y los **asientos** (D-57, CON-04c) originados en cada `salida_por_cosecha`.
+
+## Antes de las presentaciones — nace con USR-09a (24/11/2026)
+1. **Subir el HSTS de un día a un año.** `HSTS_SEGUNDOS` de `config/seguridad.py` vale 86400 (D-99). Si Render lleva días en https sin problemas, pasarlo a 31536000. Sin subdominios ni preload, salvo decisión nueva.

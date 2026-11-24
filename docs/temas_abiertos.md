@@ -30,9 +30,9 @@ Copiados sin cambios de `docs/estado.md`, «Temas abiertos», el 18/11/2026. Act
 | Tema | Ahora está en |
 |---|---|
 | Reparto final de apps | D-37 |
-| Tope de pedidos de recuperación de contraseña | `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
-| Tope de intentos de identificación | `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
-| `DEBUG` apagado por defecto (Render ya tiene `DJANGO_DEBUG=0`) | `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
+| Tope de pedidos de recuperación de contraseña | USR-09b: `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
+| Tope de intentos de identificación | USR-09b: `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
+| `DEBUG` apagado por defecto (Render ya tiene `DJANGO_DEBUG=0`) | Hecho en USR-09a: D-99 |
 | Proveedor del almacenamiento para la foto de perfil | `docs/tareas/usuarios/USR-07-foto-perfil.md` y «Esperas» de `docs/estado.md` |
 | Logo y nombre de la organización configurables | `docs/disparadores.md`, «Cuando exista PerfilOrganizacion» |
 | Estilo del prototipo de producción contra el del sistema | D-47 y la tarea UI-01 (`docs/tareas/ronda_produccion_1.md`) |
@@ -131,7 +131,6 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 | Textos de los casos de uso que hay que corregir en «CU extendidos» | IOT-REG-SIS («Temas abiertos»: cita `docs/api_nodo.md` y el simulador); IOT-ENT-INF (regla «Alertas», extensiones 1a, \*b y 5g) e IOT-RSV-CMD (4b.3): el correo sale por la revisión periódica (D-71) | Con los extractos: lote I1 (REG-SIS), I2a (ENT-INF: **ya corregido en `entregar_informacion.md`**, falta pasarlo a Drive) e I3 (RSV-CMD: **ya corregido en `resolver_comando.md`**, falta pasarlo a Drive) |
 | Pendientes de Drive fuera del repo | DCU con el paquete IoT; caso 21 de pendientes_CU; correcciones de CU-90 y CU-92 de la «Documentación para la IA» | Sin fecha (no frenan a Claude Code) |
 | Interpretaciones de IOT-ENT-INF en el código (lote I2a) | Siete puntos que el caso de uso no resuelve: «cambiado en el invernadero» inicial, histéresis en un umbral angosto, variable del umbral vacía, resolución al quedarse sin umbral, identificador mal formado, reglas de los estados y sector fuera de servicio | D-75 (**validada el 22/11/2026**; falta pasarla a «CU extendidos») |
-| HTTPS detrás del proxy de Render | La dirección de la API que muestra IOT-02 sale de `request.build_absolute_uri`: si Django no sabe que Render terminó el HTTPS (`SECURE_PROXY_SSL_HEADER`), la muestra con `http://` | Verificación a mano 11 de IOT-03; si falla, USR-09 |
 | Aviso de compatibilidad del actuador, sin JavaScript (IOT-02, D-61) | Con HTMX, el aviso «el nodo no anunció el comando de…» llega al cambiar el identificador o el tipo. Sin JavaScript no hay evento de cambio: aparece al volver a dibujar el formulario y, si el actuador queda incompatible, en el aviso de después de guardar. Interpretación de Claude Code; el caso de uso no distingue | Confirmar con el equipo que alcanza; IOT-ALT-HDW (`docs/casos_de_uso/iot/hardware.md`) |
 | Reglas nuevas de la revisión, del panel y de la configuración IoT (lote I2b) | Inactividad, «no registrado» sin mensajes, resúmenes, fotoperíodo, retención, correo y refresco; reglas 2b a 7b de ADM-MOD-CFG | D-76 (**validada el 22/11/2026**; falta pasarla a «CU extendidos», en IOT-ENT-INF y en ADM-MOD-CFG) |
 | Correo de una alerta crítica sin enlace | El comando de la revisión no conoce la dirección del sitio (no hay una variable de configuración): el correo dice «entrá a InfoPonia, menú «Alertas»» (D-76, punto 7) | Si se agrega una variable con la dirección pública (por ejemplo con USR-09) |
