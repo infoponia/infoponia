@@ -558,8 +558,11 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando exista el rol Contador (USR-11) — nace con el lote 1 de Contabilidad
 
+USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servicios/responsables.py` existen. El punto 1 sigue vigente para CON-04d; el punto 2 nace con el modelo.
+
 1. El aviso de «registrar asiento manual» de COM-ATN-ENR (postcondición b) pasa del Vendedor a `responsable_contable()` (H12). Lo programa
    **CON-04d**, o COM-06b si llega después de CON-02. Toda pantalla que diga «Gerente y Vendedor registran asientos» se corrige.
+2. `EjercicioContable.contador` (R010, MD-116) es una FK nula a `core.Contador` (`PROTECT`, `related_name="ejercicios_cerrados"`), declarada en `contabilidad` (regla A2 de D-37). La crea CON-02. El modelo `Contador` ya existe en `core` (USR-11).
 
 ## Cuando se programe CON-03a — nace con el lote 1 de Contabilidad
 

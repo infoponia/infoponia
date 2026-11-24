@@ -657,3 +657,12 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Restricción `ordentrabajo_prioridad_en_mantenimiento` en Neon.** No hay mantenimientos anteriores a IOT-07, pero conviene confirmar antes del despliegue que ninguna orden de tipo mantenimiento tenga la prioridad vacía (la migración 0007 fallaría).
 - **La baja con varias órdenes** da un impedimento por orden en el equipo y uno solo con la lista en el sistema; los códigos de error nuevos (`decisiones_incompletas`, `orden_no_cancelable`, `ordenes_cambiaron`, `orden_no_pendiente`, `cambio_simultaneo`, `motivo_obligatorio`, `motivo_largo`) no estaban en el extracto.
 - **Si la alerta ya tiene otra orden (R048, 0..1)**, la orden nueva se crea sin alerta.
+
+## USR-11 (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **Pruebas de servicio en un archivo aparte.** La tarea pedía extender las pruebas del ABM de cuentas; están en `core/tests/test_usr_11_rol_contador.py` (alta, reactivación, baja, consulta y concurrencia del Contador). Cambió una prueba existente: el `<select>` del alta ahora espera seis roles.
+- **`docs/casos_de_uso/usuarios.md` sigue diciendo "cinco roles"** en la regla 1 de USR-ALT/MOD/BAJ/CNS-USR y "nunca más de un Gerente activo" en SEG-15. Manda `usuarios_rol_contador.md`; conviene actualizar `usuarios.md` en la próxima ronda de documentación.
+- **Menú del Contador.** El prototipo (`NAV.con`) le da «Panel de control», «Compras» y «Contabilidad»; D-85 punto 6 dice solo «Panel de control» y «Contabilidad», y las dos entradas las registran CON-03a y compras. Hoy el menú es solo «Panel de control».
+- **No existe `docs/modelo/core.md`.** `Usuario` y los roles están en D-01, D-09, D-11 y D-85, y el Contador también en `docs/modelo/contabilidad.md` (MD-114, R010). Pendiente decidir si se crea un extracto de `core`.
+- **La ventana de reactivación** (`_ventana_confirmar.html`) usa la variable `titular_activo` en lugar de `gerente_activo`.
+

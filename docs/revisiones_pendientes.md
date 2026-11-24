@@ -609,6 +609,28 @@ Los 11 pasos son los de «Verificación a mano» de `docs/tareas/iot/IOT-07-orde
 - [ ] 10. **Baja después de cancelar (opcional).** Con la orden cancelada, «Dar de baja» el equipo funciona y en Auditoría figura. *Lo cubre el recorrido.*
 - [ ] 11. **Opcional.** En un celular (o con la ventana angosta), la tabla de órdenes se lee y los botones se tocan.
 
+## USR-11 · Tarea USR-11 (el rol Contador y quién registra los asientos)
+
+Los 15 pasos son los de «Verificación a mano» de `docs/tareas/core/USR-11-rol-contador.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **una migración nueva** (`core` 0035): `python manage.py migrate`; después `python manage.py runserver` y abrí `http://127.0.0.1:8000/`. Necesitás el Administrador y el Gerente de tu base local y una ventana privada para la segunda sesión. Crear a mano, con el Gerente en «Usuarios y seguridad» → «Nuevo usuario»: un Contador `Carolina Vega`, `carolina.vega@ejemplo.com`, forma de acceso «Contraseña temporal» (anotá la temporal: se muestra una sola vez), y un Vendedor `Mario Rey`, `mario.rey@ejemplo.com`. Ninguna contraseña en un archivo del repo.
+
+- [ ] 1. **Alta del Contador (Gerente).** El desplegable «Rol» de «Nuevo usuario» ofrece **Contador** al final (después de Técnico). Dar de alta a Carolina Vega: «Cuenta creada» con la temporal. *Lo cubre el recorrido.*
+- [ ] 2. **Un solo Contador activo.** Un segundo alta de Contador (`otra.persona@ejemplo.com`) vuelve al formulario con «Ya hay un Contador activo: Carolina Vega. Solo puede haber uno a la vez…», conserva lo escrito y no crea la cuenta. *Lo cubren el recorrido y `AltaDeContadorTests`.*
+- [ ] 3. **Lista, filtro y ficha.** Filtrando por rol «Contador» aparece Carolina Vega, «Activo»; su ficha dice «Contador» y tiene «Modificar», «Restablecer contraseña» y «Dar de baja». *Lo cubre el recorrido.*
+- [ ] 4. **Primer ingreso del Contador.** En ventana privada, entrar con la temporal, elegir una contraseña propia y llegar al inicio. *Lo cubre el recorrido.*
+- [ ] 5. **Cómo se ve el Contador.** Avatar «CON» y «Contador»; el desplegable de cuenta dice «Operás como Contador»; el menú lateral tiene solo «Panel de control» (sin «Estadísticas», «Producción», «Compras», «Comercial», «Usuarios y seguridad» ni «Auditoría»); hay campana; «Contabilidad» todavía no aparece (CON-03a).
+- [ ] 6. **El Contador por la dirección escrita a mano.** `/usuarios/`, `/auditoria/`, `/produccion/` y `/compras/pedidos/` dan 403 («Tu cuenta de Contador no tiene acceso a esta pantalla.»). *Lo cubre el recorrido.*
+- [ ] 7. **El Administrador.** En «Cuentas» no aparece Carolina Vega ni «Contador» en el filtro; su ficha escrita a mano da 403. *Lo cubre el recorrido.*
+- [ ] 8. **El Gerente no pierde nada en su menú por haber un Contador.** Lo demás (quién registra y a quién se avisa) no tiene pantalla todavía. *Lo cubren `test_responsables.py` y el recorrido.*
+- [ ] 9. **Baja del Contador.** La ventana de baja no lista impedimentos ni pendientes; al confirmar queda «Inactivo». *Lo cubre el recorrido.*
+- [ ] 10. **La sesión del Contador cae.** En la ventana privada, recargar lleva al inicio de sesión. *Lo cubre el recorrido.*
+- [ ] 11. **Reemplazo: baja y alta.** Con el primero dado de baja, dar de alta a `Otra Persona` (`otra.persona@ejemplo.com`) deja. *Lo cubre el recorrido.*
+- [ ] 12. **Reactivar con otro activo.** La ficha de Carolina (inactiva) → «Reactivar»: «…ya hay un Contador activo, **Otra Persona**…», solo «Ver a Otra Persona» y «Cerrar», sin botón de confirmar. Dando de baja a Otra Persona, «Reactivar» sí ofrece confirmar y reactiva. *Lo cubren el recorrido y `ReactivacionDeContadorTests`.*
+- [ ] 13. **Auditoría.** Como Gerente, «Auditoría» muestra el alta, el cambio de contraseña del Contador, las bajas y las reactivaciones, con el rol «Contador»; el Administrador no los ve. *Lo cubre el recorrido.*
+- [ ] 14. **Navegador real.** En la ventana normal como Gerente, hacé el alta (paso 1) y la reactivación (paso 12) **hasta el final** mirando la consola (F12). Si aparece «Prohibido (403)», «Verificación CSRF fallida» o un error en la consola, avisá: el cliente de Django no ve el CSRF ni el encabezado `Origin`.
+- [ ] 15. **Opcional.** Sin JavaScript, el alta, la baja y la reactivación siguen funcionando como páginas; en un celular, el menú del Contador se ve como chips y las pantallas de cuentas se leen bien.
+
+*Lo que no se prueba a mano:* dos altas de Contador a la vez y un alta junto a una reactivación (las cubre `ContadorUnicoConcurrenciaTests`, con `--tag concurrencia`); y el panel del Contador, que es de CON-03a.
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que

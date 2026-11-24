@@ -7,17 +7,17 @@ Restablecer y reactivar ofrecen la forma de acceso (_forma_de_acceso.html, D-35)
 La baja lista lo que la cuenta tiene asignado («asignaciones», regla 4 de USR-BAJ-USR, D-43: lo registran las apps de
 negocio en core.extensiones). Si la cuenta es la del Gerente, «pendientes» (total y detalle, NOT-01, D-42) dice cuántos quedan
 esperando hasta el alta de otro Gerente (postcondición c): es un texto, no una notificación. Pendiente: lo que dejan los pedidos y las entregas.
-Con «gerente_activo» (reactivar un Gerente con otro activo, regla 5 y D-30) la ventana no ofrece confirmar: muestra
-el motivo, con «Ver a <nombre>» y «Cerrar».
+Con «titular_activo» (reactivar un Gerente o un Contador con otro activo, regla 5, D-30 y D-85 punto 2) la ventana no ofrece
+confirmar: muestra el motivo, con «Ver a <nombre>» y «Cerrar».
 Con «impedimentos» (baja; precondición d de USR-BAJ-USR, MAE-05, D-55: el Transportista en ruta, que registra `comercial` en
 core.extensiones) la ventana los lista todos, cada uno con cómo resolverlo, y no ofrece confirmar: solo «Entendido» (D-30).{% endcomment %}
 <div class="ov" data-ventana>
-  {% if accion == "reactivar" and gerente_activo %}
+  {% if accion == "reactivar" and titular_activo %}
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
     <h2 id="ventana-titulo">No se puede reactivar la cuenta</h2>
-    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) no se puede reactivar: ya hay un Gerente activo, <b>{{ gerente_activo.get_full_name }}</b>. Solo puede haber uno a la vez. Para reactivar esta cuenta, primero dá de baja al actual desde su ficha.</p>
+    <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) no se puede reactivar: ya hay un {{ cuenta|rol_visible }} activo, <b>{{ titular_activo.get_full_name }}</b>. Solo puede haber uno a la vez. Para reactivar esta cuenta, primero dá de baja al actual desde su ficha.</p>
     <div class="acts">
-      <a class="btn btn-primary" href="{% url 'core:usuario' gerente_activo.pk %}">Ver a {{ gerente_activo.get_full_name }}</a>
+      <a class="btn btn-primary" href="{% url 'core:usuario' titular_activo.pk %}">Ver a {{ titular_activo.get_full_name }}</a>
       <a class="btn btn-ghost" href="{% url 'core:usuario' cuenta.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a>
     </div>
   </div>
