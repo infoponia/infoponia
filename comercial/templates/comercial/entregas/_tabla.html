@@ -1,0 +1,30 @@
+{% comment %}La tabla de «Entregas» y su paginación (también es lo que devuelve HTMX). Orden: primero las de envío sin transportista, después fecha programada e id. «Atrasada» (MD-139), nunca
+«Vencida». Un retiro no tiene transportista («No corresponde»); la acción es solo «Ver contrato» (COM-05a1). Recibe «datos», «filtros» y «consulta».{% endcomment %}
+<div class="tablewrap">
+  <table class="data-table">
+    <thead><tr><th>Entrega</th><th>Cliente y destino</th><th>Fecha</th><th class="right">Peso</th><th>Transportista</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+    {% for f in datos.filas %}
+      <tr{% if f.sin_transportista %} class="r-warn"{% endif %}>
+        <td class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b><span class="sub2">{{ f.contrato_codigo }}</span></td>
+        <td><b style="font-weight:600">{{ f.cliente }}</b><span class="sub2">{{ f.destino }}</span>{% if f.contenido %}<span class="sub2">{{ f.contenido }}</span>{% endif %}</td>
+        <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span></td>
+        <td class="right nowrap mono">{{ f.peso|floatformat:2 }} kg</td>
+        <td>{% if f.es_retiro %}<span class="muted">No corresponde</span>{% elif f.transportista %}{{ f.transportista }}{% elif f.estado == "a_realizar" %}<span class="status-badge status-danger">Sin transportista</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
+        <td><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
+        <td class="right"><a class="rowlink" href="{{ f.url_del_contrato }}">Ver contrato<span class="sr"> de la entrega {{ f.codigo }}</span></a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">{% if datos.hay_filtros %}No hay entregas con estos filtros.{% else %}No hay entregas a realizar. InfoPonia las planifica solas cuando todo el producto de una venta o de un período está listo.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if datos.pagina.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Páginas">
+  {% if datos.pagina.has_previous %}<a class="rowlink" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}pagina={{ datos.pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
+  <span class="muted">Página {{ datos.pagina.number }} de {{ datos.pagina.paginator.num_pages }} · {{ datos.pagina.paginator.count }} entregas</span>
+  {% if datos.pagina.has_next %}<a class="rowlink" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}pagina={{ datos.pagina.next_page_number }}">Siguiente ›</a>{% endif %}
+</nav>
+{% endif %}

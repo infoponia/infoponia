@@ -34,9 +34,10 @@ from comercial.models import (
     DetalleReserva,
     DetalleSuministro,
     DireccionCliente,
+    Entrega,
     Suministro,
 )
-from comercial.servicios import calendario, comprobantes, stock_maduro
+from comercial.servicios import calendario, comprobantes, entregas, stock_maduro
 from comercial.servicios import clientes as api_clientes
 from comercial.servicios.compra_ventas import (
     CENTAVOS,
@@ -693,7 +694,7 @@ def pactar_suministro(actor, datos):
       una reserva por invernadero de cada período de la ventana y sus cosechas (``stock_maduro``).
     - Postcondiciones h e i y D-36: UN registro ``pacto_suministro`` (el Gerente queda como quien lo cargó; el Vendedor responsable va en ``datos``).
     - Paso 15, FUERA de la transacción (D-14, D-54): el comprobante. Queda «para imprimir» (sin correo), «enviado» o «pendiente de envío».
-    - Postcondición f (planificar la entrega de un período que salió todo de cámara): se completa en COM-05.
+    - Postcondición f (planificar la entrega de un período que salió todo de cámara): `entregas.programar_para_reservas` (COM-05a1), con `on_commit`.
     """
     previo = _analizar(actor, datos, estricto=True)
     if previo.errores:
@@ -846,6 +847,7 @@ def pactar_suministro(actor, datos):
             afectados=[suministro, clausula, *[x for par in zip(detalles, clausulas) for x in par], *reservas, *lineas, *cosechas],
             detalle={"datos": datos_de_auditoria},
         )
+        entregas.programar_para_reservas([r.pk for r in reservas])  # postcondición f (D-66 punto 5): los períodos que salieron todo de cámara se planifican después de confirmar
 
     # Paso 15 y extensión 15a: FUERA de la transacción (D-14, D-54).
     suministro.estado_comprobante = comprobantes.enviar_comprobante(suministro)
@@ -2194,6 +2196,8 @@ def _cerrar_rescision(suministro_id, hoy):
         s = Suministro.objects.get(pk=suministro_id)
         if not s.tiene_rescision_acordada or s.fecha_ultima_entrega_rescision >= hoy:
             return False
+        if Entrega.objects.filter(contrato_entrega_id=suministro_id, estado_orden="a_realizar").exists():
+            return False  # punto 6 de «Cuando exista Entrega»: el cierre espera las entregas del contrato (si queda una atrasada, sigue «vigente»)
         s.estado_suministro, s.fecha_rescision = Suministro.Estado.RESCINDIDO, s.fecha_ultima_entrega_rescision
         s.save()
         vigentes = list(s.detalles.filter(estado_detalle_suministro=DetalleSuministro.Estado.VIGENTE).order_by("pk"))
@@ -2213,12 +2217,13 @@ def _cerrar_rescision(suministro_id, hoy):
 def cerrar_rescisiones(hoy):
     """Paso diario 35 (D-56): pasa a «rescindido» los suministros «vigentes» con rescisión acordada cuya última entrega conservada ya pasó (el día siguiente), con
     ``fecha_rescision`` = esa fecha, y sus detalles vigentes a «finalizado». Un contrato por transacción; idempotente; nunca lee la fecha por su cuenta. Un contrato que
-    falla queda en el log y los demás siguen. Se completa en COM-05a1 y COM-06: el cierre esperará las entregas del contrato que queden por concretar.
+    falla queda en el log y los demás siguen. Desde COM-05a1 espera las entregas del contrato «a realizar» (si queda una atrasada, sigue «vigente» y se cierra el día que se concrete o se cancele).
     Devuelve ``ResumenDePaso(procesados=N, creados=0, resueltos=N, detalle="N suministros rescindidos")``."""
     pendientes = list(
         Suministro.objects.filter(
             estado_suministro=Suministro.Estado.VIGENTE, motivo_rescision__isnull=False, fecha_ultima_entrega_rescision__lt=hoy
         )
+        .exclude(pk__in=Entrega.objects.filter(estado_orden="a_realizar").values("contrato_entrega_id"))  # el cierre espera las entregas a realizar del contrato
         .order_by("pk")
         .values_list("pk", flat=True)
     )

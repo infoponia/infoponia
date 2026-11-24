@@ -15,7 +15,7 @@ from contabilidad.models import OrigenDocumento
 from core.models import Transportista, Usuario, Vendedor, rol_de
 from core.validadores import validar_telefono
 from maestros.models import Direccion, Invernadero, Variedad
-from produccion.models import Cosecha, Lote, StockCosechado
+from produccion.models import Cosecha, Lote, OrdenTrabajo, StockCosechado
 
 # La patente argentina: AAA123 (formato viejo) o AA123AA (Mercosur), en mayúsculas y sin espacios (MD-129).
 REGEX_PATENTE = r"^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$"
@@ -804,16 +804,19 @@ class AlertaComercial(models.Model):
     cantidad_sin_cubrir = models.PositiveIntegerField(null=True, blank=True)  # se actualiza en cada intento de la pre-reserva (D-63, punto 3)
     # COM-04b (MD-134, D-64 punto 10): «partida por vencer». La FK vive acá (regla A2 de D-37: `StockCosechado` es de `produccion`, nivel menor).
     partida = models.ForeignKey(StockCosechado, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas_comerciales")
+    # COM-05a1 (MD-122, extensión 6a de COM-PNF-ENT, D-66 punto 10): «entrega sin transportista». La FK vive acá (regla A2 de D-37: `Entrega` es de `comercial`).
+    entrega = models.ForeignKey("Entrega", null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")
 
     class Meta:
         verbose_name = "Alerta comercial"
         verbose_name_plural = "Alertas comerciales"
         constraints = [
-            # Exactamente una FK de origen cargada (D-63, punto 1). Desde COM-04b: `suministro`, `detalle_suministro` o `partida`.
+            # Exactamente una FK de origen cargada (D-63, punto 1). Desde COM-05a1: `suministro`, `detalle_suministro`, `partida` o `entrega` (COM-06a suma `solicitud`).
             models.CheckConstraint(
-                condition=(Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True))
-                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False) & Q(partida__isnull=True))
-                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=False)),
+                condition=(Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False) & Q(partida__isnull=True) & Q(entrega__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=False) & Q(entrega__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=False)),
                 name="alerta_comercial_un_solo_origen",
             ),
             # detalle_suministro no nulo <=> fecha_periodo y cantidad_sin_cubrir no nulos.
@@ -829,3 +832,145 @@ class AlertaComercial(models.Model):
     def __str__(self):
         """«Alerta comercial #12»."""
         return f"Alerta comercial #{self.pk}"
+
+
+# ---- COM-05a1: Entrega y DetalleEntrega (docs/modelo/comercial.md; D-66) ----
+
+
+class EntregaQuerySet(models.QuerySet):
+    """QuerySet de entregas con el alcance por usuario en un único lugar (D-28; docs/modelo/comercial.md, «Entrega», «Alcance»)."""
+
+    def en_alcance_de(self, actor):
+        """Entregas que ``actor`` consulta: el Gerente activo, todas; el Vendedor activo, las de sus contratos; el Agrónomo activo, las de sus invernaderos a cargo
+        (solo para el envasado, COM-05a2); el Transportista activo, las suyas (COM-06a); cualquier otro actor, o una cuenta inactiva, ninguna."""
+        if actor is None or not getattr(actor, "is_active", False):
+            return self.none()
+        rol = rol_de(actor)
+        if rol == Usuario.Rol.GERENTE:
+            return self.all()
+        if rol == Usuario.Rol.VENDEDOR:
+            return self.filter(contrato_entrega__vendedor_id=actor.pk)
+        if rol == Usuario.Rol.AGRONOMO:
+            return self.filter(invernadero__agronomo_id=actor.pk)
+        if rol == Usuario.Rol.TRANSPORTISTA:
+            return self.filter(transportista_id=actor.pk)
+        return self.none()
+
+
+class Entrega(OrdenTrabajo):
+    """Entrega del producto al cliente, con envío (con Transportista) o con retiro en el invernadero (sin Transportista). Hija multitabla de
+    `produccion.OrdenTrabajo` (``tipo_orden = entrega``; D-50, D-66 punto 2), sin `ConCapataz` (D-53). Sale de un único invernadero (el de la orden) y la planifica
+    siempre InfoPonia (``agronomo`` nulo). ``contrato``, ``modalidad_entrega`` y ``direccion_destino`` no están en el modelo: son desnormalizaciones del código (D-66
+    punto 3) que una sola función escribe al crearla (`entregas._crear_entrega`) y no cambian. Su clave es ``ordentrabajo_ptr``."""
+
+    class Modalidad(models.TextChoices):
+        """La misma lista que `CompraVenta.Modalidad`; un suministro siempre es «envío»."""
+
+        RETIRO = "retiro", "Retiro en invernadero"
+        ENVIO = "envio", "Envío a domicilio"
+
+    class Confirmacion(models.TextChoices):
+        """Solo en una entrega de suministro (regla 15 de 8.12); la cambia COM-CNF-ENT (COM-06)."""
+
+        NO_CONFIRMADO = "no_confirmado", "No confirmada"
+        CONFIRMADO = "confirmado", "Confirmada"
+
+    class EstadoDelAviso(models.TextChoices):
+        """Resultado del último correo al cliente (D-66 punto 12)."""
+
+        ENVIADO = "enviado", "Enviado"
+        PENDIENTE_ENVIO = "pendiente_envio", "Pendiente de envío"
+        SIN_CORREO = "sin_correo", "Sin correo"
+
+    # DIFERENCIA CON LA DOCUMENTACIÓN: el modelo lo llama `contrato`, pero choca con la relación inversa `OrigenDocumento.contrato` (la hija `Contrato`); se llama `contrato_entrega`, como `tipo_orden` y `tipo_contrato` (D-81).
+    contrato_entrega = models.ForeignKey(Contrato, on_delete=models.PROTECT, related_name="entregas")
+    modalidad_entrega = models.CharField(max_length=10, choices=Modalidad.choices)
+    # Con envío: la dirección de envío de la venta (R146) o la del detalle de suministro (R125). Con retiro: nula (el destino es el invernadero, R151).
+    direccion_destino = models.ForeignKey(Direccion, null=True, blank=True, on_delete=models.PROTECT, related_name="entregas_con_destino")
+    transportista = models.ForeignKey(Transportista, null=True, blank=True, on_delete=models.PROTECT, related_name="entregas")  # R122
+    estado_confirmacion_cliente = models.CharField(max_length=15, choices=Confirmacion.choices, null=True, blank=True)
+    estado_aviso_cliente = models.CharField(max_length=20, choices=EstadoDelAviso.choices, null=True, blank=True)
+    recordatorio_para = models.DateField(null=True, blank=True)  # la fecha programada por la que ya salió el recordatorio único (postcondición k)
+    aviso_atrasada_para = models.DateField(null=True, blank=True)  # la fecha programada por la que ya salió el aviso de atrasada (PCU, sección 8)
+
+    objects = EntregaQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Entrega"
+        verbose_name_plural = "Entregas"
+        indexes = [
+            models.Index(fields=["transportista"], condition=Q(transportista__isnull=False), name="entrega_transportista_idx"),
+            models.Index(fields=["contrato_entrega"], name="entrega_contrato_idx"),
+        ]
+        constraints = [
+            # Con envío, dirección de destino; con retiro, ninguna (R151: el destino es el invernadero). Cubre también la lista de modalidades.
+            models.CheckConstraint(
+                condition=(Q(modalidad_entrega="envio") & Q(direccion_destino__isnull=False))
+                | (Q(modalidad_entrega="retiro") & Q(direccion_destino__isnull=True)),
+                name="entrega_destino_segun_modalidad",
+            ),
+            # Regla 25 de 8.8: un retiro no tiene transportista.
+            models.CheckConstraint(
+                condition=~Q(modalidad_entrega="retiro") | Q(transportista__isnull=True), name="entrega_retiro_sin_transportista"
+            ),
+            models.CheckConstraint(
+                condition=Q(aviso_atrasada_para__isnull=True) | Q(transportista__isnull=False), name="entrega_atrasada_avisada_con_transportista"
+            ),
+            models.CheckConstraint(
+                condition=Q(estado_confirmacion_cliente__isnull=True) | Q(estado_confirmacion_cliente__in=["no_confirmado", "confirmado"]),
+                name="entrega_confirmacion_valida",
+            ),
+            models.CheckConstraint(
+                condition=Q(estado_aviso_cliente__isnull=True) | Q(estado_aviso_cliente__in=["enviado", "pendiente_envio", "sin_correo"]),
+                name="entrega_aviso_valido",
+            ),
+        ]
+
+    @property
+    def es_retiro(self):
+        """True si la entrega es un retiro en el invernadero (sin transportista)."""
+        return self.modalidad_entrega == self.Modalidad.RETIRO
+
+
+class DetalleEntrega(models.Model):
+    """Una línea de la entrega: satisface un detalle de venta o un período de un detalle de suministro (C4) y dice qué reservas entrega (R150). Su cantidad planificada
+    no se guarda: es la suma de la cantidad cubierta de sus reservas no liberadas (D-66 punto 4). Una línea cuyas reservas quedaron todas liberadas queda en 0 y se da por
+    quitada: nunca se borra. ``cant_entregada`` y ``monto_pagar`` quedan vacíos hasta que COM-06a concreta la entrega."""
+
+    entrega = models.ForeignKey(Entrega, on_delete=models.PROTECT, related_name="lineas")  # R120
+    detalle_venta = models.ForeignKey(DetalleVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="lineas_de_entrega")  # R147
+    detalle_suministro = models.ForeignKey(DetalleSuministro, null=True, blank=True, on_delete=models.PROTECT, related_name="lineas_de_entrega")  # R121
+    fecha_periodo = models.DateField(null=True, blank=True)  # la fecha del período del detalle de suministro; nula en una línea de venta
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)  # al planificar; COM-06a lo recalcula con la fecha real en un suministro
+    cant_entregada = models.PositiveIntegerField(null=True, blank=True)  # nula hasta concretar (COM-06a)
+    monto_pagar = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # nulo hasta concretar (COM-06a)
+    reservas = models.ManyToManyField(ReservaStock, related_name="lineas_de_entrega")  # R150
+
+    class Meta:
+        verbose_name = "Línea de entrega"
+        verbose_name_plural = "Líneas de entrega"
+        constraints = [
+            # C4: exactamente uno de `detalle_venta` y `detalle_suministro`.
+            models.CheckConstraint(
+                condition=(Q(detalle_venta__isnull=False) & Q(detalle_suministro__isnull=True))
+                | (Q(detalle_venta__isnull=True) & Q(detalle_suministro__isnull=False)),
+                name="linea_entrega_venta_o_suministro",
+            ),
+            models.CheckConstraint(
+                condition=(Q(detalle_suministro__isnull=False) & Q(fecha_periodo__isnull=False))
+                | (Q(detalle_suministro__isnull=True) & Q(fecha_periodo__isnull=True)),
+                name="linea_entrega_periodo_segun_detalle",
+            ),
+            models.UniqueConstraint(fields=["entrega", "detalle_venta"], name="linea_entrega_un_detalle_de_venta_por_entrega"),
+            models.UniqueConstraint(
+                fields=["entrega", "detalle_suministro", "fecha_periodo"], name="linea_entrega_un_periodo_por_entrega"
+            ),
+            models.CheckConstraint(condition=Q(precio_unitario__gt=0), name="linea_entrega_precio_positivo"),
+            models.CheckConstraint(
+                condition=Q(cant_entregada__isnull=True) | Q(cant_entregada__gte=0), name="linea_entrega_entregada_no_negativa"
+            ),
+        ]
+
+    def __str__(self):
+        """«Línea de entrega #N» (texto de la auditoría, D-36)."""
+        return f"Línea de entrega #{self.pk}"

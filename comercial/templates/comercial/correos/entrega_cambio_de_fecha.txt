@@ -1,0 +1,14 @@
+{% autoescape off %}Hola, {{ cliente }}:
+
+Cambió la fecha de tu entrega {{ codigo }} en {{ nombre_organizacion }}: ahora es el {{ fecha|date:"d/m/Y" }}.
+
+{% if retiro %}{{ destino }}{% else %}Destino: {{ destino }}{% endif %}
+
+Qué recibís:
+{% for parte in partes %}- {{ parte }}
+{% endfor %}
+Si tenés dudas, escribile a tu vendedor: {{ vendedor.get_full_name }}{% if vendedor.email %} ({{ vendedor.email }}){% endif %}{% if vendedor.telefono %}, teléfono {{ vendedor.telefono }}{% endif %}.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

@@ -17,7 +17,7 @@
 #     30  | Vencer pagos de suministro        | comercial
 #     35  | Cerrar rescisiones de suministros | comercial (COM-03b)
 #     40  | Pre-reservar suministros          | comercial
-#     50  | Planificar entregas               | comercial
+#     50  | Planificar entregas               | comercial (COM-05a1: recupera COM-PNF-ENT y busca transportista)
 #     60  | Pedidos vencidos                  | compras (CMP-03: avisa del vencimiento o cancela «nadie cotizó»)
 #     61  | Recordatorio de validez           | compras (CMP-03: mañana vence la primera cotización elegible)
 #     62  | Pedidos sin cotización elegible   | compras (CMP-03: cancela si ninguna cotización se puede elegir)

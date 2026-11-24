@@ -371,3 +371,37 @@ def camara_alerta(p):
     from maestros.models import Alerta
 
     return Alerta.objects.get(tipo_alerta=camara.TIPO_POR_VENCER, clave_estado=f"partida:{p.pk}")
+
+
+class EntregasTests(Base):
+    """COM-05a1: la extensión 10c de PROD-REG-MRM: quitar las líneas recortadas de su entrega «a realizar» y cancelar la que queda vacía."""
+
+    def test_ext_10c_la_entrega_que_queda_vacia_se_cancela_con_el_motivo_de_la_perdida(self):
+        """10c: la merma que agota la partida reservada deja la línea en 0; la entrega vacía se cancela («Se perdió en cámara el producto reservado.»), se avisa al transportista y la auditoría la nombra."""
+        from comercial.tests.fabricas import entrega, transportista_con_vehiculo
+        from core.models import Notificacion, RegistroAuditoria
+
+        p = partida(self.lote, 30)
+        d = self.venta(30)
+        r = reserva(d, [(p, 30)])
+        transportista = transportista_con_vehiculo(self.e.invernadero, "800")
+        e = entrega(d.compra_venta, [r], transportista=transportista)
+        self.sin_stock_de_lote()
+        self.registrar(p, 30)
+        e.refresh_from_db()
+        self.assertEqual((e.estado_orden, e.motivo_cancelacion), ("cancelada", "Se perdió en cámara el producto reservado."))
+        self.assertEqual(Notificacion.objects.filter(destinatario=transportista, titulo=f"Se canceló la entrega {e.codigo}").count(), 1)
+        registros = [r_ for r_ in RegistroAuditoria.objects.filter(accion="registro_merma") if "entregas_canceladas" in r_.detalle.get("datos", {})]
+        self.assertEqual([r_.detalle["datos"]["entregas_canceladas"] for r_ in registros], [[e.codigo]])
+
+    def test_ext_10c_una_perdida_que_cabe_en_el_stock_libre_no_toca_la_entrega(self):
+        """Sin recorte (10c no aplica) no se quita ninguna línea ni se cancela nada."""
+        from comercial.tests.fabricas import entrega
+
+        p = partida(self.lote, 50)
+        d = self.venta(30)
+        r = reserva(d, [(p, 30)])
+        e = entrega(d.compra_venta, [r])
+        self.registrar(p, 10)
+        e.refresh_from_db()
+        self.assertEqual(e.estado_orden, "a_realizar")

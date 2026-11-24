@@ -364,3 +364,44 @@ class ProdVncCamServicioTests(Base):
         self.assertEqual(camara.enlaces_de_alertas_de_camara(crear_gerente(), [alerta])[alerta.pk].url, url)
         self.assertEqual(camara.enlaces_de_alertas_de_camara(self.e.vendedor, [alerta]), {})
         self.assertEqual(camara.enlaces_de_alertas_de_camara(self.e.agronomo, []), {})
+
+
+class EntregasTests(Base):
+    """COM-05a1: la postcondición d y la extensión 3a de PROD-VNC-CAM: quitar las líneas recortadas de su entrega «a realizar» y cancelar la que queda vacía."""
+
+    def entrega_con(self, *reservas, detalle_=None):
+        from comercial.tests.fabricas import entrega, transportista_con_vehiculo
+
+        transportista = transportista_con_vehiculo(self.e.invernadero, "800")
+        return transportista, entrega(detalle_.compra_venta, list(reservas), transportista=transportista)
+
+    def test_post_d_3a_la_entrega_que_queda_vacia_se_cancela_y_se_avisa_al_transportista(self):
+        """3a: la reserva recortada a cero deja la línea en 0; la entrega «a realizar» vacía se cancela con el motivo «Se venció en cámara el producto reservado.», se avisa al transportista y la auditoría la nombra."""
+        p = self.vencida(30)
+        d = self.venta(30)
+        r = reserva(d, [(p, 30)])
+        transportista, e = self.entrega_con(r, detalle_=d)
+        self.sin_stock_de_lote()
+        self.correr()
+        e.refresh_from_db()
+        self.assertEqual((e.estado_orden, e.motivo_cancelacion), ("cancelada", "Se venció en cámara el producto reservado."))
+        self.assertEqual(e.lineas.count(), 1)
+        self.assertEqual(Notificacion.objects.filter(destinatario=transportista, titulo=f"Se canceló la entrega {e.codigo}").count(), 1)
+        datos = RegistroAuditoria.objects.get(accion="vencimiento_partida").detalle["datos"]
+        self.assertEqual(datos["entregas_canceladas"], [e.codigo])
+        verificar_invariantes_de_reservas()
+
+    def test_post_d_3a_la_entrega_que_conserva_otra_reserva_no_se_cancela(self):
+        """3a: si la entrega conserva producto de otra partida vigente, sigue «a realizar» (solo se recortó una parte) y su peso baja a lo que queda."""
+        from decimal import Decimal
+
+        from comercial.servicios import entregas
+
+        vencida, vigente = self.vencida(30), self.vigente(20)
+        d = self.venta(50)
+        transportista, e = self.entrega_con(reserva(d, [(vencida, 30)]), reserva(d, [(vigente, 20)]), detalle_=d)
+        self.sin_stock_de_lote()
+        self.correr()
+        e.refresh_from_db()
+        self.assertEqual(e.estado_orden, "a_realizar")
+        self.assertEqual(entregas.peso_de_entregas([e.pk])[e.pk], Decimal("3.00"))

@@ -629,3 +629,141 @@ def verificar_invariantes_de_suministros():
             problemas.append(f"{d}: vigente con fecha de fin del detalle y sin rescisión acordada")
     if problemas:
         raise AssertionError("Invariantes de suministros rotos: " + "; ".join(problemas))
+
+
+# ---- COM-05a1: entregas ----
+
+
+def reserva_lista(detalle_, lote_, cantidad, *, fecha_entrega=None, detalle_suministro=None):
+    """Una `ReservaStock` «lista para entrega» de ``cantidad`` plantas de una partida nueva de ``lote_`` (sin cosecha): lo que deja el stock de cámara. Para un período,
+    ``detalle_`` es ``None`` y se pasa ``detalle_suministro`` con ``fecha_entrega``."""
+    partida_ = partida_cosechada(lote_, cantidad)
+    return reserva(detalle_, [(partida_, cantidad)], fecha_entrega=fecha_entrega, detalle_suministro=detalle_suministro)
+
+
+def transportista_con_vehiculo(invernadero, capacidad="800", *, email=None, en_ruta=False, tipo="camioneta", activo=True, con_vehiculo=True):
+    """Un Transportista del ``invernadero`` (`TransportistaInvernadero`) con un vehículo activo de ``capacidad`` kg (``en_ruta=True`` lo deja con la ruta iniciada hoy;
+    ``con_vehiculo=False``, sin vehículo; ``activo=False``, con la cuenta inactiva). Devuelve el `Transportista`; el vehículo es ``transportista.vehiculo``."""
+    from maestros.tests.fabricas import asignar_transportista, crear_transportista
+
+    numero = next(_secuencia)
+    transportista = crear_transportista(email=email or f"transportista{numero}@infoponia.com", nombre=f"Trans{numero}", apellido="Porte", activo=activo)
+    asignar_transportista(transportista, invernadero)
+    if con_vehiculo:
+        vehiculo(capacidad=capacidad, transportista=transportista, en_ruta_hoy=en_ruta, tipo=tipo)
+    return transportista
+
+
+def entrega(contrato, reservas, *, fecha=None, transportista=None, estado="a_realizar", direccion=None, precio=None, aviso=None):
+    """Una `Entrega` de ``contrato`` (una `CompraVenta` o un `Suministro`) creada directo, sin avisos ni alertas, con una línea por detalle de venta (o por período) de
+    ``reservas`` y esas reservas asociadas (R150). El invernadero es el de las reservas. ``fecha`` es la programada (por defecto, la prometida; una pasada baja
+    ``fecha_creacion_orden`` para cumplir la restricción de la orden). ``estado`` puede ser «concretada» o «cancelada». Escribe los datos copiados igual que
+    `entregas._crear_entrega` (D-66 punto 3)."""
+    from comercial.models import DetalleEntrega, Entrega
+    from comercial.servicios import calendario
+    from produccion.servicios import ordenes
+
+    hoy = timezone.localdate()
+    reservas = list(reservas)
+    es_venta = contrato.tipo_contrato == "compra_venta"
+    prometida = contrato.fecha_pactada_venta if es_venta else reservas[0].fecha_entrega_reserva
+    fecha = fecha or max(prometida, hoy)
+    if es_venta:
+        modalidad = contrato.modalidad_entrega
+        destino = contrato.direccion_envio if modalidad == "envio" else None
+    else:
+        modalidad = "envio"
+        destino = direccion or reservas[0].detalle_suministro.direccion
+    extra = {}
+    if estado != "a_realizar":
+        extra["fecha_resolucion_orden"] = hoy
+    if estado == "cancelada":
+        extra["motivo_cancelacion"] = "Motivo de prueba"
+    nueva = Entrega.objects.create(
+        tipo_orden="entrega",
+        numero=ordenes.siguiente_numero(),
+        fecha_creacion_orden=min(hoy, fecha),
+        fecha_programada_orden=fecha,
+        estado_orden=estado,
+        invernadero=reservas[0].invernadero,
+        contrato_entrega_id=contrato.pk,
+        modalidad_entrega=modalidad,
+        direccion_destino=destino,
+        transportista=transportista,
+        estado_confirmacion_cliente=None if es_venta else "no_confirmado",
+        estado_aviso_cliente=aviso,
+        **extra,
+    )
+    grupos = {}
+    for r in reservas:
+        clave = ("v", r.detalle_venta_id) if r.detalle_venta_id else ("s", r.detalle_suministro_id, r.fecha_entrega_reserva)
+        grupos.setdefault(clave, []).append(r)
+    for clave, rs in grupos.items():
+        if clave[0] == "v":
+            detalle_venta_ = rs[0].detalle_venta
+            linea = DetalleEntrega.objects.create(entrega=nueva, detalle_venta=detalle_venta_, precio_unitario=precio or detalle_venta_.precio_unitario_de_venta)
+        else:
+            detalle_ = rs[0].detalle_suministro
+            linea = DetalleEntrega.objects.create(
+                entrega=nueva, detalle_suministro=detalle_, fecha_periodo=clave[2], precio_unitario=precio or calendario.precio_en(detalle_, fecha)
+            )
+        linea.reservas.set(rs)
+    return nueva
+
+
+def verificar_invariantes_de_entregas():
+    """Invariantes de `docs/modelo/comercial.md`, «Entrega» y «DetalleEntrega» (COM-05a1), los que la base no puede vigilar: se llama al final de cada prueba que
+    crea entregas. Verifica que (1) el contrato, la modalidad y el destino de cada entrega coinciden con los de sus líneas; (2) la confirmación del cliente es no nula
+    si y solo si el contrato es un suministro; (3) todas las reservas de sus líneas son del invernadero de origen; (4) cada línea tiene al menos una reserva, del mismo
+    detalle y, en un suministro, de la fecha de su período; (5) una reserva tiene a lo sumo una línea en una entrega no cancelada (regla 4 de 8.8); (6) la entrega no
+    tiene Agrónomo planificador. Lanza `AssertionError` con lo que encuentra."""
+    from collections import defaultdict
+
+    from comercial.models import CompraVenta, DetalleEntrega, Entrega
+
+    problemas = []
+    for e in Entrega.objects.select_related("contrato_entrega").order_by("pk"):
+        venta = CompraVenta.objects.filter(pk=e.contrato_entrega_id).first()
+        es_suministro = venta is None
+        if e.agronomo_id is not None:
+            problemas.append(f"{e.codigo}: con Agrónomo planificador")
+        if (e.estado_confirmacion_cliente is not None) != es_suministro:
+            problemas.append(f"{e.codigo}: confirmación del cliente {e.estado_confirmacion_cliente!r} con un contrato de {'suministro' if es_suministro else 'compra-venta'}")
+        if venta is not None:
+            if e.modalidad_entrega != venta.modalidad_entrega:
+                problemas.append(f"{e.codigo}: modalidad distinta de la de {venta.codigo}")
+            if e.modalidad_entrega == "envio" and e.direccion_destino_id != venta.direccion_envio_id:
+                problemas.append(f"{e.codigo}: destino distinto de la dirección de envío de {venta.codigo}")
+            if e.modalidad_entrega == "retiro" and e.invernadero_id != venta.invernadero_retiro_id:
+                problemas.append(f"{e.codigo}: retiro en un invernadero que no es el de {venta.codigo}")
+        elif e.modalidad_entrega != "envio":
+            problemas.append(f"{e.codigo}: un suministro siempre es con envío")
+        for linea in e.lineas.select_related("detalle_venta", "detalle_suministro").order_by("pk"):
+            if linea.detalle_venta_id:
+                if linea.detalle_venta.compra_venta_id != e.contrato_entrega_id:
+                    problemas.append(f"{e.codigo}: línea #{linea.pk} de otro contrato")
+            else:
+                if linea.detalle_suministro.suministro_id != e.contrato_entrega_id:
+                    problemas.append(f"{e.codigo}: línea #{linea.pk} de otro contrato")
+                if linea.detalle_suministro.direccion_id != e.direccion_destino_id:
+                    problemas.append(f"{e.codigo}: línea #{linea.pk} con otra dirección de destino")
+            reservas = list(linea.reservas.all())
+            if not reservas:
+                problemas.append(f"{e.codigo}: línea #{linea.pk} sin reservas")
+            for r in reservas:
+                if r.invernadero_id != e.invernadero_id:
+                    problemas.append(f"{e.codigo}: línea #{linea.pk} con la reserva #{r.pk} de otro invernadero")
+                if linea.detalle_venta_id and r.detalle_venta_id != linea.detalle_venta_id:
+                    problemas.append(f"{e.codigo}: línea #{linea.pk} con la reserva #{r.pk} de otro detalle")
+                if linea.detalle_suministro_id and (r.detalle_suministro_id != linea.detalle_suministro_id or r.fecha_entrega_reserva != linea.fecha_periodo):
+                    problemas.append(f"{e.codigo}: línea #{linea.pk} con la reserva #{r.pk} de otro detalle o de otro período")
+    vivas = defaultdict(list)
+    for entrega_id, reserva_id in DetalleEntrega.objects.exclude(entrega__estado_orden="cancelada").values_list("entrega_id", "reservas"):
+        if reserva_id is not None:
+            vivas[reserva_id].append(entrega_id)
+    for reserva_id, entregas_ in vivas.items():
+        if len(entregas_) > 1:
+            problemas.append(f"Reserva #{reserva_id}: en {len(entregas_)} entregas no canceladas")
+    if problemas:
+        raise AssertionError("Invariantes de entregas rotos: " + "; ".join(problemas))
+

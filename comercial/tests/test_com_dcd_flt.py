@@ -258,7 +258,10 @@ class ComDcdFltServicioTests(Base):
             faltantes.registrar_decision(None, {d.pk: ACEPTAR}, {d.pk: 30}, vendedor=self.e.vendedor, venta_id=venta.pk)
         d.refresh_from_db()
         self.assertEqual(d.estado_detalle_venta, "confirmado")
-        self.assertEqual((Notificacion.objects.filter(destinatario=self.e.vendedor).count(), envio.call_count), (0, 0))
+        # COM-05a1: la venta que queda «abierta» y lista programa su entrega y el Vendedor recibe su aviso de planificación; lo que no debe haber es un aviso de falta de correo ni un correo al cliente.
+        titulos = list(Notificacion.objects.filter(destinatario=self.e.vendedor).values_list("titulo", flat=True))
+        self.assertEqual(envio.call_count, 0)
+        self.assertTrue(all(t.startswith(("Entrega sin transportista", "Retiro planificado")) for t in titulos), titulos)
         registro = RegistroAuditoria.objects.get(accion="decision_faltante")
         self.assertEqual((registro.usuario_id, registro.rol), (self.e.vendedor.pk, "vendedor"))
 
@@ -528,3 +531,19 @@ class ComDcdFltConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
         self.assertIn("enlace_no_sirve", codigos_del_rechazo(rechazos[0]))
         self.assertEqual(EnlaceCliente.objects.get(pk=self.enlace.pk).estado, "reemplazado")
+
+
+class PlanificacionDeLaEntregaTests(Base):
+    """COM-05a1: el paso 7 y la postcondición m de COM-DCD-FLT (planificar la entrega de la venta que queda «abierta» y lista), con `on_commit`."""
+
+    def test_ext_7_la_venta_que_queda_abierta_y_lista_programa_su_entrega_despues_de_confirmar(self):
+        """Paso 7: la decisión que deja la venta «abierta» con todas sus reservas «lista para entrega» (la cámara que la cubría) dispara COM-PNF-ENT después de confirmar."""
+        from comercial.models import Entrega
+
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.decidir()
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        entrega = Entrega.objects.get()
+        self.assertEqual(entrega.contrato_entrega_id, self.venta.pk)

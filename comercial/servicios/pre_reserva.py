@@ -21,7 +21,7 @@ from django.db import transaction
 from django.urls import reverse
 
 from comercial.models import AlertaComercial, DetalleReserva, DetalleSuministro, ReservaStock, Suministro
-from comercial.servicios import calendario, stock_maduro
+from comercial.servicios import calendario, entregas, stock_maduro
 from comercial.servicios.stock_maduro import Periodo
 from core import notificaciones
 from core.models import Notificacion, RegistroAuditoria, Usuario, rol_de
@@ -202,6 +202,8 @@ def _pre_reservar_periodo(detalle_id, fecha):
                     }
                 },
             )
+        if reservas:
+            entregas.programar_para_reservas([r.pk for r in reservas])  # lo que quedó todo de cámara se planifica después de confirmar (el paso 50 corre después igual)
         return SimpleNamespace(reservas=len(reservas), alertas_creadas=creadas, alertas_resueltas=resueltas, sin_cubrir=final)
 
 

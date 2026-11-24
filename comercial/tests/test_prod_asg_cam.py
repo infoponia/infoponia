@@ -163,7 +163,7 @@ class ProdAsgCamServicioTests(Base):
         with override_settings(CORREO_CONFIGURADO=True), self.captureOnCommitCallbacks(execute=True):
             resultado = self.asignar(p)
         d.refresh_from_db()
-        self.assertEqual((d.estado_detalle_venta, resultado[0].detalles_reabiertos, mail.outbox), ("abierto", [], []))
+        self.assertEqual((d.estado_detalle_venta, resultado[0].detalles_reabiertos, [m for m in mail.outbox if "faltante" in m.subject]), ("abierto", [], []))
 
     def test_ext_7b_si_la_venta_conserva_otro_detalle_pendiente_sigue_pendiente(self):
         """Extensión 7b: el detalle cubierto pasa a «abierto» pero la venta sigue en «pendiente de decisión»: le queda otro detalle pendiente."""
@@ -216,7 +216,7 @@ class ProdAsgCamServicioTests(Base):
         self.pendiente(40)
         with override_settings(CORREO_CONFIGURADO=True), self.captureOnCommitCallbacks(execute=True):
             self.asignar(p)
-        (correo,) = mail.outbox
+        (correo,) = [m for m in mail.outbox if "faltante" in m.subject]  # COM-05a1: cambiada: ahora también se planifica la entrega (aviso y correo propios); se mira solo lo de este caso de uso
         self.assertEqual(correo.to, [self.e.cliente.email_cliente])
 
     def test_ext_11a_cliente_sin_correo_el_vendedor_recibe_el_aviso_de_que_se_lo_informe(self):
@@ -229,7 +229,7 @@ class ProdAsgCamServicioTests(Base):
         with override_settings(CORREO_CONFIGURADO=True), self.captureOnCommitCallbacks(execute=True):
             self.asignar(p)
         self.assertEqual(mail.outbox, [])
-        aviso = Notificacion.objects.get(destinatario_id=self.e.vendedor.pk)
+        aviso = Notificacion.objects.get(destinatario_id=self.e.vendedor.pk, titulo__startswith="Stock de cámara")  # COM-05a1: cambiada: ahora también se planifica la entrega (aviso y correo propios); se mira solo lo de este caso de uso
         self.assertIn("dejó de estar pendiente", aviso.detalle)
         self.assertIn("no tiene correo", aviso.detalle)
 
@@ -470,3 +470,49 @@ class ProdAsgCamServicioTests(Base):
         pasos = {p.orden: p.codigo for p in pasos_diarios()}
         self.assertEqual(pasos[25], "reasignar_camara")
         self.assertEqual(sorted(o for o in pasos if o in (20, 25, 35, 40)), [20, 25, 35, 40])
+
+
+class PlanificacionDeLaEntregaTests(Base):
+    """COM-05a1: el paso 9 y la postcondición e de PROD-ASG-CAM (planificar la entrega) y la condición «sin línea en una entrega no cancelada» de los candidatos."""
+
+    def test_post_e_paso_9_la_venta_que_queda_lista_programa_su_entrega_despues_de_confirmar(self):
+        """Paso 9: la asignación que deja lista una venta dispara COM-PNF-ENT con `on_commit`."""
+        from comercial.models import Entrega
+
+        p = partida(self.lote, 40)
+        self.venta(40)
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.asignar(p)
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        self.assertEqual(Entrega.objects.count(), 1)
+
+    def test_regla_candidato_un_detalle_con_linea_en_una_entrega_a_realizar_ya_no_es_candidato(self):
+        """Regla «Candidato»: un detalle de venta con alguna línea en una entrega «a realizar» o «concretada» no es candidato (la cámara no le agrega más)."""
+        from comercial.tests.fabricas import entrega, reserva_lista
+
+        d = self.venta(40)
+        entrega(d.compra_venta, [reserva_lista(d, self.lote, 10)])
+        self.asignar(partida(self.lote, 100))
+        self.assertEqual(ReservaStock.objects.filter(detalle_venta=d).count(), 1)
+
+    def test_regla_candidato_un_detalle_con_su_entrega_cancelada_si_es_candidato(self):
+        """Regla «Candidato»: una entrega cancelada no cuenta (la línea queda de historial): el detalle vuelve a ser candidato."""
+        from comercial.tests.fabricas import entrega, reserva_lista
+
+        d = self.venta(40)
+        entrega(d.compra_venta, [reserva_lista(d, self.lote, 10)], estado="cancelada")
+        self.asignar(partida(self.lote, 100))
+        self.assertEqual(ReservaStock.objects.filter(detalle_venta=d).count(), 2)
+
+    def test_regla_candidato_un_periodo_con_linea_en_una_entrega_ya_no_es_candidato(self):
+        """Lo mismo para un período de suministro: con una línea en una entrega «a realizar» no es candidato."""
+        from comercial.tests.fabricas import detalle_suministro, entrega, reserva_lista, suministro
+
+        s = suministro(self.e)
+        ds = detalle_suministro(s, self.e.variedad, cantidad=40, primera_en_dias=3)
+        fecha = ds.fecha_primer_entrega
+        entrega(s, [reserva_lista(None, self.lote, 10, fecha_entrega=fecha, detalle_suministro=ds)])
+        self.asignar(partida(self.lote, 100))
+        self.assertEqual(ReservaStock.objects.filter(detalle_suministro=ds, fecha_entrega_reserva=fecha).count(), 1)

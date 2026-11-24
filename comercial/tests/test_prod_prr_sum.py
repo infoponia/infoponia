@@ -564,3 +564,28 @@ class EnlaceDeAlertaTests(BaseDePrereserva):
         self.client.force_login(self.e.agronomo)
         respuesta = self.client.get(reverse("alertas:ir", args=[self.alerta.pk]))
         self.assertRedirects(respuesta, reverse("maestros:invernadero", args=[self.e.invernadero.pk]))
+
+
+class PlanificacionDeLaEntregaTests(BaseDePrereserva):
+    """COM-05a1 (D-66 punto 5): lo que el paso 40 deja todo de cámara programa su entrega con `on_commit`; el paso 50 corre después igual."""
+
+    def test_post_los_periodos_pre_reservados_de_camara_programan_su_entrega_despues_de_confirmar(self):
+        """Por cada período pre-reservado que quedó listo (todo de cámara), una entrega, después de confirmar."""
+        from comercial.models import Entrega
+        from comercial.tests.fabricas import partida_cosechada
+
+        partida_cosechada(self.lote, 100)
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.correr()
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        self.assertEqual(Entrega.objects.filter(contrato_entrega_id=self.s.pk).count(), 2)
+
+    def test_regla_lo_pre_reservado_con_cosecha_no_programa_nada(self):
+        """Una pre-reserva con producto todavía en pie («activa») no deja nada listo: no hay entrega."""
+        from comercial.models import Entrega
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.correr()
+        self.assertEqual(Entrega.objects.count(), 0)

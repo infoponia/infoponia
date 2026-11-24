@@ -34,7 +34,7 @@ from django.db import transaction
 from django.http import Http404
 
 from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
-from comercial.servicios import calendario, faltantes, stock_maduro
+from comercial.servicios import calendario, entregas, faltantes, stock_maduro
 from comercial.servicios import camara as camara_comercial  # PROD-ASG-CAM (COM-04b); `camara` es el núcleo físico de `produccion`
 from comercial.servicios.stock_maduro import Periodo
 from core import notificaciones
@@ -1122,6 +1122,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
             if sin_cubrir:
                 camino = faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else detalle_actual, sin_cubrir, origen=actor)
                 enlace_nuevo = camino.enlace  # COM-04c: el enlace del cliente va a la auditoría de quien lo crea
+        entregas.programar_para_reservas([reserva.pk, *(r.pk for r in (asignacion.reservas if asignacion is not None else []))])  # n (D-66 punto 5): si la reserva quedó lista, con ella la venta o el período
         reservado_total = sum(p.linea.cantidad_reservada for p in planes)
         cosechado_total = sum(p.cosechada for p in planes)
         perdido_total = sum(p.total_perdidas for p in planes)
@@ -1310,6 +1311,8 @@ def _cancelar_en_transaccion(actor, cosecha, motivo, *, recubrir):
             camino = faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else DetalleVenta.objects.get(pk=contrato.detalle.pk), sin_cubrir, origen=actor)
             if camino.enlace is not None:
                 enlaces_nuevos.append(camino.enlace)
+    if asignacion is not None:
+        entregas.programar_para_reservas([r.pk for r in asignacion.reservas])  # i: lo que PROD-ASG-STK volvió a cubrir con stock listo se planifica después de confirmar
     return CancelacionDeCosecha(cosecha, reserva, lineas, cubierto, asignacion, sin_cubrir, [], enlaces_nuevos)
 
 
