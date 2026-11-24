@@ -130,8 +130,8 @@ class IotCnsTacServicioTests(fabricas.ConCatalogoIot, TestCase):
         self.assertEqual((cantidades["Extractor"], cantidades["Otro"], cantidades["Bomba"]), (2, 1, 0))
 
     def test_regla_2_el_listado_hace_pocas_consultas(self):
-        """Una consulta por cosa, no una por tipo ni por acción: los tipos, sus acciones y los comandos pendientes (desde IOT-05, ``acciones_en_uso`` consulta comandos reales: antes eran 2)."""
-        with self.assertNumQueries(3):
+        """Una consulta por cosa, no una por tipo ni por acción: los tipos, sus acciones y los comandos pendientes (desde IOT-05, ``acciones_en_uso`` consulta comandos reales: antes eran 2; desde IOT-06 consulta también las reglas activas: una consulta más, 4 en total)."""
+        with self.assertNumQueries(4):
             for tipo in tipos.listar_tipos(self.gerente):
                 [(a.comando.codigo, a.comando.capacidad.nombre, a.en_uso) for a in tipo.acciones_activas]
 

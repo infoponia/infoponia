@@ -31,10 +31,11 @@ class IotCnsRglServicioTests(ConEscenaDeReglas, TestCase):
     def setUp(self):
         super().setUp()
         self.regla = self.alta()
+        self.crespa = variedad_con_semilla(nombre="Crespa")
 
     def umbral(self):
         """Un umbral efectivo para «Norte» (para que la regla no avise «sin umbral»)."""
-        return variedades_presentes_de_prueba({self.norte.pk: {variedad_con_semilla(nombre="Crespa").pk}})
+        return variedades_presentes_de_prueba({self.norte.pk: {self.crespa.pk}})
 
     def fila(self, regla=None):
         with self.umbral():
@@ -51,10 +52,11 @@ class IotCnsRglServicioTests(ConEscenaDeReglas, TestCase):
         for otro in (crear_tecnico(), crear_capataz()):
             with self.assertRaises(PermissionDenied):
                 reglas.buscar_reglas(otro, self.norte.pk)
+        ajeno = crear_agronomo("otro@infoponia.com")
         with self.assertRaises(Http404):
-            reglas.buscar_reglas(crear_agronomo("otro@infoponia.com"), self.norte.pk)
+            reglas.buscar_reglas(ajeno, self.norte.pk)
         with self.assertRaises(Http404):
-            reglas.ficha_de_regla(crear_agronomo("otro@infoponia.com"), self.regla.pk)
+            reglas.ficha_de_regla(ajeno, self.regla.pk)
 
     def test_regla_1_el_gerente_consulta_todos_los_invernaderos(self):
         """Regla 1 (la de IOT-CNS-HDW): el Gerente consulta todos, aunque haya Agrónomo activo."""

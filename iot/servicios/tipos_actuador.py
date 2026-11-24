@@ -23,7 +23,7 @@ from django.shortcuts import get_object_or_404
 
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from iot.catalogo import RANGO_DEL_PORCENTAJE, UNIDAD_PORCENTAJE, UNIDADES_CON_MINIMO_CERO, UNIDADES_POR_COMANDO
-from iot.models import Accion, Actuador, Capacidad, Comando, ComandoCatalogo, TipoActuador
+from iot.models import Accion, Actuador, Capacidad, Comando, ComandoCatalogo, ReglaActuacion, TipoActuador
 from iot.servicios.compatibilidad import recalcular_compatibilidad
 from maestros.models import Invernadero
 from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general, _tiene_contenido
@@ -288,6 +288,9 @@ def acciones_en_uso(tipo):
     pendientes = Comando.objects.filter(accion__tipo_actuador__in=tipos, estado_comando=Comando.Estado.PENDIENTE).order_by("pk")
     for accion_id, pk, valor in pendientes.values_list("accion_id", "pk", "valor_comando"):
         usos.setdefault(accion_id, []).append(UsoDeAccion(f"CMD-{pk}", valor))
+    activas = ReglaActuacion.objects.filter(accion__tipo_actuador__in=tipos, estado_regla="activa").order_by("pk")
+    for accion_id, pk, valor in activas.values_list("accion_id", "pk", "aplicar_valor"):
+        usos.setdefault(accion_id, []).append(UsoDeAccion(f"RGL-{pk}", valor))
     return usos
 
 

@@ -234,7 +234,8 @@ class IotAltRglServicioTests(ConEscenaDeReglas, TestCase):
         datos = reglas.datos_para_regla(self.laura, self.norte.pk, self.ventilador.pk)
         self.assertEqual({s.pk for s in datos.sensores}, {self.temp.pk, self.hum.pk})
         self.assertEqual({a.pk for a in datos.actuadores}, {self.ventilador.pk, self.ventana.pk})
-        self.assertEqual([a.pk for a in datos.acciones], [self.encender.pk])
+        # El tipo «Ventilador» trae también «Fijar velocidad»: solo falta la acción marcada incompatible con el nodo.
+        self.assertEqual({a.nombre_accion for a in datos.acciones}, {"Encender", "Fijar velocidad"})
 
     def test_datos_para_regla_ofrece_los_sensores_de_un_sector_fuera_de_servicio(self):
         """«Lo que difiere del prototipo»: el CU no excluye esos sensores; se ofrecen y la situación avisa que no se evalúan."""
