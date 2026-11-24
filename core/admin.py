@@ -1,4 +1,4 @@
-# Admin de Usuario y de los seis roles. Solo existe en desarrollo (SEG-18, D-30): en producción la
+# Admin de Usuario y de los siete roles (el Contador lo suma D-85). Solo existe en desarrollo (SEG-18, D-30): en producción la
 # administración de cuentas se hace con las pantallas propias de InfoPonia (D-16), que aplican el alcance,
 # la contraseña temporal, la auditoría y los invariantes de SEG-15, y que este admin no aplica.
 
@@ -6,7 +6,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
 
-from .models import Agronomo, Capataz, Gerente, Tecnico, Transportista, Usuario, Vendedor
+from .models import Agronomo, Capataz, Contador, Gerente, Tecnico, Transportista, Usuario, Vendedor
 
 
 class UsuarioCreationForm(UserCreationForm):
@@ -49,7 +49,7 @@ class UsuarioAdmin(UserAdmin):
 
 
 class RolAdmin(UserAdmin):
-    """Admin común a los seis roles: alta, modificación y baja (desactivar) con
+    """Admin común a los siete roles: alta, modificación y baja (desactivar) con
     contraseña hasheada. `rol` no aparece como campo porque lo fija `save()` del modelo."""
 
     form = UsuarioChangeForm
@@ -79,3 +79,4 @@ admin.site.register(Capataz, RolAdmin)
 admin.site.register(Vendedor, RolAdmin)
 admin.site.register(Transportista, RolAdmin)
 admin.site.register(Tecnico, RolAdmin)
+admin.site.register(Contador, RolAdmin)  # D-85

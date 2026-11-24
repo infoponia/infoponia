@@ -243,3 +243,99 @@ class CmpBajPrvEnlacesTests(ConDatosDeInventario, TestCase):
         self.baja()
         Proveedor.objects.filter(pk=self.proveedor.pk).update(estado_proveedor="activo")
         self.assertEqual(self.estado(self.enlace), "anulado")
+
+from django.db import connection  # noqa: E402
+from django.test.utils import CaptureQueriesContext  # noqa: E402
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-03, paso 4: la precondición c de CMP-BAJ-PRV (H22; disparador «Cuando se programen CMP-02a, CMP-02b, CMP-03 y CMP-05», punto 3). ``impedimentos_de_baja``
+# suma, por cada orden **no terminada** (pendiente de aprobación, aprobada o parcialmente recibida) con una línea de una cotización de ese proveedor, un
+# impedimento con el código ``orden_no_terminada``. Es distinto del impedimento del insumo ``orden_de_compra_aprobada`` (``compras/servicios/registrantes.py``).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.tests.fabricas import orden_de  # noqa: E402
+
+
+class OrdenNoTerminadaImpideLaBajaTests(ConDatosDeInventario, TestCase):
+    """CMP-BAJ-PRV precondición c y regla 2: «órdenes de compra no terminadas: pendiente de aprobación, aprobada o parcialmente recibida»."""
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.ana, self.norte = crear_agronomo_con_invernadero("Norte")
+        self.iin = existencia(insumo("Lechuga", unidad="unidad"), self.norte, minimo=0, precio="10.00")
+        self.proveedor = proveedor("Semillas del Sur S. A.", n=1)
+        self.otro = proveedor("Viveros del Este S. R. L.", n=2, email="info@este.com")
+
+    def orden(self, estado="pendiente_aprobacion", proveedores=None):
+        """Una orden en ``estado`` con una línea de cada proveedor de ``proveedores`` (por omisión, el del setUp)."""
+        pedido = armar_pedido(self.ana)
+        detalle = detalle_de_pedido(pedido, self.iin, cantidad="10")
+        cotizaciones = [cotizacion_de(pedido, p, [(detalle, 5, "50.00", 2)]) for p in (proveedores or [self.proveedor])]
+        return orden_de(pedido, cotizaciones, estado=estado, gerente=self.gerente, motivo="No hay presupuesto." if estado == "rechazada" else "")
+
+    def test_pre_c_una_orden_no_terminada_impide_la_baja_con_su_codigo_y_como_resolverlo(self):
+        """Precondición c: pendiente de aprobación, aprobada y parcialmente recibida impiden; el texto nombra la orden y su estado y dice cómo resolverlo."""
+        ordenes_ = [self.orden(estado) for estado in ("pendiente_aprobacion", "aprobada", "parcialmente_recibida")]
+        impedimentos = proveedores.impedimentos_de_baja(self.proveedor)
+        self.assertEqual([i.codigo for i in impedimentos], ["orden_no_terminada"] * 3)
+        for orden in ordenes_:
+            (propio,) = [i for i in impedimentos if str(orden) in i.texto]
+            self.assertIn(orden.get_estado_orden_compra_display().lower(), propio.texto.lower())
+            self.assertTrue(propio.como_resolver)
+
+    def test_pre_c_una_orden_terminada_no_impide(self):
+        """Precondición c: rechazada, recibida y recibida con faltante ya terminaron (el pago pendiente lo trata CMP-05)."""
+        for estado in ("rechazada", "recibida", "recibida_con_faltante"):
+            self.orden(estado)
+        self.assertEqual(proveedores.impedimentos_de_baja(self.proveedor), [])
+
+    def test_pre_c_una_orden_de_otro_proveedor_no_impide(self):
+        """Precondición c: solo cuentan las órdenes con líneas de este proveedor."""
+        self.orden(proveedores=[self.otro])
+        self.assertEqual(proveedores.impedimentos_de_baja(self.proveedor), [])
+        self.assertEqual([i.codigo for i in proveedores.impedimentos_de_baja(self.otro)], ["orden_no_terminada"])
+
+    def test_pre_c_una_orden_con_dos_proveedores_impide_la_baja_de_cada_uno(self):
+        """Una orden puede incluir varios proveedores (regla 13 de 8.16): impide la baja de cada uno de ellos, una sola vez."""
+        self.orden(proveedores=[self.proveedor, self.otro])
+        for p in (self.proveedor, self.otro):
+            self.assertEqual([i.codigo for i in proveedores.impedimentos_de_baja(p)], ["orden_no_terminada"])
+
+    def test_regla_5_un_pedido_en_cotizacion_o_una_cotizacion_no_elegida_no_impide(self):
+        """Regla 5 de CMP-BAJ-PRV: un pedido «en cotización» con su cotización «propuesta», o una cotización descartada, no impiden la baja."""
+        pedido = armar_pedido(self.ana)
+        detalle = detalle_de_pedido(pedido, self.iin, cantidad="10")
+        cotizacion_de(pedido, self.proveedor, [(detalle, 5, "50.00", 2)])
+        otro_pedido = armar_pedido(self.ana)
+        otro_detalle = detalle_de_pedido(otro_pedido, self.iin, cantidad="10")
+        cotizacion_de(otro_pedido, self.proveedor, [(otro_detalle, 5, "50.00", 2)], estado="descartada")
+        self.assertEqual(proveedores.impedimentos_de_baja(self.proveedor), [])
+
+    def test_baja_proveedor_con_una_orden_no_terminada_se_rechaza_y_no_cambia_nada(self):
+        """Precondición c y regla 2: ``baja_proveedor`` informa el impedimento (``baja_con_impedimentos``) y el proveedor sigue «activo»; sin registro de auditoría."""
+        self.orden("aprobada")
+        with self.assertRaises(ErrorDeCompras) as contexto:
+            proveedores.baja_proveedor(self.gerente, self.proveedor.pk)
+        self.assertEqual(contexto.exception.codigo, "baja_con_impedimentos")
+        self.assertEqual([i.codigo for i in contexto.exception.datos["impedimentos"]], ["orden_no_terminada"])
+        self.proveedor.refresh_from_db()
+        self.assertEqual(self.proveedor.estado_proveedor, "activo")
+        self.assertFalse(RegistroAuditoria.objects.filter(accion=BAJA).exists())
+
+    def test_baja_proveedor_con_la_orden_rechazada_se_puede(self):
+        """Con la orden «rechazada» (terminada) la baja procede: el historial se conserva."""
+        self.orden("rechazada")
+        self.assertEqual(proveedores.baja_proveedor(self.gerente, self.proveedor.pk).estado_proveedor, "inactivo")
+
+    def test_sin_consultas_por_orden(self):
+        """Sin consultas por fila: la misma cantidad de consultas con 1 o con 4 órdenes."""
+        self.orden()
+        with CaptureQueriesContext(connection) as con_una:
+            proveedores.impedimentos_de_baja(self.proveedor)
+        for _ in range(3):
+            self.orden()
+        with CaptureQueriesContext(connection) as con_cuatro:
+            proveedores.impedimentos_de_baja(self.proveedor)
+        self.assertEqual(len(con_cuatro), len(con_una))

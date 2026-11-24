@@ -30,9 +30,9 @@ Copiados sin cambios de `docs/estado.md`, «Temas abiertos», el 18/11/2026. Act
 | Tema | Ahora está en |
 |---|---|
 | Reparto final de apps | D-37 |
-| Tope de pedidos de recuperación de contraseña | `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
-| Tope de intentos de identificación | `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
-| `DEBUG` apagado por defecto (Render ya tiene `DJANGO_DEBUG=0`) | `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
+| Tope de pedidos de recuperación de contraseña | USR-09b: `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
+| Tope de intentos de identificación | USR-09b: `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
+| `DEBUG` apagado por defecto (Render ya tiene `DJANGO_DEBUG=0`) | Hecho en USR-09a: D-99 |
 | Proveedor del almacenamiento para la foto de perfil | `docs/tareas/usuarios/USR-07-foto-perfil.md` y «Esperas» de `docs/estado.md` |
 | Logo y nombre de la organización configurables | `docs/disparadores.md`, «Cuando exista PerfilOrganizacion» |
 | Estilo del prototipo de producción contra el del sistema | D-47 y la tarea UI-01 (`docs/tareas/ronda_produccion_1.md`) |
@@ -131,7 +131,6 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 | Textos de los casos de uso que hay que corregir en «CU extendidos» | IOT-REG-SIS («Temas abiertos»: cita `docs/api_nodo.md` y el simulador); IOT-ENT-INF (regla «Alertas», extensiones 1a, \*b y 5g) e IOT-RSV-CMD (4b.3): el correo sale por la revisión periódica (D-71) | Con los extractos: lote I1 (REG-SIS), I2a (ENT-INF: **ya corregido en `entregar_informacion.md`**, falta pasarlo a Drive) e I3 (RSV-CMD: **ya corregido en `resolver_comando.md`**, falta pasarlo a Drive) |
 | Pendientes de Drive fuera del repo | DCU con el paquete IoT; caso 21 de pendientes_CU; correcciones de CU-90 y CU-92 de la «Documentación para la IA» | Sin fecha (no frenan a Claude Code) |
 | Interpretaciones de IOT-ENT-INF en el código (lote I2a) | Siete puntos que el caso de uso no resuelve: «cambiado en el invernadero» inicial, histéresis en un umbral angosto, variable del umbral vacía, resolución al quedarse sin umbral, identificador mal formado, reglas de los estados y sector fuera de servicio | D-75 (**validada el 22/11/2026**; falta pasarla a «CU extendidos») |
-| HTTPS detrás del proxy de Render | La dirección de la API que muestra IOT-02 sale de `request.build_absolute_uri`: si Django no sabe que Render terminó el HTTPS (`SECURE_PROXY_SSL_HEADER`), la muestra con `http://` | Verificación a mano 11 de IOT-03; si falla, USR-09 |
 | Aviso de compatibilidad del actuador, sin JavaScript (IOT-02, D-61) | Con HTMX, el aviso «el nodo no anunció el comando de…» llega al cambiar el identificador o el tipo. Sin JavaScript no hay evento de cambio: aparece al volver a dibujar el formulario y, si el actuador queda incompatible, en el aviso de después de guardar. Interpretación de Claude Code; el caso de uso no distingue | Confirmar con el equipo que alcanza; IOT-ALT-HDW (`docs/casos_de_uso/iot/hardware.md`) |
 | Reglas nuevas de la revisión, del panel y de la configuración IoT (lote I2b) | Inactividad, «no registrado» sin mensajes, resúmenes, fotoperíodo, retención, correo y refresco; reglas 2b a 7b de ADM-MOD-CFG | D-76 (**validada el 22/11/2026**; falta pasarla a «CU extendidos», en IOT-ENT-INF y en ADM-MOD-CFG) |
 | Correo de una alerta crítica sin enlace | El comando de la revisión no conoce la dirección del sitio (no hay una variable de configuración): el correo dice «entrá a InfoPonia, menú «Alertas»» (D-76, punto 7) | Si se agrega una variable con la dirección pública (por ejemplo con USR-09) |
@@ -657,3 +656,21 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Restricción `ordentrabajo_prioridad_en_mantenimiento` en Neon.** No hay mantenimientos anteriores a IOT-07, pero conviene confirmar antes del despliegue que ninguna orden de tipo mantenimiento tenga la prioridad vacía (la migración 0007 fallaría).
 - **La baja con varias órdenes** da un impedimento por orden en el equipo y uno solo con la lista en el sistema; los códigos de error nuevos (`decisiones_incompletas`, `orden_no_cancelable`, `ordenes_cambiaron`, `orden_no_pendiente`, `cambio_simultaneo`, `motivo_obligatorio`, `motivo_largo`) no estaban en el extracto.
 - **Si la alerta ya tiene otra orden (R048, 0..1)**, la orden nueva se crea sin alerta.
+
+## USR-11 (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **Pruebas de servicio en un archivo aparte.** La tarea pedía extender las pruebas del ABM de cuentas; están en `core/tests/test_usr_11_rol_contador.py` (alta, reactivación, baja, consulta y concurrencia del Contador). Cambió una prueba existente: el `<select>` del alta ahora espera seis roles.
+- **`docs/casos_de_uso/usuarios.md` sigue diciendo "cinco roles"** en la regla 1 de USR-ALT/MOD/BAJ/CNS-USR y "nunca más de un Gerente activo" en SEG-15. Manda `usuarios_rol_contador.md`; conviene actualizar `usuarios.md` en la próxima ronda de documentación.
+- **Menú del Contador.** El prototipo (`NAV.con`) le da «Panel de control», «Compras» y «Contabilidad»; D-85 punto 6 dice solo «Panel de control» y «Contabilidad», y las dos entradas las registran CON-03a y compras. Hoy el menú es solo «Panel de control».
+- **No existe `docs/modelo/core.md`.** `Usuario` y los roles están en D-01, D-09, D-11 y D-85, y el Contador también en `docs/modelo/contabilidad.md` (MD-114, R010). Pendiente decidir si se crea un extracto de `core`.
+- **La ventana de reactivación** (`_ventana_confirmar.html`) usa la variable `titular_activo` en lugar de `gerente_activo`.
+
+## CMP-03 (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **Las pruebas «aprobar contra la baja del proveedor» y «contra la baja del invernadero» son invariantes, no carreras.** Una orden no terminada ya impide las dos bajas (H20 y H22), así que la baja se rechaza siempre y no hay resultado que dependa del orden de bloqueo; las carreras reales son generar contra la baja del proveedor y dos aprobaciones del mismo insumo (esta última solo falla al sacar a la vez los bloqueos del invernadero, de la existencia y de los proveedores y el de `sumar_transito`).
+- **La generación audita con un solo registro** (`generacion_orden_compra`: pedido, cotizaciones, orden y detalles); las postcondiciones g y h del caso de uso piden dos.
+- **«Mañana vence la cotización» (paso 61)** se tomó como `fecha_validez == hoy + 1` y se recuerda solo la primera elegible; el documento no dice qué día cuenta como «mañana» ni qué pasa con varias (D-100, a validar).
+- **«Órdenes rechazadas» del Inicio del Agrónomo** muestra las de los últimos 7 días (el criterio del prototipo `panelAgr`): ningún documento lo fija.
+- **`cancelar_pedido_automaticamente` acepta `hoy` y `aviso`** (opcionales): sin `hoy`, `--fecha` no podría simular la fecha de cierre; sin `aviso`, el paso 62 no podría usar el texto de D-87.
+- **Textos de CMP-03 redactados al implementar:** los correos de descarte y de aprobación y las notificaciones de la orden (pendiente de aprobación, aprobada, rechazada) y de los pasos 60 y 61; los documentos fijan qué dicen, no sus palabras.
+- **La lista de órdenes no tiene paginación** (como la de pedidos): con muchas órdenes conviene paginarla.

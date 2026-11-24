@@ -1,0 +1,14 @@
+{% load formato_inventario %}{% autoescape off %}Hola, {{ proveedor }}:
+
+Le avisamos que {{ nombre_organizacion }} aprobó la orden de compra {{ orden }}, con su cotización.
+
+Estas son las líneas que le corresponden:
+{% for linea in lineas %}
+- {{ linea.insumo }}: {{ linea.cantidad|num:linea.unidad_medida }} {{ linea.unidad }} a {{ linea.unitario|pesos }} cada una, subtotal {{ linea.total|pesos }}
+  Entrega en {{ linea.invernadero }}, {{ linea.direccion }}
+  Fecha de entrega esperada: {{ linea.entrega|date:"d/m/Y" }}
+{% endfor %}
+Total de sus líneas: {{ total|pesos }}
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

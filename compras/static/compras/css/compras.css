@@ -64,3 +64,10 @@ a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 /* Las tarjetas de una columna (``.stack`` es una grilla) no se ensanchan con el contenido de sus tablas: la tabla scrollea adentro de su ``.tablewrap`` (visto en la verificación visual, en un celular). */
 .stack > *{min-width:0}
 .prv-categoria .sub2{display:block;font-size:13px;color:var(--muted-foreground);font-weight:400}
+
+/* ---- «Compras» → «Órdenes» (CMP-03): comparar y generar, revisar y decidir ---- */
+.ok-t{color:var(--status-ok)}
+.data-table tr.dis td{opacity:.6}
+.alert-ok{background:#f4faf5;border-color:#c6e3cb;color:#1f5a2b}
+.with-aside .card-h .muted.sm{flex:1 1 220px}
+.footbar .muted.sm{margin-left:4px}

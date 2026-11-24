@@ -1,6 +1,6 @@
-# Modelos de core: Usuario con email como identificador y seis roles con herencia multi-tabla, el grupo de
-# cuentas vinculadas, el registro de auditoría y las notificaciones. Decisiones D-01 a D-03, D-05, D-09 a D-11, D-17,
-# D-18, D-19, D-22, D-35, D-36 y D-42 (docs/decisiones/).
+# Modelos de core: Usuario con email como identificador y siete roles con herencia multi-tabla (el séptimo, el Contador,
+# lo suma D-85), el grupo de cuentas vinculadas, el registro de auditoría y las notificaciones. Decisiones D-01 a D-03,
+# D-05, D-09 a D-11, D-17, D-18, D-19, D-22, D-35, D-36, D-42 y D-85 (docs/decisiones/).
 
 from datetime import timedelta
 
@@ -47,10 +47,10 @@ class UsuarioQuerySet(models.QuerySet):
         """Cuentas que ``actor`` puede consultar y gestionar (regla 1 de USR-CNS-USR, USR-ALT-USR,
         USR-MOD-USR y USR-BAJ-USR).
 
-        - El Gerente gestiona las cuentas de Agrónomo, Capataz, Vendedor, Transportista y Técnico; no
-          la suya, ni otros Gerentes, ni Administradores (D-28).
+        - El Gerente gestiona las cuentas de Agrónomo, Capataz, Vendedor, Transportista, Técnico y Contador
+          (D-85 punto 3); no la suya, ni otros Gerentes, ni Administradores (D-28).
         - El Administrador gestiona las cuentas de Gerente (la activa y las anteriores) y las de los
-          Administradores, incluida la suya (D-16, tarea 05).
+          Administradores, incluida la suya (D-16, tarea 05). No gestiona al Contador (D-85 punto 3).
         - Cualquier otro actor (también uno inactivo) no gestiona ninguna.
         """
         if actor is None or not getattr(actor, "is_active", False):
@@ -159,6 +159,8 @@ class Usuario(AbstractUser):
         VENDEDOR = "vendedor", "Vendedor"
         TRANSPORTISTA = "transportista", "Transportista"
         TECNICO = "tecnico", "Técnico"
+        # D-85 punto 1: el séptimo rol (USR-11). Va al final para no cambiar el orden de los demás en las listas.
+        CONTADOR = "contador", "Contador"
 
     username = None
     email = models.EmailField("email", unique=True)
@@ -227,6 +229,12 @@ class Usuario(AbstractUser):
                 fields=["rol"],
                 condition=Q(rol="gerente", is_active=True),
                 name="un_solo_gerente_activo",
+            ),
+            # D-85 punto 2 (como D-09): a lo sumo un Contador activo. Mismo tipo de unicidad parcial que la del Gerente.
+            models.UniqueConstraint(
+                fields=["rol"],
+                condition=Q(rol="contador", is_active=True),
+                name="un_solo_contador_activo",
             ),
             # Regla 5 de USR-VNC-CTA y D-17: las cuentas de Administrador no se vinculan. Respaldo de la
             # base: la regla la controla ``vincular_cuenta``.
@@ -426,11 +434,34 @@ class Tecnico(RolFijoMixin, Usuario):
         verbose_name_plural = "Técnicos"
 
 
+class Contador(RolFijoMixin, Usuario):
+    """Contador: único activo a la vez (D-85 puntos 1 y 2, como el Gerente en D-09). Registra asientos y pagos, y cierra los
+    ejercicios; sin Contador activo lo hace el Gerente (D-85 punto 5, ``contabilidad/servicios/responsables.py``). Lo gestiona
+    el Gerente (D-85 punto 3). Sus asociaciones (por ejemplo, el ejercicio que cerró, R010) se declaran en ``contabilidad``
+    (regla A2 de D-37)."""
+
+    ROL = Usuario.Rol.CONTADOR
+    objects = UsuarioManager()
+
+    class Meta:
+        verbose_name = "Contador"
+        verbose_name_plural = "Contadores"
+
+    def clean(self):
+        """Respaldo a nivel de formulario de la restricción ``un_solo_contador_activo`` (D-85 punto 2), por la misma razón que
+        ``Gerente.clean``: el admin llama a ``full_clean()`` antes de guardar y, sin esto, mostraría un error 500."""
+        super().clean()
+        if self.is_active:
+            hay_otro_activo = Contador.objects.filter(is_active=True).exclude(pk=self.pk).exists()
+            if hay_otro_activo:
+                raise ValidationError("Ya hay un Contador activo.")
+
+
 class RegistroAuditoriaInmutableError(Exception):
     """Se intentó modificar o borrar un registro de auditoría, al que solo se agregan filas (D-22)."""
 
 
-# D-36: roles de las cuentas operativas (todas las del dominio menos el Gerente). El Gerente ve los registros de
+# D-36: roles de las cuentas operativas (todas las del dominio menos el Gerente; incluye al Contador, D-85 punto 1). El Gerente ve los registros de
 # cuentas en los que actuó o fue afectada una de ellas (regla 1 de AUD-CNS-REG, MD-58). El rol de una cuenta no
 # cambia (MD-55), así que el rol que se guarda en la auditoría sirve para filtrar.
 ROLES_OPERATIVOS = tuple(rol for rol in Usuario.Rol.values if rol != Usuario.Rol.GERENTE)
@@ -776,6 +807,10 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_COSECHA = "planificacion_cosecha", "Planificación de cosecha"
         MODIFICACION_COSECHA = "modificacion_cosecha", "Modificación de cosecha"
         CONCRECION_COSECHA = "concrecion_cosecha", "Concreción de cosecha"
+        # CMP-03: órdenes de compra (D-87 punto 8): <verbo del dominio>_orden_compra.
+        GENERACION_ORDEN_COMPRA = "generacion_orden_compra", "Generación de orden de compra"
+        APROBACION_ORDEN_COMPRA = "aprobacion_orden_compra", "Aprobación de orden de compra"
+        RECHAZO_ORDEN_COMPRA = "rechazo_orden_compra", "Rechazo de orden de compra"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1076,6 +1111,15 @@ class RegistroAuditoria(models.Model):
         "pedidos_cancelados": "Pedidos cancelados",
         "enlace_anterior": "Enlace anterior",
         "enlace_nuevo": "Enlace nuevo",
+        # CMP-03: generación de la orden de compra («orden», «fecha_cierre_pedido» y «cotizaciones_descartadas» ya existen).
+        "cotizaciones_seleccionadas": "Cotizaciones seleccionadas",
+        "monto_total": "Monto total",
+        # CMP-03: aprobación y rechazo de la orden (el tránsito va en la ``modificacion_insumo_invernadero`` de cada existencia).
+        "fecha_resolucion": "Fecha de resolución",
+        "motivo_rechazo": "Motivo del rechazo",
+        "gerente": "Gerente que resolvió",
+        "transito": "Cantidad en tránsito",
+        "cotizaciones_afectadas": "Cotizaciones afectadas",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1095,6 +1139,10 @@ class RegistroAuditoria(models.Model):
             "en_cotizacion": "En cotización",
             "cerrado": "Cerrado",
             "cancelado": "Cancelado",
+            # CMP-03: estados de la orden de compra.
+            "pendiente_aprobacion": "Pendiente de aprobación",
+            "aprobada": "Aprobada",
+            "rechazada": "Rechazada",
         },
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         # CMP-02b: causas de la cancelación de un pedido (`core` no importa `compras`, A1 de D-37).
@@ -1413,6 +1461,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_COSECHA,
         RegistroAuditoria.Accion.MODIFICACION_COSECHA,
         RegistroAuditoria.Accion.CONCRECION_COSECHA,
+        RegistroAuditoria.Accion.GENERACION_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.APROBACION_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.RECHAZO_ORDEN_COMPRA,
     }
 )
 

@@ -669,8 +669,8 @@ Decisiones: **D-87**, **D-89**, **D-90** (tránsito), **D-56** (pasos diarios). 
   Agrónomo del pedido y sigue activo, el pedido sigue «en cotización» con la fecha límite vencida (11a), cada elegida sigue elegible (11b) y todos
   los detalles cubiertos con la tolerancia (8a). Crear la orden (`OneToOne` con el pedido: la base impide dos), un detalle por línea elegida
   (copia cantidad y total), elegidas → `seleccionada`, el resto de las propuestas → `descartada`, pedido → `cerrado` con `fecha_cierre_pedido`.
-  Auditar el pedido, cada cotización modificada, la orden y cada detalle. `on_commit`: notificación al Gerente activo (12b: sin Gerente, se omite y
-  el mensaje final lo dice) y correo de descarte a cada proveedor descartado.
+  Auditar el pedido, cada cotización modificada, la orden y cada detalle (un solo registro, D-36). **Dentro de la transacción** (D-42): la notificación al Gerente activo
+  (12b: sin Gerente, se omite y el mensaje final lo dice). `on_commit`: el correo de descarte a cada proveedor descartado.
 
 ### CMP-APR-ODC (CMP-03)
 
@@ -680,9 +680,9 @@ Decisiones: **D-87**, **D-89**, **D-90** (tránsito), **D-56** (pasos diarios). 
   detalles; verificar «pendiente de aprobación» (8a), destinos activos (4a/8b) y cotizaciones vigentes y de proveedores activos (4b/8b, P1);
   `estado = aprobada`, `fecha_resolucion = hoy`, `gerente = actor`; `fecha_entrega_esperada = hoy + plazo` en cada detalle; `stock.sumar_transito`
   por `InsumoInvernadero` con la **suma** de sus detalles (postcondición f); auditar orden, detalles y cada `InsumoInvernadero`
-  (`modificacion_insumo_invernadero`, con el tránsito antes y después). `on_commit`: los avisos de H21 (`avisos.destinatarios_por_destino(destinos,
-  excluir=actor)`) y el correo a cada proveedor con **solo sus líneas**.
-- **Rechazar:** bloquear la orden; motivo obligatorio (5b); `rechazada`, cotizaciones seleccionadas → `descartada`; avisos y correos de descarte.
+  (`modificacion_insumo_invernadero`, con el tránsito antes y después). **Dentro de la transacción** (D-42): los avisos de H21 (`avisos.destinatarios_por_destino(destinos,
+  excluir=actor)`). `on_commit`: el correo a cada proveedor con **solo sus líneas**. No se bloquea la cuenta del Gerente (D-100).
+- **Rechazar:** bloquear las cotizaciones y la orden; motivo obligatorio (5b); `rechazada`, cotizaciones seleccionadas → `descartada`; los avisos (dentro de la transacción) y, en `on_commit`, los correos de descarte.
 - Las alertas de bajo el mínimo **no** se tocan (postcondición d).
 
 ### CMP-CNS-ODC (CMP-03 lo crea; CMP-04, CMP-05 y CMP-06 suman sus secciones)
@@ -713,7 +713,7 @@ terminada** con un detalle a ese `InsumoInvernadero`. Completa `proveedores.impe
 | CMP-CNS-ODC: alcance por rol, filtros, atajos | `test_cmp_cns_odc.py` |
 | Pasos 60, 61 y 62: idempotencia (dos corridas el mismo día no repiten), cada caso | `test_pasos_diarios_compras.py` |
 | `destinatarios_por_destino` (un Agrónomo, dos, uno sin Agrónomo, todos sin, el actor excluido) | `test_avisos.py` |
-| Concurrencia: dos generaciones del mismo pedido; generar contra cancelar; dos aprobaciones de órdenes con el mismo insumo y destino (el tránsito suma las dos); aprobar contra dar de baja el invernadero | `test_ordenes_concurrencia.py` |
+| Concurrencia: dos generaciones del mismo pedido; generar contra cancelar; generar contra la baja del proveedor (carrera real); dos aprobaciones de órdenes con el mismo insumo y destino (el tránsito suma las dos); aprobar contra la baja del proveedor y contra la baja del invernadero (**invariantes**: una orden no terminada ya impide las dos bajas, H20 y H22) | `test_ordenes_concurrencia.py` |
 
 ### Pantallas (prototipo)
 

@@ -1,0 +1,84 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen de la orden antes de confirmar (CMP-GNR-ODC paso 9): por cada proveedor elegido, sus líneas; por cada detalle, lo comprado frente a lo pedido; el monto de la orden frente al estimado del pedido, la
+diferencia en pesos y en porcentaje (sin advertencia); las cotizaciones que se descartarán y las observaciones. Recibe «pedido», «resumen» (``ResumenDeOrden``), «elegidas_ids» y «observaciones». «Confirmar la orden»
+genera la orden (pasos 10 y 11); «Volver a corregir» (extensión 10a) vuelve a la elección con lo elegido, sin generar nada. Los envíos HTMX no se usan: son formularios comunes.{% endcomment %}
+{% block titulo %}Confirmar la orden del pedido {{ pedido }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá la orden del pedido {{ pedido }}</h1></div>
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>La orden queda <b>pendiente de aprobación del Gerente</b>. Hasta entonces no se avisa a los proveedores elegidos ni cambia la cantidad en tránsito. A los proveedores cuya cotización no se elige les avisamos por correo.</div></div>
+
+  <div class="stack">
+    <div class="card">
+      <dl class="dl two">
+        <dt>Monto de la orden</dt><dd><b>{{ resumen.monto_total|pesos }}</b></dd>
+        <dt>Estimado del pedido</dt><dd>{{ resumen.monto_estimado|pesos }}</dd>
+        <dt>Diferencia</dt><dd>{% if resumen.diferencia > 0 %}+{% endif %}{{ resumen.diferencia|pesos }} ({% if resumen.diferencia > 0 %}+{% endif %}{{ resumen.diferencia_porcentaje|floatformat:1 }} %)</dd>
+        {% if resumen.observaciones %}<dt>Observaciones</dt><dd>{{ resumen.observaciones }}</dd>{% endif %}
+      </dl>
+    </div>
+
+    {% for p in resumen.proveedores %}
+    <div class="card seg">
+      <div class="card-h"><b>{{ p.proveedor.nombre_para_mostrar }}</b><span class="spacer"></span><b class="mono">{{ p.monto|pesos }}</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th>Destino</th><th class="right">Cantidad</th><th class="right">Total de la línea</th><th class="right">Plazo</th></tr></thead>
+          <tbody>
+          {% for l in p.lineas %}
+          <tr><td>{{ l.detalle_pedido.insumo_invernadero.insumo.nombre_insumo }}</td><td>{{ l.detalle_pedido.insumo_invernadero.invernadero.nombre_invernadero }}</td><td class="right nowrap mono">{{ l.cantidad_cotizada|cant:l.detalle_pedido.insumo_invernadero.insumo.unidad_medida_insumo }}</td><td class="right nowrap mono">{{ l.total_linea|pesos }}</td><td class="right nowrap">{{ l.plazo_entrega_dias }} día{{ l.plazo_entrega_dias|pluralize }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="card seg">
+      <div class="card-h"><b>Lo comprado frente a lo pedido</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th>Destino</th><th class="right">Pedido</th><th class="right">Comprado</th><th>Estado</th></tr></thead>
+          <tbody>
+          {% for d, pedida, comprada in resumen.por_detalle %}
+          <tr>
+            <td>{{ d.insumo_invernadero.insumo.nombre_insumo }}</td>
+            <td>{{ d.insumo_invernadero.invernadero.nombre_invernadero }}</td>
+            <td class="right nowrap mono">{{ pedida|cant:d.insumo_invernadero.insumo.unidad_medida_insumo }}</td>
+            <td class="right nowrap mono">{{ comprada|cant:d.insumo_invernadero.insumo.unidad_medida_insumo }}</td>
+            <td>{% if comprada > pedida %}<span class="status-badge status-info">Se compra de más</span>{% else %}<span class="status-badge status-ok">Cubierto</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if resumen.excesos %}
+    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Se compra más de lo pedido en {% for d, sobra in resumen.excesos %}{{ d.insumo_invernadero.insumo.nombre_insumo }} ({{ sobra|cant:d.insumo_invernadero.insumo.unidad_medida_insumo }} de más){% if not forloop.last %}, {% endif %}{% endfor %}. Está permitido.</div></div>
+    {% endif %}
+    {% if resumen.descartadas %}
+    <div class="card seg">
+      <div class="card-h"><b>Cotizaciones que se descartan</b><span class="muted sm">se avisa por correo a cada proveedor</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Proveedor</th><th class="right">Monto</th></tr></thead>
+          <tbody>{% for c in resumen.descartadas %}<tr><td>{{ c.proveedor.nombre_para_mostrar }}</td><td class="right mono">{{ c.monto_cotizacion|pesos }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'compras:pedido_generar_orden' pedido.pk %}" novalidate>
+    {% csrf_token %}
+    {% for i in elegidas_ids %}<input type="hidden" name="cotizacion" value="{{ i }}">{% endfor %}
+    <input type="hidden" name="observaciones" value="{{ observaciones }}">
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Generando…">Confirmar la orden</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a corregir</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

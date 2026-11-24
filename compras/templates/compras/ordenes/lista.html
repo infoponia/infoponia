@@ -1,0 +1,70 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Compras» → «Órdenes» (CMP-CNS-ODC regla 3; ``tabOdc`` del prototipo): una fila por orden, de la más reciente a la más antigua, con su identificador y fecha, el pedido de origen, los proveedores,
+el monto, el estado y la marca de líneas atrasadas. El atajo «Por aprobar» y los filtros de la regla 2 se envían con «Filtrar» o con el enlace del atajo: sin JavaScript funciona igual. El Gerente ve «Revisar»
+en las pendientes de aprobación (D-30: el Agrónomo no lo ve). Los atajos «Por recibir», «Con pago pendiente» y «Con reclamo sin emitir» los suman CMP-04, CMP-05 y CMP-06.{% endcomment %}
+{% block titulo %}Órdenes de compra · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Compras</h1></div>
+  {% include "compras/proveedores/_pestanas.html" with activa="ordenes" %}
+
+  <div class="filters">
+    <div class="chips" role="group" aria-label="Atajos">
+      <a class="chip" href="{% url 'compras:ordenes' %}" aria-pressed="{% if not atajo %}true{% else %}false{% endif %}">Todas</a>
+      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=por_aprobar" aria-pressed="{% if atajo == 'por_aprobar' %}true{% else %}false{% endif %}">Por aprobar{% if por_aprobar %} <b>{{ por_aprobar }}</b>{% endif %}</a>
+    </div>
+  </div>
+  <form class="filters" method="get" action="{% url 'compras:ordenes' %}">
+    {% if atajo %}<input type="hidden" name="atajo" value="{{ atajo }}">{% endif %}
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="">Todos los estados</option>
+      {% for valor, texto in estados %}<option value="{{ valor }}"{% if filtros.estado == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="proveedor" data-desplegable aria-label="Proveedor">
+      <option value="">Todos los proveedores</option>
+      {% for p in proveedores %}<option value="{{ p.pk }}"{% if filtros.proveedor == p.pk|stringformat:"s" %} selected{% endif %}>{{ p.nombre_para_mostrar }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero de destino">
+      <option value="">Todos los invernaderos</option>
+      {% for i in invernaderos %}<option value="{{ i.pk }}"{% if filtros.invernadero == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+    </select>
+    {% if es_gerente %}
+    <select class="field-input" name="agronomo" data-desplegable aria-label="Agrónomo del pedido">
+      <option value="">Todos los Agrónomos</option>
+      {% for a in agronomos %}<option value="{{ a.pk }}"{% if filtros.agronomo == a.pk|stringformat:"s" %} selected{% endif %}>{{ a.get_full_name|default:a.email }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <input class="field-input" type="date" name="desde" value="{{ filtros.desde }}" aria-label="Emitidas desde">
+    <input class="field-input" type="date" name="hasta" value="{{ filtros.hasta }}" aria-label="Emitidas hasta">
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+    {% if hay_filtros or atajo %}<a class="btn btn-text" href="{% url 'compras:ordenes' %}">Quitar filtros</a>{% endif %}
+  </form>
+
+  {% if filas %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Orden</th><th>Pedido</th><th>Proveedores</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+      {% with o=f.orden %}
+      <tr>
+        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' o.pk %}"><b>{{ o }}</b></a><span class="sub2">{{ o.fecha_emision|date:"d/m/Y" }}</span></td>
+        <td>{% if es_contador %}{{ f.pedido }}{% else %}<a class="prv-nombre" href="{% url 'compras:pedido_ficha' f.pedido.pk %}">{{ f.pedido }}</a>{% endif %}<span class="sub2">{{ f.agronomo.get_full_name|default:f.agronomo.email }}</span></td>
+        <td>{% for p in f.proveedores %}{{ p.nombre_para_mostrar }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+        <td class="right nowrap mono">{{ f.monto|pesos }}</td>
+        <td><span class="status-badge {% if o.estado_orden_compra == 'pendiente_aprobacion' %}status-warn{% elif o.estado_orden_compra == 'rechazada' %}status-danger{% elif o.estado_orden_compra == 'aprobada' %}status-info{% else %}status-ok{% endif %}">{{ o.get_estado_orden_compra_display }}</span>{% if f.lineas_atrasadas %} <span class="status-badge status-warn">{{ f.lineas_atrasadas }} línea{{ f.lineas_atrasadas|pluralize }} atrasada{{ f.lineas_atrasadas|pluralize }}</span>{% endif %}</td>
+        <td class="right nowrap">{% if es_gerente and o.estado_orden_compra == 'pendiente_aprobacion' %}<a class="btn btn-primary btn-sm" href="{% url 'compras:orden_resolver' o.pk %}">Revisar<span class="sr"> la orden {{ o }}</span></a> {% endif %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:orden_ficha' o.pk %}">Ver<span class="sr"> la orden {{ o }}</span></a></td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay órdenes con esos filtros</b><span>{% if hay_filtros or atajo %}Probá quitar algún filtro.{% elif es_contador %}Cuando un Agrónomo genere una orden de compra, la ves acá.{% elif es_gerente %}Cuando un Agrónomo genere una orden de compra, la ves acá para aprobarla.{% else %}Cuando generes una orden de compra con las cotizaciones de un pedido, la ves acá.{% endif %}</span></div>
+  {% endif %}
+  {% if es_contador %}<p class="hint" style="margin-top:12px">Como Contador ves todas las órdenes, en modo consulta, para seguir los pagos.</p>{% endif %}
+  {% if es_gerente %}<p class="hint" style="margin-top:12px">Las órdenes las genera el Agrónomo del pedido y las aprobás o rechazás vos.</p>{% endif %}
+</div>
+{% endblock %}

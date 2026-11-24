@@ -37,7 +37,7 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
 | USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
-| USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
+| USR-09b | Topes de intentos de identificación y de pedidos de recuperación (USR-09a hizo el resto) | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
 | MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | hecha (PR #45, 21/11/2026; revisión a mano pendiente) | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
 
@@ -112,8 +112,7 @@ compras y estadísticas dependen de ella. Las tareas están en orden de implemen
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| USR-11 | El rol Contador y quién registra los asientos | core (y `contabilidad/servicios/responsables.py`) | pendiente | — | `core/USR-11-rol-contador.md` |
-| CON-02 | Núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos | contabilidad | pendiente | USR-11, CON-01 (hecha) | `contabilidad/CON-02-nucleo-contable.md` |
+| CON-02 | Núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos | contabilidad | pendiente | USR-11 (hecha), CON-01 (hecha) | `contabilidad/CON-02-nucleo-contable.md` |
 | CON-03a | Libro de gestión, plan de cuentas y ejercicios (con el cierre) | contabilidad | pendiente | CON-02 | `contabilidad/CON-03a-libro-plan-y-ejercicios.md` |
 | CON-03b | Asientos manuales y contraasientos | contabilidad | pendiente | CON-03a | `contabilidad/CON-03b-asientos-manuales-y-contraasientos.md` |
 
@@ -123,9 +122,8 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CMP-03 | Orden de compra y pasos diarios 60 a 62 | compras (y el tránsito en inventario) | pendiente | CMP-02b | `compras/CMP-03-orden-de-compra-y-pasos-diarios.md` |
 | CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario) | pendiente | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
-| CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11, CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
+| CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11 (hecha), CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
 | CMP-06 | Corrección de recepción y reclamos | compras (y un tipo en inventario) | pendiente | CMP-05 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
 
 ### Ronda «Contabilidad 2» (D-92; reaperturas y lote existente)
@@ -139,7 +137,7 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 | PRD-05 | Registrar Lote Existente | produccion | pendiente | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
 | CON-04a | Asientos de producción (reapertura) | produccion | pendiente | CON-02 (PRD-04, hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | pendiente | CON-02, COM-04a, COM-04b, COM-06a | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
-| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11, COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
+| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11 (hecha), COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
 
 ### Ronda «Estadísticas 1» (D-93)
 

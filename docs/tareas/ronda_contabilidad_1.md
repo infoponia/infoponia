@@ -10,8 +10,8 @@ de las tareas: **D-44**. Este archivo lo lee la persona que planifica; Claude Co
 
 | ID | Tarea | App | Casos de uso | Depende de | Lote |
 |---|---|---|---|---|---|
-| USR-11 | El rol Contador y quién registra los asientos | core | USR-ALT/MOD/BAJ/CNS-USR, SEG-13, SEG-15 (cambios) | — | 1 |
-| CON-02 | Núcleo contable | contabilidad | CON-ABR-EJE (paso diario 5) y `registrar_asiento_automatico` | USR-11, CON-01 (hecha) | 1 |
+| USR-11 | El rol Contador y quién registra los asientos — **hecha el 24/11/2026** (a la espera de la revisión a mano) | core | USR-ALT/MOD/BAJ/CNS-USR, SEG-13, SEG-15 (cambios) | — | 1 |
+| CON-02 | Núcleo contable | contabilidad | CON-ABR-EJE (paso diario 5) y `registrar_asiento_automatico` | USR-11 (hecha), CON-01 (hecha) | 1 |
 | CON-03a | Libro de gestión, plan de cuentas y ejercicios | contabilidad | CON-CNS-LGS, CON-CNS-PCT, CON-CRR-EJE | CON-02 | 1 |
 | CON-03b | Asientos manuales y contraasientos | contabilidad | CON-REG-ASI, CON-CTR-ASI | CON-03a | 1 |
 

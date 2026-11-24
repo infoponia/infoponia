@@ -28,6 +28,7 @@ from core.models import (
     MODELO_CUENTA,
     Agronomo,
     Capataz,
+    Contador,
     Gerente,
     GrupoCuentas,
     RegistroAuditoria,
@@ -72,15 +73,19 @@ ResultadoAcceso = namedtuple("ResultadoAcceso", "forma contrasena_temporal invit
 
 # D-09 y SEG-15: nombre de la restricción de la base que impide un segundo Gerente activo (core/models.py).
 RESTRICCION_UN_SOLO_GERENTE_ACTIVO = "un_solo_gerente_activo"
+# D-85 punto 2 y SEG-15: lo mismo para el Contador (USR-11).
+RESTRICCION_UN_SOLO_CONTADOR_ACTIVO = "un_solo_contador_activo"
 
 # Regla 1 de USR-ALT-USR: los roles que da de alta el Gerente, con la clase de cada uno. El Gerente
-# (D-09) y el Administrador (SEG-17) no están: no se dan de alta desde las pantallas del Gerente.
+# (D-09) y el Administrador (SEG-17) no están: no se dan de alta desde las pantallas del Gerente. El Contador sí
+# (D-85 punto 3); con eso aparece en el alta y en los filtros de la lista.
 CLASES_DE_ROL_QUE_DA_DE_ALTA_EL_GERENTE = {
     Usuario.Rol.AGRONOMO: Agronomo,
     Usuario.Rol.CAPATAZ: Capataz,
     Usuario.Rol.VENDEDOR: Vendedor,
     Usuario.Rol.TRANSPORTISTA: Transportista,
     Usuario.Rol.TECNICO: Tecnico,
+    Usuario.Rol.CONTADOR: Contador,
 }
 
 # Regla 1 de USR-ALT-USR y D-16: el Administrador da de alta solo la cuenta del Gerente. Los
@@ -149,6 +154,18 @@ def _bloquear_gerentes():
     )
 
 
+def _bloquear_contadores():
+    """SEG-15 y D-85 punto 2: bloquea todas las filas de Contador, activas o no, en orden de id. Es la copia de
+    ``_bloquear_gerentes`` para el Contador (mismo patrón, mismas razones: sin filtrar por ``is_active``, orden fijo contra
+    deadlocks y ``FOR NO KEY UPDATE`` por D-32). Si no hay ninguna fila (el primer alta), no hay nada que bloquear: la cubre
+    la restricción ``un_solo_contador_activo``."""
+    list(
+        Usuario.objects.select_for_update(no_key=True)
+        .filter(rol=Usuario.Rol.CONTADOR)
+        .order_by("pk")
+    )
+
+
 def _bloquear_administradores_activos():
     """SEG-15 y precondición c de USR-BAJ-USR: bloquea todas las filas de Administradores activos, en orden
     de id.
@@ -212,6 +229,9 @@ def _bloquear_grupo_de_reactivacion(cuenta):
     _bloquear_grupo_de_cuenta(cuenta)
     if cuenta.rol == Usuario.Rol.GERENTE:
         _bloquear_gerentes()
+    elif cuenta.rol == Usuario.Rol.CONTADOR:
+        # D-85 punto 2: reactivar un Contador con otro activo se rechaza; mismo bloqueo que el alta.
+        _bloquear_contadores()
 
 
 def _nombre_de_restriccion(error):
@@ -249,6 +269,30 @@ def _error_gerente_activo(activo=None, reactivando=False):
         f"Ya hay un Gerente activo{quien}. Solo puede haber uno a la vez: para dar de alta a otro, "
         "primero dá de baja al actual desde su ficha.",
         code="gerente_activo",
+    )
+
+
+def _contador_activo():
+    """El Contador activo, o ``None`` (D-85 punto 2). Consulta aparte, posterior a ``_bloquear_contadores``."""
+    return Usuario.objects.filter(rol=Usuario.Rol.CONTADOR, is_active=True).first()
+
+
+def _error_contador_activo(activo=None, reactivando=False):
+    """Error del alta o de la reactivación (``reactivando``) de un Contador cuando ya hay otro activo (D-85 punto 2, SEG-15).
+
+    Mismo tipo de mensaje que el del segundo Gerente (``_error_gerente_activo``), con el código «contador_activo». Sin
+    ``activo`` (el rechazo vino de la restricción de la base) lo busca: la otra operación ya confirmó."""
+    activo = activo or _contador_activo()
+    quien = f": {activo.get_full_name()}" if activo else ""
+    if reactivando:
+        return ValidationError(
+            f"No se puede reactivar: ya hay un Contador activo{quien}. Dalo de baja primero.",
+            code="contador_activo",
+        )
+    return ValidationError(
+        f"Ya hay un Contador activo{quien}. Solo puede haber uno a la vez: para dar de alta a otro, "
+        "primero dá de baja al actual desde su ficha.",
+        code="contador_activo",
     )
 
 
@@ -518,14 +562,18 @@ def obtener_registro(actor, registro_id):
     return registro
 
 
-def gerente_activo_que_impide_reactivar(cuenta):
-    """El Gerente activo si ``cuenta`` es un Gerente inactivo y ya hay otro activo (regla 5 de USR-MOD-USR,
-    D-09); si no, ``None``. La ventana de «Reactivar cuenta» lo usa para mostrar el motivo sin pedir
-    confirmación (D-30). No bloquea nada: la regla la vuelve a controlar ``reactivar_usuario`` con el
-    bloqueo de SEG-15."""
-    if cuenta.is_active or cuenta.rol != Usuario.Rol.GERENTE:
+def titular_activo_que_impide_reactivar(cuenta):
+    """La cuenta activa que impide reactivar ``cuenta``: el Gerente activo si es un Gerente inactivo y ya hay otro (regla 5
+    de USR-MOD-USR, D-09), o el Contador activo si es un Contador inactivo y ya hay otro (D-85 punto 2); si no,
+    ``None``. La ventana de «Reactivar cuenta» lo usa para mostrar el motivo sin pedir confirmación (D-30). No bloquea
+    nada: la regla la vuelve a controlar ``reactivar_usuario`` con el bloqueo de SEG-15."""
+    if cuenta.is_active:
         return None
-    return _gerente_activo()
+    if cuenta.rol == Usuario.Rol.GERENTE:
+        return _gerente_activo()
+    if cuenta.rol == Usuario.Rol.CONTADOR:
+        return _contador_activo()
+    return None
 
 
 def quien_gestiona(cuenta):
@@ -691,6 +739,12 @@ def alta_usuario(
             activo = _gerente_activo()
             if activo is not None:
                 errores[NON_FIELD_ERRORS] = [_error_gerente_activo(activo)]
+        elif rol == Usuario.Rol.CONTADOR and "rol" not in errores:
+            # D-85 punto 2 y SEG-15: el mismo patrón con el Contador (bloquear todas sus filas y después consultar).
+            _bloquear_contadores()
+            activo = _contador_activo()
+            if activo is not None:
+                errores[NON_FIELD_ERRORS] = [_error_contador_activo(activo)]
         if "email" not in errores and Usuario.objects.filter(email=email).exists():
             errores["email"] = [_error_de_email_repetido(actor, email)]
         if errores:
@@ -710,6 +764,8 @@ def alta_usuario(
         except IntegrityError as error:
             if _nombre_de_restriccion(error) == RESTRICCION_UN_SOLO_GERENTE_ACTIVO:
                 raise ValidationError({NON_FIELD_ERRORS: [_error_gerente_activo()]}) from error
+            if _nombre_de_restriccion(error) == RESTRICCION_UN_SOLO_CONTADOR_ACTIVO:
+                raise ValidationError({NON_FIELD_ERRORS: [_error_contador_activo()]}) from error
             # El email repetido, o una restricción que no se pudo identificar (D-30): nunca un 500.
             raise ValidationError(
                 {"email": [ValidationError(MENSAJE_EMAIL_REPETIDO, code="email_repetido")]}
@@ -991,6 +1047,10 @@ def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=No
             activo = _gerente_activo()
             if activo is not None:
                 raise _error_gerente_activo(activo, reactivando=True)
+        elif cuenta.rol == Usuario.Rol.CONTADOR:
+            activo = _contador_activo()
+            if activo is not None:
+                raise _error_contador_activo(activo, reactivando=True)
         cuenta.is_active = True
         temporal = _preparar_acceso(cuenta, acceso)
         try:
@@ -1003,6 +1063,8 @@ def reactivar_usuario(actor, cuenta_id, acceso=ACCESO_TEMPORAL, construir_url=No
         except IntegrityError as error:
             if _nombre_de_restriccion(error) == RESTRICCION_UN_SOLO_GERENTE_ACTIVO:
                 raise _error_gerente_activo(reactivando=True) from error
+            if _nombre_de_restriccion(error) == RESTRICCION_UN_SOLO_CONTADOR_ACTIVO:
+                raise _error_contador_activo(reactivando=True) from error
             raise ValidationError(
                 "No se pudo reactivar la cuenta. Volvé a intentarlo.", code="no_se_pudo_reactivar"
             ) from error

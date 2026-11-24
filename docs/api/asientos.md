@@ -73,6 +73,7 @@ class ErrorContable(Exception):
 | `libro.movimientos_de_cuenta(codigo, ejercicio_id)` | Los movimientos con su saldo acumulado, para la vista por cuenta |
 | `libro.resultado_del_periodo(desde, hasta)` | `Resultado(ingresos, egresos, resultado)` por **fecha del asiento**, aunque el período cruce dos ejercicios (lo usa Estadísticas, EST-02) |
 | `libro.total_por_cuenta_en_periodo(codigo, desde, hasta, *, tipo=None)` | Suma de los movimientos de una cuenta en un período, por fecha del asiento |
+| `responsables.contador_activo()` | El `Contador` activo o `None` (D-85 punto 5; lo usa `responsable_contable`) |
 | `responsables.responsable_contable()` | El Contador activo o, si no hay, el Gerente activo, o `None` (D-85 punto 5) |
 | `responsables.puede_registrar_asientos(usuario)` | `True` si es el Contador activo, o el Gerente activo **sin Contador activo**. Vale también para registrar pagos |
 | `responsables.notificar_al_responsable_contable(titulo, detalle, *, excluir=None)` | Una notificación (D-42) al responsable contable, sin la cuenta `excluir`; sin responsable no hace nada ni falla |
