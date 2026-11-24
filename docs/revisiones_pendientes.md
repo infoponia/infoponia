@@ -442,6 +442,24 @@ Los 19 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-02a
 - [ ] 18. (Opcional) Sin JavaScript y en un ancho de celular (390 px): «Nuevo pedido» y el portal siguen funcionando y no se cortan las tarjetas.
 - [ ] 19. **Navegador real (D-96).** En una ventana privada, enviá la cotización hasta el final (y confirmá el pedido y la habilitación del paso 3): sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola (F12).
 
+## COM-03a · Tarea COM-03a (suministros: pactar y consultar)
+
+Los 13 pasos son los de «Verificación a mano» (en el «Cierre») de `docs/tareas/comercial/COM-03a-suministros-pactar-y-consultar.md`, con los datos que hay que crear a mano, en orden, y sus valores, copiados acá para ir tachándolos (M5). Hay dos migraciones nuevas (`comercial` 0003 y `core` 0030): `python manage.py migrate`; después `python manage.py runserver` y abrí `http://127.0.0.1:8000/`. No hay datos cargados: creá un Agrónomo, un Capataz y dos Vendedores; un invernadero con el primer Vendedor y un lote de «Lechuga Crespa» en Maduración con 300 plantas; los clientes «Verdulería Los Pinos S.R.L.» (con correo y dos direcciones) y «Verdulería Sin Correo S.A.» (sin correo); y la pre-reserva de suministros en 14 días.
+
+- [ ] 1. **Lista y selector.** «Contratos»: «Compra-ventas | Suministros»; «Suministros» dice «Todavía no hay suministros.» y tiene el botón «Pactar suministro».
+- [ ] 2. **Cliente sin correo.** Aviso «El cliente no tiene correo…» con «Cargar el correo»; las secciones 2 y 3 bloqueadas; al cargarlo se vuelve con el cliente todavía elegido.
+- [ ] 3. **Contrato.** Duración 6: «Termina el» con el mismo día del mes, 6 meses después; tolerados 0, multa 50000, plazo de pago 15, indemnización por atraso 100.
+- [ ] 4. **Detalle 1 y stock.** 200 plantas cada 7 días: el segundo período dice «No alcanza» (hay 300 para 400); con 150, los dos «Alcanza».
+- [ ] 5. **Errores.** Mismo par variedad y dirección: «El contrato ya tiene…»; ajuste periódico 3 % cada 2 meses con sus tramos; cantidad mínima mayor que la cantidad: error, y se corrige.
+- [ ] 6. **Pactar.** Resumen, «Confirmar suministro»; ficha con `SUM-0001` vigente, calendario «Reservado» y «Fuera de la ventana»; cosechas notificadas al Capataz y al Agrónomo; «Pacto de suministro» en «Auditoría».
+- [ ] 7. **Superposición.** Mismo cliente, variedad y dirección: aviso con `SUM-0001` y «Continuar igual»; sin marcarla no deja; con otro cliente no hay aviso.
+- [ ] 8. **Consulta.** Filtros de la lista, «Al límite», «Ver todo el calendario», «Ver comprobante», suministro en la ficha del cliente y «Suministros vigentes» al darlo de baja.
+- [ ] 9. **Roles.** Agrónomo: 403 en `/comercial/contratos/?tipo=suministro`; el segundo Vendedor no ve `SUM-0001` y su dirección da 403.
+- [ ] 10. **Baja de variedad y cambio de Vendedor.** «Tiene contratos abiertos: 2 suministros.»; el traspaso avisa «Suministros vigentes: 2» y los contratos pasan al Vendedor nuevo.
+- [ ] 11. **Navegador real (D-96).** En una ventana privada, pactá un suministro hasta el final y probá «Reenviar comprobante»: sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola (F12).
+- [ ] 12. (Opcional) Sin JavaScript y en un ancho de celular (390 px): el pacto funciona con «Actualizar» y nada se desborda.
+- [ ] 13. (Opcional) **Después del despliegue:** en el log de Render, que se aplicaron `comercial/0003_suministros` y `core/0030_comercial_suministros`.
+
 ## IOT-05 · Tarea IOT-05 (comandos: emitir, retirar, resolver con reintentos y cancelar)
 
 Los 17 pasos son los de «Verificación a mano» de `docs/tareas/iot/IOT-05-comandos.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay tres migraciones nuevas (`iot` 0004, `produccion` 0006 y `core` 0029): `python manage.py migrate`; después `python manage.py runserver` y abrí `http://localhost:8000`. No hay datos cargados: creá a mano, en este orden, (a) un **Agrónomo** (Laura) a cargo del invernadero «Norte», un **Gerente** y un **Técnico**; un segundo invernadero «Libre» **sin Agrónomo**; (b) en «IoT · Sistema IoT» de «Norte», el sistema (anotá el token); (c) en «IoT · Hardware» de «Norte», dos actuadores con un insumo de «Repuestos de hardware» cada uno: `norte/sectorA/ventilador` (tipo «Ventilador», con un sector) y `norte/sectorA/ventana` (tipo «Ventana»); (d) en «Libre», un sistema y `libre/ventilador` (tipo «Ventilador»). Con el Gerente, «Configuración · Módulo IoT»: **1 reintento y 10 s de intervalo** (al final, volver a 3 y 60). Node-RED con los dos flujos (`docs/api/nodo/node-red/README.md`, secciones 1 a 4) y, en otra terminal, `python manage.py revision_iot --cada 30`. Si no tenés Node-RED, los pasos 5 a 12 se pueden cubrir con la API (`GET comandos` y `POST comandos/<id>/resultado`, con `Authorization: Bearer <token>`).

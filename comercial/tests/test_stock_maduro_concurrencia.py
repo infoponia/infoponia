@@ -123,7 +123,7 @@ class StockMaduroConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         venta, baja = separar({"a": venta_primero["a"]}), separar({"b": venta_primero["b"]})
         self.assertEqual((len(venta[0]), venta[2], baja[2]), (1, [], []))
         self.assertEqual(len(baja[1]), 1)
-        self.assertIn("Tiene compra-ventas abiertas", str(baja[1][0]))
+        self.assertIn("Tiene contratos abiertos: 1 compra-venta", str(baja[1][0]))  # COM-03a: el texto ahora dice «contratos abiertos» (antes, «compra-ventas abiertas»)
         self.assertTrue(self.e.variedad.__class__.objects.get(pk=self.e.variedad.pk).activa)
 
     def test_regla_la_baja_de_la_variedad_primero_rechaza_la_venta_por_variedad_inactiva(self):

@@ -1,0 +1,72 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Comercial» → «Contratos» → «Suministros» (COM-CNS-SUM, reglas 1 a 3, 9; `tabContratos` con «sum» del prototipo). Filtros en la URL (formulario GET común: sin
+JavaScript funciona igual, y no valida nada al tipear): cliente, estado, rango de fechas (de realización o de fin) y, solo para el Gerente, Vendedor. «Al límite» marca el
+contrato al que le queda un solo incumplimiento tolerado (o ya usó todos). «Pactar suministro» se muestra deshabilitado con su motivo (precondiciones b y c). Recibe
+«pagina», «filtros», «estados», «es_gerente», «vendedores», «puede_pactar», «motivo», «consulta» (para las páginas) y «hay_filtros».{% endcomment %}
+{% block titulo %}Suministros · Comercial · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Comercial</h1></div>
+  {% include "comercial/_pestanas.html" with activa="contratos" %}
+
+  <form class="filters" method="get" action="{% url 'comercial:contratos' %}" role="search">
+    {% include "comercial/contratos/_selector.html" with tipo="suministro" %}
+    <input type="hidden" name="tipo" value="suministro">
+    <input class="field-input q" type="search" name="cliente_q" value="{{ filtros.cliente_texto }}" placeholder="Cliente: nombre o CUIT" aria-label="Buscar por cliente" autocomplete="off">
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="">Todos los estados</option>
+      {% for valor, texto in estados %}<option value="{{ valor }}"{% if filtros.estado == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+    </select>
+    {% if es_gerente %}
+    <select class="field-input" name="vendedor" data-desplegable aria-label="Vendedor">
+      <option value="">Todos los Vendedores</option>
+      {% for v in vendedores %}<option value="{{ v.pk }}"{% if filtros.vendedor_id == v.pk|stringformat:"s" %} selected{% endif %}>{{ v.get_full_name }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <select class="field-input" name="fecha_de" data-desplegable aria-label="Tipo de fecha">
+      <option value="realizacion"{% if filtros.fecha_de != "fin" %} selected{% endif %}>Fecha de realización</option>
+      <option value="fin"{% if filtros.fecha_de == "fin" %} selected{% endif %}>Fecha de fin</option>
+    </select>
+    <input class="field-input" type="date" name="desde" value="{{ filtros.desde }}" aria-label="Desde">
+    <input class="field-input" type="date" name="hasta" value="{{ filtros.hasta }}" aria-label="Hasta">
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+    <span class="spacer"></span>
+    {% if puede_pactar %}
+    <a class="btn btn-primary" href="{% url 'comercial:suministro_nuevo' %}">{% icono "plus" 15 %} Pactar suministro</a>
+    {% else %}
+    <span class="btn btn-primary" aria-disabled="true" title="{{ motivo }}" style="opacity:.55;cursor:not-allowed">{% icono "plus" 15 %} Pactar suministro</span>
+    <span class="muted" role="status">{{ motivo }}</span>
+    {% endif %}
+  </form>
+
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Suministro</th><th>Cliente</th><th>Vigencia</th><th class="right">Detalles vigentes</th><th>Incumplimientos</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for s in pagina.object_list %}
+        <tr>
+          <td class="nowrap"><b style="font-weight:600" class="mono">{{ s.codigo }}</b>{% if s.tiene_rescision_acordada %} <span class="status-badge status-warn">Rescisión acordada</span>{% endif %}{% if es_gerente %}<span class="sub2">{{ s.vendedor.get_full_name }}</span>{% endif %}</td>
+          <td>{{ s.cliente }}</td>
+          <td class="nowrap">{{ s.fecha_realizacion|date:"d/m/Y" }} al {{ s.fecha_fin|date:"d/m/Y" }}<span class="sub2">{{ s.duracion_meses }} meses</span></td>
+          <td class="right mono">{{ s.detalles_vigentes }}</td>
+          <td class="nowrap">{{ s.cantidad_incumplimientos }} de {{ s.incumplimientos_tolerados }}{% if s.al_limite %} <span class="status-badge status-warn">Al límite</span>{% endif %}</td>
+          <td>{% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}</td>
+          <td class="right"><a class="rowlink" href="{% url 'comercial:suministro' s.pk %}">Ver<span class="sr"> el suministro {{ s.codigo }}</span></a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">{% if hay_filtros %}Ningún suministro coincide con los filtros.{% else %}Todavía no hay suministros. Pactá el primero con «Pactar suministro».{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagina.paginator.num_pages > 1 %}
+  <nav class="pager" aria-label="Páginas">
+    {% if pagina.has_previous %}<a class="rowlink" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
+    <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} · {{ pagina.paginator.count }} suministros</span>
+    {% if pagina.has_next %}<a class="rowlink" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}pagina={{ pagina.next_page_number }}">Siguiente ›</a>{% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

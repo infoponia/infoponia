@@ -3,13 +3,13 @@
 
 from django.urls import path
 
-from comercial import views, views_contratos
+from comercial import views, views_contratos, views_suministros
 
 app_name = "comercial"
 
 urlpatterns = [
     path("", views.inicio, name="inicio"),
-    # Contratos (COM-REG-CVT, COM-CNS-CVT): compra-ventas. COM-03 suma los suministros.
+    # Contratos (COM-REG-CVT, COM-CNS-CVT): compra-ventas. COM-03a suma los suministros (COM-PCT-SUM, COM-CNS-SUM); la lista es la misma, con ?tipo=suministro.
     path("contratos/", views_contratos.contratos, name="contratos"),
     path("contratos/compra-ventas/nueva/", views_contratos.compra_venta_nueva, name="compra_venta_nueva"),
     path("contratos/compra-ventas/nueva/calcular/", views_contratos.compra_venta_calcular, name="compra_venta_calcular"),
@@ -20,6 +20,17 @@ urlpatterns = [
         "contratos/compra-ventas/<int:venta_id>/reenviar-comprobante/",
         views_contratos.compra_venta_reenviar_comprobante,
         name="compra_venta_reenviar_comprobante",
+    ),
+    path("contratos/suministros/nuevo/", views_suministros.suministro_nuevo, name="suministro_nuevo"),
+    path("contratos/suministros/nuevo/calcular/", views_suministros.suministro_calcular, name="suministro_calcular"),
+    path("contratos/suministros/nuevo/revisar/", views_suministros.suministro_revisar, name="suministro_revisar"),
+    path("contratos/suministros/<int:suministro_id>/", views_suministros.suministro, name="suministro"),
+    path("contratos/suministros/<int:suministro_id>/calendario/", views_suministros.suministro_calendario, name="suministro_calendario"),
+    path("contratos/suministros/<int:suministro_id>/comprobante/", views_suministros.suministro_comprobante, name="suministro_comprobante"),
+    path(
+        "contratos/suministros/<int:suministro_id>/reenviar-comprobante/",
+        views_suministros.suministro_reenviar_comprobante,
+        name="suministro_reenviar_comprobante",
     ),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
     path("clientes/", views.clientes, name="clientes"),

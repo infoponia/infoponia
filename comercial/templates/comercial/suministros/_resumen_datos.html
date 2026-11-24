@@ -1,0 +1,23 @@
+{% load comercial %}{% comment %}Lo que dice el resumen del pacto (paso 12), en la ventana y en la página: cliente, Vendedor responsable, duración, fecha de fin, tolerados, multa, la cláusula del
+suministrado y, por detalle, la variedad, la dirección, la cantidad por período, el calendario de entregas, el precio y su mecanismo y su cláusula del suministrante. Recibe «resumen» y «f».{% endcomment %}
+<dl class="dl">
+  <dt>Cliente</dt><dd>{{ f.cliente }} · CUIT {{ f.cliente.cuit_cliente|cuit }}</dd>
+  <dt>Vendedor responsable</dt><dd>{{ f.vendedor.get_full_name }}</dd>
+  <dt>Duración</dt><dd>{{ f.contrato.duracion }} meses · termina el {{ f.fecha_fin|date:"d/m/Y" }}</dd>
+  <dt>Incumplimientos tolerados</dt><dd>{{ f.contrato.tolerados }}</dd>
+  <dt>Multa por resolución</dt><dd class="mono">{{ f.contrato.multa|pesos }}</dd>
+  <dt>Pago de cada entrega</dt><dd>dentro de {{ f.contrato.plazo_pago }} días; atraso: {{ f.contrato.indemnizacion_pago|pesos }} por día</dd>
+</dl>
+{% for fila in resumen.filas %}
+<div class="detcard">
+  <div class="detcard-h"><b>{{ fila.variedad }}</b><span class="muted sm">{{ fila.direccion.texto }} · {{ fila.direccion.localidad.nombre_localidad }}</span></div>
+  <dl class="dl">
+    <dt>Entrega</dt><dd>{{ fila.cantidad }} plantas cada {{ fila.periodo }} días · {{ fila.cantidad_de_entregas }} entregas, del {{ fila.primera|date:"d/m/Y" }} al {{ fila.ultima_fecha|date:"d/m/Y" }} ({{ fila.total_de_plantas }} plantas en total)</dd>
+    <dt>Precio</dt><dd>{{ fila.precio|pesos }} por planta{% if fila.mecanismo == "ajuste_periodico" %}, con un ajuste de {{ fila.porcentaje }} % cada {{ fila.meses }} meses{% endif %}
+      {% if fila.tramos_de_precio|length > 1 %}<span class="sub2">{% for desde, precio in fila.tramos_de_precio %}Desde el {{ desde|date:"d/m/Y" }}: {{ precio|pesos }}{% if not forloop.last %} · {% endif %}{% endfor %}</span>{% endif %}</dd>
+    <dt>Cláusula del suministrante</dt><dd>tolerancia de {{ fila.plazo_entrega }} días; retraso: {{ fila.indemnizacion_retraso|pesos }} por día; mínimo {{ fila.cantidad_minima }} plantas; faltante: {{ fila.indemnizacion_faltante|pesos }} por planta</dd>
+    {% if fila.periodos_de_la_ventana %}<dt>Se reserva ahora</dt><dd>{% for p in fila.periodos_de_la_ventana %}{{ p.fecha|date:"d/m" }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+  </dl>
+</div>
+{% endfor %}
+<p class="hint">Al confirmar se reservan los períodos de la ventana de pre-reserva y se programan las cosechas necesarias. Se le envía el comprobante al cliente{% if f.cliente_sin_correo %} (no tiene correo){% endif %}.</p>

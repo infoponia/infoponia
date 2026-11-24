@@ -412,6 +412,10 @@ class ReservaStock(models.Model):
     detalle_venta = models.ForeignKey(
         DetalleVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="reservas"
     )  # R123
+    # R124 (COM-03): la reserva de un período lleva el detalle y `fecha_entrega_reserva` = la fecha del período.
+    detalle_suministro = models.ForeignKey(
+        "DetalleSuministro", null=True, blank=True, on_delete=models.PROTECT, related_name="reservas"
+    )
     invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="reservas_de_stock")
     fecha_reserva = models.DateField(default=timezone.localdate)
     # En una compra-venta, la pactada; nunca cambia (regla 12 de 8.8). Nula solo en la reserva de una cosecha sin contrato (D-64 punto 6).
@@ -428,6 +432,10 @@ class ReservaStock(models.Model):
             models.CheckConstraint(
                 condition=Q(estado_reserva__in=["activa", "lista_para_entrega", "entregada", "liberada"]),
                 name="reserva_stock_estado_valido",
+            ),
+            # C3: a lo sumo uno de R123 y R124 (ninguno: la reserva de una cosecha manual sin contrato, COM-04).
+            models.CheckConstraint(
+                condition=Q(detalle_venta__isnull=True) | Q(detalle_suministro__isnull=True), name="reserva_stock_un_solo_detalle"
             ),
         ]
 
@@ -471,3 +479,247 @@ class DetalleReserva(models.Model):
     def __str__(self):
         """«Línea #N» (texto de la auditoría, D-36)."""
         return f"Línea #{self.pk}"
+
+
+# ---- COM-03: Suministro, DetalleSuministro y sus cláusulas (docs/modelo/comercial.md) ----
+
+
+class Suministro(Contrato):
+    """Contrato de entregas periódicas a un cliente, con cláusulas resolutorias (COM-PCT-SUM). Hija de `Contrato` (``tipo_contrato =
+    suministro``). Código visible ``SUM-0001`` con la secuencia ``comercial_suministro_numero_seq``. ``fecha_fin`` es derivada pero se
+    guarda (la filtran las consultas y la pre-reserva): la calcula solo el servicio con ``calendario.sumar_meses``. Los campos de la rescisión
+    (MD-140) y ``fecha_resolucion_suministro`` (MD-120) los escriben COM-03b y COM-07b: se crean ya para tener una sola migración."""
+
+    class Estado(models.TextChoices):
+        """Regla 5 de 8.11: nace «vigente». «Rescindido» es de COM-RSC-SUM (MD-140)."""
+
+        VIGENTE = "vigente", "Vigente"
+        FINALIZADO = "finalizado", "Finalizado"
+        RESUELTO = "resuelto", "Resuelto"
+        RESCINDIDO = "rescindido", "Rescindido"
+
+    class MotivoDeRescision(models.TextChoices):
+        """MD-140."""
+
+        A_PEDIDO_DEL_CLIENTE = "a_pedido_del_cliente", "A pedido del cliente"
+        A_PEDIDO_DE_LA_EMPRESA = "a_pedido_de_la_empresa", "A pedido de la empresa"
+        OTRO = "otro", "Otro"
+
+    duracion_meses = models.PositiveSmallIntegerField()
+    estado_suministro = models.CharField(max_length=12, choices=Estado.choices, default=Estado.VIGENTE)
+    fecha_fin = models.DateField()
+    incumplimientos_tolerados = models.PositiveSmallIntegerField()  # PCU 16: de 0 a 99
+    multa_resolucion = models.DecimalField(max_digits=10, decimal_places=2)
+    cantidad_incumplimientos = models.PositiveIntegerField(default=0)  # regla 6 de 8.11
+    fecha_resolucion_suministro = models.DateField(null=True, blank=True)  # MD-120: la carga COM-07b
+    # MD-140 (los carga COM-03b): rescisión por mutuo acuerdo.
+    motivo_rescision = models.CharField(max_length=25, choices=MotivoDeRescision.choices, null=True, blank=True)
+    descripcion_rescision = models.CharField(max_length=500, blank=True, default="")
+    fecha_acuerdo_rescision = models.DateField(null=True, blank=True)
+    fecha_registro_rescision = models.DateField(null=True, blank=True)
+    fecha_ultima_entrega_rescision = models.DateField(null=True, blank=True)
+    fecha_rescision = models.DateField(null=True, blank=True)
+
+    objects = ContratoQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Suministro"
+        verbose_name_plural = "Suministros"
+        indexes = [models.Index(fields=["estado_suministro"], name="suministro_estado_idx")]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(estado_suministro__in=["vigente", "finalizado", "resuelto", "rescindido"]), name="suministro_estado_valido"
+            ),
+            models.CheckConstraint(condition=Q(duracion_meses__gte=1, duracion_meses__lte=120), name="suministro_duracion_valida"),
+            models.CheckConstraint(
+                condition=Q(incumplimientos_tolerados__gte=0, incumplimientos_tolerados__lte=99), name="suministro_tolerados_validos"
+            ),
+            models.CheckConstraint(condition=Q(multa_resolucion__gte=0), name="suministro_multa_no_negativa"),
+            models.CheckConstraint(condition=Q(cantidad_incumplimientos__gte=0), name="suministro_incumplimientos_no_negativos"),
+            # resuelto <=> fecha de resolución.
+            models.CheckConstraint(
+                condition=(Q(estado_suministro="resuelto") & Q(fecha_resolucion_suministro__isnull=False))
+                | (~Q(estado_suministro="resuelto") & Q(fecha_resolucion_suministro__isnull=True)),
+                name="suministro_resuelto_con_fecha",
+            ),
+            # rescindido <=> fecha de rescisión.
+            models.CheckConstraint(
+                condition=(Q(estado_suministro="rescindido") & Q(fecha_rescision__isnull=False))
+                | (~Q(estado_suministro="rescindido") & Q(fecha_rescision__isnull=True)),
+                name="suministro_rescindido_con_fecha",
+            ),
+            # Rescisión acordada (motivo no nulo) <=> las tres fechas del acuerdo no nulas.
+            models.CheckConstraint(
+                condition=(
+                    Q(motivo_rescision__isnull=False)
+                    & Q(fecha_acuerdo_rescision__isnull=False)
+                    & Q(fecha_registro_rescision__isnull=False)
+                    & Q(fecha_ultima_entrega_rescision__isnull=False)
+                )
+                | (
+                    Q(motivo_rescision__isnull=True)
+                    & Q(fecha_acuerdo_rescision__isnull=True)
+                    & Q(fecha_registro_rescision__isnull=True)
+                    & Q(fecha_ultima_entrega_rescision__isnull=True)
+                ),
+                name="suministro_rescision_completa",
+            ),
+            models.CheckConstraint(
+                condition=Q(fecha_acuerdo_rescision__isnull=True)
+                | Q(fecha_registro_rescision__isnull=True)
+                | Q(fecha_acuerdo_rescision__lte=F("fecha_registro_rescision")),
+                name="suministro_acuerdo_no_posterior_al_registro",
+            ),
+            # rescindido => rescisión acordada.
+            models.CheckConstraint(
+                condition=~Q(estado_suministro="rescindido") | Q(motivo_rescision__isnull=False), name="suministro_rescindido_acordado"
+            ),
+        ]
+
+    @property
+    def al_limite(self):
+        """Regla 9 de COM-CNS-SUM: un contrato vigente está «al límite» si le queda un solo incumplimiento tolerado o ya usó todos (el próximo lo
+        resuelve, regla 5 de 8.11)."""
+        return self.estado_suministro == self.Estado.VIGENTE and self.cantidad_incumplimientos >= self.incumplimientos_tolerados - 1
+
+    @property
+    def tiene_rescision_acordada(self):
+        """«Rescisión acordada» = motivo no nulo con el estado «vigente» (docs/modelo/comercial.md)."""
+        return self.motivo_rescision is not None and self.estado_suministro == self.Estado.VIGENTE
+
+
+class DetalleSuministro(models.Model):
+    """Una variedad que se entrega periódicamente en una dirección del cliente (R112, R125, R126). El calendario no se guarda: se calcula
+    (``calendario.calendario``). ``reemplaza_a`` y ``fecha_fin_detalle`` (MD-131) los escribe COM-03b. ``fecha_base_ajuste`` no está en el
+    modelo: desde cuándo se cuentan los meses del ajuste (docs/modelo/comercial.md)."""
+
+    class Mecanismo(models.TextChoices):
+        """Mecanismo de precio."""
+
+        FIJO = "fijo", "Fijo"
+        AJUSTE_PERIODICO = "ajuste_periodico", "Ajuste periódico"
+
+    class Estado(models.TextChoices):
+        """Nace «vigente»; «finalizado» lo escribe COM-MOD-SUM y «resuelto», COM-RSV-SUM."""
+
+        VIGENTE = "vigente", "Vigente"
+        FINALIZADO = "finalizado", "Finalizado"
+        RESUELTO = "resuelto", "Resuelto"
+
+    suministro = models.ForeignKey(Suministro, on_delete=models.PROTECT, related_name="detalles")  # R112
+    # R125: una dirección activa del cliente del contrato; la verifica el servicio (D-58), no la base.
+    direccion = models.ForeignKey(Direccion, on_delete=models.PROTECT, related_name="detalles_de_suministro")
+    variedad = models.ForeignKey(Variedad, on_delete=models.PROTECT, related_name="detalles_de_suministro")  # R126
+    periodo_entrega_dias = models.PositiveSmallIntegerField()
+    fecha_primer_entrega = models.DateField()
+    cantidad_por_periodo = models.PositiveIntegerField()
+    mecanismo_precio = models.CharField(max_length=20, choices=Mecanismo.choices)
+    estado_detalle_suministro = models.CharField(max_length=12, choices=Estado.choices, default=Estado.VIGENTE)
+    precio_unitario_suministro = models.DecimalField(max_digits=9, decimal_places=2)  # precio inicial
+    porcentaje_ajuste = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    meses_ajuste = models.PositiveSmallIntegerField(null=True, blank=True)
+    fecha_fin_detalle = models.DateField(null=True, blank=True)  # MD-131
+    fecha_base_ajuste = models.DateField()
+    reemplaza_a = models.OneToOneField("self", null=True, blank=True, on_delete=models.PROTECT, related_name="sucesor")  # MD-131
+
+    class Meta:
+        verbose_name = "Detalle de suministro"
+        verbose_name_plural = "Detalles de suministro"
+        constraints = [
+            models.CheckConstraint(condition=Q(periodo_entrega_dias__gte=1, periodo_entrega_dias__lte=365), name="detalle_suministro_periodo_valido"),
+            models.CheckConstraint(condition=Q(cantidad_por_periodo__gte=1, cantidad_por_periodo__lte=500000), name="detalle_suministro_cantidad_valida"),
+            models.CheckConstraint(
+                condition=Q(precio_unitario_suministro__gte="0.01", precio_unitario_suministro__lte="9999999.99"),
+                name="detalle_suministro_precio_valido",
+            ),
+            models.CheckConstraint(
+                condition=Q(porcentaje_ajuste__isnull=True) | Q(porcentaje_ajuste__gte="0.01", porcentaje_ajuste__lte=100),
+                name="detalle_suministro_porcentaje_valido",
+            ),
+            models.CheckConstraint(
+                condition=Q(meses_ajuste__isnull=True) | Q(meses_ajuste__gte=1, meses_ajuste__lte=60), name="detalle_suministro_meses_validos"
+            ),
+            models.CheckConstraint(
+                condition=Q(mecanismo_precio__in=["fijo", "ajuste_periodico"]), name="detalle_suministro_mecanismo_valido"
+            ),
+            models.CheckConstraint(
+                condition=Q(estado_detalle_suministro__in=["vigente", "finalizado", "resuelto"]), name="detalle_suministro_estado_valido"
+            ),
+            # fijo => sin ajuste; ajuste periódico => porcentaje y meses.
+            models.CheckConstraint(
+                condition=(Q(mecanismo_precio="fijo") & Q(porcentaje_ajuste__isnull=True) & Q(meses_ajuste__isnull=True))
+                | (Q(mecanismo_precio="ajuste_periodico") & Q(porcentaje_ajuste__isnull=False) & Q(meses_ajuste__isnull=False)),
+                name="detalle_suministro_ajuste_segun_mecanismo",
+            ),
+            # Regla «Dirección y modalidad» y MD-131: un par (variedad, dirección) vigente por contrato; los finalizados no cuentan.
+            models.UniqueConstraint(
+                fields=["suministro", "variedad", "direccion"],
+                condition=Q(estado_detalle_suministro="vigente"),
+                name="detalle_suministro_par_vigente_unico",
+            ),
+        ]
+
+    def __str__(self):
+        """«SUM-0001 · Lechuga Crespa» (texto de la auditoría, D-36)."""
+        return f"{self.suministro.codigo} · {self.variedad}"
+
+
+class ClausulaResolutoria(models.Model):
+    """Padre sin atributos de las dos cláusulas: abstracta (una tabla vacía no agrega nada y cada hija tiene un solo dueño)."""
+
+    class Meta:
+        abstract = True
+
+
+class ClausulaSuministrado(ClausulaResolutoria):
+    """Una por contrato (MD-124): rige el pago de todas sus entregas. Un cambio la actualiza (MD-132)."""
+
+    suministro = models.OneToOneField(Suministro, on_delete=models.PROTECT, related_name="clausula_suministrado")
+    plazo_pago_dias = models.PositiveSmallIntegerField()
+    indemnizacion_retraso_pago = models.DecimalField(max_digits=9, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Cláusula del suministrado"
+        verbose_name_plural = "Cláusulas del suministrado"
+        constraints = [
+            models.CheckConstraint(condition=Q(plazo_pago_dias__gte=0, plazo_pago_dias__lte=365), name="clausula_suministrado_plazo_valido"),
+            models.CheckConstraint(
+                condition=Q(indemnizacion_retraso_pago__gte=0, indemnizacion_retraso_pago__lte="9999999.99"),
+                name="clausula_suministrado_indemnizacion_valida",
+            ),
+        ]
+
+    def __str__(self):
+        """«Cláusula del suministrado de SUM-0001»."""
+        return f"Cláusula del suministrado de {self.suministro.codigo}"
+
+
+class ClausulaSuministrante(ClausulaResolutoria):
+    """Una por detalle. Un cambio crea el detalle sucesor con su cláusula nueva. ``cantidad_minima`` no puede superar la cantidad por
+    período del detalle: está en otra tabla y lo verifica el servicio."""
+
+    detalle = models.OneToOneField(DetalleSuministro, on_delete=models.PROTECT, related_name="clausula_suministrante")
+    plazo_entrega_dias = models.PositiveSmallIntegerField()
+    indemnizacion_retraso_entrega = models.DecimalField(max_digits=9, decimal_places=2)
+    cantidad_minima = models.PositiveIntegerField()
+    indemnizacion_faltante = models.DecimalField(max_digits=9, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Cláusula del suministrante"
+        verbose_name_plural = "Cláusulas del suministrante"
+        constraints = [
+            models.CheckConstraint(condition=Q(plazo_entrega_dias__gte=0, plazo_entrega_dias__lte=365), name="clausula_suministrante_plazo_valido"),
+            models.CheckConstraint(
+                condition=Q(indemnizacion_retraso_entrega__gte=0, indemnizacion_retraso_entrega__lte="9999999.99"),
+                name="clausula_suministrante_retraso_valido",
+            ),
+            models.CheckConstraint(condition=Q(cantidad_minima__gte=1), name="clausula_suministrante_minima_valida"),
+            models.CheckConstraint(
+                condition=Q(indemnizacion_faltante__gte=0, indemnizacion_faltante__lte="9999999.99"),
+                name="clausula_suministrante_faltante_valido",
+            ),
+        ]
+
+    def __str__(self):
+        """«Cláusula del suministrante de SUM-0001 · Lechuga Crespa»."""
+        return f"Cláusula del suministrante de {self.detalle}"

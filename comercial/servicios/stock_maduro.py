@@ -6,6 +6,11 @@
 # `cantidad_sin_cubrir` (regla 10 de 8.8), `reservado_de_lotes` y `detalle_de_cosechas` (los registrantes de `produccion.extensiones`) y
 # `repartir`, la función pura que decide qué se toma de cada partida y de cada lote (la sección 7 del patrón la reutiliza).
 #
+# COM-03a (sección 7 del patrón) suma los **períodos** de un detalle de suministro: `Periodo`, `asignar` y `cantidad_sin_cubrir` con un
+# `Periodo`, `sin_cubrir_de_periodos` (una consulta para muchos) y la verificación acumulada de COM-PCT-SUM 9e: `simular` y
+# `simular_varias` (solo lectura, sin bloquear), que usan el mismo `repartir` que `asignar`. Para no hacer una consulta por período, la
+# lectura de candidatos (`_leer_varias`) trae una vez las partidas, los lotes y lo reservado, y arma los candidatos de cada fecha en memoria.
+#
 # Bloqueos (docs/patrones/stock_maduro.md, sección 3; siempre ``FOR NO KEY UPDATE``): el caso de uso base ya tomó las cuentas, los
 # invernaderos considerados, el cliente y las variedades; `asignar` toma (o confirma, es reentrante) los lotes y las partidas candidatos, en
 # orden de id, ANTES de leer sus reservas. Así dos asignaciones sobre la misma variedad se ponen en fila y la segunda ve lo que confirmó la
@@ -18,7 +23,8 @@ from datetime import date, timedelta
 from django.db import transaction
 from django.db.models import Sum
 
-from comercial.models import DetalleReserva, DetalleVenta, ReservaStock
+from comercial.models import DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
+from comercial.servicios import calendario
 from core import notificaciones
 from inventario.servicios import ciclos, stock
 from maestros.models import Invernadero, Variedad
@@ -34,6 +40,21 @@ Asignacion = namedtuple("Asignacion", "cubierta sin_cubrir reservas cosechas")
 # Un candidato a ser tomado: `clave` es ("partida", id) o ("lote", id); `origen` es el `StockCosechado` o el `Lote`.
 Candidato = namedtuple("Candidato", "clave tipo origen invernadero_id libre")
 Lectura = namedtuple("Lectura", "candidatos libres sin_capataz programadas")
+# Un período es un par (detalle de suministro, fecha del calendario del detalle): no es una clase (docs/modelo/comercial.md).
+Periodo = namedtuple("Periodo", "detalle fecha")
+
+
+class Cobertura(namedtuple("Cobertura", "fecha cantidad disponible")):
+    """Lo que `simular` dice de un pedido: lo que se pidió y el stock maduro libre que le queda **después de los pedidos anteriores**.
+    Lo que se cubre es la menor de las dos (``cubierta``)."""
+
+    __slots__ = ()
+
+    @property
+    def cubierta(self):
+        """La parte del pedido que se cubre: ``min(cantidad, disponible)``."""
+        return min(self.cantidad, self.disponible)
+
 
 # Qué parámetro de configuración da la anticipación de la cosecha según quién reserva (regla 3 de 8.11).
 PARAMETROS = {
@@ -71,21 +92,25 @@ def reservado_de_lotes(lote_ids):
 
 def detalle_de_cosechas(cosecha_ids):
     """``{cosecha_id: DetalleDeCosecha}``: el registrante de `produccion.extensiones.registrar_detalle_de_cosecha`. El contrato es el código
-    visible de la compra-venta de la reserva (o ``None``); los lotes, ``(lote_id, cantidad_reservada, cantidad_cosechada)`` en orden de id de
-    lote. Dos consultas, sin consultas por cosecha."""
+    visible de la compra-venta o del suministro de la reserva (o ``None``); los lotes, ``(lote_id, cantidad_reservada,
+    cantidad_cosechada)`` en orden de id de lote. Dos consultas, sin consultas por cosecha."""
     ids = list(cosecha_ids)
     if not ids:
         return {}
     detalle = {i: DetalleDeCosecha(None, None, []) for i in ids}
     reservas = ReservaStock.objects.filter(cosecha_id__in=ids).values(
-        "pk", "cosecha_id", "fecha_entrega_reserva", "detalle_venta__compra_venta__numero"
+        "pk",
+        "cosecha_id",
+        "fecha_entrega_reserva",
+        "detalle_venta__compra_venta__numero",
+        "detalle_suministro__suministro__numero",
     )
     por_reserva = {}
     for fila in reservas:
-        numero = fila["detalle_venta__compra_venta__numero"]
-        detalle[fila["cosecha_id"]] = DetalleDeCosecha(
-            f"CV-{numero:04d}" if numero is not None else None, fila["fecha_entrega_reserva"], []
-        )
+        numero_cv = fila["detalle_venta__compra_venta__numero"]
+        numero_sum = fila["detalle_suministro__suministro__numero"]
+        codigo = f"CV-{numero_cv:04d}" if numero_cv is not None else (f"SUM-{numero_sum:04d}" if numero_sum is not None else None)
+        detalle[fila["cosecha_id"]] = DetalleDeCosecha(codigo, fila["fecha_entrega_reserva"], [])
         por_reserva[fila["pk"]] = fila["cosecha_id"]
     lineas = (
         DetalleReserva.objects.filter(reserva_id__in=list(por_reserva), lote__isnull=False)
@@ -100,10 +125,17 @@ def detalle_de_cosechas(cosecha_ids):
 # ---- cantidad sin cubrir (regla 10 de 8.8) ----
 
 
+def _cubierto(cantidad_reservada, cantidad_cosechada, lote_id):
+    """Regla 9 de 8.8: de lote cosechado, ``min(cosechada, reservada)``; de lote sin cosechar, la reservada; de partida, la reservada."""
+    return min(cantidad_cosechada, cantidad_reservada) if lote_id and cantidad_cosechada is not None else cantidad_reservada
+
+
 def cantidad_sin_cubrir(detalle):
     """Regla 10 de 8.8: la cantidad pedida menos la cubierta por las líneas de sus reservas no liberadas. La cantidad cubierta de una línea
     (regla 9 de 8.8): de lote sin cosechar, la reservada; de lote cosechado, ``min(cosechada, reservada)``; de partida, la reservada. Un
-    detalle confirmado, rechazado o cancelado no tiene. Nunca menor que 0."""
+    detalle confirmado, rechazado o cancelado no tiene. Nunca menor que 0. Con un ``Periodo``, lo de ese período (``sin_cubrir_de_periodos``)."""
+    if isinstance(detalle, Periodo):
+        return sin_cubrir_de_periodos([detalle])[detalle]
     if detalle.estado_detalle_venta in (
         DetalleVenta.Estado.CONFIRMADO,
         DetalleVenta.Estado.RECHAZADO,
@@ -115,8 +147,33 @@ def cantidad_sin_cubrir(detalle):
         .exclude(reserva__estado_reserva=ReservaStock.Estado.LIBERADA)
         .values_list("cantidad_reservada", "cantidad_cosechada", "lote_id")
     )
-    cubierto = sum(min(cosechada, reservada) if lote_id and cosechada is not None else reservada for reservada, cosechada, lote_id in lineas)
+    cubierto = sum(_cubierto(reservada, cosechada, lote_id) for reservada, cosechada, lote_id in lineas)
     return max(0, detalle.cant_solicitada_venta - cubierto)
+
+
+def sin_cubrir_de_periodos(periodos):
+    """``{Periodo: cantidad sin cubrir}`` de muchos períodos con **una** consulta (regla 10 de 8.8, MD-126): ``cantidad_por_periodo`` menos
+    lo cubierto por las líneas de las reservas **no liberadas** del detalle con esa ``fecha_entrega_reserva``. Tiene cantidad sin cubrir un
+    período de un detalle «vigente»; los demás (finalizado, resuelto) no tienen (el finalizado con fecha hasta su fin lo suma COM-04, D-64
+    punto 8). Nunca menor que 0. Una lista vacía da ``{}`` sin consultar."""
+    periodos = list(periodos)
+    if not periodos:
+        return {}
+    cubierto = defaultdict(int)
+    filas = (
+        DetalleReserva.objects.filter(reserva__detalle_suministro_id__in={p.detalle.pk for p in periodos})
+        .exclude(reserva__estado_reserva=ReservaStock.Estado.LIBERADA)
+        .values_list("reserva__detalle_suministro_id", "reserva__fecha_entrega_reserva", "cantidad_reservada", "cantidad_cosechada", "lote_id")
+    )
+    for detalle_id, fecha, reservada, cosechada, lote_id in filas:
+        cubierto[(detalle_id, fecha)] += _cubierto(reservada, cosechada, lote_id)
+    resultado = {}
+    for p in periodos:
+        if p.detalle.estado_detalle_suministro != DetalleSuministro.Estado.VIGENTE:
+            resultado[p] = 0
+        else:
+            resultado[p] = max(0, p.detalle.cantidad_por_periodo - cubierto[(p.detalle.pk, p.fecha)])
+    return resultado
 
 
 # ---- el reparto (función pura) ----
@@ -165,26 +222,33 @@ def bloquear_candidatos(variedad_ids, invernadero_ids):
     )
 
 
-def _fechas_programadas(variedad_ids, fecha_entrega, parametro):
-    """``{variedad_id: fecha programada por defecto}`` de una cosecha automática: ``max(hoy, entrega − anticipación efectiva)`` con la
-    anticipación efectiva ``min(parámetro, postcosecha de la variedad)`` (regla 3 de 8.11). El parámetro se lee una vez."""
+def _anticipacion(variedad_ids, parametro):
+    """``(hoy, días del parámetro, {variedad_id: postcosecha})``: lo que hace falta para la fecha programada por defecto de una cosecha
+    automática. El parámetro y las postcosechas se leen **una vez**, aunque después se calculen muchas fechas."""
     hoy = stock.hoy()
     dias = getattr(configuracion.obtener(), PARAMETROS[parametro])
     postcosecha = dict(Variedad.objects.filter(pk__in=variedad_ids).values_list("pk", "duracion_post_cosecha"))
+    return hoy, dias, postcosecha
+
+
+def _programadas(anticipacion, variedad_ids, fecha_entrega):
+    """``{variedad_id: fecha programada por defecto}`` de una cosecha automática: ``max(hoy, entrega − anticipación efectiva)`` con la
+    anticipación efectiva ``min(parámetro, postcosecha de la variedad)`` (regla 3 de 8.11)."""
+    hoy, dias, postcosecha = anticipacion
     return {v: max(hoy, fecha_entrega - timedelta(days=min(dias, postcosecha.get(v, dias)))) for v in variedad_ids}
 
 
-def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluidos=()):
-    """Los candidatos a ser tomados, **en el orden de asignación** de cada variedad, con su stock libre. Solo lee (no bloquea). Una consulta
-    por tabla: nunca una por lote ni por variedad. ``sin_capataz`` son los invernaderos considerados sin Capataz activo que tenían lotes
-    que podían asignarse (extensión 5a)."""
+def _leer_varias(variedad_ids, invernadero_ids, fechas, parametro, lotes_excluidos=()):
+    """``{fecha: Lectura}``: los candidatos a ser tomados para cada fecha de entrega, **en el orden de asignación** de cada variedad, con su
+    stock libre. Solo lee (no bloquea). **Una consulta por tabla**, nunca una por lote, por variedad ni por fecha: las partidas se traen
+    con la fecha límite más temprana de las pedidas y cada fecha filtra en memoria (el stock libre no depende de la fecha). ``sin_capataz``
+    son los invernaderos considerados sin Capataz activo que tenían lotes que podían asignarse a esa fecha (extensión 5a)."""
     variedad_ids = list(dict.fromkeys(variedad_ids))
     invernadero_ids = list(dict.fromkeys(invernadero_ids))
-    candidatos = {v: [] for v in variedad_ids}
-    libres, sin_capataz = {}, set()
-    if not variedad_ids or not invernadero_ids:
-        return Lectura(candidatos, libres, sin_capataz, {})
-    programadas = _fechas_programadas(variedad_ids, fecha_entrega, parametro)
+    fechas = sorted(set(fechas))
+    if not variedad_ids or not invernadero_ids or not fechas:
+        return {f: Lectura({v: [] for v in variedad_ids}, {}, set(), {}) for f in fechas}
+    anticipacion = _anticipacion(variedad_ids, parametro)
     con_capataz = set(
         Invernadero.objects.filter(pk__in=invernadero_ids, capataz__is_active=True).values_list("pk", flat=True)
     )
@@ -195,7 +259,7 @@ def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluid
             estado_stock_cosechado=StockCosechado.Estado.DISPONIBLE,
             lote__invernadero_id__in=invernadero_ids,
             lote__siembra__variedad_id__in=variedad_ids,
-            fecha_limite__gte=fecha_entrega,
+            fecha_limite__gte=fechas[0],
             cantidad_disponible_cosechado__gt=0,
         )
         .select_related("lote__siembra")
@@ -211,12 +275,8 @@ def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluid
             .annotate(total=Sum("cantidad_reservada"))
         )
         reservado_partidas = {f["partida_id"]: f["total"] for f in filas}
-    for p in partidas:
-        libre = p.cantidad_disponible_cosechado - reservado_partidas.get(p.pk, 0)
-        if libre > 0:
-            clave = ("partida", p.pk)
-            libres[clave] = libre
-            candidatos[p.lote.siembra.variedad_id].append(Candidato(clave, "partida", p, p.lote.invernadero_id, libre))
+    partidas_libres = [(p, p.cantidad_disponible_cosechado - reservado_partidas.get(p.pk, 0)) for p in partidas]
+    partidas_libres = [(p, libre) for p, libre in partidas_libres if libre > 0]
 
     # Lotes elegibles: «activo», en Maduración, con stock libre y cuya fecha máxima de cosecha no es anterior a la fecha programada de su
     # cosecha. La entrada a Maduración y la fecha máxima salen de `produccion` (nunca a mano): para un lote que ya está en Maduración, la
@@ -233,15 +293,28 @@ def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluid
         .select_related("siembra", "etapa")
         .order_by("pk")
     )
+    lotes_libres = []  # (lote, libre, entrada a Maduración)
     if lotes:
         reservado = reservado_de_lotes([lote.pk for lote in lotes])
         entradas = api_lotes.entradas_a_la_etapa(lotes, ciclos.etapas_de({lote.siembra.variedad_id for lote in lotes}))
-        elegibles = defaultdict(list)
         for lote in lotes:
             libre, entrada = lote.cantidad_actual - reservado.get(lote.pk, 0), entradas.get(lote.pk)
+            if libre > 0 and entrada is not None:
+                lotes_libres.append((lote, libre, entrada))
+
+    lecturas = {}
+    for fecha in fechas:
+        programadas = _programadas(anticipacion, variedad_ids, fecha)
+        candidatos = {v: [] for v in variedad_ids}
+        libres, sin_capataz = {}, set()
+        for p, libre in partidas_libres:
+            if p.fecha_limite >= fecha:
+                clave = ("partida", p.pk)
+                libres[clave] = libre
+                candidatos[p.lote.siembra.variedad_id].append(Candidato(clave, "partida", p, p.lote.invernadero_id, libre))
+        elegibles = defaultdict(list)
+        for lote, libre, entrada in lotes_libres:
             variedad_id = lote.siembra.variedad_id
-            if libre <= 0 or entrada is None:
-                continue
             if entrada + timedelta(days=lote.etapa.duracion_estimada_dias) < programadas[variedad_id]:
                 continue  # regla 11 de 8.6 y regla 3 de 8.20: llegaría tarde a cosecharse
             if lote.invernadero_id not in con_capataz:
@@ -253,7 +326,13 @@ def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluid
         for variedad_id, lista in elegibles.items():
             # Del que entró antes en Maduración al que entró después y, como desempate, el de menor stock libre (y `id`).
             candidatos[variedad_id].extend(c for *_, c in sorted(lista, key=lambda t: t[:3]))
-    return Lectura(candidatos, libres, sin_capataz, programadas)
+        lecturas[fecha] = Lectura(candidatos, libres, sin_capataz, programadas)
+    return lecturas
+
+
+def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluidos=()):
+    """`_leer_varias` para una sola fecha de entrega (`asignar` y `disponible`)."""
+    return _leer_varias(variedad_ids, invernadero_ids, [fecha_entrega], parametro, lotes_excluidos)[fecha_entrega]
 
 
 def disponible(variedad_ids, invernadero_ids, fecha_entrega, parametro):
@@ -271,33 +350,85 @@ def disponible(variedad_ids, invernadero_ids, fecha_entrega, parametro):
     return resultado
 
 
+# ---- la simulación (verificación acumulada por variedad, COM-PCT-SUM 9e) ----
+
+
+def simular_varias(pedidos_por_variedad, invernadero_ids, parametro):
+    """``{variedad_id: [Cobertura]}``: la verificación acumulada de COM-PCT-SUM (9e) y COM-MOD-SUM (5b.3) para muchas variedades de una vez.
+    ``pedidos_por_variedad`` es ``{variedad_id: [(fecha, cantidad), …]}`` con los pedidos **en orden de fecha** (si no, ``ValueError``).
+    Cada pedido se reparte con el mismo `repartir` que usa `asignar`, y lo que toma se descuenta en memoria del stock libre antes de seguir
+    con el siguiente: cada período se verifica contra lo que dejan libre los anteriores **de la misma variedad**. **Solo lectura, sin
+    bloquear**; una consulta por tabla, igual con 1 que con muchos pedidos y variedades. Sin pedidos, ``{}`` por variedad sin consultar."""
+    if parametro not in PARAMETROS:
+        raise ValueError(f"`parametro` tiene que ser uno de {sorted(PARAMETROS)}.")
+    for variedad_id, pedidos in pedidos_por_variedad.items():
+        fechas = [fecha for fecha, _ in pedidos]
+        if fechas != sorted(fechas):
+            raise ValueError("Los pedidos tienen que venir en orden de fecha.")
+    resultado = {variedad_id: [] for variedad_id in pedidos_por_variedad}
+    fechas = {fecha for pedidos in pedidos_por_variedad.values() for fecha, _ in pedidos}
+    if not fechas:
+        return resultado
+    lecturas = _leer_varias(list(pedidos_por_variedad), invernadero_ids, fechas, parametro)
+    restante = {}  # el stock libre que va quedando; las claves son de una sola variedad (un lote o una partida es de una variedad)
+    for lectura in lecturas.values():
+        restante.update(lectura.libres)
+    for variedad_id, pedidos in pedidos_por_variedad.items():
+        for fecha, cantidad in pedidos:
+            claves = [c.clave for c in lecturas[fecha].candidatos[variedad_id]]
+            libre = {clave: restante[clave] for clave in claves}
+            tomado, _ = repartir(claves, libre, cantidad)
+            for clave, cuanto in tomado:
+                restante[clave] -= cuanto
+            resultado[variedad_id].append(Cobertura(fecha, cantidad, sum(libre.values())))
+    return resultado
+
+
+def simular(variedad_id, invernadero_ids, pedidos, parametro):
+    """``[Cobertura(fecha, cantidad, disponible)]`` de los ``pedidos`` de **una** variedad, en orden de fecha (`simular_varias`)."""
+    return simular_varias({variedad_id: list(pedidos)}, invernadero_ids, parametro)[variedad_id]
+
+
 # ---- PROD-ASG-STK ----
 
 
-def invernaderos_considerados(compra_venta):
+def invernaderos_considerados(contrato):
     """Pasos 3, 3a y 3b: con retiro, solo el invernadero de retiro; con envío (y en un suministro), los invernaderos del Vendedor del
     contrato (R115, R097, R151). Siempre **activos** (regla 4 de PROD-BAJ-INV: un invernadero inactivo no aparece en las asignaciones).
-    Con el Capataz y el Agrónomo cargados, en orden de id."""
+    Con el Capataz y el Agrónomo cargados, en orden de id. ``contrato`` es una compra-venta o un suministro (este no tiene retiro)."""
     consulta = Invernadero.objects.filter(estado_invernadero=Invernadero.Estado.ACTIVO).select_related("agronomo", "capataz")
-    if compra_venta.modalidad_entrega == compra_venta.Modalidad.RETIRO:
-        consulta = consulta.filter(pk=compra_venta.invernadero_retiro_id)
+    if getattr(contrato, "modalidad_entrega", None) == "retiro":
+        consulta = consulta.filter(pk=contrato.invernadero_retiro_id)
     else:
-        consulta = consulta.filter(vendedor_id=compra_venta.vendedor_id)
+        consulta = consulta.filter(vendedor_id=contrato.vendedor_id)
     return list(consulta.order_by("pk"))
 
 
 def _verificar(detalle, cantidad, fecha_entrega, parametro):
     """Precondiciones a, b y c (las garantiza el caso de uso base; si no se cumplen es un error de programación): ``RuntimeError`` sin
     transacción y ``ValueError`` con un detalle que no se puede cubrir, una cantidad que no es un entero mayor que cero o una fecha o un
-    parámetro inválidos. Devuelve el detalle releído con su compra-venta y su variedad."""
+    parámetro inválidos. ``detalle`` es un ``DetalleVenta`` «abierto» de una venta «abierta» o un ``Periodo`` de un detalle y un suministro
+    «vigentes» cuya fecha es del calendario del detalle (con ``parametro="suministro"``). Devuelve el detalle (o el período) releído."""
     if transaction.get_autocommit():
         raise RuntimeError("`asignar` corre dentro de la transacción del caso de uso base (precondición a de PROD-ASG-STK).")
-    if not isinstance(detalle, DetalleVenta):
-        raise ValueError("Hasta COM-03, `asignar` solo cubre un detalle de venta.")
+    if not isinstance(detalle, (DetalleVenta, Periodo)):
+        raise ValueError("`asignar` cubre un detalle de venta o un período de un detalle de suministro.")
     if parametro not in PARAMETROS:
         raise ValueError(f"`parametro` tiene que ser uno de {sorted(PARAMETROS)}.")
     if not isinstance(fecha_entrega, date) or isinstance(cantidad, bool) or not isinstance(cantidad, int) or cantidad <= 0:
         raise ValueError("Hace falta una fecha de entrega y una cantidad entera mayor que cero (precondición c).")
+    if isinstance(detalle, Periodo):
+        if parametro != "suministro":
+            raise ValueError("Con un período, `parametro` es siempre «suministro» (sección 7 del patrón).")
+        releido = DetalleSuministro.objects.select_related("suministro", "variedad").get(pk=detalle.detalle.pk)
+        if (
+            releido.estado_detalle_suministro != DetalleSuministro.Estado.VIGENTE
+            or releido.suministro.estado_suministro != Suministro.Estado.VIGENTE
+        ):
+            raise ValueError("El detalle y el suministro tienen que estar «vigentes» (precondición b).")
+        if fecha_entrega != detalle.fecha or not calendario.calendario(releido, desde=fecha_entrega, hasta=fecha_entrega):
+            raise ValueError("La fecha no es un período del calendario del detalle (precondición b).")
+        return Periodo(releido, fecha_entrega)
     detalle = DetalleVenta.objects.select_related("compra_venta", "variedad").get(pk=detalle.pk)
     if (
         detalle.estado_detalle_venta != DetalleVenta.Estado.ABIERTO
@@ -313,6 +444,8 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
 
     - ``origen`` es la cuenta que actúa (Vendedor o Gerente) o ``None`` si actúa InfoPonia (D-27). Corre dentro de la transacción del caso de
       uso base (sin ella, ``RuntimeError``), con las cuentas, los invernaderos, el cliente y las variedades ya bloqueados.
+    - ``detalle`` es un ``DetalleVenta`` o un ``Periodo`` (desde COM-03): con un período, cada reserva lleva ``detalle_suministro`` y
+      ``fecha_entrega_reserva`` = la fecha del período, y los invernaderos considerados son los del Vendedor **actual** del suministro.
     - Paso 2 y extensión 2a: reserva la menor entre ``cantidad`` y la cantidad sin cubrir del detalle; sin nada sin cubrir, no crea nada.
     - Pasos 3 a 5 y extensiones 3a, 3b, 5a, 5c y 5d: los invernaderos considerados, las partidas por vencimiento y los lotes por entrada a
       Maduración (reglas 7, 9 a 11 de 8.6; 2 y 3 de 8.20); los lotes de un invernadero sin Capataz activo no se consideran y, si podían
@@ -323,12 +456,15 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
     - No cambia la cantidad de ningún lote ni de ninguna partida (regla 14 de 8.8), ni el estado del detalle ni de la venta, y no audita.
     """
     detalle = _verificar(detalle, cantidad, fecha_entrega, parametro)
+    es_periodo = isinstance(detalle, Periodo)
+    detalle_de_contrato = detalle.detalle if es_periodo else detalle
+    contrato = detalle_de_contrato.suministro if es_periodo else detalle_de_contrato.compra_venta
     a_reservar = min(cantidad, cantidad_sin_cubrir(detalle))
     if a_reservar <= 0:
         return Asignacion(0, 0, [], [])
-    considerados = invernaderos_considerados(detalle.compra_venta)
+    considerados = invernaderos_considerados(contrato)
     ids = [i.pk for i in considerados]
-    variedad_id = detalle.variedad_id
+    variedad_id = detalle_de_contrato.variedad_id
     bloquear_candidatos([variedad_id], ids)  # antes de leer las reservas: así se ve lo que confirmaron las demás
     lectura = _leer([variedad_id], ids, fecha_entrega, parametro, lotes_excluidos)
     for invernadero_id in sorted(lectura.sin_capataz):
@@ -361,7 +497,7 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
             )
             cosechas.append(cosecha)
         reserva = ReservaStock.objects.create(
-            detalle_venta=detalle,
+            **({"detalle_suministro": detalle_de_contrato} if es_periodo else {"detalle_venta": detalle_de_contrato}),
             invernadero=invernadero,
             fecha_reserva=hoy,
             fecha_entrega_reserva=fecha_entrega,
@@ -379,7 +515,7 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
             pendientes_de_aviso.append((cosecha, invernadero, [(c.origen, cuanto) for c, cuanto in items if c.tipo == "lote"]))
 
     for cosecha, invernadero, lotes_tomados in pendientes_de_aviso:
-        _notificar(cosecha, invernadero, detalle, lotes_tomados)
+        _notificar(cosecha, invernadero, detalle_de_contrato.variedad, contrato, fecha_entrega, lotes_tomados)
     cubierta = sum(cuanto for _, cuanto in tomado)
     return Asignacion(cubierta, a_reservar - cubierta, reservas, cosechas)
 
@@ -406,13 +542,13 @@ def _texto_de_cosecha(cosecha, invernadero, variedad, lotes_tomados, sufijo=""):
     return armar(1)[:LARGO_DE_LA_NOTIFICACION]
 
 
-def _notificar(cosecha, invernadero, detalle, lotes_tomados):
-    """Una notificación por cosecha al Capataz y otra al Agrónomo del invernadero (si tiene uno activo); este último con el contrato, la
-    fecha de entrega y que puede modificarla o cancelarla. Sin reintento: no hay cola de envíos (D-42; «Notificaciones» de temas_abiertos)."""
+def _notificar(cosecha, invernadero, variedad, contrato, fecha_entrega, lotes_tomados):
+    """Una notificación por cosecha al Capataz y otra al Agrónomo del invernadero (si tiene uno activo); este último con el contrato (una
+    compra-venta o un suministro), la fecha de entrega y que puede modificarla o cancelarla. Sin reintento: no hay cola de envíos (D-42;
+    «Notificaciones» de temas_abiertos)."""
     titulo = f"Nueva cosecha {cosecha.codigo}"
-    variedad = detalle.variedad
     sufijo = (
-        f" Para {detalle.compra_venta.codigo}, entrega el {detalle.compra_venta.fecha_pactada_venta:%d/%m/%Y}."
+        f" Para {contrato.codigo}, entrega el {fecha_entrega:%d/%m/%Y}."
         " Podés modificarla o cancelarla desde Órdenes de trabajo."
     )
     capataz = invernadero.capataz

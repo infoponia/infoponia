@@ -9,7 +9,7 @@
 # mismo error de campo, nunca un 500). Dos modificaciones a la vez del mismo cliente: gana la última (D-40), salvo el CUIT.
 #
 # Lo que completan otras tareas, escrito ya como funciones: ``direcciones_en_uso`` y ``pendientes_del_cliente`` (COM-02 las completó con
-# las compra-ventas; COM-03, COM-06 y COM-08a suman las suyas) e ``impide_quitar_el_correo`` (COM-03, hoy siempre False).
+# las compra-ventas; COM-03a les sumó los suministros; COM-06 y COM-08a suman lo suyo) e ``impide_quitar_el_correo`` (COM-03a).
 
 import re
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ from django.db.models.functions import Coalesce, Concat, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
-from comercial.models import Cliente, CompraVenta, DireccionCliente
+from comercial.models import Cliente, CompraVenta, DetalleSuministro, DireccionCliente, Suministro
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
@@ -117,24 +117,30 @@ class FichaDelCliente:
 def direcciones_en_uso(ids):
     """Los ids de ``Direccion`` (de ``ids``) que usa una compra-venta o un detalle de suministro (regla 3 de 8.18, MD-19): esas
     no se modifican ni se borran. Desde COM-02 cuenta las compra-ventas con envío, **en cualquier estado** (una dirección usada nunca se
-    modifica ni se borra, aunque la venta esté cancelada); **COM-03 suma los detalles de suministro**."""
+    modifica ni se borra, aunque la venta esté cancelada); COM-03a suma los detalles de suministro, también en cualquier estado."""
     ids = list(ids)
     if not ids:
         return set()
-    return set(CompraVenta.objects.filter(direccion_envio_id__in=ids).values_list("direccion_envio_id", flat=True))
+    de_ventas = set(CompraVenta.objects.filter(direccion_envio_id__in=ids).values_list("direccion_envio_id", flat=True))
+    de_suministros = set(DetalleSuministro.objects.filter(direccion_id__in=ids).values_list("direccion_id", flat=True))
+    return de_ventas | de_suministros
 
 
 def impide_quitar_el_correo(cliente):
     """Regla 3 de COM-MOD-CLT: True si al cliente no se le puede quitar el correo porque tiene un suministro vigente (los enlaces
-    de confirmación y las quejas solo llegan por correo, regla 18 de 8.20). **Se completa en COM-03**. En COM-01, siempre False."""
-    return False
+    de confirmación y las quejas solo llegan por correo, regla 18 de 8.20). Lo completó COM-03a; en COM-01 era siempre False."""
+    return Suministro.objects.filter(cliente=cliente, estado_suministro=Suministro.Estado.VIGENTE).exists()
 
 
 def pendientes_del_cliente(cliente, actor):
     """Regla 1 de COM-BAJ-CLT: lo que el cliente tiene pendiente, como textos para la ventana de baja (entregas sin cobrar,
     suministros vigentes, compra-ventas abiertas, quejas y discrepancias pendientes). Desde COM-02 informa las compra-ventas abiertas o
-    pendientes de decisión (de todos los Vendedores: solo el Gerente da de baja); **COM-03** suma los suministros, **COM-06** las entregas
-    sin cobrar, las quejas y las discrepancias, **COM-08a** el estado de pago."""
+    pendiente de decisión (de todos los Vendedores: solo el Gerente da de baja); COM-03a suma los suministros vigentes, que van primero;
+    **COM-06** suma las entregas sin cobrar, las quejas y las discrepancias, **COM-08a** el estado de pago."""
+    suministros = list(
+        Suministro.objects.filter(cliente=cliente, estado_suministro=Suministro.Estado.VIGENTE).order_by("numero").values_list("numero", flat=True)
+    )
+    pendientes = [f"Suministros vigentes: {len(suministros)} ({', '.join(f'SUM-{n:04d}' for n in suministros)})."] if suministros else []
     codigos = [
         f"CV-{numero:04d}"
         for numero in CompraVenta.objects.filter(
@@ -143,32 +149,44 @@ def pendientes_del_cliente(cliente, actor):
         .order_by("numero")
         .values_list("numero", flat=True)
     ]
-    return [f"Compra-ventas abiertas: {len(codigos)} ({', '.join(codigos)})."] if codigos else []
+    if codigos:
+        pendientes.append(f"Compra-ventas abiertas: {len(codigos)} ({', '.join(codigos)}).")
+    return pendientes
 
 
 def contratos_del_cliente(actor, cliente):
-    """Las compra-ventas del cliente que ``actor`` puede ver (el Vendedor, solo las suyas; el Gerente, todas), con su monto, de la más
-    reciente a la más antigua: para la ficha del cliente (COM-02; COM-03 suma los suministros). Una consulta."""
-    return list(
-        CompraVenta.objects.en_alcance_de(actor)
+    """Los contratos del cliente que ``actor`` puede ver (el Vendedor, solo los suyos; el Gerente, todos): las compra-ventas con su monto y, desde
+    COM-03a, los suministros (con ``detalles_vigentes``), mezclados de la más reciente a la más antigua. Para la ficha del cliente. Dos
+    consultas; ``tipo_contrato`` dice de qué clase es cada uno."""
+    ventas = list(CompraVenta.objects.en_alcance_de(actor).filter(cliente=cliente).con_monto())
+    suministros = list(
+        Suministro.objects.en_alcance_de(actor)
         .filter(cliente=cliente)
-        .con_monto()
-        .order_by("-fecha_realizacion", "-numero")
+        .annotate(detalles_vigentes=Count("detalles", filter=Q(detalles__estado_detalle_suministro=DetalleSuministro.Estado.VIGENTE)))
     )
+    return sorted(ventas + suministros, key=lambda c: (c.fecha_realizacion, c.pk), reverse=True)
 
 
 def contratos_vigentes_por_cliente(actor, clientes_):
-    """``{cliente_id: cantidad}`` de compra-ventas abiertas o pendientes de decisión de cada cliente de ``clientes_``, dentro del alcance de
-    ``actor``: la columna «Contratos vigentes» de la lista (COM-02), en una sola consulta."""
-    filas = (
+    """``{cliente_id: cantidad}`` de compra-ventas abiertas o pendientes de decisión y de suministros vigentes de cada cliente de ``clientes_``,
+    dentro del alcance de ``actor``: la columna «Contratos vigentes» de la lista. Dos consultas (una por clase de contrato), no una por cliente."""
+    clientes_ = list(clientes_)
+    ventas = (
         CompraVenta.objects.en_alcance_de(actor)
-        .filter(
-            cliente__in=list(clientes_), estado_venta__in=[CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION]
-        )
+        .filter(cliente__in=clientes_, estado_venta__in=[CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION])
         .values("cliente_id")
         .annotate(cantidad=Count("pk"))
     )
-    return {fila["cliente_id"]: fila["cantidad"] for fila in filas}
+    suministros = (
+        Suministro.objects.en_alcance_de(actor)
+        .filter(cliente__in=clientes_, estado_suministro=Suministro.Estado.VIGENTE)
+        .values("cliente_id")
+        .annotate(cantidad=Count("pk"))
+    )
+    total = {}
+    for fila in [*ventas, *suministros]:
+        total[fila["cliente_id"]] = total.get(fila["cliente_id"], 0) + fila["cantidad"]
+    return total
 
 
 def direcciones_activas(cliente):

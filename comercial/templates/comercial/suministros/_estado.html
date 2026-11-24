@@ -1,0 +1,2 @@
+{% comment %}La insignia del estado de un suministro. Recibe «estado» y «texto».{% endcomment %}
+<span class="status-badge {% if estado == 'vigente' %}status-ok{% elif estado == 'resuelto' %}status-danger{% else %}status-neutral{% endif %}">{{ texto }}</span>
