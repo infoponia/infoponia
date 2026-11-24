@@ -14,6 +14,7 @@ from django.utils import timezone
 from comercial.models import DetalleReserva, DetalleVenta, ReservaStock
 from comercial.servicios import stock_maduro
 from comercial.tests.fabricas import (
+    reserva_de_periodo,
     compra_venta,
     detalle,
     detalle_suministro,
@@ -793,13 +794,16 @@ class AsignarPeriodoTests(BaseDePeriodo):
         with self.assertRaises(ValueError):
             self.asignar_periodo(parametro="compra_venta")
 
-    def test_pre_b_un_detalle_finalizado_o_resuelto_no_se_asigna(self):
-        """Precondición b: el detalle tiene que estar «vigente» (un finalizado recién se asigna desde COM-04, D-64 punto 8)."""
-        for estado in ("finalizado", "resuelto"):
-            with self.subTest(estado=estado):
-                type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro=estado)
-                with self.assertRaises(ValueError):
-                    self.asignar_periodo()
+    def test_pre_b_un_detalle_resuelto_o_un_finalizado_sin_fecha_de_fin_no_se_asigna(self):
+        """Precondición b (D-64 punto 8, COM-04a): el detalle tiene que estar «vigente» o «finalizado» con la fecha del período dentro de su
+        `fecha_fin_detalle`; uno «resuelto», o uno «finalizado» sin fecha de fin, no se asigna (el finalizado con fecha de fin sí: ver
+        `AsignarPeriodoDeUnDetalleFinalizadoTests`)."""
+        type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro="resuelto")
+        with self.assertRaises(ValueError):
+            self.asignar_periodo()
+        type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro="finalizado", fecha_fin_detalle=None)
+        with self.assertRaises(ValueError):
+            self.asignar_periodo()
         type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro="vigente")
 
     def test_pre_b_un_suministro_que_no_esta_vigente_no_se_asigna(self):
@@ -885,3 +889,65 @@ class CantidadSinCubrirDePeriodoTests(BaseDePeriodo):
         """Sin períodos, `{}` sin consultar la base."""
         with self.assertNumQueries(0):
             self.assertEqual(stock_maduro.sin_cubrir_de_periodos([]), {})
+
+
+class OrigenDeLaCosechaTests(BaseDeAsignacion):
+    """COM-04a (D-64 punto 5, patrón sección 8): `asignar(..., origen_cosecha=...)`: las cosechas que crea llevan ese origen."""
+
+    def test_regla_d64_5_por_defecto_las_cosechas_son_automaticas(self):
+        """Sin el argumento, `origen_cosecha = automatica` (la pre-reserva y COM-REG-CVT no cambian)."""
+        lote_maduro(self.e, 100)
+        resultado = self.asignar(30)
+        self.assertEqual([c.origen_cosecha for c in resultado.cosechas], ["automatica"])
+
+    def test_regla_d64_5_la_extension_13a_de_prod_cnc_csc_pasa_encadenada(self):
+        """PROD-CNC-CSC 13a: `origen_cosecha="encadenada"` queda guardado en la cosecha nueva (y en la base)."""
+        lote_maduro(self.e, 100)
+        resultado = self.asignar(30, origen_cosecha="encadenada")
+        self.assertEqual([c.origen_cosecha for c in resultado.cosechas], ["encadenada"])
+        self.assertEqual(Cosecha.objects.get(pk=resultado.cosechas[0].pk).origen_cosecha, "encadenada")
+
+
+class AsignarPeriodoDeUnDetalleFinalizadoTests(BaseDePeriodo):
+    """COM-04a (D-64 punto 8): el período de un detalle «finalizado» con fecha ≤ `fecha_fin_detalle` todavía se debe: tiene cantidad sin cubrir y
+    `asignar` lo acepta; uno posterior a la fecha de fin no."""
+
+    def setUp(self):
+        super().setUp()
+        type(self.dsum).objects.filter(pk=self.dsum.pk).update(estado_detalle_suministro="finalizado", fecha_fin_detalle=dias(10))
+        self.dsum.refresh_from_db()
+        self.p3, self.p10, self.p17 = periodo(self.dsum, dias(3)), periodo(self.dsum, dias(10)), periodo(self.dsum, dias(17))
+
+    def test_regla_d64_8_un_periodo_hasta_la_fecha_de_fin_tiene_cantidad_sin_cubrir_y_uno_posterior_no(self):
+        """`cantidad_sin_cubrir(periodo)` y `sin_cubrir_de_periodos` (MD-126 se aplica a los períodos posteriores a la fecha de fin)."""
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 30)
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p10), 30)
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p17), 0)
+        self.assertEqual(
+            stock_maduro.sin_cubrir_de_periodos([self.p3, self.p10, self.p17]), {self.p3: 30, self.p10: 30, self.p17: 0}
+        )
+
+    def test_regla_d64_8_un_finalizado_con_el_periodo_cubierto_a_medias_cuenta_lo_que_falta(self):
+        """Una reserva de 20 en el período del día 3: faltan 10; la «liberada» no cuenta."""
+        lote = lote_maduro(self.e, 100)
+        reserva_de_periodo(self.dsum, dias(3), [(lote, 20)])
+        self.assertEqual(stock_maduro.cantidad_sin_cubrir(self.p3), 10)
+
+    def test_regla_d64_8_asignar_acepta_un_periodo_del_detalle_finalizado(self):
+        """Precondición b ampliada: reserva el período del día 3 de un detalle «finalizado» (con su cosecha), igual que uno vigente."""
+        lote_maduro(self.e, 100)
+        resultado = self.asignar_periodo(self.p3)
+        self.assertEqual((resultado.cubierta, resultado.sin_cubrir), (30, 0))
+        self.assertEqual(resultado.reservas[0].detalle_suministro_id, self.dsum.pk)
+        self.assertEqual(resultado.reservas[0].fecha_entrega_reserva, dias(3))
+
+    def test_pre_b_un_periodo_posterior_a_la_fecha_de_fin_lanza_value_error(self):
+        """Con una fecha posterior a `fecha_fin_detalle`, `ValueError` como hasta ahora."""
+        with self.assertRaises(ValueError):
+            self.asignar_periodo(self.p17)
+
+    def test_regla_d64_8_un_suministro_finalizado_o_resuelto_sigue_sin_asignarse(self):
+        """El cambio es del detalle: el suministro tiene que seguir «vigente» (el rescindido no cambia, D-64 punto 8)."""
+        type(self.sum).objects.filter(pk=self.sum.pk).update(estado_suministro="finalizado")
+        with self.assertRaises(ValueError):
+            self.asignar_periodo(self.p3)

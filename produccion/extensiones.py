@@ -11,8 +11,15 @@ from django.core.exceptions import ImproperlyConfigured
 # `(lote_id, cantidad_reservada, cantidad_cosechada)` en orden de id de lote (`cantidad_cosechada` es `None` hasta concretar).
 DetalleDeCosecha = namedtuple("DetalleDeCosecha", "contrato fecha_entrega lotes")
 
+# COM-04a (D-64 punto 11): qué botones de `comercial` muestran las pantallas de `produccion`. Cada campo es una URL o `None`.
+AccionesDeCosecha = namedtuple("AccionesDeCosecha", "concretar modificar cancelar")
+# `planificar_cosecha`: URL o `None`; `merma_en_camara`: URL o `None`. COM-05a2 suma `envasado` con valor por defecto (D-66).
+EntradasDeComercial = namedtuple("EntradasDeComercial", "planificar_cosecha merma_en_camara")
+
 _RESERVADO_DE_LOTE = []
 _DETALLE_DE_COSECHA = []
+_ACCIONES_DE_COSECHA = []
+_ENTRADAS_DE_COMERCIAL = []
 
 
 def registrar_reservado_de_lote(funcion):
@@ -58,3 +65,44 @@ def detalle_de_cosechas(cosecha_ids):
     for funcion in list(_DETALLE_DE_COSECHA):
         detalle = funcion(ids)
     return detalle
+
+
+def registrar_acciones_de_cosecha(funcion):
+    """Registra ``funcion(usuario, cosecha_ids) -> dict[int, AccionesDeCosecha]`` (COM-04a, D-64 punto 11): `concretar` solo para el Capataz
+    asignado; `modificar` y `cancelar`, solo para el Agrónomo a cargo; todas `None` si la cosecha ya no está «a realizar». Nunca una URL a un 403.
+    A lo sumo un registrante (`comercial`): un segundo lanza ``ImproperlyConfigured``."""
+    if _ACCIONES_DE_COSECHA and funcion not in _ACCIONES_DE_COSECHA:
+        raise ImproperlyConfigured("`registrar_acciones_de_cosecha` admite un solo registrante.")
+    if funcion not in _ACCIONES_DE_COSECHA:
+        _ACCIONES_DE_COSECHA.append(funcion)
+    return funcion
+
+
+def acciones_de_cosechas(usuario, cosecha_ids):
+    """``{cosecha_id: AccionesDeCosecha}`` de las cosechas pedidas. Sin registrante o con una lista vacía, ``{}`` (sin consultar la base): la
+    pantalla no muestra botones."""
+    ids = list(cosecha_ids)
+    if not ids:
+        return {}
+    acciones = {}
+    for funcion in list(_ACCIONES_DE_COSECHA):
+        acciones = funcion(usuario, ids)
+    return acciones
+
+
+def registrar_entradas_de_comercial(funcion):
+    """Registra ``funcion(usuario) -> EntradasDeComercial`` (COM-04a, D-64 punto 11): el botón «Planificar cosecha» y la entrada «Pérdida en
+    cámara» de la merma. A lo sumo un registrante (`comercial`): un segundo lanza ``ImproperlyConfigured``."""
+    if _ENTRADAS_DE_COMERCIAL and funcion not in _ENTRADAS_DE_COMERCIAL:
+        raise ImproperlyConfigured("`registrar_entradas_de_comercial` admite un solo registrante.")
+    if funcion not in _ENTRADAS_DE_COMERCIAL:
+        _ENTRADAS_DE_COMERCIAL.append(funcion)
+    return funcion
+
+
+def entradas_de_comercial(usuario):
+    """Las entradas de `comercial` para `usuario`; sin registrante, ninguna (todas `None`)."""
+    entradas = EntradasDeComercial(None, None)
+    for funcion in list(_ENTRADAS_DE_COMERCIAL):
+        entradas = funcion(usuario)
+    return entradas

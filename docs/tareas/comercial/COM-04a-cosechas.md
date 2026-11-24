@@ -179,34 +179,128 @@ recortan las restricciones de la base, los bloqueos, la huella de PROD-MOD-CSC n
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
-al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
-`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
-cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
-siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
+**Antes de empezar**
 
-Hay migraciones nuevas (`produccion`, `contabilidad`, `comercial`, `core`): `python manage.py migrate`. Datos: los de COM-03b (un invernadero
-con Agrónomo, Capataz y Vendedor y un lote de «Lechuga Crespa» en Maduración con 300 plantas libres en dos sectores); un cliente con correo.
+1. Abrí una terminal con el entorno virtual activo y corré `python manage.py migrate` (aplica `contabilidad` 0003, `produccion` 0007, `comercial` 0005 y `core` 0034) y `python manage.py runserver`. Abrí `http://127.0.0.1:8000/`. No hay datos cargados: los creás vos (los cargadores no existen, D-95).
+2. Cuentas (todas con la contraseña de tus cuentas de prueba): un **Gerente**, un **Agrónomo**, un **Capataz** y un **Vendedor**; el Agrónomo, el Capataz y el Vendedor tienen que estar asignados al mismo invernadero (en «Invernaderos» › ficha › personal). Creá además, en otra ventana de navegador, una segunda cuenta de **Capataz** y otra de **Agrónomo** (sin invernadero) para probar permisos.
+3. Datos mínimos, en este orden (si venís de COM-03b ya los tenés: invernadero con Agrónomo, Capataz y Vendedor, y un lote de «Lechuga Crespa» en Maduración):
+   - un invernadero (por ejemplo «Norte») con **dos sectores de Maduración** de 100 agujeros cada uno y la variedad «Lechuga Crespa» con ciclo hasta Maduración (postcosecha de 7 días);
+   - un **lote en Maduración de 300 plantas** (sembrá 300 plantines, concretá la siembra y concretá las transiciones hasta Maduración; repartilo 200 en un sector y 100 en el otro con la pantalla de transición); costo cualquiera;
+   - un **cliente** con correo y una dirección activa (por ejemplo CUIT `20-12345678-6` o el que ya tengas).
+4. Cada paso dice **quién** lo hace; cambiá de cuenta cerrando sesión (o con una ventana privada por cuenta). «Lo cubre…» indica qué prueba ya verifica ese paso, para que te concentres en lo que se ve y se siente.
 
-1. Con el Vendedor, una compra-venta con envío de 100 plantas para dentro de 3 días (COM-02): se programa una cosecha automática.
-2. Con el Agrónomo: «Producción» › órdenes: la cosecha aparece con su contrato, origen «Automática» y los botones «Modificar» y «Cancelar».
-   «Modificar»: fecha programada posterior a la entrega: aviso de retraso; más allá de la postcosecha: error con la primera fecha admitida.
-   Cambiá el reparto entre lotes con un total distinto: no deja terminar. Dejalo como estaba y cambiá la prioridad: el resumen muestra antes y
-   después. El Capataz tiene la notificación.
-3. «Planificar cosecha» sin contrato: 40 plantas del lote. Queda «Manual», «Sin contrato».
-4. Con el Capataz (en el celular o con el navegador angosto): la bandeja muestra las dos cosechas. Concretá la automática: la propuesta por
-   sector suma 100; poné 90 (10 menos en un sector) y declará 4 perdidas por «Plaga». El resumen dice 6 que quedan en el lote, 4 de merma y
-   el faltante de 10. Confirmá. Si el lote no tenía más stock libre, la venta pasa a «Pendiente de decisión del cliente» (sin enlace todavía:
-   COM-04c); si tenía, se programó una cosecha «Encadenada».
-5. Concretá la sin contrato con 40: en «Auditoría» queda la concreción con su partida `P-…` de 40 plantas (la pestaña «Cámara» la trae
-   COM-04b).
-6. Cancelá una cosecha con contrato: la ventana estima cuánto se vuelve a cubrir sin sus lotes; con motivo vacío, error.
-7. Sin JavaScript: planificar, modificar, cancelar y concretar funcionan con «Actualizar» y el resumen como página.
-8. Después del merge: revisar en el log de Render que se aplicaron las migraciones nuevas.
+**Camino feliz, con contrato**
+
+1. **Vendedor** › «Comercial» › «Contratos» › «Nueva compra-venta»: cliente el de arriba, **envío** a su dirección, fecha pactada **dentro de 10 días**, renglón «Lechuga Crespa», **100** plantas a 100. Confirmá. *Tiene que ver:* la venta «abierta»; el sistema programa la cosecha automática que ves en el paso siguiente. (Lo cubre `test_recorrido_cosechas`.)
+2. **Agrónomo** › «Producción» › «Órdenes» › filtro «Tipo: Cosecha»: aparece la cosecha (`OT-…`) con **Origen «Automática»**, el **Contrato** (`CV-…` y la fecha de entrega) y los botones **«Ver», «Modificar» y «Cancelar»**; arriba, **«Planificar cosecha»**. El **Capataz** recibió una notificación «Nueva cosecha OT-…». (Lo cubre `test_cosechas_vistas.ListaYBandejaTests`.)
+3. **Agrónomo** › «Modificar» (ficha de la cosecha). *Tiene que ver:* lotes con su **stock libre que incluye lo que ya reserva esta cosecha**, la primera y la última fecha admitida, y **sin** campos para variedad, invernadero, contrato ni cantidad total. (Lo cubre `test_prod_mod_csc` y `test_cosechas_vistas.ModificarTests`.)
+   - Poné una **fecha programada posterior a la de entrega** y tocá «Ver resumen»: aviso amarillo «la entrega saldrá con retraso». No lo confirmes todavía.
+   - Poné una fecha **anterior a la primera admitida** (entrega − 7 días − 1): error junto a la fecha con «la primera fecha programada admitida es dd/mm/aaaa».
+   - Cambiá la cantidad del lote a **90** (el total reservado era 100): «Ver resumen» no deja terminar («no coincide con el reservado»).
+   - Dejá todo como estaba y cambiá solo la **prioridad a «Alta»**: «Ver resumen» muestra la tabla **antes → después** (media → alta); «Confirmar cambios». Vuelve a la lista con un aviso. El Capataz tiene la notificación «Cosecha OT-… modificada».
+4. **Agrónomo** › «Planificar cosecha» › invernadero «Norte» › «¿Cubre un contrato?: No, sin contrato» › variedad «Lechuga Crespa» › fecha de mañana, prioridad «Media» › lote **40** plantas › «Ver resumen» (muestra el total y, si el lote pasa de su fecha máxima de cosecha, la advertencia con los días de exceso) › «Confirmar planificación». *Tiene que ver:* en la lista queda **Origen «Manual»** y **«Sin contrato»**. (Lo cubre `test_cosechas_vistas.PlanificarTests` y el recorrido.)
+5. **Capataz** › «Mis órdenes» (en el celular o con la ventana angosta): las dos cosechas, cada una con **«Concretar cosecha»**. Abrí la automática. *Tiene que ver:* la fecha efectiva (hoy) y, por sector, la cantidad **propuesta como texto de ayuda** (100 repartidas según los agujeros que ocupa el lote en cada sector: 67 y 33 si el lote ocupa 200 y 100).
+   - Escribí en un sector **10 menos** que lo propuesto y declará **4 perdidas** con causa «Plaga» (desplegá «declarar plantas perdidas»). «Ver resumen»: por lote, reservadas / cosechadas / perdidas, y el destino («Faltan 6…»). «Confirmar concreción». Vuelve a la bandeja con un aviso.
+   - *Tiene que ver:* la cosecha desaparece de la bandeja. Si el lote tenía más stock libre, el **Agrónomo** ve en la lista una cosecha **«Encadenada»** para el faltante; si no, la venta pasa a **«Pendiente de decisión del cliente»** (todavía sin enlace: COM-04c). El Agrónomo y el Vendedor reciben su aviso. (Lo cubre `test_prod_cnc_csc` y el recorrido.)
+6. **Capataz** › concretá la cosecha sin contrato con los valores propuestos (40). En «Auditoría» (Gerente) queda **«Concreción de cosecha»** con la partida `P-…` de 40 plantas, los movimientos de stock, la bitácora y el lote (la pestaña «Cámara» la trae COM-04b). En «Bitácora» del invernadero (Agrónomo) aparecen los registros de tipo **«Cosecha»**: el filtro «Tipo» ya lo ofrece.
+7. **Agrónomo** › «Cancelar» sobre la cosecha «Encadenada» (u otra con contrato): la página muestra **lo que se libera** (lotes y cantidades), el **contrato**, la **estimación de cuánto se vuelve a cubrir sin sus lotes** y el recordatorio de «Modificar cosecha». Con el **motivo vacío**: error «Indicá el motivo de la cancelación». Con un motivo: se cancela, vuelve a la lista y el Capataz recibe «Orden OT-… cancelada» con el motivo.
+
+**Errores y estados**
+
+8. **Planificar** con una fecha anterior a hoy, una cantidad mayor que el stock libre y un lote sin cantidad: cada error sale **debajo de su campo** («Ver resumen»). Con un detalle de otro Vendedor o un período fuera del horizonte no aparece en la lista de contratos. (Lo cubre `test_prod_pnf_csc`.)
+9. **Dos pestañas:** abrí «Modificar» de la misma cosecha en dos pestañas; confirmá un cambio en una y después en la otra: la segunda vuelve a abrir la cosecha con un aviso («la cosecha cambió»). Lo mismo con «Cancelar»: abrí la ventana, concretá la cosecha en otra pestaña (con el Capataz) y confirmá la cancelación: aviso de que ya no está «a realizar». (Lo cubre `test_cosechas_concurrencia` y `test_cancelar_cosecha_concurrencia`.)
+10. **Concretar** con más plantas que los agujeros del sector, con una fecha futura y con perdidas sin causa: errores por campo, sin resumen. (Lo cubre `test_prod_cnc_csc`.)
+
+**Roles**
+
+11. **Gerente:** en «Producción» › «Órdenes» › «Cosecha» ve la lista **sin botones** de cosecha ni «Planificar cosecha». Escribiendo a mano `/comercial/cosechas/planificar/`, `/comercial/cosechas/<id>/modificar/`, `/cancelar/` o `/concretar/`: **403**. (Lo cubre `test_cosechas_vistas.PermisosTests`.)
+12. **Vendedor:** igual: **403** en las cuatro direcciones. **Capataz:** ve «Concretar cosecha» solo en las suyas; `/comercial/cosechas/planificar/` y `/modificar/` dan 403. **Segundo Capataz y segundo Agrónomo:** no ven la cosecha en su bandeja ni en su lista, y las direcciones escritas a mano dan 403. **Agrónomo:** `/concretar/` da 403.
+13. **Inicio del Agrónomo:** después de «Mi producción», el grupo **«Cosechas»** con «A realizar», «Vencidas» y «Sin Capataz» (cada indicador lleva a la lista filtrada). Probá dejando el invernadero sin Capataz activo (desde su ficha): «Sin Capataz» sube y «Planificar cosecha» deshabilita el invernadero con «sin Capataz activo». (Lo cubre `test_extensiones_de_produccion` y `test_cosechas_vistas`.)
+14. **Inicio del Capataz:** la cosecha de hoy aparece con su botón «Concretar cosecha».
+
+**Navegador real (obligatorio: hay formularios que se envían)**
+
+15. Abrí **una ventana privada**, iniciá sesión con el **Agrónomo** y enviá **hasta el final** «Planificar cosecha» (sin contrato, 10 plantas); después, con el **Capataz** en otra ventana privada, enviá hasta el final «Concretar cosecha». Tienen que terminar con el aviso verde y la cosecha en su lugar. Si aparece una página «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola del navegador (F12), avisá: el cliente de Django no ve los encabezados `Origin` ni el JavaScript. Mirá también que los desplegables de invernadero, detalle y variedad **redibujen el formulario sin mover la pantalla** y sin validar nada al elegir.
+
+**Opcionales**
+
+16. **Sin JavaScript** (desactivalo en el navegador): planificar, modificar y concretar funcionan con «Actualizar», «Ver resumen» y «Confirmar»; cancelar es una página.
+17. **Celular:** abrí «Concretar cosecha» en un celular (o con la ventana de 360 px): una columna, botones grandes, el resumen al final.
+
+**Después del merge**
+
+18. Revisar en el log de Render que se aplicaron las cuatro migraciones nuevas (`contabilidad` 0003, `produccion` 0007, `comercial` 0005 y `core` 0034) y que «Producción» › «Órdenes» abre.
 
 ## Cierre (la completa Claude Code al cerrar)
 
-<!-- Al cerrar, Claude Code suma, si corrigió o completó pantallas (D-61):
-### Pantallas: lo que se corrigió del prototipo
+**Qué se hizo** (rama `feature/com-04a-cosechas`, 24/11/2026)
+
+- **Migraciones** (ninguna de datos; `sqlmigrate` leído: solo `CREATE TABLE`, `ADD COLUMN`, `ADD`/`DROP CONSTRAINT` de restricciones `CHECK` que se recrean con más valores; ningún `DELETE` ni `UPDATE` ni `DROP` de datos):
+  - `produccion/0007_cosecha_y_camara`: `MovimientoStock` (hija de `OrigenDocumento`; 6 restricciones, entre ellas C2), `Bitacora.cosecha` (con «tipo `cosecha` ⇔ cosecha») y los tipos `cosecha`, `incumplimiento_de_clausula` y `anulacion_de_resolucion` (con su restricción
+    «sin lote, etapa ni cosecha»), `Cosecha.origen_cosecha` (default `automatica`, con su restricción), `Merma.orden` (⇔ `dano_en_entrega`) y las tres causas nuevas, `Consumo.orden` con `consumo_un_solo_origen` ampliada a tres orígenes. Las restricciones `bitacora_tipo_evento_valido` y
+    `merma_causa_valida` se reemplazan por la lista completa.
+  - `contabilidad/0003_movimiento_de_stock` (solo `choices`; SQL vacío), `comercial/0005_cosechas` (`reserva_stock_fecha_segun_detalle`: fecha de entrega nula ⇔ sin detalle) y `core/0034_comercial_cosechas` (solo `choices`: `planificacion_cosecha`, `modificacion_cosecha`, `concrecion_cosecha`).
+  - `core/models.py`: `Accion`, `ACCIONES_DE_NEGOCIO`, `ETIQUETAS` (`origen_cosecha`) y `VALORES_VISIBLES` (`origen_cosecha`).
+- **`produccion` (núcleo físico, `docs/api/produccion.md`, secciones 8, 10 y 11):** `servicios/movimientos.py` (ayudas comunes), `cosechas.py` (`cosechar_lote`, `concretar_orden`, `costo_unitario_de_cosecha`), `camara.py` (`crear_partida`, `aplicar_merma_de_partida`, `vencer_partida`, `partidas_del_invernadero`, `egresar_de_partida`,
+  `devolver_a_partida`); `mermas.aplicar_merma` suma el movimiento «salida por merma», `mermas.aplicar_merma_de_entrega`, `consumos.registrar_consumo_de_orden` (`cerrar_reserva` ya existía desde PRD-01) y `bitacora.registrar_evento_de_contrato`. `Merma.CAUSAS_EN_PIE` (las siete de PRD-02): las validaciones y las pantallas de
+  merma usan esa lista, no `Merma.Causa`. Puntos 3 y 4 de `extensiones.py` (`registrar_acciones_de_cosecha`, `registrar_entradas_de_comercial`), el impedimento `partidas_en_camara` de la baja del invernadero y el filtro «Cosecha» (y los dos tipos de contrato) de la bitácora. `ordenes.py`: se quitaron los tres `exclude` «hasta COM-04a»
+  (bandeja, lista y detalle) y `ordenes_cancelables` lista todos los `TIPOS_DE_PRODUCCION`; `contexto_de_cosechas` arma lo que las pantallas piden a `comercial`.
+- **`comercial` (servicios):** `faltantes.py` (`seguir_camino_de_faltante`, sin enlace ni correo: COM-04c), `cosechas.py` (planificar, modificar, concretar, cancelar y `cancelar_cosecha_incluida`, con los bloqueos en el orden del patrón: cuentas → invernaderos → variedad → sectores → lotes y partidas → contrato y detalle → fila de la cosecha → reserva y líneas),
+  y en `stock_maduro.py`: `asignar(..., origen_cosecha=)`, el período de un detalle «finalizado» hasta su `fecha_fin_detalle` (D-64 punto 8: `cantidad_sin_cubrir`, `sin_cubrir_de_periodos`, `asignar`), `simular(..., lotes_excluidos, sin_reservas)` y `estimar` (la estimación de 6b); `pre_reserva.py` retoma esos períodos.
+  Registrantes en `apps.py`: acciones y entradas de cosecha y el grupo «Cosechas» del Inicio del Agrónomo (`secCosecha`).
+- **Pantallas** (`views_cosechas.py`, `templates/comercial/cosechas/`): «Planificar cosecha», «Modificar cosecha», «Concretar cosecha» (celular) y «Cancelar cosecha», cada una con su `calcular/` (redibuja sin validar) y su `revisar/` (el resumen), ninguna escribe; en `produccion`, la lista (columnas «Origen» y «Contrato» con el filtro «Cosecha», botones, aviso de períodos sin cobertura), la bandeja, el detalle y el Inicio del Capataz muestran las cosechas con los botones de `comercial`.
+- **Disparadores** que se cumplieron (para tachar, M3): «Cuando exista `produccion` completa», puntos 3 y 5 (filtro «Cosecha» y movimiento «salida por merma»), y la parte de cosechas de «Cuando exista Lote, OrdenTrabajo o StockCosechado» (paso 8). **Nacen:** para COM-04b, el `on_commit` de PROD-ASG-CAM en PROD-CNC-CSC y en la cancelación (hoy las partidas nuevas quedan sin asignarse hasta el paso diario 25), y la entrada «Pérdida en cámara» de `entradas_de_comercial`; para COM-04c, el enlace y el correo del camino de faltante en `seguir_camino_de_faltante`.
+- **Estados de paso:** una partida que nace de una cosecha queda en la cámara sin asignarse sola a quien la espera; una venta «pendiente de decisión del cliente» todavía no tiene enlace ni pantalla para decidir (COM-04b y COM-04c; ninguno rompe datos).
+
+**Pruebas** (M1; comandos de «Hecho cuando», 24/11/2026)
+
+- `manage.py test comercial produccion maestros core contabilidad --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **4176 pruebas, OK**.
+- `manage.py test comercial produccion --keepdb --tag concurrencia`: **100 pruebas, OK** (las de COM-04a: 12). `manage.py test produccion --keepdb --tag migracion`: 2 pruebas, OK. `makemigrations --check --dry-run`: sin cambios; `manage.py check`: sin problemas.
+- Nuevas en `produccion`: `test_modelos_cosecha_camara` (14), `test_cosechas_nucleo` (15), `test_camara_nucleo` (23), `test_entregas_nucleo` (13), `test_bitacora_de_contrato` (7). En `comercial`: `test_modelos_cosecha_camara` (6), `test_camino_de_faltante` (8), `test_prod_pnf_csc` (47), `test_prod_mod_csc` (27), `test_prod_cnc_csc` (41), `test_prod_cnl_ord_cosechas` (26),
+  `test_cancelar_cosecha_incluida` (7), `test_cosechas_vistas` (26), `test_recorrido_cosechas` (1), `test_cosechas_concurrencia` (9), `test_cancelar_cosecha_concurrencia` (3). Ampliadas: `test_prod_asg_stk`, `test_prod_prr_sum`, `test_simular`, `test_extensiones_de_produccion` (5) y, en `produccion`, `test_extensiones` (7) y `test_prod_reg_mrm` (2).
+- **Pruebas existentes cambiadas** (para anotar en el PR; ninguna se borró ni se debilitó: cambió la regla, y el estudiante aprobó los ajustes en las pausas A y B):
+  - `produccion/test_cosecha_en_produccion.py`: las 4 pruebas «hasta COM-04a» (bandeja, lista, cancelables y ventana de detalle) se invirtieron.
+  - `produccion/test_modelos_transicion.py`, `test_mermas_nucleo.py` y `test_prod_reg_mrm.py`: usan `Merma.CAUSAS_EN_PIE` (las siete) donde usaban `Merma.Causa`; `vencimiento_en_camara` ya no viola la restricción. `test_prod_cns_bit.py` (2): el filtro de la bitácora ofrece `cosecha` y los dos tipos de contrato.
+  - `comercial/test_modelos_suministros.py` (C3): el cambio de contrato de una reserva se hace en un solo `update` (la restricción de la fecha de entrega). `test_prod_asg_stk.py` (precondición b) y `test_prod_prr_sum.py` (el detalle finalizado se pre-reserva hasta su fecha de fin): D-64 punto 8.
+  - `comercial/test_com_cns_sum.py` (3 pruebas con alerta): el detalle «finalizado» de la fábrica ahora tiene sus períodos reservados para que «el cálculo dé 0»; sin reservas, desde D-64 punto 8, el período se debe y el cálculo da lo que falta. `test_stock_maduro_concurrencia.py` (baja del invernadero): la partida de la prueba está agotada, porque desde D-64 punto 12 una partida «disponible» impide la baja.
+  - Fábricas: `partida()` también crea su `ingreso_a_camara`; los invariantes cuentan lo cubierto de un lote cosechado como `min(cosechada, reservada)` (regla 9 de 8.8) y suman los de la sección 8 del patrón de stock.
+
+**Verifiqué** (con el cliente de Django y la base de pruebas)
+
+- El recorrido `test_recorrido_cosechas` (pasos 1 a 7 de la verificación a mano, por rol y por estado): OK.
+- Las cuatro migraciones: `makemigrations --check`, `sqlmigrate` leído y aplicadas en la base de pruebas (`produccion` con su prueba `@tag("migracion")`): OK.
+- La concurrencia: planificar contra planificar y contra una venta, modificar contra concretar, concretar contra cancelar, dos concreciones, concretar contra una venta, cancelar contra modificar: OK, siempre con los invariantes de reservas y sin un error 500.
+
+**Lo cubre una prueba**
+
+- Reglas de cada caso de uso: `test_prod_pnf_csc`, `test_prod_mod_csc`, `test_prod_cnc_csc`, `test_prod_cnl_ord_cosechas`; permisos, botones y flujos con y sin HTMX: `test_cosechas_vistas`; el núcleo de `produccion`: `test_cosechas_nucleo`, `test_camara_nucleo`, `test_entregas_nucleo`, `test_bitacora_de_contrato`; los registrantes y el Inicio: `test_extensiones_de_produccion`.
+
+**No pude verificar**
+
+- El aspecto, el celular, el CSRF y el encabezado `Origin` en un navegador real, el JavaScript (los desplegables que redibujan sin mover la pantalla) y el funcionamiento con JavaScript desactivado: pasos 15 a 17 de la verificación a mano.
+- La aplicación de las migraciones en Render/Neon (paso 18). El correo al cliente del camino de faltante no existe todavía (COM-04c).
+
+**Pantallas: lo que se corrigió del prototipo** (D-61)
+
 | Pantalla (función del prototipo) | Qué tenía | Qué se hizo | Por qué (paso o regla) |
--->
+|---|---|---|---|
+| Planificar cosecha (`VIEWS.cscnew`) | No mostraba la primera fecha admitida ni el aviso de retraso con el texto de suministro; sin búsqueda por cliente o variedad; sin el error de cantidad mayor que lo sin cubrir; sin resumen antes de confirmar | Mensaje de 8b con la primera fecha admitida; advertencia `retraso` (con la posible indemnización en un suministro) y `fecha_maxima` con los días de exceso; búsqueda; error 11b por campo; resumen con firma y «Confirmar planificación» como página (y botones «Actualizar» y «Ver resumen» sin JavaScript) | Pasos 8, 11 y 13; extensiones 5a, 8b, 8c, 11b y 11c |
+| Modificar cosecha (`VIEWS.cscmod`) | Sin resumen con valor anterior y nuevo; sin el aviso 5b.4c con el enlace a cancelar | Tabla «antes → después» (paso 8); advertencia `lotes_no_alcanzan` con el enlace a «Cancelar cosecha»; el stock libre de cada lote incluye lo ya reservado por esta cosecha | Paso 8; extensiones 5b.4a a 5b.4c |
+| Cancelar cosecha (`MODALS.cnlcsc`) | Sin el resumen de lo que se libera ni la estimación de recobertura | Página (cada ventana es una página, D-47) con las líneas, el contrato, la estimación de cuánto se vuelve a cubrir sin sus lotes, el caso «ya espera la decisión del cliente» y el recordatorio de «Modificar cosecha»; motivo obligatorio | Pasos 4 y 6; extensiones 4b, 4c, 6b y 6c de PROD-CNL-ORD |
+| Concretar cosecha (`VIEWS.capcsc`, `capcscCalc`) | La fecha efectiva no validaba la fecha de creación; faltaban el error del máximo del lote y el de perdidas por sector; sin resumen con el destino de lo cosechado | Validaciones 6a, 6b, 8a, 8b y 10a.3a/3b por campo; resumen por lote con el destino (cámara, contrato, faltante) antes de confirmar; la propuesta por sector como texto de ayuda | Pasos 5 a 11; extensiones 6a, 6b, 8a, 8b, 10a |
+| Lista de órdenes (`ordenesTab`, `tabCosechas`) | Dos listas separadas | Una sola con el filtro «Tipo» (la de PRD-01): con «Cosecha» suma «Origen» y «Contrato» y el aviso de períodos sin cobertura completa; los botones salen de `registrar_acciones_de_cosecha` y nunca llevan a un 403 | D-64 punto 11; «Lo que difiere del prototipo» |
+| Panel del Agrónomo (`secCosecha`) | — | Grupo «Cosechas» (a realizar, vencidas, sin Capataz) con `registrar_seccion_de_inicio` | D-43; `cosecha.md`, «Pantallas» |
+
+**Decisiones:** ninguna nueva de equipo (`D-NN`). Aplicadas D-14, D-27, D-28, D-29, D-34, D-36, D-37, D-40, D-42, D-44, D-50, D-52, D-53, D-57, D-59, D-60, D-61, D-63, **D-64** (puntos 1 a 6, 8, 11 a 13; el 9 queda para COM-04b), D-67 (1d, 1e y 2), D-68 (2 y 3) y D-69 (3).
+
+**Desvíos y temas abiertos** (para `docs/temas_abiertos.md`; no los corregí en silencio):
+
+1. **Máximo al concretar (8b):** el caso de uso dice «cantidad reservada + stock libre del lote sin contar esta reserva». Leído literalmente cuenta dos veces las plantas de la propia reserva (se podrían tomar plantas reservadas por otra orden). Se implementó: reservada + (cantidad actual − todo lo reservado, esta reserva incluida) = **cantidad actual menos lo que reservan las demás órdenes**. Hay que corregir el texto del extracto y de Drive.
+2. **Plantas no cosechadas ni perdidas:** quedan en el lote como stock libre y **pueden volver a reservarse** al cubrir el faltante (`asignar` no excluye los lotes de la cosecha en la 13a, a diferencia de la cancelación); una cosecha con todo en 0 y sin perdidas se vuelve a cubrir con su propio lote.
+3. **Un lote en cero** (`cosechar_lote`) deja `costo_acumulado` en 0 y el costo de lo cosechado se calcula con `costo_de_la_merma` (si se cosecha todo, el costo entero); el costo por planta del movimiento y de la partida es `costo_acumulado ÷ cantidad` con 4 decimales.
+4. **Bitácora `cosecha`:** sus `sectores` son todos los sectores que ocupa el lote (también los de 0 plantas); la merma de las plantas perdidas lleva la fecha de **hoy** y no la efectiva.
+5. **Contratos de código que fijaron las pruebas y aprobó el estudiante:** claves de detalle `cv:<id>` y `sum:<id>:<fecha>`, `ultima_fecha` = fecha de entrega, errores por campo `lote_<id>`, `cantidad_<lote>_<sector>`, `perdidas_<lote>[_<sector>]` y `causa_<lote>`, y los códigos `sin_stock_maduro`, `detalle_no_cubrible`, `supera_stock_libre`, `supera_sin_cubrir`, `supera_maximo`, `supera_no_cosechadas`, `cosecha_cambio`, `cosecha_resuelta`, `orden_no_a_realizar`, `no_modificable`, `total_distinto`, `sin_cambios`, `lotes_no_alcanzan` (advertencia) y `cosecha_duplicada` (la 15a se verifica **antes** que lo demás: una cosecha repetida también supera lo sin cubrir). Los usan COM-04b y COM-04c.
+6. **Sectores:** se bloquean directo (`SectorProduccion`), no con `bloquear_sectores` (que rechaza un sector «fuera de servicio»: un lote reubicado ya no está ahí, pero la cosecha de un lote con ocupaciones de sectores ya fuera de servicio no debe fallar).
+7. **Baja del invernadero:** `partidas_en_camara` (D-64 punto 12) la impide mientras haya una partida «disponible», aunque su lote esté finalizado (por eso se ajustó la prueba de concurrencia de la baja).
+8. **`detalle_de_orden`:** quitó el tercer `exclude` (API, sección 9; el plan lo aprobó el estudiante). Una cosecha no tiene `puede_cancelar` ni `puede_concretar` desde `produccion`: los botones son los de `comercial`.
+9. **Cancelar como página**, no como ventana: sin JavaScript todo funciona y con HTMX no hay ventana propia (D-47: «cada ventana es una página»). El correo y el enlace del faltante (COM-04c) y la asignación de cámara (COM-04b) quedan para sus tareas.

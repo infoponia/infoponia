@@ -11,7 +11,7 @@
 # activos (`bloquear_invernadero_activo`, por id) → la variedad → los lotes y las partidas candidatos → el `Suministro` y el `DetalleSuministro`. Con todo
 # bloqueado se relee que sigan «vigentes», que la fecha siga en el calendario y que la cantidad sin cubrir siga siendo mayor que 0 (otra corrida o una
 # modificación pudieron cambiarlas); si no, el período se saltea sin cambios. COM-MOD-SUM bloquea el mismo `Suministro`: se ponen en fila.
-# Hasta COM-04a (D-64, punto 8, decisión del estudiante del 24/11/2026) solo se toman detalles «vigentes».
+# Desde COM-04a (D-64, punto 8) también se toman los períodos de un detalle «finalizado» con fecha hasta su `fecha_fin_detalle`: todavía se deben.
 
 import logging
 from types import SimpleNamespace
@@ -69,13 +69,13 @@ def _activas_de(detalle_ids, desde, hasta):
 
 
 def _periodos_a_pre_reservar(hoy):
-    """Regla «Período a pre-reservar»: de un detalle «vigente» de un suministro «vigente», con fecha entre hoy y hoy + días de pre-reserva (y sin pasar la
+    """Regla «Período a pre-reservar»: de un detalle «vigente» (o «finalizado», hasta su fecha de fin: D-64 punto 8) de un suministro «vigente», con fecha entre hoy y hoy + días de pre-reserva (y sin pasar la
     fecha de fin del detalle ni la del contrato: lo cumple el calendario), con cantidad sin cubrir mayor que 0. También los que tienen una alerta activa
     aunque ya estén cubiertos (para resolverla). Ordenados por fecha y, con la misma fecha, por id del detalle (orden de registro)."""
     ventana = calendario.ventana(hoy)
     detalles = list(
         DetalleSuministro.objects.filter(
-            estado_detalle_suministro=DetalleSuministro.Estado.VIGENTE,
+            estado_detalle_suministro__in=[DetalleSuministro.Estado.VIGENTE, DetalleSuministro.Estado.FINALIZADO],
             suministro__estado_suministro=Suministro.Estado.VIGENTE,
             fecha_primer_entrega__lte=ventana,
             suministro__fecha_fin__gte=hoy,
@@ -136,7 +136,7 @@ def _pre_reservar_periodo(detalle_id, fecha):
 
         # Se relee todo con las filas bloqueadas: si algo cambió, el período se saltea sin cambios.
         vigente = (
-            detalle.estado_detalle_suministro == DetalleSuministro.Estado.VIGENTE
+            stock_maduro._se_debe(detalle, fecha)
             and detalle.suministro.estado_suministro == Suministro.Estado.VIGENTE
             and bool(calendario.calendario(detalle, desde=fecha, hasta=fecha))
         )

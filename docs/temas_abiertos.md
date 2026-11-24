@@ -635,3 +635,16 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Las pantallas de Hardware, Comandos y Reglas de un sistema dado de baja** dicen «no tiene Sistema IoT» (`sistema_del_invernadero` solo ve el vigente): el historial de un sistema dado de baja no tiene pantalla propia.
 - **Panel de monitoreo:** el enlace a las reglas de actuación (punto 7 de «Cuando existan actuadores, comandos y reglas del IoT», de `docs/disparadores.md`) quedó sin hacer: la tarea no lo pedía.
 - **Migración renumerada:** la de IOT-06 era `core` 0031 y pasó a 0032 al traer `main` (CMP-02b trajo la suya).
+
+
+## COM-04a (24/11/2026): lo que se implementó distinto de lo escrito
+- **Máximo al concretar (8b de PROD-CNC-CSC):** el texto dice «reservada + stock libre sin contar esta reserva», que cuenta dos veces las plantas de la propia reserva. Se implementó **cantidad actual − lo que reservan las demás órdenes**. Corregir el extracto (`cosecha.md`) y el documento de Drive.
+- **Plantas no cosechadas ni perdidas:** quedan como stock libre y `asignar` puede volver a reservarlas al cubrir el faltante (no excluye los lotes de la cosecha, a diferencia de la cancelación). Confirmar si es lo querido.
+- **Costo de lo cosechado:** `costo_de_la_merma` (si se cosecha todo, el costo entero) y costo por planta de 4 decimales para el movimiento y la partida; `docs/patrones/costo_del_lote.md` dice «Cosecha: fuera de la ronda».
+- **Bitácora `cosecha`:** `sectores` = todos los del lote (también los de 0 plantas); la merma de las perdidas lleva la fecha de hoy, no la efectiva.
+- **Códigos y contratos nuevos** (`docs/api/produccion.md` y `docs/api/extensiones_de_produccion.md` no los nombran): `supera_maximo`, `supera_no_cosechadas`, `cosecha_cambio`, `cosecha_resuelta`, `cosecha_duplicada` (se verifica **antes** que lo demás), `lotes_no_alcanzan`, claves `cv:<id>` y `sum:<id>:<fecha>`, `EntradasDeComercial` con 2 campos (COM-05a2 suma `envasado`).
+- **Sectores:** se bloquean directo y no con `bloquear_sectores` (que rechaza un sector fuera de servicio).
+- **Baja del invernadero:** una partida «disponible» la impide aunque su lote esté finalizado (D-64 punto 12); una prueba de concurrencia de COM-02 se ajustó.
+- **Cancelar cosecha** es una página, no una ventana (D-47). `detalle_de_orden` abre las cosechas (API, sección 9).
+- **Invariantes de las fábricas:** lo cubierto de un lote cosechado es `min(cosechada, reservada)` (regla 9 de 8.8); en producción `cantidad_sin_cubrir` ya lo hacía.
+

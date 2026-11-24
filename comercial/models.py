@@ -437,6 +437,12 @@ class ReservaStock(models.Model):
             models.CheckConstraint(
                 condition=Q(detalle_venta__isnull=True) | Q(detalle_suministro__isnull=True), name="reserva_stock_un_solo_detalle"
             ),
+            # COM-04a (D-64 punto 6): `fecha_entrega_reserva` es nula si y solo si la reserva no tiene detalle (postcondición f de PROD-PNF-CSC).
+            models.CheckConstraint(
+                condition=(Q(fecha_entrega_reserva__isnull=True) & Q(detalle_venta__isnull=True) & Q(detalle_suministro__isnull=True))
+                | (Q(fecha_entrega_reserva__isnull=False) & (Q(detalle_venta__isnull=False) | Q(detalle_suministro__isnull=False))),
+                name="reserva_stock_fecha_segun_detalle",
+            ),
         ]
 
     def __str__(self):

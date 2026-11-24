@@ -515,9 +515,12 @@ class SinCoberturaConAlertaTests(BaseDeConsulta):
         return next(f for f in suministros.ficha_de_suministro(self.gerente, s.pk).calendario if f.fecha == fecha)
 
     def finalizado_con_alerta(self, faltan=12, resuelta=False):
-        """Un detalle «finalizado» (por una modificación) con su período del día 3 dentro de la ventana, sin reservas, y la alerta de ese período."""
+        """Un detalle «finalizado» (por una modificación) con sus períodos del día 3 y del 10 ya cubiertos (desde COM-04a, D-64 punto 8, un período finalizado SIN
+        reservas se debe y el cálculo da lo que falta: para que «el cálculo dé 0» hace falta que esté cubierto) y la alerta —todavía activa— del día 3."""
         s = suministro(self.e)
         d = detalle_suministro(s, self.e.variedad, cantidad=30, periodo=7, primera_en_dias=3, estado="finalizado", fecha_fin_detalle=dias(10))
+        for n in (3, 10):
+            reserva_de_periodo(d, dias(n), [(self.lote, 30)])
         alerta_de_periodo(d, dias(3), cantidad_sin_cubrir=faltan, invernadero=self.e.invernadero, resuelta=resuelta)
         return s, d
 

@@ -179,7 +179,11 @@ class ContenidoTests(Base):
         self.evento("aplicacion", tipo="aplicacion", clase=Bitacora)
         textos = {r.tipo: r.tipo_texto for r in self.registros(self.consultar())}
         self.assertEqual(textos, {"siembra": "Siembra", "transicion": "Transición de etapa", "merma": "Merma", "otro_evento": "Otro evento", "aplicacion": "Aplicación de insumos"})
-        self.assertEqual([v for v, _ in bitacora.TIPOS_DE_FILTRO], ["siembra", "transicion", "merma", "aplicacion", "otro_evento", "fuera_de_servicio", "reubicacion"])
+        # COM-04a suma `cosecha` y los dos de contrato al filtro (docs/disparadores.md, «Cuando exista `produccion` completa», punto 3).
+        self.assertEqual(
+            [v for v, _ in bitacora.TIPOS_DE_FILTRO],
+            ["siembra", "transicion", "merma", "aplicacion", "otro_evento", "fuera_de_servicio", "reubicacion", "cosecha", "incumplimiento_de_clausula", "anulacion_de_resolucion"],
+        )
 
     def test_regla_5_el_consumo_interno_de_una_aplicacion_no_se_lista_pero_se_muestra_dentro_de_su_aplicacion(self):
         """Regla 5 y D-51 punto 3: el consumo de una aplicación es de tipo interno `consumo` y no se lista; se ve dentro de su aplicación (insumo y cantidad)."""
@@ -256,8 +260,8 @@ class FiltrosTests(Base):
         self.assertFalse(self.consultar().hay_filtros)
 
     def test_regla_6_un_tipo_que_no_se_ofrece_es_un_filtro_invalido(self):
-        """Regla 5: el interno `consumo` y los tipos que todavía no existen no se ofrecen: pedirlos es un `filtro_invalido` en el campo `tipo`."""
-        for tipo in ("consumo", "cosecha", "inventado"):
+        """Regla 5: el interno `consumo` y los tipos inventados no se ofrecen: pedirlos es un `filtro_invalido` en el campo `tipo` (COM-04a ya ofrece `cosecha`)."""
+        for tipo in ("consumo", "comando", "inventado"):
             error = rechazo(lambda: self.consultar(tipo=tipo))
             self.assertEqual((error.codigo, error.campo), ("filtro_invalido", "tipo"))
 

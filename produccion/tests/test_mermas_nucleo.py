@@ -144,7 +144,7 @@ class PostcondicionesDeLaMermaTests(BaseDeMermas):
             with self.subTest(causa=causa), self.assertRaises(ErrorDeProduccion) as invalida:
                 self.aplicar(lote, 1, causa=causa)
             self.assertEqual(invalida.exception.codigo, "causa_invalida")
-        for causa in Merma.Causa.values:
+        for causa in Merma.CAUSAS_EN_PIE:  # COM-04a: `Merma.Causa` suma las de cámara y entrega; las del lote en pie son estas siete
             self.aplicar(lote, 1, causa=causa)
         self.assertEqual(Merma.objects.count(), 7)
 

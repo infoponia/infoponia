@@ -809,7 +809,7 @@ def _causa_de_la_merma(datos, sin_trasladar):
         return "", ""
     if not datos.causa:
         raise _error("causa_obligatoria", "La causa de las plantas que no se trasladaron es obligatoria.", "causa")
-    if datos.causa not in Merma.Causa.values:
+    if datos.causa not in Merma.CAUSAS_EN_PIE:
         raise _error("causa_invalida", "Esa causa no corresponde a un lote en pie.", "causa")
     descripcion = (datos.descripcion or "").strip()
     if len(descripcion) > LARGO_DE_LA_DESCRIPCION_DE_LA_MERMA:

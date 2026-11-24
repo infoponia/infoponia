@@ -1,4 +1,4 @@
-{% comment %}Una orden de la bandeja del Capataz y de su sección del Inicio. Recibe «f» (FilaDeOrden). Todo se escapa. Una siembra lleva a «Concretar siembra» y una transición a «Concretar transición»; el resto de los tipos, solo al detalle.{% endcomment %}
+{% load produccion %}{% comment %}Una orden de la bandeja del Capataz y de su sección del Inicio. Recibe «f» (FilaDeOrden) y «acciones» (las de `comercial` para las cosechas, COM-04a). Todo se escapa. Una siembra lleva a «Concretar siembra», una transición a «Concretar transición» y una cosecha a «Concretar cosecha» (solo si es suya y está «a realizar»); el resto, solo al detalle.{% endcomment %}
 <div class="card" style="margin-bottom:8px;padding:12px 14px">
   <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
     <span><b class="mono">{{ f.codigo }}</b> · {{ f.tipo_texto }}</span>
@@ -6,7 +6,7 @@
   </div>
   <div class="sm muted">{{ f.invernadero }}{% if f.resumen %} · {{ f.resumen }}{% endif %}</div>
   <div style="margin-top:8px;display:flex;gap:8px">
-    {% if f.tipo_orden == 'siembra' %}<a class="btn btn-primary btn-sm" href="{% url 'produccion:concretar' f.orden_id %}">Concretar siembra</a>{% elif f.tipo_orden == 'transicion' %}<a class="btn btn-primary btn-sm" href="{% url 'produccion:concretar' f.orden_id %}">Concretar transición</a>{% endif %}
+    {% if f.tipo_orden == 'siembra' %}<a class="btn btn-primary btn-sm" href="{% url 'produccion:concretar' f.orden_id %}">Concretar siembra</a>{% elif f.tipo_orden == 'transicion' %}<a class="btn btn-primary btn-sm" href="{% url 'produccion:concretar' f.orden_id %}">Concretar transición</a>{% elif f.tipo_orden == 'cosecha' %}{% with a=acciones|de:f.orden_id %}{% if a.concretar %}<a class="btn btn-primary btn-sm" href="{{ a.concretar }}">Concretar cosecha</a>{% endif %}{% endwith %}{% endif %}
     <a class="btn btn-ghost btn-sm" href="{% url 'produccion:orden' f.orden_id %}">Ver</a>
   </div>
 </div>

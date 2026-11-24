@@ -49,6 +49,11 @@ class ComercialConfig(AppConfig):
         # registrante por punto; ``registrar_*`` es idempotente con la misma función.
         extensiones_de_produccion.registrar_reservado_de_lote(stock_maduro.reservado_de_lotes)
         extensiones_de_produccion.registrar_detalle_de_cosecha(stock_maduro.detalle_de_cosechas)
+        # COM-04a (D-64 punto 11): los botones de `comercial` en las pantallas de `produccion` y el grupo «Cosechas» del Inicio del Agrónomo (después de la
+        # sección de PRD-04: `comercial` está después de `produccion` en INSTALLED_APPS).
+        extensiones_de_produccion.registrar_acciones_de_cosecha(registrantes.acciones_de_cosechas)
+        extensiones_de_produccion.registrar_entradas_de_comercial(registrantes.entradas_de_comercial)
+        extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_cosechas)
 
         # COM-03b (D-62, D-63 y D-56): la primera alerta comercial («período sin cobertura completa», MD-133) con su enlace en la campana (el Gerente va a
         # la ficha del suministro; el Agrónomo, a la del invernadero) y el paso diario 40, que pre-reserva los períodos que entran en la ventana. Los tres

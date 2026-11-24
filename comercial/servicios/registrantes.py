@@ -131,3 +131,71 @@ def impedimentos_de_baja_de_variedad(variedad):
     if not partes:
         return []
     return [Impedimento("contratos_abiertos", f"Tiene contratos abiertos: {' y '.join(partes)}.", "Esperá a que se concreten o se cancelen.")]
+
+
+# ---- COM-04a: lo que `comercial` le contesta a las pantallas de `produccion` (D-64 punto 11; docs/api/extensiones_de_produccion.md, puntos 3 y 4) ----
+
+
+def acciones_de_cosechas(usuario, cosecha_ids):
+    """`registrar_acciones_de_cosecha`: por cosecha, las URL de lo que `usuario` puede hacer (`AccionesDeCosecha`): `concretar` solo para el Capataz
+    asignado, `modificar` y `cancelar` solo para el Agrónomo a cargo del invernadero, y todas `None` si la cosecha ya no está «a realizar» o su
+    invernadero no está activo. **Nunca una URL a un 403** (D-30). Una consulta, sin consultas por cosecha."""
+    from django.urls import reverse
+
+    from core.models import Usuario, rol_de
+    from produccion.extensiones import AccionesDeCosecha
+    from produccion.models import Cosecha, OrdenTrabajo
+
+    rol = rol_de(usuario) if getattr(usuario, "is_active", False) else None
+    resultado = {}
+    for cosecha in Cosecha.objects.filter(pk__in=list(cosecha_ids)).select_related("invernadero"):
+        posible = cosecha.estado_orden == OrdenTrabajo.Estado.A_REALIZAR and cosecha.invernadero.activo
+        concretar = posible and rol == Usuario.Rol.CAPATAZ and cosecha.capataz_id == usuario.pk
+        del_agronomo = posible and rol == Usuario.Rol.AGRONOMO and cosecha.invernadero.agronomo_id == usuario.pk
+        resultado[cosecha.pk] = AccionesDeCosecha(
+            reverse("comercial:cosecha_concretar", args=[cosecha.pk]) if concretar else None,
+            reverse("comercial:cosecha_modificar", args=[cosecha.pk]) if del_agronomo else None,
+            reverse("comercial:cosecha_cancelar", args=[cosecha.pk]) if del_agronomo else None,
+        )
+    return resultado
+
+
+def entradas_de_comercial(usuario):
+    """`registrar_entradas_de_comercial`: «Planificar cosecha» para el Agrónomo con algún invernadero activo a su cargo; `merma_en_camara` (la pantalla
+    de COM-04b) todavía no existe: `None`."""
+    from django.urls import reverse
+
+    from core.models import Usuario, rol_de
+    from produccion.extensiones import EntradasDeComercial
+
+    planificar = None
+    if getattr(usuario, "is_active", False) and rol_de(usuario) == Usuario.Rol.AGRONOMO:
+        if Invernadero.objects.filter(agronomo_id=usuario.pk, estado_invernadero=Invernadero.Estado.ACTIVO).exists():
+            planificar = reverse("comercial:cosecha_planificar")
+    return EntradasDeComercial(planificar, None)
+
+
+def seccion_de_cosechas(usuario):
+    """`registrar_seccion_de_inicio` (`secCosecha` del prototipo, COM-04a): el grupo «Cosechas» del Inicio del Agrónomo, después de la sección de PRD-04:
+    las cosechas «a realizar» de sus invernaderos activos que son de hoy, las vencidas (fecha programada anterior a hoy) y las de invernaderos sin
+    Capataz activo. `None` para los demás roles. Una sola consulta."""
+    from core.models import Usuario, rol_de
+    from core.extensiones import SeccionDeInicio
+    from django.utils import timezone
+    from produccion.models import Cosecha, OrdenTrabajo
+
+    if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.AGRONOMO:
+        return None
+    hoy = timezone.localdate()
+    filas = list(
+        Cosecha.objects.filter(
+            estado_orden=OrdenTrabajo.Estado.A_REALIZAR, invernadero__agronomo_id=usuario.pk, invernadero__estado_invernadero=Invernadero.Estado.ACTIVO
+        ).values_list("fecha_programada_orden", "invernadero__capataz__is_active")
+    )
+    datos = {
+        "a_realizar": len(filas),
+        "hoy": sum(1 for fecha, _ in filas if fecha == hoy),
+        "vencidas": sum(1 for fecha, _ in filas if fecha < hoy),
+        "sin_capataz": sum(1 for _, activo in filas if not activo),
+    }
+    return SeccionDeInicio("comercial/cosechas/_seccion_de_inicio.html", {"cosechas": datos})

@@ -75,15 +75,16 @@ def _plantas(cantidad):
 # ---- lo que `comercial` registra en `produccion.extensiones` ----
 
 
-def reservado_de_lotes(lote_ids):
+def reservado_de_lotes(lote_ids, excluyendo_reservas=()):
     """``{lote_id: plantas}`` reservadas en líneas de reservas «activas» (regla 9 de 8.6): el registrante de
     `produccion.extensiones.registrar_reservado_de_lote`. Un lote sin reservas falta. Una consulta; con una lista vacía, ``{}`` sin consultar.
-    No bloquea: lo llama quien ya bloqueó el lote."""
+    No bloquea: lo llama quien ya bloqueó el lote. ``excluyendo_reservas`` (COM-04a): ids de reservas que no se cuentan (la estimación de cancelar)."""
     ids = list(lote_ids)
     if not ids:
         return {}
     filas = (
         DetalleReserva.objects.filter(lote_id__in=ids, reserva__estado_reserva__in=RESERVAS_QUE_OCUPAN_LOTE)
+        .exclude(reserva_id__in=list(excluyendo_reservas))
         .values("lote_id")
         .annotate(total=Sum("cantidad_reservada"))
     )
@@ -154,8 +155,8 @@ def cantidad_sin_cubrir(detalle):
 def sin_cubrir_de_periodos(periodos):
     """``{Periodo: cantidad sin cubrir}`` de muchos períodos con **una** consulta (regla 10 de 8.8, MD-126): ``cantidad_por_periodo`` menos
     lo cubierto por las líneas de las reservas **no liberadas** del detalle con esa ``fecha_entrega_reserva``. Tiene cantidad sin cubrir un
-    período de un detalle «vigente»; los demás (finalizado, resuelto) no tienen (el finalizado con fecha hasta su fin lo suma COM-04, D-64
-    punto 8). Nunca menor que 0. Una lista vacía da ``{}`` sin consultar."""
+    período de un detalle «vigente» o, desde COM-04a (D-64 punto 8), de uno «finalizado» cuya fecha no supera su `fecha_fin_detalle` (todavía se
+    debe); los demás (posteriores a esa fecha, resuelto) no tienen. Nunca menor que 0. Una lista vacía da ``{}`` sin consultar."""
     periodos = list(periodos)
     if not periodos:
         return {}
@@ -169,11 +170,22 @@ def sin_cubrir_de_periodos(periodos):
         cubierto[(detalle_id, fecha)] += _cubierto(reservada, cosechada, lote_id)
     resultado = {}
     for p in periodos:
-        if p.detalle.estado_detalle_suministro != DetalleSuministro.Estado.VIGENTE:
+        if not _se_debe(p.detalle, p.fecha):
             resultado[p] = 0
         else:
             resultado[p] = max(0, p.detalle.cantidad_por_periodo - cubierto[(p.detalle.pk, p.fecha)])
     return resultado
+
+
+def _se_debe(detalle, fecha):
+    """D-64 punto 8: un período se debe si su detalle está «vigente» o «finalizado» con `fecha_fin_detalle` y la fecha no la supera."""
+    if detalle.estado_detalle_suministro == DetalleSuministro.Estado.VIGENTE:
+        return True
+    return (
+        detalle.estado_detalle_suministro == DetalleSuministro.Estado.FINALIZADO
+        and detalle.fecha_fin_detalle is not None
+        and fecha <= detalle.fecha_fin_detalle
+    )
 
 
 # ---- el reparto (función pura) ----
@@ -238,10 +250,11 @@ def _programadas(anticipacion, variedad_ids, fecha_entrega):
     return {v: max(hoy, fecha_entrega - timedelta(days=min(dias, postcosecha.get(v, dias)))) for v in variedad_ids}
 
 
-def _leer_varias(variedad_ids, invernadero_ids, fechas, parametro, lotes_excluidos=()):
+def _leer_varias(variedad_ids, invernadero_ids, fechas, parametro, lotes_excluidos=(), sin_reservas=()):
     """``{fecha: Lectura}``: los candidatos a ser tomados para cada fecha de entrega, **en el orden de asignación** de cada variedad, con su
     stock libre. Solo lee (no bloquea). **Una consulta por tabla**, nunca una por lote, por variedad ni por fecha: las partidas se traen
-    con la fecha límite más temprana de las pedidas y cada fecha filtra en memoria (el stock libre no depende de la fecha). ``sin_capataz``
+    con la fecha límite más temprana de las pedidas y cada fecha filtra en memoria (el stock libre no depende de la fecha). ``sin_reservas`` (COM-04a):
+    ids de reservas cuyo stock cuenta como libre (la estimación de PROD-CNL-ORD, 6b). ``sin_capataz``
     son los invernaderos considerados sin Capataz activo que tenían lotes que podían asignarse a esa fecha (extensión 5a)."""
     variedad_ids = list(dict.fromkeys(variedad_ids))
     invernadero_ids = list(dict.fromkeys(invernadero_ids))
@@ -271,6 +284,7 @@ def _leer_varias(variedad_ids, invernadero_ids, fechas, parametro, lotes_excluid
             DetalleReserva.objects.filter(
                 partida_id__in=[p.pk for p in partidas], reserva__estado_reserva__in=RESERVAS_QUE_OCUPAN_PARTIDA
             )
+            .exclude(reserva_id__in=list(sin_reservas))
             .values("partida_id")
             .annotate(total=Sum("cantidad_reservada"))
         )
@@ -295,7 +309,7 @@ def _leer_varias(variedad_ids, invernadero_ids, fechas, parametro, lotes_excluid
     )
     lotes_libres = []  # (lote, libre, entrada a Maduración)
     if lotes:
-        reservado = reservado_de_lotes([lote.pk for lote in lotes])
+        reservado = reservado_de_lotes([lote.pk for lote in lotes], excluyendo_reservas=sin_reservas)
         entradas = api_lotes.entradas_a_la_etapa(lotes, ciclos.etapas_de({lote.siembra.variedad_id for lote in lotes}))
         for lote in lotes:
             libre, entrada = lote.cantidad_actual - reservado.get(lote.pk, 0), entradas.get(lote.pk)
@@ -330,9 +344,9 @@ def _leer_varias(variedad_ids, invernadero_ids, fechas, parametro, lotes_excluid
     return lecturas
 
 
-def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluidos=()):
+def _leer(variedad_ids, invernadero_ids, fecha_entrega, parametro, lotes_excluidos=(), sin_reservas=()):
     """`_leer_varias` para una sola fecha de entrega (`asignar` y `disponible`)."""
-    return _leer_varias(variedad_ids, invernadero_ids, [fecha_entrega], parametro, lotes_excluidos)[fecha_entrega]
+    return _leer_varias(variedad_ids, invernadero_ids, [fecha_entrega], parametro, lotes_excluidos, sin_reservas)[fecha_entrega]
 
 
 def disponible(variedad_ids, invernadero_ids, fecha_entrega, parametro):
@@ -353,7 +367,7 @@ def disponible(variedad_ids, invernadero_ids, fecha_entrega, parametro):
 # ---- la simulación (verificación acumulada por variedad, COM-PCT-SUM 9e) ----
 
 
-def simular_varias(pedidos_por_variedad, invernadero_ids, parametro):
+def simular_varias(pedidos_por_variedad, invernadero_ids, parametro, *, lotes_excluidos=(), sin_reservas=()):
     """``{variedad_id: [Cobertura]}``: la verificación acumulada de COM-PCT-SUM (9e) y COM-MOD-SUM (5b.3) para muchas variedades de una vez.
     ``pedidos_por_variedad`` es ``{variedad_id: [(fecha, cantidad), …]}`` con los pedidos **en orden de fecha** (si no, ``ValueError``).
     Cada pedido se reparte con el mismo `repartir` que usa `asignar`, y lo que toma se descuenta en memoria del stock libre antes de seguir
@@ -369,7 +383,8 @@ def simular_varias(pedidos_por_variedad, invernadero_ids, parametro):
     fechas = {fecha for pedidos in pedidos_por_variedad.values() for fecha, _ in pedidos}
     if not fechas:
         return resultado
-    lecturas = _leer_varias(list(pedidos_por_variedad), invernadero_ids, fechas, parametro)
+    sin_reservas = [getattr(r, "pk", r) for r in sin_reservas]
+    lecturas = _leer_varias(list(pedidos_por_variedad), invernadero_ids, fechas, parametro, lotes_excluidos, sin_reservas)
     restante = {}  # el stock libre que va quedando; las claves son de una sola variedad (un lote o una partida es de una variedad)
     for lectura in lecturas.values():
         restante.update(lectura.libres)
@@ -384,9 +399,12 @@ def simular_varias(pedidos_por_variedad, invernadero_ids, parametro):
     return resultado
 
 
-def simular(variedad_id, invernadero_ids, pedidos, parametro):
-    """``[Cobertura(fecha, cantidad, disponible)]`` de los ``pedidos`` de **una** variedad, en orden de fecha (`simular_varias`)."""
-    return simular_varias({variedad_id: list(pedidos)}, invernadero_ids, parametro)[variedad_id]
+def simular(variedad_id, invernadero_ids, pedidos, parametro, *, lotes_excluidos=(), sin_reservas=()):
+    """``[Cobertura(fecha, cantidad, disponible)]`` de los ``pedidos`` de **una** variedad, en orden de fecha (`simular_varias`). COM-04a (patrón, sección
+    8): ``lotes_excluidos`` no se consideran y las ``sin_reservas`` (reservas o sus ids) cuentan como libres: la estimación de PROD-CNL-ORD (6b)."""
+    return simular_varias(
+        {variedad_id: list(pedidos)}, invernadero_ids, parametro, lotes_excluidos=lotes_excluidos, sin_reservas=sin_reservas
+    )[variedad_id]
 
 
 # ---- PROD-ASG-STK ----
@@ -421,11 +439,10 @@ def _verificar(detalle, cantidad, fecha_entrega, parametro):
         if parametro != "suministro":
             raise ValueError("Con un período, `parametro` es siempre «suministro» (sección 7 del patrón).")
         releido = DetalleSuministro.objects.select_related("suministro", "variedad").get(pk=detalle.detalle.pk)
-        if (
-            releido.estado_detalle_suministro != DetalleSuministro.Estado.VIGENTE
-            or releido.suministro.estado_suministro != Suministro.Estado.VIGENTE
-        ):
-            raise ValueError("El detalle y el suministro tienen que estar «vigentes» (precondición b).")
+        if not _se_debe(releido, fecha_entrega) or releido.suministro.estado_suministro != Suministro.Estado.VIGENTE:
+            raise ValueError(
+                "El suministro tiene que estar «vigente» y el detalle «vigente» o «finalizado» con la fecha dentro de su fecha de fin (precondición b, D-64 punto 8)."
+            )
         if fecha_entrega != detalle.fecha or not calendario.calendario(releido, desde=fecha_entrega, hasta=fecha_entrega):
             raise ValueError("La fecha no es un período del calendario del detalle (precondición b).")
         return Periodo(releido, fecha_entrega)
@@ -438,7 +455,7 @@ def _verificar(detalle, cantidad, fecha_entrega, parametro):
     return detalle
 
 
-def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_excluidos=()):
+def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_excluidos=(), origen_cosecha=Cosecha.OrigenCosecha.AUTOMATICA):
     """PROD-ASG-STK: reserva stock maduro para ``detalle`` y programa las cosechas necesarias. Devuelve
     ``Asignacion(cubierta, sin_cubrir, reservas, cosechas)``.
 
@@ -449,7 +466,8 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
     - Paso 2 y extensión 2a: reserva la menor entre ``cantidad`` y la cantidad sin cubrir del detalle; sin nada sin cubrir, no crea nada.
     - Pasos 3 a 5 y extensiones 3a, 3b, 5a, 5c y 5d: los invernaderos considerados, las partidas por vencimiento y los lotes por entrada a
       Maduración (reglas 7, 9 a 11 de 8.6; 2 y 3 de 8.20); los lotes de un invernadero sin Capataz activo no se consideran y, si podían
-      asignarse, queda la alerta «sin Capataz» (`maestros`, D-41). ``lotes_excluidos``: lotes que no se consideran (PCU 7, lo usa COM-04).
+      asignarse, queda la alerta «sin Capataz» (`maestros`, D-41). ``lotes_excluidos``: lotes que no se consideran (PCU 7, lo usa COM-04a).
+    - ``origen_cosecha`` (D-64 punto 5): el origen de las cosechas que crea; PROD-CNC-CSC (13a) pasa «encadenada».
     - Pasos 6 y 7 y extensiones 4a y 5b: una reserva por invernadero (regla 1 de 8.8), «lista para entrega» si todo es de cámara y «activa»
       si tiene un lote; esta con su cosecha «a realizar», con la prioridad media y el Capataz del invernadero (reglas 2 de 8.8 y 3 de 8.11).
     - Paso 10: dentro de la transacción (D-42) una notificación por cosecha al Capataz y otra al Agrónomo del invernadero, si hay uno activo.
@@ -494,6 +512,7 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
                 invernadero=invernadero,
                 capataz_id=invernadero.capataz_id,
                 variedad_id=variedad_id,
+                origen_cosecha=origen_cosecha,
             )
             cosechas.append(cosecha)
         reserva = ReservaStock.objects.create(
@@ -557,3 +576,22 @@ def _notificar(cosecha, invernadero, variedad, contrato, fecha_entrega, lotes_to
     agronomo = invernadero.agronomo
     if agronomo is not None and agronomo.is_active:
         notificaciones.notificar(agronomo, titulo, _texto_de_cosecha(cosecha, invernadero, variedad, lotes_tomados, sufijo))
+
+
+# ---- la estimación de una recobertura (COM-04a, 6b de PROD-CNL-ORD) ----
+
+Estimacion = namedtuple("Estimacion", "cubierta sin_cubrir origenes")  # origenes: [(Candidato, cantidad)] en el orden de asignación
+
+
+def estimar(variedad_id, invernadero_ids, fecha_entrega, cantidad, parametro, *, lotes_excluidos=(), sin_reservas=()):
+    """Lo que `asignar` reservaría para `cantidad` plantas de `variedad_id` a `fecha_entrega`, **sin reservar nada** (solo lectura, sin bloquear):
+    `Estimacion(cubierta, sin_cubrir, origenes)`. Usa la misma lectura de candidatos y el mismo `repartir` que `asignar`; `lotes_excluidos` no se
+    consideran y las `sin_reservas` (reservas o sus ids) cuentan como libres (la estimación de PROD-CNL-ORD, 6b: patrón, sección 8)."""
+    if parametro not in PARAMETROS:
+        raise ValueError(f"`parametro` tiene que ser uno de {sorted(PARAMETROS)}.")
+    ids = [getattr(r, "pk", r) for r in sin_reservas]
+    lectura = _leer([variedad_id], list(invernadero_ids), fecha_entrega, parametro, lotes_excluidos, ids)
+    candidatos = lectura.candidatos[variedad_id]
+    tomado, sin_cubrir = repartir([c.clave for c in candidatos], lectura.libres, cantidad)
+    por_clave = {c.clave: c for c in candidatos}
+    return Estimacion(cantidad - sin_cubrir, sin_cubrir, [(por_clave[clave], cuanto) for clave, cuanto in tomado])

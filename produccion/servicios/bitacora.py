@@ -148,6 +148,33 @@ def registrar_evento(actor, datos):
         return evento
 
 
+TIPOS_DE_CONTRATO = (Bitacora.TipoEvento.INCUMPLIMIENTO_DE_CLAUSULA, Bitacora.TipoEvento.ANULACION_DE_RESOLUCION)
+
+
+def registrar_evento_de_contrato(invernadero, tipo, descripcion, responsable):
+    """Núcleo para COM-07a (COM-04a, D-69 punto 3; docs/api/produccion.md, sección 11): un registro de bitácora del `invernadero` de `tipo`
+    `incumplimiento_de_clausula` o `anulacion_de_resolucion` (con otro, `ValueError`), con `descripcion` de 1 a 500 caracteres (sin espacios al
+    borde; `ErrorDeProduccion('descripcion_invalida')` si queda vacía o pasa de 500), fecha y hora actuales, el `responsable` (el Gerente) y SIN
+    lote, etapa, sectores ni cosecha. No verifica que el invernadero esté activo (un contrato puede tener entregas de uno dado de baja). Corre
+    en la transacción de quien llama (sin ella, `RuntimeError`), con el invernadero ya bloqueado; no audita ni notifica."""
+    from produccion.servicios import movimientos
+
+    movimientos.exigir_transaccion("registrar_evento_de_contrato")
+    if tipo not in TIPOS_DE_CONTRATO:
+        raise ValueError(f"`registrar_evento_de_contrato` solo registra {[t.value for t in TIPOS_DE_CONTRATO]}, no «{tipo}».")
+    descripcion = (descripcion or "").strip()
+    if not 1 <= len(descripcion) <= LARGO_DE_LA_DESCRIPCION:
+        raise _error("descripcion_invalida", f"La descripción debe tener entre 1 y {LARGO_DE_LA_DESCRIPCION} caracteres.", "descripcion")
+    return Bitacora.objects.create(
+        invernadero=invernadero,
+        responsable=responsable,
+        fecha_bitacora=timezone.localdate(),
+        hora_bitacora=timezone.localtime().time(),
+        tipo_evento=tipo,
+        descripcion_evento=descripcion,
+    )
+
+
 # ---- PROD-CNS-BIT · Consultar Bitácora ----
 # Quién: el Agrónomo (invernaderos a su cargo) y el Gerente (todos), también los dados de baja (regla 2: la baja es lógica y conserva el historial).
 # El Capataz no consulta. Una consulta por tabla para toda la página (`select_related` y `prefetch_related`), sin consultas por fila, y sin auditoría
@@ -164,6 +191,9 @@ TIPOS_DE_FILTRO = [
         Bitacora.TipoEvento.OTRO_EVENTO,
         Bitacora.TipoEvento.FUERA_DE_SERVICIO,  # PRD-04 (docs/disparadores.md, «Cuando exista PROD-PNR-FDS»)
         Bitacora.TipoEvento.REUBICACION,
+        Bitacora.TipoEvento.COSECHA,  # COM-04a (docs/disparadores.md, «Cuando exista `produccion` completa», punto 3)
+        Bitacora.TipoEvento.INCUMPLIMIENTO_DE_CLAUSULA,
+        Bitacora.TipoEvento.ANULACION_DE_RESOLUCION,
     )
 ]
 

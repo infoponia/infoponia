@@ -24,8 +24,8 @@ from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion import extensiones
 from produccion.errores import ErrorDeProduccion
-from produccion.models import AlertaDeMerma, Cosecha, Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
-from produccion.servicios import alcance, costos
+from produccion.models import AlertaDeMerma, Cosecha, Lote, Merma, MovimientoStock, OcupacionSector, OrdenTrabajo, TransicionEtapa
+from produccion.servicios import alcance, costos, movimientos
 from produccion.servicios.bloqueos import traducir as _bloquear
 
 # Lo que devuelve `aplicar_merma`: la merma creada, lo que costó (se descontó del costo acumulado del lote) y las alertas creadas.
@@ -82,7 +82,7 @@ def _verificar(lote, cantidad, causa, descripcion, fecha, por_sector):
         )
     if not causa:
         raise _error("causa_obligatoria", "Indicá la causa de la merma.", "causa")
-    if causa not in Merma.Causa.values:
+    if causa not in Merma.CAUSAS_EN_PIE:  # COM-04a: `Merma.Causa` suma las de cámara y entrega
         raise _error("causa_invalida", "Esa causa no corresponde a un lote en pie.", "causa")
     descripcion = (descripcion or "").strip()
     if len(descripcion) > LARGO_DE_LA_DESCRIPCION:
@@ -177,6 +177,7 @@ def aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por
         raise RuntimeError("aplicar_merma corre dentro de la transacción del caso de uso que la llama.")
     descripcion, ocupaciones = _verificar(lote, cantidad, causa, descripcion, fecha, por_sector)
     costo = costos.costo_de_la_merma(lote, cantidad)  # antes de cambiar la cantidad del lote (docs/patrones/costo_del_lote.md)
+    costo_unitario = movimientos.costo_por_planta_exacto(lote)  # COM-04a: el costo por planta de ANTES, para el movimiento
     texto = f"Merma de {plantas(cantidad)} por {Merma.Causa(causa).label.lower()}."
     merma = Merma.objects.create(
         invernadero_id=lote.invernadero_id,
@@ -192,6 +193,8 @@ def aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por
     )
     if sector_ids:
         merma.sectores.set(list(sector_ids))
+    # COM-04a (D-64 punto 2): el movimiento «salida por merma» del lote (origen: la merma).
+    movimientos.registrar(MovimientoStock.TipoMovimiento.SALIDA_POR_MERMA, cantidad, costo_unitario, merma, lote=lote, fecha=fecha)
     # Postcondición b.
     quedan = lote.cantidad_actual - cantidad
     lote.cantidad_actual = quedan
@@ -212,6 +215,32 @@ def aplicar_merma(lote, cantidad, causa, descripcion, fecha, responsable, *, por
     for alerta in creadas:
         AlertaDeMerma.objects.create(merma=merma, alerta=alerta)
     return ResultadoMerma(merma, costo, creadas)
+
+
+def aplicar_merma_de_entrega(orden, lote, cantidad, descripcion, responsable):
+    """Merma «daño en la entrega» (COM-04a para COM-06a; docs/api/produccion.md, sección 10; D-68 punto 3): `Merma` con causa `dano_en_entrega`, la
+    `orden` (la entrega, vista como `OrdenTrabajo`), el LOTE DE ORIGEN (R144), el invernadero de la orden, SIN etapa ni sectores, fecha y hora
+    actuales y `responsable`. NO toca el lote (ni cantidad, costo ni agujeros: el producto ya fue cosechado) ni crea `MovimientoStock`: lo perdido
+    ya salió del stock con la «salida por cosecha» o el egreso de la partida. Sin etapa, no suma a `merma_acumulada`. Corre en la transacción
+    de quien llama (sin ella, `RuntimeError`); no audita ni notifica. `cantidad_invalida` si `cantidad <= 0`. Devuelve la `Merma`."""
+    movimientos.exigir_transaccion("aplicar_merma_de_entrega")
+    if not isinstance(cantidad, int) or isinstance(cantidad, bool) or cantidad < 1:
+        raise _error("cantidad_invalida", "La cantidad perdida debe ser un número entero mayor que cero.", "cantidad")
+    descripcion = (descripcion or "").strip()
+    texto = f"Merma de {plantas(cantidad)} por {Merma.Causa.DANO_EN_ENTREGA.label.lower()}."
+    return Merma.objects.create(
+        invernadero_id=orden.invernadero_id,
+        lote=lote,
+        etapa=None,
+        tipo_evento="merma",
+        fecha_bitacora=timezone.localdate(),
+        hora_bitacora=timezone.localtime().time(),
+        responsable=responsable,
+        descripcion_evento=f"{texto} {descripcion}"[:500] if descripcion else texto,
+        cant_merma=cantidad,
+        causa=Merma.Causa.DANO_EN_ENTREGA,
+        orden_id=orden.pk,
+    )
 
 
 # ---- PROD-REG-MRM · Registrar Merma (PRD-03): el caso de uso sobre el núcleo de arriba ----
@@ -317,7 +346,7 @@ def _planear(actor, datos):
     por_sector = _exigir_cantidades(ocupadas, datos)
     if not datos.causa:
         raise _error("causa_obligatoria", "Indicá la causa de la merma.", "causa")
-    if datos.causa not in Merma.Causa.values:
+    if datos.causa not in Merma.CAUSAS_EN_PIE:
         raise _error("causa_invalida", "Esa causa no corresponde a un lote en pie.", "causa")
     descripcion = (datos.descripcion or "").strip()
     if len(descripcion) > LARGO_DE_LA_DESCRIPCION:
@@ -352,7 +381,7 @@ def datos_de_merma(actor, lote_id):
         [FilaDeSectorConMerma(o.sector_id, o.sector.nombre_sector, o.cant_agujeros_ocupados) for o in _ocupaciones_vigentes(lote)],
         merma_acumulada(lote),
         configuracion.obtener().porc_merma_maxima,
-        [(c.value, c.label) for c in Merma.Causa],
+        [(c.value, c.label) for c in Merma.CAUSAS_EN_PIE],
     )
 
 

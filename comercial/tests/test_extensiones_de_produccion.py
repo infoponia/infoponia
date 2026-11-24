@@ -105,3 +105,77 @@ class ExtensionesDeProduccionTests(ConDatosDeInventario, TestCase):
 
         self.assertEqual(extensiones._RESERVADO_DE_LOTE, [stock_maduro.reservado_de_lotes])
         self.assertEqual(extensiones._DETALLE_DE_COSECHA, [stock_maduro.detalle_de_cosechas])
+
+
+class AccionesYEntradasDeComercialTests(ConDatosDeInventario, TestCase):
+    """COM-04a (puntos 3 y 4 de la API, D-64 punto 11): `registrar_acciones_de_cosecha` y `registrar_entradas_de_comercial`, con el registrante REAL, y el
+    grupo «Cosechas» del Inicio del Agrónomo: por rol, para una cosecha ya concretada, sin consultas por cosecha y nunca una URL a un 403."""
+
+    def setUp(self):
+        from comercial.tests.fabricas import cosecha_manual
+
+        self.e = escenario_comercial()
+        self.lote = lote_maduro(self.e, 100)
+        self.cosecha = cosecha_manual(self.e, [(self.lote, 10)], dias=1)
+        self.addCleanup(verificar_invariantes_de_reservas)
+
+    def acciones(self, usuario, ids=None):
+        return extensiones.acciones_de_cosechas(usuario, ids or [self.cosecha.pk])[self.cosecha.pk]
+
+    def test_ext_acciones_por_rol(self):
+        """Prueba mínima 1 del punto 3: el Capataz asignado concreta; el Agrónomo a cargo modifica y cancela; otro Capataz, otro Agrónomo, el Gerente y el
+        Vendedor, nada."""
+        from core.tests.fabricas import crear_gerente
+        from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo
+
+        capataz = self.acciones(self.e.capataz)
+        self.assertEqual((capataz.modificar, capataz.cancelar), (None, None))
+        self.assertTrue(capataz.concretar.endswith(f"/comercial/cosechas/{self.cosecha.pk}/concretar/"))
+        agronomo = self.acciones(self.e.agronomo)
+        self.assertEqual(agronomo.concretar, None)
+        self.assertTrue(agronomo.modificar.endswith("/modificar/") and agronomo.cancelar.endswith("/cancelar/"))
+        for otro in (crear_capataz_activo(email="otro.capataz@infoponia.com"), crear_agronomo(email="otro.agro@infoponia.com"), crear_gerente(), self.e.vendedor):
+            self.assertEqual(tuple(self.acciones(otro)), (None, None, None), otro.email)
+
+    def test_ext_acciones_de_una_cosecha_resuelta_son_todas_none(self):
+        """Prueba mínima 1: una cosecha concretada o cancelada no ofrece nada."""
+        from produccion.models import OrdenTrabajo
+
+        OrdenTrabajo.objects.filter(pk=self.cosecha.pk).update(estado_orden="cancelada", fecha_resolucion_orden=self.cosecha.fecha_creacion_orden, motivo_cancelacion="x")
+        self.assertEqual(tuple(self.acciones(self.e.agronomo)), (None, None, None))
+        self.assertEqual(tuple(self.acciones(self.e.capataz)), (None, None, None))
+
+    def test_ext_acciones_neutro_y_sin_consultas_por_cosecha(self):
+        """Pruebas mínimas 2 y 3: una lista vacía da `{}` sin consultar; con tres cosechas, las mismas consultas que con una."""
+        from comercial.tests.fabricas import cosecha_manual
+
+        with self.assertNumQueries(0):
+            self.assertEqual(extensiones.acciones_de_cosechas(self.e.agronomo, []), {})
+        una = consultas(lambda: extensiones.acciones_de_cosechas(self.e.agronomo, [self.cosecha.pk]))
+        otras = [cosecha_manual(self.e, [(self.lote, 5)], dias=1).pk for _ in range(2)]
+        self.assertEqual(una, consultas(lambda: extensiones.acciones_de_cosechas(self.e.agronomo, [self.cosecha.pk, *otras])))
+
+    def test_ext_entradas_por_rol(self):
+        """Punto 4: «Planificar cosecha» solo para el Agrónomo con un invernadero activo a su cargo; la merma en cámara es de COM-04b (`None`)."""
+        from core.tests.fabricas import crear_gerente
+
+        self.assertTrue(extensiones.entradas_de_comercial(self.e.agronomo).planificar_cosecha.endswith("/comercial/cosechas/planificar/"))
+        for otro in (self.e.capataz, self.e.vendedor, crear_gerente()):
+            self.assertEqual(tuple(extensiones.entradas_de_comercial(otro)), (None, None))
+        self.assertIsNone(extensiones.entradas_de_comercial(self.e.agronomo).merma_en_camara)
+
+    def test_regla_la_seccion_de_cosechas_del_inicio_cuenta_hoy_vencidas_y_sin_capataz(self):
+        """`secCosecha`: solo para el Agrónomo; a realizar, de hoy, vencidas y de invernaderos sin Capataz activo."""
+        from comercial.servicios.registrantes import seccion_de_cosechas
+        from comercial.tests.fabricas import cosecha_manual
+        from maestros.models import Invernadero
+        from produccion.models import OrdenTrabajo
+
+        hoy = cosecha_manual(self.e, [(self.lote, 5)], dias=0)
+        vencida = cosecha_manual(self.e, [(self.lote, 5)], dias=-2)
+        self.assertEqual(seccion_de_cosechas(self.e.capataz), None)
+        datos = seccion_de_cosechas(self.e.agronomo).contexto["cosechas"]
+        self.assertEqual((datos["a_realizar"], datos["hoy"], datos["vencidas"], datos["sin_capataz"]), (3, 1, 1, 0))
+        Invernadero.objects.filter(pk=self.e.invernadero.pk).update(capataz=None)
+        self.assertEqual(seccion_de_cosechas(self.e.agronomo).contexto["cosechas"]["sin_capataz"], 3)
+        self.assertTrue(hoy and vencida and OrdenTrabajo)

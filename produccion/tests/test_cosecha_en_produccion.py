@@ -1,5 +1,5 @@
 # Pruebas de lo que COM-02 suma a `produccion` (D-59): las restricciones de `Cosecha` y `StockCosechado`, la cosecha en la unión
-# `ordenes_del_capataz` y en el traspaso del Capataz, lo que la bandeja, la lista y las cancelables todavía NO muestran (hasta COM-04a),
+# `ordenes_del_capataz` y en el traspaso del Capataz, lo que la bandeja, la lista y las cancelables muestran desde COM-04a (D-67 punto 1e),
 # los impedimentos de baja del invernadero y de la variedad y la condición 1 de las plantas comprometidas (regla 15 de 8.8).
 # Fuente: docs/modelo/produccion.md («Cosecha», «StockCosechado», «Diferencias», fila 8), docs/api/extensiones_de_produccion.md y D-59.
 
@@ -113,7 +113,8 @@ class RestriccionesTests(CosechaEnProduccionBase):
 
 
 class OrdenesDelCapatazTests(CosechaEnProduccionBase):
-    """`ordenes_del_capataz` suma la cosecha (D-53, D-59); la bandeja, la lista y las cancelables no la muestran hasta COM-04a."""
+    """`ordenes_del_capataz` suma la cosecha (D-53, D-59); desde COM-04a la bandeja, la lista, las cancelables y el detalle la muestran
+    (COM-04a invirtió las cuatro pruebas «hasta COM-04a» de COM-02: se anota en el PR)."""
 
     def test_regla_ordenes_del_capataz_incluye_la_cosecha(self):
         """Ficha de Cosecha: la unión de `ordenes_del_capataz` la incluye (la usan el traspaso y el aviso de baja de la cuenta)."""
@@ -131,29 +132,32 @@ class OrdenesDelCapatazTests(CosechaEnProduccionBase):
         con_tres = consultas(lambda: ordenes.ordenes_del_capataz(self.e.capataz))
         self.assertEqual(con_una, con_tres)
 
-    def test_regla_la_bandeja_del_capataz_no_la_muestra_hasta_com_04a(self):
-        """Ficha de Cosecha: la bandeja del Capataz no muestra cosechas hasta COM-04a."""
-        cosecha(self.e)
-        bandeja = ordenes.bandeja_del_capataz(self.e.capataz)
-        self.assertEqual((bandeja.vencidas, bandeja.hoy, bandeja.proximas), ([], [], []))
-
-    def test_regla_la_lista_del_agronomo_no_la_muestra_hasta_com_04a(self):
-        """Ficha de Cosecha: la lista de órdenes del Agrónomo no muestra cosechas hasta COM-04a (tampoco la del Gerente)."""
-        cosecha(self.e)
-        self.assertEqual(ordenes.lista_de_ordenes(self.e.agronomo, ordenes.FiltrosDeOrdenes()), [])
-
-    def test_regla_las_cancelables_no_la_incluyen(self):
-        """Ficha de Cosecha: las órdenes cancelables no incluyen cosechas (PRD-01: se cancelan desde `comercial`)."""
-        cosecha(self.e)
-        self.assertEqual(ordenes.ordenes_cancelables(self.e.agronomo), [])
-
-    def test_regla_la_ventana_de_detalle_de_produccion_no_abre_una_cosecha(self):
-        """Hasta COM-04a la cosecha no tiene ventana de detalle en `produccion`: 404 (como cualquier orden que no se muestra)."""
-        from django.http import Http404
-
+    def test_regla_la_bandeja_del_capataz_muestra_la_cosecha_desde_com_04a(self):
+        """D-67 punto 1e: COM-04a quita el `exclude` «hasta COM-04a»: la bandeja del Capataz muestra la cosecha «a realizar» (de hoy)."""
         c = cosecha(self.e)
-        with self.assertRaises(Http404):
-            ordenes.detalle_de_orden(self.e.agronomo, c.pk)
+        bandeja = ordenes.bandeja_del_capataz(self.e.capataz)
+        self.assertEqual(([f.orden_id for f in bandeja.hoy], bandeja.vencidas, bandeja.proximas), ([c.pk], [], []))
+
+    def test_regla_la_lista_del_agronomo_muestra_la_cosecha_desde_com_04a(self):
+        """D-67 punto 1e: la lista de órdenes del Agrónomo muestra la cosecha, también la concretada (y la del Gerente, en solo lectura)."""
+        c = cosecha(self.e)
+        filas = ordenes.lista_de_ordenes(self.e.agronomo, ordenes.FiltrosDeOrdenes())
+        self.assertEqual([(f.orden_id, f.tipo_orden) for f in filas], [(c.pk, "cosecha")])
+        self.assertEqual([f.orden_id for f in ordenes.lista_de_ordenes(self.e.agronomo, ordenes.FiltrosDeOrdenes(tipo="cosecha"))], [c.pk])
+
+    def test_regla_las_cancelables_incluyen_la_cosecha_desde_com_04a(self):
+        """D-67 punto 1e y API, sección 2: `ordenes_cancelables` lista todos los `TIPOS_DE_PRODUCCION`; `cancelar_orden` las sigue rechazando
+        (la fila de la cosecha lleva la acción «Cancelar» de `comercial`)."""
+        c = cosecha(self.e)
+        grupos = ordenes.ordenes_cancelables(self.e.agronomo)
+        self.assertEqual([(g.tipo_orden, [f.orden_id for f in g.ordenes]) for g in grupos], [("cosecha", [c.pk])])
+
+    def test_regla_la_ventana_de_detalle_de_produccion_abre_una_cosecha_desde_com_04a(self):
+        """API, sección 9: COM-04a quita también el `exclude` de `detalle_de_orden`: la ventana abre la cosecha, sin permiso de cancelar ni
+        concretar desde `produccion` (esos botones los trae `comercial`)."""
+        c = cosecha(self.e)
+        detalle = ordenes.detalle_de_orden(self.e.agronomo, c.pk)
+        self.assertEqual((detalle.orden.pk, detalle.puede_cancelar, detalle.puede_concretar), (c.pk, False, False))
 
     def test_regla_el_aviso_de_baja_de_la_cuenta_del_capataz_la_cuenta(self):
         """Ficha de Cosecha: el aviso de baja de la cuenta del Capataz (`asignaciones_de_cuenta`) cuenta la cosecha «a realizar»."""

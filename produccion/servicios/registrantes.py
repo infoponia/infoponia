@@ -22,7 +22,18 @@ from core.models import Usuario, rol_de
 from inventario.extensiones import USO_NEUTRO, OrdenQueReserva, UsoDeVariedad
 from maestros.extensiones import Aviso, Contenido, Impedimento
 from maestros.models import Invernadero
-from produccion.models import Bitacora, Cosecha, FueraDeServicio, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
+from produccion.models import (
+    Bitacora,
+    Cosecha,
+    FueraDeServicio,
+    Lote,
+    OcupacionSector,
+    OrdenTrabajo,
+    ReservaInsumo,
+    Siembra,
+    StockCosechado,
+    TransicionEtapa,
+)
 from produccion.servicios import lotes as api_lotes
 from produccion.servicios import bitacora, inicio, ordenes
 
@@ -179,6 +190,10 @@ def impedimentos_de_baja_del_invernadero(invernadero):
     se cuentan de TODOS los tipos (siembra, transición, cosecha, entrega, mantenimiento): D-64 punto 12 y punto 5 de «Tipos futuros»."""
     cantidad_de_lotes = Lote.objects.filter(invernadero=invernadero, estado_lote=Lote.Estado.ACTIVO).count()
     cantidad_de_ordenes = OrdenTrabajo.objects.filter(invernadero=invernadero, estado_orden=Estado.A_REALIZAR).count()
+    # COM-04a (D-64 punto 12): precondición e de PROD-BAJ-INV, «no tiene partidas en cámara disponibles».
+    cantidad_de_partidas = StockCosechado.objects.filter(
+        lote__invernadero=invernadero, estado_stock_cosechado=StockCosechado.Estado.DISPONIBLE
+    ).count()
     impedimentos = []
     if cantidad_de_lotes:
         impedimentos.append(
@@ -194,6 +209,14 @@ def impedimentos_de_baja_del_invernadero(invernadero):
                 "ordenes_a_realizar",
                 f"Tiene {_plural(cantidad_de_ordenes, 'orden de trabajo a realizar', 'órdenes de trabajo a realizar')}.",
                 "Concretalas o cancelalas.",
+            )
+        )
+    if cantidad_de_partidas:
+        impedimentos.append(
+            Impedimento(
+                "partidas_en_camara",
+                f"Tiene {_plural(cantidad_de_partidas, 'partida en cámara disponible', 'partidas en cámara disponibles')}.",
+                "Esperá a que se entreguen o venzan, o registrá su pérdida.",
             )
         )
     return impedimentos
@@ -384,7 +407,9 @@ def seccion_de_inicio(usuario):
     La del Agrónomo es `seccion_de_inicio_del_agronomo` (PRD-04)."""
     if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.CAPATAZ:
         return None
-    return SeccionDeInicio("produccion/_seccion_de_inicio.html", {"bandeja": ordenes.bandeja_del_capataz(usuario)})
+    bandeja = ordenes.bandeja_del_capataz(usuario)
+    de_cosechas = ordenes.contexto_de_cosechas(usuario, [*bandeja.vencidas, *bandeja.hoy])
+    return SeccionDeInicio("produccion/_seccion_de_inicio.html", {"bandeja": bandeja, "acciones": de_cosechas["acciones"], "detalles": de_cosechas["detalles"]})
 
 
 def pestana_de_bitacora(actor, invernadero):

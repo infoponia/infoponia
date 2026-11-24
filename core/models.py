@@ -771,6 +771,11 @@ class RegistroAuditoria(models.Model):
         # CMP-02b: cancelar un pedido (a mano o solo) y reenviar la invitación a un proveedor.
         CANCELACION_PEDIDO = "cancelacion_pedido", "Cancelación de pedido de cotización"
         REENVIO_INVITACION = "reenvio_invitacion", "Reenvío de invitación a un proveedor"
+        # COM-04a: cosechas (PROD-PNF-CSC, PROD-MOD-CSC y PROD-CNC-CSC, en `comercial`). La cancelación de una cosecha usa `cancelacion_orden`
+        # y la merma de las plantas perdidas, `registro_merma` (que ya existen).
+        PLANIFICACION_COSECHA = "planificacion_cosecha", "Planificación de cosecha"
+        MODIFICACION_COSECHA = "modificacion_cosecha", "Modificación de cosecha"
+        CONCRECION_COSECHA = "concrecion_cosecha", "Concreción de cosecha"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -918,6 +923,7 @@ class RegistroAuditoria(models.Model):
         "acciones_borradas": "Acciones borradas",
         # Lo que entrega el nodo (IOT-03) y la revisión periódica (IOT-04): «sistema» es una referencia; «ahora», la hora usada (texto ISO).
         "origen": "Origen",
+        "origen_cosecha": "Origen de la cosecha",
         "sistema": "Sistema IoT",
         "mensaje": "Mensaje del nodo",
         "identificador": "Identificador",
@@ -1100,6 +1106,8 @@ class RegistroAuditoria(models.Model):
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
         # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
         "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
+        # COM-04a (D-64 punto 5): `core` no importa `produccion` (A1 de D-37), así que la lista cerrada se repite acá.
+        "origen_cosecha": {"automatica": "Automática", "manual": "Manual", "encadenada": "Encadenada"},
         # INV-01: `core` no importa `inventario` (A1 de D-37), así que las listas cerradas se repiten acá.
         "consumo_directo": {
             "no_admite": "No admite",
@@ -1392,6 +1400,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.ALTA_COTIZACION,
         RegistroAuditoria.Accion.CANCELACION_PEDIDO,
         RegistroAuditoria.Accion.REENVIO_INVITACION,
+        RegistroAuditoria.Accion.PLANIFICACION_COSECHA,
+        RegistroAuditoria.Accion.MODIFICACION_COSECHA,
+        RegistroAuditoria.Accion.CONCRECION_COSECHA,
     }
 )
 

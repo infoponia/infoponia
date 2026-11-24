@@ -1,0 +1,65 @@
+{% load produccion %}{% comment %}La carga de «Concretar cosecha», en pasos para el celular: 1 · fecha, 2 · cuántas plantas se cosecharon en cada sector (lo que no se escribe toma la propuesta, que se ve como texto de ayuda), 3 · plantas perdidas
+(opcional, con su causa) y 4 · resumen. NO hay validación ni recálculo al escribir: «Ver resumen» valida y calcula; «Confirmar concreción» escribe. Sin JavaScript funciona igual. Recibe «ficha», «valores», «errores» ({campo: [mensajes]}),
+«resumen» (ResumenDeConcrecion, solo con el resumen), «firma» y «causas». Todo se escapa.{% endcomment %}
+<form method="post" action="{% url 'comercial:cosecha_concretar' cosecha.pk %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{% for m in errores.general %}{{ m }} {% endfor %}</div>{% endif %}
+  {% if aviso_de_cambio %}<div class="hint" role="status" style="margin-bottom:10px">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+  <div class="stack">
+    <div class="card"><div class="card-title">1 · Cuándo se cosechó</div>
+      <div class="fld"><label for="fecha_efectiva">Fecha efectiva</label>
+        <input class="field-input" id="fecha_efectiva" name="fecha_efectiva" type="date" min="{{ cosecha.fecha_creacion_orden|date:'Y-m-d' }}" max="{{ ficha.hoy|date:'Y-m-d' }}" value="{% if valores.fecha_efectiva %}{{ valores.fecha_efectiva }}{% else %}{{ ficha.hoy|date:'Y-m-d' }}{% endif %}"{% if errores.fecha_efectiva %} aria-invalid="true"{% endif %}>
+        {% for m in errores.fecha_efectiva %}<div class="err">{{ m }}</div>{% empty %}<div class="hint">Entre el {{ cosecha.fecha_creacion_orden|date:"d/m/Y" }} y hoy.</div>{% endfor %}</div></div>
+
+    <div class="card"><div class="card-title">2 · Cuántas plantas se cosecharon</div>
+      {% for lote in ficha.lotes %}
+      <div style="padding:8px 0;border-top:1px solid var(--border)">
+        <b class="mono">{{ lote.codigo }}</b> <span class="muted sm">reservadas: {{ lote.reservada }}</span>
+        {% for s in lote.sectores %}
+        <div class="fld"><label for="cant_{{ lote.lote_id }}_{{ s.sector_id }}">{{ s.nombre }} <span class="muted">(ocupa {{ s.ocupados }})</span></label>
+          <input class="field-input" id="cant_{{ lote.lote_id }}_{{ s.sector_id }}" name="cant_{{ lote.lote_id }}_{{ s.sector_id }}" type="number" min="0" max="{{ s.ocupados }}" step="1" inputmode="numeric" placeholder="{{ s.propuesta }}" value="{% campo valores 'cant' lote.lote_id s.sector_id %}">
+          {% campo errores 'cantidad' lote.lote_id s.sector_id as errores_del_sector %}{% for m in errores_del_sector %}<div class="err">{{ m }}</div>{% endfor %}</div>
+        {% endfor %}
+        {% campo errores 'lote' lote.lote_id as errores_del_lote %}{% for m in errores_del_lote %}<div class="err">{{ m }}</div>{% endfor %}
+      </div>
+      {% endfor %}
+      <div class="hint">Si no escribís nada en un sector, se toma la cantidad propuesta.</div></div>
+
+    <div class="card"><div class="card-title">3 · Plantas perdidas (si hubo)</div>
+      <p class="hint">Si en un lote se cosechó menos de lo reservado, las plantas que no se cosecharon quedan en el lote como stock libre, salvo que declares cuántas se perdieron.</p>
+      {% for lote in ficha.lotes %}
+      <details{% if errores %} open{% endif %}><summary class="sm"><b class="mono">{{ lote.codigo }}</b>: declarar plantas perdidas</summary>
+        {% for s in lote.sectores %}
+        <div class="fld"><label for="perd_{{ lote.lote_id }}_{{ s.sector_id }}">Perdidas en {{ s.nombre }}</label>
+          <input class="field-input" id="perd_{{ lote.lote_id }}_{{ s.sector_id }}" name="perd_{{ lote.lote_id }}_{{ s.sector_id }}" type="number" min="0" step="1" inputmode="numeric" value="{% campo valores 'perd' lote.lote_id s.sector_id %}">
+          {% campo errores 'perdidas' lote.lote_id s.sector_id as errores_perdidas_del_sector %}{% for m in errores_perdidas_del_sector %}<div class="err">{{ m }}</div>{% endfor %}</div>
+        {% endfor %}
+        {% campo errores 'perdidas' lote.lote_id as errores_perdidas %}{% for m in errores_perdidas %}<div class="err">{{ m }}</div>{% endfor %}
+        <div class="fld"><label for="causa_{{ lote.lote_id }}">Causa</label>
+          <select class="field-input" id="causa_{{ lote.lote_id }}" name="causa_{{ lote.lote_id }}" data-desplegable>
+            <option value="">Elegí una causa</option>
+            {% for valor, texto in causas %}<option value="{{ valor }}"{% campo valores 'causa' lote.lote_id as causa_elegida %}{% if causa_elegida == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+          </select>
+          {% campo errores 'causa' lote.lote_id as errores_de_causa %}{% for m in errores_de_causa %}<div class="err">{{ m }}</div>{% endfor %}</div>
+        <div class="fld"><label for="desc_{{ lote.lote_id }}">Descripción (opcional)</label>
+          <input class="field-input" id="desc_{{ lote.lote_id }}" name="desc_{{ lote.lote_id }}" type="text" maxlength="300" value="{% campo valores 'desc' lote.lote_id %}"></div>
+      </details>
+      {% endfor %}</div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la concreción"><div class="card-title">4 · Resumen</div>
+      <input type="hidden" name="firma" value="{{ firma }}">
+      {% for f in resumen.lotes %}
+      <p class="sm"><b class="mono">{{ f.codigo }}</b>: reservadas {{ f.reservada }}, cosechadas {{ f.cosechada }}{% if f.excedente %}, excedente {{ f.excedente }}{% endif %}{% if f.no_cosechadas %}, sin cosechar {{ f.no_cosechadas }}{% endif %}{% if f.perdidas %}, perdidas {{ f.perdidas }}{% endif %}{% if f.quedan_libres %}, quedan libres {{ f.quedan_libres }}{% endif %}</p>
+      {% endfor %}
+      <p class="sm"><b>Total:</b> {{ resumen.total_cosechado }} cosechadas de {{ resumen.total_reservado }} reservadas</p>
+      {% for texto in resumen.destino %}<div class="hint" role="status">{{ texto }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:cosecha_concretar_calcular' cosecha.pk %}" data-sin-envio-en-curso>Actualizar</button>
+    <button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:cosecha_concretar_revisar' cosecha.pk %}" data-enviando="Calculando…">Ver resumen</button>
+    {% if resumen %}<button class="btn btn-primary" type="submit" data-enviando="Concretando…">Confirmar concreción</button>{% endif %}
+  </div>
+</form>
