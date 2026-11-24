@@ -9,7 +9,7 @@
 # El token (D-70, punto 3): se genera con ``core.enlaces.nuevo_token`` y se guarda SOLO su resumen. Nunca va a la auditoría, a un mensaje de
 # error ni a un registro. Lo devuelve la función, que lo muestra una sola vez.
 #
-# «Se completa en IOT-06»: ``acciones_permitidas`` suma desactivar, activar y dar de baja el sistema.
+# IOT-06: desactivar, activar y dar de baja el sistema (abajo, «desactivar, activar y dar de baja»).
 
 from collections import namedtuple
 from dataclasses import dataclass
@@ -17,7 +17,7 @@ from datetime import timedelta
 
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.urls import reverse
@@ -28,7 +28,7 @@ from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.categorias import REPUESTOS_DE_HARDWARE
 from inventario.models import Insumo
 from iot.alcance import invernaderos_que_consulta, invernaderos_que_opera, puede_operar
-from iot.models import NodoCentral, SistemaIoT
+from iot.models import Actuador, AlertaIot, Comando, Hardware, NodoCentral, ReglaActuacion, Sensor, SistemaIoT
 from iot.validadores import texto, validar_fecha_de_instalacion, validar_rango_de_la_solucion, validar_texto
 from maestros.extensiones import EstadoIot, Impedimento
 from maestros.models import Invernadero
@@ -38,6 +38,9 @@ from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general,
 
 ACCION_MODIFICAR = "modificar"
 ACCION_REGENERAR_TOKEN = "regenerar_token"
+ACCION_DESACTIVAR = "desactivar"
+ACCION_ACTIVAR = "activar"
+ACCION_BAJA = "baja"
 
 LARGO_DEL_NOMBRE = NodoCentral._meta.get_field("nombre_nodo").max_length
 LARGO_DEL_MODELO = NodoCentral._meta.get_field("modelo_hardware").max_length
@@ -433,14 +436,15 @@ def conectividad(nodo, ahora):
 
 
 def acciones_permitidas(actor, sistema):
-    """D-30: las acciones que ``actor`` puede hacer sobre ``sistema``, un ``frozenset``: modificar y regenerar el token a quien opera el IoT de
-    ese invernadero (regla 1 de IOT-DSC-SIS), si el sistema no está dado de baja (regla 6 de IOT-MOD-SIS); a quien solo consulta, ninguna.
-    **Se completa en IOT-06** (desactivar, activar y dar de baja). Ningún botón lleva a un 403."""
+    """D-30: las acciones que ``actor`` puede hacer sobre ``sistema``, un ``frozenset``: a quien opera el IoT de ese invernadero (regla 1 de IOT-DSC-SIS), con el sistema no dado de
+    baja (regla 6 de IOT-MOD-SIS), modificar, regenerar el token y dar de baja, más desactivar si está activo o activar si está desconectado; a quien solo consulta, ninguna.
+    Ningún botón lleva a un 403."""
     if actor is None or not actor.is_active or rol_de(actor) not in (Usuario.Rol.AGRONOMO, Usuario.Rol.GERENTE):
         return frozenset()
     if sistema.estado_sistema == Estado.INACTIVO or not puede_operar(actor, sistema.invernadero):
         return frozenset()
-    return frozenset({ACCION_MODIFICAR, ACCION_REGENERAR_TOKEN})
+    especifica = ACCION_DESACTIVAR if sistema.estado_sistema == Estado.ACTIVO else ACCION_ACTIVAR
+    return frozenset({ACCION_MODIFICAR, ACCION_REGENERAR_TOKEN, ACCION_BAJA, especifica})
 
 
 # ---- los registrantes de `maestros` (IOT-02; docs/api/extensiones_de_maestros.md, «Estado del IoT del invernadero»; los registra ``IotConfig.ready()``) ----
@@ -470,3 +474,204 @@ def impedimentos_de_baja_del_invernadero(invernadero):
         return []
     nodo = nodo_del_sistema(sistema)
     return [Impedimento("sistema_iot", f"Tiene el sistema IoT «{nodo.nombre_nodo}».", "Dalo de baja desde IoT · Sistema IoT.")]
+
+
+# ---- desactivar, activar y dar de baja (IOT-DSC-SIS, IOT-ACT-SIS e IOT-BAJ-SIS; IOT-06) ----
+# Bloqueos (siempre ``FOR NO KEY UPDATE``; D-78, punto 11): invernadero → sistema → nodo → equipos o actuadores → comandos (en orden de id). ``comandos`` y ``reglas`` se importan dentro de
+# cada función: ``comandos`` importa este módulo, y ``reglas`` importa ``comandos``.
+
+DatosDeBajaDelSistema = namedtuple("DatosDeBajaDelSistema", "sistema nodo equipos reglas impedimentos")
+
+
+def ordenes_a_realizar_del_sistema(sistema):
+    """Precondición d de IOT-BAJ-SIS: las órdenes de mantenimiento «a realizar» de los equipos del sistema. **Se completa en IOT-07**: hasta entonces, vacía."""
+    return []
+
+
+def _previo_del_ciclo(actor, sistema_id):
+    """El id del invernadero del sistema, antes de bloquear: ``Http404`` si el sistema no existe o su invernadero está fuera del alcance de consulta (D-28)."""
+    invernadero_id = SistemaIoT.objects.filter(pk=sistema_id).values_list("invernadero_id", flat=True).first()
+    if invernadero_id is None or not invernaderos_que_consulta(actor).filter(pk=invernadero_id).exists():
+        raise Http404("No existe ese sistema IoT.")
+    return invernadero_id
+
+
+def _bloquear_ciclo(actor, sistema_id, invernadero_id):
+    """Bloquea el invernadero, el sistema y su nodo (releídos) y verifica, ya bloqueados, que quien actúa siga activo y opere el invernadero (regla 1). El estado del sistema lo
+    verifica cada caso de uso: no es el mismo en los tres. Devuelve ``(invernadero, sistema, nodo)``."""
+    invernadero = api_alertas.bloquear_invernadero_para_alertas(invernadero_id)
+    _actor_sigue_activo(actor)
+    sistema = SistemaIoT.objects.select_for_update(no_key=True).get(pk=sistema_id)
+    nodo = NodoCentral.objects.select_for_update(no_key=True).get(sistema=sistema)
+    if not puede_operar(actor, invernadero):
+        raise _error_de_alcance(actor, invernadero)
+    return invernadero, sistema, nodo
+
+
+def _resolver_alertas_del_sistema(invernadero_id, sistema):
+    """Resuelve todas las alertas activas con ``AlertaIot.sistema`` = ``sistema`` (en orden de id) y devuelve las resueltas."""
+    activas = AlertaIot.objects.filter(sistema=sistema, alerta__estado_alerta="activa").select_related("alerta").order_by("alerta_id")
+    resueltas = [api_alertas.resolver_alerta_de_estado(invernadero_id, v.alerta.tipo_alerta, v.alerta.clave_estado) for v in activas]
+    return [alerta for alerta in resueltas if alerta is not None]
+
+
+def _pendientes_bloqueados(sistema):
+    """Los comandos pendientes de los actuadores del sistema, con los actuadores y los comandos bloqueados (en orden de id). Devuelve ``(actuadores por id, comandos)``; cada
+    comando trae su actuador (con su tipo) y su acción, para su registro de bitácora."""
+    actuadores = {a.pk: a for a in Actuador.objects.select_for_update(no_key=True, of=("self",)).select_related("tipo_actuador").filter(sistema=sistema).order_by("pk")}
+    pendientes = list(
+        Comando.objects.select_for_update(no_key=True, of=("self",))
+        .select_related("accion__comando")
+        .filter(actuador__in=list(actuadores), estado_comando=Comando.Estado.PENDIENTE)
+        .order_by("pk")
+    )
+    for comando in pendientes:
+        comando.actuador = actuadores[comando.actuador_id]
+    return actuadores, pendientes
+
+
+def desactivar_sistema_iot(actor, sistema_id, ahora):
+    """IOT-DSC-SIS: pasa el sistema IoT a «desconectado» y lo devuelve.
+
+    - Precondición a y regla 1: Agrónomo o Gerente activos, con el alcance de IOT-DSC-SIS (``fuera_de_alcance``, vuelto a verificar DESPUÉS de bloquear); sistema inexistente o fuera
+      del alcance de consulta, ``Http404`` (D-28). Precondición b: el sistema está «activo» (``sistema_no_activo``).
+    - Postcondición a y regla 5: el nodo, el hardware y las reglas quedan como estaban. Postcondición b y regla 3: cada comando pendiente pasa a «cancelado» con
+      ``comandos.cancelar_comando_incluido`` (sin esperar a que venza un intento), con su bitácora y quien desactivó como responsable; no genera alertas ni órdenes.
+    - Postcondición c: las alertas activas con ``AlertaIot.sistema`` = este sistema pasan a «resuelta». Postcondición d y D-36: UN registro ``desactivacion_sistema_iot``.
+    - Bloqueos: invernadero, sistema, nodo, actuadores y comandos."""
+    from iot.servicios import comandos
+
+    _exigir_operador(actor)
+    invernadero_id = _previo_del_ciclo(actor, sistema_id)
+    with transaction.atomic():
+        _, sistema, _ = _bloquear_ciclo(actor, sistema_id, invernadero_id)
+        if sistema.estado_sistema != Estado.ACTIVO:
+            raise _error_general("El sistema IoT no está activo: solo se desactiva uno activo.", "sistema_no_activo")
+        _, pendientes = _pendientes_bloqueados(sistema)
+        registros = [comandos.cancelar_comando_incluido(comando, "sistema desconectado", ahora, responsable=actor) for comando in pendientes]
+        alertas = _resolver_alertas_del_sistema(invernadero_id, sistema)
+        sistema.estado_sistema = Estado.DESCONECTADO
+        sistema.save(update_fields=["estado_sistema"])
+        datos = {"comandos_cancelados": [referencia(c) for c in pendientes], "alertas_resueltas": [referencia(a) for a in alertas]}
+        RegistroAuditoria.objects.registrar(
+            usuario=actor,
+            accion=RegistroAuditoria.Accion.DESACTIVACION_SISTEMA_IOT,
+            afectados=[sistema, *pendientes, *registros, *alertas],
+            detalle={"cambios": {"estado_sistema": {"antes": Estado.ACTIVO.value, "despues": Estado.DESCONECTADO.value}}, "datos": datos},
+        )
+        return sistema
+
+
+def activar_sistema_iot(actor, sistema_id, ahora):
+    """IOT-ACT-SIS: pasa el sistema IoT de «desconectado» a «activo» y lo devuelve.
+
+    - Precondición a y regla 1 como la desactivación. Precondición b: el invernadero está activo (el alcance solo opera invernaderos activos: ``fuera_de_alcance``). Precondición c: el
+      sistema está «desconectado» (``sistema_no_desconectado``; uno dado de baja es ``sistema_dado_de_baja``: la baja es definitiva).
+    - Regla 4 y «Disparo de una regla»: todas las reglas ACTIVAS del sistema vuelven a «sin evaluar» con el contador en 0. Postcondición b y D-36: ``activacion_sistema_iot``.
+    - Bloqueos: invernadero, sistema, nodo y reglas (en orden de id)."""
+    from iot.servicios import reglas
+
+    _exigir_operador(actor)
+    invernadero_id = _previo_del_ciclo(actor, sistema_id)
+    with transaction.atomic():
+        _, sistema, _ = _bloquear_ciclo(actor, sistema_id, invernadero_id)
+        if sistema.estado_sistema == Estado.INACTIVO:
+            raise _error_general("El sistema IoT está dado de baja: la baja es definitiva.", "sistema_dado_de_baja")
+        if sistema.estado_sistema != Estado.DESCONECTADO:
+            raise _error_general("El sistema IoT no está desconectado.", "sistema_no_desconectado")
+        activas = list(
+            ReglaActuacion.objects.select_for_update(no_key=True, of=("self",)).filter(sensor__sistema=sistema, estado_regla=ReglaActuacion.Estado.ACTIVA).order_by("pk")
+        )
+        sistema.estado_sistema = Estado.ACTIVO
+        sistema.save(update_fields=["estado_sistema"])
+        reglas.reiniciar_reglas(activas)
+        RegistroAuditoria.objects.registrar(
+            usuario=actor,
+            accion=RegistroAuditoria.Accion.ACTIVACION_SISTEMA_IOT,
+            afectados=[sistema, *activas],
+            detalle={"cambios": {"estado_sistema": {"antes": Estado.DESCONECTADO.value, "despues": Estado.ACTIVO.value}}},
+        )
+        return sistema
+
+
+def _impedimentos_de_la_baja(sistema, pendientes):
+    """Las precondiciones c y d de IOT-BAJ-SIS como ``Impedimento``, con cómo resolver cada una (regla 4)."""
+    impedimentos = []
+    if pendientes:
+        codigos = ", ".join(f"CMD-{comando.pk}" for comando in pendientes)
+        impedimentos.append(
+            Impedimento(
+                "comandos_pendientes",
+                f"Hay {len(pendientes)} comando(s) pendiente(s): {codigos}.",
+                "Cancelalos uno por uno desde Comandos, o todos juntos desactivando el sistema.",
+            )
+        )
+    ordenes = ordenes_a_realizar_del_sistema(sistema)
+    if ordenes:
+        impedimentos.append(Impedimento("ordenes_de_mantenimiento", f"Hay {len(ordenes)} orden(es) de mantenimiento a realizar.", "Concretalas o cancelalas."))
+    return impedimentos
+
+
+def datos_de_baja_del_sistema(actor, sistema_id):
+    """IOT-BAJ-SIS, regla 8: lo que muestra la ventana antes de confirmar la baja: el nodo, cada sensor y actuador no dado de baja (los actuadores con su último estado informado),
+    cada regla activa y los impedimentos de las precondiciones c y d. No escribe ni audita. Solo para quien opera el invernadero (``PermissionDenied`` si solo lo consulta);
+    un sistema fuera del alcance de consulta, ``Http404``; uno dado de baja, ``sistema_dado_de_baja``."""
+    _exigir_operador(actor)
+    _previo_del_ciclo(actor, sistema_id)
+    sistema = SistemaIoT.objects.select_related("invernadero").get(pk=sistema_id)
+    if not puede_operar(actor, sistema.invernadero):
+        raise PermissionDenied("Este invernadero lo operás solo si no tiene un Agrónomo activo.")
+    if sistema.estado_sistema == Estado.INACTIVO:
+        raise _error_general("El sistema IoT ya está dado de baja.", "sistema_dado_de_baja")
+    vigentes = ~Q(estado_hardware="inactivo")
+    sensores = list(Sensor.objects.filter(vigentes, sistema=sistema).select_related("sector").order_by(Lower("identificador_equipo"), "pk"))
+    actuadores = list(Actuador.objects.filter(vigentes, sistema=sistema).select_related("sector", "tipo_actuador").order_by(Lower("identificador_equipo"), "pk"))
+    reglas = list(
+        ReglaActuacion.objects.filter(sensor__sistema=sistema, estado_regla=ReglaActuacion.Estado.ACTIVA)
+        .select_related("sensor", "actuador__tipo_actuador", "accion")
+        .order_by("pk")
+    )
+    pendientes = list(Comando.objects.filter(actuador__sistema=sistema, estado_comando=Comando.Estado.PENDIENTE).order_by("pk"))
+    return DatosDeBajaDelSistema(sistema, nodo_del_sistema(sistema), sensores + actuadores, reglas, _impedimentos_de_la_baja(sistema, pendientes))
+
+
+def baja_sistema_iot(actor, sistema_id, ahora):
+    """IOT-BAJ-SIS: da de baja, en cascada y para siempre, el sistema IoT con su nodo y todo su hardware, y lo devuelve.
+
+    - Precondición a y regla 1 como la desactivación. Precondición b: activo o desconectado (``sistema_dado_de_baja``). Precondiciones c y d, vueltas a verificar DESPUÉS de bloquear: sin
+      comandos pendientes (``comandos_pendientes``) ni órdenes de mantenimiento a realizar (``ordenes_de_mantenimiento``); los impedimentos llegan juntos con cómo resolverlos (regla 4).
+    - Postcondición a: el sistema, el nodo y todo el hardware que no estaba dado de baja (activo o fuera de servicio) quedan «inactivo» con ``fecha_baja`` = hoy; uno ya dado de baja
+      conserva la suya. Postcondición b: sus reglas activas, «inactiva». Postcondición c y D-70: ``token_resumen`` nulo (el token deja de servir). Postcondición d: las alertas activas
+      del sistema y la de «invernadero sin Técnico activo» (``sincronizar_alertas_de_personal``, regla 7) pasan a «resuelta». Postcondición e y D-36: UN registro ``baja_sistema_iot``.
+    - Bloqueos: invernadero, sistema, nodo, equipos, actuadores y comandos (para releer las precondiciones) y reglas."""
+    _exigir_operador(actor)
+    invernadero_id = _previo_del_ciclo(actor, sistema_id)
+    with transaction.atomic():
+        invernadero, sistema, _ = _bloquear_ciclo(actor, sistema_id, invernadero_id)
+        if sistema.estado_sistema == Estado.INACTIVO:
+            raise _error_general("El sistema IoT ya está dado de baja.", "sistema_dado_de_baja")
+        antes = sistema.estado_sistema
+        equipos = list(Hardware.objects.select_for_update(no_key=True).filter(sistema=sistema).exclude(estado_hardware="inactivo").order_by("pk"))
+        _, pendientes = _pendientes_bloqueados(sistema)
+        impedimentos = _impedimentos_de_la_baja(sistema, pendientes)
+        if impedimentos:
+            raise ValidationError({NON_FIELD_ERRORS: [ValidationError(f"{i.texto} {i.como_resolver}", code=i.codigo) for i in impedimentos]})
+        hoy = timezone.localtime(ahora).date()
+        activas = list(
+            ReglaActuacion.objects.select_for_update(no_key=True, of=("self",)).filter(sensor__sistema=sistema, estado_regla=ReglaActuacion.Estado.ACTIVA).order_by("pk")
+        )
+        alertas = _resolver_alertas_del_sistema(invernadero_id, sistema)
+        Hardware.objects.filter(pk__in=[e.pk for e in equipos]).update(estado_hardware=Hardware.Estado.INACTIVO, fecha_baja=hoy)
+        ReglaActuacion.objects.filter(pk__in=[r.pk for r in activas]).update(estado_regla=ReglaActuacion.Estado.INACTIVA)
+        sistema.estado_sistema, sistema.fecha_baja, sistema.token_resumen = Estado.INACTIVO, hoy, None
+        sistema.save(update_fields=["estado_sistema", "fecha_baja", "token_resumen"])
+        # Regla 7: sin sistema IoT el invernadero deja de necesitar Técnico, así que se resuelve «invernadero sin Técnico activo».
+        alertas += [a for a in api_alertas.sincronizar_alertas_de_personal(invernadero, roles=["tecnico"]).resueltas if a is not None]
+        datos = {"equipos": [referencia(e) for e in equipos], "reglas": [referencia(r) for r in activas], "alertas_resueltas": [referencia(a) for a in alertas]}
+        RegistroAuditoria.objects.registrar(
+            usuario=actor,
+            accion=RegistroAuditoria.Accion.BAJA_SISTEMA_IOT,
+            afectados=[sistema, *equipos, *activas, *alertas],
+            detalle={"cambios": {"estado_sistema": {"antes": antes, "despues": Estado.INACTIVO.value}}, "datos": datos},
+        )
+        return sistema

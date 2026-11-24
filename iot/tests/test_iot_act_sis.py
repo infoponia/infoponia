@@ -95,10 +95,14 @@ class IotActSisServicioTests(ConEscenaDeReglas, TestCase):
         self.assertEqual(RegistroAuditoria.objects.get(accion="activacion_sistema_iot").usuario_id, self.gerente.pk)
 
     def test_precondicion_b_el_invernadero_tiene_que_estar_activo(self):
-        """Precondición b: con el invernadero dado de baja no se activa (el alcance ya no lo opera)."""
+        """Precondición b: con el invernadero dado de baja no se activa. El Agrónomo ya no lo consulta (D-28: 404); el Gerente, que consulta todos, recibe ``fuera_de_alcance`` con el motivo."""
         self.norte.estado_invernadero = "inactivo"
         self.norte.save()
-        self.assertEqual(codigos_de(error_de(self.activar), NON_FIELD_ERRORS), ["fuera_de_alcance"])
+        with self.assertRaises(Http404):
+            self.activar()
+        error = error_de(lambda: self.activar(actor=self.gerente))
+        self.assertEqual(codigos_de(error, NON_FIELD_ERRORS), ["fuera_de_alcance"])
+        self.assertIn("dado de baja", error.messages[0])
 
     def test_precondicion_c_solo_se_activa_un_sistema_desconectado(self):
         """Precondición c: uno activo no se activa; uno dado de baja tampoco (la baja es definitiva)."""

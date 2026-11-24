@@ -20,7 +20,7 @@ from core.enlaces import resumen_de
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_capataz
 from inventario.tests.fabricas import perezoso
-from iot.models import AlertaIot, Comando, Hardware, RegistroComando, SistemaIoT
+from iot.models import AlertaIot, Comando, Hardware, NodoCentral, RegistroComando, SistemaIoT
 from iot.servicios import alertas_iot, revision
 from iot.tests import fabricas
 from iot.tests.escena_de_reglas import AHORA, ConEscenaDeReglas
@@ -39,7 +39,7 @@ class IotDscSisServicioTests(ConEscenaDeReglas, TestCase):
         cache.clear()
         super().setUp()
         SistemaIoT.objects.filter(pk=self.sistema.pk).update(token_resumen=resumen_de(TOKEN))
-        self.nodo = Hardware.objects.get(sistema=self.sistema, clase="nodo")
+        self.nodo = NodoCentral.objects.get(sistema=self.sistema)
         self.regla = fabricas.regla(self.temp, self.ventilador, self.encender, ultima_evaluacion="cumplida", contador_confirmacion=0)
 
     def desactivar(self, actor=None):
@@ -168,7 +168,7 @@ class IotDscSisServicioTests(ConEscenaDeReglas, TestCase):
         self.desactivar()
         self.assertEqual(codigos_de(error_de(lambda: comandos.emitir_comando(self.laura, self.ventilador.pk, comandos.DatosDeComando(accion_id=self.encender.pk), AHORA)), NON_FIELD_ERRORS), ["sistema_no_activo"])
         fabricas.telemetria(self.temp, 21, medida_en=AHORA.replace(hour=1))
-        Hardware.objects.filter(pk=self.nodo.pk).update(ultima_comunicacion=AHORA.replace(hour=1))
+        NodoCentral.objects.filter(pk=self.nodo.pk).update(ultima_comunicacion=AHORA.replace(hour=1))
         resumen = revision.revisar(AHORA.replace(hour=23))
         self.assertEqual(len(resumen.sistemas), 0)
         self.assertEqual(AlertaIot.objects.count(), 0)
