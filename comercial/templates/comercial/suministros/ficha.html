@@ -1,8 +1,8 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
 {% comment %}Ficha del suministro (COM-CNS-SUM, reglas 4 a 6, 9 y 10, en lo que existe hoy; VIEWS.sum del prototipo, segunda definición): los datos del contrato con su cláusula del suministrado, el aviso de
 límite, los detalles (una línea por cadena «reemplaza a», con el precio vigente hoy y la cláusula del suministrante), el calendario con la situación de cada período («Fuera de la ventana», «Reservado»,
-«Sin cobertura completa», «Pasado») y el comprobante con «Ver comprobante» y «Reenviar comprobante». Todavía NO (D-25): «Modificar», «Rescindir», «Ver historial de cambios» (COM-03b), las entregas, las
-solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha», «s» y «es_gerente».{% endcomment %}
+«Sin cobertura completa», «Pasado») y el comprobante con «Ver comprobante» y «Reenviar comprobante». COM-03b suma el aviso de la rescisión, «Modificar suministro», «Rescindir suministro», «Dejar sin efecto la rescisión» y «Ver historial de cambios» (solo lo que la persona puede hacer, regla 10). Todavía NO (D-25): las entregas, las
+solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha», «s», «es_gerente» y, si hay una ventana abierta, «plantilla_de_ventana» con su contexto.{% endcomment %}
 {% block titulo %}{{ s.codigo }} · Contratos · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
@@ -12,10 +12,17 @@ solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha
     <h1 class="mono">{{ s.codigo }}</h1>
     {% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}
     <span class="spacer"></span>
+    {% if "ver_historial" in ficha.acciones %}<a class="btn btn-ghost" href="{% url 'comercial:suministro_historial' s.pk %}" hx-get="{% url 'comercial:suministro_historial' s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Ver historial de cambios</a>{% endif %}
     <a class="btn btn-ghost" href="{% url 'comercial:cliente' s.cliente.pk %}">{% icono "user" 14 %} Ver cliente</a>
+    {% if "modificar" in ficha.acciones %}<a class="btn btn-primary" href="{% url 'comercial:suministro_modificar' s.pk %}">Modificar suministro</a>{% endif %}
+    {% if "rescindir" in ficha.acciones %}<a class="btn btn-danger" href="{% url 'comercial:suministro_rescindir' s.pk %}" hx-get="{% url 'comercial:suministro_rescindir' s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Rescindir suministro</a>{% endif %}
+    {% if "dejar_sin_efecto" in ficha.acciones %}<a class="btn btn-ghost" href="{% url 'comercial:suministro_dejar_sin_efecto' s.pk %}" hx-get="{% url 'comercial:suministro_dejar_sin_efecto' s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Dejar sin efecto la rescisión</a>{% endif %}
   </div>
 
   <div class="stack">
+    {% if ficha.aviso_de_rescision %}
+    <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ ficha.aviso_de_rescision }}</div></div>
+    {% endif %}
     {% if ficha.aviso_de_limite %}
     <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ ficha.aviso_de_limite }}</div></div>
     {% endif %}
@@ -86,5 +93,10 @@ solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha
       </div>
     </div>
   </div>
+</div>
+{% endblock %}
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
 </div>
 {% endblock %}

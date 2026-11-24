@@ -11,7 +11,7 @@
 # «Se completa en IOT-NN»: ``tiene_lecturas`` (hecha en IOT-03), ``tiene_comandos`` y ``tiene_comando_pendiente`` (hechas en IOT-05), ``tiene_reglas`` (IOT-06) y
 # ``mantenimientos_a_realizar`` (IOT-07). Consultan sus tablas, vacías hasta entonces. La baja del equipo (IOT-06) está en «baja».
 
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from dataclasses import dataclass
 
 from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
@@ -22,9 +22,10 @@ from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import RegistroAuditoria, referencia
+from core import notificaciones
+from core.models import RegistroAuditoria, Usuario, referencia
 from iot.alcance import invernaderos_que_consulta, puede_operar
-from iot.models import Actuador, AlertaIot, Comando, EquipoAnunciado, Hardware, ReglaActuacion, Sensor, SistemaIoT, Telemetria, TipoActuador
+from iot.models import Actuador, AlertaIot, Comando, EquipoAnunciado, Hardware, MantenimientoTecnico, ReglaActuacion, Sensor, SistemaIoT, Telemetria, TipoActuador
 from iot.servicios import compatibilidad
 from iot.servicios.sistemas import (
     Estado,
@@ -45,6 +46,8 @@ from maestros.extensiones import Contenido, Impedimento
 from maestros.models import Alerta, SectorProduccion
 from maestros.servicios import alertas as api_alertas
 from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general
+from produccion.errores import ErrorDeProduccion
+from produccion.servicios import ordenes as ordenes_de_produccion
 
 ACCION_MODIFICAR = "modificar"
 ACCION_VOLVER_A_ACTIVAR = "volver_a_activar"
@@ -132,8 +135,8 @@ def tiene_reglas(equipo):
 
 
 def mantenimientos_a_realizar(equipo):
-    """Regla 8 de IOT-MOD-HDW: las órdenes de mantenimiento a realizar que incluyen al equipo. **Se completa en IOT-07**: hasta entonces, vacía."""
-    return []
+    """Regla 8 de IOT-MOD-HDW y precondición d de IOT-BAJ-HDW: las órdenes de mantenimiento «a realizar» que incluyen al equipo, por ``id`` (IOT-07). Una sola consulta."""
+    return list(MantenimientoTecnico.objects.filter(hardware=equipo, estado_orden="a_realizar").select_related("tecnico", "invernadero").order_by("pk"))
 
 
 def ya_reporto(equipo):
@@ -575,33 +578,126 @@ def campos_bloqueados(equipo):
     }
 
 
-def _auditar_cambio_de_estado(actor, equipo, desde, alertas):
-    """El registro ``reactivacion_hardware`` (volver a activar o reactivar): el cambio de estado, de dónde viene y las alertas resueltas o generadas."""
+def _auditar_cambio_de_estado(actor, equipo, desde, alertas, afectados_extra=(), datos_extra=None):
+    """El registro ``reactivacion_hardware`` (volver a activar o reactivar): el cambio de estado, de dónde viene y las alertas resueltas o generadas. IOT-07 suma las órdenes de
+    mantenimiento canceladas como afectados (``afectados_extra``) y ``ordenes_canceladas`` y ``ordenes_mantenidas`` en ``datos`` (``datos_extra``)."""
     RegistroAuditoria.objects.registrar(
         usuario=actor,
         accion=RegistroAuditoria.Accion.REACTIVACION_HARDWARE,
-        afectados=[equipo, *[a for a in alertas if a is not None]],
-        detalle={"cambios": {"estado": {"antes": desde, "despues": EstadoHw.ACTIVO.value}}, "datos": {"desde": desde}},
+        afectados=[equipo, *[a for a in alertas if a is not None], *afectados_extra],
+        detalle={"cambios": {"estado": {"antes": desde, "despues": EstadoHw.ACTIVO.value}}, "datos": {"desde": desde, **(datos_extra or {})}},
     )
 
 
-def volver_a_activar(actor, equipo_id):
-    """IOT-MOD-HDW, postcondición b y reglas 7 y 8: un equipo «fuera de servicio» vuelve a «activo» a mano y sus alertas activas de falla («dispositivo en
-    falla» y «comando fallido») pasan a «resuelta». Se rechaza si el equipo no está fuera de servicio (``equipo_no_fuera_de_servicio``) o tiene un
-    comando pendiente. **Las órdenes de mantenimiento de la regla 8 se completan en IOT-07** (``mantenimientos_a_realizar``). Se audita como
-    ``reactivacion_hardware`` con ``datos.desde = fuera_de_servicio``."""
+# Lo que la ventana de volver a activar muestra de cada orden (D-79, punto 8): ``otros_fuera_de_servicio`` son los DEMÁS equipos de la orden que siguen «fuera de servicio»; si hay alguno, no se ofrece cancelarla.
+OrdenAlVolver = namedtuple("OrdenAlVolver", "orden cancelable otros_fuera_de_servicio")
+CANCELAR, MANTENER = "cancelar", "mantener"
+ELEGI_QUE_HACER = "Elegí qué hacer con cada orden de mantenimiento."
+ORDENES_CAMBIARON = "Las órdenes del equipo cambiaron mientras confirmabas: revisalas de nuevo."
+
+
+def ordenes_al_volver_a_activar(equipo):
+    """Regla 8 de IOT-MOD-HDW (IOT-07): las órdenes de mantenimiento «a realizar» del equipo, por ``id``, cada una con si se puede cancelar y qué otros equipos suyos siguen fuera de servicio.
+    Dos consultas para toda la lista, con el Técnico y el invernadero de cada orden cargados."""
+    ordenes = mantenimientos_a_realizar(equipo)
+    if not ordenes:
+        return []
+    otros = defaultdict(list)
+    enlaces = (
+        MantenimientoTecnico.hardware.through.objects.filter(mantenimientotecnico_id__in=[o.pk for o in ordenes], hardware__estado_hardware=EstadoHw.FUERA_DE_SERVICIO)
+        .exclude(hardware_id=equipo.pk)
+        .select_related("hardware")
+        .order_by("hardware_id")
+    )
+    for enlace in enlaces:
+        otros[enlace.mantenimientotecnico_id].append(enlace.hardware)
+    return [OrdenAlVolver(orden, not otros[orden.pk], otros[orden.pk]) for orden in ordenes]
+
+
+def _decisiones_validas(decisiones):
+    """``{orden_id: "cancelar" | "mantener"}`` con las claves como entero (vienen de un formulario). Un valor que no es ninguno de los dos, o una clave que no es un número, es «Elegí qué hacer…»."""
+    limpias = {}
+    for clave, decision in (decisiones or {}).items():
+        try:
+            limpias[int(clave)] = decision
+        except (TypeError, ValueError):
+            raise _error_general(ELEGI_QUE_HACER, "decisiones_incompletas") from None
+        if decision not in (CANCELAR, MANTENER):
+            raise _error_general(ELEGI_QUE_HACER, "decisiones_incompletas")
+    return limpias
+
+
+def volver_a_activar(actor, equipo_id, decisiones=None):
+    """IOT-MOD-HDW, postcondición b y reglas 7 y 8: un equipo «fuera de servicio» vuelve a «activo» a mano y sus alertas activas de falla («dispositivo en falla» y «comando fallido») pasan a «resuelta».
+    Se rechaza si el equipo no está fuera de servicio (``equipo_no_fuera_de_servicio``) o tiene un comando pendiente.
+
+    Regla 8 (IOT-07; D-73 punto 2, D-79 punto 8): si el equipo está en órdenes de mantenimiento «a realizar», ``decisiones`` dice qué hacer con cada una, ``{orden_id: "cancelar" | "mantener"}``.
+    - Con órdenes y sin decisión para alguna (o con un valor inválido): ``decisiones_incompletas``. Pedir cancelar una que incluye otros equipos fuera de servicio: ``orden_no_cancelable``.
+    - Después de bloquear, si una orden decidida ya no está «a realizar» o no es de este equipo: ``ordenes_cambiaron``.
+    - Cada orden a cancelar: ``cancelar_orden_incluida`` con el motivo «Se volvió a activar el equipo {identificador}.» y aviso al Técnico (solo con la cuenta activa). Una mantenida no cambia.
+    Bloqueos (D-78, punto 11; sin tipo, D-82 no aplica): las cuentas del actor y de los Técnicos de las órdenes a cancelar (una consulta) → invernadero → sistemas → el equipo y los demás equipos de esas
+    órdenes (en orden de ``id``) → las órdenes (``cancelar_orden_incluida``).
+    Se audita como ``reactivacion_hardware`` con ``datos.desde = fuera_de_servicio`` y, si había órdenes, ``ordenes_canceladas`` y ``ordenes_mantenidas`` (códigos)."""
     _exigir_operador(actor)
     previo = _previo(equipo_id)
+    decisiones = _decisiones_validas(decisiones)
+    previas = list(MantenimientoTecnico.objects.filter(hardware=equipo_id, estado_orden="a_realizar").values("pk", "tecnico_id"))
+    if {fila["pk"] for fila in previas} - set(decisiones):
+        raise _error_general(ELEGI_QUE_HACER, "decisiones_incompletas")
+    a_cancelar = [fila for fila in previas if decisiones.get(fila["pk"]) == CANCELAR]
+    otros_ids = set(MantenimientoTecnico.hardware.through.objects.filter(mantenimientotecnico_id__in=[f["pk"] for f in a_cancelar]).values_list("hardware_id", flat=True))
+    equipos_ids = sorted(otros_ids | {int(equipo_id)})
+    tecnicos = {fila["tecnico_id"] for fila in a_cancelar}
     with transaction.atomic():
-        invernadero, _, equipo = _bloquear_equipo(actor, equipo_id, previo)
+        list(Usuario.objects.select_for_update(no_key=True).filter(pk__in={actor.pk, *tecnicos}).order_by("pk"))
+        invernadero = api_alertas.bloquear_invernadero_para_alertas(previo["sistema__invernadero_id"])
+        _actor_sigue_activo(actor)
+        sistema_ids = sorted({previo["sistema_id"], *Hardware.objects.filter(pk__in=equipos_ids).values_list("sistema_id", flat=True)})
+        sistemas = {s.pk: s for s in SistemaIoT.objects.select_for_update(no_key=True).filter(pk__in=sistema_ids).order_by("pk")}
+        list(Hardware.objects.select_for_update(no_key=True).filter(pk__in=equipos_ids).order_by("pk"))
+        if sistemas[previo["sistema_id"]].estado_sistema == Estado.INACTIVO:
+            raise _error_general("El sistema IoT está dado de baja.", "sistema_dado_de_baja")
+        if not puede_operar(actor, invernadero):
+            raise _error_de_alcance(actor, invernadero)
+        equipo = (Sensor if previo["clase"] == "sensor" else Actuador).objects.get(pk=equipo_id)
         if equipo.estado_hardware != EstadoHw.FUERA_DE_SERVICIO:
             raise _error_general("El equipo no está fuera de servicio.", "equipo_no_fuera_de_servicio")
         if previo["clase"] == "actuador" and tiene_comando_pendiente(equipo):
             raise _error_general("El equipo tiene un comando pendiente: esperá su resultado o cancelalo antes de volver a activarlo.", "comando_pendiente")
+        filas = ordenes_al_volver_a_activar(equipo)
+        ahora_ids = {fila.orden.pk for fila in filas}
+        if ahora_ids - set(decisiones):
+            raise _error_general(ELEGI_QUE_HACER, "decisiones_incompletas")
+        if set(decisiones) - ahora_ids:
+            raise _error_general(ORDENES_CAMBIARON, "ordenes_cambiaron")
+        for fila in filas:
+            if decisiones[fila.orden.pk] == CANCELAR:
+                if not fila.cancelable:
+                    raise _error_general(f"La orden {fila.orden.codigo} incluye otros equipos fuera de servicio: no se puede cancelar.", "orden_no_cancelable")
+                if fila.orden.tecnico_id not in tecnicos:  # un traspaso la cambió de Técnico mientras tanto: su cuenta no quedó bloqueada
+                    raise _error_general(ORDENES_CAMBIARON, "ordenes_cambiaron")
         equipo.estado_hardware = EstadoHw.ACTIVO
         equipo.save(update_fields=["estado_hardware"])
         alertas = [api_alertas.resolver_alerta_de_estado(invernadero.pk, tipo, f"hw:{equipo.pk}") for tipo in TIPOS_DE_FALLA]
-        _auditar_cambio_de_estado(actor, equipo, EstadoHw.FUERA_DE_SERVICIO.value, alertas)
+        canceladas, mantenidas, afectados = [], [], []
+        motivo = f"Se volvió a activar el equipo {equipo.identificador_equipo}."
+        for fila in filas:
+            if decisiones[fila.orden.pk] != CANCELAR:
+                mantenidas.append(fila.orden.codigo)
+                continue
+            try:
+                resultado = ordenes_de_produccion.cancelar_orden_incluida(actor, fila.orden, motivo, avisar=False)
+            except ErrorDeProduccion as error:  # otra operación la canceló entre la lectura y su bloqueo
+                if error.codigo == "orden_no_pendiente":
+                    raise _error_general(ORDENES_CAMBIARON, "ordenes_cambiaron") from error
+                raise
+            canceladas.append(fila.orden.codigo)
+            afectados += [fila.orden, *resultado.reservas, *resultado.alertas_resueltas]
+            if fila.orden.tecnico.is_active:  # extensión 9a: sin Técnico activo no se avisa
+                titulo, detalle = ordenes_de_produccion.texto_de_cancelacion(fila.orden, motivo, actor)
+                notificaciones.notificar_a_varios([fila.orden.tecnico], titulo, detalle, excluir=actor)
+        datos = {"ordenes_canceladas": canceladas, "ordenes_mantenidas": mantenidas} if filas else None
+        _auditar_cambio_de_estado(actor, equipo, EstadoHw.FUERA_DE_SERVICIO.value, alertas, afectados, datos)
     return equipo
 
 
@@ -651,9 +747,14 @@ def _impedimentos_de_baja(equipo):
         pendientes = Comando.objects.filter(actuador_id=equipo.pk, estado_comando=Comando.Estado.PENDIENTE).order_by("pk")
         for comando in pendientes:
             impedimentos.append(Impedimento("comandos_pendientes", f"Tiene el comando pendiente CMD-{comando.pk}.", "Esperá su resultado o cancelalo desde Comandos."))
-    ordenes = mantenimientos_a_realizar(equipo)
-    if ordenes:
-        impedimentos.append(Impedimento("ordenes_de_mantenimiento", f"Está en {len(ordenes)} orden(es) de mantenimiento a realizar.", "Concretala o cancelala."))
+    for orden in mantenimientos_a_realizar(equipo):  # IOT-07: un impedimento por orden; no se concreta en esta ronda, se cancela (D-61)
+        impedimentos.append(
+            Impedimento(
+                "ordenes_de_mantenimiento",
+                f"Está en la orden de mantenimiento {orden.codigo}, a realizar:",
+                "cancelala desde «Órdenes de mantenimiento», en la ficha del equipo.",
+            )
+        )
     usan = ReglaActuacion.objects.filter(Q(sensor_id=equipo.pk) | Q(actuador_id=equipo.pk), estado_regla=ReglaActuacion.Estado.ACTIVA).order_by("pk")
     codigos = ", ".join(f"RGL-{regla.pk}" for regla in usan)
     if codigos:

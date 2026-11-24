@@ -1,6 +1,6 @@
 # Modelos de la app `iot` (nivel 7 de D-37). IOT-01 crea TODO el esquema del módulo (D-72, punto 6), salvo `RegistroComando`
-# (la crea IOT-05: necesita `produccion.Bitacora`) y `MantenimientoTecnico` (IOT-07): las demás tareas agregan comportamiento sin
-# cambiar modelos. Fuente: docs/modelo/iot.md. Convenciones: nombres de D-05; bajas lógicas; claves foráneas `PROTECT` (la única
+# (la crea IOT-05: necesita `produccion.Bitacora`) y `MantenimientoTecnico` (la crea IOT-07: hija de `produccion.OrdenTrabajo`): las demás tareas
+# agregan comportamiento sin cambiar modelos. Fuente: docs/modelo/iot.md. Convenciones: nombres de D-05; bajas lógicas; claves foráneas `PROTECT` (la única
 # excepción es `EquipoAnunciado.sistema`, que es `CASCADE`: dato de diseño que cada anuncio del nodo reemplaza, MD-102);
 # comparación de nombres e identificadores sin distinguir mayúsculas (`Lower` en los índices únicos).
 
@@ -10,9 +10,9 @@ from django.db.models import F, Q
 from django.db.models.functions import Lower
 from django.utils import timezone
 
-from core.models import Agronomo, Usuario, rol_de
+from core.models import Agronomo, Tecnico, Usuario, rol_de
 from iot import alcance
-from produccion.models import Bitacora
+from produccion.models import Bitacora, OrdenTrabajo
 
 # ---- QuerySets con el alcance por usuario (D-28; docs/modelo/iot.md, «Convenciones de esta ficha») ----
 
@@ -775,6 +775,37 @@ class RegistroComando(Bitacora):
     def __str__(self):
         """«Registro de CMD-N #M» (texto de la auditoría, D-36)."""
         return f"Registro de {self.comando} #{self.pk}"
+
+
+# ---- Mantenimiento técnico (IOT-07; docs/modelo/iot.md, «MantenimientoTecnico»; D-53, D-73, D-79) ----
+
+
+class MantenimientoTecnico(OrdenTrabajo):
+    """Orden de mantenimiento técnico: hija de ``produccion.OrdenTrabajo`` SIN ``ConCapataz`` (D-53), con su Técnico (R047), sus equipos (R057) y, si nació de un comando fallido, su
+    alerta (R048). En esta ronda solo la crea InfoPonia al agotarse los intentos de un comando (IOT-RSV-CMD, extensión 4b); planificarla y concretarla son CU-05 y CU-06, de la etapa 2
+    (D-73). Su clave es ``ordentrabajo_ptr``. La prioridad es obligatoria: la restricción ``ordentrabajo_prioridad_en_mantenimiento`` está en ``OrdenTrabajo``. «Al menos un equipo» (R057,
+    1..*) no lo garantiza la base: lo garantiza el servicio y lo prueba una prueba de invariante."""
+
+    class TipoMantenimiento(models.TextChoices):
+        REVISION = "revision", "Revisión"
+        REPARACION = "reparacion", "Reparación"
+        CALIBRACION = "calibracion", "Calibración"
+        REEMPLAZO = "reemplazo", "Reemplazo"
+        MANTENIMIENTO_GENERAL = "mantenimiento_general", "Mantenimiento general"
+
+    tipo_mantenimiento = models.CharField(max_length=30, choices=TipoMantenimiento.choices, default=TipoMantenimiento.REVISION)
+    tecnico = models.ForeignKey(Tecnico, on_delete=models.PROTECT, related_name="mantenimientos_asignados")  # R047; el índice lo crea la FK
+    hardware = models.ManyToManyField(Hardware, related_name="mantenimientos")  # R057
+    alerta = models.OneToOneField("maestros.Alerta", null=True, blank=True, on_delete=models.PROTECT, related_name="mantenimiento_tecnico")  # R048
+
+    class Meta:
+        verbose_name = "Mantenimiento técnico"
+        verbose_name_plural = "Mantenimientos técnicos"
+
+    def save(self, *args, **kwargs):
+        """Fija ``tipo_orden = mantenimiento``: nunca cambia (docs/modelo/produccion.md, ``tipo_orden``)."""
+        self.tipo_orden = OrdenTrabajo.Tipo.MANTENIMIENTO
+        super().save(*args, **kwargs)
 
 
 # ---- Alertas del IoT (D-72, punto 4) ----

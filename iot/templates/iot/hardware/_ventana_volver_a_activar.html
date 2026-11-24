@@ -1,12 +1,28 @@
 {% load iconos %}{% comment %}Ventana de volver a activar un equipo fuera de servicio (IOT-MOD-HDW postcondición b y reglas 7 y 8; ventana ``react`` del prototipo). El equipo vuelve a estar activo y puede recibir
-comandos; sus alertas de falla se resuelven. Las órdenes de mantenimiento a realizar que lo incluyen, con «Cancelarla» o «Mantenerla» por cada una, las suma IOT-07 (``ordenes``, vacío hasta entonces).
-Abrirla (GET) no cambia nada; volver a activar es un POST.{% endcomment %}
+comandos; sus alertas de falla se resuelven. IOT-07 (regla 8, D-73 punto 2, D-79 punto 8): una fila por cada orden de mantenimiento «a realizar» que lo incluye, con «Cancelarla» (marcada de entrada: volver a activar dice que el equipo
+funciona) y «Mantenerla»; una orden con otros equipos que siguen fuera de servicio solo ofrece «Mantenerla». El prototipo cancelaba sin preguntar: manda el caso de uso. Abrirla (GET) no cambia nada; volver a activar es un POST.
+Recibe «equipo», «nombre», «filas» (cada una con «fila» —OrdenAlVolver— y «elegida») y «error».{% endcomment %}
 <div class="ov" data-ventana>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
     <h2 id="ventana-titulo">Volver a activar {{ nombre }} {{ equipo.identificador_equipo }}</h2>
     <p>El equipo vuelve a estar activo y puede recibir comandos. Su alerta de falla se resuelve.</p>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
     <form method="post" action="{% url 'iot:hardware_volver_a_activar' equipo.pk %}">
       {% csrf_token %}
+      {% if filas %}
+      <p><b>Órdenes de mantenimiento a realizar</b></p>
+      {% for f in filas %}
+      <fieldset class="field" style="margin-bottom:10px">
+        <legend><span class="mono">{{ f.fila.orden.codigo }}</span> · {{ f.fila.orden.get_tipo_mantenimiento_display }} · para el {{ f.fila.orden.fecha_programada_orden|date:"d/m/Y" }} · Técnico: {{ f.fila.orden.tecnico.get_full_name|default:f.fila.orden.tecnico.email }}</legend>
+        {% if f.fila.cancelable %}
+        <label><input type="radio" name="decision_{{ f.fila.orden.pk }}" value="cancelar"{% if f.elegida == "cancelar" %} checked{% endif %}> Cancelarla <span class="sm muted">(el Técnico recibe un aviso)</span></label>
+        {% else %}
+        <p class="sm muted" style="margin:0">Incluye otros equipos fuera de servicio: {% for e in f.fila.otros_fuera_de_servicio %}<span class="mono">{{ e.identificador_equipo }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+        {% endif %}
+        <label><input type="radio" name="decision_{{ f.fila.orden.pk }}" value="mantener"{% if f.elegida == "mantener" %} checked{% endif %}> Mantenerla</label>
+      </fieldset>
+      {% endfor %}
+      {% endif %}
       <div class="acts">
         <a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
         <button class="btn btn-ghost" type="submit" data-enviando="Activando…">Volver a activar</button>

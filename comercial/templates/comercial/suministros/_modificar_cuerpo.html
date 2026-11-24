@@ -1,0 +1,268 @@
+{% load iconos comercial %}{% comment %}El cuerpo del formulario «Modificar suministro» (COM-MOD-SUM, pasos 4 a 9; `VIEWS.summod` del prototipo, segunda definición): el contrato (cliente y fecha de realización
+como texto, extensión 5g; duración, tolerados, multa y cláusula del suministrado; el Vendedor, solo para el Gerente), cada detalle vigente con qué hacer («Sin cambios», «Modificar», «Terminar»),
+desde cuándo rige el cambio (el primer período posterior a la ventana de pre-reserva; 5a) y sus datos con los valores actuales, los detalles nuevos (5b) y el panel «Cambios» a la derecha.
+Es lo que redibuja HTMX con «Actualizar» y los botones: NUNCA mientras se tipea (`.claude/rules/interfaz.md`). Un campo igual al actual no es un cambio. Recibe «s», «datos», «filas», «nuevos», «contrato»,
+«errores», «errores_generales», «es_gerente», «vendedores», «variedades», «direcciones», «huella» y «dias_de_ventana».{% endcomment %}
+{% url 'comercial:suministro_modificar_calcular' s.pk as url_calcular %}
+{% if errores_generales %}
+<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{% for mensaje in errores_generales %}{{ mensaje }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
+{% endif %}
+<input type="hidden" name="huella" value="{{ huella }}">
+<div class="cv-layout">
+  <div class="cv-pasos">
+
+    <section class="card paso" aria-labelledby="mod-contrato">
+      <div class="card-title"><span class="paso-n">1</span><span id="mod-contrato">Contrato</span></div>
+      <dl class="dl">
+        <dt>Cliente</dt><dd>{{ s.cliente }} <span class="muted">· CUIT {{ s.cliente.cuit_cliente|cuit }}</span></dd>
+        <dt>Fecha de realización</dt><dd>{{ s.fecha_realizacion|date:"d/m/Y" }}</dd>
+      </dl>
+      <p class="hint">No se modifican: para otro cliente o desde otra fecha, pactá un suministro nuevo.</p>
+      {% if es_gerente %}
+      <div class="fld">
+        <label for="mod-vendedor">Vendedor responsable</label>
+        <select class="field-input" id="mod-vendedor" name="vendedor" data-desplegable>
+          {% for v in vendedores %}<option value="{{ v.pk }}"{% if contrato.vendedor|stringformat:"s" == v.pk|stringformat:"s" %} selected{% endif %}>{{ v.get_full_name }}</option>{% endfor %}
+        </select>
+        {% for mensaje in errores.vendedor %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        <div class="hint">Lo ya reservado no se mueve; los períodos siguientes salen de los invernaderos del Vendedor nuevo.</div>
+      </div>
+      {% endif %}
+      <div class="grid3">
+        <div class="fld">
+          <label for="mod-duracion">Duración</label>
+          <div class="suf"><input class="field-input" id="mod-duracion" type="text" inputmode="numeric" name="duracion" value="{{ contrato.duracion }}" autocomplete="off"><span>meses</span></div>
+          {% for mensaje in errores.duracion %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          <div class="hint">Hoy termina el {{ s.fecha_fin|date:"d/m/Y" }}. Acortarla es terminar el contrato por mutuo acuerdo, sin multa.</div>
+        </div>
+        <div class="fld">
+          <label for="mod-tolerados">Incumplimientos tolerados</label>
+          <input class="field-input" id="mod-tolerados" type="text" inputmode="numeric" name="tolerados" value="{{ contrato.tolerados }}" autocomplete="off">
+          {% for mensaje in errores.tolerados %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          <div class="hint">Tiene {{ s.cantidad_incumplimientos }} acumulados: no puede ser menor.</div>
+        </div>
+        <div class="fld">
+          <label for="mod-multa">Multa por resolución</label>
+          <div class="suf"><input class="field-input" id="mod-multa" type="text" inputmode="decimal" name="multa" value="{{ contrato.multa }}" autocomplete="off"><span>$</span></div>
+          {% for mensaje in errores.multa %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        </div>
+      </div>
+      <div class="sublbl">Cláusula del suministrado</div>
+      <div class="grid3">
+        <div class="fld">
+          <label for="mod-plazo-pago">Plazo de pago</label>
+          <div class="suf"><input class="field-input" id="mod-plazo-pago" type="text" inputmode="numeric" name="plazo_pago" value="{{ contrato.plazo_pago }}" autocomplete="off"><span>días</span></div>
+          {% for mensaje in errores.plazo_pago %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          <div class="hint">Rige para las entregas que se concreten desde hoy. Las ya concretadas conservan su vencimiento.</div>
+        </div>
+        <div class="fld">
+          <label for="mod-indemnizacion-pago">Indemnización por atraso en el pago</label>
+          <div class="suf"><input class="field-input" id="mod-indemnizacion-pago" type="text" inputmode="decimal" name="indemnizacion_pago" value="{{ contrato.indemnizacion_pago }}" autocomplete="off"><span>$ por día</span></div>
+          {% for mensaje in errores.indemnizacion_pago %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card paso" aria-labelledby="mod-detalles">
+      <div class="card-title"><span class="paso-n">2</span><span id="mod-detalles">Detalles</span></div>
+      <p class="muted" style="margin-bottom:12px">Los cambios rigen desde el primer período posterior al {{ datos.ventana|date:"d/m/Y" }}. Lo ya reservado, cosechado o entregado no cambia.</p>
+      {% if datos.equivale_a_terminar_el_contrato %}
+      <div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>Equivale a terminar el contrato. Si es por acuerdo con el cliente, el Gerente puede rescindirlo desde la ficha (sin multa).
+        {% if datos.duracion_sugerida %}<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" type="submit" name="acortar_duracion" value="{{ datos.duracion_sugerida }}" hx-post="{{ url_calcular }}" hx-target="#cuerpo-mod" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Acortar la duración hasta el {{ datos.fecha_sugerida|date:"d/m/Y" }}</button></div>{% endif %}</div></div>
+      {% endif %}
+      {% for x in filas %}{% with d=x.fila.detalle %}
+      <div class="detcard" id="detalle-existente-{{ d.pk }}">
+        <div class="detcard-h"><b>{{ d.variedad }}</b><span class="muted sm">{{ x.direccion }} · {{ d.cantidad_por_periodo }} plantas cada {{ d.periodo_entrega_dias }} días</span></div>
+        {% if x.fila.rige_desde %}
+        <input type="hidden" name="modificar-{{ d.pk }}-rige_visto" value="{{ x.rige_visto }}">
+        <fieldset class="fld" style="border:0;padding:0;margin:0 0 10px">
+          <legend class="sr">Qué hacer con {{ d.variedad }}</legend>
+          <label style="margin-right:16px"><input type="radio" name="modificar-{{ d.pk }}-accion" value="sin_cambios"{% if x.accion == "sin_cambios" %} checked{% endif %}> Sin cambios</label>
+          <label style="margin-right:16px"><input type="radio" name="modificar-{{ d.pk }}-accion" value="modificar"{% if x.accion == "modificar" %} checked{% endif %}> Modificar</label>
+          <label><input type="radio" name="modificar-{{ d.pk }}-accion" value="terminar"{% if x.accion == "terminar" %} checked{% endif %}> Terminar</label>
+          {% if x.errores.accion %}<div class="err">{{ x.errores.accion }}</div>{% endif %}
+          <div class="hint">«Terminar» no lleva multa: es de mutuo acuerdo. Se entrega por última vez en el último período dentro de la ventana de pre-reserva.</div>
+        </fieldset>
+        <div class="grid4">
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-rige">Rige desde</label>
+            <select class="field-input" id="mod-{{ d.pk }}-rige" name="modificar-{{ d.pk }}-rige_desde" data-desplegable>
+              {% for o in x.opciones %}<option value="{{ o|date:'Y-m-d' }}"{% if x.rige_elegido == o|date:"Y-m-d" or not x.rige_elegido and forloop.first %} selected{% endif %}>{{ o|date:"d/m/Y" }}</option>{% endfor %}
+            </select>
+            {% if x.errores.rige_desde %}<div class="err">{{ x.errores.rige_desde }}</div>{% endif %}
+            <div class="hint">Los períodos anteriores siguen con las condiciones actuales.</div>
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-cantidad">Cantidad por período</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-cantidad" type="text" inputmode="numeric" name="modificar-{{ d.pk }}-cantidad" value="{{ x.cantidad }}" autocomplete="off"><span>plantas</span></div>
+            {% if x.errores.cantidad %}<div class="err">{{ x.errores.cantidad }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-periodo">Período de entrega</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-periodo" type="text" inputmode="numeric" name="modificar-{{ d.pk }}-periodo" value="{{ x.periodo }}" autocomplete="off"><span>días</span></div>
+            {% if x.errores.periodo %}<div class="err">{{ x.errores.periodo }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-precio">Precio inicial</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-precio" type="text" inputmode="decimal" name="modificar-{{ d.pk }}-precio" value="{{ x.precio }}" autocomplete="off"><span>$</span></div>
+            {% if x.errores.precio %}<div class="err">{{ x.errores.precio }}</div>{% endif %}
+            <div class="hint">Propuesto: lo que valdría hoy el detalle actual en esa fecha.</div>
+          </div>
+        </div>
+        <div class="grid4">
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-mecanismo">Mecanismo de precio</label>
+            <select class="field-input" id="mod-{{ d.pk }}-mecanismo" name="modificar-{{ d.pk }}-mecanismo" data-desplegable>
+              <option value="fijo"{% if x.mecanismo == "fijo" %} selected{% endif %}>Fijo</option>
+              <option value="ajuste_periodico"{% if x.mecanismo == "ajuste_periodico" %} selected{% endif %}>Ajuste periódico</option>
+            </select>
+            {% if x.errores.mecanismo %}<div class="err">{{ x.errores.mecanismo }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-porcentaje">Ajuste</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-porcentaje" type="text" inputmode="decimal" name="modificar-{{ d.pk }}-porcentaje" value="{{ x.porcentaje }}" autocomplete="off"><span>%</span></div>
+            {% if x.errores.porcentaje %}<div class="err">{{ x.errores.porcentaje }}</div>{% endif %}
+            <div class="hint">Solo con ajuste periódico.</div>
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-meses">Cada</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-meses" type="text" inputmode="numeric" name="modificar-{{ d.pk }}-meses" value="{{ x.meses }}" autocomplete="off"><span>meses</span></div>
+            {% if x.errores.meses %}<div class="err">{{ x.errores.meses }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="sublbl">Cláusula del suministrante</div>
+        <div class="grid4">
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-plazo-entrega">Tolerancia de entrega</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-plazo-entrega" type="text" inputmode="numeric" name="modificar-{{ d.pk }}-plazo_entrega" value="{{ x.plazo_entrega }}" autocomplete="off"><span>días</span></div>
+            {% if x.errores.plazo_entrega %}<div class="err">{{ x.errores.plazo_entrega }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-retraso">Indemnización por retraso</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-retraso" type="text" inputmode="decimal" name="modificar-{{ d.pk }}-indemnizacion_retraso" value="{{ x.indemnizacion_retraso }}" autocomplete="off"><span>$ por día</span></div>
+            {% if x.errores.indemnizacion_retraso %}<div class="err">{{ x.errores.indemnizacion_retraso }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-minima">Cantidad mínima</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-minima" type="text" inputmode="numeric" name="modificar-{{ d.pk }}-cantidad_minima" value="{{ x.cantidad_minima }}" autocomplete="off"><span>plantas</span></div>
+            {% if x.errores.cantidad_minima %}<div class="err">{{ x.errores.cantidad_minima }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="mod-{{ d.pk }}-faltante">Indemnización por faltante</label>
+            <div class="suf"><input class="field-input" id="mod-{{ d.pk }}-faltante" type="text" inputmode="decimal" name="modificar-{{ d.pk }}-indemnizacion_faltante" value="{{ x.indemnizacion_faltante }}" autocomplete="off"><span>$ por planta</span></div>
+            {% if x.errores.indemnizacion_faltante %}<div class="err">{{ x.errores.indemnizacion_faltante }}</div>{% endif %}
+          </div>
+        </div>
+        {% else %}
+        {% if x.errores.accion %}<div class="err">{{ x.errores.accion }}</div>{% endif %}
+        <p class="muted">Todos sus períodos ya están dentro de la ventana de pre-reserva: no se puede modificar ni terminar.</p>
+        {% endif %}
+      </div>
+      {% endwith %}{% endfor %}
+
+      {% for n in nuevos %}{% with i=n.r.indice r=n.r %}
+      <div class="detcard" id="detalle-nuevo-{{ i }}">
+        <div class="detcard-h"><b>Detalle nuevo</b><span class="spacer"></span>
+          <button class="btn btn-ghost btn-sm" type="submit" name="quitar_nuevo" value="{{ i }}" aria-label="Quitar el detalle nuevo" hx-post="{{ url_calcular }}" hx-target="#cuerpo-mod" hx-swap="innerHTML show:none" data-sin-envio-en-curso>{% icono "trash" 14 %} Quitar</button></div>
+        <div class="grid4">
+          <div class="fld">
+            <label for="nuevo-{{ i }}-variedad">Variedad</label>
+            <select class="field-input" id="nuevo-{{ i }}-variedad" name="detalle-{{ i }}-variedad" data-desplegable>
+              <option value="">Seleccionar…</option>
+              {% for v in variedades %}<option value="{{ v.pk }}"{% if v.pk|stringformat:"s" == r.variedad_id %} selected{% endif %}>{{ v }}</option>{% endfor %}
+            </select>
+            {% if n.errores.variedad %}<div class="err">{{ n.errores.variedad }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-direccion">Dirección de entrega</label>
+            <select class="field-input" id="nuevo-{{ i }}-direccion" name="detalle-{{ i }}-direccion" data-desplegable>
+              <option value="">Seleccionar…</option>
+              {% for dir in direcciones %}<option value="{{ dir.pk }}"{% if dir.pk|stringformat:"s" == r.direccion_id %} selected{% endif %}>{{ dir.texto }} · {{ dir.localidad.nombre_localidad }}</option>{% endfor %}
+            </select>
+            {% if n.errores.direccion %}<div class="err">{{ n.errores.direccion }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-cantidad">Cantidad por período</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-cantidad" type="text" inputmode="numeric" name="detalle-{{ i }}-cantidad" value="{{ r.cantidad }}" autocomplete="off"><span>plantas</span></div>
+            {% if n.errores.cantidad %}<div class="err">{{ n.errores.cantidad }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-periodo">Período de entrega</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-periodo" type="text" inputmode="numeric" name="detalle-{{ i }}-periodo" value="{{ r.periodo }}" autocomplete="off"><span>días</span></div>
+            {% if n.errores.periodo %}<div class="err">{{ n.errores.periodo }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="grid4">
+          <div class="fld">
+            <label for="nuevo-{{ i }}-primera">Primera entrega</label>
+            <input class="field-input" id="nuevo-{{ i }}-primera" type="date" name="detalle-{{ i }}-primera_entrega" value="{{ r.primera_entrega }}">
+            {% if n.errores.primera_entrega %}<div class="err">{{ n.errores.primera_entrega }}</div>{% endif %}
+            <div class="hint">Desde hoy y hasta el fin del contrato. Las entregas de los próximos {{ dias_de_ventana }} días se reservan al confirmar.</div>
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-mecanismo">Mecanismo de precio</label>
+            <select class="field-input" id="nuevo-{{ i }}-mecanismo" name="detalle-{{ i }}-mecanismo" data-desplegable>
+              <option value="fijo"{% if r.mecanismo != "ajuste_periodico" %} selected{% endif %}>Fijo</option>
+              <option value="ajuste_periodico"{% if r.mecanismo == "ajuste_periodico" %} selected{% endif %}>Ajuste periódico</option>
+            </select>
+            {% if n.errores.mecanismo %}<div class="err">{{ n.errores.mecanismo }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-precio">Precio inicial</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-precio" type="text" inputmode="decimal" name="detalle-{{ i }}-precio" value="{{ r.precio }}" autocomplete="off"><span>$</span></div>
+            {% if n.errores.precio %}<div class="err">{{ n.errores.precio }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-porcentaje">Ajuste cada</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-porcentaje" type="text" inputmode="decimal" name="detalle-{{ i }}-porcentaje" value="{{ r.porcentaje }}" autocomplete="off"><span>%</span></div>
+            <div class="suf" style="margin-top:6px"><input class="field-input" type="text" inputmode="numeric" name="detalle-{{ i }}-meses" value="{{ r.meses }}" autocomplete="off" aria-label="Meses entre ajustes"><span>meses</span></div>
+            {% if n.errores.porcentaje %}<div class="err">{{ n.errores.porcentaje }}</div>{% endif %}{% if n.errores.meses %}<div class="err">{{ n.errores.meses }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="sublbl">Cláusula del suministrante</div>
+        <div class="grid4">
+          <div class="fld">
+            <label for="nuevo-{{ i }}-plazo-entrega">Tolerancia de entrega</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-plazo-entrega" type="text" inputmode="numeric" name="detalle-{{ i }}-plazo_entrega" value="{{ r.plazo_entrega }}" autocomplete="off"><span>días</span></div>
+            {% if n.errores.plazo_entrega %}<div class="err">{{ n.errores.plazo_entrega }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-retraso">Indemnización por retraso</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-retraso" type="text" inputmode="decimal" name="detalle-{{ i }}-indemnizacion_retraso" value="{{ r.indemnizacion_retraso }}" autocomplete="off"><span>$ por día</span></div>
+            {% if n.errores.indemnizacion_retraso %}<div class="err">{{ n.errores.indemnizacion_retraso }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-minima">Cantidad mínima</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-minima" type="text" inputmode="numeric" name="detalle-{{ i }}-cantidad_minima" value="{{ r.cantidad_minima }}" autocomplete="off"><span>plantas</span></div>
+            {% if n.errores.cantidad_minima %}<div class="err">{{ n.errores.cantidad_minima }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label for="nuevo-{{ i }}-faltante">Indemnización por faltante</label>
+            <div class="suf"><input class="field-input" id="nuevo-{{ i }}-faltante" type="text" inputmode="decimal" name="detalle-{{ i }}-indemnizacion_faltante" value="{{ r.indemnizacion_faltante }}" autocomplete="off"><span>$ por planta</span></div>
+            {% if n.errores.indemnizacion_faltante %}<div class="err">{{ n.errores.indemnizacion_faltante }}</div>{% endif %}
+          </div>
+        </div>
+        {% for a in n.advertencias %}<div class="alert alert-warn" role="status" style="margin-top:8px">{% icono "warn" 16 %}<div>{{ a.mensaje }}
+          {% if a.codigo == "superposicion" %}<label style="display:block;margin-top:6px"><input type="checkbox" name="detalle-{{ i }}-continuar" value="1"{% if r.continuar_superpuesto %} checked{% endif %}> Continuar igual</label>{% endif %}</div></div>{% endfor %}
+        {% if n.errores.continuar %}<div class="err">{{ n.errores.continuar }}</div>{% endif %}
+      </div>
+      {% endwith %}{% endfor %}
+      <button class="btn btn-ghost" type="submit" name="agregar_detalle" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-mod" hx-swap="innerHTML show:none" data-sin-envio-en-curso>{% icono "plus" 15 %} Agregar detalle</button>
+    </section>
+  </div>
+
+  <aside class="card cv-resumen" aria-labelledby="mod-cambios">
+    <div class="card-title"><span id="mod-cambios">Cambios</span></div>
+    {% if datos.cambios %}
+    <ul class="sm" style="margin:0 0 10px 18px">{% for c in datos.cambios %}<li>{{ c.texto }}</li>{% endfor %}</ul>
+    {% else %}
+    <p class="muted">Todavía no indicaste ningún cambio.</p>
+    {% endif %}
+    <p class="hint">Al confirmar, cada detalle modificado pasa a «finalizado» y se crea su sucesor desde la fecha indicada. Se le envía al cliente el comprobante con cada cambio.</p>
+    <div class="acts-col">
+      <button class="btn btn-primary" type="submit" formaction="{% url 'comercial:suministro_modificar_revisar' s.pk %}" hx-post="{% url 'comercial:suministro_modificar_revisar' s.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" data-sin-envio-en-curso>Guardar cambios</button>
+      <button class="btn btn-ghost" type="submit" name="actualizar" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-mod" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Actualizar</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:suministro' s.pk %}">Cancelar</a>
+    </div>
+  </aside>
+</div>

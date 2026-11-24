@@ -1,0 +1,28 @@
+{% load iconos %}{% comment %}Ventana «Cancelar orden» de un mantenimiento (PROD-CNL-ORD pasos 4d, 5 y 6 para un mantenimiento; IOT-07, D-79 puntos 1 y 2; no está en el prototipo). Muestra el resumen del paso 4d (los equipos, el
+tipo, el Técnico y los repuestos reservados: en esta ronda ninguno), pide el motivo (obligatorio, hasta 300 caracteres) y confirma con «Cancelar orden». Abrirla (GET) no cambia nada; cancelar es un POST. Sin JavaScript, es la
+ficha con la ventana abierta. Recibe «equipo», «resumen» (ResumenDeCancelacionDeMantenimiento), «motivo» (lo escrito) y «errores» (por campo).{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Cancelar la orden {{ resumen.orden.codigo }}</h2>
+    <dl class="facts" style="margin-bottom:10px">
+      <div><dt class="k">Tipo</dt><dd class="v">{{ resumen.tipo_texto }}</dd></div>
+      <div><dt class="k">Equipos</dt><dd class="v">{% for e in resumen.equipos %}<span class="mono">{{ e.identificador_equipo }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+      <div><dt class="k">Técnico</dt><dd class="v">{{ resumen.tecnico.get_full_name|default:resumen.tecnico.email }}</dd></div>
+      <div><dt class="k">Repuestos reservados</dt><dd class="v">{% for r in resumen.repuestos %}{{ r.insumo_invernadero.insumo.nombre_insumo }} ({{ r.cantidad_reservada }}){% if not forloop.last %}, {% endif %}{% empty %}Sin repuestos reservados{% endfor %}</dd></div>
+    </dl>
+    <div class="alert alert-info" role="status" style="margin-bottom:10px">{% icono "info" 16 %}<div>{{ resumen.aviso }}</div></div>
+    <form method="post" action="{% url 'iot:hardware_cancelar_orden' equipo.pk resumen.orden.pk %}">
+      {% csrf_token %}
+      <div class="field{% if errores.motivo %} has-error{% endif %}">
+        <label for="motivo-cancelacion">Motivo de la cancelación</label>
+        <textarea id="motivo-cancelacion" name="motivo" rows="3" maxlength="300" required aria-describedby="motivo-ayuda{% if errores.motivo %} motivo-error{% endif %}" data-foco-inicial>{{ motivo }}</textarea>
+        <span id="motivo-ayuda" class="sm muted">Hasta 300 caracteres. El Técnico lo recibe en el aviso.</span>
+        {% if errores.motivo %}<span id="motivo-error" class="error" role="alert">{{ errores.motivo.0 }}</span>{% endif %}
+      </div>
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana>Volver</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Cancelando…">Cancelar orden</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -28,7 +28,7 @@ from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.categorias import REPUESTOS_DE_HARDWARE
 from inventario.models import Insumo
 from iot.alcance import invernaderos_que_consulta, invernaderos_que_opera, puede_operar
-from iot.models import Actuador, AlertaIot, Comando, Hardware, NodoCentral, ReglaActuacion, Sensor, SistemaIoT
+from iot.models import Actuador, AlertaIot, Comando, Hardware, MantenimientoTecnico, NodoCentral, ReglaActuacion, Sensor, SistemaIoT
 from iot.validadores import texto, validar_fecha_de_instalacion, validar_rango_de_la_solucion, validar_texto
 from maestros.extensiones import EstadoIot, Impedimento
 from maestros.models import Invernadero
@@ -484,8 +484,8 @@ DatosDeBajaDelSistema = namedtuple("DatosDeBajaDelSistema", "sistema nodo equipo
 
 
 def ordenes_a_realizar_del_sistema(sistema):
-    """Precondición d de IOT-BAJ-SIS: las órdenes de mantenimiento «a realizar» de los equipos del sistema. **Se completa en IOT-07**: hasta entonces, vacía."""
-    return []
+    """Precondición d de IOT-BAJ-SIS: las órdenes de mantenimiento «a realizar» que incluyen algún equipo del sistema, sin repetir, por ``id`` (IOT-07). Una sola consulta."""
+    return list(MantenimientoTecnico.objects.filter(hardware__sistema=sistema, estado_orden="a_realizar").distinct().order_by("pk"))
 
 
 def _previo_del_ciclo(actor, sistema_id):
@@ -608,7 +608,10 @@ def _impedimentos_de_la_baja(sistema, pendientes):
         )
     ordenes = ordenes_a_realizar_del_sistema(sistema)
     if ordenes:
-        impedimentos.append(Impedimento("ordenes_de_mantenimiento", f"Hay {len(ordenes)} orden(es) de mantenimiento a realizar.", "Concretalas o cancelalas."))
+        codigos = ", ".join(orden.codigo for orden in ordenes)
+        impedimentos.append(
+            Impedimento("ordenes_de_mantenimiento", f"Hay {len(ordenes)} orden(es) de mantenimiento a realizar ({codigos}):", "cancelalas desde la ficha de cada equipo.")
+        )
     return impedimentos
 
 

@@ -1,6 +1,6 @@
 # Pruebas de IOT-RSV-CMD · Resolver Comando, sin la orden de mantenimiento (docs/casos_de_uso/iot/resolver_comando.md, v0.2, con «Cómo se aplica en la ronda «IoT 1»») y de lo que cita:
 # D-77 (el contrato), D-78 (puntos 1 a 5, 10, 11 y 12), D-71 (el correo lo manda la revisión), D-36 y D-75 (punto 1). Se escribieron ANTES que el servicio.
-# La orden de mantenimiento (postcondiciones k y l, extensiones 4b.4, 4b.4a y 4b.4b) es de IOT-07: acá se prueba que NO se crea.
+# La orden de mantenimiento (postcondiciones k y l, extensiones 4b.4, 4b.4a y 4b.4b) es de IOT-07 y se prueba en test_iot_rsv_cmd_mantenimiento.py; acá la escena no tiene Técnico (4b.4a).
 #
 # Servicios que se prueban (iot/servicios/comandos.py), tomados del módulo dentro de cada prueba:
 #   retirar_comandos(sistema_id, ahora) -> Retiro(modo, comandos)                  cada comando: EntregaDeComando(id, identificador, comando, valor, intento, espera_segundos)
@@ -19,7 +19,7 @@ from django.test import TestCase
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import perezoso
-from iot.models import AlertaIot, Comando, NodoCentral, RegistroComando
+from iot.models import AlertaIot, Comando, MantenimientoTecnico, NodoCentral, RegistroComando
 from iot.servicios.nodo import SistemaDesconectado
 from iot.tests import fabricas
 from maestros.models import Alerta
@@ -463,7 +463,12 @@ class IotRsvCmdServicioTests(fabricas.ConCatalogoIot, TestCase):
         self.escalar("Sin corriente.")
         alerta = self.alerta("iot_comando_fallido")
         self.assertEqual((alerta.clave_estado, alerta.nivel_severidad), (f"hw:{self.actuador.pk}", "critica"))
-        self.assertEqual(alerta.descripcion_alerta, "norte/extractor · Encender no se ejecutó en 4 intentos (último: falló: Sin corriente.)")
+        # IOT-07 (D-79, punto 3): la escena de esta clase no tiene Técnico, así que el texto base lleva el sufijo de 4b.4a. Los otros dos sufijos se prueban en test_iot_rsv_cmd_mantenimiento.py.
+        self.assertEqual(
+            alerta.descripcion_alerta,
+            "norte/extractor · Encender no se ejecutó en 4 intentos (último: falló: Sin corriente.)"
+            " · El invernadero no tiene Técnico: la orden de mantenimiento deberá planificarse cuando se asigne uno.",
+        )
         vinculo = AlertaIot.objects.get(alerta=alerta)
         self.assertEqual((vinculo.hardware_id, vinculo.sistema_id), (self.actuador.pk, self.sistema.pk))
 
@@ -482,7 +487,7 @@ class IotRsvCmdServicioTests(fabricas.ConCatalogoIot, TestCase):
         """D-78 punto 10: «(último: sin respuesta)» cuando fue un vencimiento."""
         self.retirado(70, intentos=4)
         self.retirar()
-        self.assertTrue(self.alerta("iot_comando_fallido").descripcion_alerta.endswith("(último: sin respuesta)"))
+        self.assertIn("(último: sin respuesta)", self.alerta("iot_comando_fallido").descripcion_alerta)  # IOT-07: sigue el sufijo de la orden
 
     def test_ext_4b_deja_el_registro_fallido_y_audita_con_la_alerta_y_el_actuador(self):
         """Postcondición m: el fallo definitivo queda en la bitácora. Postcondición q: la auditoría incluye comando, actuador, alerta y registro."""
@@ -491,10 +496,11 @@ class IotRsvCmdServicioTests(fabricas.ConCatalogoIot, TestCase):
         afectados = {a["modelo"] for a in self.auditorias().get().afectados}
         self.assertTrue({"iot.comando", "iot.actuador", "maestros.alerta", "iot.registrocomando"} <= afectados)
 
-    def test_ext_4b_hasta_iot_07_no_se_crea_la_orden_de_mantenimiento_ni_se_nombra_en_la_alerta(self):
-        """«Cómo se aplica»: la orden de mantenimiento (4b.4, 4b.4a y 4b.4b) la suma IOT-07; hasta entonces no se crea y la alerta no menciona ninguna orden."""
+    def test_ext_4b_4a_sin_tecnico_no_se_crea_la_orden_y_la_alerta_lo_dice(self):
+        """«Cómo se aplica» y extensión 4b.4a (IOT-07): el invernadero de esta escena no tiene Técnico: no se crea ninguna orden y la alerta lo dice. Con Técnico, ver test_iot_rsv_cmd_mantenimiento.py."""
         self.escalar()
-        self.assertNotIn("orden", self.alerta("iot_comando_fallido").descripcion_alerta.lower())
+        self.assertEqual(MantenimientoTecnico.objects.count(), 0)
+        self.assertIn("no tiene Técnico", self.alerta("iot_comando_fallido").descripcion_alerta)
 
     def test_ext_4b_un_segundo_escalamiento_no_duplica_la_alerta(self):
         """D-78 punto 10 y regla de alertas de estado: una activa por invernadero, tipo y clave."""

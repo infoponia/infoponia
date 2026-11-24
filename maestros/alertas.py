@@ -32,6 +32,11 @@ class Origen(str, Enum):
     TELEMETRIA = "telemetria"
     SOLICITUD_REVISION = "solicitud_revision"
     MERMA = "merma"
+    # D-62, punto 1 (COM-03b): los orígenes de `comercial` y de la partida de `produccion`. No hay migración: el origen vive en el tipo.
+    ENTREGA = "entrega"
+    SUMINISTRO = "suministro"
+    DETALLE_SUMINISTRO = "detalle_suministro"
+    STOCK_COSECHADO = "stock_cosechado"
 
 
 @dataclass(frozen=True)

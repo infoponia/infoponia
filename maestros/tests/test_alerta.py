@@ -238,6 +238,25 @@ class AlertaTiposTests(SimpleTestCase):
         with tipo_de_alerta_de_prueba(tipo):
             self.assertEqual(registro.tipo_de_alerta("prueba_origen").origen, Origen.TELEMETRIA)
 
+    def test_d62_origenes_de_comercial_en_la_lista(self):
+        """D-62, punto 1 (COM-03b): ``Origen`` suma ``entrega``, ``suministro``, ``detalle_suministro`` y ``stock_cosechado``; los cuatro
+        anteriores siguen igual (restricción C5 reescrita como «a lo sumo un origen»)."""
+        self.assertEqual(Origen.ENTREGA.value, "entrega")
+        self.assertEqual(Origen.SUMINISTRO.value, "suministro")
+        self.assertEqual(Origen.DETALLE_SUMINISTRO.value, "detalle_suministro")
+        self.assertEqual(Origen.STOCK_COSECHADO.value, "stock_cosechado")
+        self.assertEqual(
+            {o.value for o in Origen},
+            {"hardware", "telemetria", "solicitud_revision", "merma", "entrega", "suministro", "detalle_suministro", "stock_cosechado"},
+        )
+
+    def test_d62_un_tipo_se_registra_con_cada_origen_nuevo(self):
+        """D-62, punto 1: un tipo puede declarar cualquiera de los orígenes nuevos (no hay migración: el origen vive en el tipo)."""
+        for origen in (Origen.ENTREGA, Origen.SUMINISTRO, Origen.DETALLE_SUMINISTRO, Origen.STOCK_COSECHADO):
+            with self.subTest(origen=origen):
+                with tipo_de_alerta_de_prueba(tipo_falso(f"prueba_{origen.value}", origen=origen)):
+                    self.assertEqual(registro.tipo_de_alerta(f"prueba_{origen.value}").origen, origen)
+
 
 class AlertaServicioTests(ConGeoref, TestCase):
     """API de ``maestros/servicios/alertas.py`` (D-41). Se corre dentro de la transacción de ``TestCase``."""

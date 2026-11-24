@@ -607,6 +607,25 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **El retiro audita una vez por retiro**, con los hechos juntos (`datos.hechos`), y no un registro por comando (D-97).
 - **Prueba paralela intermitente:** un primer intento de `python manage.py test iot produccion core --keepdb --parallel …` terminó con `TypeError: cannot pickle 'traceback' object` (el runner no puede mostrar un fallo). No se reprodujo en cuatro corridas más; si reaparece, correr en serie para ver el fallo.
 
+
+## Abiertos desde COM-03b (24/11/2026)
+
+- **D-64, punto 8 queda para COM-04a** (decisión del estudiante): la pre-reserva toma solo detalles «vigentes». Si una modificación ocurre antes de la corrida del día, el período que entra hoy en la ventana del detalle finalizado queda sin reservar y el calendario lo muestra «Reservado» (sin alerta). `pre_reserva.md` y la sección 7 del patrón de stock ya decían «desde COM-04».
+- **Enlace del Agrónomo = la ficha del invernadero, explícito** (`maestros:invernadero`): la segunda enmienda de D-62 hace del detalle de la alerta el enlace *por omisión* y `pre_reserva.md` dice «la ficha del invernadero (enlace por omisión)». Corregir el texto de `pre_reserva.md`.
+- **Comprobante único del estado actual** (sin columnas nuevas): `enviar_comprobante(contrato, tipo, cambios)` cambia asunto e introducción (modificación, rescisión, rescisión sin efecto); «Reenviar» deduce la constancia de la rescisión de `motivo_rescision`. Después de dejarla sin efecto no hay marca: ver `docs/disparadores.md`.
+- **Rescisión sin períodos conservados (2a):** `fecha_ultima_entrega_rescision` y `fecha_rescision` valen hoy (la restricción `suministro_rescision_completa` exige la fecha). Decirlo en COM-RSC-SUM (pendientes_CU).
+- **Rescisión después de una modificación:** `periodos_conservados` ignora los detalles finalizados por una modificación, cuyos períodos de la ventana se siguen entregando. Ver `docs/disparadores.md` (COM-05a1 y COM-06) y aclararlo en COM-RSC-SUM.
+- **D-63, punto 4:** el aviso al Vendedor y al Gerente por falta de invernaderos activos sale una sola vez por texto. **«Se resuelve al llegar su fecha»:** la consulta con auditoría `pre_reserva_periodo` al empezar la corrida del día siguiente.
+- **`asignar` usa `stock.hoy()`:** con `proceso_diario --fecha` la cosecha programada toma la fecha real de hoy, no la simulada (código de COM-02).
+- **Detalle sin ningún período hasta la nueva fecha de fin** (acortar la duración): pasa a «finalizado» con `fecha_fin_detalle` = la nueva fecha de fin. COM-MOD-SUM solo dice «su último período».
+- **Quién cambia el Vendedor:** un Vendedor que manda `vendedor` distinto del actual recibe `PermissionDenied`; mandar el actual no es un cambio.
+- **Concurrencia:** la pre-reserva usa una transacción por período, así que «pre-reserva primero» solo garantiza el primer período frente a una modificación o rescisión que llegue en el medio.
+- **`huella` y `conservados` en `None` no se comparan** en `rescindir_suministro` y `dejar_sin_efecto_rescision`.
+- **Códigos y campos de error** (los reutilizan COM-04, COM-05 y COM-07): ver el «Cierre» de la tarea, punto 14.
+- **Pruebas existentes reescritas:** `test_regla_10_las_acciones_de_la_ficha_son_solo_las_que_existen_en_com_03a` (ahora `…_sin_las_de_otras_tareas`) y `test_regla_ningun_boton_lleva_a_un_403`: «Modificar suministro» ya existe en la ficha del Vendedor.
+- **Tema abierto con el Jardín Botánico:** que un preaviso igual a la ventana de pre-reserva (14 días) sea aceptable para modificar y rescindir.
+- **Pendientes de Drive.** pendientes_CU: COM-RSC-SUM (2a con la fecha de hoy; el cierre y la rescisión después de una modificación); COM-ANL-RSC (los códigos `sin_rescision` y `rescision_cerrada`); COM-MOD-SUM (detalle sin períodos hasta la nueva fecha de fin; Vendedor solo el Gerente); PROD-PRR-SUM (el aviso de D-63 punto 4 una sola vez; el enlace del Agrónomo). pendientes_MD: nada nuevo.
+
 ## Abiertos desde IOT-06 (24/11/2026)
 
 - **`iot/verificacion.py` y el cargador de datos de verificación** (la tarea pedía sumar `norte/sectorA/temp-vieja` y un paso del motivo `equipo_dado_de_baja`): no se hizo, porque D-95 los retiró. El paso del motivo `equipo_dado_de_baja` se cubre en las pruebas (`test_iot_baj_hdw.py`) y en los pasos 26 y 27 de la «Verificación a mano».
@@ -616,3 +635,14 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Las pantallas de Hardware, Comandos y Reglas de un sistema dado de baja** dicen «no tiene Sistema IoT» (`sistema_del_invernadero` solo ve el vigente): el historial de un sistema dado de baja no tiene pantalla propia.
 - **Panel de monitoreo:** el enlace a las reglas de actuación (punto 7 de «Cuando existan actuadores, comandos y reglas del IoT», de `docs/disparadores.md`) quedó sin hacer: la tarea no lo pedía.
 - **Migración renumerada:** la de IOT-06 era `core` 0031 y pasó a 0032 al traer `main` (CMP-02b trajo la suya).
+
+## Abiertos desde IOT-07 (24/11/2026)
+
+- **Claves de auditoría del extracto.** `mantenimiento_automatico.md` y la tarea decían `desde` y `equipos` para la cancelación; esas claves ya existen con otro sentido (reactivación y baja del sistema). Se usaron `cancelada_desde` y `equipos_de_la_orden` (más `orden_mantenimiento`, `sin_orden`, `ordenes_canceladas` y `ordenes_mantenidas`). Hay que corregir el extracto y la tarea. Tocó `core/models.py` (solo `ETIQUETAS` y `VALORES_VISIBLES`, sin migración), fuera de «Permitido fuera de la app»: autorizado por el estudiante.
+- **`produccion/tests/fabricas.py`** (fuera de «Permitido fuera de la app», autorizado): `orden_suelta` pone prioridad `media` también al mantenimiento, porque la restricción nueva `ordentrabajo_prioridad_en_mantenimiento` la exige. Sumarlo a «Permitido fuera de la app» de la tarea.
+- **El Inicio del Técnico muestra solo el identificador de cada equipo** (el extracto pedía «identificador y descripción»: la descripción vive en cada subtipo y costaría una consulta por equipo).
+- **El Inicio usa `timezone.localdate()`** para marcar las órdenes vencidas: el punto de extensión de `core` solo recibe al usuario, no la fecha.
+- **El orden de bloqueo del traspaso y de dos operaciones del mismo actor no se puede probar con barrera.** Todas empiezan por las cuentas, y el Agrónomo es común, así que se serializan antes del invernadero: invertir el orden no las hace fallar. Solo la prueba de escalamiento contra cancelación (`test_d78_el_escalamiento_corre_entero_antes_de_que_la_cancelacion_tome_el_invernadero`) discrimina (con el orden invertido, bloqueo mutuo). Se descartó la prueba de barrera del traspaso.
+- **Restricción `ordentrabajo_prioridad_en_mantenimiento` en Neon.** No hay mantenimientos anteriores a IOT-07, pero conviene confirmar antes del despliegue que ninguna orden de tipo mantenimiento tenga la prioridad vacía (la migración 0007 fallaría).
+- **La baja con varias órdenes** da un impedimento por orden en el equipo y uno solo con la lista en el sistema; los códigos de error nuevos (`decisiones_incompletas`, `orden_no_cancelable`, `ordenes_cambiaron`, `orden_no_pendiente`, `cambio_simultaneo`, `motivo_obligatorio`, `motivo_largo`) no estaban en el extracto.
+- **Si la alerta ya tiene otra orden (R048, 0..1)**, la orden nueva se crea sin alerta.

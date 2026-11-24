@@ -113,6 +113,12 @@ class OrdenTrabajo(OrigenDocumento):
             models.CheckConstraint(
                 condition=~Q(tipo_orden="cosecha") | Q(prioridad_orden__isnull=False), name="orden_trabajo_cosecha_con_prioridad"
             ),
+            # IOT-07 (D-53 punto 6, D-73 punto 3; docs/modelo/produccion.md): la prioridad es obligatoria en el mantenimiento. Va aparte de la
+            # de la cosecha. El extracto la llama `ordentrabajo_prioridad_en_mantenimiento` y usa `tipo`; el campo real es `tipo_orden`.
+            models.CheckConstraint(
+                condition=~Q(tipo_orden="mantenimiento") | Q(prioridad_orden__isnull=False),
+                name="ordentrabajo_prioridad_en_mantenimiento",
+            ),
         ]
 
     def __str__(self):

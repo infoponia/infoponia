@@ -5,6 +5,7 @@
 
 import re
 from datetime import timedelta
+from html import unescape
 from unittest import mock
 
 from django.contrib.messages import get_messages
@@ -139,12 +140,14 @@ class PermisosTests(BaseDeVistas):
         self.assertContains(pagina, self.ajeno.codigo)
 
     def test_regla_ningun_boton_lleva_a_un_403(self):
-        """D-30 y D-25: la ficha propia ofrece solo lo que existe (sin «Modificar», «Rescindir» ni «Ver historial») y ningún enlace lleva a un 403."""
+        """D-30 y D-25: la ficha propia ofrece solo lo que la persona puede hacer y existe («Modificar suministro» desde COM-03b: antes esta prueba decía que no; sin «Rescindir»
+        —es del Gerente—, sin «Ver historial» —no tiene cambios— ni «Registrar cobro») y ningún enlace lleva a un 403."""
         propio = self.propio()
         self.client.force_login(self.e.vendedor)
         pagina = self.client.get(reverse("comercial:suministro", args=[propio.pk]))
         self.assertContains(pagina, "Reenviar comprobante")
-        for texto in ("Modificar suministro", "Rescindir", "Ver historial de cambios", "Registrar cobro"):
+        self.assertContains(pagina, "Modificar suministro")
+        for texto in ("Rescindir", "Dejar sin efecto la rescisión", "Ver historial de cambios", "Registrar cobro"):
             self.assertNotContains(pagina, texto)
         for url in re.findall(r'href="(/comercial/[^"]*)"', pagina.content.decode()):
             self.assertNotEqual(self.client.get(url).status_code, 403, url)
@@ -528,3 +531,398 @@ class FichaCalendarioYComprobanteTests(BaseDeVistas):
         self.client.force_login(self.gerente)
         ventana = self.client.get(reverse("comercial:cliente_baja", args=[self.e.cliente.pk]), **HTMX)
         self.assertContains(ventana, f"Suministros vigentes: 1 ({propio.codigo}).")
+
+
+# ---- COM-03b: modificar, rescindir, dejar sin efecto la rescisión e historial (paso 7 de la tarea) ----
+#
+# Los permisos, los flujos con HTMX y sin él, los errores por campo, los botones y que `calcular/` y `revisar/` no escriben nada. Las reglas de negocio ya las prueban los
+# servicios (`test_com_mod_sum.py`, `test_com_rsc_sum.py`, `test_com_anl_rsc.py`, `test_com_cns_sum.py`).
+
+
+def campos_ocultos(respuesta):
+    """``{nombre: valor}`` de los campos ocultos de una respuesta (lo que el resumen manda de vuelta al confirmar: sin JavaScript es lo único que viaja)."""
+    html = respuesta.content.decode()
+    return {nombre: unescape(valor) for nombre, valor in re.findall(r'<input type="hidden" name="([^"]+)" value="([^"]*)"', html)}
+
+
+class BaseDeModificacionEnVistas(BaseDeVistas):
+    """Un suministro propio (30 plantas cada 7 días desde dentro de 3: períodos a los 3, 10, 17…; el cambio rige desde el día 17) para el Vendedor y el Gerente."""
+
+    def setUp(self):
+        super().setUp()
+        self.s = self.propio()
+        self.d = self.s.detalles.get()
+        self.url = reverse("comercial:suministro_modificar", args=[self.s.pk])
+
+    def huella(self):
+        return suministros.huella_de(Suministro.objects.get(pk=self.s.pk))
+
+    def cambios(self, **extra):
+        """Lo que manda el formulario al modificar la cantidad del detalle a 40 (con la huella y la propuesta que vio la persona)."""
+        datos = {
+            "huella": self.huella(),
+            f"modificar-{self.d.pk}-accion": "modificar",
+            f"modificar-{self.d.pk}-cantidad": "40",
+            f"modificar-{self.d.pk}-rige_visto": iso(17),
+        }
+        datos.update(extra)
+        return {k: v for k, v in datos.items() if v is not None}
+
+    def cuenta_de_lo_escrito(self):
+        return (DetalleSuministro.objects.count(), RegistroAuditoria.objects.count(), Notificacion.objects.count(), ReservaStock.objects.count())
+
+
+class ComModSumVistaTests(BaseDeModificacionEnVistas):
+    """«Modificar suministro»: pantalla, recálculo, resumen y confirmación."""
+
+    def test_pre_a_los_demas_roles_y_otro_vendedor_reciben_403_y_el_anonimo_va_al_inicio_de_sesion(self):
+        """Precondición a y regla «Quién modifica»: Agrónomo, Capataz y Transportista, y un Vendedor ajeno, 403 en la pantalla, el recálculo, el resumen y la
+        confirmación; sin sesión, a iniciar sesión; un id que no existe, 404."""
+        urls = [self.url, self.url + "calcular/", self.url + "revisar/"]
+        for cuenta in (self.e.agronomo, self.e.capataz, crear_transportista(), self.otro.vendedor):
+            self.client.force_login(cuenta)
+            self.assertEqual(self.client.get(self.url).status_code, 403, cuenta)
+            for url in urls[1:]:
+                self.assertEqual(self.client.post(url, self.cambios()).status_code, 403, (cuenta, url))
+            self.assertEqual(self.client.post(self.url, {**self.cambios(), "confirmar": "1"}).status_code, 403, cuenta)
+        self.client.logout()
+        for url in urls:
+            self.assertEqual(self.client.get(url).status_code in (302, 405), True, url)
+        self.client.force_login(self.gerente)
+        self.assertEqual(self.client.get(reverse("comercial:suministro_modificar", args=[999999])).status_code, 404)
+        self.assertEqual(self.cuenta_de_lo_escrito()[0], 2)  # nada se escribió (el ajeno y el propio)
+
+    def test_regla_la_pantalla_trae_los_valores_actuales_y_lo_que_no_se_modifica(self):
+        """Pasos 4 y 5: el formulario viene cargado con lo actual, dice desde cuándo rige un cambio y muestra el cliente y la fecha de realización como texto (extensión 5g)."""
+        self.client.force_login(self.e.vendedor)
+        pagina = self.client.get(self.url)
+        self.assertContains(pagina, f"Modificar suministro <span class=\"mono\">{self.s.codigo}</span>")
+        self.assertContains(pagina, f'name="modificar-{self.d.pk}-cantidad" value="30"')
+        self.assertContains(pagina, f'name="modificar-{self.d.pk}-rige_visto" value="{iso(17)}"')
+        self.assertContains(pagina, "No se modifican: para otro cliente o desde otra fecha, pactá un suministro nuevo.")
+        self.assertContains(pagina, "Los cambios rigen desde el primer período posterior al")
+        self.assertNotContains(pagina, 'name="cliente"')
+        self.assertContains(pagina, f'name="huella" value="{self.huella()}"')
+
+    def test_regla_solo_el_gerente_ve_el_vendedor_responsable(self):
+        """Extensión 1a: el selector de Vendedor es del Gerente; el Vendedor no lo ve y, si lo manda, recibe 403."""
+        self.client.force_login(self.e.vendedor)
+        self.assertNotContains(self.client.get(self.url), 'name="vendedor"')
+        self.assertEqual(self.client.post(self.url + "revisar/", {**self.cambios(), "vendedor": str(self.otro.vendedor.pk)}).status_code, 403)
+        self.client.force_login(self.gerente)
+        self.assertContains(self.client.get(self.url), 'name="vendedor"')
+
+    def test_regla_un_contrato_con_rescision_acordada_vuelve_a_la_ficha_con_el_motivo(self):
+        """Precondición nueva de COM-RSC-SUM: con una rescisión acordada, la pantalla no se abre; vuelve a la ficha con «Tiene una rescisión acordada…» (con HTMX,
+        por `HX-Redirect`)."""
+        lectura = suministros.datos_de_rescision(self.gerente, self.s.pk)
+        suministros.rescindir_suministro(
+            self.gerente, self.s.pk, suministros.PedidoDeRescision("a_pedido_del_cliente", "", iso(0), "1"), lectura.huella, lectura.conservados
+        )
+        self.client.force_login(self.e.vendedor)
+        respuesta = self.client.get(self.url)
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertIn("Tiene una rescisión acordada: dejala sin efecto para modificarlo.", avisos(respuesta))
+        htmx = self.client.post(self.url + "calcular/", self.cambios(), **HTMX)
+        self.assertEqual((htmx.status_code, htmx["HX-Redirect"]), (204, reverse("comercial:suministro", args=[self.s.pk])))
+
+    def test_regla_calcular_devuelve_el_cuerpo_con_los_cambios_y_no_escribe_nada(self):
+        """Paso 6: `calcular/` redibuja el cuerpo con el panel «Cambios» (la fecha desde la que rige) sin guardar ni auditar ni avisar; solo POST."""
+        self.client.force_login(self.gerente)
+        antes = self.cuenta_de_lo_escrito()
+        pagina = self.client.post(self.url + "calcular/", self.cambios(), **HTMX)
+        self.assertContains(pagina, "cantidad por período: de 30 a 40")
+        self.assertContains(pagina, f"Rige desde el {(HOY + timedelta(days=17)):%d/%m/%Y}")
+        self.assertNotContains(pagina, "<html")
+        self.assertEqual(self.cuenta_de_lo_escrito(), antes)
+        self.assertEqual(self.client.get(self.url + "calcular/").status_code, 405)
+
+    def test_regla_agregar_y_quitar_un_detalle_nuevo_sin_validar(self):
+        """Extensión 5b: «Agregar detalle» suma un bloque en blanco sin errores; «Quitar» lo saca (con la convención de COM-02: nada valida al tipear)."""
+        self.client.force_login(self.gerente)
+        con_nuevo = self.client.post(self.url + "calcular/", {**self.cambios(), "agregar_detalle": "1"}, **HTMX)
+        self.assertContains(con_nuevo, "Detalle nuevo")
+        self.assertNotContains(con_nuevo, 'class="err"')
+        sin_nuevo = self.client.post(self.url + "calcular/", {**self.cambios(), "detalle-0-cantidad": "5", "quitar_nuevo": "0"}, **HTMX)
+        self.assertNotContains(sin_nuevo, "Detalle nuevo")
+
+    def test_regla_terminar_el_unico_detalle_avisa_que_equivale_a_terminar_el_contrato(self):
+        """Extensión 5c.1a: aviso con el botón «Acortar la duración hasta el dd/mm/aaaa»; el botón manda `acortar_duracion` y la pantalla lo recalcula."""
+        self.client.force_login(self.gerente)
+        datos = {"huella": self.huella(), f"modificar-{self.d.pk}-accion": "terminar", f"modificar-{self.d.pk}-rige_visto": iso(17)}
+        pagina = self.client.post(self.url + "calcular/", datos, **HTMX)
+        self.assertContains(pagina, "Equivale a terminar el contrato")
+        self.assertContains(pagina, "Acortar la duración hasta el")
+        acortada = self.client.post(self.url + "calcular/", {**datos, "acortar_duracion": "1"}, **HTMX)
+        self.assertContains(acortada, 'name="duracion" value="1"')
+
+    def test_regla_revisar_con_htmx_muestra_la_ventana_de_resumen_y_no_escribe(self):
+        """Pasos 7 a 9: «Guardar cambios» abre el resumen sobre el formulario, con cada cambio y la fecha desde la que rige; «Confirmar cambios» está ahí, no en el formulario."""
+        self.client.force_login(self.e.vendedor)
+        antes = self.cuenta_de_lo_escrito()
+        ventana = self.client.post(self.url + "revisar/", self.cambios(), **HTMX)
+        self.assertContains(ventana, "data-ventana")
+        self.assertContains(ventana, f"Resumen de los cambios de {self.s.codigo}")
+        self.assertContains(ventana, "Confirmar cambios")
+        self.assertContains(ventana, f"rige desde el {(HOY + timedelta(days=17)):%d/%m/%Y}")
+        self.assertNotContains(self.client.get(self.url), "Confirmar cambios")
+        self.assertEqual(self.cuenta_de_lo_escrito(), antes)
+
+    def test_regla_revisar_sin_javascript_es_una_pagina(self):
+        """Sin JavaScript el resumen es otra página, con «Volver a la carga» y «Confirmar cambios»."""
+        self.client.force_login(self.e.vendedor)
+        pagina = self.client.post(self.url + "revisar/", self.cambios())
+        self.assertContains(pagina, "<html")
+        self.assertContains(pagina, "Resumen de los cambios de")
+        self.assertContains(pagina, "Volver a la carga")
+        self.assertContains(pagina, "Confirmar cambios")
+
+    def test_ext_6a_un_dato_invalido_vuelve_al_formulario_con_el_error_en_su_campo(self):
+        """6a: cantidad 0 al revisar: con HTMX, el cuerpo con el error junto al campo y `HX-Retarget` (no la ventana); sin HTMX, el formulario completo."""
+        self.client.force_login(self.e.vendedor)
+        malo = self.cambios(**{f"modificar-{self.d.pk}-cantidad": "0"})
+        htmx = self.client.post(self.url + "revisar/", malo, **HTMX)
+        self.assertEqual((htmx["HX-Retarget"], htmx["HX-Reswap"]), ("#cuerpo-mod", "innerHTML show:none"))
+        self.assertContains(htmx, "Ingresá un número entero de plantas, de 1 a 500.000.")
+        self.assertNotContains(htmx, "data-ventana")
+        plano = self.client.post(self.url + "revisar/", malo)
+        self.assertContains(plano, "<html")
+        self.assertContains(plano, "Ingresá un número entero de plantas, de 1 a 500.000.")
+
+    def test_ext_7a_sin_ningun_cambio_se_informa(self):
+        """7a: revisar sin cambios muestra «No indicaste ningún cambio.» y no abre el resumen."""
+        self.client.force_login(self.e.vendedor)
+        pagina = self.client.post(self.url + "revisar/", {"huella": self.huella()}, **HTMX)
+        self.assertContains(pagina, "No indicaste ningún cambio.")
+        self.assertNotContains(pagina, "data-ventana")
+
+    def test_flujo_principal_el_resumen_lleva_todo_y_confirmar_modifica(self):
+        """Flujo de punta a punta sin JavaScript: el resumen manda de vuelta, en campos ocultos, todo lo cargado (incluida la huella y la propuesta que vio la persona);
+        «Confirmar cambios» modifica: el detalle pasa a «finalizado», nace su sucesor, un solo registro de auditoría y el aviso breve; la ficha muestra «Con cambios desde» y el historial."""
+        self.client.force_login(self.e.vendedor)
+        resumen = self.client.post(self.url + "revisar/", self.cambios())
+        confirmacion = {**campos_ocultos(resumen), "confirmar": "1"}
+        self.assertEqual(confirmacion["huella"], self.huella())
+        respuesta = self.client.post(self.url, confirmacion)
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertTrue(any(a.startswith(f"{self.s.codigo} modificado.") for a in avisos(respuesta)))
+        self.assertEqual(DetalleSuministro.objects.get(pk=self.d.pk).estado_detalle_suministro, "finalizado")
+        (sucesor,) = DetalleSuministro.objects.filter(reemplaza_a=self.d)
+        self.assertEqual((sucesor.cantidad_por_periodo, sucesor.fecha_primer_entrega), (40, HOY + timedelta(days=17)))
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="modificacion_suministro").count(), 1)
+        ficha = self.client.get(reverse("comercial:suministro", args=[self.s.pk]))
+        self.assertContains(ficha, f"Con cambios desde el {(HOY + timedelta(days=17)):%d/%m/%Y}")
+        self.assertContains(ficha, "Ver historial de cambios")
+
+    def test_ext_10b_si_el_contrato_cambio_vuelve_a_la_ficha_sin_registrar_nada(self):
+        """10b: con la huella vieja, «El contrato cambió mientras lo modificabas…» en la ficha; no se registra nada."""
+        self.client.force_login(self.e.vendedor)
+        datos = {**self.cambios(), "confirmar": "1"}
+        Suministro.objects.filter(pk=self.s.pk).update(incumplimientos_tolerados=9)
+        respuesta = self.client.post(self.url, datos)
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertTrue(any("El contrato cambió mientras lo modificabas" in a for a in avisos(respuesta)))
+        self.assertEqual(DetalleSuministro.objects.filter(reemplaza_a=self.d).count(), 0)
+
+    def test_ext_10a_si_un_periodo_entro_en_la_ventana_se_vuelve_a_mostrar_con_las_fechas_recalculadas(self):
+        """10a: la propuesta que vio la persona ya no es la de hoy: «Desde que abriste la pantalla, un período entró en la ventana. Revisá las fechas nuevas.» con el formulario
+        otra vez (la propuesta nueva en lugar de la vieja); no se registra nada."""
+        self.client.force_login(self.e.vendedor)
+        respuesta = self.client.post(self.url, {**self.cambios(**{f"modificar-{self.d.pk}-rige_visto": iso(10)}), "confirmar": "1"})
+        self.assertContains(respuesta, "Desde que abriste la pantalla, un período entró en la ventana. Revisá las fechas nuevas.")
+        self.assertContains(respuesta, f'name="modificar-{self.d.pk}-rige_visto" value="{iso(17)}"')
+        self.assertEqual(DetalleSuministro.objects.filter(reemplaza_a=self.d).count(), 0)
+
+    def test_regla_un_detalle_nuevo_se_agrega_con_su_reserva_de_la_ventana(self):
+        """Extensión 5b de punta a punta con el formulario: agregar un detalle en otra dirección, revisar y confirmar; el período de la ventana queda reservado."""
+        otra = direccion_de_cliente(self.e.cliente).direccion
+        nuevo = {
+            "detalle-0-variedad": str(self.e.variedad.pk), "detalle-0-direccion": str(otra.pk), "detalle-0-cantidad": "20", "detalle-0-periodo": "30",
+            "detalle-0-primera_entrega": iso(5), "detalle-0-mecanismo": "fijo", "detalle-0-precio": "1500,50", "detalle-0-plazo_entrega": "1",
+            "detalle-0-indemnizacion_retraso": "100", "detalle-0-cantidad_minima": "10", "detalle-0-indemnizacion_faltante": "50",
+        }
+        self.client.force_login(self.e.vendedor)
+        resumen = self.client.post(self.url + "revisar/", {"huella": self.huella(), **nuevo})
+        self.assertContains(resumen, "Se agrega")
+        self.client.post(self.url, {**campos_ocultos(resumen), "confirmar": "1"})
+        creado = DetalleSuministro.objects.exclude(pk=self.d.pk).get(suministro=self.s)
+        self.assertEqual(ReservaStock.objects.filter(detalle_suministro=creado).count(), 1)
+
+    def test_regla_con_cambios_no_hay_boton_que_lleve_a_un_403(self):
+        """D-30: ninguna ficha (de Gerente ni de Vendedor, vigente, con cambios o rescindida) tiene un enlace que dé 403, incluidas las pantallas nuevas."""
+        self.client.force_login(self.e.vendedor)
+        self.client.post(self.url, {**campos_ocultos(self.client.post(self.url + "revisar/", self.cambios())), "confirmar": "1"})
+        for cuenta in (self.e.vendedor, self.gerente):
+            self.client.force_login(cuenta)
+            pagina = self.client.get(reverse("comercial:suministro", args=[self.s.pk]))
+            for url in set(re.findall(r'href="(/comercial/[^"#]*)"', pagina.content.decode())):
+                with self.subTest(cuenta=cuenta.rol, url=url):
+                    self.assertNotEqual(self.client.get(url).status_code, 403)
+
+
+class ComRscSumVistaTests(BaseDeModificacionEnVistas):
+    """«Rescindir suministro», «Dejar sin efecto la rescisión» y «Ver historial de cambios»."""
+
+    def setUp(self):
+        super().setUp()
+        self.rescindir_url = reverse("comercial:suministro_rescindir", args=[self.s.pk])
+        self.anular_url = reverse("comercial:suministro_dejar_sin_efecto", args=[self.s.pk])
+        self.historial_url = reverse("comercial:suministro_historial", args=[self.s.pk])
+
+    def pedido(self, **extra):
+        """Lo que manda la ventana de rescindir: a pedido del cliente, acordado ayer, con la casilla, y lo que vio el Gerente (la huella y los períodos que se conservan)."""
+        lectura = suministros.datos_de_rescision(self.gerente, self.s.pk)
+        datos = {
+            "motivo": "a_pedido_del_cliente", "descripcion": "", "fecha_acuerdo": iso(-1), "acuerdo": "1", "huella": lectura.huella,
+            "conservado": [f"{d}:{f}" for d, f in lectura.conservados],
+        }
+        datos.update(extra)
+        return datos
+
+    def rescindir(self):
+        lectura = suministros.datos_de_rescision(self.gerente, self.s.pk)
+        suministros.rescindir_suministro(
+            self.gerente, self.s.pk, suministros.PedidoDeRescision("a_pedido_del_cliente", "", iso(-1), "1"), lectura.huella, lectura.conservados
+        )
+
+    def test_regla_solo_el_gerente_rescinde_y_deja_sin_efecto(self):
+        """Regla «Quién rescinde»: el Vendedor del contrato, otro Vendedor y los demás roles reciben 403 en las dos pantallas y en sus POST; el Vendedor no ve el botón."""
+        self.rescindir()
+        for cuenta in (self.e.vendedor, self.otro.vendedor, self.e.agronomo, crear_transportista()):
+            self.client.force_login(cuenta)
+            for url in (self.rescindir_url, self.anular_url):
+                self.assertEqual(self.client.get(url).status_code, 403, (cuenta, url))
+                self.assertEqual(self.client.post(url, {}).status_code, 403, (cuenta, url))
+        self.client.logout()
+        self.assertEqual(self.client.get(self.rescindir_url).status_code, 302)
+        self.client.force_login(self.e.vendedor)
+        self.assertNotContains(self.client.get(reverse("comercial:suministro", args=[self.s.pk])), "Dejar sin efecto la rescisión")
+
+    def test_regla_la_ventana_de_rescindir_presenta_lo_que_pasara_y_abrirla_no_cambia_nada(self):
+        """Pasos 1 y 2: con HTMX llega solo la ventana; sin JavaScript, la ficha con la ventana abierta. Dice los períodos que se conservan, la fecha de la última entrega y que no hay
+        multa; lleva ocultos la huella y los períodos que ve el Gerente. Abrirla (GET) no escribe nada."""
+        self.client.force_login(self.gerente)
+        antes = self.cuenta_de_lo_escrito()
+        htmx = self.client.get(self.rescindir_url, **HTMX)
+        self.assertNotContains(htmx, "<html")
+        for texto in (f"Rescindir {self.s.codigo}", (HOY + timedelta(days=10)).strftime("%d/%m/%Y"), "no lleva multa ni indemnización", "Registrar rescisión",
+                      "Confirmo que la rescisión se acordó con el cliente"):
+            self.assertContains(htmx, texto)
+        self.assertIn("huella", campos_ocultos(htmx))  # y los períodos que vio el Gerente, en `conservado`
+        self.assertContains(htmx, 'name="conservado"', count=2)
+        pagina = self.client.get(self.rescindir_url)
+        self.assertContains(pagina, "<html")
+        self.assertContains(pagina, "Registrar rescisión")
+        self.assertContains(pagina, f"{self.s.codigo}")
+        self.assertEqual(self.cuenta_de_lo_escrito(), antes)
+
+    def test_flujo_principal_registrar_la_rescision_vuelve_a_la_ficha_con_el_aviso(self):
+        """Pasos 3 a 8 sin JavaScript: un POST común registra; vuelve a la ficha con el aviso breve («Se entrega hasta el dd/mm/aaaa»), el contrato sigue «vigente» y la ficha avisa la
+        rescisión, sin «Modificar» ni «Rescindir» y con «Dejar sin efecto la rescisión»."""
+        self.client.force_login(self.gerente)
+        respuesta = self.client.post(self.rescindir_url, self.pedido())
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertTrue(any(f"Se entrega hasta el {(HOY + timedelta(days=10)):%d/%m/%Y}" in a for a in avisos(respuesta)))
+        self.assertEqual(Suministro.objects.get(pk=self.s.pk).estado_suministro, "vigente")
+        ficha = self.client.get(reverse("comercial:suministro", args=[self.s.pk]))
+        self.assertContains(ficha, "Rescisión acordada el")
+        self.assertContains(ficha, "Dejar sin efecto la rescisión")
+        for texto in ("Modificar suministro", "Rescindir suministro"):
+            self.assertNotContains(ficha, texto)
+
+    def test_ext_4a_los_errores_vuelven_en_la_ventana_con_lo_cargado(self):
+        """4a: sin la casilla, con «Otro» sin descripción y con fecha futura, la ficha vuelve con la ventana abierta, cada error junto a su campo y lo que se había cargado; no se registra nada."""
+        self.client.force_login(self.gerente)
+        respuesta = self.client.post(self.rescindir_url, self.pedido(motivo="otro", descripcion="", fecha_acuerdo=iso(2), acuerdo=""))
+        self.assertEqual(respuesta.status_code, 200)
+        for texto in ("Con el motivo «Otro», contá cuál fue.", "No puede ser posterior al", "Confirmá que la rescisión se acordó con el cliente"):
+            self.assertContains(respuesta, texto)
+        self.assertContains(respuesta, f'value="{iso(2)}"')
+        self.assertIsNone(Suministro.objects.get(pk=self.s.pk).motivo_rescision)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="rescision_suministro").count(), 0)
+
+    def test_ext_6a_si_un_periodo_entro_en_la_ventana_la_ventana_se_vuelve_a_presentar(self):
+        """6a: lo que vio el Gerente ya no es lo que se conserva: «Desde que abriste la pantalla, un período entró en la ventana…» y los períodos de ahora; no se registra nada."""
+        self.client.force_login(self.gerente)
+        respuesta = self.client.post(self.rescindir_url, self.pedido(conservado=[f"{self.d.pk}:{iso(3)}"]))
+        self.assertContains(respuesta, "Desde que abriste la pantalla, un período entró en la ventana. Revisá las fechas nuevas.")
+        self.assertIsNone(Suministro.objects.get(pk=self.s.pk).motivo_rescision)
+
+    def test_ext_6b_si_el_contrato_cambio_vuelve_a_la_ficha(self):
+        """6b: con la huella vieja, a la ficha con la situación actual; y un contrato que ya tiene la rescisión no abre la ventana."""
+        self.client.force_login(self.gerente)
+        datos = self.pedido()
+        Suministro.objects.filter(pk=self.s.pk).update(incumplimientos_tolerados=9)
+        respuesta = self.client.post(self.rescindir_url, datos)
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertTrue(any("El contrato cambió mientras lo modificabas" in a for a in avisos(respuesta)))
+        Suministro.objects.filter(pk=self.s.pk).update(incumplimientos_tolerados=3)
+        self.rescindir()
+        respuesta = self.client.get(self.rescindir_url)
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertIn("Ya tiene una rescisión acordada.", avisos(respuesta))
+        htmx = self.client.get(self.rescindir_url, **HTMX)
+        self.assertEqual(htmx.status_code, 204)
+
+    def test_ext_2a_sin_periodos_conservados_la_ventana_avisa_que_queda_rescindido_en_el_acto(self):
+        """2a: con todo fuera de la ventana, la ventana dice que el contrato queda rescindido al confirmar; al registrar, el aviso lo dice."""
+        solo = suministro(self.e)
+        detalle_suministro(solo, self.e.variedad, direccion=direccion_de_cliente(self.e.cliente).direccion, primera_en_dias=30)
+        self.client.force_login(self.gerente)
+        url = reverse("comercial:suministro_rescindir", args=[solo.pk])
+        self.assertContains(self.client.get(url, **HTMX), "el contrato queda rescindido en el momento de confirmar")
+        lectura = suministros.datos_de_rescision(self.gerente, solo.pk)
+        respuesta = self.client.post(url, {"motivo": "a_pedido_de_la_empresa", "fecha_acuerdo": iso(0), "acuerdo": "1", "huella": lectura.huella})
+        self.assertEqual(Suministro.objects.get(pk=solo.pk).estado_suministro, "rescindido")
+        self.assertTrue(any("quedó rescindido" in a for a in avisos(respuesta)))
+
+    def test_flujo_dejar_sin_efecto_la_rescision(self):
+        """COM-ANL-RSC: la ventana pide el motivo (obligatorio: sin él, el error junto al campo y la rescisión sigue); con motivo, el contrato vuelve a «Modificar»."""
+        self.rescindir()
+        self.client.force_login(self.gerente)
+        ventana = self.client.get(self.anular_url, **HTMX)
+        self.assertContains(ventana, f"Dejar sin efecto la rescisión de {self.s.codigo}")
+        sin_motivo = self.client.post(self.anular_url, {"motivo": "  ", "huella": campos_ocultos(ventana)["huella"]})
+        self.assertContains(sin_motivo, "Contá por qué se deja sin efecto la rescisión.")
+        self.assertTrue(Suministro.objects.get(pk=self.s.pk).tiene_rescision_acordada)
+        respuesta = self.client.post(self.anular_url, {"motivo": "Siguen con el contrato", "huella": campos_ocultos(ventana)["huella"]})
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertTrue(any("la rescisión quedó sin efecto" in a for a in avisos(respuesta)))
+        self.assertFalse(Suministro.objects.get(pk=self.s.pk).tiene_rescision_acordada)
+        self.assertContains(self.client.get(reverse("comercial:suministro", args=[self.s.pk])), "Modificar suministro")
+
+    def test_regla_pasada_la_ultima_entrega_ya_no_hay_boton_ni_pantalla(self):
+        """Ningún botón lleva a un error: pasada la fecha de la última entrega, «Dejar sin efecto la rescisión» no se ofrece y abrir la pantalla vuelve a la ficha con el motivo."""
+        self.rescindir()
+        Suministro.objects.filter(pk=self.s.pk).update(fecha_ultima_entrega_rescision=HOY - timedelta(days=1))
+        self.client.force_login(self.gerente)
+        self.assertNotContains(self.client.get(reverse("comercial:suministro", args=[self.s.pk])), "Dejar sin efecto la rescisión")
+        respuesta = self.client.get(self.anular_url)
+        self.assertRedirects(respuesta, reverse("comercial:suministro", args=[self.s.pk]), fetch_redirect_response=False)
+        self.assertIn("La rescisión ya no se puede dejar sin efecto.", avisos(respuesta))
+
+    def test_regla_5_el_historial_es_una_ventana_de_solo_lectura_y_respeta_el_alcance(self):
+        """«Ver historial de cambios»: con HTMX la ventana y sin JavaScript la ficha con la ventana abierta; trae los tramos; el Vendedor propio y el Gerente la ven, otro Vendedor recibe 403; solo GET."""
+        self.client.force_login(self.e.vendedor)
+        self.client.post(self.url, {**campos_ocultos(self.client.post(self.url + "revisar/", self.cambios())), "confirmar": "1"})
+        ventana = self.client.get(self.historial_url, **HTMX)
+        self.assertContains(ventana, f"Historial de cambios de {self.s.codigo}")
+        self.assertContains(ventana, "fin del contrato")
+        self.assertContains(ventana, (HOY + timedelta(days=17)).strftime("%d/%m/%Y"))
+        self.assertNotContains(ventana, "<html")
+        self.assertContains(self.client.get(self.historial_url), "Historial de cambios de")
+        self.assertEqual(self.client.post(self.historial_url).status_code, 405)
+        self.client.force_login(self.otro.vendedor)
+        self.assertEqual(self.client.get(self.historial_url).status_code, 403)
+        self.client.force_login(self.gerente)
+        self.assertEqual(self.client.get(self.historial_url).status_code, 200)
+
+    def test_regla_la_lista_marca_la_rescision_acordada_y_el_contrato_rescindido(self):
+        """La lista (COM-CNS-SUM): la marca «Rescisión acordada» y, ya cerrado, el estado «Rescindido» (también con el filtro)."""
+        self.rescindir()
+        self.client.force_login(self.gerente)
+        self.assertContains(self.client.get(reverse("comercial:contratos"), {"tipo": "suministro"}), "Rescisión acordada")
+        suministros.cerrar_rescisiones(HOY + timedelta(days=11))
+        lista = self.client.get(reverse("comercial:contratos"), {"tipo": "suministro", "estado": "rescindido"})
+        self.assertContains(lista, self.s.codigo)
+        self.assertContains(lista, "Rescindido")

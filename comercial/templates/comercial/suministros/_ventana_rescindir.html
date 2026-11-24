@@ -1,0 +1,50 @@
+{% load iconos comercial %}{% comment %}Ventana «Rescindir suministro» (COM-RSC-SUM, pasos 2 a 5; `MODALS.sumrsc` del prototipo). Presenta lo que pasará: los períodos que se conservan (los de la ventana de pre-reserva), la fecha de la última entrega,
+que los posteriores no se entregan y que no hay multa ni indemnización ni cuenta como incumplimiento. Pide el motivo (lista cerrada; con «Otro», la descripción es obligatoria), la fecha del acuerdo con el cliente y la casilla
+«Confirmo que la rescisión se acordó con el cliente». Registrar es un POST común a la misma URL (sin JavaScript funciona igual: la ficha con la ventana abierta). Lleva ocultos la huella del contrato y los períodos que vio el
+Gerente (6a y 6b). Recibe «s», «lectura», «por_detalle», «pedido», «errores», «errores_generales» y «motivos».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal modal-ancho" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Rescindir {{ s.codigo }}</h2>
+    {% if errores_generales %}<div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>{% for m in errores_generales %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+    {% if lectura.rescinde_en_el_acto %}
+    <p>No hay ningún período dentro de la ventana de pre-reserva: el contrato queda rescindido en el momento de confirmar.</p>
+    {% else %}
+    <p>Se entregan los períodos que ya están dentro de la ventana de pre-reserva (hasta el {{ lectura.ventana|date:"d/m/Y" }}); la última entrega es el <b>{{ lectura.fecha_ultima_entrega|date:"d/m/Y" }}</b>. Los períodos posteriores no se entregan ni se pre-reservan.</p>
+    <ul class="sm" style="margin:0 0 10px 18px">{% for variedad, fechas in por_detalle %}<li>{{ variedad }}: {% for f in fechas %}{{ f|date:"d/m" }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>{% endfor %}</ul>
+    {% endif %}
+    <p class="muted">Es de mutuo acuerdo: no lleva multa ni indemnización y no cuenta como incumplimiento. Lo ya entregado, cobrado o reclamado no cambia. Mientras se entregan esos períodos el contrato sigue «vigente»; no se puede modificar y podés dejar la rescisión sin efecto hasta la última entrega.</p>
+    <form method="post" action="{% url 'comercial:suministro_rescindir' s.pk %}" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="huella" value="{{ lectura.huella }}">
+      {% for detalle_id, fecha in lectura.conservados %}<input type="hidden" name="conservado" value="{{ detalle_id }}:{{ fecha|date:'Y-m-d' }}">{% endfor %}
+      <div class="fld">
+        <label for="rsc-motivo">Motivo<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="rsc-motivo" name="motivo" data-desplegable>
+          <option value="">Seleccionar…</option>
+          {% for valor, texto in motivos %}<option value="{{ valor }}"{% if pedido.motivo == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+        </select>
+        {% for m in errores.motivo %}<div class="err">{{ m }}</div>{% endfor %}
+      </div>
+      <div class="fld">
+        <label for="rsc-descripcion">Descripción <span class="muted">(obligatoria con «Otro»)</span></label>
+        <textarea class="field-input" id="rsc-descripcion" name="descripcion" rows="3" maxlength="500">{{ pedido.descripcion }}</textarea>
+        {% for m in errores.descripcion %}<div class="err">{{ m }}</div>{% endfor %}
+      </div>
+      <div class="fld">
+        <label for="rsc-fecha">Fecha del acuerdo con el cliente<span class="req" aria-hidden="true"> *</span></label>
+        <input class="field-input" id="rsc-fecha" type="date" name="fecha_acuerdo" value="{{ pedido.fecha_acuerdo }}" max="{{ lectura.hoy|date:'Y-m-d' }}">
+        {% for m in errores.fecha_acuerdo %}<div class="err">{{ m }}</div>{% endfor %}
+      </div>
+      <div class="fld">
+        <label><input type="checkbox" name="acuerdo" value="1"{% if pedido.acuerdo == "1" %} checked{% endif %}> Confirmo que la rescisión se acordó con el cliente</label>
+        {% for m in errores.acuerdo %}<div class="err">{{ m }}</div>{% endfor %}
+        <div class="hint">Sin el acuerdo del cliente no se puede rescindir: un contrato de suministro con plazo determinado no se rescinde por voluntad de una sola parte.</div>
+      </div>
+      <p class="hint">Se le envía al cliente la constancia de la rescisión y se avisa al Vendedor.</p>
+      <div class="acts">
+        <a class="btn btn-ghost" href="{% url 'comercial:suministro' s.pk %}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Registrando…">Registrar rescisión</button>
+      </div>
+    </form>
+  </div>
+</div>

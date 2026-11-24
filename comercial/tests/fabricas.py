@@ -461,6 +461,26 @@ def reserva_de_periodo(detalle_, fecha, lineas, estado=None, con_cosecha=True):
     return reserva_
 
 
+def alerta_de_periodo(detalle_, fecha, *, cantidad_sin_cubrir=5, invernadero=None, resuelta=False, para_gerente=False, agronomo=None):
+    """Una alerta «período sin cobertura completa» del período (``detalle_``, ``fecha``) con su `AlertaComercial`, creada directo en la base (D-63,
+    punto 3): clave ``periodo:{detalle}:{aaaa-mm-dd}``, la del invernadero pedido (por defecto el de la primera reserva del escenario no se
+    conoce acá: se pasa ``invernadero``). ``resuelta=True`` la deja resuelta con su fecha."""
+    from comercial.models import AlertaComercial
+    from maestros.tests.fabricas import crear_alerta
+
+    alerta = crear_alerta(
+        invernadero,
+        "comercial_periodo_sin_cobertura",
+        para_gerente=para_gerente or agronomo is None,
+        agronomo=agronomo,
+        resuelta=resuelta,
+        clave_estado=f"periodo:{detalle_.pk}:{fecha.isoformat()}",
+        descripcion_alerta=f"Período sin cobertura completa · {detalle_.variedad} · {detalle_.suministro.cliente} · {fecha:%d/%m}",
+    )
+    AlertaComercial.objects.create(alerta=alerta, detalle_suministro=detalle_, fecha_periodo=fecha, cantidad_sin_cubrir=cantidad_sin_cubrir)
+    return alerta
+
+
 def verificar_invariantes_de_suministros():
     """Invariantes de la sección 7 de `docs/patrones/stock_maduro.md` (COM-03a): ningún período con más cubierto que su cantidad; ninguna
     reserva de un período fuera del calendario de su detalle; ninguna reserva con los dos detalles a la vez; ``fecha_fin`` de cada

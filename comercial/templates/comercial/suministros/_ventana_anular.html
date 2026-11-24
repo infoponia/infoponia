@@ -1,0 +1,23 @@
+{% load iconos comercial %}{% comment %}Ventana «Dejar sin efecto la rescisión» (COM-ANL-RSC; `MODALS.sumrscanl` del prototipo). El motivo es obligatorio (texto libre, hasta 500). Vuelven a regir todos los períodos hasta la
+fecha de fin del contrato; los que entraron en la ventana desde la rescisión los toma la próxima pre-reserva diaria. Es un POST común a la misma URL. Recibe «s», «motivo», «errores», «errores_generales» y «huella».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Dejar sin efecto la rescisión de {{ s.codigo }}</h2>
+    {% if errores_generales %}<div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>{% for m in errores_generales %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+    <p>La rescisión acordada el {{ s.fecha_acuerdo_rescision|date:"d/m/Y" }} (última entrega el {{ s.fecha_ultima_entrega_rescision|date:"d/m/Y" }}) queda sin efecto y el contrato sigue como estaba: vuelven a regir todos sus períodos hasta el {{ s.fecha_fin|date:"d/m/Y" }}.</p>
+    <p class="muted">Los períodos que entraron en la ventana de pre-reserva desde la rescisión los reserva la próxima ejecución diaria. Se le envía al cliente la constancia y se avisa al Vendedor.</p>
+    <form method="post" action="{% url 'comercial:suministro_dejar_sin_efecto' s.pk %}" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="huella" value="{{ huella }}">
+      <div class="fld">
+        <label for="anl-motivo">Motivo<span class="req" aria-hidden="true"> *</span></label>
+        <textarea class="field-input" id="anl-motivo" name="motivo" rows="3" maxlength="500">{{ motivo }}</textarea>
+        {% for m in errores.motivo %}<div class="err">{{ m }}</div>{% endfor %}
+      </div>
+      <div class="acts">
+        <a class="btn btn-ghost" href="{% url 'comercial:suministro' s.pk %}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-primary" type="submit" data-enviando="Registrando…">Dejar sin efecto</button>
+      </div>
+    </form>
+  </div>
+</div>
