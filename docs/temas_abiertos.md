@@ -674,3 +674,16 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **`cancelar_pedido_automaticamente` acepta `hoy` y `aviso`** (opcionales): sin `hoy`, `--fecha` no podría simular la fecha de cierre; sin `aviso`, el paso 62 no podría usar el texto de D-87.
 - **Textos de CMP-03 redactados al implementar:** los correos de descarte y de aprobación y las notificaciones de la orden (pendiente de aprobación, aprobada, rechazada) y de los pasos 60 y 61; los documentos fijan qué dicen, no sus palabras.
 - **La lista de órdenes no tiene paginación** (como la de pedidos): con muchas órdenes conviene paginarla.
+
+## CON-02 (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **El asiento automático nunca se rechaza por la fecha** (D-102, diferencia con D-84 punto 5): ejercicio cerrado, anterior al primer ejercicio o futura van al abierto con la fecha de hoy y la descripción aclara la fecha real. El texto («Fecha del hecho: dd/mm/aaaa (motivo); se registra con la fecha de hoy.») y el recorte a 300 caracteres no estaban en ningún documento.
+- **`total_por_cuenta_en_periodo(tipo=None)`** devuelve el saldo según la naturaleza de la cuenta; la API decía solo «suma de los movimientos» (D-102).
+- **Migraciones:** `contabilidad` 0004 (esquema) y 0005 (datos), y `core` 0038; la tarea y D-84 punto 7 decían 0002 y 0003 (ocupadas). El «carga las 18» del paso 2 era un error de tipeo: son 19 cuentas.
+- **`DEBE` y `HABER`** viven en `contabilidad/constantes.py` (como importa la API) y `cuentas.py` los reexporta (como dice la tarea).
+- **`ResultadoApertura`** tiene dos campos más (`cantidad_creados` y `cantidad_cerrados_solos`) para el resumen del paso diario cuando hay varias vueltas; **`crear_primer_ejercicio`** suma `hoy` opcional y devuelve el ejercicio existente si ya hay uno.
+- **Auditoría:** la documentación no fijaba las claves de cada acción; siguen D-36. La cuenta del movimiento es `cuenta_contable` (no `cuenta`), y `estado_ejercicio` y `tipo_movimiento` tienen su propia lista en `VALORES_VISIBLES`.
+- **Textos nuevos de aviso:** «El ejercicio N.º X se cerró solo» y «Se cerró solo porque venció el siguiente (terminó el dd/mm/aaaa).».
+- **`saldo_por_cuenta`** devuelve las 19 cuentas, también las sin movimientos; las pruebas del libro están en `test_libro.py` y no en las de asientos.
+- **`docs/api/auditoria.md` no existe:** se ignoró esa mención de «Leer» de la tarea.
+- **Dos pruebas de otras tareas se ajustaron** porque CON-02 cambió su premisa: la de COM-02 que preguntaba si existía el modelo `AsientoContable` (ahora comprueba que la venta no deje asientos) y la de INV-02 que afirmaba que el paso 10 era el primero del proceso diario (ahora acepta solo el paso 5 de contabilidad antes).

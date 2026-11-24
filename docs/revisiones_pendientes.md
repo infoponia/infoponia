@@ -717,3 +717,24 @@ Los 31 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-03-
 - [ ] 29. **Navegador real** (ventana privada): generar, aprobar y rechazar hasta el final sin 403 ni «Verificación CSRF fallida».
 - [ ] 30. Roles: Capataz 403 en Órdenes; Beto lista vacía y 403 en la ficha; Gerente 403 en generar; Ana 403 en resolver.
 - [ ] 31. (Opcional) Sin JavaScript y en un celular.
+
+## CON-02 · Tarea CON-02 (núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos)
+
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-02-nucleo-contable.md` (comandos de PowerShell y código para pegar en `python manage.py shell`, con valores concretos), copiados acá para ir tachándolos (M5). No tiene pantallas ni paso de «navegador real». Los pasos 14 a 16 son opcionales: dejan ejercicios de 2027 y 2028 en la base de desarrollo, que no se pueden sacar.
+
+- [ ] 1. `python manage.py migrate` aplica `core` 0038, `contabilidad` 0004 y 0005 sin errores.
+- [ ] 2. En la consola: 19 cuentas, de `1.1.01 Caja` a `5.1.07 Gastos Generales`, con `2.1.02 Indemnizaciones a Pagar`.
+- [ ] 3. `proceso_diario --listar` muestra `5 · abrir_ejercicio` antes del `10 · revisar_vencimientos`.
+- [ ] 4. `poner_en_marcha_contabilidad --fecha-inicio 2026-11-01`: «Primer ejercicio creado: del 01/11/2026 al 31/10/2027.»
+- [ ] 5. Corrido otra vez, dice «Ya existe un ejercicio contable…» y no crea otro; una fecha futura y un formato malo dan error.
+- [ ] 6. `registrar_asiento_automatico` de 3.000 (Insumos en Stock al Debe, Proveedores al Haber): número 1, fecha del hecho, tipo `automatico` y sus dos movimientos.
+- [ ] 7. Auditoría: 1 `alta_ejercicio_contable`, 1 `alta_asiento_contable` y 2 `alta_movimiento_contable`, con rol `infoponia` y el detalle con fechas ISO e importes como texto.
+- [ ] 8. Un segundo asiento toma el número 2.
+- [ ] 9. Desbalanceado (100 contra 90): `asiento_desbalanceado` y no se crea nada; también `cuenta_inexistente`, `importe_invalido`, `tipo_de_movimiento_invalido` y `origen_con_asiento`.
+- [ ] 10. Todos los importes en cero: devuelve `None`, sin error y sin asiento.
+- [ ] 11. Un asiento no se edita ni se borra: `AsientoInmutableError`.
+- [ ] 12. Fecha anterior al primer ejercicio: no falla, se registra con la fecha de hoy y la descripción trae «Fecha del hecho: 05/05/2026 (anterior al primer ejercicio)…».
+- [ ] 13. Saldos del libro: Caja 510,00, Insumos en Stock y Proveedores 3000,00, Ventas 510,00; resultado del período con ingresos 510,00.
+- [ ] 14. (Opcional) `proceso_diario --solo abrir_ejercicio --fecha 2027-10-31` no cambia nada.
+- [ ] 15. (Opcional) Con `--fecha 2027-11-01`: el ejercicio pasa a «en cierre», se abre el siguiente y el Contador (o el Gerente) recibe el aviso; repetido, no hace nada.
+- [ ] 16. (Opcional) Con `--fecha 2028-11-01`: el que estaba «en cierre» se cierra solo, sin Contador, y se avisa.

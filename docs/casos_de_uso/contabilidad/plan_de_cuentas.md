@@ -48,7 +48,7 @@ a. Ninguna: es una consulta.
 
 Decisión **D-84** (punto 7). Modelo: `docs/modelo/contabilidad.md` (`CuentaContable` y el plan aprobado).
 
-- **Migración de datos** `contabilidad/migrations/0003_plan_de_cuentas.py` (la crea CON-02): una fila por cuenta, con `update_or_create` por
+- **Migración de datos** `contabilidad/migrations/0005_plan_de_cuentas.py` (la crea CON-02; la 0002 y la 0003 ya estaban ocupadas): una fila por cuenta, con `update_or_create` por
   `codigo_cuenta`; la inversa no hace nada. Pruebas con el mixin de `docs/patrones/datos_de_migracion.md`.
 - **No hay ABM** y no hay auditoría (es una consulta, SEG-14). El servicio es de lectura: `plan.arbol() -> list[Rubro]` con
   `Rubro(codigo, nombre, subrubros=[Subrubro(codigo, nombre, cuentas=[CuentaContable])])` y `plan.cuenta(codigo)`.

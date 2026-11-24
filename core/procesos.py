@@ -9,6 +9,7 @@
 #
 #   Orden | Paso                              | App
 #   ------+-----------------------------------+------------
+#      5  | Abrir ejercicio contable          | contabilidad (CON-02: antes de todo paso que genere asientos)
 #     10  | Revisar vencimientos de insumos   | inventario
 #     20  | Vencer partidas en cámara         | comercial (D-59: toca reservas)
 #     25  | Reasignar cámara                  | comercial (COM-04b: recupera PROD-ASG-CAM)
