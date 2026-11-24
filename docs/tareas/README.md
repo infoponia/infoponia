@@ -112,7 +112,6 @@ compras y estadísticas dependen de ella. Las tareas están en orden de implemen
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CON-02 | Núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos | contabilidad | pendiente | USR-11 (hecha), CON-01 (hecha) | `contabilidad/CON-02-nucleo-contable.md` |
 | CON-03a | Libro de gestión, plan de cuentas y ejercicios (con el cierre) | contabilidad | pendiente | CON-02 | `contabilidad/CON-03a-libro-plan-y-ejercicios.md` |
 | CON-03b | Asientos manuales y contraasientos | contabilidad | pendiente | CON-03a | `contabilidad/CON-03b-asientos-manuales-y-contraasientos.md` |
 

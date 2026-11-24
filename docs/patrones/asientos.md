@@ -30,8 +30,9 @@ Es **lo último que cualquier servicio bloquea**. Por eso:
 ## 3. Qué fecha se pasa
 
 La **fecha del hecho**: la de la recepción, la del pago elegido, la de concreción de una entrega (puede ser anterior a hoy). No la de registro.
-La función decide en qué ejercicio cae (D-84 punto 5). Si el hecho cae en un ejercicio ya cerrado, el asiento va al abierto con la fecha de
-registro y su descripción lo aclara.
+La función decide en qué ejercicio cae (D-84 punto 5). Si el hecho cae en un ejercicio ya cerrado, es anterior al primer ejercicio o es posterior a hoy, el asiento
+**no falla**: va al abierto con la fecha de hoy y su descripción lo aclara («Fecha del hecho: dd/mm/aaaa (<motivo>); se registra con la fecha de
+hoy.», D-102).
 
 ## 4. Cómo se prueba
 

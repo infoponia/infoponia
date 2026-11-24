@@ -815,6 +815,12 @@ class RegistroAuditoria(models.Model):
         GENERACION_ORDEN_COMPRA = "generacion_orden_compra", "Generación de orden de compra"
         APROBACION_ORDEN_COMPRA = "aprobacion_orden_compra", "Aprobación de orden de compra"
         RECHAZO_ORDEN_COMPRA = "rechazo_orden_compra", "Rechazo de orden de compra"
+        # CON-02 (D-84 punto 9): <acción>_<entidad>. Un registro por cada ejercicio, asiento y movimiento creados; el cambio de estado
+        # de un ejercicio es ``modificacion_ejercicio_contable``.
+        ALTA_EJERCICIO_CONTABLE = "alta_ejercicio_contable", "Alta de ejercicio contable"
+        MODIFICACION_EJERCICIO_CONTABLE = "modificacion_ejercicio_contable", "Modificación de ejercicio contable"
+        ALTA_ASIENTO_CONTABLE = "alta_asiento_contable", "Alta de asiento contable"
+        ALTA_MOVIMIENTO_CONTABLE = "alta_movimiento_contable", "Alta de movimiento contable"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1137,6 +1143,18 @@ class RegistroAuditoria(models.Model):
         "gerente": "Gerente que resolvió",
         "transito": "Cantidad en tránsito",
         "cotizaciones_afectadas": "Cotizaciones afectadas",
+        # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
+        "fecha_inicio_ejercicio": "Inicio del ejercicio",
+        "fecha_cierre_ejercicio": "Cierre previsto del ejercicio",
+        "estado_ejercicio": "Estado del ejercicio",
+        "ejercicio": "Ejercicio contable",
+        "numero_asiento": "Número de asiento",
+        "fecha_asiento": "Fecha del asiento",
+        "descripcion_asiento": "Descripción del asiento",
+        "asiento": "Asiento contable",
+        "cuenta_contable": "Cuenta contable",
+        "tipo_movimiento": "Debe o Haber",
+        "importe_movimiento": "Importe",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1255,6 +1273,10 @@ class RegistroAuditoria(models.Model):
         "estado_regla": {"activa": "Activa", "inactiva": "Inactiva"},
         "estado_sistema": {"activo": "Activo", "desconectado": "Desconectado", "inactivo": "Dado de baja"},
         "estado_hardware": {"activo": "Activo", "fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
+        # CON-02: las listas cerradas del ejercicio y del movimiento (`core` no importa `contabilidad`, A1 de D-37). Claves propias y no la
+        # «estado» común, igual que «estado_venta».
+        "estado_ejercicio": {"abierto": "Abierto", "en_cierre": "En cierre", "cerrado": "Cerrado"},
+        "tipo_movimiento": {"D": "Debe", "H": "Haber"},
     }
     SIN_VALOR = "—"
 
@@ -1485,6 +1507,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.GENERACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.APROBACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.RECHAZO_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE,
+        RegistroAuditoria.Accion.MODIFICACION_EJERCICIO_CONTABLE,
+        RegistroAuditoria.Accion.ALTA_ASIENTO_CONTABLE,
+        RegistroAuditoria.Accion.ALTA_MOVIMIENTO_CONTABLE,
     }
 )
 
