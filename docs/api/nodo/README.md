@@ -112,7 +112,7 @@ comandos, para no contradecir el control local. Al volver a `remoto`, las reglas
 
 ## 7. Seguridad
 
-- Siempre `https://`. Nunca mandes el token por `http://`.
+- Siempre `https://`. Nunca mandes el token por `http://`: el servidor responde con una redirección (301) a `https://` y el pedido no se registra.
 - El token va solo en el encabezado `Authorization: Bearer <token>` de cada pedido. No lo pongas en la dirección, en el cuerpo, en el flujo
   exportado ni en los registros del nodo.
 - Si sospechás que el token se filtró, regeneralo en InfoPonia y cargá el nuevo en el nodo.

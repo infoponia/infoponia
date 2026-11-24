@@ -631,6 +631,31 @@ Los 15 pasos son los de «Verificación a mano» de `docs/tareas/core/USR-11-rol
 
 *Lo que no se prueba a mano:* dos altas de Contador a la vez y un alta junto a una reactivación (las cubre `ContadorUnicoConcurrenciaTests`, con `--tag concurrencia`); y el panel del Contador, que es de CON-03a.
 
+## USR-09a · Tarea USR-09a (HTTPS, cookies seguras, HSTS y DEBUG apagado por defecto; sin migraciones)
+
+Los pasos están en «Verificación a mano» de `docs/tareas/usuarios/USR-09a-endurecimiento-del-despliegue.md`: (a) en local, (b) en Render y (c) en Node-RED, los dos últimos tras el despliegue; (d) es qué hacer si algo falla.
+
+(a) En local:
+1. En `.env`, `DJANGO_DEBUG=1` (el `.env.example` ya lo trae); `python manage.py runserver` arranca sin errores.
+2. `http://localhost:8000/` muestra el inicio de sesión por http, sin redirigir a https.
+3. Iniciar sesión con una cuenta de prueba entra al inicio.
+4. En F12 → Cookies, `sessionid` tiene HttpOnly y no tiene Secure; la respuesta no trae `Strict-Transport-Security`.
+5. `http://localhost:8000/admin/` carga (con `DJANGO_DEBUG=1` el admin existe).
+6. Opcional: comentá `DJANGO_DEBUG=1` en `.env` y corré `python manage.py check`: dice que falta la clave.
+7. Volver a dejar `DJANGO_DEBUG=1` en `.env`.
+
+(b) En Render, tras el despliegue:
+1. El despliegue queda en «Live».
+2. `http://<servicio>.onrender.com/` termina en `https://…/iniciar-sesion/` y carga (sin «demasiadas redirecciones»).
+3. Navegador real: ventana privada, iniciar sesión hasta el final y navegar dos o tres pantallas.
+4. En F12 → Cookies, `sessionid` tiene Secure y HttpOnly; `csrftoken`, Secure.
+5. En F12 → Network, la respuesta trae `strict-transport-security: max-age=86400`.
+6. Opcional: el enlace del correo de recuperación empieza con `https://`.
+
+(c) Node-RED:
+1. Con la dirección https de la API, el pedido de prueba recibe 200.
+2. Opcional: con `http://` recibe un 301 y no se registra.
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que

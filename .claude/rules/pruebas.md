@@ -58,7 +58,8 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   `DJANGO_SECRET_KEY` inventada en la misma línea. Sin la clave, con `DEBUG` apagado la configuración queda sin
   `SECRET_KEY` y fallan casi todas las pruebas. No leas `.env` ni uses la clave real.
   En PowerShell: `$env:DJANGO_DEBUG="0"; $env:DJANGO_SECRET_KEY="clave-falsa-solo-para-pruebas"; python manage.py test`
-  (después, `Remove-Item Env:DJANGO_DEBUG, Env:DJANGO_SECRET_KEY` para volver al modo normal).
+  (después, `Remove-Item Env:DJANGO_DEBUG, Env:DJANGO_SECRET_KEY` para volver al modo normal, que necesita `DJANGO_DEBUG=1`
+  en tu `.env`: desde USR-09a, D-99, sin esa variable `DEBUG` queda apagado).
   Con la herramienta Bash: `DJANGO_DEBUG=0 DJANGO_SECRET_KEY=clave-falsa-solo-para-pruebas .venv/Scripts/python.exe manage.py test`.
   Si la base `test_infoponia` quedó de una corrida interrumpida, agregá `--noinput` para recrearla.
 

@@ -37,7 +37,7 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
 | USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
-| USR-09 | Seguridad de producción | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
+| USR-09b | Topes de intentos de identificación y de pedidos de recuperación (USR-09a hizo el resto) | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
 | MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | hecha (PR #45, 21/11/2026; revisión a mano pendiente) | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
 
