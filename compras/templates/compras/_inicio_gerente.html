@@ -5,7 +5,7 @@
   <h2 style="margin-bottom:12px">Compras</h2>
   {% with i=datos.indicadores %}
   <div class="kpis">
-    <a class="kpi{% if i.cantidad_por_aprobar %} warn{% endif %}" href="{% url 'compras:ordenes' %}?atajo=por_aprobar" style="text-decoration:none;color:inherit"><span class="k">Órdenes por aprobar</span><span class="v" data-kpi="por-aprobar">{{ i.cantidad_por_aprobar }}</span><span class="c">{% if i.cantidad_por_aprobar %}esperan tu decisión{% else %}ninguna pendiente{% endif %}</span></a>
+    <a class="kpi{% if i.cantidad_por_aprobar %} warn{% endif %}" href="{% url 'compras:ordenes' %}?atajo=por_aprobar" style="text-decoration:none;color:inherit"><span class="k">Órdenes por aprobar</span><span class="v" data-kpi="por-aprobar">{{ i.cantidad_por_aprobar }}</span><span class="c">{% if i.cantidad_por_aprobar %}esperan tu decisión{% else %}nada por decidir{% endif %}</span></a>
   </div>
   {% if i.ordenes_por_aprobar %}
   <div class="card seg" style="margin-top:16px">
