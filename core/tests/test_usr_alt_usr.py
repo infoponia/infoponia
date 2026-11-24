@@ -877,9 +877,10 @@ class UsrAltUsrVistaTests(TestCase):
             self.assertNotContains(self.client.get(url), temporal)
         self.assertNotIn(temporal, str(self.client.session.items()))
 
-    def test_regla_1_formulario_tiene_select_nativo_con_los_cinco_roles(self):
+    def test_regla_1_formulario_tiene_select_nativo_con_los_seis_roles(self):
         """USR-ALT-USR regla 1 y D-24: el formulario tiene un ``<select>`` nativo (es lo que se ve sin
-        JavaScript) con los cinco roles y la opción vacía; sin Gerente ni Administrador."""
+        JavaScript) con los seis roles (D-85 suma el Contador a los cinco de antes) y la opción vacía; sin Gerente
+        ni Administrador."""
         self.entrar_como_gerente()
 
         respuesta = self.client.get(reverse("core:usuario_nuevo"))
@@ -888,7 +889,7 @@ class UsrAltUsrVistaTests(TestCase):
         lector.feed(respuesta.content.decode())
         self.assertTrue(lector.encontrado, "no hay un <select name='rol'>")
         self.assertEqual(
-            lector.valores, ["", "agronomo", "capataz", "vendedor", "transportista", "tecnico"]
+            lector.valores, ["", "agronomo", "capataz", "vendedor", "transportista", "tecnico", "contador"]
         )
 
     def test_regla_8_ofrece_reactivar_la_cuenta_inactiva(self):

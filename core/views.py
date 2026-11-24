@@ -57,7 +57,7 @@ from core.servicios import (
     cuentas_vinculadas,
     desvincular_cuenta,
     gerente_activo_que_impide_el_alta,
-    gerente_activo_que_impide_reactivar,
+    titular_activo_que_impide_reactivar,
     impedimentos_de_baja,
     modificar_usuario,
     obtener_cuenta,
@@ -696,7 +696,8 @@ def _gestionar_cuenta(request, cuenta_id, accion):
         "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
     }
     if accion == "reactivar":
-        contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
+        # Regla 5 de USR-MOD-USR y D-85 punto 2: el Gerente o el Contador activo que impide reactivar esta cuenta.
+        contexto["titular_activo"] = titular_activo_que_impide_reactivar(cuenta)
     if accion == "baja":
         # Regla 4 de USR-BAJ-USR (D-43): lo que la cuenta tiene asignado y qué pasará con eso. Solo lectura.
         contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
@@ -724,8 +725,8 @@ def _gestionar_cuenta(request, cuenta_id, accion):
         except ValidationError as error:
             contexto["error"] = error.messages[0]
             if accion == "reactivar":
-                # Otra operación pudo activar a un Gerente mientras la ventana estaba abierta.
-                contexto["gerente_activo"] = gerente_activo_que_impide_reactivar(cuenta)
+                # Otra operación pudo activar a un Gerente o a un Contador mientras la ventana estaba abierta.
+                contexto["titular_activo"] = titular_activo_que_impide_reactivar(cuenta)
             elif accion == "baja":
                 contexto["asignaciones"] = extensiones.asignaciones_de_cuenta(cuenta)
                 # Un impedimento que apareció con la ventana abierta: la ventana los lista todos y no repite el motivo.
