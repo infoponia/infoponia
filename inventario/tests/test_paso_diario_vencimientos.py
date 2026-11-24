@@ -50,8 +50,9 @@ class PasoDiarioVencimientosTests(ConDatosDeInventario, TestCase):
         self.assertEqual((paso.codigo, paso.nombre, paso.orden), ("revisar_vencimientos", "Revisar vencimientos de insumos", 10))
 
     def test_d56_el_paso_es_el_primero_del_proceso_diario(self):
-        """Orden 10 es el primero reservado (T-04): ningún otro paso registrado lo antecede."""
-        self.assertEqual(procesos.pasos_diarios()[0].codigo, CODIGO)
+        """Orden 10 es el primero de los reservados por D-56 (T-04): solo lo antecede el paso 5 de contabilidad (D-84, CON-02)."""
+        codigos = [p.codigo for p in procesos.pasos_diarios()]
+        self.assertEqual(codigos[: codigos.index(CODIGO)], ["abrir_ejercicio"])
 
     def test_d56_registrarlo_otra_vez_no_falla_ni_duplica(self):
         """``ready()`` puede correr más de una vez: un registro idéntico es idempotente."""

@@ -720,7 +720,7 @@ Los 31 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-03-
 
 ## COM-04c · Tarea COM-04c (faltante y enlace del cliente; paso diario 27)
 
-Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-04c-faltante-y-enlace-del-cliente.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0007 y `core` 0038, solo `choices`): `python manage.py migrate`; después `python manage.py runserver` (con `CORREO_CONSOLA=1` en tu `.env` para ver el correo en la terminal). Necesitás un Gerente, un Agrónomo, un Capataz y un Vendedor del mismo invernadero. Crear a mano: «Configuración» con vigencia del enlace de faltante 2 días; los clientes **Verdulería Los Pinos S.R.L.** (CUIT `30712345671`, correo `lospinos@ejemplo.com`) y **Verdulería Sin Correo S.A.** (CUIT `30000000090`, teléfono `1144445555`, sin correo); un lote de 60 plantas y una partida en cámara de 40 con fecha límite hoy; una compra-venta de 20 plantas por cliente que reserve de esa partida.
+Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-04c-faltante-y-enlace-del-cliente.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0007 y `core` 0039, solo `choices`): `python manage.py migrate`; después `python manage.py runserver` (con `CORREO_CONSOLA=1` en tu `.env` para ver el correo en la terminal). Necesitás un Gerente, un Agrónomo, un Capataz y un Vendedor del mismo invernadero. Crear a mano: «Configuración» con vigencia del enlace de faltante 2 días; los clientes **Verdulería Los Pinos S.R.L.** (CUIT `30712345671`, correo `lospinos@ejemplo.com`) y **Verdulería Sin Correo S.A.** (CUIT `30000000090`, teléfono `1144445555`, sin correo); un lote de 60 plantas y una partida en cámara de 40 con fecha límite hoy; una compra-venta de 20 plantas por cliente que reserve de esa partida.
 
 - [ ] 1. Generar el faltante (partida vencida y lote sin stock): las dos ventas «Pendiente de decisión»; la ficha de Los Pinos con lo pendiente, el vencimiento y sin botón; la de Sin Correo, con el botón «Registrar decisión de faltante».
 - [ ] 2. El correo a Los Pinos en la terminal, con las cantidades, la fecha pactada, el vencimiento y el enlace; el aviso «CV-…: el cliente no tiene correo» en la campana del Vendedor.
@@ -735,4 +735,25 @@ Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 11. Un faltante que se cubre (nueva partida y `reasignar_camara`): el detalle «Abierto», la venta «Abierta» y el enlace «fue anulado».
 - [ ] 12. (Opcional) Sin JavaScript: decidir (cliente y Vendedor) funciona igual.
 - [ ] 13. (Opcional) En un celular: la tabla del resumen se apila y los botones se alcanzan.
-- [ ] 14. Después del merge, en Render: cargar `URL_DEL_SITIO` (sin barra final), ver en el log `comercial.0007_enlace_cliente` y `core.0038_comercial_faltantes` y, desde la «Shell», `proceso_diario --listar` con el 27.
+- [ ] 14. Después del merge, en Render: cargar `URL_DEL_SITIO` (sin barra final), ver en el log `comercial.0007_enlace_cliente` y `core.0039_comercial_faltantes` y, desde la «Shell», `proceso_diario --listar` con el 27.
+
+## CON-02 · Tarea CON-02 (núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos)
+
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-02-nucleo-contable.md` (comandos de PowerShell y código para pegar en `python manage.py shell`, con valores concretos), copiados acá para ir tachándolos (M5). No tiene pantallas ni paso de «navegador real». Los pasos 14 a 16 son opcionales: dejan ejercicios de 2027 y 2028 en la base de desarrollo, que no se pueden sacar.
+
+- [ ] 1. `python manage.py migrate` aplica `core` 0038, `contabilidad` 0004 y 0005 sin errores.
+- [ ] 2. En la consola: 19 cuentas, de `1.1.01 Caja` a `5.1.07 Gastos Generales`, con `2.1.02 Indemnizaciones a Pagar`.
+- [ ] 3. `proceso_diario --listar` muestra `5 · abrir_ejercicio` antes del `10 · revisar_vencimientos`.
+- [ ] 4. `poner_en_marcha_contabilidad --fecha-inicio 2026-11-01`: «Primer ejercicio creado: del 01/11/2026 al 31/10/2027.»
+- [ ] 5. Corrido otra vez, dice «Ya existe un ejercicio contable…» y no crea otro; una fecha futura y un formato malo dan error.
+- [ ] 6. `registrar_asiento_automatico` de 3.000 (Insumos en Stock al Debe, Proveedores al Haber): número 1, fecha del hecho, tipo `automatico` y sus dos movimientos.
+- [ ] 7. Auditoría: 1 `alta_ejercicio_contable`, 1 `alta_asiento_contable` y 2 `alta_movimiento_contable`, con rol `infoponia` y el detalle con fechas ISO e importes como texto.
+- [ ] 8. Un segundo asiento toma el número 2.
+- [ ] 9. Desbalanceado (100 contra 90): `asiento_desbalanceado` y no se crea nada; también `cuenta_inexistente`, `importe_invalido`, `tipo_de_movimiento_invalido` y `origen_con_asiento`.
+- [ ] 10. Todos los importes en cero: devuelve `None`, sin error y sin asiento.
+- [ ] 11. Un asiento no se edita ni se borra: `AsientoInmutableError`.
+- [ ] 12. Fecha anterior al primer ejercicio: no falla, se registra con la fecha de hoy y la descripción trae «Fecha del hecho: 05/05/2026 (anterior al primer ejercicio)…».
+- [ ] 13. Saldos del libro: Caja 510,00, Insumos en Stock y Proveedores 3000,00, Ventas 510,00; resultado del período con ingresos 510,00.
+- [ ] 14. (Opcional) `proceso_diario --solo abrir_ejercicio --fecha 2027-10-31` no cambia nada.
+- [ ] 15. (Opcional) Con `--fecha 2027-11-01`: el ejercicio pasa a «en cierre», se abre el siguiente y el Contador (o el Gerente) recibe el aviso; repetido, no hace nada.
+- [ ] 16. (Opcional) Con `--fecha 2028-11-01`: el que estaba «en cierre» se cierra solo, sin Contador, y se avisa.

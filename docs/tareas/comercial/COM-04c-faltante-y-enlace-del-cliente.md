@@ -110,7 +110,7 @@ concurrencia.
 
 ## Verificación a mano (la hace el estudiante; la escribió Claude Code al cerrar)
 
-Hay migraciones nuevas (`comercial` 0007 y `core` 0038, solo `choices`) y una **variable de entorno nueva** (`URL_DEL_SITIO`). No hay datos cargados: los creás vos, a mano.
+Hay migraciones nuevas (`comercial` 0007 y `core` 0039, solo `choices`) y una **variable de entorno nueva** (`URL_DEL_SITIO`). No hay datos cargados: los creás vos, a mano.
 
 **Antes de empezar**
 1. `python manage.py migrate` y `python manage.py runserver`; entrá a `http://localhost:8000`. En local, con `DJANGO_DEBUG=1` en tu `.env`, `URL_DEL_SITIO` vale `http://localhost:8000` sola. Para ver el correo en la terminal, `CORREO_CONSOLA=1` en tu `.env` (sin él, el enlace queda «No se pudo enviar» y el Vendedor recibe el aviso: es el camino del paso 8).
@@ -134,12 +134,12 @@ Hay migraciones nuevas (`comercial` 0007 y `core` 0038, solo `choices`) y una **
 11. **Un faltante que se cubre.** Con un enlace vigente, concretá una cosecha sin contrato (o una partida nueva) de la misma variedad en ese invernadero y corré `proceso_diario --solo reasignar_camara`: el detalle vuelve a «Abierto», la venta a «Abierta» y el enlace deja de servir («Este enlace no se puede usar», «fue anulado»). *(Lo cubre `test_prod_asg_cam.py`.)*
 12. **Sin JavaScript (opcional).** Desactivá JavaScript en la ventana privada y repetí el paso 3 y el 6: funciona igual (páginas y un POST).
 13. **Celular (opcional).** Abrí el enlace en un celular: la tabla del resumen se apila y los botones se alcanzan con el pulgar.
-14. **Después del merge, en Render.** Cargá la variable de entorno **`URL_DEL_SITIO`** (por ejemplo `https://<tu-servicio>.onrender.com`, **sin barra final**) y esperá el despliegue; en el log, que se aplicaron `comercial.0007_enlace_cliente` y `core.0038_comercial_faltantes`. Desde la «Shell»: `python manage.py proceso_diario --listar` muestra el 27. Sin la variable, los enlaces quedan «No se pudo enviar».
+14. **Después del merge, en Render.** Cargá la variable de entorno **`URL_DEL_SITIO`** (por ejemplo `https://<tu-servicio>.onrender.com`, **sin barra final**) y esperá el despliegue; en el log, que se aplicaron `comercial.0007_enlace_cliente` y `core.0039_comercial_faltantes`. Desde la «Shell»: `python manage.py proceso_diario --listar` muestra el 27. Sin la variable, los enlaces quedan «No se pudo enviar».
 
 ## Cierre
 
 **Qué se hizo**
-- `EnlaceCliente` (D-65): modelo, restricciones y migración `comercial` 0007; en `core`, las acciones `decision_faltante` y `vencimiento_enlace`, sus etiquetas y los estados del enlace (migración 0038, solo `choices`). `ROL_CLIENTE_ENLACE` y `rol_externo` ya existían (CMP-02a).
+- `EnlaceCliente` (D-65): modelo, restricciones y migración `comercial` 0007; en `core`, las acciones `decision_faltante` y `vencimiento_enlace`, sus etiquetas y los estados del enlace (migración 0039, solo `choices`). `ROL_CLIENTE_ENLACE` y `rol_externo` ya existían (CMP-02a).
 - `comercial/servicios/enlaces.py`: crear (reemplaza al vigente, correo con `on_commit`), reemplazar, anular, buscar por token, `situacion_del_enlace`, `bloquear_enlace`, `enviar_enlace` y el paso diario 27 (`avisar_enlaces_vencidos`).
 - `seguir_camino_de_faltante` crea o reemplaza el enlace (con correo) o avisa «registrá vos la decisión» (sin correo); PROD-ASG-CAM anula el enlace de la venta que vuelve a «abierta»; el enlace va a la auditoría de la concreción, la cancelación de cosecha, el vencimiento y la merma en cámara.
 - COM-DCD-FLT (`faltantes.py`): `datos_de_decision`, `resumen_de_decision`, `registrar_decision`, `ventas_para_decidir`, `puede_decidir_el_vendedor`, `estado_del_faltante`; bloqueos en el orden de `bloqueos.md` con el enlace al final; auditoría `decision_faltante` con origen «cliente mediante enlace» o el Vendedor; acuse y asignación de cámara con `on_commit`.

@@ -562,7 +562,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 1. El aviso de «registrar asiento manual» de COM-ATN-ENR (postcondición b) pasa del Vendedor a `responsable_contable()` (H12). Lo programa
    **CON-04d**, o COM-06b si llega después de CON-02. Toda pantalla que diga «Gerente y Vendedor registran asientos» se corrige.
-2. `EjercicioContable.contador` (R010, MD-116) es una FK nula a `core.Contador` (`PROTECT`, `related_name="ejercicios_cerrados"`), declarada en `contabilidad` (regla A2 de D-37). La crea CON-02. El modelo `Contador` ya existe en `core` (USR-11).
+2. ~~`EjercicioContable.contador` (R010, MD-116) es una FK nula a `core.Contador` (`PROTECT`, `related_name="ejercicios_cerrados"`), declarada en `contabilidad` (regla A2 de D-37). La crea CON-02. El modelo `Contador` ya existe en `core` (USR-11).~~ **Cumplido en CON-02 (24/11/2026).**
 
 ## Cuando se programe CON-03a — nace con el lote 1 de Contabilidad
 
@@ -635,3 +635,14 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 2. **COM-05a1:** planificar la entrega después de decidir (paso 7 y postcondición m de COM-DCD-FLT: si la venta queda «abierta» con todas sus reservas «lista para entrega»); el punto de enganche es el final de `faltantes._registrar`, con `on_commit`, junto a la asignación de cámara.
 3. **COM-05b:** COM-CNL-CVT llama a `enlaces.anular_enlaces_de(venta)` (ya existe; es el tercer llamador). **COM-06b:** suma el tipo `confirmacion_entrega` y su FK a `Entrega` al mismo `EnlaceCliente`, con `crear_enlace(…, entrega=)` sin reemplazo y vigencia calculada (`enlace_del_cliente.md`, sección 9); el paso 27 no lo toma.
 4. **Documentar `URL_DEL_SITIO`** en `docs/patrones/enlace_del_cliente.md` (sección 3) y los bloqueos de COM-DCD-FLT en `docs/patrones/bloqueos.md` (ver `docs/temas_abiertos.md`, «COM-04c»).
+
+## Cuando se programen CON-03b, CON-04a a CON-04d, CMP-04 y Estadísticas — nacen con CON-02 (24/11/2026)
+
+El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen desde CON-02 (`docs/api/asientos.md`, D-102).
+
+1. **Cuando exista la recepción de compras (asiento de compras):** CMP-04 suma el tipo `recepcion` a `OrigenDocumento.Tipo` (una migración de `contabilidad` con solo ese cambio) y llama a `registrar_asiento_automatico` con Debe Insumos en Stock / Haber Proveedores (regla 14 de 8.20, valorizada con el precio total por línea, MD-125). Sin ingreso al stock, no hay asiento.
+2. **Cuando se reabra COM-CNC-ENT (CON-04c):** los asientos de la entrega, de sus mermas y de sus consumos (postcondiciones e, g y h) usan el mismo servicio, cada uno con su documento de origen; ya está listado arriba, en «Cuando exista contabilidad con asientos».
+3. **Cuando se reabra cada caso de uso con asiento (CON-04a a CON-04d):** completar el texto de `DESCRIPCION_DE_CUENTA` (`contabilidad/cuentas.py`) con lo que ese asiento mueve (regla 3 de CON-CNS-PCT). No necesita migración.
+4. **Cuando se programe CON-03b (asiento manual y contraasiento):** validar la fecha con `ejercicios.ejercicio_para(fecha, automatico=False)`, que lanza `fecha_en_ejercicio_cerrado`, `fecha_anterior_al_primer_ejercicio` y `fecha_futura` (D-102). El automático nunca las lanza.
+5. **Cuando se programe Estadísticas (EST-02):** usar `libro.resultado_del_periodo(desde, hasta)` y `libro.total_por_cuenta_en_periodo(...)`; con `tipo=None` el total es el saldo según la naturaleza de la cuenta y puede ser negativo (D-102).
+6. **Cuando se arme el cron único:** el paso 5 `abrir_ejercicio` ya está registrado y va primero (D-56); no hace falta programarlo aparte.

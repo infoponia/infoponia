@@ -688,3 +688,16 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Planificar la entrega (paso 7 y postcondición m de COM-DCD-FLT)** no se hace: es de COM-05a1 (`docs/disparadores.md`, «Lo que deja COM-04c»).
 - **Se agregó** «Faltantes para decidir (N)» en la lista de Contratos del Vendedor y `estado_del_faltante` para la ficha (D-61: el prototipo no tiene la pantalla del Vendedor).
 - **Pendiente de la tanda (no es un desvío): la pasada manual en navegador real** (ventana privada; CSRF real, `Origin` y los encabezados de `/cliente/`) queda para cuando se cierre la tanda de «Comercial 1», y **cargar `URL_DEL_SITIO` en Render** (sin barra final; por ejemplo `https://<servicio>.onrender.com`). Sin la variable, los enlaces del cliente quedan «No se pudo enviar» y el Vendedor decide por él. Pasos 3 y 14 de la «Verificación a mano» de COM-04c.
+
+## CON-02 (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **El asiento automático nunca se rechaza por la fecha** (D-102, diferencia con D-84 punto 5): ejercicio cerrado, anterior al primer ejercicio o futura van al abierto con la fecha de hoy y la descripción aclara la fecha real. El texto («Fecha del hecho: dd/mm/aaaa (motivo); se registra con la fecha de hoy.») y el recorte a 300 caracteres no estaban en ningún documento.
+- **`total_por_cuenta_en_periodo(tipo=None)`** devuelve el saldo según la naturaleza de la cuenta; la API decía solo «suma de los movimientos» (D-102).
+- **Migraciones:** `contabilidad` 0004 (esquema) y 0005 (datos), y `core` 0038; la tarea y D-84 punto 7 decían 0002 y 0003 (ocupadas). El «carga las 18» del paso 2 era un error de tipeo: son 19 cuentas.
+- **`DEBE` y `HABER`** viven en `contabilidad/constantes.py` (como importa la API) y `cuentas.py` los reexporta (como dice la tarea).
+- **`ResultadoApertura`** tiene dos campos más (`cantidad_creados` y `cantidad_cerrados_solos`) para el resumen del paso diario cuando hay varias vueltas; **`crear_primer_ejercicio`** suma `hoy` opcional y devuelve el ejercicio existente si ya hay uno.
+- **Auditoría:** la documentación no fijaba las claves de cada acción; siguen D-36. La cuenta del movimiento es `cuenta_contable` (no `cuenta`), y `estado_ejercicio` y `tipo_movimiento` tienen su propia lista en `VALORES_VISIBLES`.
+- **Textos nuevos de aviso:** «El ejercicio N.º X se cerró solo» y «Se cerró solo porque venció el siguiente (terminó el dd/mm/aaaa).».
+- **`saldo_por_cuenta`** devuelve las 19 cuentas, también las sin movimientos; las pruebas del libro están en `test_libro.py` y no en las de asientos.
+- **`docs/api/auditoria.md` no existe:** se ignoró esa mención de «Leer» de la tarea.
+- **Dos pruebas de otras tareas se ajustaron** porque CON-02 cambió su premisa: la de COM-02 que preguntaba si existía el modelo `AsientoContable` (ahora comprueba que la venta no deje asientos) y la de INV-02 que afirmaba que el paso 10 era el primero del proceso diario (ahora acepta solo el paso 5 de contabilidad antes).

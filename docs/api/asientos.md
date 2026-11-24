@@ -35,8 +35,11 @@ asiento = asientos.registrar_asiento_automatico(
 - **Devuelve** el `AsientoContable`, o **`None`** si no corresponde asiento: los movimientos de importe 0 se omiten y con menos de dos
   movimientos no hay asiento (H11). Quien llama **no** falla por eso.
 - **Dentro de la transacción de quien llama**, con sus bloqueos ya tomados. Bloquea el ejercicio **al final** (`docs/patrones/asientos.md`).
-- **Elige el ejercicio** por la fecha (D-84 punto 5): el que contiene la fecha, abierto o en cierre. Si cae en un ejercicio *cerrado*, el
-  asiento va al abierto con fecha de registro y la descripción aclara la fecha real. Antes de elegir, **se recupera solo** si el ejercicio
+- **Elige el ejercicio** por la fecha (D-84 punto 5): el que contiene la fecha, abierto o en cierre. **Nunca rechaza por la fecha** (D-102): si cae en
+  un ejercicio *cerrado*, es anterior al primer ejercicio o es posterior a hoy, el asiento va al abierto con la fecha de hoy y la descripción
+  aclara la fecha real: «Fecha del hecho: dd/mm/aaaa (el ejercicio de esa fecha ya está cerrado | anterior al primer ejercicio | posterior a la
+  fecha de hoy); se registra con la fecha de hoy.». Tu `descripcion` va primero, separada por « — »; el total no pasa de 300 caracteres (se
+  recorta la tuya, terminada en «…», nunca la aclaración). Antes de elegir, **se recupera solo** si el ejercicio
   abierto ya venció (H9) o si todavía no hay ninguno (puesta en marcha).
 - **Numera** correlativo por ejercicio (H8) y **audita** el asiento y cada movimiento (`alta_asiento_contable`, `alta_movimiento_contable`):
   no los audites vos. En tu propio registro de auditoría nombrá el asiento entre los `afectados` o con `referencia(asiento)` en `datos`.
@@ -59,7 +62,7 @@ class ErrorContable(Exception):
 | `asientos.registrar_asiento_manual(actor, fecha, descripcion, movimientos) -> AsientoContable` | CON-REG-ASI completo (permisos, fecha, auditoría). Las demás apps **no** la llaman |
 | `asientos.contraasentar(actor, asiento_id, fecha, descripcion) -> AsientoContable` | CON-CTR-ASI completo, con la notificación al Gerente |
 | `ejercicios.cerrar_ejercicio(actor, ejercicio_id) -> EjercicioContable` | CON-CRR-EJE |
-| `ejercicios.abrir_ejercicio_si_corresponde(hoy=None) -> ResultadoApertura` | CON-ABR-EJE. La llaman el paso diario `abrir_ejercicio` y el servicio de asientos; idempotente |
+| `ejercicios.abrir_ejercicio_si_corresponde(hoy=None) -> ResultadoApertura` | CON-ABR-EJE. La llaman el paso diario `abrir_ejercicio` y el servicio de asientos; idempotente. `ResultadoApertura` suma `cantidad_creados` y `cantidad_cerrados_solos` (varias vueltas si el sistema estuvo apagado) |
 | `ejercicios.crear_primer_ejercicio(fecha_inicio) -> EjercicioContable` | La puesta en marcha (D-84 punto 3); la llama el comando `poner_en_marcha_contabilidad` |
 
 ## Lectura (no escribe, no bloquea)
@@ -72,7 +75,7 @@ class ErrorContable(Exception):
 | `libro.saldo_por_cuenta(ejercicio_id) -> dict[str, Saldo]` | `Saldo(debe, haber, saldo_inicial, saldo, contrario)` por `codigo_cuenta`; cuentas de resultado desde cero, patrimoniales con lo acumulado (D-84 punto 8) |
 | `libro.movimientos_de_cuenta(codigo, ejercicio_id)` | Los movimientos con su saldo acumulado, para la vista por cuenta |
 | `libro.resultado_del_periodo(desde, hasta)` | `Resultado(ingresos, egresos, resultado)` por **fecha del asiento**, aunque el período cruce dos ejercicios (lo usa Estadísticas, EST-02) |
-| `libro.total_por_cuenta_en_periodo(codigo, desde, hasta, *, tipo=None)` | Suma de los movimientos de una cuenta en un período, por fecha del asiento |
+| `libro.total_por_cuenta_en_periodo(codigo, desde, hasta, *, tipo=None)` | Por fecha del asiento (extremos inclusivos). Con `tipo` «D» o «H», la suma de ese lado; con `tipo=None`, el saldo según la naturaleza de la cuenta (Debe − Haber en una deudora, Haber − Debe en una acreedora), con su signo aunque quede contrario. Otro `tipo`: `tipo_de_movimiento_invalido` (D-102) |
 | `responsables.contador_activo()` | El `Contador` activo o `None` (D-85 punto 5; lo usa `responsable_contable`) |
 | `responsables.responsable_contable()` | El Contador activo o, si no hay, el Gerente activo, o `None` (D-85 punto 5) |
 | `responsables.puede_registrar_asientos(usuario)` | `True` si es el Contador activo, o el Gerente activo **sin Contador activo**. Vale también para registrar pagos |
