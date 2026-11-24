@@ -68,11 +68,11 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    (alertas activas para el Gerente). Nació en NOT-01.
 
 
-## Cuando exista Pedido
+## ~~Cuando exista Pedido~~
 
-**Planificado:** CMP-02b (`registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta`; D-87).
+**Hecho el 24/11/2026 en CMP-02b** (`compras/servicios/registrantes.py`: `efecto_de_baja_de_cuenta` y `asignaciones_de_cuenta`; D-87). Texto original:
 
-1. **Baja de un Agrónomo.** Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se avisa. Regla 4:
+1. ~~**Baja de un Agrónomo.**~~ Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se avisa. Regla 4:
    la baja lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
    `core/extensiones.py` (D-43); bloquea sus filas después del invernadero y en orden de id.
 
@@ -379,6 +379,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    que quedan entre los afectados de `modificacion_invernadero` (D-81: `traspasar` ahora devuelve lo que tocó). Siguen los de COM-02, COM-03 e IOT-07.
    **COM-02 (lote C2)** suma las cosechas al traspaso del Capataz (por `ordenes_del_capataz`, D-53) y registra el del Vendedor con la regla de
    D-60 (compra-ventas); **Hecho el 23/11/2026 en COM-03a:** los suministros vigentes, con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
+   **Hecho el 24/11/2026 en CMP-02b (los pedidos):** `compras` registra su `traspasar` (cancela los pedidos «en cotización» del Agrónomo saliente con algún detalle a ese invernadero, aunque siga activo: MD-62 no lo condiciona) y su aviso (`registrar_aviso_de_traspaso`, D-98); su `contar` devuelve vacío.
    **IOT-07 (lote I4)** registra el del Técnico: pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
 
 ## Cuando exista un caso de uso que planifique, haga pedidos, asigne stock o reintente entregas
@@ -388,6 +389,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un invernadero inactivo y la bandeja lo excluye; hecho el 22/11/2026). Nació en MAE-01b.
    **Asignación de stock: COM-02 (lote C2)**, en `stock_maduro` (invernaderos considerados = solo activos). Planificaciones y reintento de
    entregas: COM-03 y COM-05 (**planificado en el lote C5a:** COM-05a, en la planificación inmediata y en el paso 50).
+   **Pedidos: hecho el 24/11/2026 en CMP-02b.** Un invernadero inactivo no se ofrece al armar un pedido (CMP-RLZ-PED lo rechaza con `invernadero_inactivo` vía `bloquear_invernadero_activo`) y la baja del invernadero se impide con un pedido en curso. Quedan las planificaciones, la asignación de stock y el reintento de entregas.
 
 ## Cuando exista Cliente o CompraVenta
 
@@ -460,6 +462,7 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
    solo la escribirá `compras`. `compras` se enchufa a `inventario` por dos vías ya documentadas (`docs/api/extensiones_de_inventario.md`):
    el punto `registrar_impedimento_de_deshabilitacion` (orden de compra aprobada sin recibir, pedido en curso: los usan CMP-DSH-IIN, CMP-BAJ-INS y
    la baja del invernadero) y los servicios de stock (`docs/api/stock.md`) para la **recepción**.
+   **Hecho el 24/11/2026 en CMP-02b:** el código `pedido_en_curso` (un pedido «en cotización» con ese insumo en ese invernadero, con enlace al pedido). Falta `orden_de_compra_aprobada` (CMP-03) y el tránsito (CMP-03 y CMP-04).
    INV-02 ya dejó conectado el punto: CMP-DSH-IIN, CMP-BAJ-INS y la baja del invernadero llaman a `registrar_impedimento_de_deshabilitacion` (`compras` solo registra su función). Su `cant_transito_insumo` ya cuenta en «bajo el mínimo» y se muestra en las existencias.
 2. **Recepción y faltante sin lote.** Por la regla 4 de 8.23 la recepción cancela primero el faltante sin lote y crea un lote nuevo por partida
    (y por fecha de vencimiento); hoy solo lo regulariza un recuento físico (`docs/modelo/inventario.md`, «Diferencias con el caso de uso»). Al
@@ -590,3 +593,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 3. **Ficha del pedido** (`compras/templates/compras/pedidos/ficha.html`): hoy sin acciones. CMP-02b suma «Cancelar pedido» y «Reenviar invitación»; CMP-03, «Comparar cotizaciones y generar orden» y la orden que generó un pedido «cerrado» (regla 4 de CMP-CNS-PED).
 4. **El paso diario 60** pone «vencido» a los enlaces vigentes: la ficha ya muestra «vencido» un enlace vigente con la fecha límite pasada, así que el paso no cambia lo que se ve (`pedidos._estado_del_enlace`).
 
+## Nacidos en CMP-02b
+
+1. **Cuando CMP-03 genere la orden.** `cancelar_pedido_automaticamente(pedido, causa)` ya existe para los pasos 60 y 62 (causas `nadie_cotizo` y `sin_cotizaciones_elegibles`); devuelve `None` si el pedido ya no estaba en cotización, así que los pasos son idempotentes. Hay que completar el impedimento `orden_de_compra_aprobada` (puede usar `Impedimento.url`) y la parte «orden pendiente de aprobación» de la extensión 4c de CMP-RLZ-PED.
+2. **Cuando se toque la ventana de baja de cuentas de `core`.** Mostrar `Asignacion.cantidad` (hoy solo `texto` y `que_pasa`); CMP-02b y PRD-01 meten el número en el texto.

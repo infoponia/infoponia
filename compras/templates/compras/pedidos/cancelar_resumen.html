@@ -1,0 +1,42 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen de la cancelación (CMP-CNL-PED paso 4) antes de confirmar: el motivo, cuántas cotizaciones se descartan, cuántos enlaces se anulan y a quién se avisa por correo (todos los invitados, sin el
+motivo). Recibe «pedido», «motivo» y «resumen» (``ResumenDeCancelacion``). «Confirmar cancelación» cancela (pasos 5 y 6); «Volver a corregir» (*a, paso 3) vuelve al formulario con el motivo escrito, sin cancelar nada.{% endcomment %}
+{% block titulo %}Confirmar la cancelación de {{ pedido }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá la cancelación del pedido {{ pedido }}</h1></div>
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>La cancelación no se puede deshacer.</b></div></div>
+
+  <div class="stack">
+    <div class="card">
+      <dl class="dl two">
+        <dt>Motivo</dt><dd>{{ resumen.motivo }}</dd>
+        <dt>Cotizaciones que se descartan</dt><dd>{{ resumen.descartadas }}</dd>
+        <dt>Enlaces que se anulan</dt><dd>{{ resumen.enlaces }} <span class="muted sm">los proveedores que no cotizaron ya no podrán hacerlo</span></dd>
+        <dt>Se avisa por correo a</dt><dd>{% for p in resumen.invitados %}<span class="chip-fijo">{{ p.nombre_para_mostrar }} · {{ p.email_proveedor }}</span>{% endfor %}</dd>
+      </dl>
+    </div>
+    {% if resumen.cotizaciones %}
+    <div class="card seg">
+      <div class="card-h"><b>Cotizaciones recibidas</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Proveedor</th><th class="right">Monto</th></tr></thead>
+          <tbody>{% for proveedor, monto in resumen.cotizaciones %}<tr><td>{{ proveedor.nombre_para_mostrar }}</td><td class="right mono">{{ monto|pesos }}</td></tr>{% endfor %}</tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'compras:pedido_cancelar' pedido.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="motivo" value="{{ motivo }}">
+    <div class="footbar">
+      <button class="btn btn-danger" type="submit" name="accion" value="confirmar" data-enviando="Cancelando…">Confirmar cancelación</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a corregir</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

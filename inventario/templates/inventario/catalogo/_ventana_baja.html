@@ -7,7 +7,7 @@ un POST a la misma URL; abrirla (GET) no cambia nada.{% endcomment %}
     {% if impedimentos %}
     <h2 id="ventana-titulo">No se puede dar de baja {{ insumo.nombre_insumo }}</h2>
     <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>Todavía tiene existencias o compromisos:
-      <ul class="inv-impedimentos">{% for i in impedimentos %}<li><b>{{ i.invernadero.nombre_invernadero }}:</b> {{ i.texto }} {{ i.como_resolver }}</li>{% endfor %}</ul></div></div>
+      <ul class="inv-impedimentos">{% for i in impedimentos %}<li><b>{{ i.invernadero.nombre_invernadero }}:</b> {{ i.texto }} {{ i.como_resolver }}{% if i.url %} <a href="{{ i.url }}">Ver detalle</a>{% endif %}</li>{% endfor %}</ul></div></div>
     <div class="acts">
       <a class="btn btn-primary" href="{% url 'inventario:catalogo' %}" data-cerrar-ventana data-foco-inicial>Entendido</a>
     </div>

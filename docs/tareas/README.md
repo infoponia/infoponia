@@ -126,7 +126,6 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CMP-02b | Cancelar pedido, reenviar invitación y lo que cancela solo | compras | pendiente | CMP-02a | `compras/CMP-02b-cancelar-reenviar-y-bajas.md` |
 | CMP-03 | Orden de compra y pasos diarios 60 a 62 | compras (y el tránsito en inventario) | pendiente | CMP-02b | `compras/CMP-03-orden-de-compra-y-pasos-diarios.md` |
 | CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario) | pendiente | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
 | CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11, CON-02 | `compras/CMP-05-pago-a-proveedores.md` |

@@ -1,0 +1,8 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+Le avisamos que el pedido de cotización {{ pedido }}, que le enviamos el {{ fecha_pedido|date:"d/m/Y" }}, fue cancelado el {{ fecha_cierre|date:"d/m/Y" }}.
+
+El enlace que le enviamos ya no sirve: no hace falta que cotice. Si ya había enviado una cotización, no se tendrá en cuenta.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

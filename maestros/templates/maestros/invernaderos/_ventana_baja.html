@@ -9,7 +9,7 @@ cómo resolverla, y «Entendido» (D-30). Sin ellos, pide confirmar. Dar de baja
     <h2 id="ventana-titulo">No se puede dar de baja {{ invernadero.nombre_invernadero }}</h2>
     <p>Primero hay que resolver:</p>
     <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>
-      <ul style="margin:0;padding-left:18px">{% for impedimento in impedimentos %}<li>{{ impedimento.texto }} {{ impedimento.como_resolver }}</li>{% endfor %}</ul>
+      <ul style="margin:0;padding-left:18px">{% for impedimento in impedimentos %}<li>{{ impedimento.texto }} {{ impedimento.como_resolver }}{% if impedimento.url %} <a href="{{ impedimento.url }}">Ver detalle</a>{% endif %}</li>{% endfor %}</ul>
     </div></div>
     <div class="acts">
       <a class="btn btn-primary" href="{% url 'maestros:invernadero' invernadero.pk %}" data-cerrar-ventana data-foco-inicial>Entendido</a>

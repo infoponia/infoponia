@@ -482,6 +482,32 @@ Los 17 pasos son los de «Verificación a mano» de `docs/tareas/iot/IOT-05-coma
 - [ ] 16. (Opcional) **Sin JavaScript y en un celular.** Desactivá JavaScript: elegí el actuador y tocá «Actualizar el formulario», elegí la acción y volvé a tocarlo; «Ver resumen» y «Confirmar y emitir» funcionan; «Cancelar» abre la misma página con la ventana. En un ancho de 390 px no hay desborde horizontal.
 - [ ] 17. (Opcional) **Después del despliegue:** en el log de Render, que se aplicaron las tres migraciones.
 
+## CMP-02b · Tarea CMP-02b (cancelar pedido, reenviar invitación y lo que cancela solo)
+
+Los 21 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-02b-cancelar-reenviar-y-bajas.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay una migración nueva (`core` 0031, que no cambia ninguna tabla): `python manage.py migrate`. Para ver los correos sin enviarlos, correo en modo consola (`CORREO_CONSOLA=1` en `.env`).
+
+- [ ] 1. Ana: pedido P1 (Lechuga 20, Norte) a los dos proveedores; la ficha ofrece «Cancelar pedido» y «Reenviar invitación» en cada invitado; copiar los enlaces de la terminal (A de Semillas, C de Viveros).
+- [ ] 2. «Reenviar invitación» a Semillas del Sur: la ventana dice a quién y que el enlace anterior deja de servir; «Volver» no cambia nada; confirmar manda un correo nuevo (enlace B) y deja «No cotizó» y «Vigente».
+- [ ] 3. Proveedor (ventana privada): el enlace A dice «reemplazado por uno más nuevo» sin datos del pedido; el B abre el portal.
+- [ ] 4. Viveros cotiza con el enlace C; en la ficha figura «Cotizó» y «Usado» y ya no tiene «Reenviar invitación»; Semillas sí.
+- [ ] 5. «Cancelar pedido»: sección 1 con destino, cotizaciones recibidas (1), monto $ 250,00 y las advertencias; sin motivo, el error sale junto al campo.
+- [ ] 6. Con motivo, el resumen: cotizaciones que se descartan (1), enlaces que se anulan (1) y a quién se avisa; «Volver a corregir» conserva el motivo.
+- [ ] 7. «Confirmar cancelación»: ficha «Cancelado», motivo, «Cancelado por el Agrónomo», sin botones; la cotización «Descartada» y el enlace de Semillas «Anulado»; dos correos sin el motivo, ni el otro proveedor ni precios.
+- [ ] 8. Proveedor (ventana privada): los enlaces B y C dicen «El pedido fue cancelado.».
+- [ ] 9. La dirección `/compras/pedidos/<n>/cancelar/` de P1 a mano vuelve a la ficha con el aviso de que ya no está en cotización.
+- [ ] 10. Gerente: P1 sin botones y 403 en `/cancelar/`; «Auditoría» con «Reenvío de invitación a un proveedor» y «Cancelación de pedido de cotización», sin tokens.
+- [ ] 11. Otra Agrónoma o el Capataz: 403 en `/cancelar/`.
+- [ ] 12. P2 (Lechuga en Norte y Nutriente en Norte 2) y P3 (Nutriente en Norte 2); el Gerente cambia el Agrónomo de Norte a «Nuevo»: la ventana dice «Se cancela 1 pedido de cotización en curso de Ana…», no dice que «Nuevo» recibe pedidos y no guarda hasta confirmar.
+- [ ] 13. Confirmado: P2 «Cancelado» (cancelación automática, «Agrónomo sin el invernadero de destino»), P3 sigue en cotización; avisos en la campana de Ana y de Nuevo y no del Gerente; «Auditoría» con la cancelación de InfoPonia.
+- [ ] 14. Baja de la cuenta de Ana: la ventana dice «Pedidos de cotización en curso. Es 1: se cancelan solos…»; P3 queda «Cancelado» («Agrónomo inactivo») y figura en el registro de la baja; el Gerente no recibe aviso.
+- [ ] 15. Otra: P4 (Tomate) y P5 (Pepino); «Deshabilitar» el Tomate y «Dar de baja» en el catálogo dicen «Está en el pedido P-…» con «Ver detalle».
+- [ ] 16. Gerente: «Dar de baja» el Invernadero Este lista los dos pedidos, cada uno con «Ver detalle».
+- [ ] 17. Otra cancela P4: el Tomate se deshabilita; el Pepino sigue impedido por P5.
+- [ ] 18. Baja del proveedor Semillas: la ventana avisa que sus enlaces dejan de servir; el enlace D «fue anulado», el E (Viveros) sigue sirviendo, P5 sigue en cotización y «Auditoría» lista los enlaces anulados.
+- [ ] 19. **Navegador real (D-96).** Confirmar cancelación, «Reenviar invitación», «Confirmar y guardar» del personal y «Dar de baja» de la cuenta, enviados hasta el final en una ventana privada: sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola (F12); las ventanas abren sin recargar la página.
+- [ ] 20. (Opcional) Sin JavaScript: «Reenviar invitación» lleva a la ficha con la ventana abierta y funciona; «Cancelar pedido» y su resumen funcionan.
+- [ ] 21. (Opcional) En un ancho de celular (390 px): la ficha, «Cancelar pedido», su resumen y la ventana no se cortan.
+
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
