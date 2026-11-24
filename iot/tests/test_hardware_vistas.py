@@ -504,3 +504,93 @@ class IotModHdwVistaTests(HardwareVistasBase):
         self.assertContains(respuesta, "se reactivó con su historial")
         self.sensor.refresh_from_db()
         self.assertEqual((self.sensor.estado_hardware, list(self.sensor.telemetrias.all())), ("activo", [lectura]))
+
+
+class IotBajHdwVistaTests(HardwareVistasBase):
+    """IOT-BAJ-HDW (IOT-06, paso 5): la ventana de dar de baja un equipo, las reglas activas que lo usan en la ficha y sus permisos. Las reglas de negocio las prueba ``test_iot_baj_hdw.py``."""
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(fabricas.con_iot_registrado())
+        self.sensor = fabricas.sensor(self.sistema, "norte/temp")
+        self.actuador = fabricas.actuador(self.sistema, self.tipo, "norte/extractor")
+        self.client.force_login(self.laura)
+
+    def test_pre_a_los_demas_roles_reciben_403_y_un_equipo_ajeno_da_404(self):
+        """Precondición a y regla 1 (D-28): otros roles, 403; el Agrónomo de otro invernadero, 404."""
+        ruta = self.url("hardware_baja", self.sensor.pk)
+        for cuenta in (crear_capataz(), crear_vendedor(), crear_tecnico("otro@infoponia.com"), crear_administrador()):
+            self.client.force_login(cuenta)
+            for metodo in (self.client.get, self.client.post):
+                with self.subTest(cuenta=cuenta.email, metodo=metodo.__name__):
+                    self.assertEqual(metodo(ruta).status_code, 403)
+        self.client.force_login(crear_agronomo("otra@infoponia.com"))
+        self.assertEqual(self.client.get(ruta).status_code, 404)
+        self.assertEqual(self.client.post(ruta).status_code, 404)
+
+    def test_la_ficha_ofrece_dar_de_baja_a_quien_opera_y_no_al_gerente_con_agronomo_activo(self):
+        """D-30: «Dar de baja» solo para quien opera; el Gerente de Norte (con Agrónomo activo) solo consulta y, si escribe la URL, vuelve a la ficha sin cambios."""
+        self.assertContains(self.client.get(self.url("hardware_ficha", self.sensor.pk)), "Dar de baja")
+        self.client.force_login(self.gerente)
+        self.assertNotContains(self.client.get(self.url("hardware_ficha", self.sensor.pk)), "Dar de baja")
+        self.assertEqual(self.client.post(self.url("hardware_baja", self.sensor.pk)).status_code, 302)
+        self.sensor.refresh_from_db()
+        self.assertEqual(self.sensor.estado_hardware, "activo")
+
+    def test_la_ventana_explica_la_baja_y_la_de_un_actuador_advierte_su_ultimo_estado(self):
+        """Regla 7: de un actuador, el último estado informado y que después no podrá recibir comandos; abrirla (GET) no cambia nada."""
+        ventana = self.client.get(self.url("hardware_baja", self.actuador.pk), headers={"HX-Request": "true"})
+        self.assertContains(ventana, "queda libre para registrar un equipo de reemplazo")
+        self.assertContains(ventana, "Último estado informado por el nodo: desconocido")
+        self.assertContains(ventana, "InfoPonia no podrá enviarle comandos")
+        self.assertNotContains(ventana, "<html")
+        sensor = self.client.get(self.url("hardware_baja", self.sensor.pk), headers={"HX-Request": "true"})
+        self.assertNotContains(sensor, "Último estado informado")
+        self.assertContains(self.client.get(self.url("hardware_baja", self.sensor.pk)), "<html")  # sin JavaScript: la ficha con la ventana abierta
+        self.actuador.refresh_from_db()
+        self.assertEqual(self.actuador.estado_hardware, "activo")
+
+    def test_regla_2_con_una_regla_activa_la_ventana_no_deja_confirmar_y_explica_como_resolverlo(self):
+        """Precondición e y regla 2: lista la regla activa que lo usa, dice «Dalas de baja primero…» y no ofrece el botón; el POST a mano tampoco da de baja."""
+        regla = fabricas.regla(self.sensor, self.actuador)
+        ventana = self.client.get(self.url("hardware_baja", self.sensor.pk), headers={"HX-Request": "true"})
+        self.assertContains(ventana, "No se puede dar de baja todavía")
+        self.assertContains(ventana, f"RGL-{regla.pk}")
+        self.assertContains(ventana, "Dalas de baja primero desde Reglas de actuación")
+        self.assertNotContains(ventana, 'type="submit"')
+        respuesta = self.client.post(self.url("hardware_baja", self.sensor.pk), headers={"HX-Request": "true"})
+        self.assertContains(respuesta, "No se puede dar de baja todavía")
+        self.sensor.refresh_from_db()
+        self.assertEqual(self.sensor.estado_hardware, "activo")
+
+    def test_regla_2_con_un_comando_pendiente_la_ventana_dice_que_espere_o_cancele(self):
+        """Precondición c y regla 2: el actuador con un comando pendiente no se da de baja; la ventana lo explica."""
+        pendiente = fabricas.comando(self.actuador, self.tipo.acciones.first())
+        ventana = self.client.get(self.url("hardware_baja", self.actuador.pk), headers={"HX-Request": "true"})
+        self.assertContains(ventana, f"CMD-{pendiente.pk}")
+        self.assertContains(ventana, "Esperá su resultado o cancelalo desde Comandos")
+
+    def test_post_a_da_de_baja_audita_y_vuelve_a_la_ficha(self):
+        """Postcondiciones a y c: el POST deja el equipo «inactivo», audita y vuelve a la ficha con el aviso."""
+        respuesta = self.client.post(self.url("hardware_baja", self.sensor.pk), follow=True)
+        self.assertRedirects(respuesta, self.url("hardware_ficha", self.sensor.pk))
+        self.assertContains(respuesta, "dado de baja")
+        self.sensor.refresh_from_db()
+        self.assertEqual(self.sensor.estado_hardware, "inactivo")
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.BAJA_HARDWARE).count(), 1)
+
+    def test_un_equipo_ya_dado_de_baja_no_ofrece_la_baja(self):
+        """D-30: la ventana de un equipo inactivo vuelve a su ficha con un aviso."""
+        Hardware.objects.filter(pk=self.sensor.pk).update(estado_hardware="inactivo")
+        self.assertRedirects(self.client.get(self.url("hardware_baja", self.sensor.pk)), self.url("hardware_ficha", self.sensor.pk), fetch_redirect_response=False)
+
+    def test_regla_6_la_ficha_lista_las_reglas_activas_que_usan_el_equipo(self):
+        """IOT-CNS-HDW regla 6 (prototipo «Reglas activas que lo usan»): el sensor y el actuador de la regla la muestran con su frase; un equipo sin reglas dice «Ninguna»."""
+        regla = fabricas.regla(self.sensor, self.actuador)
+        otro = fabricas.sensor(self.sistema, "norte/otro", "humedad")
+        for equipo in (self.sensor, self.actuador):
+            with self.subTest(equipo=equipo.identificador_equipo):
+                ficha = self.client.get(self.url("hardware_ficha", equipo.pk))
+                self.assertContains(ficha, f"RGL-{regla.pk}")
+                self.assertContains(ficha, "Cuando Temperatura norte/temp")
+        self.assertContains(self.client.get(self.url("hardware_ficha", otro.pk)), "Ninguna.")

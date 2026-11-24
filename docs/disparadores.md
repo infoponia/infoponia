@@ -263,8 +263,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    - ~~IOT-02: el aviso de equipos afectados (regla 6 de IOT-MOD-TAC), la compatibilidad sobre actuadores reales (regla 9) y el conteo de la
      baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados. Al crear un actuador, llamar antes a `bloquear_tipo_activo(tipo_id)` (`iot/servicios/tipos_actuador.py`; contrato de D-40).~~ (hecho el 22/11/2026, IOT-02: `recalcular_compatibilidad`; el aviso y el conteo ya los tenía IOT-01)
    - ~~IOT-05: `acciones_en_uso(tipo)` (devuelve `dict[int, list[UsoDeAccion]]`: por id de acción, sus usos con código `RGL-n` o `CMD-n` y valor) y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).~~ (hecho el 23/11/2026, IOT-05: una sola consulta para toda la lista de tipos)
-   - IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.
-2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). IOT-06: desactivar, activar y dar de baja; IOT-07:
+   - ~~IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.~~ (hecho el 24/11/2026, IOT-06)
+2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). ~~IOT-06: desactivar, activar y dar de baja~~ (hecho el 24/11/2026, IOT-06); IOT-07:
    `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
 3. **Hardware** (`docs/casos_de_uso/iot/hardware.md`).
    - ~~IOT-03: la última lectura y la situación por lecturas en la lista y la ficha; los identificadores anunciados (`EquipoAnunciado`) y la
@@ -272,9 +272,9 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
      `recalcular_compatibilidad`** (`iot/servicios/compatibilidad.py`) con los actuadores del sistema: es la única función que calcula y escribe la compatibilidad (D-82: bloquea
      los invernaderos en orden, después del tipo).~~ (hecho el 23/11/2026, IOT-03: `resumen_de_equipos` y `situacion_de` por alertas, «Último dato» en la lista y la ficha, `anuncios.registrar_anuncio` y `tiene_lecturas`)
    - ~~IOT-05: `tiene_comandos(actuador)`, `tiene_comando_pendiente(actuador)`, «Comando pendiente» y el historial de comandos de la ficha.~~ (hecho el 23/11/2026, IOT-05)
-   - IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
+   - ~~IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
      (`iot/servicios/hardware.py`: hoy no ofrece «Dar de baja», para que ningún botón lleve a un 403); y sumar `temp-vieja` (un sensor dado de baja) al cargador de datos de verificación
-     de `iot` (`iot/verificacion.py`) con ese servicio.
+     de `iot` (`iot/verificacion.py`) con ese servicio.~~ (hecho el 24/11/2026, IOT-06; lo del cargador no se hizo: D-95 retiró los cargadores de datos de verificación)
    - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.
      **Planificado en el lote I4** (`mantenimiento_automatico.md`).
 4. ~~**Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
@@ -282,11 +282,11 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 5. **API del nodo** (`docs/casos_de_uso/iot/entregar_informacion.md`, «Reparto»; lote I2a). IOT-03 las deja escritas sin hacer nada:
    - ~~IOT-05: `explica_un_comando(actuador, estado)` en `iot/servicios/estados.py` (hoy, falso: D-75 punto 1); en modo `local`, no entregar
      comandos (extensión 1b.2); las rutas de comandos del contrato (`docs/api/nodo/`, lote I3).~~ (hecho el 23/11/2026, IOT-05)
-   - IOT-06: `evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)` en `iot/servicios/lecturas.py` (paso 6 y 6a a 6d);
+   - ~~IOT-06: `evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)` en `iot/servicios/lecturas.py` (paso 6 y 6a a 6d);
      `al_volver_a_remoto(sistema)` en `iot/servicios/nodo.py` (1b.3); el reinicio de las reglas cuando el invernadero se queda sin umbral
-     efectivo (5c).
+     efectivo (5c).~~ (hecho el 24/11/2026, IOT-06)
 
-6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), IOT-06 e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
+6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), ~~IOT-06~~ (hecho el 24/11/2026: alta, modificación y reactivación de reglas, con su prueba de concurrencia) e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
    (`bloquear_tipo_activo`) y después el invernadero, el sistema y el equipo (excepción a D-40 y a `docs/patrones/bloqueos.md`). Nació en IOT-02.
 7. **El panel de monitoreo** (`iot/servicios/monitoreo.py` y `iot/templates/iot/monitoreo/_panel.html`). ~~IOT-05~~ (hecho el 23/11/2026): «Comandos pendientes» (indicador y columna de actuadores) y «Emitir comando» desde la fila de cada actuador a quien opera
    (regla 11 de IOT-CNS-LEC); IOT-06: el enlace a las reglas de actuación. Nació en IOT-04.
@@ -332,7 +332,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 
 1. **Alerta del Técnico.** Al registrar o dar de baja el `SistemaIoT` de un invernadero, el caso de uso llama a
    `maestros.servicios.alertas.sincronizar_alertas_de_personal` (la alerta «invernadero sin Técnico activo» solo cuenta con sistema
-   IoT, regla 3 de 8.22). `Invernadero.tiene_sistema_iot()` es verdadero desde IOT-02. Nació en MAE-02a. Al registrar: hecho en IOT-02 (22/11/2026). **Planificado:** IOT-06 (al dar de baja).
+   IoT, regla 3 de 8.22). `Invernadero.tiene_sistema_iot()` es verdadero desde IOT-02. Nació en MAE-02a. Al registrar: hecho en IOT-02 (22/11/2026). Al dar de baja: hecho en IOT-06 (24/11/2026).
 
 ## Cuando exista Hardware, Telemetría, Merma o SolicitudRevisión
 

@@ -426,3 +426,133 @@ class IotModSisVistaTests(SistemaVistasBase):
         self.client.post(self.url("sistema_regenerar_token", self.sistema.pk), follow=True)
         self.sistema.refresh_from_db()
         self.assertEqual(self.sistema.token_resumen, resumen_de("token-original"))
+
+
+class IotCicloSisVistaTests(SistemaVistasBase):
+    """IOT-DSC-SIS, IOT-ACT-SIS e IOT-BAJ-SIS (IOT-06, paso 5): las ventanas de desconectar y de dar de baja, el botón «Activar» y sus permisos. Las reglas de negocio las prueban
+    ``test_iot_dsc_sis.py``, ``test_iot_act_sis.py`` y ``test_iot_baj_sis.py``."""
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(fabricas.con_iot_registrado())
+        self.sistema = fabricas.sistema(self.norte)
+        self.sensor = fabricas.sensor(self.sistema, "norte/temp")
+        self.actuador = fabricas.actuador(self.sistema, fabricas.tipo_actuador("Extractor"), "norte/ventilador")
+        self.client.force_login(self.laura)
+
+    def estado(self):
+        return SistemaIoT.objects.get(pk=self.sistema.pk).estado_sistema
+
+    def test_pre_a_los_demas_roles_reciben_403(self):
+        """Precondición a de DSC, ACT y BAJ: Capataz, Vendedor, Técnico y Administrador, 403 (con GET y con POST)."""
+        rutas = [self.url(n, self.sistema.pk) for n in ("sistema_desactivar", "sistema_activar", "sistema_baja")]
+        for cuenta in (crear_capataz(), crear_vendedor(), crear_tecnico("otro@infoponia.com"), crear_administrador()):
+            self.client.force_login(cuenta)
+            for ruta in rutas:
+                for metodo in (self.client.get, self.client.post):
+                    with self.subTest(cuenta=cuenta.email, ruta=ruta, metodo=metodo.__name__):
+                        self.assertEqual(metodo(ruta).status_code, 403)
+
+    def test_regla_1_un_sistema_fuera_del_alcance_da_404(self):
+        """Regla 1 de DSC (D-28): el Agrónomo de otro invernadero recibe 404 en las tres ventanas."""
+        self.client.force_login(crear_agronomo("otra@infoponia.com"))
+        for nombre in ("sistema_desactivar", "sistema_activar", "sistema_baja"):
+            with self.subTest(nombre=nombre):
+                self.assertEqual(self.client.post(self.url(nombre, self.sistema.pk)).status_code, 404)
+        self.assertEqual(self.estado(), "activo")
+
+    def test_la_ficha_ofrece_desconectar_y_dar_de_baja_con_el_sistema_activo(self):
+        """D-30: con el sistema activo, la ficha ofrece «Desconectar» y «Dar de baja», no «Activar»."""
+        pagina = self.client.get(self.url("sistema", invernadero=self.norte))
+        self.assertContains(pagina, "Desconectar")
+        self.assertContains(pagina, "Dar de baja")
+        self.assertNotContains(pagina, "Activando…")
+
+    def test_la_ficha_ofrece_activar_con_el_sistema_desconectado(self):
+        """D-30: desconectado, la ficha ofrece «Activar» y no «Desconectar»."""
+        SistemaIoT.objects.filter(pk=self.sistema.pk).update(estado_sistema="desconectado")
+        pagina = self.client.get(self.url("sistema", invernadero=self.norte))
+        self.assertContains(pagina, "Activando…")
+        self.assertNotContains(pagina, self.url("sistema_desactivar", self.sistema.pk))
+
+    def test_el_gerente_con_agronomo_activo_no_ve_botones_y_escribir_a_mano_no_cambia_nada(self):
+        """D-30 y regla 1: solo consulta; los POST vuelven a la ficha con un aviso (nunca un 403) y el sistema queda como estaba."""
+        self.client.force_login(self.gerente)
+        pagina = self.client.get(self.url("sistema", invernadero=self.norte))
+        for texto in ("Desconectar", "Dar de baja", "Activando…"):
+            with self.subTest(texto=texto):
+                self.assertNotContains(pagina, texto)
+        for nombre in ("sistema_desactivar", "sistema_activar", "sistema_baja"):
+            with self.subTest(nombre=nombre):
+                self.assertEqual(self.client.post(self.url(nombre, self.sistema.pk)).status_code, 302)
+        self.assertEqual(self.estado(), "activo")
+
+    def test_post_b_desconectar_abre_la_ventana_sin_cambiar_y_el_post_desconecta_cancelando_los_pendientes(self):
+        """IOT-DSC-SIS postcondiciones a y b: abrir la ventana (GET) no cambia nada; el POST desconecta y cancela el comando pendiente."""
+        pendiente = fabricas.comando(self.actuador, self.actuador.tipo_actuador.acciones.first())
+        ventana = self.client.get(self.url("sistema_desactivar", self.sistema.pk), headers={"HX-Request": "true"})
+        self.assertContains(ventana, "Desconectar el sistema")
+        self.assertContains(ventana, "Los comandos pendientes se cancelan")
+        self.assertNotContains(ventana, "<html")
+        self.assertEqual(self.estado(), "activo")
+        pagina = self.client.get(self.url("sistema_desactivar", self.sistema.pk))  # sin JavaScript: la ficha con la ventana abierta
+        self.assertContains(pagina, "<html")
+        self.assertContains(pagina, "Desconectar el sistema")
+        respuesta = self.client.post(self.url("sistema_desactivar", self.sistema.pk), follow=True)
+        self.assertRedirects(respuesta, self.url("sistema", invernadero=self.norte))
+        self.assertContains(respuesta, "Sistema IoT desconectado")
+        pendiente.refresh_from_db()
+        self.assertEqual((self.estado(), pendiente.estado_comando), ("desconectado", "cancelado"))
+
+    def test_post_a_activar_es_un_post_directo_y_deja_el_sistema_activo(self):
+        """IOT-ACT-SIS postcondición a: «Activar» es un POST (un GET da 405) y el sistema vuelve a «activo»."""
+        SistemaIoT.objects.filter(pk=self.sistema.pk).update(estado_sistema="desconectado")
+        self.assertEqual(self.client.get(self.url("sistema_activar", self.sistema.pk)).status_code, 405)
+        respuesta = self.client.post(self.url("sistema_activar", self.sistema.pk), follow=True)
+        self.assertContains(respuesta, "Sistema IoT activado")
+        self.assertEqual(self.estado(), "activo")
+
+    def test_regla_2_de_baj_un_sistema_dado_de_baja_no_se_activa_y_lo_avisa(self):
+        """Un sistema dado de baja no se desconecta ni se activa: vuelve a la ficha con el aviso de que la baja es definitiva."""
+        SistemaIoT.objects.filter(pk=self.sistema.pk).update(estado_sistema="inactivo")
+        respuesta = self.client.post(self.url("sistema_activar", self.sistema.pk), follow=True)
+        self.assertContains(respuesta, "la baja es definitiva")
+
+    def test_regla_8_la_ventana_de_baja_lista_lo_que_se_da_de_baja_y_advierte(self):
+        """IOT-BAJ-SIS regla 8: el nodo, cada equipo con su estado, el último estado de cada actuador y cada regla activa; y que la baja es definitiva y no habrá más comandos."""
+        regla = fabricas.regla(self.sensor, self.actuador)
+        ventana = self.client.get(self.url("sistema_baja", self.sistema.pk), headers={"HX-Request": "true"})
+        self.assertContains(ventana, "La baja es <b>definitiva</b>")
+        self.assertContains(ventana, "Nodo de prueba")
+        self.assertContains(ventana, "norte/temp")
+        self.assertContains(ventana, "norte/ventilador")
+        self.assertContains(ventana, "último estado: desconocido")
+        self.assertContains(ventana, f"RGL-{regla.pk}")
+        self.assertContains(ventana, "InfoPonia no podrá enviar comandos a estos actuadores")
+        self.assertContains(ventana, "Dar de baja definitivamente")
+        self.assertEqual(self.estado(), "activo")
+
+    def test_regla_4_con_comandos_pendientes_la_ventana_no_deja_confirmar_y_explica_como_resolverlo(self):
+        """IOT-BAJ-SIS precondición c y regla 4: lista los comandos pendientes con cómo resolverlos y sin botón de confirmar; el POST a mano tampoco da de baja."""
+        pendiente = fabricas.comando(self.actuador, self.actuador.tipo_actuador.acciones.first())
+        ventana = self.client.get(self.url("sistema_baja", self.sistema.pk), headers={"HX-Request": "true"})
+        self.assertContains(ventana, "No se puede dar de baja todavía")
+        self.assertContains(ventana, f"CMD-{pendiente.pk}")
+        self.assertContains(ventana, "desactivando el sistema")
+        self.assertNotContains(ventana, "Dar de baja definitivamente")
+        respuesta = self.client.post(self.url("sistema_baja", self.sistema.pk), headers={"HX-Request": "true"})
+        self.assertContains(respuesta, "No se puede dar de baja todavía")
+        self.assertEqual(self.estado(), "activo")
+
+    def test_post_a_la_baja_deja_todo_inactivo_sin_token_y_vuelve_a_la_ficha(self):
+        """IOT-BAJ-SIS postcondiciones a a c: el sistema, el nodo y los equipos quedan inactivos, el token se anula y la ficha pasa a «no tiene Sistema IoT»."""
+        regla = fabricas.regla(self.sensor, self.actuador)
+        respuesta = self.client.post(self.url("sistema_baja", self.sistema.pk), follow=True)
+        self.assertRedirects(respuesta, self.url("sistema", invernadero=self.norte))
+        self.assertContains(respuesta, "Sistema IoT dado de baja")
+        self.assertContains(respuesta, "no tiene Sistema IoT")
+        sistema = SistemaIoT.objects.get(pk=self.sistema.pk)
+        regla.refresh_from_db()
+        self.sensor.refresh_from_db()
+        self.assertEqual((sistema.estado_sistema, sistema.token_resumen, regla.estado_regla, self.sensor.estado_hardware), ("inactivo", None, "inactiva", "inactivo"))
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.BAJA_SISTEMA_IOT).count(), 1)

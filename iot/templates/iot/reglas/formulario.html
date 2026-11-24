@@ -1,0 +1,91 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}Nueva regla y modificar una regla (IOT-ALT-RGL, IOT-MOD-RGL; ``rgl-form`` del prototipo): el sensor, la condición, el actuador, la acción y, si la acción lleva valor, el valor, con la frase de vista previa que dice
+exactamente lo que va a hacer la regla. Al modificar, el sensor y el actuador se muestran deshabilitados con su motivo (regla 3 de MOD). Elegir el actuador o la acción, y «Actualizar la frase», mandan el formulario a esta
+URL con «refrescar», que lo vuelve a dibujar SIN guardar: con HTMX solo cambia «#formulario»; sin JavaScript, el botón «Actualizar la frase» recarga la página. Nada se valida mientras se tipea (interfaz.md):
+«novalidate», las reglas son del servicio. Recibe «regla» (nula al crear), «datos», «errores» (por campo), «general», «sensores», «actuadores», «acciones», «accion», «condiciones», «vista_previa» y «sin_umbral».{% endcomment %}
+{% block titulo %}{% if regla %}Modificar regla{% else %}Nueva regla de actuación{% endif %} · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page narrow">
+  <a class="back" href="{% if regla %}{% url 'iot:regla_ficha' regla.pk %}{% else %}{% url 'iot:reglas' %}?invernadero={{ elegido.pk }}{% endif %}">{% icono "back" 14 %} Volver</a>
+  <div class="page-h"><h1>{% if regla %}Modificar RGL-{{ regla.pk }}{% else %}Nueva regla de actuación{% endif %}</h1></div>
+  <p class="muted" style="margin-bottom:14px">{{ elegido.nombre_invernadero }}</p>
+  <div id="formulario"><div class="card"><div class="card-b">
+    {% for mensaje in general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+    <form method="post" novalidate action="{{ request.get_full_path }}">
+      {% csrf_token %}
+      <div class="fld">
+        <label for="regla-sensor">Cuando el sensor…{% if not regla %}<span class="req" aria-hidden="true"> *</span>{% endif %}</label>
+        {% if regla %}
+        <input class="field-input" id="regla-sensor" value="{{ regla.sensor.get_tipo_variable_sensor_display }} · {{ regla.sensor.identificador_equipo }}" disabled>
+        <div class="hint">El sensor y el actuador no se cambian: para otros, se crea una regla nueva.</div>
+        {% else %}
+        <select class="field-input" id="regla-sensor" name="sensor" data-desplegable>
+          <option value="">Seleccioná un sensor</option>
+          {% for s in sensores %}<option value="{{ s.pk }}"{% if datos.sensor_id|stringformat:"s" == s.pk|stringformat:"s" %} selected{% endif %}>{{ s.get_tipo_variable_sensor_display }} · {{ s.identificador_equipo }} · {% if s.sector %}{{ s.sector.nombre_sector }}{% else %}General{% endif %}</option>{% endfor %}
+        </select>
+        {% for e in errores.sensor %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">Solo temperatura, humedad e intensidad lumínica. La solución nutritiva y el fotoperíodo se monitorean con alertas.{% if not sensores %} Este sistema no tiene sensores activos que admitan reglas.{% endif %}</div>
+        {% endif %}
+      </div>
+
+      <fieldset class="fld" style="border:none;padding:0;margin:0 0 14px">
+        <legend class="lbl" style="padding:0">…y la lectura<span class="req" aria-hidden="true"> *</span></legend>
+        {% for valor, etiqueta in condiciones %}
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0;font-weight:400"><input type="radio" name="condicion" value="{{ valor }}"{% if datos.condicion == valor %} checked{% endif %}> {{ etiqueta }}</label>
+        {% endfor %}
+        {% for e in errores.condicion %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">Dispara una vez, cuando la condición se cumple en las lecturas seguidas de confirmación. Deja de cumplirse recién cuando la lectura se aleja del límite más que la histéresis, y respeta el tiempo mínimo entre comandos del actuador.</div>
+      </fieldset>
+
+      <div class="grid2">
+        <div class="fld">
+          <label for="regla-actuador">…entonces el actuador{% if not regla %}<span class="req" aria-hidden="true"> *</span>{% endif %}</label>
+          {% if regla %}
+          <input class="field-input" id="regla-actuador" value="{{ regla.actuador.tipo_actuador.nombre_actuador }} · {{ regla.actuador.identificador_equipo }}" disabled>
+          {% else %}
+          <select class="field-input" id="regla-actuador" name="actuador" data-desplegable data-sin-envio-en-curso hx-post="{{ request.get_full_path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-trigger="change" hx-target="#formulario" hx-select="#formulario" hx-swap="outerHTML">
+            <option value="">Seleccioná un actuador</option>
+            {% for a in actuadores %}<option value="{{ a.pk }}"{% if datos.actuador_id|stringformat:"s" == a.pk|stringformat:"s" %} selected{% endif %}>{{ a.tipo_actuador.nombre_actuador }} · {{ a.identificador_equipo }}</option>{% endfor %}
+          </select>
+          {% for e in errores.actuador %}<div class="err">{{ e }}</div>{% endfor %}
+          {% if not actuadores %}<div class="hint">Este sistema no tiene actuadores activos.</div>{% endif %}
+          {% endif %}
+        </div>
+        <div class="fld">
+          <label for="regla-accion">Acción<span class="req" aria-hidden="true"> *</span></label>
+          {% if acciones %}
+          <select class="field-input" id="regla-accion" name="accion" data-desplegable data-sin-envio-en-curso hx-post="{{ request.get_full_path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-trigger="change" hx-target="#formulario" hx-select="#formulario" hx-swap="outerHTML">
+            <option value="">Seleccioná la acción</option>
+            {% for a in acciones %}<option value="{{ a.pk }}"{% if accion.pk == a.pk %} selected{% endif %}>{{ a.nombre_accion }}</option>{% endfor %}
+          </select>
+          {% else %}
+          <select class="field-input" id="regla-accion" data-desplegable disabled><option>{% if actuador %}No hay acciones disponibles{% else %}Primero elegí el actuador{% endif %}</option></select>
+          {% endif %}
+          {% for e in errores.accion %}<div class="err">{{ e }}</div>{% endfor %}
+          {% if actuador and actuador.acciones_incompatibles.all %}<div class="hint">No se ofrecen las acciones que el nodo no soporta: {% for a in actuador.acciones_incompatibles.all %}{{ a.nombre_accion }}{% if not forloop.last %}, {% endif %}{% endfor %}.</div>{% endif %}
+        </div>
+      </div>
+
+      {% if accion.requiere_valor %}
+      <div class="fld">
+        <label for="regla-valor">Valor ({{ accion.unidad_valor }})<span class="req" aria-hidden="true"> *</span></label>
+        <input class="field-input" id="regla-valor" name="valor" type="text" inputmode="numeric" value="{{ datos.valor|default_if_none:'' }}" autocomplete="off">
+        {% for e in errores.valor %}<div class="err">{{ e }}</div>{% empty %}<div class="hint">Número entero entre {{ accion.valor_minimo }} y {{ accion.valor_maximo }} {{ accion.unidad_valor }}.</div>{% endfor %}
+      </div>
+      {% endif %}
+
+      {% if vista_previa %}<div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div class="sentence"><b>Vista previa.</b> {{ vista_previa }}.</div></div>{% endif %}
+      {% if sin_umbral %}<div class="alert alert-warn" role="status" style="margin-bottom:14px">{% icono "warn" 16 %}<div>Este invernadero no tiene umbral efectivo: la regla se guarda, pero no se evalúa hasta que lo tenga.</div></div>{% endif %}
+      {% if sistema_desconectado %}<div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>El sistema IoT está desconectado: la regla se guarda y empieza a evaluarse cuando lo actives.</div></div>{% endif %}
+
+      <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary" type="submit" data-enviando="Guardando…">{% if regla %}Guardar cambios{% else %}Crear regla{% endif %}</button>
+        <button class="btn btn-ghost" type="submit" name="refrescar" value="1" formnovalidate hx-post="{{ request.get_full_path }}" hx-include="closest form" hx-vals='{"refrescar": "1"}' hx-target="#formulario" hx-select="#formulario" hx-swap="outerHTML" data-sin-envio-en-curso>Actualizar la frase</button>
+        <a class="btn btn-ghost" href="{% if regla %}{% url 'iot:regla_ficha' regla.pk %}{% else %}{% url 'iot:reglas' %}?invernadero={{ elegido.pk }}{% endif %}">Cancelar</a>
+      </div>
+    </form>
+  </div></div></div>
+</div>
+{% endblock %}

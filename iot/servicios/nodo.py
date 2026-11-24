@@ -52,8 +52,13 @@ def registrar_comunicacion(sistema_id, ahora):
 
 def al_volver_a_remoto(sistema):
     """Extensión 1b.3: cuando el nodo vuelve a ``remoto``, cada regla de actuación se evalúa desde la próxima lectura como si antes su condición no se cumpliera
-    (última evaluación «sin evaluar», contador en cero). **Se completa en IOT-06** (reglas de actuación): hasta entonces no hace nada."""
-    return None
+    (última evaluación «sin evaluar», contador en cero), porque el control local pudo cambiar el estado de los actuadores. Corre en la transacción de ``registrar_modo``, con el sistema
+    ya bloqueado. ``reglas`` se importa acá y no arriba: ``reglas`` importa ``comandos``, que importa este módulo."""
+    from iot.models import ReglaActuacion
+    from iot.servicios import reglas
+
+    ids = ReglaActuacion.objects.filter(sensor__sistema=sistema, estado_regla=ReglaActuacion.Estado.ACTIVA).values_list("pk", flat=True)
+    reglas.reiniciar_reglas(list(ids))
 
 
 def registrar_modo(sistema_id, modo, ahora):
