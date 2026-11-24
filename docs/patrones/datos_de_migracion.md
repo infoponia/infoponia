@@ -84,7 +84,7 @@ Por qué así y no de otra forma:
   `--keepdb`.
 - Una corrida que tarda de golpe diez veces más sin que haya cambiado nada. Para comprobarlo: en `manage.py shell`,
   contá las filas de la tabla en la base `test_<nombre>`; si es cero, la vaciaron.
-- Arreglo rápido sin tocar código: correr una vez sin `--keepdb` y con `--noinput`, que recrea la base.
+- Arreglo rápido sin tocar código: correr una vez sin `--keepdb` y con `--noinput`, que recrea la base de pruebas (`test_…`; no pide permiso, `CLAUDE.md`, D-101).
 
 ## Lo que no hay que hacer
 

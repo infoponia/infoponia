@@ -312,3 +312,92 @@ class ImpedimentoDeDeshabilitacionTests(RegistrantesBase):
         with self.assertRaises(ValidationError):
             invernaderos.baja_invernadero(self.gerente, self.norte.pk)
         self.assertEqual(Invernadero.objects.get(pk=self.norte.pk).estado_invernadero, "activo")
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-03, paso 4: el impedimento ``orden_de_compra_aprobada`` (H20, D-87 punto 5; disparador «Nacidos en CMP-02b», punto 1). ``impedimento_de_deshabilitacion``
+# suma, por cada orden **no terminada** (pendiente de aprobación, aprobada o parcialmente recibida) con una línea a ese ``InsumoInvernadero``, un impedimento con
+# el código ``orden_de_compra_aprobada`` (el código queda igual para no tocar ``inventario``). Es distinto del impedimento del proveedor ``orden_no_terminada``
+# (``compras/servicios/proveedores.py``). La URL de la ficha de la orden la suma el paso 6, cuando existe esa pantalla.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.tests.fabricas import cotizacion_de, orden_de  # noqa: E402
+
+
+class OrdenDeCompraImpideDeshabilitarTests(RegistrantesBase):
+    """`registrar_impedimento_de_deshabilitacion` (H20): una orden no terminada con una línea a ese insumo en ese invernadero."""
+
+    def orden_de_norte(self, estado="pendiente_aprobacion", iin=None, lineas=1):
+        """Una orden en ``estado`` de un pedido de Ana con ``lineas`` líneas al ``iin`` (por omisión, la lechuga de Norte)."""
+        iin = iin or self.en_norte
+        pedido = armar_pedido(self.ana)
+        detalle = detalle_de_pedido(pedido, iin, cantidad="5")
+        cotizaciones = [cotizacion_de(pedido, self.prv, [(detalle, 5, "50.00", 2)])]
+        return orden_de(pedido, cotizaciones, estado=estado, gerente=self.gerente, motivo="No hay presupuesto." if estado == "rechazada" else "")
+
+    def test_con_datos_un_impedimento_por_orden_no_terminada(self):
+        """Con datos: pendiente, aprobada y parcialmente recibida impiden; el texto nombra la orden y su estado, y trae cómo resolverlo."""
+        ordenes_ = {estado: self.orden_de_norte(estado) for estado in ("pendiente_aprobacion", "aprobada", "parcialmente_recibida")}
+        impedimentos = registrantes.impedimento_de_deshabilitacion(self.en_norte)
+        self.assertEqual([i.codigo for i in impedimentos], ["orden_de_compra_aprobada"] * 3)
+        for orden in ordenes_.values():
+            (propio,) = [i for i in impedimentos if str(orden) in i.texto]
+            self.assertIn(orden.get_estado_orden_compra_display().lower(), propio.texto.lower())
+            self.assertTrue(propio.como_resolver)
+
+    def test_sin_datos_una_orden_terminada_o_de_otro_insumo_no_impide(self):
+        """Sin datos: rechazada, recibida y recibida con faltante ya terminaron; una orden del insumo de otro invernadero no impide este."""
+        for estado in ("rechazada", "recibida", "recibida_con_faltante"):
+            self.orden_de_norte(estado)
+        self.orden_de_norte(iin=self.en_norte2)
+        self.assertEqual(registrantes.impedimento_de_deshabilitacion(self.en_norte), [])
+
+    def test_una_orden_con_varias_lineas_al_mismo_insumo_impide_una_sola_vez(self):
+        """Una orden, un impedimento: dos proveedores con líneas al mismo ``InsumoInvernadero`` no lo duplican."""
+        pedido = armar_pedido(self.ana)
+        detalle = detalle_de_pedido(pedido, self.en_norte, cantidad="10")
+        otro = proveedor("Viveros del Este S. R. L.", n=2, email="info@este.com")
+        orden_de(pedido, [cotizacion_de(pedido, self.prv, [(detalle, 5, "50.00", 2)]), cotizacion_de(pedido, otro, [(detalle, 5, "60.00", 3)])])
+        self.assertEqual([i.codigo for i in registrantes.impedimento_de_deshabilitacion(self.en_norte)], ["orden_de_compra_aprobada"])
+
+    def test_el_pedido_en_curso_y_la_orden_no_terminada_son_impedimentos_distintos(self):
+        """H20: el insumo en un pedido «en cotización» (``pedido_en_curso``) y en una orden no terminada (``orden_de_compra_aprobada``) se informan por separado."""
+        self.pedido_de(self.ana, self.en_norte)
+        self.orden_de_norte()
+        self.assertEqual(sorted(i.codigo for i in registrantes.impedimento_de_deshabilitacion(self.en_norte)), ["orden_de_compra_aprobada", "pedido_en_curso"])
+
+    def test_sin_consultas_por_fila(self):
+        """Sin consultas por fila: la misma cantidad de consultas con 1 o con 4 órdenes."""
+        self.orden_de_norte()
+        with CaptureQueriesContext(connection) as con_una:
+            registrantes.impedimento_de_deshabilitacion(self.en_norte)
+        for _ in range(3):
+            self.orden_de_norte()
+        with CaptureQueriesContext(connection) as con_cuatro:
+            registrantes.impedimento_de_deshabilitacion(self.en_norte)
+        self.assertEqual(len(con_cuatro), len(con_una))
+
+    def test_deshabilitar_el_insumo_con_una_orden_pendiente_se_rechaza_con_el_codigo(self):
+        """Integración con CMP-DSH-IIN (precondición e, regla 2): el servicio real rechaza con ``orden_de_compra_aprobada``; con la orden rechazada, se puede."""
+        orden = self.orden_de_norte()
+        with self.assertRaises(ValidationError) as contexto:
+            insumos_invernadero.deshabilitar_insumo(self.ana, self.en_norte.pk)
+        self.assertIn("orden_de_compra_aprobada", [e.code for e in contexto.exception.error_dict[NON_FIELD_ERRORS]])
+        self.en_norte.refresh_from_db()
+        self.assertEqual(self.en_norte.estado_insumo_invernadero, "activo")
+        type(orden).objects.filter(pk=orden.pk).update(
+            estado_orden_compra="rechazada", gerente=self.gerente, fecha_resolucion=timezone.localdate(), motivo_rechazo="No hay presupuesto."
+        )
+        insumos_invernadero.deshabilitar_insumo(self.ana, self.en_norte.pk)
+        self.en_norte.refresh_from_db()
+        self.assertEqual(self.en_norte.estado_insumo_invernadero, "inactivo")
+
+    def test_dar_de_baja_el_invernadero_con_una_orden_aprobada_se_rechaza(self):
+        """Integración con PROD-BAJ-INV (precondición f): la orden aprobada sin recibir llega a la ventana de baja del invernadero."""
+        self.orden_de_norte("aprobada")
+        codigos = [i.codigo for i in invernaderos.impedimentos_para_baja(self.gerente, self.norte.pk)]
+        self.assertIn("orden_de_compra_aprobada", codigos)
+        with self.assertRaises(ValidationError):
+            invernaderos.baja_invernadero(self.gerente, self.norte.pk)
+        self.assertEqual(Invernadero.objects.get(pk=self.norte.pk).estado_invernadero, "activo")

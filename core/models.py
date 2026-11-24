@@ -811,6 +811,10 @@ class RegistroAuditoria(models.Model):
         ASIGNACION_CAMARA = "asignacion_camara", "Asignación de stock de cámara"
         VENCIMIENTO_PARTIDA = "vencimiento_partida", "Vencimiento de partida en cámara"
         AVISO_PARTIDA_POR_VENCER = "aviso_partida_por_vencer", "Aviso de partida por vencer"
+        # CMP-03: órdenes de compra (D-87 punto 8): <verbo del dominio>_orden_compra.
+        GENERACION_ORDEN_COMPRA = "generacion_orden_compra", "Generación de orden de compra"
+        APROBACION_ORDEN_COMPRA = "aprobacion_orden_compra", "Aprobación de orden de compra"
+        RECHAZO_ORDEN_COMPRA = "rechazo_orden_compra", "Rechazo de orden de compra"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1124,6 +1128,15 @@ class RegistroAuditoria(models.Model):
         "dias_para_vencer": "Días para vencer",
         "alerta_de_merma": "Alerta de merma con producto reservado",
         "plantas_perdidas": "Plantas perdidas",
+        # CMP-03: generación de la orden de compra («orden», «fecha_cierre_pedido» y «cotizaciones_descartadas» ya existen).
+        "cotizaciones_seleccionadas": "Cotizaciones seleccionadas",
+        "monto_total": "Monto total",
+        # CMP-03: aprobación y rechazo de la orden (el tránsito va en la ``modificacion_insumo_invernadero`` de cada existencia).
+        "fecha_resolucion": "Fecha de resolución",
+        "motivo_rechazo": "Motivo del rechazo",
+        "gerente": "Gerente que resolvió",
+        "transito": "Cantidad en tránsito",
+        "cotizaciones_afectadas": "Cotizaciones afectadas",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1143,6 +1156,10 @@ class RegistroAuditoria(models.Model):
             "en_cotizacion": "En cotización",
             "cerrado": "Cerrado",
             "cancelado": "Cancelado",
+            # CMP-03: estados de la orden de compra.
+            "pendiente_aprobacion": "Pendiente de aprobación",
+            "aprobada": "Aprobada",
+            "rechazada": "Rechazada",
         },
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         # CMP-02b: causas de la cancelación de un pedido (`core` no importa `compras`, A1 de D-37).
@@ -1465,6 +1482,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.ASIGNACION_CAMARA,
         RegistroAuditoria.Accion.VENCIMIENTO_PARTIDA,
         RegistroAuditoria.Accion.AVISO_PARTIDA_POR_VENCER,
+        RegistroAuditoria.Accion.GENERACION_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.APROBACION_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.RECHAZO_ORDEN_COMPRA,
     }
 )
 

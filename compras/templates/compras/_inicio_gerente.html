@@ -1,0 +1,32 @@
+{% load iconos formato_inventario %}
+{% comment %}Sección «Compras» del Inicio del Gerente (`registrar_seccion_de_inicio`, D-43; CMP-03, ``panelGer`` del prototipo): las órdenes de compra pendientes de aprobación, de la más antigua a la más reciente, con
+«Revisar». Recibe «datos» con «indicadores» (IndicadoresDelGerente). «Reclamos sin emitir» y «Pagos a proveedores pendientes» se suman en CMP-05 y CMP-06. Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Compras</h2>
+  {% with i=datos.indicadores %}
+  <div class="kpis">
+    <a class="kpi{% if i.cantidad_por_aprobar %} warn{% endif %}" href="{% url 'compras:ordenes' %}?atajo=por_aprobar" style="text-decoration:none;color:inherit"><span class="k">Órdenes por aprobar</span><span class="v" data-kpi="por-aprobar">{{ i.cantidad_por_aprobar }}</span><span class="c">{% if i.cantidad_por_aprobar %}esperan tu decisión{% else %}nada por decidir{% endif %}</span></a>
+  </div>
+  {% if i.ordenes_por_aprobar %}
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Órdenes pendientes de aprobación</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:ordenes' %}?atajo=por_aprobar">Ver todas</a></div>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Orden</th><th>Pedido</th><th class="right">Proveedores</th><th class="right">Monto</th><th></th></tr></thead>
+        <tbody>
+        {% for f in i.ordenes_por_aprobar %}
+        <tr>
+          <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}"><b>{{ f.orden }}</b></a><span class="sub2">{{ f.orden.fecha_emision|date:"d/m/Y" }}</span></td>
+          <td>{{ f.pedido }}<span class="sub2">{{ f.agronomo.get_full_name|default:f.agronomo.email }}</span></td>
+          <td class="right">{{ f.proveedores }}</td>
+          <td class="right nowrap mono">{{ f.monto|pesos }}</td>
+          <td class="right"><a class="btn btn-primary btn-sm" href="{% url 'compras:orden_resolver' f.orden.pk %}">Revisar<span class="sr"> la orden {{ f.orden }}</span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+  {% endwith %}
+</div>

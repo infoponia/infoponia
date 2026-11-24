@@ -123,7 +123,7 @@ concurrencia.
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-Hay migraciones nuevas (`maestros` 0011, `comercial` 0006, `core` 0036): `python manage.py migrate`. **No hay datos cargados** (D-95: los cargadores se retiraron): los creás vos, con los valores de abajo. Nunca escribas una contraseña en un archivo del repo.
+Hay migraciones nuevas (`maestros` 0011, `comercial` 0006, `core` 0037): `python manage.py migrate`. **No hay datos cargados** (D-95: los cargadores se retiraron): los creás vos, con los valores de abajo. Nunca escribas una contraseña en un archivo del repo.
 
 **Antes de empezar**
 
@@ -164,7 +164,7 @@ Hay migraciones nuevas (`maestros` 0011, `comercial` 0006, `core` 0036): `python
 13. **Sin JavaScript** (opcional): desactivá JavaScript en el navegador y repetí el paso 5: cada desplegable queda con «Continuar» (dentro del formulario) que redibuja sin validar; «Ver resumen» y «Confirmar merma» funcionan como páginas.
 14. **Celular** (opcional): abrí «Registrar merma en cámara» con el Capataz en un celular o con el ancho de ventana reducido: una columna, botones de ancho completo, sin scroll horizontal.
 15. **Navegador real** (obligatorio: hay formularios que se envían). Hacé el paso 5 y el paso 8 **en el navegador, con JavaScript** y enviando el formulario hasta el final. Tiene que mostrar el resultado esperado. Si aparece «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola del navegador (F12), avisá: lo más probable es un encabezado que el cliente de Django no puede ver. Los desplegables tienen que redibujar la pantalla sin saltar de lugar y el botón de enviar tiene que deshabilitarse con «Calculando…» / «Registrando…».
-16. **Después del merge, en Render:** en la «Shell», `python manage.py proceso_diario --listar` (tienen que verse 20, 25, 35 y 40) y revisá en el log del despliegue que se aplicaron `maestros.0011`, `comercial.0006` y `core.0036`.
+16. **Después del merge, en Render:** en la «Shell», `python manage.py proceso_diario --listar` (tienen que verse 20, 25, 35 y 40) y revisá en el log del despliegue que se aplicaron `maestros.0011`, `comercial.0006` y `core.0037`.
 
 ## Cierre (la completa Claude Code al cerrar)
 
@@ -173,7 +173,7 @@ Hay migraciones nuevas (`maestros` 0011, `comercial` 0006, `core` 0036): `python
 - **Modelos y migraciones:**
   - `maestros/0011_dias_aviso_vencimiento_camara`: el campo `dias_aviso_vencimiento_camara` (valor inicial 3 para la fila existente, `AddField` con `default`) y su restricción `>= 0`.
   - `comercial/0006_camara`: `AlertaComercial.partida` (FK a `produccion.StockCosechado`, `PROTECT`) y la restricción `alerta_comercial_un_solo_origen` reescrita con tres FK (`suministro`, `detalle_suministro`, `partida`).
-  - `core/0036_comercial_camara`: solo `choices` (`asignacion_camara`, `vencimiento_partida`, `aviso_partida_por_vencer`; el SQL es vacío). `core/models.py`: las tres acciones en `ACCIONES_DE_NEGOCIO`, las etiquetas nuevas (`partida`, `lineas_recortadas`, `reservas_liberadas`, `recubierto`, `sin_cubrir_tras_recorte`, `detalles_reabiertos`, `ventas_reabiertas`, `fecha_limite`, `dias_para_vencer`, `alerta_de_merma`, `plantas_perdidas`, `dias_aviso_vencimiento_camara`) y `estado_stock_cosechado` en `VALORES_VISIBLES`. `core/procesos.py`: solo el comentario (fila 25).
+  - `core/0037_comercial_camara`: solo `choices` (`asignacion_camara`, `vencimiento_partida`, `aviso_partida_por_vencer`; el SQL es vacío). `core/models.py`: las tres acciones en `ACCIONES_DE_NEGOCIO`, las etiquetas nuevas (`partida`, `lineas_recortadas`, `reservas_liberadas`, `recubierto`, `sin_cubrir_tras_recorte`, `detalles_reabiertos`, `ventas_reabiertas`, `fecha_limite`, `dias_para_vencer`, `alerta_de_merma`, `plantas_perdidas`, `dias_aviso_vencimiento_camara`) y `estado_stock_cosechado` en `VALORES_VISIBLES`. `core/procesos.py`: solo el comentario (fila 25).
 - **`maestros`:** el parámetro en `PARAMETROS_DE_CONFIGURACION` y en el grupo «Comercial» de la pantalla («Aviso de vencimiento de cámara (días antes)», ayuda «0 desactiva el aviso»). El servicio no cambió: valida por la tabla.
 - **`comercial/servicios/camara.py` (nuevo):** `orden_de_recorte` y `orden_de_candidatos` (puras), `recortar_partida`, `asignar_camara` (PROD-ASG-CAM), `programar_asignacion_de_camara` (`transaction.on_commit`), `reasignar_camara` (paso 25), `vencer_partidas_en_camara` (paso 20, con el aviso previo), `resolver_aviso_de_partida`, `enlaces_de_alertas_de_camara`, `indicadores_de_camara` y `pestana_de_camara`.
 - **`comercial/servicios/merma_camara.py` (nuevo):** `invernaderos_con_merma_en_camara`, `partidas_con_merma_posible`, `causas_de_camara`, `resumen_de_merma_en_camara` y `registrar_merma_en_camara`, con `DatosDeMermaEnCamara`.
@@ -196,7 +196,7 @@ Hay migraciones nuevas (`maestros` 0011, `comercial` 0006, `core` 0036): `python
 **Verifiqué** (con el cliente de Django y la base de pruebas)
 
 - El recorrido `test_recorrido_camara` (pasos 1 a 10 de la verificación a mano, por rol y por estado): el Capataz concreta una cosecha sin contrato; el Agrónomo ve la partida; el paso 25 la asigna y avisa, y repetirlo no duplica; el Capataz registra una merma en cámara con recorte (el resumen nombra el contrato, lo recortado se vuelve a cubrir con el lote en pie); el aviso previo con `proceso_diario --fecha`; el vencimiento con su merma y el aviso resuelto; la misma fecha otra vez no duplica nada: OK.
-- Las tres migraciones: `makemigrations --check`, `sqlmigrate` leído (agregan dos columnas (una con valor inicial), un índice y dos restricciones de la base (una de ellas reescrita); no borran ni reescriben datos; `core/0036` es un no-op) y aplicadas en la base de pruebas: OK.
+- Las tres migraciones: `makemigrations --check`, `sqlmigrate` leído (agregan dos columnas (una con valor inicial), un índice y dos restricciones de la base (una de ellas reescrita); no borran ni reescriben datos; `core.0037` es un no-op) y aplicadas en la base de pruebas: OK.
 - La concurrencia (`test_camara_concurrencia`): PROD-ASG-CAM contra una compra-venta que toma la misma partida (en los dos órdenes), el vencimiento contra una merma (en los dos órdenes), una merma contra la asignación (en los dos órdenes) y dos mermas de la misma partida: OK, siempre con los invariantes de reservas y sin un error 500.
 
 **Lo cubre una prueba**

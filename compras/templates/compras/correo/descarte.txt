@@ -1,0 +1,8 @@
+{% load formato_inventario %}{% autoescape off %}Hola, {{ proveedor }}:
+
+Le avisamos que su cotización del pedido {{ pedido }}, enviada el {{ fecha_cotizacion|date:"d/m/Y" }} por {{ monto|pesos }}, no fue seleccionada.
+
+Gracias por cotizar. Ya no hace falta que haga nada con ese pedido.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

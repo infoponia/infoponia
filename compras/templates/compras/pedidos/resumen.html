@@ -20,7 +20,7 @@ al formulario con lo escrito, sin validar. Lo escrito viaja en campos ocultos.{%
           <tbody>
           {% for l in lineas %}
           <tr>
-            <td>{{ l.iin.insumo.nombre_insumo }}{% if l.ya_pedido %}<span class="sub2 warn-t">Ya figura en el pedido P-{{ l.ya_pedido.pedido_id|stringformat:"04d" }}: {{ l.ya_pedido.cantidad|cant:l.iin.insumo.unidad_medida_insumo }}, con cotizaciones hasta el {{ l.ya_pedido.fecha_limite|date:"d/m/Y" }}.</span>{% endif %}</td>
+            <td>{{ l.iin.insumo.nombre_insumo }}{% if l.ya_pedido %}<span class="sub2 warn-t">Ya figura en el pedido P-{{ l.ya_pedido.pedido_id|stringformat:"04d" }}: {{ l.ya_pedido.cantidad|cant:l.iin.insumo.unidad_medida_insumo }}, {% if l.ya_pedido.orden_id %}su orden de compra está pendiente de aprobación{% else %}con cotizaciones hasta el {{ l.ya_pedido.fecha_limite|date:"d/m/Y" }}{% endif %}.</span>{% endif %}</td>
             <td class="right mono">{{ l.cantidad|cant:l.iin.insumo.unidad_medida_insumo }}</td>
             <td class="right mono">{{ l.precio|pesos }}</td>
             <td class="right mono">{{ l.subtotal|pesos }}</td>

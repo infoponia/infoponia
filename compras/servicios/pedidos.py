@@ -14,12 +14,12 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import Lower
 from django.http import Http404
 
 from compras.errores import ErrorDeCompras
-from compras.models import MOTIVOS_DE_CANCELACION_AUTOMATICA, Cotizacion, DetallePedido, EnlaceProveedor, InvitacionPedido, Pedido, Proveedor
+from compras.models import MOTIVOS_DE_CANCELACION_AUTOMATICA, Cotizacion, DetallePedido, EnlaceProveedor, InvitacionPedido, OrdenCompra, Pedido, Proveedor
 from compras.servicios import avisos, enlaces
 from compras.servicios import cotizaciones as servicio_de_cotizaciones
 from core import notificaciones
@@ -35,9 +35,9 @@ from maestros.servicios.invernaderos import _actor_sigue_activo, bloquear_invern
 DOS_DECIMALES = Decimal("0.01")
 LIMITE_DE_CANTIDAD = Decimal(10) ** 11  # DecimalField(14, 3)
 
-# Lo que otro pedido «en cotización» ya pide del mismo insumo en el mismo invernadero (extensión 4c; la parte de «orden pendiente de aprobación»
-# la completa CMP-03, que es quien crea la orden).
-YaPedido = namedtuple("YaPedido", "pedido_id cantidad fecha_limite")
+# Lo que otro pedido ya pide del mismo insumo en el mismo invernadero (extensión 4c): «en cotización» (con su fecha límite) o «cerrado» con su orden de compra
+# «pendiente de aprobación» (``orden_id``; sin fecha límite).
+YaPedido = namedtuple("YaPedido", "pedido_id cantidad fecha_limite orden_id", defaults=(None,))
 # Un insumo del Agrónomo para armar el pedido: la existencia, sus cantidades (``stock.Existencia``), la sugerida y si ya está en otro pedido.
 FilaPedible = namedtuple("FilaPedible", "iin existencia sugerida ya_pedido")
 LineaResumen = namedtuple("LineaResumen", "iin cantidad precio subtotal ya_pedido")
@@ -78,17 +78,29 @@ def _insumos_del_agronomo(actor):
 
 
 def ya_pedido(iin_ids):
-    """``{iin_id: YaPedido}`` de los insumos que ya figuran en otro pedido «en cotización» (extensión 4c). Una consulta; el pedido más reciente."""
+    """``{iin_id: YaPedido}`` de los insumos que ya figuran en otro pedido «en cotización» o en uno «cerrado» cuya orden de compra está «pendiente de aprobación»
+    (extensión 4c y regla 14 de 8.15). Una consulta; el pedido más reciente."""
     resultado = {}
     detalles = (
-        DetallePedido.objects.filter(insumo_invernadero_id__in=list(iin_ids), pedido__estado_pedido=Pedido.Estado.EN_COTIZACION)
-        .select_related("pedido")
+        DetallePedido.objects.filter(insumo_invernadero_id__in=list(iin_ids))
+        .filter(
+            Q(pedido__estado_pedido=Pedido.Estado.EN_COTIZACION)
+            | Q(pedido__orden_compra__estado_orden_compra=OrdenCompra.Estado.PENDIENTE_APROBACION)
+        )
+        .select_related("pedido", "pedido__orden_compra")
         .order_by("-pedido_id")
     )
     for detalle in detalles:
+        pedido = detalle.pedido
+        en_cotizacion = pedido.estado_pedido == Pedido.Estado.EN_COTIZACION
         resultado.setdefault(
             detalle.insumo_invernadero_id,
-            YaPedido(detalle.pedido_id, detalle.cantidad_detalle, detalle.pedido.fecha_limite_cotizaciones),
+            YaPedido(
+                detalle.pedido_id,
+                detalle.cantidad_detalle,
+                pedido.fecha_limite_cotizaciones if en_cotizacion else None,
+                None if en_cotizacion else pedido.orden_compra.pk,
+            ),
         )
     return resultado
 
@@ -351,7 +363,8 @@ FilaDePedido = namedtuple("FilaDePedido", "pedido monto invernaderos insumos inv
 Invitado = namedtuple("Invitado", "invitacion proveedor cotizo enlace estado_del_enlace sin_enviar puede_reenviar")
 # Una cotización recibida (regla 6), con sus líneas tal como se muestran (``cotizaciones.lineas_para_mostrar``) y su monto.
 CotizacionRecibida = namedtuple("CotizacionRecibida", "cotizacion lineas monto")
-FichaDePedido = namedtuple("FichaDePedido", "pedido monto grupos invitados cotizaciones por_resolver automatica puede_cancelar")
+# ``orden`` es la orden que se generó con el pedido (o ``None``); ``puede_generar`` dice si el Agrónomo del pedido puede comparar las cotizaciones y generar la orden (CMP-03).
+FichaDePedido = namedtuple("FichaDePedido", "pedido monto grupos invitados cotizaciones por_resolver automatica puede_cancelar orden puede_generar", defaults=(None, False))
 
 ESTADOS_DEL_PEDIDO = {valor for valor, _ in Pedido.Estado.choices}
 
@@ -471,6 +484,9 @@ def ficha_de_pedido(actor, pedido_id):
     es_el_agronomo = rol_de(actor) == Usuario.Rol.AGRONOMO and pedido.agronomo_id == actor.pk
     puede_cancelar = es_el_agronomo and pedido.en_cotizacion
     reenvio_abierto = puede_cancelar and hoy <= pedido.fecha_limite_cotizaciones
+    # CMP-03 (disparador «Cuando se programe CMP-03», punto 3): «Comparar cotizaciones y generar orden» para el Agrónomo del pedido ya vencido y con alguna cotización «propuesta».
+    puede_generar = es_el_agronomo and _vencido_por_resolver(pedido, hoy) and any(c.estado_cotizacion == Cotizacion.Estado.PROPUESTA for c in recibidas)
+    orden = OrdenCompra.objects.en_alcance_de(actor).filter(pedido=pedido).first()  # D-30: solo se ofrece el enlace si quien mira puede abrir la orden
     invitados = []
     for invitacion in InvitacionPedido.objects.filter(pedido=pedido).select_related("proveedor").prefetch_related("enlaces").order_by("id"):
         enlace = max(invitacion.enlaces.all(), key=lambda e: e.pk, default=None)
@@ -494,6 +510,8 @@ def ficha_de_pedido(actor, pedido_id):
         por_resolver=_vencido_por_resolver(pedido, hoy),
         automatica=pedido.causa_cancelacion not in (None, Pedido.Causa.MANUAL),
         puede_cancelar=puede_cancelar,
+        orden=orden,
+        puede_generar=puede_generar,
     )
 
 
@@ -563,11 +581,13 @@ def resumir_cancelacion(actor, pedido_id, motivo):
     )
 
 
-def _cancelar(pedido_id, causa, motivo, actor):
+def _cancelar(pedido_id, causa, motivo, actor, hoy=None, aviso=None):
     """La función interna de la cancelación (CMP-CNL-PED paso 6), dentro de la transacción del llamador. Bloquea el pedido, verifica que siga «en
     cotización» (6a), lo pasa a «cancelado» con la fecha de cierre de hoy, el motivo y la causa, descarta las cotizaciones «propuesta», anula los enlaces
     vigentes, audita ``cancelacion_pedido`` y deja en ``on_commit`` el correo a cada invitado (sin el motivo). La manual audita a ``actor``; la automática
-    (causa distinta de ``manual``) audita como InfoPonia (``usuario=None``) y avisa en la campana según H21 (``actor`` es solo a quien no se avisa)."""
+    (causa distinta de ``manual``) audita como InfoPonia (``usuario=None``) y avisa en la campana según H21 (``actor`` es solo a quien no se avisa).
+    ``hoy`` (opcional) es la fecha de cierre: los pasos diarios pasan la suya para que ``--fecha`` simule el día (D-56 punto 4); sin ella, la de hoy. ``aviso`` (opcional)
+    reemplaza el texto de la notificación de una cancelación automática (el paso 62 usa el de D-87)."""
     pedido = Pedido.objects.select_for_update(no_key=True, of=("self",)).select_related("agronomo").get(pk=pedido_id)
     _exigir_en_cotizacion(pedido)
     propuestas = list(
@@ -575,7 +595,7 @@ def _cancelar(pedido_id, causa, motivo, actor):
     )
     anulados = enlaces.anular_enlaces_de_pedido(pedido)
     Cotizacion.objects.filter(pk__in=[c.pk for c in propuestas]).update(estado_cotizacion=Cotizacion.Estado.DESCARTADA)
-    hoy = stock.hoy()
+    hoy = hoy or stock.hoy()
     pedido.estado_pedido = Pedido.Estado.CANCELADO
     pedido.fecha_cierre_pedido = hoy
     pedido.motivo_cancelacion = motivo
@@ -605,8 +625,8 @@ def _cancelar(pedido_id, causa, motivo, actor):
         notificaciones.notificar_a_varios(
             avisos.destinatarios_por_destino(destinos, excluir=actor),
             f"Pedido {pedido} cancelado",
-            f"El pedido {pedido} de {agronomo.get_full_name() or agronomo.email} se canceló solo ({motivo}). "
-            "Se avisó por correo a los proveedores invitados.",
+            aviso
+            or f"El pedido {pedido} de {agronomo.get_full_name() or agronomo.email} se canceló solo ({motivo}). Se avisó por correo a los proveedores invitados.",
         )
     transaction.on_commit(lambda: enlaces.enviar_aviso_de_cancelacion(pedido.pk))
     return pedido
@@ -627,16 +647,17 @@ def cancelar_pedido(actor, pedido_id, motivo):
         return _cancelar(pedido_id, Pedido.Causa.MANUAL, motivo, actor)
 
 
-def cancelar_pedido_automaticamente(pedido, causa, *, actor=None):
+def cancelar_pedido_automaticamente(pedido, causa, *, actor=None, hoy=None, aviso=None):
     """Las cancelaciones automáticas de CMP-CNL-PED (regla «Cancelaciones automáticas»): sin flujo y sin actor humano. ``causa`` es una de las cuatro
     automáticas (otra es un error de uso: ``ValueError``); el motivo es su literal fijo (``MOTIVOS_DE_CANCELACION_AUTOMATICA``). ``actor`` es la cuenta que
     dio la baja o hizo el traspaso, solo para no avisarle. Se audita como InfoPonia. Devuelve el pedido cancelado o ``None`` si, releído con el bloqueo, ya no
-    estaba «en cotización» (la usan los pasos diarios de CMP-03). Corre dentro de la transacción del llamador si hay una."""
+    estaba «en cotización» (la usan los pasos diarios de CMP-03). Corre dentro de la transacción del llamador si hay una. ``hoy`` y ``aviso`` son opcionales
+    (ver ``_cancelar``): los pasos diarios pasan la fecha que reciben y, el 62, su texto."""
     if causa not in MOTIVOS_DE_CANCELACION_AUTOMATICA:
         raise ValueError(f"{causa!r} no es una causa de cancelación automática.")
     try:
         with transaction.atomic():
-            return _cancelar(pedido.pk, causa, MOTIVOS_DE_CANCELACION_AUTOMATICA[causa], actor)
+            return _cancelar(pedido.pk, causa, MOTIVOS_DE_CANCELACION_AUTOMATICA[causa], actor, hoy=hoy, aviso=aviso)
     except ErrorDeCompras as error:
         if error.codigo == "pedido_no_en_cotizacion":
             return None

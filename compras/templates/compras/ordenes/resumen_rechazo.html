@@ -1,0 +1,32 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen del rechazo (CMP-APR-ODC extensión 5a.3) antes de confirmar: el motivo, las cotizaciones que pasarán a «descartada» y los proveedores a los que se les avisará (sin el motivo ni los otros proveedores), que no
+cambia la cantidad en tránsito y que el pedido sigue «cerrado» (lo no comprado se resuelve con un pedido nuevo). Recibe «resumen» (``ResumenDeRechazo``). «Confirmar rechazo» rechaza (5a.4 y 5a.5); «Volver a corregir» (5a.4a)
+vuelve a la revisión con el motivo escrito, sin rechazar nada.{% endcomment %}
+{% block titulo %}Confirmar el rechazo de {{ resumen.orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá el rechazo de la orden {{ resumen.orden }}</h1></div>
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>Una orden rechazada no se reabre.</b> El pedido sigue cerrado: lo que falte comprar se resuelve con un pedido nuevo.</div></div>
+
+  <div class="stack">
+    <div class="card">
+      <dl class="dl two">
+        <dt>Motivo</dt><dd>{{ resumen.motivo }}</dd>
+        <dt>Cotizaciones que se descartan</dt><dd>{% for c in resumen.descartadas %}<span class="chip-fijo">{{ c.proveedor.nombre_para_mostrar }} · {{ c.monto_cotizacion|pesos }}</span>{% endfor %}</dd>
+        <dt>Se avisa por correo a</dt><dd>{% for p in resumen.proveedores %}<span class="chip-fijo">{{ p.nombre_para_mostrar }} · {{ p.email_proveedor }}</span>{% endfor %} <span class="muted sm">que su cotización no fue seleccionada, sin el motivo</span></dd>
+        <dt>Cantidad en tránsito</dt><dd>No cambia.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'compras:orden_resolver' resumen.orden.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="motivo" value="{{ resumen.motivo }}">
+    <div class="footbar">
+      <button class="btn btn-danger" type="submit" name="accion" value="confirmar_rechazo" data-enviando="Rechazando…">Confirmar rechazo</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a corregir</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -466,7 +466,7 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
    solo la escribirá `compras`. `compras` se enchufa a `inventario` por dos vías ya documentadas (`docs/api/extensiones_de_inventario.md`):
    el punto `registrar_impedimento_de_deshabilitacion` (orden de compra aprobada sin recibir, pedido en curso: los usan CMP-DSH-IIN, CMP-BAJ-INS y
    la baja del invernadero) y los servicios de stock (`docs/api/stock.md`) para la **recepción**.
-   **Hecho el 24/11/2026 en CMP-02b:** el código `pedido_en_curso` (un pedido «en cotización» con ese insumo en ese invernadero, con enlace al pedido). Falta `orden_de_compra_aprobada` (CMP-03) y el tránsito (CMP-03 y CMP-04).
+   **Hecho el 24/11/2026 en CMP-02b:** el código `pedido_en_curso` (un pedido «en cotización» con ese insumo en ese invernadero, con enlace al pedido). **Hecho el 24/11/2026 en CMP-03:** `orden_de_compra_aprobada` (una orden no terminada con una línea a ese insumo en ese invernadero, con enlace a su ficha) y el tránsito al aprobar (`stock.sumar_transito`). Falta el tránsito al recibir o cerrar con faltante (CMP-04; `stock.restar_transito` ya existe).
    INV-02 ya dejó conectado el punto: CMP-DSH-IIN, CMP-BAJ-INS y la baja del invernadero llaman a `registrar_impedimento_de_deshabilitacion` (`compras` solo registra su función). Su `cant_transito_insumo` ya cuenta en «bajo el mínimo» y se muestra en las existencias.
 2. **Recepción y faltante sin lote.** Por la regla 4 de 8.23 la recepción cancela primero el faltante sin lote y crea un lote nuevo por partida
    (y por fecha de vencimiento); hoy solo lo regulariza un recuento físico (`docs/modelo/inventario.md`, «Diferencias con el caso de uso»). Al
@@ -585,23 +585,23 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 1. **Hecho el 23/11/2026 en CMP-02a** (`tiene_pedidos_u_ordenes` y la tarjeta de pedidos de la ficha, `proveedores.pedidos_del_proveedor`); las órdenes, pagos y reclamos de la ficha se suman de CMP-03 a CMP-06. Texto original: **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
 2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
-3. **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
+3. **Hecho el 24/11/2026 en CMP-03** (`impedimentos_de_baja` con `orden_no_terminada` y la tarjeta «Órdenes de compra» de la ficha, `proveedores.ordenes_del_proveedor`). Texto original: **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
 4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).
 
 
 ## Cuando se programen COM-03b y COM-04 — nace con COM-03a (23/11/2026)
 1. **Calendario de la ficha con detalles finalizados.** Un período de un detalle finalizado que cae dentro de la ventana se muestra «Reservado» (los finalizados no tienen cantidad sin cubrir hasta D-64, punto 8). ~~COM-03b, los períodos posteriores a la rescisión~~ **Hecho en COM-03b (24/11/2026):** el calendario corta en `fecha_fin_detalle` y un período con la alerta «sin cobertura completa» activa dice «Sin cobertura completa · faltan N». **Queda para COM-04a:** la cantidad sin cubrir de un período de un detalle finalizado y que la pre-reserva (`comercial/servicios/pre_reserva.py`, `_periodos_a_pre_reservar` y `_pre_reservar_periodo`) retome esos períodos; revisar también `comercial/servicios/suministros.py`, `_filas_de_calendario`.
 
-## Cuando se programe CMP-03 (completa lo que CMP-02a dejó a medias) — nace con CMP-02a
+## ~~Cuando se programe CMP-03 (completa lo que CMP-02a dejó a medias)~~ (cerrado el 24/11/2026, CMP-03)
 
-1. **Regla 4c de CMP-RLZ-PED:** `pedidos.ya_pedido` cuenta hoy solo los pedidos «en cotización»; sumar los pedidos «cerrados» cuya orden de compra está «pendiente de aprobación» (regla 14 de 8.15), con el texto de la advertencia («su orden de compra está pendiente de aprobación»).
-2. **Inicio del Agrónomo:** `compras/servicios/inicio.py` trae «Insumos bajo el mínimo» y «Esperando cotizaciones»; CMP-03 suma «Pedidos por resolver» (con su lista y el botón «Resolver») y «Órdenes rechazadas»; CMP-04, «Por recibir».
-3. **Ficha del pedido** (`compras/templates/compras/pedidos/ficha.html`): hoy sin acciones. CMP-02b suma «Cancelar pedido» y «Reenviar invitación»; CMP-03, «Comparar cotizaciones y generar orden» y la orden que generó un pedido «cerrado» (regla 4 de CMP-CNS-PED).
-4. **El paso diario 60** pone «vencido» a los enlaces vigentes: la ficha ya muestra «vencido» un enlace vigente con la fecha límite pasada, así que el paso no cambia lo que se ve (`pedidos._estado_del_enlace`).
+1. **Hecho en CMP-03** (`ya_pedido` cuenta también los pedidos «cerrados» con la orden «pendiente de aprobación» y trae su `orden_id`; las pantallas dicen «su orden de compra está pendiente de aprobación»). Texto original: **Regla 4c de CMP-RLZ-PED:** `pedidos.ya_pedido` cuenta hoy solo los pedidos «en cotización»; sumar los pedidos «cerrados» cuya orden de compra está «pendiente de aprobación» (regla 14 de 8.15), con el texto de la advertencia («su orden de compra está pendiente de aprobación»).
+2. **Hecho en CMP-03** («Pedidos por resolver» con «Resolver», «Órdenes rechazadas» de los últimos 7 días y, para el Gerente, «Órdenes por aprobar»; «Por recibir» sigue siendo de CMP-04). Texto original: **Inicio del Agrónomo:** `compras/servicios/inicio.py` trae «Insumos bajo el mínimo» y «Esperando cotizaciones»; CMP-03 suma «Pedidos por resolver» (con su lista y el botón «Resolver») y «Órdenes rechazadas»; CMP-04, «Por recibir».
+3. **Hecho en CMP-03** («Comparar cotizaciones y generar orden» y el aviso con el enlace a la orden que generó el pedido, solo si quien mira puede abrirla). Texto original: **Ficha del pedido** (`compras/templates/compras/pedidos/ficha.html`): hoy sin acciones. CMP-02b suma «Cancelar pedido» y «Reenviar invitación»; CMP-03, «Comparar cotizaciones y generar orden» y la orden que generó un pedido «cerrado» (regla 4 de CMP-CNS-PED).
+4. **Hecho en CMP-03** (el paso 60 pone «vencido» a los enlaces vigentes de un pedido con cotizaciones). Texto original: **El paso diario 60** pone «vencido» a los enlaces vigentes: la ficha ya muestra «vencido» un enlace vigente con la fecha límite pasada, así que el paso no cambia lo que se ve (`pedidos._estado_del_enlace`).
 
 ## Nacidos en CMP-02b
 
-1. **Cuando CMP-03 genere la orden.** `cancelar_pedido_automaticamente(pedido, causa)` ya existe para los pasos 60 y 62 (causas `nadie_cotizo` y `sin_cotizaciones_elegibles`); devuelve `None` si el pedido ya no estaba en cotización, así que los pasos son idempotentes. Hay que completar el impedimento `orden_de_compra_aprobada` (puede usar `Impedimento.url`) y la parte «orden pendiente de aprobación» de la extensión 4c de CMP-RLZ-PED.
+1. **Hecho el 24/11/2026 en CMP-03** (el impedimento `orden_de_compra_aprobada` con su enlace y la parte «orden pendiente» de 4c; los pasos 60 y 62 usan `cancelar_pedido_automaticamente`, que ahora acepta `hoy` y `aviso`). Texto original: **Cuando CMP-03 genere la orden.** `cancelar_pedido_automaticamente(pedido, causa)` ya existe para los pasos 60 y 62 (causas `nadie_cotizo` y `sin_cotizaciones_elegibles`); devuelve `None` si el pedido ya no estaba en cotización, así que los pasos son idempotentes. Hay que completar el impedimento `orden_de_compra_aprobada` (puede usar `Impedimento.url`) y la parte «orden pendiente de aprobación» de la extensión 4c de CMP-RLZ-PED.
 2. **Cuando se toque la ventana de baja de cuentas de `core`.** Mostrar `Asignacion.cantidad` (hoy solo `texto` y `que_pasa`); CMP-02b y PRD-01 meten el número en el texto.
 
 
@@ -620,3 +620,12 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 ## Antes de las presentaciones — nace con USR-09a (24/11/2026)
 1. **Subir el HSTS de un día a un año.** `HSTS_SEGUNDOS` de `config/seguridad.py` vale 86400 (D-99). Si Render lleva días en https sin problemas, pasarlo a 31536000. Sin subdominios ni preload, salvo decisión nueva.
+
+## Nacidos en CMP-03 (24/11/2026)
+
+1. **Hecho en CMP-03:** el Contador (USR-11) consulta las órdenes en solo lectura (`en_alcance_de`, `_exigir_consulta`, menú «Compras» → «Órdenes», una sola pestaña, sin enlaces a pedidos ni proveedores). **Queda para CMP-05:** su entrada «Pagos a proveedores» y las marcas de pago pendiente.
+2. **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
+3. **Atajos de la lista de órdenes y marcas de la fila:** «Por recibir» y «Con reclamo sin emitir» (CMP-04), «Con pago pendiente» (CMP-05). Los atajos que hoy no existen se ignoran como un filtro mal formado.
+4. **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
+5. **Estados posteriores a la aprobación** de la orden («parcialmente recibida», «recibida», «recibida con faltante») y del detalle («completo», «cerrado con faltante») los aplica CMP-04; `OrdenCompra.NO_TERMINADAS` ya los incluye para los impedimentos.
+6. **`AlertaCompras`:** la crea CMP-04 junto con `ReclamoProveedor` (su FK); el archivo de la tarea CMP-04 debe listarla.

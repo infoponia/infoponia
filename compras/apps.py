@@ -5,7 +5,7 @@ from django.apps import AppConfig
 class ComprasConfig(AppConfig):
     """Registra la app `compras` (nivel 6 de D-37, D-87). Importa de `core`, `contabilidad`, `maestros` e `inventario`;
     **nunca** de `comercial` ni de `produccion` (A1: `compras` y `comercial` no se importan entre sí). En ``ready()``
-    registra la entrada «Compras» del menú del Gerente y del Agrónomo (``core.menu.registrar_entrada``) y la sección «Compras» del Inicio del
+    registra los pasos diarios 60 a 62 (CMP-03), la entrada «Compras» del menú del Gerente y del Agrónomo (``core.menu.registrar_entrada``) y la sección «Compras» del Inicio del
     Agrónomo (``core.extensiones.registrar_seccion_de_inicio``, CMP-02a). Cada tarea de la ronda «Compras 1» suma lo suyo."""
 
     default_auto_field = 'django.db.models.BigAutoField'
@@ -23,6 +23,8 @@ class ComprasConfig(AppConfig):
         # (la de «Proveedores» está a un clic). Lugar del NAV del prototipo: después de «Producción» (el Gerente) y de «Inventario» (el Agrónomo).
         registrar_entrada(("Compras", "compras:pedidos", "pkg"), (Usuario.Rol.GERENTE,), despues_de="Producción")
         registrar_entrada(("Compras", "compras:pedidos", "pkg"), (Usuario.Rol.AGRONOMO,), despues_de="Inventario")
+        # CMP-03 (D-87 punto 6): el Contador ve «Compras» solo con las órdenes, en solo lectura.
+        registrar_entrada(("Compras", "compras:ordenes", "pkg"), (Usuario.Rol.CONTADOR,))
         # CMP-02a: «Insumos bajo el mínimo» con «Pedir» y «Esperando cotizaciones» en el Inicio del Agrónomo (D-87 punto 5).
         extensiones.registrar_seccion_de_inicio(inicio.seccion_de_inicio)
 
@@ -39,3 +41,16 @@ class ComprasConfig(AppConfig):
             extensiones_de_maestros.registrar_aviso_de_traspaso(registrantes.aviso_de_traspaso)
         if registrantes.impedimento_de_deshabilitacion not in extensiones_de_inventario._IMPEDIMENTOS_DE_DESHABILITACION:
             extensiones_de_inventario.registrar_impedimento_de_deshabilitacion(registrantes.impedimento_de_deshabilitacion)
+
+        # CMP-03 (D-14 y D-42): lo que espera al Gerente (las órdenes por aprobar) cuenta en sus pendientes; la ventana de baja de su cuenta lo muestra.
+        from compras.servicios import ordenes as servicio_de_ordenes
+
+        extensiones.registrar_contador_de_pendientes(servicio_de_ordenes.pendientes_de_aprobacion)
+
+        # CMP-03 (D-87 punto 4, D-56): los pasos diarios 60, 61 y 62. ``registrar_paso_diario`` es idempotente con la misma función.
+        from compras import procesos
+        from core.procesos import registrar_paso_diario
+
+        registrar_paso_diario(procesos.CODIGO_VENCIDOS, "Pedidos vencidos", 60, procesos.paso_pedidos_vencidos)
+        registrar_paso_diario(procesos.CODIGO_RECORDATORIO, "Recordatorio de validez de cotizaciones", 61, procesos.paso_recordatorio_de_validez)
+        registrar_paso_diario(procesos.CODIGO_SIN_ELEGIBLE, "Pedidos sin cotización elegible", 62, procesos.paso_pedidos_sin_cotizacion_elegible)

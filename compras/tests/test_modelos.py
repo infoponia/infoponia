@@ -421,3 +421,198 @@ class PedidosRestriccionesTests(ConDatosDeInventario, TestCase):
         for clave in ("fecha_limite_cotizaciones", "monto_estimado", "detalles", "invitaciones", "monto_cotizacion", "lineas_cotizadas"):
             self.assertIn(clave, RegistroAuditoria.ETIQUETAS)
         self.assertEqual(RegistroAuditoria.VALORES_VISIBLES["rol"]["proveedor_enlace"], "Proveedor (mediante enlace)")
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-03, paso 1: OrdenCompra y DetalleOrdenCompra. Fuente: docs/modelo/compras.md («OrdenCompra», «DetalleOrdenCompra»), reglas 13, 16, 18, 23 y 24
+# de 8.16, D-89 (total guardado, unitario derivado) y D-87 punto 8 (acciones de auditoría).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.models import DetalleOrdenCompra, OrdenCompra  # noqa: E402
+from compras.precios import precio_unitario  # noqa: E402
+from compras.tests.fabricas import orden_de  # noqa: E402
+
+
+class OrdenesRestriccionesTests(ConDatosDeInventario, TestCase):
+    """Las restricciones de la base de las órdenes de compra y de sus detalles, y lo que se deriva (monto, R026, proveedor, alcance)."""
+
+    def setUp(self):
+        self.agronomo, self.invernadero = crear_agronomo_con_invernadero()
+        self.gerente = crear_gerente()
+        self.existencia = existencia(insumo(), self.invernadero, minimo=10, precio="12.50")
+        self.proveedor_a = proveedor(n=1)
+        self.proveedor_b = proveedor("Vivero Norte S. R. L.", n=2, email="vivero@norte.com")
+        self.pedido = armar_pedido(self.agronomo)
+        self.detalle = detalle_de_pedido(self.pedido, self.existencia, cantidad="20")
+        self.cotizacion = cotizacion_de(self.pedido, self.proveedor_a, [(self.detalle, "12", "120.00", 3)])
+        self.otra = cotizacion_de(self.pedido, self.proveedor_b, [(self.detalle, "8", "100.00", 5)])
+
+    def rechazo(self, crear, restriccion):
+        """Falla la prueba si la base no rechaza ``crear()`` con un ``IntegrityError`` que nombre ``restriccion``."""
+        with self.assertRaises(IntegrityError) as contexto:
+            with transaction.atomic():
+                crear()
+        self.assertIn(restriccion, str(contexto.exception))
+
+    def orden_cruda(self, pedido=None, **campos):
+        """Una ``OrdenCompra`` con ``campos`` pisados, sin pasar por la fábrica."""
+        datos = {"pedido": pedido or self.pedido, "fecha_emision": timezone.localdate()}
+        datos.update(campos)
+        return OrdenCompra.objects.create(**datos)
+
+    def otro_agronomo_con_orden(self):
+        """Un segundo Agrónomo con su invernadero, su pedido y su orden. Devuelve ``(agronomo, pedido, detalle_de_pedido, orden)``."""
+        agronomo, invernadero = crear_agronomo_con_invernadero(email="otro.agronomo@infoponia.com", nombre="Invernadero Sur")
+        ajena = existencia(insumo("Fertilizante"), invernadero, minimo=10, precio="5.00")
+        pedido = armar_pedido(agronomo)
+        detalle = detalle_de_pedido(pedido, ajena, cantidad="5")
+        orden = orden_de(pedido, [cotizacion_de(pedido, self.proveedor_a, [(detalle, "5", "25.00", 2)])])
+        return agronomo, pedido, detalle, orden
+
+    def test_regla_13_de_8_16_un_pedido_tiene_a_lo_sumo_una_orden(self):
+        """Regla 13 de 8.16: la base impide dos órdenes para el mismo pedido (``OneToOne``); se llega a ella con ``pedido.orden_compra``."""
+        orden = self.orden_cruda()
+        self.assertEqual(self.pedido.orden_compra, orden)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.orden_cruda()
+
+    def test_regla_orden_nace_pendiente_sin_gerente_ni_fecha_de_resolucion(self):
+        """CMP-GNR-ODC postcondición a: la orden nace «pendiente de aprobación», sin Gerente ni resolución; se muestra como «OC-0007»."""
+        orden = self.orden_cruda()
+        self.assertEqual(orden.estado_orden_compra, "pendiente_aprobacion")
+        self.assertTrue(orden.pendiente)
+        self.assertIsNone(orden.gerente)
+        self.assertIsNone(orden.fecha_resolucion)
+        self.assertEqual(str(orden), f"OC-{orden.pk:04d}")
+        self.assertEqual(str(OrdenCompra()), "OC-nueva")
+
+    def test_regla_orden_resuelta_si_y_solo_si_tiene_gerente_y_fecha_de_resolucion(self):
+        """CMP-APR-ODC regla «Orden resoluble» (R011): una orden tiene Gerente y fecha de resolución si y solo si está resuelta."""
+        hoy = timezone.localdate()
+        coherente = "orden_resolucion_coherente_con_estado"
+        self.rechazo(lambda: self.orden_cruda(estado_orden_compra="aprobada"), coherente)
+        self.rechazo(lambda: self.orden_cruda(estado_orden_compra="aprobada", gerente=self.gerente), coherente)
+        self.rechazo(lambda: self.orden_cruda(estado_orden_compra="aprobada", fecha_resolucion=hoy), coherente)
+        self.rechazo(lambda: self.orden_cruda(gerente=self.gerente, fecha_resolucion=hoy), coherente)
+        self.rechazo(lambda: self.orden_cruda(fecha_resolucion=hoy), coherente)
+        aprobada = self.orden_cruda(estado_orden_compra="aprobada", gerente=self.gerente, fecha_resolucion=hoy)
+        self.assertFalse(aprobada.pendiente)
+
+    def test_regla_orden_rechazada_si_y_solo_si_tiene_motivo(self):
+        """CMP-APR-ODC regla «Rechazo»: el motivo es obligatorio al rechazar y solo una orden rechazada lo tiene."""
+        hoy = timezone.localdate()
+        coherente = "orden_motivo_de_rechazo_coherente_con_estado"
+        resuelta = {"gerente": self.gerente, "fecha_resolucion": hoy}
+        self.rechazo(lambda: self.orden_cruda(estado_orden_compra="rechazada", **resuelta), coherente)
+        self.rechazo(lambda: self.orden_cruda(estado_orden_compra="aprobada", motivo_rechazo="No hay presupuesto", **resuelta), coherente)
+        self.rechazo(lambda: self.orden_cruda(motivo_rechazo="No hay presupuesto"), coherente)
+        rechazada = self.orden_cruda(estado_orden_compra="rechazada", motivo_rechazo="No hay presupuesto", **resuelta)
+        self.assertEqual(rechazada.motivo_rechazo, "No hay presupuesto")
+
+    def test_regla_24_de_8_16_el_estado_de_la_orden_es_de_lista_cerrada(self):
+        """Regla 24 de 8.16: seis estados (pendiente, aprobada, rechazada, parcialmente recibida, recibida, recibida con faltante)."""
+        self.rechazo(lambda: self.orden_cruda(estado_orden_compra="cancelada"), "orden_estado_valido")
+        self.assertEqual(
+            [valor for valor, _ in OrdenCompra.Estado.choices],
+            ["pendiente_aprobacion", "aprobada", "rechazada", "parcialmente_recibida", "recibida", "recibida_con_faltante"],
+        )
+
+    def test_regla_16_de_8_16_cada_linea_de_cotizacion_genera_un_solo_detalle_de_orden(self):
+        """Regla 16 de 8.16 y R023: el detalle copia cantidad y total de su línea; una línea no genera dos detalles."""
+        orden = orden_de(self.pedido, [self.cotizacion])
+        detalle = orden.detalles.get()
+        self.assertEqual(detalle.cantidad_detalle_orden, Decimal("12.000"))
+        self.assertEqual(detalle.total_linea, Decimal("120.00"))
+        self.assertEqual(detalle.estado_detalle_orden, "pendiente")
+        self.assertIsNone(detalle.fecha_entrega_esperada)
+        linea = self.cotizacion.lineas.get()
+        self.assertEqual(linea.detalle_orden, detalle)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                DetalleOrdenCompra.objects.create(orden=orden, detalle_cotizacion=linea, cantidad_detalle_orden="1", total_linea="1")
+
+    def test_regla_5_de_8_17_r026_y_el_proveedor_se_derivan_de_la_linea(self):
+        """Regla 5 de 8.17 (técnico): el detalle del pedido y el proveedor de un detalle de orden salen de su línea de cotización."""
+        detalle = orden_de(self.pedido, [self.cotizacion]).detalles.get()
+        self.assertEqual(detalle.detalle_pedido, self.detalle)
+        self.assertEqual(detalle.proveedor, self.proveedor_a)
+        self.assertEqual(str(detalle), str(self.detalle))
+
+    def test_regla_detalle_cantidad_y_total_son_mayores_que_cero(self):
+        """Modelo, «DetalleOrdenCompra»: cantidad y total de la línea mayores que cero."""
+        orden = self.orden_cruda()
+        linea = self.cotizacion.lineas.get()
+        for campos, restriccion in (
+            ({"cantidad_detalle_orden": "0", "total_linea": "10"}, "detalle_orden_cantidad_positiva"),
+            ({"cantidad_detalle_orden": "1", "total_linea": "0"}, "detalle_orden_total_positivo"),
+        ):
+            with self.subTest(restriccion=restriccion):
+                self.rechazo(lambda: DetalleOrdenCompra.objects.create(orden=orden, detalle_cotizacion=linea, **campos), restriccion)
+
+    def test_regla_detalle_estado_y_cierre_con_faltante_coherentes(self):
+        """Modelo, «DetalleOrdenCompra»: cerrado con faltante ⇔ motivo y fecha de cierre; el estado es de lista cerrada."""
+        detalle = orden_de(self.pedido, [self.cotizacion]).detalles.get()
+        coherente = "detalle_orden_faltante_coherente_con_estado"
+        hoy = timezone.localdate()
+        for campos in (
+            {"estado_detalle_orden": "cerrado_con_faltante"},
+            {"estado_detalle_orden": "cerrado_con_faltante", "motivo_cierre_faltante": "No llegó"},
+            {"estado_detalle_orden": "cerrado_con_faltante", "fecha_cierre_faltante": hoy},
+            {"motivo_cierre_faltante": "No llegó"},
+            {"fecha_cierre_faltante": hoy},
+        ):
+            with self.subTest(campos=campos):
+                self.rechazo(lambda: DetalleOrdenCompra.objects.filter(pk=detalle.pk).update(**campos), coherente)
+        self.rechazo(lambda: DetalleOrdenCompra.objects.filter(pk=detalle.pk).update(estado_detalle_orden="perdido"), "detalle_orden_estado_valido")
+        DetalleOrdenCompra.objects.filter(pk=detalle.pk).update(
+            estado_detalle_orden="cerrado_con_faltante", motivo_cierre_faltante="No llegó", fecha_cierre_faltante=hoy
+        )
+
+    def test_regla_18_de_8_16_el_monto_es_la_suma_de_los_totales_de_sus_detalles(self):
+        """Regla 18 de 8.16 y D-89 punto 5: monto = Σ total de línea; es derivado (propiedad y anotación), no una columna."""
+        orden = orden_de(self.pedido, [self.cotizacion, self.otra])
+        self.assertEqual(orden.monto_total, Decimal("220.00"))
+        self.assertEqual(OrdenCompra.objects.con_monto().get(pk=orden.pk).monto_orden, Decimal("220.00"))
+        vacia = self.orden_cruda(pedido=armar_pedido(self.agronomo))
+        self.assertEqual(vacia.monto_total, Decimal("0.00"))
+        self.assertEqual(OrdenCompra.objects.con_monto().get(pk=vacia.pk).monto_orden, Decimal("0.00"))
+        self.assertNotIn("monto_total", [campo.name for campo in OrdenCompra._meta.concrete_fields])
+
+    def test_d89_el_unitario_de_la_orden_es_derivado_con_cuatro_decimales(self):
+        """D-89 punto 1: el detalle de orden guarda el total; ``precio_unitario`` lo deriva con la cantidad de la orden (120 / 12 = 10,0000)."""
+        detalle = orden_de(self.pedido, [self.cotizacion]).detalles.get()
+        self.assertEqual(precio_unitario(detalle), Decimal("10.0000"))
+        self.assertNotIn("precio_unitario", [campo.name for campo in DetalleOrdenCompra._meta.concrete_fields])
+
+    def test_regla_las_ordenes_se_ven_segun_el_rol(self):
+        """CMP-CNS-ODC regla 1: el Agrónomo ve las órdenes con algún destino a su cargo; el Gerente, todas; nadie más."""
+        propia = orden_de(self.pedido, [self.cotizacion])
+        otro_agronomo, _, _, ajena = self.otro_agronomo_con_orden()
+        self.assertEqual(set(OrdenCompra.objects.en_alcance_de(self.agronomo)), {propia})
+        self.assertEqual(set(OrdenCompra.objects.en_alcance_de(otro_agronomo)), {ajena})
+        self.assertEqual(set(OrdenCompra.objects.en_alcance_de(self.gerente)), {propia, ajena})
+        sin_alcance = (
+            crear_capataz(),
+            crear_vendedor(),
+            crear_administrador(),
+            crear_agronomo(email="baja@infoponia.com", activo=False),
+            None,
+        )
+        for cuenta in sin_alcance:
+            with self.subTest(cuenta=cuenta):
+                self.assertEqual(list(OrdenCompra.objects.en_alcance_de(cuenta)), [])
+
+    def test_regla_el_agronomo_ve_la_orden_si_algun_destino_esta_a_su_cargo(self):
+        """CMP-CNS-ODC regla 1: una orden con destinos de dos Agrónomos la ven los dos (basta un destino a su cargo)."""
+        otro_agronomo, invernadero = crear_agronomo_con_invernadero(email="otro.agronomo@infoponia.com", nombre="Invernadero Sur")
+        segundo = detalle_de_pedido(self.pedido, existencia(insumo("Fertilizante"), invernadero, minimo=10, precio="5.00"), cantidad="5")
+        cotizacion = cotizacion_de(self.pedido, proveedor("Hortalizas S. A.", n=3, email="h@h.com"), [(segundo, "5", "25.00", 2)])
+        orden = orden_de(self.pedido, [self.otra, cotizacion])
+        self.assertEqual(set(OrdenCompra.objects.en_alcance_de(self.agronomo)), {orden})
+        self.assertEqual(set(OrdenCompra.objects.en_alcance_de(otro_agronomo)), {orden})
+
+    def test_regla_una_orden_con_dos_detalles_no_se_repite_en_el_alcance(self):
+        """El alcance del Agrónomo no duplica la orden aunque tenga varios detalles a su cargo."""
+        orden = orden_de(self.pedido, [self.cotizacion, self.otra])
+        self.assertEqual(list(OrdenCompra.objects.en_alcance_de(self.agronomo)), [orden])

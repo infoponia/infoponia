@@ -6,8 +6,49 @@ con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. T
   {% with i=datos.indicadores %}
   <div class="kpis">
     <a class="kpi{% if i.cantidad_bajo_el_minimo %} warn{% endif %}" href="{% url 'compras:pedido_nuevo' %}" style="text-decoration:none;color:inherit"><span class="k">Insumos bajo el mínimo</span><span class="v" data-kpi="bajo-el-minimo">{{ i.cantidad_bajo_el_minimo }}</span><span class="c">{% if i.cantidad_bajo_el_minimo %}conviene hacer un pedido{% else %}todos al día{% endif %}</span></a>
+    <a class="kpi{% if i.pedidos_por_resolver %} warn{% endif %}" href="{% url 'compras:pedidos' %}" style="text-decoration:none;color:inherit"><span class="k">Pedidos por resolver</span><span class="v" data-kpi="por-resolver">{{ i.pedidos_por_resolver|length }}</span><span class="c">{% if i.pedidos_por_resolver %}venció su fecha límite{% else %}ninguno vencido{% endif %}</span></a>
     <a class="kpi" href="{% url 'compras:pedidos' %}" style="text-decoration:none;color:inherit"><span class="k">Esperando cotizaciones</span><span class="v" data-kpi="esperando">{{ i.esperando_cotizaciones }}</span><span class="c">pedido{{ i.esperando_cotizaciones|pluralize }} abierto{{ i.esperando_cotizaciones|pluralize }}</span></a>
   </div>
+  {% if i.pedidos_por_resolver %}
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Pedidos que vencieron</b></div>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Pedido</th><th>Fecha límite</th><th class="right">Cotizaciones</th><th></th></tr></thead>
+        <tbody>
+        {% for f in i.pedidos_por_resolver %}
+        <tr>
+          <td><a class="prv-nombre" href="{% url 'compras:pedido_ficha' f.pedido.pk %}"><b>{{ f.pedido }}</b></a></td>
+          <td class="nowrap">{{ f.pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}</td>
+          <td class="right">{{ f.cotizaciones }}{% if not f.alcanzan %}<span class="sub2 warn-t">no alcanzan</span>{% endif %}</td>
+          <td class="right"><a class="btn btn-primary btn-sm" href="{% url 'compras:pedido_generar_orden' f.pedido.pk %}">Resolver<span class="sr"> el pedido {{ f.pedido }}</span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+  {% if i.ordenes_rechazadas %}
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Órdenes rechazadas</b><span class="muted sm">de los últimos días</span></div>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Orden</th><th>Pedido</th><th>Motivo</th><th></th></tr></thead>
+        <tbody>
+        {% for o in i.ordenes_rechazadas %}
+        <tr>
+          <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' o.pk %}"><b>{{ o }}</b></a><span class="sub2">{{ o.fecha_resolucion|date:"d/m/Y" }}</span></td>
+          <td>{{ o.pedido }}</td>
+          <td>{{ o.motivo_rechazo|truncatechars:90 }}</td>
+          <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'compras:orden_ficha' o.pk %}">Ver<span class="sr"> la orden {{ o }}</span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
   {% if i.bajo_el_minimo %}
   <div class="card seg" style="margin-top:16px">
     <div class="card-h"><b>Insumos bajo el mínimo</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:pedido_nuevo' %}">Nuevo pedido</a></div>

@@ -1,7 +1,8 @@
-{% comment %}Barra de pestañas de «Compras» (VIEWS.c_main del prototipo): «Pedidos» (CMP-02a) y «Proveedores» (CMP-01) para el Gerente y el Agrónomo; cada tarea de la ronda «Compras 1» suma la suya
-(Órdenes de compra, Por recibir, Reclamos, Pagos), según el rol. «activa» es «pedidos» o «proveedores» (sin dato, «proveedores»). Son enlaces: cada pestaña es una página y funciona sin
+{% comment %}Barra de pestañas de «Compras» (VIEWS.c_main del prototipo): «Pedidos» (CMP-02a), «Órdenes» (CMP-03) y «Proveedores» (CMP-01) para el Gerente y el Agrónomo; cada tarea de la ronda «Compras 1»
+suma la suya (Por recibir, Reclamos, Pagos), según el rol. «activa» es «pedidos», «ordenes» o «proveedores» (sin dato, «proveedores»). Son enlaces: cada pestaña es una página y funciona sin
 JavaScript.{% endcomment %}
 <div class="tabs" role="tablist" aria-label="Compras">
-  <a class="tab" role="tab" href="{% url 'compras:pedidos' %}" aria-selected="{% if activa == 'pedidos' %}true{% else %}false{% endif %}">Pedidos</a>
-  <a class="tab" role="tab" href="{% url 'compras:proveedores' %}" aria-selected="{% if activa == 'pedidos' %}false{% else %}true{% endif %}">Proveedores</a>
+  {% if user.rol != "contador" %}<a class="tab" role="tab" href="{% url 'compras:pedidos' %}" aria-selected="{% if activa == 'pedidos' %}true{% else %}false{% endif %}">Pedidos</a>{% endif %}
+  <a class="tab" role="tab" href="{% url 'compras:ordenes' %}" aria-selected="{% if activa == 'ordenes' %}true{% else %}false{% endif %}">Órdenes</a>
+  {% if user.rol != "contador" %}<a class="tab" role="tab" href="{% url 'compras:proveedores' %}" aria-selected="{% if activa == 'pedidos' or activa == 'ordenes' %}false{% else %}true{% endif %}">Proveedores</a>{% endif %}
 </div>

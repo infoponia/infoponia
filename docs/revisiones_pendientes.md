@@ -658,7 +658,7 @@ Los pasos están en «Verificación a mano» de `docs/tareas/usuarios/USR-09a-en
 
 ## COM-04b · Tarea COM-04b (cámara: asignación automática, vencimiento y merma en cámara)
 
-Los 16 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-04b-camara.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`maestros` 0011, `comercial` 0006, `core` 0036): `python manage.py migrate`; después `python manage.py runserver`. Necesitás un Gerente, un Agrónomo, un Capataz y un Vendedor del mismo invernadero «Norte». Crear a mano, en orden: la variedad «Lechuga Crespa» (postcosecha 7 días) y un sector de Maduración; el **Lote A** (100 plantas) y el **Lote B** (60 plantas) en Maduración; un cliente con correo y dirección (CUIT `20-12345678-6`); el Agrónomo planifica una cosecha **sin contrato** de 60 plantas del Lote B para hoy; el Vendedor registra la venta **V1** (envío, 100 plantas, dentro de 5 días); el Capataz concreta la cosecha de V1 cosechando 60 y declarando 40 perdidas («Plaga»): V1 queda «pendiente de decisión del cliente».
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-04b-camara.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`maestros` 0011, `comercial` 0006, `core` 0037): `python manage.py migrate`; después `python manage.py runserver`. Necesitás un Gerente, un Agrónomo, un Capataz y un Vendedor del mismo invernadero «Norte». Crear a mano, en orden: la variedad «Lechuga Crespa» (postcosecha 7 días) y un sector de Maduración; el **Lote A** (100 plantas) y el **Lote B** (60 plantas) en Maduración; un cliente con correo y dirección (CUIT `20-12345678-6`); el Agrónomo planifica una cosecha **sin contrato** de 60 plantas del Lote B para hoy; el Vendedor registra la venta **V1** (envío, 100 plantas, dentro de 5 días); el Capataz concreta la cosecha de V1 cosechando 60 y declarando 40 perdidas («Plaga»): V1 queda «pendiente de decisión del cliente».
 
 - [ ] 1. **Configuración (Gerente).** Grupo «Comercial»: «Aviso de vencimiento de cámara (días antes)» con 3 y «0 desactiva el aviso». `-1` da «El mínimo es 0.» y no guarda; `0` guarda; volver a 3; queda en «Auditoría». *Lo cubren `test_adm_mod_cfg` y `test_configuracion_vistas`.*
 - [ ] 2. **Asignación automática (Capataz).** Concretar la cosecha sin contrato (60 del Lote B): nace la partida «P-…» y sola se asigna a V1 (40). Vendedor: «Stock de cámara para CV-…»; Agrónomo: «Partida P-… asignada» (libre 20); Gerente › Auditoría: «Asignación de stock de cámara»; V1 vuelve a «abierto»/«abierta»; el cliente recibe el correo si está configurado. *Lo cubren `test_prod_asg_cam` y `test_post_k_*`.*
@@ -675,10 +675,45 @@ Los 16 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 13. **Sin JavaScript (opcional).** Repetir el paso 5: «Continuar» redibuja sin validar; «Ver resumen» y «Confirmar merma» funcionan como páginas.
 - [ ] 14. **Celular (opcional).** «Registrar merma en cámara» con el Capataz en un celular: una columna, botones de ancho completo, sin scroll horizontal.
 - [ ] 15. **Navegador real (obligatorio).** Los pasos 5 y 8 en el navegador, con JavaScript, enviando hasta el final. Si aparece «Prohibido (403)», «Verificación CSRF fallida» o un error en la consola (F12), avisar. Los desplegables no saltan y el botón se deshabilita con «Calculando…» y «Registrando…».
-- [ ] 16. **En Render, tras el despliegue.** En la «Shell», `python manage.py proceso_diario --listar` muestra 20, 25, 35 y 40; el log aplicó `maestros.0011`, `comercial.0006` y `core.0036`.
+- [ ] 16. **En Render, tras el despliegue.** En la «Shell», `python manage.py proceso_diario --listar` muestra 20, 25, 35 y 40; el log aplicó `maestros.0011`, `comercial.0006` y `core.0037`.
 
 ## CFG · Configuración del repositorio
 
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
    el check de `pruebas.yml` pase para poder mergear a main.
 
+## CMP-03 · Tarea CMP-03 (orden de compra y pasos diarios)
+
+Los 31 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-03-orden-de-compra-y-pasos-diarios.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay dos migraciones nuevas (`compras` 0003 y `core` 0036, esta última solo cambia los `choices`): `python manage.py migrate`. Tu `.env` necesita `DJANGO_DEBUG=1` (desde USR-09a). Para ver los correos sin enviarlos, correo en modo consola (`CORREO_CONSOLA=1` en `.env`).
+
+- [ ] 1. Ana, Inicio: «Pedidos por resolver» en 1 y «Pedidos que vencieron» con «Resolver».
+- [ ] 2. Ana, ficha de P1: «Comparar cotizaciones y generar orden»; el Gerente no lo ve y Beto da 403.
+- [ ] 3. «Comparar cotizaciones y generar orden»: «Por insumo» y «Por cotización», «el más bajo» marcado, nada elegido y «Revisar la orden» deshabilitado.
+- [ ] 4. Elegir A: lechuga cubierta, tomate «Falta 8», $ 330,00.
+- [ ] 5. Elegir B: todo cubierto, $ 430,00 y 2 proveedores.
+- [ ] 6. Elegir también C: aviso de 10 lechugas de más; «Quitar» en C vuelve a $ 430,00.
+- [ ] 7. «Revisar la orden»: resumen con $ 430,00 frente a $ 450,00 (−$ 20,00, −4,4 %), C descartada y las observaciones; no se generó nada.
+- [ ] 8. «Volver a corregir» conserva la elección y las observaciones.
+- [ ] 9. «Confirmar la orden»: OC pendiente de aprobación y un solo correo, a Hortalizas del Oeste (C), sin los otros proveedores.
+- [ ] 10. Ficha de P1 «Cerrado» con el enlace a la orden; `/compras/pedidos/<N>/generar-orden/` a mano vuelve a la ficha con el motivo.
+- [ ] 11. Gerente, Inicio: «Órdenes por aprobar» en 1, tabla con «Revisar» y notificación en la campana.
+- [ ] 12. Gerente, Compras → Órdenes: atajo «Por aprobar»; Ana no ve «Revisar».
+- [ ] 13. «Revisar y decidir»: pedido, Agrónoma, observaciones, líneas por proveedor, comprado frente a pedido y monto frente al estimado.
+- [ ] 14. «Aprobar orden»: resumen con las fechas de entrega (hoy + 3, + 4 y + 5), el tránsito 0 → 20 de cada insumo y «no registra ningún pago»; «Volver» no cambia nada.
+- [ ] 15. «Confirmar aprobación»: orden aprobada, tránsito 20 en Inventario y dos correos con solo las líneas de cada proveedor.
+- [ ] 16. Ana recibe el aviso de la aprobación; el Gerente no recibe el suyo.
+- [ ] 17. «Auditoría»: aprobación de orden y dos modificaciones de insumo con el tránsito antes y después.
+- [ ] 18. Con la orden aprobada: deshabilitar la Lechuga y dar de baja al proveedor A se rechazan nombrando la orden.
+- [ ] 19. Ficha del proveedor A con «Órdenes de compra» ($ 330,00); la de C, «Todavía no se le compró»; Beto no ve la orden.
+- [ ] 20. P2 (Lechuga 20, solo A, total $ 200) vencido; Ana genera su orden.
+- [ ] 21. Rechazar sin motivo: el error sale bajo el campo y nada cambia.
+- [ ] 22. Rechazar con motivo: resumen, correo a A sin el motivo, orden «Rechazada», «Órdenes rechazadas» en el Inicio de Ana y el tránsito sin cambio.
+- [ ] 23. `/compras/ordenes/<id>/resolver/` de una orden ya resuelta vuelve a la ficha con la decisión.
+- [ ] 24. P3 con la cotización vencida: «Validez vencida» sin botón «Elegir», «Ofertas insuficientes» y «Cancelar pedido».
+- [ ] 25. (Opcional) Orden con cotización vencida: sin «Aprobar orden» y con el motivo propuesto para rechazar.
+- [ ] 26. `proceso_diario --listar` muestra los pasos 60, 61 y 62.
+- [ ] 27. P4 sin cotizaciones: `--solo pedidos_vencidos` lo cancela («Nadie cotizó»); correrlo otra vez no repite nada.
+- [ ] 28. P5 (validez hasta mañana): aviso de vencimiento, recordatorio de validez (una vez) y, con `--fecha` pasado mañana, cancelación por «Sin cotizaciones elegibles».
+- [ ] 29. **Navegador real** (ventana privada): generar, aprobar y rechazar hasta el final sin 403 ni «Verificación CSRF fallida».
+- [ ] 30. Roles: Capataz 403 en Órdenes; Beto lista vacía y 403 en la ficha; Gerente 403 en generar; Ana 403 en resolver.
+- [ ] 31. (Opcional) Sin JavaScript y en un celular.

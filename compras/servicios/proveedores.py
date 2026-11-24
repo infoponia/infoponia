@@ -8,17 +8,18 @@
 # ``compras`` no importa de ``comercial`` ni de ``produccion`` (A1 de D-37).
 
 from collections import namedtuple
+from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
-from django.db.models import Case, F, Prefetch, Q, Value, When
+from django.db.models import Case, F, Prefetch, Q, Sum, Value, When
 from django.db.models.functions import Concat, Lower
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 
 from compras.errores import ErrorDeCompras
-from compras.models import Cotizacion, Pedido, Proveedor
+from compras.models import Cotizacion, DetalleOrdenCompra, OrdenCompra, Pedido, Proveedor
 from compras.servicios import enlaces
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
@@ -82,11 +83,46 @@ def pedidos_del_proveedor(actor, proveedor):
     return [PedidoDelProveedor(p, p.pk in cotizaron) for p in pedidos]
 
 
+# Una orden en la ficha del proveedor (regla 4 de CMP-CNS-PRV): la orden y el monto de las líneas de este proveedor.
+OrdenDelProveedor = namedtuple("OrdenDelProveedor", "orden monto")
+
+
+def ordenes_del_proveedor(actor, proveedor):
+    """Regla 4 de CMP-CNS-PRV (CMP-03): las órdenes de compra con líneas de ``proveedor``, de la más reciente a la más vieja, **según el alcance de quien mira** (el Agrónomo,
+    las que tienen algún destino a su cargo; el Gerente, todas), con el monto de las líneas de este proveedor. Dos consultas; no audita."""
+    _exigir_lectura(actor)
+    ordenes = list(
+        OrdenCompra.objects.en_alcance_de(actor)
+        .filter(detalles__detalle_cotizacion__cotizacion__proveedor=proveedor)
+        .distinct()
+        .order_by("-fecha_emision", "-id")
+    )
+    montos = {
+        fila["orden_id"]: fila["monto"]
+        for fila in DetalleOrdenCompra.objects.filter(orden__in=ordenes, detalle_cotizacion__cotizacion__proveedor=proveedor)
+        .values("orden_id")
+        .annotate(monto=Sum("total_linea"))
+    }
+    return [OrdenDelProveedor(o, montos.get(o.pk, Decimal("0.00"))) for o in ordenes]
+
+
 def impedimentos_de_baja(proveedor):
-    """Precondiciones c y d de CMP-BAJ-PRV: la lista de ``Impedimento(codigo, texto, como_resolver)`` que impiden la baja. Hoy vacía: CMP-03
-    suma ``orden_no_terminada`` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas) y CMP-05 ``pago_pendiente``.
-    Un pedido «en cotización» donde está invitado no es un impedimento (regla 5)."""
-    return []
+    """Precondiciones c y d de CMP-BAJ-PRV: la lista de ``Impedimento(codigo, texto, como_resolver)`` que impiden la baja. Hoy: ``orden_no_terminada`` (CMP-03, H22), una
+    por cada orden pendiente de aprobación, aprobada o parcialmente recibida con una línea de una cotización de este proveedor; CMP-05 suma ``pago_pendiente``. Un
+    pedido «en cotización» donde está invitado no es un impedimento (regla 5). Una sola consulta; no confundir con el ``orden_de_compra_aprobada`` del insumo."""
+    sin_terminar = (
+        OrdenCompra.objects.filter(estado_orden_compra__in=OrdenCompra.NO_TERMINADAS, detalles__detalle_cotizacion__cotizacion__proveedor=proveedor)
+        .distinct()
+        .order_by("id")
+    )
+    return [
+        Impedimento(
+            "orden_no_terminada",
+            f"Tiene la orden de compra {orden} sin terminar ({orden.get_estado_orden_compra_display().lower()}).",
+            "Esperá a que se rechace o a recibir o cerrar con faltante la mercadería.",
+        )
+        for orden in sin_terminar
+    ]
 
 
 def _error(mensaje, codigo):

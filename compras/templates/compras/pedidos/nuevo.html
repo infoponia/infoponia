@@ -52,7 +52,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
             {% if f.existencia %}<span class="muted sm">En stock {{ f.existencia.libre|cant:f.iin.insumo.unidad_medida_insumo }} · en camino {{ f.existencia.transito|num:f.iin.insumo.unidad_medida_insumo }} · mínimo {{ f.existencia.minimo|num:f.iin.insumo.unidad_medida_insumo }}{% if f.existencia.bajo_minimo %} · <b class="warn-t">bajo el mínimo</b>{% endif %}</span>{% endif %}
           </div>
           {% for e in f.errores.insumo %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
-          {% if f.ya_pedido %}<div class="hint warn-t">Ya figura en el pedido P-{{ f.ya_pedido.pedido_id|stringformat:"04d" }}: {{ f.ya_pedido.cantidad|cant:f.iin.insumo.unidad_medida_insumo }}, con cotizaciones hasta el {{ f.ya_pedido.fecha_limite|date:"d/m/Y" }}. Podés pedirlo igual.</div>{% endif %}
+          {% if f.ya_pedido %}<div class="hint warn-t">Ya figura en el pedido P-{{ f.ya_pedido.pedido_id|stringformat:"04d" }}: {{ f.ya_pedido.cantidad|cant:f.iin.insumo.unidad_medida_insumo }}, {% if f.ya_pedido.orden_id %}su orden de compra está pendiente de aprobación{% else %}con cotizaciones hasta el {{ f.ya_pedido.fecha_limite|date:"d/m/Y" }}{% endif %}. Podés pedirlo igual.</div>{% endif %}
           <div class="fld ped-cantidad">
             <label for="cantidad-{{ f.indice }}">Cantidad{% if f.iin %} ({{ f.iin.insumo.get_unidad_medida_insumo_display }}){% endif %}</label>
             <div class="ped-cantidad-fila">

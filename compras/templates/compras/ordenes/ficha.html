@@ -1,0 +1,60 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Ficha de la orden de compra (CMP-CNS-ODC reglas 4, 5 y 8; ``VIEWS.c_odc`` del prototipo): el pedido de origen y su Agrónomo, el monto frente al estimado, el estado; si se resolvió, el Gerente, la fecha y, si
+se rechazó, el motivo; y las líneas por proveedor e invernadero de destino con lo pedido, lo recibido y lo que falta, el precio, la entrega esperada (con los días de atraso) y el estado de cada una.
+Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si ``"resolver" in ficha.acciones`` (D-30). Las recepciones, los pagos y los reclamos los suman CMP-04, CMP-05 y CMP-06.{% endcomment %}
+{% block titulo %}Orden {{ orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <a class="btn btn-text" href="{% url 'compras:ordenes' %}">{% icono "back" 14 %} Órdenes</a>
+  <div class="page-h">
+    <h1>Orden {{ orden }}</h1>
+    <span class="status-badge {% if orden.estado_orden_compra == 'pendiente_aprobacion' %}status-warn{% elif orden.estado_orden_compra == 'rechazada' %}status-danger{% elif orden.estado_orden_compra == 'aprobada' %}status-info{% else %}status-ok{% endif %}">{{ orden.get_estado_orden_compra_display }}</span>
+    {% if ficha.lineas_atrasadas %}<span class="status-badge status-warn">{{ ficha.lineas_atrasadas }} línea{{ ficha.lineas_atrasadas|pluralize }} atrasada{{ ficha.lineas_atrasadas|pluralize }}</span>{% endif %}
+    {% if "resolver" in ficha.acciones %}<span class="spacer"></span><a class="btn btn-primary" href="{% url 'compras:orden_resolver' orden.pk %}">Revisar y decidir</a>{% endif %}
+  </div>
+
+  {% if orden.estado_orden_compra == "rechazada" %}
+  <div class="alert alert-danger" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>Motivo del rechazo:</b> {{ orden.motivo_rechazo }}</div></div>
+  {% elif orden.estado_orden_compra == "pendiente_aprobacion" %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div>Esta orden espera la decisión del Gerente.{% if es_gerente %} Revisala y decidí si la aprobás o la rechazás.{% endif %}</div></div>
+  {% endif %}
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">Datos</div>
+      <dl class="dl two">
+        <dt>Pedido de origen</dt><dd>{% if es_contador %}<b>{{ ficha.pedido }}</b>{% else %}<a class="prv-nombre" href="{% url 'compras:pedido_ficha' ficha.pedido.pk %}"><b>{{ ficha.pedido }}</b></a>{% endif %} <span class="muted">de {{ ficha.agronomo.get_full_name|default:ficha.agronomo.email }}</span></dd>
+        <dt>Emitida el</dt><dd>{{ orden.fecha_emision|date:"d/m/Y" }}</dd>
+        <dt>Monto de la orden</dt><dd><b>{{ ficha.monto_total|pesos }}</b> <span class="muted">estimado del pedido: {{ ficha.monto_estimado|pesos }} ({% if ficha.diferencia > 0 %}+{% endif %}{{ ficha.diferencia|pesos }}, {% if ficha.diferencia > 0 %}+{% endif %}{{ ficha.diferencia_porcentaje|floatformat:1 }} %)</span></dd>
+        {% if ficha.gerente %}<dt>{% if orden.estado_orden_compra == "rechazada" %}Rechazada{% else %}Aprobada{% endif %} por</dt><dd>{{ ficha.gerente.get_full_name|default:ficha.gerente.email }} · {{ orden.fecha_resolucion|date:"d/m/Y" }}</dd>{% endif %}
+        {% if orden.observaciones %}<dt>Observaciones del Agrónomo</dt><dd>{{ orden.observaciones }}</dd>{% endif %}
+      </dl>
+    </div>
+
+    {% for g in ficha.grupos %}
+    <div class="card seg">
+      <div class="card-h"><b>{{ g.proveedor.nombre_para_mostrar }}</b><span class="muted sm">entrega en {{ g.invernadero.nombre_invernadero }}</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th class="right">Pedida</th><th class="right">Recibida</th><th class="right">Falta</th><th class="right">Total de la línea</th><th>Entrega esperada</th><th>Estado</th></tr></thead>
+          <tbody>
+          {% for l in g.lineas %}
+          <tr>
+            <td>{{ l.insumo.nombre_insumo }}</td>
+            <td class="right nowrap mono">{{ l.cantidad|cant:l.insumo.unidad_medida_insumo }}</td>
+            <td class="right nowrap mono">{{ l.recibida|num:l.insumo.unidad_medida_insumo }}</td>
+            <td class="right nowrap mono">{% if l.estado == "pendiente" %}{{ l.pendiente|num:l.insumo.unidad_medida_insumo }}{% else %}—{% endif %}</td>
+            <td class="right nowrap mono">{{ l.total|pesos }}<span class="sub2">{{ l.unitario|pesos }} c/u</span></td>
+            <td class="nowrap">{% if l.entrega %}{{ l.entrega|date:"d/m/Y" }}{% if l.atraso_dias %}<span class="sub2 warn-t">{{ l.atraso_dias }} día{{ l.atraso_dias|pluralize }} de atraso</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td><span class="status-badge {% if l.estado == 'completo' %}status-ok{% elif l.estado == 'cerrado_con_faltante' %}status-danger{% else %}status-neutral{% endif %}">{{ l.detalle.get_estado_detalle_orden_display }}</span>{% if l.motivo_cierre %}<span class="sub2">{{ l.motivo_cierre }}</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

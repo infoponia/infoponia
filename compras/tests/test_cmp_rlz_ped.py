@@ -459,3 +459,81 @@ class RegistroDelPedidoTests(PedidoBase):
         en_sur = existencia(self.lechuga.insumo, segundo, minimo=10, precio="11.00")
         pedido = self.registrar(detalles=[(self.lechuga.pk, "5"), (en_sur.pk, "6")])
         self.assertEqual({d.insumo_invernadero.invernadero_id for d in pedido.detalles.all()}, {self.invernadero.pk, segundo.pk})
+
+from django.db import connection  # noqa: E402
+from django.test.utils import CaptureQueriesContext  # noqa: E402
+
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-03, paso 4: la parte de la extensión 4c que dejó CMP-02a (disparador «Cuando se programe CMP-03», punto 1; «Nacidos en CMP-02b», punto 1). ``ya_pedido``
+# cuenta también los pedidos «cerrados» cuya orden de compra está «pendiente de aprobación» (regla 14 de 8.15). El ``YaPedido`` suma ``orden_id`` (el de la orden
+# pendiente; ``None`` si el pedido sigue «en cotización») y, para la orden, ``fecha_limite`` queda en ``None``: la advertencia dice «su orden de compra está
+# pendiente de aprobación» en lugar de la fecha límite (el texto en pantalla lo prueba el paso 6).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.tests.fabricas import cotizacion_de, orden_de  # noqa: E402
+
+
+class YaPedidoConOrdenPendienteTests(ConDatosDeInventario, TestCase):
+    """Extensión 4c: «en otro pedido “en cotización”, o en un pedido “cerrado” cuya orden de compra está “pendiente de aprobación”»."""
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.agronomo, self.invernadero = crear_agronomo_con_invernadero("Norte")
+        self.lechuga = existencia(insumo("Lechuga", unidad="unidad"), self.invernadero, minimo=20, precio="12.50")
+        self.prv = proveedor("Semillas del Sur S. A.", n=1)
+
+    def pedido_con_orden(self, estado="pendiente_aprobacion", cantidad="7"):
+        """Un pedido de la lechuga con su orden en ``estado`` (el pedido queda «cerrado»). Devuelve ``(pedido, orden)``."""
+        pedido = armar_pedido(self.agronomo)
+        detalle = detalle_de_pedido(pedido, self.lechuga, cantidad=cantidad)
+        orden = orden_de(
+            pedido, [cotizacion_de(pedido, self.prv, [(detalle, cantidad, "70.00", 2)])], estado=estado, gerente=self.gerente,
+            motivo="No hay presupuesto." if estado == "rechazada" else "",
+        )
+        return pedido, orden
+
+    def test_ext_4c_un_pedido_cerrado_con_orden_pendiente_cuenta_como_ya_pedido(self):
+        """Extensión 4c: informa el pedido, su cantidad y que su orden está pendiente de aprobación (``orden_id``; sin fecha límite)."""
+        pedido, orden = self.pedido_con_orden()
+        ya = pedidos.ya_pedido([self.lechuga.pk])[self.lechuga.pk]
+        self.assertEqual((ya.pedido_id, ya.cantidad, ya.orden_id, ya.fecha_limite), (pedido.pk, Decimal("7"), orden.pk, None))
+
+    def test_ext_4c_un_pedido_en_cotizacion_sigue_sin_orden(self):
+        """Extensión 4c: el «en cotización» conserva su fecha límite y no trae orden."""
+        previo = armar_pedido(self.agronomo)
+        detalle_de_pedido(previo, self.lechuga, cantidad="7")
+        ya = pedidos.ya_pedido([self.lechuga.pk])[self.lechuga.pk]
+        self.assertEqual((ya.pedido_id, ya.orden_id, ya.fecha_limite), (previo.pk, None, previo.fecha_limite_cotizaciones))
+
+    def test_ext_4c_una_orden_aprobada_o_rechazada_ya_no_cuenta(self):
+        """Extensión 4c: solo la orden «pendiente de aprobación»; una aprobada o rechazada ya está resuelta (la aprobada, en el tránsito)."""
+        for estado in ("aprobada", "rechazada"):
+            self.pedido_con_orden(estado)
+        self.assertEqual(pedidos.ya_pedido([self.lechuga.pk]), {})
+
+    def test_ext_4c_entre_varios_gana_el_pedido_mas_reciente(self):
+        """Extensión 4c: el más reciente de los que cuentan, sea «en cotización» o con orden pendiente."""
+        self.pedido_con_orden()
+        reciente = armar_pedido(self.agronomo)
+        detalle_de_pedido(reciente, self.lechuga, cantidad="3")
+        self.assertEqual(pedidos.ya_pedido([self.lechuga.pk])[self.lechuga.pk].pedido_id, reciente.pk)
+        _, mas_reciente = self.pedido_con_orden(cantidad="9")
+        self.assertEqual(pedidos.ya_pedido([self.lechuga.pk])[self.lechuga.pk].orden_id, mas_reciente.pk)
+
+    def test_ext_4c_la_lista_de_insumos_bajo_el_minimo_marca_el_que_tiene_orden_pendiente(self):
+        """Paso 2 y extensión 4c: ``insumos_bajo_el_minimo`` trae el ``ya_pedido`` con su orden."""
+        _, orden = self.pedido_con_orden()
+        (fila,) = [f for f in pedidos.insumos_bajo_el_minimo(self.agronomo) if f.iin.pk == self.lechuga.pk]
+        self.assertEqual(fila.ya_pedido.orden_id, orden.pk)
+
+    def test_ext_4c_una_sola_consulta_para_todos_los_insumos(self):
+        """``ya_pedido`` hace la misma cantidad de consultas para 1 o para varios insumos."""
+        self.pedido_con_orden()
+        otra = existencia(insumo("Tomate", unidad="unidad"), self.invernadero, minimo=20, precio="10.00")
+        with CaptureQueriesContext(connection) as con_uno:
+            pedidos.ya_pedido([self.lechuga.pk])
+        with CaptureQueriesContext(connection) as con_dos:
+            pedidos.ya_pedido([self.lechuga.pk, otra.pk])
+        self.assertEqual(len(con_dos), len(con_uno))
