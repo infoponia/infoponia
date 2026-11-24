@@ -3,6 +3,11 @@
 from django.db import migrations, models
 
 
+# Valor inicial del parámetro nuevo (COM-04b, MD-134). No se carga con una operación de datos: el ``default`` del AddField
+# ya lo escribe en la fila única que creó la 0007. Está acá para que una prueba lo compare con el ``default`` del modelo.
+VALORES_INICIALES_CONFIGURACION = {"dias_aviso_vencimiento_camara": 3}
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
