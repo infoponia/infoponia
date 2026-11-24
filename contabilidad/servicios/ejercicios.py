@@ -1,17 +1,23 @@
 # Ejercicios contables (CON-ABR-EJE, D-84 puntos 2, 3, 5 y 10): apertura automática (paso diario 5 y autorrecuperación), primer ejercicio,
-# lecturas y elección del ejercicio donde va un asiento. El cierre manual es CON-03a y no está acá.
+# lecturas, elección del ejercicio donde va un asiento y el cierre manual (CON-CRR-EJE, CON-03a).
 # Bloqueos (docs/patrones/asientos.md, sección 2): la apertura bloquea la fila del abierto y la del en cierre, en orden de `id`, y nada más; el
 # primer ejercicio no tiene nada que bloquear y lo respalda la restricción única de la base (el perdedor atrapa el `IntegrityError` y relee).
+# El cierre bloquea SOLO la fila del ejercicio que cierra (FOR NO KEY UPDATE) y no bloquea nada después: así no cruza el orden de nadie.
 import datetime
 from collections import namedtuple
+from decimal import Decimal
 
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Q, Sum
+from django.http import Http404
 from django.utils import timezone
 
+from contabilidad.constantes import DEBE, HABER
 from contabilidad.errores import ErrorContable
-from contabilidad.models import EjercicioContable
+from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
 from contabilidad.servicios import responsables
-from core.models import RegistroAuditoria, referencia  # noqa: F401 - `referencia` lo reusan los servicios hermanos
+from core.models import RegistroAuditoria, referencia, rol_de
 from core.procesos import ResumenDePaso
 
 Estado = EjercicioContable.Estado
@@ -108,6 +114,21 @@ def ejercicio_para(fecha, *, automatico, hoy=None):
 def _numero_de(ejercicio):
     """Posición del ejercicio por fecha de inicio («Ejercicio 1»): para los textos de los avisos."""
     return EjercicioContable.objects.filter(fecha_inicio_ejercicio__lte=ejercicio.fecha_inicio_ejercicio).count()
+
+
+def numero_de_ejercicio(ejercicio):
+    """El «N.º» de un ejercicio (su posición por fecha de inicio) para las pantallas y los avisos; ver `ejercicios_numerados` para una lista."""
+    return _numero_de(ejercicio)
+
+
+# Un ejercicio con su número («Ejercicio 1») y la cantidad de asientos, para la lista de ejercicios y el selector del libro.
+EjercicioNumerado = namedtuple("EjercicioNumerado", "numero ejercicio cantidad_de_asientos")
+
+
+def ejercicios_numerados():
+    """Todos los ejercicios, del más viejo al más nuevo, con su número (posición por fecha de inicio) y su cantidad de asientos: una sola consulta."""
+    lista = EjercicioContable.objects.select_related("contador").annotate(cantidad_de_asientos=Count("asientos")).order_by("fecha_inicio_ejercicio", "id")
+    return [EjercicioNumerado(numero, ejercicio, ejercicio.cantidad_de_asientos) for numero, ejercicio in enumerate(lista, start=1)]
 
 
 def _crear(inicio, origen):
@@ -235,6 +256,64 @@ def crear_primer_ejercicio(fecha_inicio, hoy=None):
                 return _crear(fecha_inicio, "puesta en marcha")
         except IntegrityError:
             return existente()  # otra operación lo creó a la vez
+
+
+# --- Cierre manual (CON-CRR-EJE) ---------------------------------------------------------------------------------------------------------------------
+
+# Resumen que la pantalla muestra antes de confirmar el cierre (regla 4): el ejercicio (con su rango) y lo que tiene asentado.
+ResumenDeCierre = namedtuple("ResumenDeCierre", "ejercicio cantidad_de_asientos total_debe total_haber")
+
+
+def resumen_para_cierre(ejercicio_id):
+    """El resumen del ejercicio para el paso previo al cierre (regla 4 de CON-CRR-EJE): rango, cantidad de asientos y total del Debe y del Haber.
+    Solo lectura: no bloquea ni audita; las sumas son una consulta agregada y no una por asiento. Un id inexistente es 404."""
+    try:
+        ejercicio = EjercicioContable.objects.get(pk=ejercicio_id)
+    except EjercicioContable.DoesNotExist:
+        raise Http404("No existe ese ejercicio.") from None
+    sumas = MovimientoContable.objects.filter(asiento__ejercicio_id=ejercicio_id).aggregate(
+        debe=Sum("importe_movimiento", filter=Q(tipo_movimiento=DEBE)),
+        haber=Sum("importe_movimiento", filter=Q(tipo_movimiento=HABER)),
+    )
+    cantidad = AsientoContable.objects.filter(ejercicio_id=ejercicio_id).count()
+    cero = Decimal("0.00")
+    return ResumenDeCierre(ejercicio, cantidad, sumas["debe"] or cero, sumas["haber"] or cero)
+
+
+def cerrar_ejercicio(actor, ejercicio_id):
+    """CON-CRR-EJE: cierra de forma definitiva un ejercicio «en cierre» y lo devuelve (docs/api/asientos.md, «Escritura»).
+
+    Orden: (1) permisos (`responsables.puede_registrar_asientos`: el Contador activo o, sin Contador activo, el Gerente; si no, `PermissionDenied`);
+    (2) bloquea el ejercicio (`FOR NO KEY UPDATE`) y lo relee: si ya no está «en cierre» (otro lo cerró, o la apertura lo cerró sola, C1) lanza
+    `ErrorContable` `ejercicio_no_esta_en_cierre`; (3) vuelve a verificar que el actor siga siendo quien cierra (pudo dejar de serlo mientras esperaba);
+    (4) pasa a «cerrado», asocia al Contador si es él (R010; si es el Gerente queda vacío) y audita `modificacion_ejercicio_contable`.
+    No genera asientos de cierre ni refundición (regla 3) y no tiene verificaciones que lo bloqueen (regla 4). Lo único que bloquea es esa fila,
+    y nada después: no cruza el orden de bloqueos de `docs/patrones/asientos.md`, sección 2."""
+    if not responsables.puede_registrar_asientos(actor):
+        raise PermissionDenied("Solo el Contador, o el Gerente si no hay un Contador activo, cierra un ejercicio.")
+    with transaction.atomic():
+        try:
+            ejercicio = EjercicioContable.objects.select_for_update(no_key=True).get(pk=ejercicio_id)
+        except EjercicioContable.DoesNotExist:
+            raise Http404("No existe ese ejercicio.") from None
+        if ejercicio.estado_ejercicio != Estado.EN_CIERRE:
+            raise ErrorContable(
+                "ejercicio_no_esta_en_cierre",
+                "Ese ejercicio ya no está en cierre (alguien lo cerró mientras tanto, o todavía no terminó). Actualizá la pantalla.",
+            )
+        if not responsables.puede_registrar_asientos(actor):  # revalida después de bloquear (orden del cierre, punto 3)
+            raise PermissionDenied("Ya no sos quien cierra los ejercicios.")
+        rol = rol_de(actor)
+        cambios = {"estado_ejercicio": {"antes": Estado.EN_CIERRE, "despues": Estado.CERRADO}}
+        ejercicio.estado_ejercicio = Estado.CERRADO
+        if rol == "contador":  # R010: el Contador que lo cerró; si lo cerró el Gerente, queda vacío y la persona está en la auditoría
+            ejercicio.contador_id = actor.pk
+            cambios["contador"] = {"antes": None, "despues": referencia(actor)}
+        ejercicio.save(update_fields=["estado_ejercicio", "contador"])
+        RegistroAuditoria.objects.registrar(
+            actor, Accion.MODIFICACION_EJERCICIO_CONTABLE, [ejercicio], {"cambios": cambios, "datos": {"cerrado_por": rol}}
+        )
+    return ejercicio
 
 
 # --- Paso diario 5 -----------------------------------------------------------------------------------------------------------------------------------

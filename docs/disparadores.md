@@ -566,11 +566,15 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 ## Cuando se programe CON-03a — nace con el lote 1 de Contabilidad
 
-1. La entrada del menú «Contabilidad» y la alerta del «ejercicio en cierre» en el Panel del Contador y del Gerente (sin Contador, al Gerente).
+1. ~~La entrada del menú «Contabilidad» y la alerta del «ejercicio en cierre» en el Panel del Contador y del Gerente (sin Contador, al Gerente).~~ **Cumplido en CON-03a (24/11/2026):** la entrada se registra desde `contabilidad/apps.py` (`registrar_entrada`) y la alerta es una sección del Inicio (`registrar_seccion_de_inicio`). **La alerta la ve el responsable contable: el Contador activo y, solo si no hay Contador activo, el Gerente** (el Gerente con un Contador activo no la ve).
+
+## Cuando se programe CON-03b — nace con CON-03a
+
+1. Las acciones de la ficha («Contraasentar», solo si el asiento puede anularse y su ejercicio no está cerrado) y de la lista («Registrar asiento») se agregan a `contabilidad/templates/contabilidad/asiento.html` y `libro.html` con `responsables.puede_registrar_asientos`; hoy están ocultas para todos (D-30). La validación de la fecha de un asiento manual o de un contraasiento usa `ejercicios.ejercicio_para(..., automatico=False)` (D-102 punto 3).
 
 ## Cuando una app tenga un origen de asiento con pantalla propia — nace con el lote 1 de Contabilidad
 
-1. Registrar su `registrar_enlace_de_origen(tipo, funcion)` en `ready()` (punto de extensión de `contabilidad/extensiones.py`, creado por CON-03a),
+1. Registrar su `registrar_enlace_de_origen(tipo, funcion)` en `ready()` (punto de extensión de `contabilidad/extensiones.py`, creado por CON-03a el 24/11/2026; solo falta registrar los enlaces),
    para que el libro de gestión enlace el asiento con su documento. Compras: CMP-04 (recepción), CMP-05 (pago), CMP-06 (corrección).
 
 ## Cuando se programe COM-04c o CMP-02a (lo que llegue primero) — nace con el lote 2 de Compras

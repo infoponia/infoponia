@@ -1,0 +1,2 @@
+{% comment %}Insignias de un asiento (``asiBadges`` del prototipo): el tipo, que se deduce (regla 15 de 8.20: automático, manual o contraasiento), y «Anulado» si tiene contraasiento. Recibe asiento y anulado.{% endcomment %}
+{% if asiento.tipo == 'automatico' %}<span class="status-badge status-info">Automático</span>{% elif asiento.tipo == 'contraasiento' %}<span class="status-badge status-warn">Contraasiento</span>{% else %}<span class="status-badge status-neutral">Manual</span>{% endif %}{% if anulado %} <span class="status-badge status-danger">Anulado</span>{% endif %}

@@ -24,8 +24,8 @@ MENU_POR_ROL = {
     Rol.GERENTE: [_PANEL, _USUARIOS, _AUDITORIA],
     Rol.AGRONOMO: [_PANEL],
     Rol.VENDEDOR: [_PANEL],
-    # D-85 punto 6: el Contador es de escritorio; entra al «Panel de control» y no tiene «Estadísticas» (H28). La entrada
-    # «Contabilidad» (y, desde ella, los pagos a proveedores) la registra la tarea CON-03a.
+    # D-85 punto 6: el Contador es de escritorio; entra al «Panel de control» y no tiene «Estadísticas» (H28). «Contabilidad»
+    # la registra `contabilidad` en `ready()` (CON-03a, ``registrar_entrada``) y «Compras», `compras` (CMP-03).
     Rol.CONTADOR: [_PANEL],
     # Roles de campo (celular): sin menú lateral.
     Rol.CAPATAZ: [],

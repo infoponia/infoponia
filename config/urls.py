@@ -26,6 +26,8 @@ urlpatterns = [
     path("compras/", include("compras.urls")),
     # COM-04c: portal público del cliente (decide un faltante sin cuenta por el enlace que recibió por correo; D-65).
     path("cliente/", include("comercial.urls_cliente")),
+    # CON-03a: «Contabilidad» (libro de gestión, plan de cuentas y ejercicios; Contador y Gerente).
+    path("contabilidad/", include("contabilidad.urls")),
     # CMP-02a: portal público del proveedor (cotiza sin cuenta por el enlace que recibió por correo; D-88).
     path("proveedor/", include("compras.urls_proveedor")),
     # IOT-03: API HTTPS del nodo central (contrato en docs/api/nodo/; D-70). Sin sesión ni CSRF: la protege el token.

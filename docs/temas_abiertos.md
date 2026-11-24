@@ -701,3 +701,11 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **`saldo_por_cuenta`** devuelve las 19 cuentas, también las sin movimientos; las pruebas del libro están en `test_libro.py` y no en las de asientos.
 - **`docs/api/auditoria.md` no existe:** se ignoró esa mención de «Leer» de la tarea.
 - **Dos pruebas de otras tareas se ajustaron** porque CON-02 cambió su premisa: la de COM-02 que preguntaba si existía el modelo `AsientoContable` (ahora comprueba que la venta no deje asientos) y la de INV-02 que afirmaba que el paso 10 era el primero del proceso diario (ahora acepta solo el paso 5 de contabilidad antes).
+
+## CON-03a (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **La entrada «Contabilidad» del menú no está en `core/menu.py`:** la tarea («Permitido») la ubicaba ahí; se registra desde `ContabilidadConfig.ready()` con `core.menu.registrar_entrada`, el patrón vigente (D-40, regla A4 de D-37). En `core/menu.py` solo cambió un comentario.
+- **Tres aserciones de pruebas de `core` se actualizaron** (el menú del Contador ahora es «Panel de control, Contabilidad, Compras»): dos líneas en `core/tests/test_rol_contador_vistas.py` y una en `core/tests/test_recorrido_rol_contador.py`. No estaban en «Permitido».
+- **«Deja de aceptar asientos»** («Hecho cuando») se lee con D-102 punto 1: el ejercicio cerrado no recibe ningún asiento; un automático con fecha de su rango va al abierto con la fecha de hoy y la aclaración, y uno manual o un contraasiento se rechaza (`fecha_en_ejercicio_cerrado`).
+- **Un asiento o un ejercicio inexistente dan 404** (la documentación no lo dice; sigue D-28).
+- **«Quién registró» el asiento** se muestra con el nombre y el rol de la cuenta (la documentación dice solo «quién lo registró»).

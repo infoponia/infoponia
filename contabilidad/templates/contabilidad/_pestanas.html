@@ -1,0 +1,7 @@
+{% comment %}Barra de pestañas de «Contabilidad» (CON-03a; ``VIEWS.k_main`` del prototipo): «Libro de gestión», «Ejercicios» y «Plan de cuentas». Son enlaces: cada pestaña es una página y funciona sin
+JavaScript. «activa» es «libro», «ejercicios» o «plan». «Ejercicios» lleva un aviso si hay un ejercicio en cierre (hay_ejercicio_en_cierre).{% endcomment %}
+<div class="tabs" role="tablist" aria-label="Contabilidad">
+  <a class="tab" role="tab" href="{% url 'contabilidad:libro' %}" aria-selected="{% if activa == 'libro' %}true{% else %}false{% endif %}">Libro de gestión</a>
+  <a class="tab" role="tab" href="{% url 'contabilidad:ejercicios' %}" aria-selected="{% if activa == 'ejercicios' %}true{% else %}false{% endif %}">Ejercicios{% if hay_ejercicio_en_cierre %} <span class="status-badge status-warn">en cierre</span>{% endif %}</a>
+  <a class="tab" role="tab" href="{% url 'contabilidad:plan' %}" aria-selected="{% if activa == 'plan' %}true{% else %}false{% endif %}">Plan de cuentas</a>
+</div>

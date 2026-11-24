@@ -74,12 +74,30 @@ class ErrorContable(Exception):
 | `ejercicios.ejercicio_para(fecha, *, automatico, hoy=None)` | El ejercicio donde iría un asiento con esa fecha, o `ErrorContable` (`fecha_en_ejercicio_cerrado`, `fecha_futura`, `fecha_anterior_al_primer_ejercicio`) si es manual y no entra. Lo usa la interfaz para validar la fecha de un formulario |
 | `libro.saldo_por_cuenta(ejercicio_id) -> dict[str, Saldo]` | `Saldo(debe, haber, saldo_inicial, saldo, contrario)` por `codigo_cuenta`; cuentas de resultado desde cero, patrimoniales con lo acumulado (D-84 punto 8) |
 | `libro.movimientos_de_cuenta(codigo, ejercicio_id)` | Los movimientos con su saldo acumulado, para la vista por cuenta |
+| `libro.pagina_de_movimientos_de_cuenta(codigo, ejercicio_id, pagina=1, por_pagina=100)` | Una página de esa vista: `PaginaDeMovimientos(filas, numero, total_paginas, cantidad, saldo_inicial, saldo_final)`. El saldo de la primera fila sale de una suma agregada (CON-03a) |
+| `libro.listar_asientos(actor, ejercicio_id=None, desde=None, hasta=None, tipo=None, origen_tipo=None, cuenta=None, anulados=None, texto="")` | `QuerySet` de asientos de un ejercicio (por defecto el abierto) por fecha y número, con sus movimientos, cuentas, origen y ejercicio ya traídos. Solo el Contador y el Gerente activos (`PermissionDenied`); un `tipo` desconocido es `ValueError` (CON-03a) |
+| `libro.ficha_de_asiento(actor, ejercicio_id, numero)` | `FichaDeAsiento(asiento, movimientos, total, origen_texto, origen_url, registrado_por, anula, anulado_por)`. `registrado_por` sale de la auditoría y solo para un manual o un contraasiento; `Http404` si no existe (CON-03a) |
+| `libro.total_de_los_asientos(asientos)` | Total del Debe (igual al del Haber) de todo un `QuerySet` de `listar_asientos`, aunque se muestre una página (CON-03a) |
+| `ejercicios.ejercicios_numerados()` y `ejercicios.numero_de_ejercicio(ejercicio)` | Los ejercicios con su número («Ejercicio 1», la posición por fecha de inicio) y su cantidad de asientos, en una consulta; el número de uno (CON-03a) |
+| `ejercicios.resumen_para_cierre(ejercicio_id)` | `ResumenDeCierre(ejercicio, cantidad_de_asientos, total_debe, total_haber)` para la pantalla previa al cierre; `Http404` si no existe (CON-03a) |
 | `libro.resultado_del_periodo(desde, hasta)` | `Resultado(ingresos, egresos, resultado)` por **fecha del asiento**, aunque el período cruce dos ejercicios (lo usa Estadísticas, EST-02) |
 | `libro.total_por_cuenta_en_periodo(codigo, desde, hasta, *, tipo=None)` | Por fecha del asiento (extremos inclusivos). Con `tipo` «D» o «H», la suma de ese lado; con `tipo=None`, el saldo según la naturaleza de la cuenta (Debe − Haber en una deudora, Haber − Debe en una acreedora), con su signo aunque quede contrario. Otro `tipo`: `tipo_de_movimiento_invalido` (D-102) |
 | `responsables.contador_activo()` | El `Contador` activo o `None` (D-85 punto 5; lo usa `responsable_contable`) |
 | `responsables.responsable_contable()` | El Contador activo o, si no hay, el Gerente activo, o `None` (D-85 punto 5) |
 | `responsables.puede_registrar_asientos(usuario)` | `True` si es el Contador activo, o el Gerente activo **sin Contador activo**. Vale también para registrar pagos |
 | `responsables.notificar_al_responsable_contable(titulo, detalle, *, excluir=None)` | Una notificación (D-42) al responsable contable, sin la cuenta `excluir`; sin responsable no hace nada ni falla |
+
+## Enlace de un asiento con su documento de origen (punto de extensión)
+
+`contabilidad` no puede importar las apps que originan los asientos (A1 de D-37). La app que reabre un caso de uso con asiento (compras: CMP-04 a CMP-06; CON-04a a CON-04d) registra en `AppConfig.ready()` cómo se enlaza su documento, y la ficha del asiento se lo pregunta:
+
+```python
+from contabilidad import extensiones
+
+extensiones.registrar_enlace_de_origen("recepcion", lambda origen: ("Recepción N.º 12", "/compras/recepciones/12/"))  # (texto, url) o None
+```
+
+El primer tipo es el valor de `OrigenDocumento.Tipo`. Es idempotente; si la función devuelve `None` (o no hay ninguna registrada) la ficha muestra solo el texto del tipo («Recepción», «Entrega»…), sin enlace. Solo lectura: no bloquea ni escribe.
 
 ## Reglas para quien llama
 
