@@ -26,6 +26,7 @@ from iot.models import ReglaActuacion, Sensor, TipoActuador
 from iot.servicios import comandos as api_comandos
 from iot.servicios import compatibilidad as api_compatibilidad
 from iot.servicios import hardware as api
+from iot.servicios import mantenimiento as api_mantenimiento
 from iot.servicios import reglas as api_reglas
 from iot.servicios import sistemas as api_sistemas
 from iot.textos import estado_legible, lectura_legible
@@ -33,6 +34,7 @@ from iot.textos import estado_legible, lectura_legible
 GERENTE, AGRONOMO = Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO
 VENTANA_VOLVER_A_ACTIVAR = "iot/hardware/_ventana_volver_a_activar.html"
 VENTANA_REACTIVAR = "iot/hardware/_ventana_reactivar.html"
+VENTANA_CANCELAR_ORDEN = "iot/hardware/_ventana_cancelar_orden.html"
 VENTANA_BAJA = "iot/hardware/_ventana_baja.html"
 # Los errores generales que mandan de vuelta a la lista: ya no se puede operar (extensiones 8a y 8b, precondición b).
 ERRORES_QUE_SACAN_DEL_FORMULARIO = {"fuera_de_alcance", "sistema_dado_de_baja", "invernadero_inactivo", "equipo_dado_de_baja", "comando_pendiente"}
@@ -112,6 +114,7 @@ def _contexto_de_la_ficha(request, equipo, **extra):
         comandos = {"historial": filas, "historial_total": total, "puede_emitir": api_comandos.puede_emitir_a(request.user, equipo)}
     return contexto | comandos | {
         "reglas_activas": _reglas_activas_del_equipo(equipo),
+        "mantenimientos": api_mantenimiento.mantenimientos_del_equipo(equipo),  # IOT-07, regla 6 de IOT-CNS-HDW: «Cancelar orden» solo lo ve quien opera (D-30)
         "equipo": equipo,
         "situacion": api.situacion_de(equipo, resumen.alertas),
         "ultimo": ultimo,
@@ -309,25 +312,82 @@ def _ventana(request, equipo, plantilla, **extra):
     return render(request, "iot/hardware/ficha.html", _contexto_de_la_ficha(request, equipo, plantilla_de_ventana=plantilla, **extra))
 
 
+# Los errores de «volver a activar» que se corrigen en la misma ventana (la persona vuelve a elegir con las órdenes de ahora); los demás mandan a la ficha con el aviso.
+ERRORES_DE_LA_VENTANA = {"decisiones_incompletas", "ordenes_cambiaron", "orden_no_cancelable"}
+PREFIJO_DE_DECISION = "decision_"
+
+
+def _decisiones_del_formulario(post):
+    """``{orden_id: decisión}`` de los campos ``decision_<id>`` (un grupo de opciones por orden)."""
+    return {int(clave[len(PREFIJO_DE_DECISION):]): valor for clave, valor in post.items() if clave.startswith(PREFIJO_DE_DECISION) and clave[len(PREFIJO_DE_DECISION):].isdigit()}
+
+
+def _filas_de_la_ventana(equipo, elegidas):
+    """Las órdenes del equipo para la ventana, cada una con su opción elegida: lo que la persona había marcado o, de entrada, «Cancelarla» si se puede (D-79, punto 8)."""
+    return [
+        {"fila": fila, "elegida": elegidas.get(fila.orden.pk) or ("cancelar" if fila.cancelable else "mantener")} for fila in api.ordenes_al_volver_a_activar(equipo)
+    ]
+
+
 @rol_requerido(GERENTE, AGRONOMO)
 @never_cache
 @vary_on_headers("HX-Request")
 def hardware_volver_a_activar(request, equipo_id):
-    """Volver a activar un equipo fuera de servicio (IOT-MOD-HDW, postcondición b y regla 7; ventana ``react`` del prototipo), con confirmación previa. Lista las órdenes de
-    mantenimiento a realizar que lo incluyen (regla 8, **se completa en IOT-07**). Abrirla (GET) no cambia nada; volver a activar es un POST."""
+    """Volver a activar un equipo fuera de servicio (IOT-MOD-HDW, postcondición b y reglas 7 y 8; ventana ``react`` del prototipo), con confirmación previa. Lista las órdenes de mantenimiento a realizar
+    que lo incluyen y, por cada una, «Cancelarla» o «Mantenerla» (IOT-07). Abrirla (GET) no cambia nada; volver a activar es un POST. Si falta elegir, las órdenes cambiaron o una no se puede cancelar, la
+    ventana vuelve a abrirse con el mensaje y las órdenes de ahora."""
     equipo = api.ficha_del_equipo(request.user, equipo_id)
     if api.ACCION_VOLVER_A_ACTIVAR not in api.acciones_permitidas(request.user, equipo):
         messages.error(request, "Este equipo no se puede volver a activar.")
         return _a_la_ficha(equipo)
+    error, elegidas = "", {}
     if request.method == "POST":
+        elegidas = _decisiones_del_formulario(request.POST)
         try:
-            api.volver_a_activar(request.user, equipo.pk)
-        except ValidationError as error:
-            messages.error(request, error.messages[0])
+            api.volver_a_activar(request.user, equipo.pk, elegidas)
+        except ValidationError as rechazo:
+            if ERRORES_DE_LA_VENTANA & set(codigos_del_servicio(rechazo)):
+                error = rechazo.messages[0]
+            else:
+                messages.error(request, rechazo.messages[0])
+                return _a_la_ficha(equipo)
         else:
             messages.success(request, f"{api.nombre_del_equipo(equipo)} {equipo.identificador_equipo} volvió a estar activo.")
+            return _a_la_ficha(equipo)
+    return _ventana(request, equipo, VENTANA_VOLVER_A_ACTIVAR, filas=_filas_de_la_ventana(equipo, elegidas), error=error)
+
+
+@rol_requerido(GERENTE, AGRONOMO)
+@never_cache
+@vary_on_headers("HX-Request")
+def hardware_cancelar_orden(request, equipo_id, orden_id):
+    """Cancelar una orden de mantenimiento desde la ficha del equipo (PROD-CNL-ORD para un mantenimiento; IOT-07, D-79 puntos 1 y 2), con su resumen y el motivo. Abrirla (GET) no cambia nada; cancelar es un POST.
+    Quien solo consulta no tiene el botón (D-30) y, por la dirección escrita a mano, recibe un 403. Un error del motivo vuelve a abrir la ventana con lo escrito; los demás (la orden ya no está a realizar,
+    ya no operás el invernadero, cambió el Técnico) mandan a la ficha con el aviso."""
+    if request.method not in ("GET", "HEAD", "POST"):
+        return HttpResponseNotAllowed(["GET", "HEAD", "POST"])
+    equipo = api.ficha_del_equipo(request.user, equipo_id)
+    try:
+        resumen = api_mantenimiento.resumen_de_cancelacion_de_mantenimiento(request.user, orden_id)
+    except ValidationError as rechazo:  # ya no está «a realizar»
+        messages.error(request, rechazo.messages[0])
         return _a_la_ficha(equipo)
-    return _ventana(request, equipo, VENTANA_VOLVER_A_ACTIVAR, ordenes=api.mantenimientos_a_realizar(equipo))
+    if equipo.pk not in {e.pk for e in resumen.equipos}:
+        raise Http404("Esa orden no es de este equipo.")
+    motivo, errores = "", {}
+    if request.method == "POST":
+        motivo = request.POST.get("motivo", "")
+        try:
+            api_mantenimiento.cancelar_mantenimiento(request.user, orden_id, motivo)
+        except ValidationError as rechazo:
+            errores, generales = errores_del_servicio(rechazo)
+            if not errores:
+                messages.error(request, generales[0])
+                return _a_la_ficha(equipo)
+        else:
+            messages.success(request, f"{resumen.orden.codigo} cancelada. El equipo sigue fuera de servicio y la alerta «comando fallido» sigue activa hasta que vuelva a estar activo.")
+            return _a_la_ficha(equipo)
+    return _ventana(request, equipo, VENTANA_CANCELAR_ORDEN, resumen=resumen, motivo=motivo, errores=errores)
 
 
 @rol_requerido(GERENTE, AGRONOMO)

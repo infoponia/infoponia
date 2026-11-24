@@ -23,6 +23,7 @@ from iot.alcance import invernaderos_que_consulta, puede_operar
 from iot.catalogo import estado_que_deja
 from iot.models import Accion, Actuador, Comando, Hardware, NodoCentral, RegistroComando, ReglaActuacion, SistemaIoT
 from iot.servicios import alertas_iot
+from iot.servicios import mantenimiento
 from iot.servicios import nodo as servicio_nodo
 from iot.servicios.sistemas import Estado, _error_de_alcance, _exigir_operador, _sistema_vigente, conectividad
 from iot.servicios.tipos_actuador import bloquear_tipo_activo
@@ -469,6 +470,7 @@ class _Hechos:
 
     def __init__(self):
         self.afectados, self.cambios, self.textos = [], {}, []
+        self.datos = {}  # lo que suma al ``datos`` del registro (IOT-07: ``orden_mantenimiento`` o ``sin_orden``)
 
     def sumar(self, *objetos):
         for objeto in objetos:
@@ -491,8 +493,9 @@ def _ultimo_resultado(resultado, detalle):
 
 
 def _escalar(comando, actuador, sistema, resultado, detalle, ahora, hechos):
-    """Extensión 4b (sin 4b.4: la orden de mantenimiento es de IOT-07) y D-78, puntos 3 y 10: el comando pasa a «fallido», el actuador a «fuera de servicio», se asegura la alerta
-    crítica «comando fallido» (el correo lo manda la revisión periódica, D-71) y se registra el fallo definitivo."""
+    """Extensión 4b y D-78, puntos 3 y 10: el comando pasa a «fallido», el actuador a «fuera de servicio», se crea la orden de mantenimiento (4b.4, IOT-07: ``mantenimiento.crear_orden_automatica``,
+    ANTES de la alerta porque su texto lleva el código de la orden), se asegura la alerta crítica «comando fallido» con el sufijo de la orden (D-79, punto 3; el correo lo manda la revisión periódica, D-71)
+    y se registra el fallo definitivo."""
     antes = comando.estado_comando
     comando.estado_comando, comando.resultado_comando, comando.detalle_resultado, comando.resuelto_en = Comando.Estado.FALLIDO, resultado, detalle, ahora
     comando.save(update_fields=["estado_comando", "resultado_comando", "detalle_resultado", "resuelto_en"])
@@ -500,8 +503,17 @@ def _escalar(comando, actuador, sistema, resultado, detalle, ahora, hechos):
     actuador.estado_hardware = Actuador.Estado.FUERA_DE_SERVICIO
     actuador.save(update_fields=["estado_hardware"])
     ultimo = _ultimo_resultado(resultado, detalle)
-    descripcion = f"{actuador.identificador_equipo} · {comando.accion.nombre_accion} no se ejecutó en {comando.cantidad_intentos} intentos (último: {ultimo})"
+    automatica = mantenimiento.crear_orden_automatica(comando, ahora)
+    descripcion = mantenimiento.descripcion_de_la_alerta(actuador.identificador_equipo, comando.accion.nombre_accion, comando.cantidad_intentos, ultimo, automatica.sufijo)
     alerta = alertas_iot.asegurar_alerta_iot(actuador.sistema.invernadero_id, sistema, TIPO_COMANDO_FALLIDO, f"hw:{actuador.pk}", descripcion, hardware=actuador)
+    if automatica.caso == mantenimiento.CREADA:
+        mantenimiento.asociar_alerta(automatica.orden, alerta.alerta)
+        hechos.sumar(automatica.orden)
+        hechos.datos["orden_mantenimiento"] = automatica.orden.codigo
+    else:
+        hechos.datos["sin_orden"] = automatica.caso
+        if automatica.orden is not None:
+            hechos.datos["orden_mantenimiento"] = automatica.orden.codigo
     registro = registrar_hecho(comando, RegistroComando.Resultado.FALLIDO, ahora, que_paso=f"fallido tras {comando.cantidad_intentos} intentos (último: {ultimo})")
     hechos.sumar(comando, actuador, alerta.alerta if alerta.creada else None, registro)
     hechos.cambios[f"Estado de {codigo_de(comando)}"] = {"antes": antes, "despues": "fallido"}
@@ -520,7 +532,7 @@ def _intento_fallido(comando, resultado, detalle, que_paso, ahora, hechos):
 
 def _auditar(hechos, sistema, mensaje, identificador=None):
     """Postcondición q: un registro ``resolucion_comando_iot`` (actor ``None``, origen «nodo_central») con lo que hizo el mensaje. Solo si hubo hechos."""
-    datos = {"origen": "nodo_central", "sistema": referencia(sistema), "mensaje": mensaje, "hechos": hechos.textos}
+    datos = {"origen": "nodo_central", "sistema": referencia(sistema), "mensaje": mensaje, "hechos": hechos.textos, **hechos.datos}
     if identificador is not None:
         datos["identificador"] = identificador
     detalle = {"datos": datos}

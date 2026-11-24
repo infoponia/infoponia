@@ -1041,6 +1041,13 @@ class RegistroAuditoria(models.Model):
         "comandos_cancelados": "Comandos cancelados",
         "equipos": "Equipos dados de baja",
         "reglas": "Reglas dadas de baja",
+        # Orden de mantenimiento automática (IOT-07). «desde» y «equipos» ya existen con otro sentido (reactivación y baja del sistema): por eso las claves propias.
+        "cancelada_desde": "Cancelada desde",
+        "equipos_de_la_orden": "Equipos de la orden",
+        "orden_mantenimiento": "Orden de mantenimiento",
+        "sin_orden": "Sin orden de mantenimiento",
+        "ordenes_canceladas": "Órdenes de mantenimiento canceladas",
+        "ordenes_mantenidas": "Órdenes de mantenimiento mantenidas",
         # Pedidos y cotizaciones (CMP-02a): cantidades, importes y fechas van como texto (D-36). «estado», «invernadero»,
         # «insumo» y «agronomo» ya existen, y también «monto_estimado», «detalles» y «lineas» (los de la compra-venta de COM-02): no se repiten, porque en
         # un diccionario la clave de más abajo pisa a la de arriba y cambiaría el texto de aquellas pantallas. Las líneas de la cotización llevan su clave propia.
@@ -1094,6 +1101,9 @@ class RegistroAuditoria(models.Model):
         },
         # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
         "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
+        # IOT-07: por qué no se creó la orden automática y desde dónde se canceló una orden de mantenimiento.
+        "sin_orden": {"sin_tecnico": "El invernadero no tiene Técnico", "orden_existente": "Ya había una orden a realizar"},
+        "cancelada_desde": {"iot": "Ficha del equipo (IoT)"},
         "clase": {"sensor": "Sensor", "actuador": "Actuador"},
         # CMP-01: `core` no importa `compras` (A1 de D-37), así que la lista cerrada se repite acá.
         "tipo_proveedor": {"juridica": "Persona jurídica", "fisica": "Persona física"},

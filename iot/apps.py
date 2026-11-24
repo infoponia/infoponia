@@ -46,3 +46,12 @@ class IotConfig(AppConfig):
         from iot.servicios import alertas_iot
 
         extensiones.registrar_enlace_de_alerta(CODIGOS_DE_ALERTAS_IOT, alertas_iot.enlaces_de_alertas_iot)
+        # IOT-07 (D-79, puntos 4 y 9): el Técnico del invernadero. ``maestros``: el traspaso de las órdenes de mantenimiento; ``core``: lo que la baja de su cuenta informa y su sección del Inicio.
+        # Con guarda: ``ready()`` puede correr más de una vez y el traspaso admite varios registrantes.
+        from core import extensiones as extensiones_de_core
+        from iot.servicios import mantenimiento
+
+        if (mantenimiento.contar_traspaso, mantenimiento.traspasar_mantenimientos) not in extensiones._TRASPASOS:
+            extensiones.registrar_traspaso(mantenimiento.contar_traspaso, mantenimiento.traspasar_mantenimientos)
+        extensiones_de_core.registrar_asignaciones_de_cuenta(mantenimiento.asignaciones_del_tecnico)
+        extensiones_de_core.registrar_seccion_de_inicio(mantenimiento.seccion_de_mantenimientos)

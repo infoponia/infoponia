@@ -22,6 +22,7 @@ from iot.models import (
     Capacidad,
     Comando,
     ComandoCatalogo,
+    MantenimientoTecnico,
     NodoCentral,
     Sensor,
     SistemaIoT,
@@ -178,6 +179,31 @@ def comando(actuador_destino, accion, estado="pendiente", **extra):
     if estado != "pendiente":
         datos["resuelto_en"] = INSTANTE_BASE
     return Comando.objects.create(actuador=actuador_destino, accion=accion, **(datos | extra))
+
+
+def mantenimiento_tecnico(invernadero, tecnico, equipos, estado="a_realizar", **extra):
+    """Una orden de mantenimiento (``MantenimientoTecnico``) del ``invernadero`` para ``tecnico``, con los ``equipos`` (una lista: «al menos uno», R057), creada directo en la base y
+    sin pasar por los servicios. Por defecto, como la automática: «revisión», prioridad alta, programada para hoy y sin Agrónomo. El código sale de ``siguiente_numero``. Una orden
+    «cancelada» queda con su motivo y la fecha de hoy; una «concretada», solo con la fecha. ``extra`` pisa cualquier campo. Es una función y no una clase: este archivo usa funciones
+    (el extracto de IOT-07 la llama ``MantenimientoTecnicoFactory``)."""
+    from produccion.servicios import ordenes
+
+    hoy = timezone.localdate()
+    datos = {
+        "numero": ordenes.siguiente_numero(),
+        "fecha_creacion_orden": hoy,
+        "fecha_programada_orden": hoy,
+        "prioridad_orden": "alta",
+        "estado_orden": estado,
+        "agronomo": None,
+    }
+    if estado != "a_realizar":
+        datos["fecha_resolucion_orden"] = hoy
+    if estado == "cancelada":
+        datos["motivo_cancelacion"] = "Motivo de prueba"
+    orden = MantenimientoTecnico.objects.create(invernadero=invernadero, tecnico=tecnico, **(datos | extra))
+    orden.hardware.set(equipos)
+    return orden
 
 
 # ---- datos de formulario de los tipos de actuador (IOT-01, paso 3) ----

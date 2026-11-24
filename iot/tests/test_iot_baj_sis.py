@@ -6,7 +6,7 @@
 #       lo que muestra la ventana (regla 8): el nodo, cada sensor y actuador NO dado de baja (con su estado), cada regla activa y los impedimentos (``maestros.extensiones.Impedimento``:
 #       ``codigo``, ``texto`` y ``como_resolver``) de las precondiciones c y d. No escribe ni audita.
 #   baja_sistema_iot(actor, sistema_id, ahora) -> SistemaIoT
-#   ordenes_a_realizar_del_sistema(sistema) -> list          (precondición d; hasta IOT-07, vacía)
+#   ordenes_a_realizar_del_sistema(sistema) -> list          (precondición d; IOT-07 la completa: consulta las órdenes reales)
 # Errores: ``PermissionDenied`` (otro rol), ``Http404`` (sistema inexistente o fuera del alcance de consulta), ``ValidationError`` general: ``fuera_de_alcance`` (regla 1),
 # ``sistema_dado_de_baja`` (precondición b), ``comandos_pendientes`` (c) y ``ordenes_de_mantenimiento`` (d); los impedimentos llegan juntos (regla 4).
 
@@ -165,12 +165,57 @@ class IotBajSisServicioTests(ConEscenaDeReglas, TestCase):
         self.assertEqual((self.sistema.estado_sistema, comando.estado_comando), ("activo", "pendiente"))
         self.assertEqual(RegistroAuditoria.objects.filter(accion="baja_sistema_iot").count(), 0)
 
+    def orden_de(self, *equipos, **extra):
+        """Una orden de mantenimiento «a realizar» de Norte para un Técnico, con los ``equipos`` (IOT-07: ya no hace falta un ``mock``)."""
+        if getattr(self, "tecnico_de_las_ordenes", None) is None:
+            self.tecnico_de_las_ordenes = crear_tecnico("tecnico@infoponia.com")
+        return fabricas.mantenimiento_tecnico(self.norte, self.tecnico_de_las_ordenes, list(equipos), **extra)
+
     def test_precondicion_d_con_una_orden_de_mantenimiento_a_realizar_no_se_da_de_baja(self):
-        """Precondición d: hasta IOT-07 ``ordenes_a_realizar_del_sistema`` devuelve una lista vacía y la baja procede; con una orden, no, y el impedimento se informa junto con los demás."""
+        """Precondición d: sin órdenes la baja procede; con una orden «a realizar» de un equipo del sistema, no, y el impedimento se informa junto con los demás (con una orden REAL)."""
         self.assertEqual(sistemas.ordenes_a_realizar_del_sistema(self.sistema), [])
         fabricas.comando(self.ventilador, self.encender)
-        with mock.patch("iot.servicios.sistemas.ordenes_a_realizar_del_sistema", return_value=["OT-1"]):
-            self.assertEqual(sorted(codigos_de(error_de(self.baja), NON_FIELD_ERRORS)), ["comandos_pendientes", "ordenes_de_mantenimiento"])
+        self.orden_de(self.temp)
+        self.assertEqual(sorted(codigos_de(error_de(self.baja), NON_FIELD_ERRORS)), ["comandos_pendientes", "ordenes_de_mantenimiento"])
+        self.sistema.refresh_from_db()
+        self.assertEqual(self.sistema.estado_sistema, "activo")
+
+    def test_precondicion_d_el_texto_nombra_las_ordenes_y_dice_como_cancelarlas(self):
+        """Regla 4 y «Lecturas»: «Hay {n} orden(es) de mantenimiento a realizar ({códigos}): cancelalas desde la ficha de cada equipo.» (no «concretalas»: en esta ronda no se concreta, D-61)."""
+        primera, segunda = self.orden_de(self.temp), self.orden_de(self.ventilador)
+        error = error_de(self.baja)
+        self.assertEqual(
+            error.messages,
+            [f"Hay 2 orden(es) de mantenimiento a realizar ({primera.codigo}, {segunda.codigo}): cancelalas desde la ficha de cada equipo."],
+        )
+
+    def test_precondicion_d_una_orden_con_varios_equipos_del_sistema_se_cuenta_una_sola_vez(self):
+        """«Sin repetir»: una orden que incluye el sensor y el actuador es una sola orden."""
+        orden = self.orden_de(self.temp, self.ventilador)
+        error = error_de(self.baja)
+        self.assertEqual(error.messages, [f"Hay 1 orden(es) de mantenimiento a realizar ({orden.codigo}): cancelalas desde la ficha de cada equipo."])
+
+    def test_precondicion_d_una_orden_cancelada_no_impide_la_baja(self):
+        """Solo las «a realizar»: una cancelada no impide la baja del sistema."""
+        self.orden_de(self.temp, estado="cancelada")
+        self.baja()
+        self.sistema.refresh_from_db()
+        self.assertEqual(self.sistema.estado_sistema, "inactivo")
+
+    def test_precondicion_d_la_ventana_trae_el_impedimento_con_su_como_resolver(self):
+        """La ventana (``datos_de_baja_del_sistema``): ``Impedimento`` de código ``ordenes_de_mantenimiento`` con el texto y el «cómo resolver» por separado."""
+        orden = self.orden_de(self.temp)
+        datos = sistemas.datos_de_baja_del_sistema(self.laura, self.sistema.pk)
+        self.assertEqual(
+            datos.impedimentos,
+            [
+                Impedimento(
+                    "ordenes_de_mantenimiento",
+                    f"Hay 1 orden(es) de mantenimiento a realizar ({orden.codigo}):",
+                    "cancelalas desde la ficha de cada equipo.",
+                )
+            ],
+        )
 
     # ---- regla 3 y regla 6 (después de la baja) ----
 

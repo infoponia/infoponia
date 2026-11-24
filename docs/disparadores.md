@@ -252,7 +252,7 @@ que falta se registra en el `AppConfig.ready()` de su app y prueba su registrant
 
 ## Cuando exista SistemaIoT
 
-0. **Traspaso del Técnico y órdenes de mantenimiento** (D-53, D-73): **IOT-07** (antes «IOT-05») agrega el `CheckConstraint` de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` de `OrdenTrabajo.Tipo` lo crea PRD-01, D-67 punto 1) y su `registrar_traspaso` para el rol Técnico (el punto ya admite varios registrantes y recibe el rol). Si `maestros/extensiones.py` no entrega el rol a quien registra, es una corrección chica dentro de IOT-07 (hoy ya lo entrega: `traspasar(actor, invernadero, rol, saliente, entrante)`). **Planificado: IOT-07** (`docs/tareas/iot/IOT-07-orden-de-mantenimiento.md`; `docs/casos_de_uso/iot/mantenimiento_automatico.md`, «Traspaso del Técnico»; D-79, punto 9).
+0. ~~**Traspaso del Técnico y órdenes de mantenimiento** (D-53, D-73): **IOT-07** (antes «IOT-05») agrega el `CheckConstraint` de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` de `OrdenTrabajo.Tipo` lo crea PRD-01, D-67 punto 1) y su `registrar_traspaso` para el rol Técnico (el punto ya admite varios registrantes y recibe el rol). Si `maestros/extensiones.py` no entrega el rol a quien registra, es una corrección chica dentro de IOT-07 (hoy ya lo entrega: `traspasar(actor, invernadero, rol, saliente, entrante)`). **Planificado: IOT-07** (`docs/tareas/iot/IOT-07-orden-de-mantenimiento.md`; `docs/casos_de_uso/iot/mantenimiento_automatico.md`, «Traspaso del Técnico»; D-79, punto 9).~~ (hecho el 24/11/2026, IOT-07: la restricción `ordentrabajo_prioridad_en_mantenimiento` y `traspasar_mantenimientos` con `contar_traspaso`, registrados en `IotConfig.ready()`)
 0. ~~**Envío de correo desde `iot`** (D-54, D-71): usar `core.correo.enviar_correo`, nunca `_enviar_correo`. Lo deja USR-10 y lo usa la revisión periódica de **IOT-04**.~~ (hecho el 23/11/2026, IOT-04: `enviar_correos_pendientes`)
 1. ~~**IoT del invernadero.** `Invernadero.tiene_sistema_iot` (hoy `False`), la alerta y el campo del Técnico (regla 5 de
    PROD-ALT-INV) y la precondición h de PROD-BAJ-INV. Nació en MAE-01a. La precondición h se conecta con
@@ -269,8 +269,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
      baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados. Al crear un actuador, llamar antes a `bloquear_tipo_activo(tipo_id)` (`iot/servicios/tipos_actuador.py`; contrato de D-40).~~ (hecho el 22/11/2026, IOT-02: `recalcular_compatibilidad`; el aviso y el conteo ya los tenía IOT-01)
    - ~~IOT-05: `acciones_en_uso(tipo)` (devuelve `dict[int, list[UsoDeAccion]]`: por id de acción, sus usos con código `RGL-n` o `CMD-n` y valor) y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).~~ (hecho el 23/11/2026, IOT-05: una sola consulta para toda la lista de tipos)
    - ~~IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.~~ (hecho el 24/11/2026, IOT-06)
-2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). ~~IOT-06: desactivar, activar y dar de baja~~ (hecho el 24/11/2026, IOT-06); IOT-07:
-   `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
+2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). ~~IOT-06: desactivar, activar y dar de baja~~ (hecho el 24/11/2026, IOT-06); ~~IOT-07:
+   `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS).~~ (hecho el 24/11/2026, IOT-07)
 3. **Hardware** (`docs/casos_de_uso/iot/hardware.md`).
    - ~~IOT-03: la última lectura y la situación por lecturas en la lista y la ficha; los identificadores anunciados (`EquipoAnunciado`) y la
      compatibilidad contra anuncios reales; `tiene_lecturas(sensor)` con lecturas reales. **Al anunciar equipos, la API llama a
@@ -280,8 +280,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    - ~~IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
      (`iot/servicios/hardware.py`: hoy no ofrece «Dar de baja», para que ningún botón lleve a un 403); y sumar `temp-vieja` (un sensor dado de baja) al cargador de datos de verificación
      de `iot` (`iot/verificacion.py`) con ese servicio.~~ (hecho el 24/11/2026, IOT-06; lo del cargador no se hizo: D-95 retiró los cargadores de datos de verificación)
-   - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.
-     **Planificado en el lote I4** (`mantenimiento_automatico.md`).
+   - ~~IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.~~ (hecho el 24/11/2026, IOT-07: `ordenes_al_volver_a_activar`, `mantenimientos_del_equipo` y el impedimento de baja)
 4. ~~**Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
    panel. **IOT-04.**~~ (hecho el 23/11/2026, IOT-04: `enlaces_de_alertas_iot`)
 5. **API del nodo** (`docs/casos_de_uso/iot/entregar_informacion.md`, «Reparto»; lote I2a). IOT-03 las deja escritas sin hacer nada:
@@ -291,7 +290,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
      `al_volver_a_remoto(sistema)` en `iot/servicios/nodo.py` (1b.3); el reinicio de las reglas cuando el invernadero se queda sin umbral
      efectivo (5c).~~ (hecho el 24/11/2026, IOT-06)
 
-6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), ~~IOT-06~~ (hecho el 24/11/2026: alta, modificación y reactivación de reglas, con su prueba de concurrencia) e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
+6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), ~~IOT-06~~ (hecho el 24/11/2026: alta, modificación y reactivación de reglas, con su prueba de concurrencia) e IOT-07 (hecho el 24/11/2026: ninguno de sus flujos toma el tipo de actuador, así que D-82 no aplica): todo flujo que toque un actuador y su tipo toma primero el tipo
    (`bloquear_tipo_activo`) y después el invernadero, el sistema y el equipo (excepción a D-40 y a `docs/patrones/bloqueos.md`). Nació en IOT-02.
 7. **El panel de monitoreo** (`iot/servicios/monitoreo.py` y `iot/templates/iot/monitoreo/_panel.html`). ~~IOT-05~~ (hecho el 23/11/2026): «Comandos pendientes» (indicador y columna de actuadores) y «Emitir comando» desde la fila de cada actuador a quien opera
    (regla 11 de IOT-CNS-LEC); IOT-06: el enlace a las reglas de actuación. Nació en IOT-04.
@@ -381,11 +380,11 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    invernadero y se avisa a los proveedores invitados. `contar` alimenta el aviso de la regla 2 y la notificación de la
    postcondición c. Bloquean sus filas después del invernadero y en orden de id. Nació en MAE-01b.
    **Hecho el 22/11/2026 en PRD-01 (el Capataz):** `produccion` registra el suyo, filtra por `TIPOS_DE_PRODUCCION` y devuelve las instancias tocadas,
-   que quedan entre los afectados de `modificacion_invernadero` (D-81: `traspasar` ahora devuelve lo que tocó). Siguen los de COM-02, COM-03 e IOT-07.
+   que quedan entre los afectados de `modificacion_invernadero` (D-81: `traspasar` ahora devuelve lo que tocó). Siguen los de COM-02 y COM-03; el de IOT-07, abajo.
    **COM-02 (lote C2)** suma las cosechas al traspaso del Capataz (por `ordenes_del_capataz`, D-53) y registra el del Vendedor con la regla de
    D-60 (compra-ventas); **Hecho el 23/11/2026 en COM-03a:** los suministros vigentes, con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
    **Hecho el 24/11/2026 en CMP-02b (los pedidos):** `compras` registra su `traspasar` (cancela los pedidos «en cotización» del Agrónomo saliente con algún detalle a ese invernadero, aunque siga activo: MD-62 no lo condiciona) y su aviso (`registrar_aviso_de_traspaso`, D-98); su `contar` devuelve vacío.
-   **IOT-07 (lote I4)** registra el del Técnico: pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
+   **Hecho el 24/11/2026 en IOT-07:** `iot` registra el del Técnico (`traspasar_mantenimientos` y `contar_traspaso`): pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
 
 ## Cuando exista un caso de uso que planifique, haga pedidos, asigne stock o reintente entregas
 

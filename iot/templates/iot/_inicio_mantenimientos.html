@@ -1,0 +1,21 @@
+{% comment %}Sección «Mantenimientos a realizar» del Inicio del Técnico (`registrar_seccion_de_inicio`, D-43; IOT-07, D-79 punto 4). Recibe «datos» con «ordenes» (las órdenes de mantenimiento «a realizar» del Técnico, con el invernadero y los
+equipos cargados) y «hoy». Es de solo lectura: sin botones ni enlaces, porque el Técnico no tiene pantallas del IoT (IOT-CNS-HDW) y planificar o concretar un mantenimiento es de la etapa 2 (D-73). Todo se escapa.{% endcomment %}
+<div class="page narrow" style="margin-top:16px">
+  <h2 style="margin-bottom:8px">Mantenimientos a realizar</h2>
+  {% for o in datos.ordenes %}
+  <div class="card" style="margin-bottom:10px">
+    <div class="card-b">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <b class="mono">{{ o.codigo }}</b>
+        <span>{% if o.fecha_programada_orden < datos.hoy %}<span class="status-badge status-danger">Vencida</span> {% endif %}<span class="sm muted">Para el {{ o.fecha_programada_orden|date:"d/m/Y" }}</span></span>
+      </div>
+      <div class="sm" style="margin-top:4px">{{ o.get_tipo_mantenimiento_display }} · {{ o.invernadero.nombre_invernadero }} · Prioridad: {{ o.get_prioridad_orden_display }}</div>
+      <div class="sm muted" style="margin-top:2px">Equipos: {% for e in o.hardware.all %}<span class="mono">{{ e.identificador_equipo }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+      {% if o.descripcion_orden %}<p class="sm" style="margin-top:6px">{{ o.descripcion_orden }}</p>{% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="empty"><b>No tenés mantenimientos a realizar.</b></div>
+  {% endfor %}
+  <p class="sm muted">Las órdenes las cierra el Agrónomo: cancelándolas o volviendo a activar el equipo.</p>
+</div>

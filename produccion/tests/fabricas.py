@@ -118,8 +118,8 @@ def orden_suelta(invernadero, tipo, *, estado="a_realizar", reservas=()):
         extra["fecha_resolucion_orden"] = hoy
     if estado == "cancelada":
         extra["motivo_cancelacion"] = "Motivo de prueba"
-    if tipo == OrdenTrabajo.Tipo.COSECHA:
-        extra["prioridad_orden"] = "media"  # COM-02: la prioridad es obligatoria en la cosecha
+    if tipo in (OrdenTrabajo.Tipo.COSECHA, OrdenTrabajo.Tipo.MANTENIMIENTO):
+        extra["prioridad_orden"] = "media"  # COM-02: obligatoria en la cosecha; IOT-07: también en el mantenimiento (`ordentrabajo_prioridad_en_mantenimiento`)
     orden = OrdenTrabajo.objects.create(
         tipo_orden=tipo,
         numero=ordenes.siguiente_numero(),
