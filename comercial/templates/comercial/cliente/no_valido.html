@@ -1,0 +1,6 @@
+{% extends "comercial/cliente/base.html" %}{% load iconos %}
+{% comment %}«Este enlace no es válido»: un token que no existe, o un acceso sin haber abierto un enlace. No dice nada más: ni de qué compra se trataba ni por qué.{% endcomment %}
+{% block contenido %}
+<div class="portal-h"><h1>Este enlace no es válido</h1></div>
+<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Revise que haya copiado el enlace completo del correo. Si el problema sigue, comuníquese con {{ nombre_organizacion }}.</div></div>
+{% endblock %}

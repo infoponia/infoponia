@@ -31,6 +31,7 @@ solo para el Gerente, Vendedor. El monto es «estimado» si la venta no está co
     <input class="field-input" type="date" name="hasta" value="{{ filtros.hasta }}" aria-label="Hasta">
     <button class="btn btn-ghost" type="submit">Filtrar</button>
     <span class="spacer"></span>
+    {% if para_decidir %}<a class="btn btn-ghost" href="{% url 'comercial:faltantes' %}">Faltantes para decidir ({{ para_decidir }})</a>{% endif %}
     {% if puede_registrar %}
     <a class="btn btn-primary" href="{% url 'comercial:compra_venta_nueva' %}">{% icono "plus" 15 %} Nueva compra-venta</a>
     {% else %}

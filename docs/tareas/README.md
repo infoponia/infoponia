@@ -66,7 +66,7 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 | COM-03a | Suministros: pactar y consultar | comercial | hecha (PR #68, 23/11/2026) | COM-02 |`comercial/COM-03a-suministros-pactar-y-consultar.md` |
 | COM-03b | Suministros: modificar, rescindir, dejar sin efecto y pre-reservar (pasos 35 y 40) | comercial (y los orígenes de alertas en maestros, D-62) | hecha (PR #__, 24/11/2026) | COM-03a, MAE-02d (DIA-01, hecha) |`comercial/COM-03b-suministros-modificar-rescindir-y-pre-reservar.md` |
 | COM-04b | Cámara: asignación, vencimiento y merma en cámara (pasos 20 y 25) | comercial (y un parámetro en maestros) | hecha (PR #__, 24/11/2026) | COM-04a | `comercial/COM-04b-camara.md` | |
-| COM-04c | Faltante y enlace del cliente (paso 27) | comercial (y piezas de core) | pendiente | COM-04b | `comercial/COM-04c-faltante-y-enlace-del-cliente.md` |
+| COM-04c | Faltante y enlace del cliente (paso 27) | comercial (y piezas de core) | hecha (PR #__, 24/11/2026; revisión a mano pendiente) | COM-04b | `comercial/COM-04c-faltante-y-enlace-del-cliente.md` |
 | COM-05a1 | Entregas: modelo, planificación automática (paso diario 50) y cancelación incluida | comercial | pendiente | COM-04c, MAE-02d (INV-02, hecha) | `comercial/COM-05a1-planificacion-de-entregas.md` |
 | COM-05a2 | Envasado y las entregas en el panel, las fichas y los vehículos | comercial (y la restricción de `ReservaInsumo` y el núcleo de reservas en produccion, D-66) | pendiente | COM-05a1 | `comercial/COM-05a2-envasado-y-pantallas-de-entregas.md` |
 | COM-05b | Asignar transportista y cancelar la compra-venta | comercial | pendiente | COM-05a2 | `comercial/COM-05b-asignar-transportista-y-cancelar-compra-venta.md` |

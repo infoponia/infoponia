@@ -2,7 +2,7 @@
 # toma la misma partida, PROD-VNC-CAM contra una merma en cámara, la merma en cámara contra PROD-ASG-CAM y dos mermas de la misma partida. Todas bloquean en el mismo orden (cuentas →
 # invernaderos → variedad → lotes y partidas → contratos → reservas), así que la segunda espera a la primera y ve lo que confirmó. Las operaciones usan retiro (sin Georef: el
 # `flush` de estas pruebas vacía las tablas). Dos hilos, dos conexiones, el orden fijado con ``primera`` (core/tests/concurrencia.py). Todas terminan verificando los invariantes de
-# reservas. Pendiente para COM-04c: «merma en cámara contra la decisión del cliente que usa esas reservas» (la decisión todavía no existe).
+# reservas. «Merma en cámara contra la decisión del cliente que usa esas reservas» (COM-04c): `test_com_dcd_flt.py`, `ComDcdFltConcurrenciaTests` (comparte el escenario de la decisión).
 
 from datetime import timedelta
 

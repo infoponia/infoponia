@@ -1,0 +1,16 @@
+{% autoescape off %}Hola {{ cliente }},
+
+No pudimos reunir todo el producto de tu compra {{ codigo }} en {{ nombre_organizacion }}. Necesitamos que decidas qué querés hacer con lo que falta:
+{% for linea in lineas %}
+- {{ linea.variedad }}: pediste {{ linea.solicitada }} plantas y hoy podemos entregarte {{ linea.disponible }}.{% endfor %}
+
+La entrega está pactada para el {{ fecha_pactada|date:"d/m/Y" }}.
+
+Entrá a este enlace para aceptar la cantidad disponible o no recibir ese producto:
+{{ url }}
+
+Podés decidir hasta el {{ vence|date:"d/m/Y" }}. El enlace se usa una sola vez y la decisión no se puede modificar después. Si no lo usás a tiempo, el Vendedor se comunicará con vos.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

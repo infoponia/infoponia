@@ -108,32 +108,73 @@ concurrencia.
   python manage.py test comercial produccion maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion
   python manage.py test comercial --keepdb --tag concurrencia
 
-## Verificación a mano (la completa Claude Code al cerrar)
+## Verificación a mano (la hace el estudiante; la escribió Claude Code al cerrar)
 
-**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
-al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
-`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
-cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
-siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
+Hay migraciones nuevas (`comercial` 0007 y `core` 0039, solo `choices`) y una **variable de entorno nueva** (`URL_DEL_SITIO`). No hay datos cargados: los creás vos, a mano.
 
-Hay migraciones nuevas (`comercial`, `core`): `python manage.py migrate`. Datos: los de COM-04b; un cliente con correo y otro sin correo; en
-«Configuración», vigencia del enlace de faltante 2 días.
+**Antes de empezar**
+1. `python manage.py migrate` y `python manage.py runserver`; entrá a `http://localhost:8000`. En local, con `DJANGO_DEBUG=1` en tu `.env`, `URL_DEL_SITIO` vale `http://localhost:8000` sola. Para ver el correo en la terminal, `CORREO_CONSOLA=1` en tu `.env` (sin él, el enlace queda «No se pudo enviar» y el Vendedor recibe el aviso: es el camino del paso 8).
+2. Cuentas que necesitás (con la contraseña de prueba que usás siempre): un **Gerente**, un **Agrónomo**, un **Capataz** y un **Vendedor**, y un invernadero activo con ese Agrónomo, ese Capataz y ese Vendedor, un sector en Maduración y una variedad con ciclo completo (los de COM-04b).
+3. En «Configuración»: «Vigencia del enlace de decisión ante un faltante» = **2** días.
+4. Dos clientes en «Comercial» › «Clientes»: **Verdulería Los Pinos S.R.L.** (CUIT `30712345671`, con correo `lospinos@ejemplo.com`) y **Verdulería Sin Correo S.A.** (CUIT `30000000090`, teléfono `1144445555`, **sin correo**).
+5. Un lote en Maduración con **60 plantas** de la variedad, y una partida en cámara de **40 plantas** de esa variedad con fecha límite **hoy** (por ejemplo, concretando una cosecha sin contrato de 40, como en COM-04b). Dos compra-ventas con retiro en el invernadero, una por cliente, de **20 plantas** cada una a $10, que reserven de esa partida (se asignan solas con «Reasignar cámara»: `python manage.py proceso_diario --solo reasignar_camara`).
 
-1. Repetí el punto 4 de COM-04a con el lote sin más stock libre: la venta pasa a «Pendiente de decisión del cliente» y el cliente recibe el
-   correo con el enlace. La ficha de la venta dice hasta cuándo puede decidir.
-2. Abrí el enlace del correo: la URL cambia y no muestra el token. Elegí «No recibir Lechuga Crespa»: el resumen dice que la compra se
-   cancela; confirmá. La venta queda «Cancelada» y lo cosechado entra a la cámara con «Rechazo por cantidad reducida». Volvé a abrir el
-   enlace: «Este enlace no se puede usar», con el contacto del Vendedor. En «Auditoría», el registro dice «Cliente (mediante enlace)».
-3. Repetí con el cliente **sin correo**: el Vendedor recibe la notificación y, desde la ficha de la venta, «Registrar decisión de faltante».
-4. `python manage.py proceso_diario --listar`: aparecen 20, 25, 27, 35 y 40. Con un enlace vencido sin respuesta, `proceso_diario --fecha
-   <vencimiento + 1>`: el Vendedor recibe el aviso una sola vez.
-5. Sin JavaScript: decidir (cliente y Vendedor) funciona con el resumen como página.
-6. Después del merge: en Render, desde la «Shell», `python manage.py proceso_diario --listar` y revisar en el log que se aplicaron las
-   migraciones nuevas.
+**Pasos** (lo marcado «lo cubre una prueba» ya lo verifica el recorrido; concentrate en lo que se ve y se siente)
 
-## Cierre (la completa Claude Code al cerrar)
+1. **Generar el faltante.** Esperá a que pase la fecha límite de la partida (o corré `python manage.py proceso_diario --solo vencer_partidas_en_camara --fecha <mañana>`), y agotá antes el stock del lote (reservando las 60 con otra venta) para que no se pueda volver a cubrir. Resultado: las dos ventas pasan a «Pendiente de decisión del cliente». Entrá como **Vendedor** › Comercial › Contratos: en la ficha de la venta de Los Pinos tiene que decir «Pendiente de decisión del cliente», el producto y «desde el <hoy>», **«El cliente puede decidir hasta el <hoy + 2 días>»** y **sin** botón. En la de Sin Correo: «El cliente no tiene correo…» **con** el botón «Registrar decisión de faltante». *(Lo cubre el recorrido.)*
+2. **El correo.** En la terminal de `runserver` (`CORREO_CONSOLA=1`) aparece el correo a `lospinos@ejemplo.com` con las cantidades pedida y disponible, la fecha pactada, el vencimiento y un enlace `http://localhost:8000/cliente/<código largo>/`. Copiá el enlace. La campana del Vendedor tiene además el aviso «CV-…: el cliente no tiene correo».
+3. **Navegador real (obligatorio).** Abrí una **ventana privada** (sin sesión) y pegá el enlace. Tiene que pasar a `/cliente/enlace/` **sin el código en la barra de direcciones**, sin menú ni campana. Elegí «No recibir <variedad>» (con disponible 0 es la única opción); tocá **«Ver resumen»**: dice que la compra quedará cancelada y que la decisión no podrá modificarse. Tocá **«Cambiar»**: vuelve con tu elección marcada. Volvé a «Ver resumen» y **«Confirmar decisión»** hasta el final. Tiene que mostrar «Gracias. Recibimos su decisión.». Si aparece «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola (F12), avisá: es un encabezado que el cliente de Django no ve. Con **F12 › Red**, comprobá que las respuestas de `/cliente/…` traen `Cache-Control: no-store`, `Referrer-Policy: same-origin` y `X-Robots-Tag: noindex`.
+4. **Reabrir.** En la misma ventana privada, volvé a pegar el enlace: «Este enlace no se puede usar», «ya se usó», con nombre, teléfono y correo del Vendedor y **sin** datos de la venta. Un enlace inventado (cambiá una letra del código): «Este enlace no es válido». *(Lo cubre una prueba, pero conviene ver el texto.)*
+5. **Auditoría y efectos.** Como **Gerente** › Auditoría: un registro «Decisión de faltante» con origen **«Cliente (mediante enlace)»**, la venta, el cliente, el detalle y el enlace. La venta de Los Pinos quedó «Cancelada».
+6. **Cliente sin correo.** Como **Vendedor** › Contratos: botón «Faltantes para decidir (1)». Abrilo: aparece la venta de Sin Correo con su teléfono, la fecha pactada, el producto y desde cuándo. «Registrar decisión»: pantalla con «Estás registrando la decisión en nombre de…», elegí «No recibir», «Ver resumen», «Confirmar decisión». Vuelve a la ficha con el aviso «Registraste la decisión del cliente sobre el faltante de CV-…» y la venta «Cancelada». Sin ventas pendientes, la lista dice «No hay ventas de tus contratos esperando una decisión que puedas registrar.».
+7. **Aceptar parte (opcional, con otra venta).** Repetí los pasos 1 a 3 con una venta de 50 plantas con 30 cubiertas por otra partida: la pantalla ofrece «Recibir las 30 plantas disponibles · $ 300,00» y «No recibir»; aceptá, confirmá: el detalle queda «Confirmado» con 30 entregadas, la venta «Abierta» y el monto de la ficha usa las 30.
+8. **Correo que no sale.** Sin `CORREO_CONSOLA` (o con el correo sin configurar), generá otro faltante para Los Pinos: la ficha dice **«El correo no se pudo enviar»**, el Vendedor tiene el aviso «No se pudo enviar el enlace…» y el botón «Registrar decisión de faltante» aparece aunque el plazo siga corriendo.
+9. **Paso diario 27.** `python manage.py proceso_diario --listar`: aparecen 20, 25, **27**, 35 y 40. Con un enlace vigente sin responder: `python manage.py proceso_diario --solo avisar_enlaces_vencidos --fecha <vencimiento + 1 día>`. El Vendedor recibe **un** aviso «Venció el plazo del cliente de CV-…»; corrélo de nuevo: no hay otro. La venta sigue «Pendiente de decisión» (no hay decisión tácita) y ahora la ficha ofrece el botón. *(Lo cubre el recorrido.)*
+10. **Roles.** El **Gerente** ve la ficha de la venta pendiente con el bloque y **sin** botón; por la dirección `/comercial/faltantes/` o `/comercial/contratos/compra-ventas/<id>/decidir-faltante/` recibe 403. El **Agrónomo** y el **Capataz**: 403 en `/comercial/faltantes/`. Otro **Vendedor** (de otro invernadero): 403 en la decisión de una venta ajena. *(Lo cubre `test_faltantes_vistas.py`.)*
+11. **Un faltante que se cubre.** Con un enlace vigente, concretá una cosecha sin contrato (o una partida nueva) de la misma variedad en ese invernadero y corré `proceso_diario --solo reasignar_camara`: el detalle vuelve a «Abierto», la venta a «Abierta» y el enlace deja de servir («Este enlace no se puede usar», «fue anulado»). *(Lo cubre `test_prod_asg_cam.py`.)*
+12. **Sin JavaScript (opcional).** Desactivá JavaScript en la ventana privada y repetí el paso 3 y el 6: funciona igual (páginas y un POST).
+13. **Celular (opcional).** Abrí el enlace en un celular: la tabla del resumen se apila y los botones se alcanzan con el pulgar.
+14. **Después del merge, en Render.** Cargá la variable de entorno **`URL_DEL_SITIO`** (por ejemplo `https://<tu-servicio>.onrender.com`, **sin barra final**) y esperá el despliegue; en el log, que se aplicaron `comercial.0007_enlace_cliente` y `core.0039_comercial_faltantes`. Desde la «Shell»: `python manage.py proceso_diario --listar` muestra el 27. Sin la variable, los enlaces quedan «No se pudo enviar».
 
-<!-- Al cerrar, Claude Code suma, si corrigió o completó pantallas (D-61):
+## Cierre
+
+**Qué se hizo**
+- `EnlaceCliente` (D-65): modelo, restricciones y migración `comercial` 0007; en `core`, las acciones `decision_faltante` y `vencimiento_enlace`, sus etiquetas y los estados del enlace (migración 0039, solo `choices`). `ROL_CLIENTE_ENLACE` y `rol_externo` ya existían (CMP-02a).
+- `comercial/servicios/enlaces.py`: crear (reemplaza al vigente, correo con `on_commit`), reemplazar, anular, buscar por token, `situacion_del_enlace`, `bloquear_enlace`, `enviar_enlace` y el paso diario 27 (`avisar_enlaces_vencidos`).
+- `seguir_camino_de_faltante` crea o reemplaza el enlace (con correo) o avisa «registrá vos la decisión» (sin correo); PROD-ASG-CAM anula el enlace de la venta que vuelve a «abierta»; el enlace va a la auditoría de la concreción, la cancelación de cosecha, el vencimiento y la merma en cámara.
+- COM-DCD-FLT (`faltantes.py`): `datos_de_decision`, `resumen_de_decision`, `registrar_decision`, `ventas_para_decidir`, `puede_decidir_el_vendedor`, `estado_del_faltante`; bloqueos en el orden de `bloqueos.md` con el enlace al final; auditoría `decision_faltante` con origen «cliente mediante enlace» o el Vendedor; acuse y asignación de cámara con `on_commit`.
+- Portal público (`/cliente/…`), «Faltantes para decidir» y «Registrar decisión de faltante» del Vendedor, la ficha de la compra-venta con lo pendiente y el enlace en la lista de Contratos.
+
+**Pruebas (M1)**
+- `python manage.py test comercial produccion maestros core --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`: **4444 pruebas, OK**.
+- `python manage.py test comercial --keepdb --tag concurrencia`: **69 pruebas, OK** (dos envíos del mismo enlace, la decisión contra PROD-ASG-CAM, contra la merma en cámara y contra cancelar una cosecha).
+- `makemigrations --check --dry-run`: sin cambios. `check`: sin problemas. `sqlmigrate comercial 0007`: crea la tabla, sus restricciones y el índice parcial único, sin tocar datos; `sqlmigrate core 0038`: no-op.
+- Pruebas nuevas: `test_enlaces.py`, `test_com_dcd_flt.py` (con `ComDcdFltConcurrenciaTests`), `test_faltantes_vistas.py`, `test_recorrido_faltantes.py` y métodos nuevos en `test_modelos_cosecha_camara.py`, `test_camino_de_faltante.py`, `test_prod_asg_cam.py`, `test_prod_vnc_cam.py`, `test_prod_reg_mrm_camara.py`, `test_prod_cnc_csc.py`, `test_prod_cnl_ord_cosechas.py` y `test_cancelar_cosecha_concurrencia.py`.
+- **Pruebas existentes cambiadas** (con tu autorización): `test_prod_cnl_ord_cosechas.py`, `test_post_h_las_lineas_de_camara_que_se_liberan_programan_la_asignacion_de_camara` (se quitó `len(callbacks) == 1`: ahora hay además el `on_commit` del correo del enlace) y `test_post_h_una_cosecha_sin_lineas_de_camara_no_programa_nada` (verifica que no corra `asignar_camara` en vez de que no haya callbacks).
+
+**Verifiqué:** el recorrido `RecorridoDeFaltantesTests` (correo con el enlace, portal sin token en la URL, «No recibir», resumen, confirmar, reabrir, auditoría «Cliente (mediante enlace)», decisión del Vendedor, roles, paso 27 idempotente); las migraciones (SQL leído, sin pérdida de datos; aplicadas en la base de pruebas).
+**Lo cubre una prueba:** cada postcondición (a a l) y extensión (`test_com_dcd_flt.py`); el token que no está en la base y los tres encabezados (`test_enlaces.py`, `test_faltantes_vistas.py`); permisos por rol (`test_faltantes_vistas.py`); concurrencia (`ComDcdFltConcurrenciaTests`, `test_cancelar_cosecha_concurrencia.py`).
+**No pude verificar:** el CSRF real, el encabezado `Origin` y el aspecto en navegador (pasos 3 y 12 a 13 de arriba); el envío real de correo; el despliegue en Render con `URL_DEL_SITIO` (paso 14).
+
+**Desvíos respecto de la documentación** (para `docs/temas_abiertos.md`, M3)
+1. `ROL_CLIENTE_ENLACE`, `rol_externo` y su texto visible ya existían (CMP-02a): no se tocaron y no hay `core/tests/test_auditoria_rol_externo.py` (lo cubre `test_registro_auditoria.py::test_d88_*`).
+2. **`URL_DEL_SITIO`** (nuevo ajuste en `config/settings.py`, de la variable de entorno; en local con DEBUG vale `http://localhost:8000`) y la ruta `/cliente/` en `config/urls.py`: ninguna estaba en «Permitido fuera de la app» (autorizado por el estudiante). Hay que cargar la variable en Render.
+3. `cancelar_cosecha_incluida` recibe como actor al Vendedor en 1a (la doc dice siempre `None`); así el aviso dice «cancelada por <Vendedor>».
+4. El aviso «registrá vos la decisión» no lleva URL (`notificar` no tiene ese campo): el botón está en la ficha y en la lista.
+5. COM-DCD-FLT bloquea además las partidas de las líneas de **todos** los detalles pendientes (para que 6b sea confiable frente a una merma o una asignación sobre un detalle aceptado). El orden no cambia.
+6. Si un caso de uso deja dos detalles de la misma venta sin cubrir, el enlace se crea dos veces en la transacción (el primero queda `reemplazado` y su correo no sale); sin correo del cliente, el Vendedor puede recibir dos avisos iguales.
+7. Sin HTMX en el flujo del cliente y del Vendedor: son páginas completas y un POST (`Vary: HX-Request`); el respaldo sin JavaScript es el único camino.
+8. La prueba «merma en cámara contra la decisión del cliente» está en `test_com_dcd_flt.py` (comparte su escenario) y no en `test_camara_concurrencia.py`.
+9. El paso 7 / postcondición m (planificar la entrega) no se hace: es de COM-05a1, como dice la doc.
+10. La contraseña de las cuentas de prueba no se escribió en ningún archivo versionado; los datos de «Datos para verificar» (cargador) no se cargaron (D-95).
+
 ### Pantallas: lo que se corrigió del prototipo
+
 | Pantalla (función del prototipo) | Qué tenía | Qué se hizo | Por qué (paso o regla) |
--->
+|---|---|---|---|
+| Portal del cliente · Decidir Faltante (`VIEWS.dcd`) | Un solo detalle pendiente (`c.det.find`), sin resumen y registro directo | Una elección por detalle pendiente, resumen con cantidad, subtotal, monto total nuevo y advertencia, y «Cambiar» | Extensiones 3b, 4a y 4b; paso 4 |
+| `VIEWS.dcd` | No mostraba los demás detalles, la modalidad ni el monto total; no contemplaba disponible 0 | Muestra la modalidad y el destino, hasta cuándo puede decidir, «el resto de la compra no cambia» y, con disponible 0, solo «No recibir» | Paso 2; extensión 2b |
+| (no existe) | Sin pantalla de enlace que no sirve ni de enlace no válido | «Este enlace no se puede usar» con motivo y contacto del Vendedor; «Este enlace no es válido» (404) | Extensiones 2a y 6a |
+| (no existe) | Sin pantalla para el Vendedor | «Faltantes para decidir» (con 1a.2a) y «Registrar decisión de faltante»; el botón y el enlace en la ficha y en Contratos, solo cuando puede | Extensión 1a; D-30 (ningún botón lleva a un 403) |
+| `ACT['dcd-ok']` | Registraba al elegir | Dos páginas y un POST (sin JavaScript) con un campo oculto con la cantidad disponible vista | Extensión 6b; D-29 |
+| Ficha de la compra-venta (COM-02) | Sin lo pendiente ni el plazo | Bloque «Pendiente de decisión del cliente» con desde cuándo, vencimiento y estado del envío | «Lo que completa a COM-02» |

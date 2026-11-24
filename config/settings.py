@@ -76,6 +76,11 @@ AUTH_USER_MODEL = "core.Usuario"
 # Es un dato de cada instalación, no del código: «Jardín Botánico» era solo del prototipo (D-24).
 NOMBRE_ORGANIZACION = os.environ.get("NOMBRE_ORGANIZACION", "InfoPonia")
 
+# COM-04c (D-65): la dirección pública del sitio, sin barra final (por ejemplo ``https://infoponia.onrender.com``). La usan los correos que se
+# mandan sin un pedido web delante (el enlace de decisión de faltante lo crean también procesos automáticos, como el paso diario 20). Con DEBUG y
+# sin la variable vale ``http://localhost:8000``; en producción hay que cargarla en Render: sin ella el enlace queda «pendiente de envío».
+URL_DEL_SITIO = os.environ.get("URL_DEL_SITIO", "http://localhost:8000" if DEBUG else "").rstrip("/")
+
 # Tarea 02 — USR-INI-SES, SEG-01, SEG-05 a SEG-08 (docs/casos_de_uso/usuarios.md).
 # El backend compara el email sin distinguir mayúsculas (SEG-01). No se agrega ningún límite de
 # intentos ni bloqueo (SEG-05).

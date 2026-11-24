@@ -17,15 +17,18 @@
 
 from datetime import timedelta
 
-from django.test import TestCase
+from unittest import mock
+
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from comercial.models import CompraVenta, DetalleVenta
+from comercial.models import CompraVenta, DetalleVenta, EnlaceCliente
 from comercial.servicios import faltantes
 from comercial.tests.fabricas import (
     compra_venta,
     detalle,
     detalle_suministro,
+    enlace as un_enlace,
     escenario_comercial,
     periodo,
     suministro,
@@ -90,6 +93,77 @@ class CompraVentaTests(Base):
         self.seguir()
         otro.refresh_from_db()
         self.assertEqual(otro.estado_detalle_venta, Estado.ABIERTO)
+
+
+class EnlaceDelCaminoTests(Base):
+    """COM-04c (D-65 puntos 1, 5 y 6): el camino de faltante crea o reemplaza el enlace del cliente y, sin correo, avisa al Vendedor."""
+
+    def test_regla_con_correo_crea_el_enlace_vigente_que_vence_con_la_vigencia_configurada(self):
+        """Regla «Enlace de decisión»: un enlace `vigente` de la venta que vence en la `fecha_pendiente_decision` más reciente + `dias_vigencia_enlace_faltante` (2 de fábrica)."""
+        resultado = self.seguir()
+        creado = EnlaceCliente.objects.get(compra_venta=self.venta)
+        self.assertEqual(resultado.enlace.pk, creado.pk)
+        self.assertEqual((creado.estado, creado.tipo, creado.cliente_id, creado.fecha_vencimiento), ("vigente", "decision_faltante", self.venta.cliente_id, HOY + timedelta(days=2)))
+
+    def test_regla_el_vencimiento_cuenta_desde_la_fecha_de_pendiente_mas_reciente(self):
+        """8d de PROD-CNL-ORD y la regla «Enlace de decisión»: con otro detalle que esperaba desde hace 3 días y la vigencia en 5, vence a los 5 días de la fecha MÁS RECIENTE."""
+        from maestros.models import ConfiguracionOperativa
+        from maestros.tests.fabricas import crear_variedad
+
+        ConfiguracionOperativa.objects.filter(singleton=1).update(dias_vigencia_enlace_faltante=5)
+        viejo = detalle(self.venta, crear_variedad(self.e.variedad.cultivo, nombre="Otra"), 5, estado="pendiente_decision")
+        DetalleVenta.objects.filter(pk=viejo.pk).update(fecha_pendiente_decision=HOY - timedelta(days=3))
+        self.seguir()
+        self.assertEqual(EnlaceCliente.objects.get(compra_venta=self.venta).fecha_vencimiento, HOY + timedelta(days=5))
+
+    def test_regla_reemplaza_al_enlace_vigente_de_la_venta(self):
+        """8d y D-65 punto 5: un faltante nuevo (otro detalle o más producto perdido) reemplaza el enlace vigente: el viejo, `reemplazado`; uno solo vigente."""
+        viejo, _ = un_enlace(self.venta)
+        self.seguir()
+        viejo.refresh_from_db()
+        self.assertEqual(viejo.estado, "reemplazado")
+        self.assertEqual(EnlaceCliente.objects.filter(compra_venta=self.venta, estado="vigente").count(), 1)
+
+    @override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test")
+    def test_regla_el_correo_sale_con_on_commit_con_las_cantidades_y_la_url(self):
+        """D-65 punto 6: el correo no sale dentro de la transacción; con `on_commit` lleva la URL con el token, la cantidad solicitada y la disponible; el envío queda anotado."""
+        with mock.patch("core.correo.enviar_correo", return_value=True) as envio:
+            with self.captureOnCommitCallbacks(execute=False) as callbacks:
+                self.seguir()
+            self.assertEqual((envio.call_count, len(callbacks)), (0, 1))
+            callbacks[0]()  # recién ahora sale el correo, con el parche todavía activo
+        contexto = envio.call_args.args[3]
+        self.assertTrue(contexto["url"].startswith("https://sitio.test/cliente/"))
+        self.assertEqual(contexto["lineas"], [{"variedad": str(self.e.variedad), "solicitada": 50, "disponible": 0}])
+        self.assertEqual(EnlaceCliente.objects.get(compra_venta=self.venta).estado_envio, "enviado")
+
+    def test_regla_un_periodo_de_suministro_no_crea_enlace(self):
+        """El período de un suministro no cambia de estado ni tiene enlace (la pre-reserva diaria lo vuelve a intentar)."""
+        det = detalle_suministro(suministro(self.e), self.e.variedad, cantidad=30, primera_en_dias=3)
+        resultado = faltantes.seguir_camino_de_faltante(periodo(det, HOY + timedelta(days=3)), 12, origen=None)
+        self.assertEqual((resultado.enlace, EnlaceCliente.objects.count()), (None, 0))
+
+
+class SinCorreoDelClienteTests(Base):
+    def setUp(self):
+        self.e = escenario_comercial(email_del_cliente="")
+        self.venta = compra_venta(self.e)
+        self.detalle = detalle(self.venta, self.e.variedad, 50)
+        self.addCleanup(verificar_invariantes_de_reservas)
+
+    def test_regla_sin_correo_no_hay_enlace_y_el_vigente_pasa_a_reemplazado(self):
+        """D-65 punto 1 y patrón, sección 2: el cliente sin correo no tiene enlace; el que hubiera pasa a `reemplazado`."""
+        viejo, _ = un_enlace(self.venta)
+        resultado = self.seguir()
+        viejo.refresh_from_db()
+        self.assertEqual((resultado.enlace, viejo.estado, EnlaceCliente.objects.filter(estado="vigente").count()), (None, "reemplazado", 0))
+
+    def test_regla_sin_correo_se_avisa_al_vendedor_que_registre_la_decision(self):
+        """Regla del camino de faltante: «El cliente de CV-… no tiene correo: registrá vos su decisión sobre el faltante.»"""
+        self.seguir()
+        aviso = Notificacion.objects.get(destinatario=self.e.vendedor)
+        self.assertIn(self.venta.codigo, aviso.titulo)
+        self.assertIn("no tiene correo: registrá vos su decisión", aviso.detalle)
 
 
 class PeriodoTests(Base):

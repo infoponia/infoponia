@@ -815,6 +815,9 @@ class RegistroAuditoria(models.Model):
         GENERACION_ORDEN_COMPRA = "generacion_orden_compra", "Generación de orden de compra"
         APROBACION_ORDEN_COMPRA = "aprobacion_orden_compra", "Aprobación de orden de compra"
         RECHAZO_ORDEN_COMPRA = "rechazo_orden_compra", "Rechazo de orden de compra"
+        # COM-04c (D-65): decidir un faltante (el cliente por su enlace, o el Vendedor por él) y el vencimiento del enlace sin respuesta (paso diario 27).
+        DECISION_FALTANTE = "decision_faltante", "Decisión de faltante"
+        VENCIMIENTO_ENLACE = "vencimiento_enlace", "Vencimiento del enlace del cliente"
         # CON-02 (D-84 punto 9): <acción>_<entidad>. Un registro por cada ejercicio, asiento y movimiento creados; el cambio de estado
         # de un ejercicio es ``modificacion_ejercicio_contable``.
         ALTA_EJERCICIO_CONTABLE = "alta_ejercicio_contable", "Alta de ejercicio contable"
@@ -1143,6 +1146,14 @@ class RegistroAuditoria(models.Model):
         "gerente": "Gerente que resolvió",
         "transito": "Cantidad en tránsito",
         "cotizaciones_afectadas": "Cotizaciones afectadas",
+        # COM-04c: decidir un faltante y vencer un enlace del cliente.
+        "decisiones": "Decisión de cada detalle",
+        "partidas_creadas": "Partidas de cámara creadas",
+        "movimientos_creados": "Movimientos de stock creados",
+        "cosechas_canceladas": "Cosechas canceladas",
+        "enlace": "Enlace del cliente",
+        "enlaces_anulados": "Enlaces anulados",
+        "fecha_vencimiento_enlace": "El enlace vencía el",
         # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
         "fecha_inicio_ejercicio": "Inicio del ejercicio",
         "fecha_cierre_ejercicio": "Cierre previsto del ejercicio",
@@ -1170,6 +1181,12 @@ class RegistroAuditoria(models.Model):
             "activo": "Activo",
             "inactivo": "Inactivo",
             "fuera_de_servicio": "Fuera de servicio",
+            # COM-04c: estados del enlace del cliente (`core` no importa `comercial`, A1 de D-37).
+            "vigente": "Vigente",
+            "usado": "Usado",
+            "reemplazado": "Reemplazado",
+            "anulado": "Anulado",
+            "vencido": "Vencido",
             # CMP-02a: estados del pedido de cotización (`core` no importa `compras`, A1 de D-37).
             "en_cotizacion": "En cotización",
             "cerrado": "Cerrado",
@@ -1507,6 +1524,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.GENERACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.APROBACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.RECHAZO_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.DECISION_FALTANTE,
+        RegistroAuditoria.Accion.VENCIMIENTO_ENLACE,
         RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.MODIFICACION_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_ASIENTO_CONTABLE,

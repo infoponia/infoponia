@@ -1,0 +1,5 @@
+{% extends "comercial/cliente/base.html" %}
+{% comment %}Decidir un faltante, para el cliente (COM-DCD-FLT pasos 2 a 6; `VIEWS.dcd` del prototipo): el formulario y el resumen son los de `comercial/faltantes/_decision.html`, que comparte la
+pantalla del Vendedor (extensión 1a).{% endcomment %}
+{% block titulo %}Faltante en su compra {{ datos.venta.codigo }} · {{ nombre_organizacion }}{% endblock %}
+{% block contenido %}{% include "comercial/faltantes/_decision.html" %}{% endblock %}

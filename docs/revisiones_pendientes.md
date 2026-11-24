@@ -718,6 +718,25 @@ Los 31 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-03-
 - [ ] 30. Roles: Capataz 403 en Órdenes; Beto lista vacía y 403 en la ficha; Gerente 403 en generar; Ana 403 en resolver.
 - [ ] 31. (Opcional) Sin JavaScript y en un celular.
 
+## COM-04c · Tarea COM-04c (faltante y enlace del cliente; paso diario 27)
+
+Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-04c-faltante-y-enlace-del-cliente.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0007 y `core` 0039, solo `choices`): `python manage.py migrate`; después `python manage.py runserver` (con `CORREO_CONSOLA=1` en tu `.env` para ver el correo en la terminal). Necesitás un Gerente, un Agrónomo, un Capataz y un Vendedor del mismo invernadero. Crear a mano: «Configuración» con vigencia del enlace de faltante 2 días; los clientes **Verdulería Los Pinos S.R.L.** (CUIT `30712345671`, correo `lospinos@ejemplo.com`) y **Verdulería Sin Correo S.A.** (CUIT `30000000090`, teléfono `1144445555`, sin correo); un lote de 60 plantas y una partida en cámara de 40 con fecha límite hoy; una compra-venta de 20 plantas por cliente que reserve de esa partida.
+
+- [ ] 1. Generar el faltante (partida vencida y lote sin stock): las dos ventas «Pendiente de decisión»; la ficha de Los Pinos con lo pendiente, el vencimiento y sin botón; la de Sin Correo, con el botón «Registrar decisión de faltante».
+- [ ] 2. El correo a Los Pinos en la terminal, con las cantidades, la fecha pactada, el vencimiento y el enlace; el aviso «CV-…: el cliente no tiene correo» en la campana del Vendedor.
+- [ ] 3. **Navegador real** (ventana privada): abrir el enlace, que la barra no muestre el código, «No recibir», «Ver resumen», «Cambiar», «Confirmar decisión» hasta «Gracias. Recibimos su decisión.»; sin 403 ni «Verificación CSRF fallida»; en F12 › Red, los tres encabezados de `/cliente/…`.
+- [ ] 4. Reabrir el enlace: «Este enlace no se puede usar» con el contacto del Vendedor y sin datos de la venta; un enlace con una letra cambiada: «Este enlace no es válido».
+- [ ] 5. «Auditoría» (Gerente): «Decisión de faltante» con origen «Cliente (mediante enlace)»; la venta de Los Pinos «Cancelada».
+- [ ] 6. Cliente sin correo: «Faltantes para decidir (1)», «Registrar decisión», resumen, confirmar, aviso «Registraste la decisión del cliente…» y venta «Cancelada»; con la lista vacía, «No hay ventas de tus contratos esperando…».
+- [ ] 7. (Opcional) Aceptar parte con una venta de 50 y 30 cubiertas: «Confirmado» con 30 entregadas y venta «Abierta».
+- [ ] 8. Correo que no sale (sin `CORREO_CONSOLA`): la ficha dice «El correo no se pudo enviar», el aviso al Vendedor y el botón disponible.
+- [ ] 9. `proceso_diario --listar` muestra el 27; con `--solo avisar_enlaces_vencidos --fecha <vencimiento + 1>`, un solo aviso al Vendedor, la venta sigue pendiente y aparece el botón.
+- [ ] 10. Roles: el Gerente ve el bloque sin botón y 403 por la dirección; Agrónomo y Capataz, 403 en `/comercial/faltantes/`; otro Vendedor, 403 en una venta ajena.
+- [ ] 11. Un faltante que se cubre (nueva partida y `reasignar_camara`): el detalle «Abierto», la venta «Abierta» y el enlace «fue anulado».
+- [ ] 12. (Opcional) Sin JavaScript: decidir (cliente y Vendedor) funciona igual.
+- [ ] 13. (Opcional) En un celular: la tabla del resumen se apila y los botones se alcanzan.
+- [ ] 14. Después del merge, en Render: cargar `URL_DEL_SITIO` (sin barra final), ver en el log `comercial.0007_enlace_cliente` y `core.0039_comercial_faltantes` y, desde la «Shell», `proceso_diario --listar` con el 27.
+
 ## CON-02 · Tarea CON-02 (núcleo contable: ejercicio, asiento, movimiento, plan de cuentas y asientos automáticos)
 
 Los 16 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-02-nucleo-contable.md` (comandos de PowerShell y código para pegar en `python manage.py shell`, con valores concretos), copiados acá para ir tachándolos (M5). No tiene pantallas ni paso de «navegador real». Los pasos 14 a 16 son opcionales: dejan ejercicios de 2027 y 2028 en la base de desarrollo, que no se pueden sacar.

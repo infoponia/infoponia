@@ -27,7 +27,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 from comercial.models import AlertaComercial, CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
-from comercial.servicios import calendario, faltantes, stock_maduro
+from comercial.servicios import calendario, enlaces, faltantes, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import Periodo, _cubierto
 from core import correo, notificaciones
@@ -59,7 +59,7 @@ Candidato = namedtuple("Candidato", "tipo objeto contrato fecha_entrega fecha_re
 LineaARecortar = namedtuple("LineaARecortar", "tipo fecha_entrega reserva_id linea")
 Afectado = namedtuple("Afectado", "objeto contrato recortado fecha_entrega")
 Recorte = namedtuple("Recorte", "lineas reservas_liberadas por_detalle")
-Recubierto = namedtuple("Recubierto", "reservas cosechas faltantes detalles")  # faltantes: [(código del contrato, plantas sin cubrir)]
+Recubierto = namedtuple("Recubierto", "reservas cosechas faltantes detalles enlaces", defaults=((),))  # faltantes: [(código del contrato, plantas sin cubrir)]; enlaces: los del cliente que creó el camino de faltante (COM-04c)
 ResultadoDeAsignacion = namedtuple("ResultadoDeAsignacion", "partida reservas detalles_reabiertos ventas_reabiertas reservado")
 
 
@@ -242,7 +242,7 @@ def _recubrir(afectados, actor):
     se cubre (docs/patrones/stock_maduro.md, sección 8). Un período o un detalle «abierto» de una venta «abierta» se cubre con `asignar`; un detalle «confirmado», con la cantidad
     aceptada como pedida (D-64 punto 13); un detalle o una venta «pendiente de decisión» va directo al camino de faltante (precondición b de PROD-ASG-STK). Con todo bloqueado
     y en la transacción del llamador. Devuelve `Recubierto(reservas, cosechas, faltantes, detalles)`."""
-    reservas, cosechas, sin_cubrir_de, detalles = [], [], [], []
+    reservas, cosechas, sin_cubrir_de, detalles, enlaces_nuevos = [], [], [], [], []
     for a in afectados:
         if isinstance(a.objeto, Periodo):
             detalle = DetalleSuministro.objects.select_related("suministro").get(pk=a.objeto.detalle.pk)
@@ -272,10 +272,12 @@ def _recubrir(afectados, actor):
             else:
                 sin_cubrir = a.recortado
             if sin_cubrir:
-                faltantes.seguir_camino_de_faltante(detalle, sin_cubrir, origen=actor)
+                camino = faltantes.seguir_camino_de_faltante(detalle, sin_cubrir, origen=actor)
+                if camino.enlace is not None:
+                    enlaces_nuevos.append(camino.enlace)
         if sin_cubrir:
             sin_cubrir_de.append((a.contrato.codigo, sin_cubrir))
-    return Recubierto(reservas, cosechas, sin_cubrir_de, detalles)
+    return Recubierto(reservas, cosechas, sin_cubrir_de, detalles, enlaces_nuevos)
 
 
 def _avisar_merma_reservada(partida, merma, recubierto, afectados, motivo):
@@ -455,10 +457,12 @@ def _asignar_partida(partida_id, hoy):
                     venta.estado_venta = CompraVenta.Estado.ABIERTA
                     ventas_reabiertas[venta.pk] = venta
         reservado = sum(l.cantidad_reservada for l in lineas)
+        # Postcondición d: una venta que vuelve a «abierta» ya no tiene detalles pendientes, así que su enlace de decisión deja de servir (`anulado`; D-65 punto 5). Va al final del orden de bloqueo.
+        anulados = [e for venta in ventas_reabiertas.values() for e in enlaces.anular_enlaces_de(venta)]
         _avisar_asignacion(partida, por_contrato, libre)
         for argumentos in correos:
             transaction.on_commit(partial(_correo_de_faltante_cubierto, *argumentos))
-        afectados = [partida, *reservas, *lineas, *reabiertos, *ventas_reabiertas.values()]
+        afectados = [partida, *reservas, *lineas, *reabiertos, *ventas_reabiertas.values(), *anulados]
         datos = {
             "partida": referencia(partida),
             "reservas": [f"{c.contrato.codigo} · {_plantas(n)} · entrega {c.fecha_entrega:%d/%m/%Y}" for items in por_contrato.values() for c, n, *_ in items],
@@ -467,6 +471,8 @@ def _asignar_partida(partida_id, hoy):
             datos["detalles_reabiertos"] = [f"{d.compra_venta.codigo} · {d.variedad}" for d in reabiertos]
         if ventas_reabiertas:
             datos["ventas_reabiertas"] = [v.codigo for v in ventas_reabiertas.values()]
+        if anulados:
+            datos["enlaces_anulados"] = [str(e) for e in anulados]
         RegistroAuditoria.objects.registrar(usuario=None, accion=RegistroAuditoria.Accion.ASIGNACION_CAMARA, afectados=afectados, detalle={"datos": datos})
     return ResultadoDeAsignacion(partida, reservas, reabiertos, list(ventas_reabiertas.values()), reservado)
 
@@ -566,7 +572,7 @@ def _vencer_en_transaccion(partida_id, hoy, previo):
             alerta = _avisar_merma_reservada(p, merma, recubierto, recorte.por_detalle, "Venció la partida")
         aviso = resolver_aviso_de_partida(p)  # e
         afectados = [p, *([merma, resultado.movimiento] if resultado is not None else []), *[l for l, _ in recorte.lineas], *recorte.reservas_liberadas]
-        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles]
+        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces]
         if alerta is not None:
             afectados.append(alerta)
         datos = {"partida": referencia(p), "fecha_limite": f"{p.fecha_limite:%d/%m/%Y}"}

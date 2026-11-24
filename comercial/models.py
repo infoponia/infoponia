@@ -731,6 +731,64 @@ class ClausulaSuministrante(ClausulaResolutoria):
         return f"Cláusula del suministrante de {self.detalle}"
 
 
+class EnlaceCliente(models.Model):
+    """El enlace de acceso temporal de un cliente sin cuenta (COM-04c, D-65; `docs/patrones/enlace_del_cliente.md`, `docs/modelo/comercial.md`). Tabla técnica, no una
+    clase del dominio: es cómo el código cumple «uso único», «vencimiento» y «reemplazo» de COM-DCD-FLT. La base guarda SOLO el resumen SHA-256 del token
+    (`core/enlaces.py`), nunca el token. Un cliente sin correo no tiene enlace. COM-06b suma el tipo `confirmacion_entrega` y su FK a `Entrega`. No se audita por su
+    cuenta: el caso de uso que lo crea o lo usa lo pone en su registro (D-36)."""
+
+    class Tipo(models.TextChoices):
+        DECISION_FALTANTE = "decision_faltante", "Decisión de faltante"
+
+    class Estado(models.TextChoices):
+        VIGENTE = "vigente", "Vigente"
+        USADO = "usado", "Usado"
+        REEMPLAZADO = "reemplazado", "Reemplazado"
+        ANULADO = "anulado", "Anulado"
+        VENCIDO = "vencido", "Vencido"
+
+    class EstadoEnvio(models.TextChoices):
+        ENVIADO = "enviado", "Enviado"
+        PENDIENTE_ENVIO = "pendiente_envio", "No se pudo enviar"
+
+    tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.DECISION_FALTANTE)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="enlaces")
+    compra_venta = models.ForeignKey(CompraVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="enlaces")
+    token_resumen = models.CharField(max_length=64, unique=True)
+    fecha_creacion = models.DateTimeField(default=timezone.now, editable=False)
+    # Sirve hasta el final de ese día (D-65 punto 4). Faltante: la `fecha_pendiente_decision` más reciente de los detalles pendientes + `dias_vigencia_enlace_faltante`.
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.VIGENTE)
+    fecha_uso = models.DateTimeField(null=True, blank=True)
+    # Nulo hasta que se intenta el envío (el correo sale fuera de la transacción, D-65 punto 6).
+    estado_envio = models.CharField(max_length=20, choices=EstadoEnvio.choices, null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Enlace del cliente"
+        verbose_name_plural = "Enlaces del cliente"
+        constraints = [
+            # D-65 punto 5: a lo sumo un enlace vigente por venta y tipo.
+            models.UniqueConstraint(fields=["compra_venta", "tipo"], condition=Q(estado="vigente"), name="enlace_cliente_un_vigente_por_venta_y_tipo"),
+            models.CheckConstraint(condition=Q(estado__in=["vigente", "usado", "reemplazado", "anulado", "vencido"]), name="enlace_cliente_estado_valido"),
+            models.CheckConstraint(condition=Q(tipo__in=["decision_faltante"]), name="enlace_cliente_tipo_valido"),
+            models.CheckConstraint(
+                condition=Q(estado_envio__isnull=True) | Q(estado_envio__in=["enviado", "pendiente_envio"]), name="enlace_cliente_estado_envio_valido"
+            ),
+            # Modelo, «EnlaceCliente»: usado <=> fecha de uso.
+            models.CheckConstraint(
+                condition=(Q(estado="usado") & Q(fecha_uso__isnull=False)) | (~Q(estado="usado") & Q(fecha_uso__isnull=True)),
+                name="enlace_cliente_usado_con_fecha_de_uso",
+            ),
+            # Modelo, «EnlaceCliente»: decision_faltante => compra_venta no nula.
+            models.CheckConstraint(condition=~Q(tipo="decision_faltante") | Q(compra_venta__isnull=False), name="enlace_cliente_faltante_con_venta"),
+        ]
+
+    def __str__(self):
+        """«Enlace de CV-0044 (vigente)»."""
+        return f"Enlace de {self.compra_venta.codigo if self.compra_venta_id else self.tipo} ({self.estado})"
+
+
 class AlertaComercial(models.Model):
     """Tabla de vínculo entre una alerta de `maestros` y su origen comercial (D-63, T-01; regla A2 de D-37: `Alerta` no conoce a `comercial`).
     Una FK nula por cada origen posible y **exactamente una** cargada. COM-03b crea `suministro` y `detalle_suministro`; COM-04 suma `partida`,

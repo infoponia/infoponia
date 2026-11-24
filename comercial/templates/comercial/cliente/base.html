@@ -1,0 +1,22 @@
+{% extends "core/base.html" %}{% load iconos estaticos %}
+{% comment %}Marco del portal público del cliente (COM-DCD-FLT; D-65 punto 3): sin menú, sin campana y sin ningún dato de la sesión de un usuario. Una sola columna que se adapta al
+celular. Muestra los mensajes de Django con las convenciones de D-29 (el portal del proveedor, CMP-ENV-COT, es el modelo).{% endcomment %}
+{% block titulo %}Su compra · {{ nombre_organizacion }}{% endblock %}
+{% block cuerpo %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="portal">
+  <div class="auth-brand portal-marca">
+    <div class="logo">{% icono "leafmark" 16 %}</div>
+    <div><b>{{ nombre_organizacion }}</b><small>Su compra</small></div>
+  </div>
+  {% if messages %}
+  <div data-avisos class="portal-avisos">
+    {% for mensaje in messages %}{% if mensaje.level >= 40 %}<div class="alert alert-danger" role="status" data-aviso data-tipo="error">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% else %}<div class="alert alert-ok" role="status" data-aviso data-tipo="ok">{% icono "check" 16 %}<div>{{ mensaje }}</div></div>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+  <main class="page narrow portal-p">
+    {% block contenido %}{% endblock %}
+  </main>
+</div>
+<div class="avisos" id="avisos" role="status" aria-live="polite"></div>
+{% endblock %}

@@ -240,6 +240,28 @@ def compra_venta(
     )
 
 
+def enlace(venta, *, estado="vigente", vence=None, estado_envio="enviado", cliente_=None):
+    """Un `EnlaceCliente` de decisión de faltante de ``venta`` creado directo (sin correo ni `on_commit`), con su token. Devuelve ``(enlace, token)``: la base guarda solo el
+    resumen. Por defecto vigente, vence dentro de 2 días (la vigencia de fábrica) y con el correo ya enviado; con ``estado="usado"`` guarda `fecha_uso` (restricción)."""
+    from comercial.models import EnlaceCliente
+    from core.enlaces import nuevo_token
+
+    token, resumen = nuevo_token()
+    return (
+        EnlaceCliente.objects.create(
+            tipo=EnlaceCliente.Tipo.DECISION_FALTANTE,
+            cliente=cliente_ or venta.cliente,
+            compra_venta=venta,
+            token_resumen=resumen,
+            fecha_vencimiento=vence or timezone.localdate() + timedelta(days=2),
+            estado=estado,
+            fecha_uso=timezone.now() if estado == "usado" else None,
+            estado_envio=estado_envio,
+        ),
+        token,
+    )
+
+
 def detalle(venta, variedad, cantidad=10, precio="100.00", estado="abierto"):
     """Un `DetalleVenta` de ``venta`` (sin reservas)."""
     from comercial.models import DetalleVenta

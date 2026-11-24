@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_camara, views_contratos, views_cosechas, views_suministros
+from comercial import views, views_camara, views_contratos, views_cosechas, views_faltantes, views_suministros
 
 app_name = "comercial"
 
@@ -53,6 +53,9 @@ urlpatterns = [
     path("cosechas/<int:cosecha_id>/concretar/calcular/", views_cosechas.concretar_calcular, name="cosecha_concretar_calcular"),
     path("cosechas/<int:cosecha_id>/concretar/revisar/", views_cosechas.concretar_revisar, name="cosecha_concretar_revisar"),
     path("cosechas/<int:cosecha_id>/cancelar/", views_cosechas.cancelar, name="cosecha_cancelar"),
+    # Faltantes (COM-DCD-FLT, extensión 1a; COM-04c): el Vendedor registra la decisión por el cliente sin correo o con el enlace vencido.
+    path("faltantes/", views_faltantes.lista, name="faltantes"),
+    path("contratos/compra-ventas/<int:venta_id>/decidir-faltante/", views_faltantes.decidir, name="faltante_decidir"),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
     path("camara/merma/", views_camara.merma, name="merma_camara"),  # COM-04b
 

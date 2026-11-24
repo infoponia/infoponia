@@ -9,11 +9,12 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from comercial.models import DetalleReserva, ReservaStock
+from comercial.models import DetalleReserva, EnlaceCliente, ReservaStock
 from comercial.tests.fabricas import (
     compra_venta,
     cosecha_manual,
     detalle,
+    enlace,
     escenario_comercial,
     partida_cosechada,
     reserva,
@@ -150,3 +151,46 @@ class RestriccionDeAlertaComercialTests(Base):
         det = detalle_suministro(contrato, self.e.variedad)
         viola(self, lambda: self.alerta(partida=partida, detalle_suministro=det, fecha_periodo=HOY, cantidad_sin_cubrir=1))
         viola(self, lambda: self.alerta(partida=partida, suministro=contrato))
+
+
+class EnlaceClienteModeloTests(Base):
+    """COM-04c, paso 1 (D-65; docs/modelo/comercial.md, «EnlaceCliente»): las restricciones de la base de `EnlaceCliente`."""
+
+    def test_regla_el_token_resumen_es_unico(self):
+        """D-65 punto 2: no puede haber dos enlaces con el mismo resumen de token (es el índice por el que se los busca)."""
+        existente, _ = enlace(self.venta)
+        otra = compra_venta(self.e)
+        viola(self, lambda: EnlaceCliente.objects.create(cliente=otra.cliente, compra_venta=otra, token_resumen=existente.token_resumen))
+
+    def test_regla_un_solo_vigente_por_venta_y_tipo_pero_un_usado_convive(self):
+        """D-65 punto 5: a lo sumo un enlace `vigente` por (venta, tipo); los que ya no están vigentes no cuentan."""
+        enlace(self.venta, estado="usado")
+        enlace(self.venta, estado="reemplazado")
+        enlace(self.venta)  # el único vigente
+        viola(self, lambda: enlace(self.venta))
+
+    def test_regla_usado_si_y_solo_si_tiene_fecha_de_uso(self):
+        """Modelo, «EnlaceCliente»: `estado = usado` <=> `fecha_uso` no nula."""
+        viola(self, lambda: EnlaceCliente.objects.create(cliente=self.venta.cliente, compra_venta=self.venta, token_resumen="a" * 64, estado="usado"))
+        viola(
+            self,
+            lambda: EnlaceCliente.objects.create(
+                cliente=self.venta.cliente, compra_venta=self.venta, token_resumen="b" * 64, estado="anulado", fecha_uso=timezone.now()
+            ),
+        )
+
+    def test_regla_la_decision_de_faltante_exige_la_venta(self):
+        """Modelo, «EnlaceCliente»: `tipo = decision_faltante` => `compra_venta` no nula."""
+        viola(self, lambda: EnlaceCliente.objects.create(cliente=self.venta.cliente, compra_venta=None, token_resumen="c" * 64))
+
+    def test_regla_el_estado_y_el_estado_de_envio_son_de_listas_cerradas(self):
+        """D-65 puntos 1 y 6: `estado` y `estado_envio` solo admiten sus valores."""
+        viola(self, lambda: EnlaceCliente.objects.create(cliente=self.venta.cliente, compra_venta=self.venta, token_resumen="d" * 64, estado="roto"))
+        viola(self, lambda: EnlaceCliente.objects.create(cliente=self.venta.cliente, compra_venta=self.venta, token_resumen="e" * 64, estado_envio="roto"))
+
+    def test_regla_la_fabrica_guarda_el_resumen_y_nunca_el_token(self):
+        """D-65 punto 2: la fila no contiene el token, solo su SHA-256 de 64 caracteres."""
+        creado, token = enlace(self.venta)
+        self.assertEqual(len(creado.token_resumen), 64)
+        self.assertNotEqual(creado.token_resumen, token)
+        self.assertNotIn(token, str(EnlaceCliente.objects.filter(pk=creado.pk).values().first()))

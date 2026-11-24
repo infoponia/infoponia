@@ -733,6 +733,7 @@ class FichaDeCompraVenta:
     monto: Decimal
     destino: str
     acciones: frozenset
+    pendiente: object = None  # COM-04c: lo que espera una venta «pendiente de decisión del cliente» (`faltantes.estado_del_faltante`)
 
 
 def ficha_de_compra_venta(actor, venta_id):
@@ -762,4 +763,8 @@ def ficha_de_compra_venta(actor, venta_id):
     acciones = {"ver_cliente"}
     if venta.estado_comprobante == CompraVenta.EstadoDelComprobante.PENDIENTE_ENVIO and venta.cliente.email_cliente:
         acciones.add("reenviar_comprobante")
-    return FichaDeCompraVenta(venta, filas, sum((f.subtotal for f in filas), Decimal("0.00")), destino, frozenset(acciones))
+    from comercial.servicios import faltantes  # `faltantes` importa de `cosechas`, que importa de este módulo: se importa acá para no cruzarlos
+
+    return FichaDeCompraVenta(
+        venta, filas, sum((f.subtotal for f in filas), Decimal("0.00")), destino, frozenset(acciones), faltantes.estado_del_faltante(venta, actor)
+    )

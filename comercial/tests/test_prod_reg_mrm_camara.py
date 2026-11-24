@@ -22,7 +22,7 @@ from django.core.exceptions import PermissionDenied
 from django.test import TestCase
 from django.utils import timezone
 
-from comercial.models import DetalleReserva, DetalleVenta, ReservaStock
+from comercial.models import DetalleReserva, DetalleVenta, EnlaceCliente, ReservaStock
 from comercial.servicios import camara, merma_camara
 from comercial.servicios.merma_camara import DatosDeMermaEnCamara
 from comercial.tests.fabricas import (
@@ -265,6 +265,17 @@ class ProdRegMrmCamaraServicioTests(Base):
         self.registrar(p, 30)
         d.refresh_from_db()
         self.assertEqual((d.estado_detalle_venta, d.compra_venta.estado_venta), ("pendiente_decision", "pendiente_decision"))
+
+    def test_ext_10c_el_cliente_con_correo_recibe_el_enlace_y_el_confirmado_uno_nuevo(self):
+        """Extensión 10c (COM-04c): el detalle que pasa a pendiente deja un enlace vigente; un confirmado que vuelve a pendiente (D-64 punto 13) también recibe uno nuevo, con el viejo reemplazado."""
+        p = partida(self.lote, 30)
+        self.sin_stock_de_lote()
+        d = self.venta(30)
+        reserva(d, [(p, 30)])
+        self.registrar(p, 30)
+        self.assertEqual(EnlaceCliente.objects.filter(compra_venta=d.compra_venta, estado="vigente").count(), 1)
+        registro = RegistroAuditoria.objects.get(accion="registro_merma")
+        self.assertIn("comercial.enlacecliente", {a["modelo"] for a in registro.afectados})
 
     def test_ext_10c_un_detalle_confirmado_sin_stock_vuelve_a_pendiente_sin_cantidad_aceptada(self):
         """D-64 punto 13: un detalle «confirmado» que pierde producto y no se cubre vuelve a «pendiente de decisión» con `cant_entregada_venta` vacía."""

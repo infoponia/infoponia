@@ -27,6 +27,7 @@ from django.utils import timezone
 
 from comercial.models import DetalleReserva, DetalleVenta, ReservaStock
 from comercial.servicios import camara
+from comercial.tests.fabricas import enlace as un_enlace
 from comercial.tests.fabricas import (
     compra_venta,
     detalle,
@@ -385,6 +386,36 @@ class ProdAsgCamServicioTests(Base):
         self.asignar(partida(self.lote, 40))
         d.refresh_from_db()
         self.assertEqual(d.estado_detalle_venta, "abierto")
+
+    def test_post_d_el_enlace_de_la_venta_que_vuelve_a_abierta_se_anula(self):
+        """Postcondición d y D-65 punto 5: al quedar sin detalles pendientes, el enlace de decisión de la venta pasa a `anulado` (y va a la auditoría)."""
+        d = self.pendiente(40)
+        creado, _ = un_enlace(d.compra_venta)
+        self.asignar(partida(self.lote, 40))
+        creado.refresh_from_db()
+        self.assertEqual(creado.estado, "anulado")
+        registro = RegistroAuditoria.objects.get(accion="asignacion_camara")
+        self.assertIn("comercial.enlacecliente", {a["modelo"] for a in registro.afectados})
+
+    def test_ext_5a_un_pendiente_cubierto_en_parte_mantiene_el_enlace_vigente(self):
+        """Extensión 5a: el detalle cubierto en parte sigue pendiente y su enlace sigue sirviendo (muestra la cantidad nueva, sin correo)."""
+        d = self.pendiente(40)
+        creado, _ = un_enlace(d.compra_venta)
+        self.asignar(partida(self.lote, 10))
+        d.refresh_from_db()
+        creado.refresh_from_db()
+        self.assertEqual((d.estado_detalle_venta, creado.estado), ("pendiente_decision", "vigente"))
+
+    def test_post_d_con_otro_detalle_pendiente_la_venta_no_vuelve_a_abierta_y_el_enlace_sigue(self):
+        """Extensión 5b: si a la venta le queda otro detalle pendiente, sigue «pendiente de decisión» y su enlace vigente."""
+        d = self.pendiente(40)
+        otra = crear_variedad(self.e.variedad.cultivo, nombre="Otra")
+        detalle(d.compra_venta, otra, 10, estado="pendiente_decision")
+        creado, _ = un_enlace(d.compra_venta)
+        self.asignar(partida(self.lote, 40))
+        d.refresh_from_db()
+        creado.refresh_from_db()
+        self.assertEqual((d.estado_detalle_venta, d.compra_venta.estado_venta, creado.estado), ("abierto", "pendiente_decision", "vigente"))
 
     # ---- on_commit y paso 25 ----
 

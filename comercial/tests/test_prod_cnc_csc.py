@@ -27,7 +27,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock
+from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, EnlaceCliente, ReservaStock
 from comercial.servicios import cosechas, stock_maduro
 from comercial.servicios.cosechas import DatosDeConcrecion
 from comercial.tests.fabricas import (
@@ -484,6 +484,21 @@ class FaltanteTests(Base):
         resultado = self.cosechando_con_perdidas()
         self.assertEqual((resultado.faltante, resultado.asignacion.cubierta, resultado.asignacion.sin_cubrir), (10, 0, 10))
         self.assertEqual(self.releer(DetalleVenta, self.detalle.pk).estado_detalle_venta, "pendiente_decision")
+
+    def test_ext_13a_el_cliente_con_correo_recibe_el_enlace_vigente_y_va_a_la_auditoria(self):
+        """13a (COM-04c): lo que no se cubre deja un enlace de decisión vigente para el cliente, que vence con la vigencia configurada, y va a la auditoría de la concreción."""
+        self.sin_stock_en_el_lote_propio()
+        self.cosechando_con_perdidas()
+        creado = EnlaceCliente.objects.get(compra_venta=self.venta)
+        self.assertEqual((creado.estado, creado.fecha_vencimiento), ("vigente", HOY + timedelta(days=2)))
+        registro = RegistroAuditoria.objects.get(accion="concrecion_cosecha")
+        self.assertIn("comercial.enlacecliente", {a["modelo"] for a in registro.afectados})
+
+    def test_ext_13a_con_cobertura_total_no_hay_enlace(self):
+        """13a con cobertura total: el faltante se cubre y el detalle no queda pendiente, así que no se crea ningún enlace."""
+        lote_maduro(self.e, 100, entrada=HOY - timedelta(days=1))
+        self.cosechando(20)
+        self.assertFalse(EnlaceCliente.objects.exists())
 
     def test_ext_13a_en_un_suministro_el_periodo_queda_con_cantidad_sin_cubrir_y_no_cambia_de_estado(self):
         """13a en un suministro: no hay pendiente de decisión; el período queda con lo que falta (la pre-reserva diaria lo vuelve a intentar) y se
