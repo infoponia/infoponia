@@ -1,0 +1,4 @@
+{% comment %}Todo lo cargado en «Modificar suministro» como campos ocultos, para confirmar o volver a la carga desde el resumen (con HTMX la ventana está sobre el formulario; sin JavaScript, el resumen es otra página y estos campos
+llevan todo de vuelta, incluida la huella del contrato y la propuesta de «rige desde» que vio la persona). Recibe «campos»: [(nombre, valor)].{% endcomment %}
+{% for nombre, valor in campos %}<input type="hidden" name="{{ nombre }}" value="{{ valor }}">
+{% endfor %}

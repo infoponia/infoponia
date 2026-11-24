@@ -1,6 +1,6 @@
 # Pruebas de COM-CNS-SUM, Consultar Suministro (COM-03a, paso 5; docs/casos_de_uso/comercial/suministro.md): `buscar_suministros`,
-# `ficha_de_suministro` y `calendario_completo`. Una prueba por regla (numeración del caso de uso). Lo que se completa después (la
-# rescisión en la ficha, «Ver historial de cambios», los botones de la regla 10, entregas, solicitudes y cobro) no se prueba acá (D-25).
+# `ficha_de_suministro` y `calendario_completo`. Una prueba por regla (numeración del caso de uso). Lo que suma COM-03b (la rescisión en la ficha, el
+# historial, la alerta en el calendario y los botones de la regla 10) está al final del archivo; entregas, solicitudes y cobro llegan después (D-25).
 #
 # Contrato de código que fijan estas pruebas (el estudiante lo revisa antes de implementar):
 #   - `FiltrosDeSuministros(cliente_id, cliente_texto, estado, fecha_de, desde, hasta, vendedor_id)` con `desde_get` (claves `cliente`,
@@ -29,6 +29,7 @@ from comercial.servicios import calendario, suministros
 from comercial.servicios.suministros import FiltrosDeSuministros
 from comercial.tests.fabricas import (
     cliente as crear_cliente,
+    alerta_de_periodo,
     compra_venta,
     detalle_suministro,
     direccion_de_cliente,
@@ -288,16 +289,17 @@ class FichaTests(BaseDeConsulta):
                 s = self.contrato(tolerados=tolerados, incumplimientos=incumplimientos, estado=estado)
                 self.assertEqual(self.ficha(s).aviso_de_limite, esperado)
 
-    def test_regla_10_las_acciones_de_la_ficha_son_solo_las_que_existen_en_com_03a(self):
-        """Regla 10 y D-25: «Ver cliente» siempre; «Reenviar comprobante» si está pendiente de envío y el cliente tiene correo; todavía no
-        «Modificar», «Rescindir», «Dejar sin efecto la rescisión», «Registrar cobro» ni «Ver historial» (los suman COM-03b, COM-07 y COM-08)."""
+    def test_regla_10_las_acciones_de_la_ficha_sin_las_de_otras_tareas(self):
+        """Regla 10 y D-25 (actualizada por COM-03b: antes decía «todavía no Modificar ni Rescindir», que ahora existen): «Ver cliente» siempre; «Reenviar comprobante»
+        si está pendiente de envío y el cliente tiene correo; «Modificar» y «Rescindir» (para el Gerente de un suministro vigente). Todavía no «Registrar cobro»
+        (COM-08a) ni «Dejar sin efecto la rescisión» ni «Ver historial» sin rescisión ni cambios. El detalle por rol y estado, en `AccionesDeLaFichaTests`."""
         s = self.contrato(comprobante="pendiente_envio")
-        self.assertEqual(self.ficha(s).acciones, frozenset({"ver_cliente", "reenviar_comprobante"}))
+        self.assertEqual(self.ficha(s).acciones, frozenset({"ver_cliente", "reenviar_comprobante", "modificar", "rescindir"}))
         enviado = self.contrato(comprobante="enviado")
-        self.assertEqual(self.ficha(enviado).acciones, frozenset({"ver_cliente"}))
+        self.assertEqual(self.ficha(enviado).acciones, frozenset({"ver_cliente", "modificar", "rescindir"}))
         para_imprimir = self.contrato(comprobante="para_imprimir")
-        self.assertEqual(self.ficha(para_imprimir).acciones, frozenset({"ver_cliente"}))
-        for prohibida in ("modificar", "rescindir", "dejar_sin_efecto", "registrar_cobro", "ver_historial"):
+        self.assertEqual(self.ficha(para_imprimir).acciones, frozenset({"ver_cliente", "modificar", "rescindir"}))
+        for prohibida in ("dejar_sin_efecto", "registrar_cobro", "ver_historial"):
             self.assertNotIn(prohibida, self.ficha(s).acciones)
 
 
@@ -411,3 +413,269 @@ class CalendarioDeLaFichaTests(BaseDeConsulta):
         with CaptureQueriesContext(connection) as con_muchos:
             suministros.ficha_de_suministro(self.gerente, largo.pk)
         self.assertEqual(len(con_pocos), len(con_muchos))
+
+
+# ---- COM-03b: lo que completa la consulta (paso 6 de la tarea; `suministro.md`, «COM-CNS-SUM», «Rescisión en la ficha y en la lista» y «Regla 10») ----
+#
+# Contrato de código que fijan estas pruebas (el estudiante lo revisa antes de implementar), en `comercial/servicios/suministros.py`:
+#   - `FichaDeSuministro` suma `aviso_de_rescision` (texto o `None`) y `hay_historial` (hay alguna cadena «reemplaza a» con más de una versión).
+#   - `FilaDeCalendario.texto` / `faltan`: dentro de la ventana, «Sin cobertura completa · faltan N» también cuando el período tiene una alerta ACTIVA aunque el cálculo
+#     dé 0 (un detalle finalizado, hasta COM-04a): N es entonces el de la alerta (`AlertaComercial.cantidad_sin_cubrir`); con cantidad sin cubrir calculada, manda esa.
+#   - `historial_de_cambios(actor, suministro_id) -> list[CadenaDeHistorial(variedad, direccion, tramos)]` con `TramoDeHistorial(detalle, desde, hasta, vigente)`:
+#     solo las cadenas con más de una versión, por variedad; los tramos, del más viejo al más nuevo; `desde` = `fecha_primer_entrega`, `hasta` = `fecha_fin_detalle`
+#     (`None`: rige hasta el fin del contrato) y `vigente` = el detalle sigue «vigente». 404 / `PermissionDenied` como la ficha.
+#   - `acciones` suma `modificar` (vigente sin rescisión acordada; su Vendedor o el Gerente), `rescindir` (Gerente, vigente sin rescisión acordada),
+#     `dejar_sin_efecto` (Gerente, rescisión acordada y la fecha de su última entrega no pasó) y `ver_historial` (`hay_historial`). Nunca `registrar_cobro` (COM-08a).
+#   - Textos: acordada, «Rescisión acordada el dd/mm/aaaa (a pedido del cliente: descripción). Se entrega hasta el dd/mm/aaaa; los períodos posteriores no se
+#     entregan.»; rescindido, «Rescindido por mutuo acuerdo (acordado el dd/mm/aaaa, a pedido del cliente: descripción). La última entrega fue el dd/mm/aaaa.». La
+#     descripción, solo si la hay.
+
+
+def _rescindir(prueba, s, **pedido):
+    """Rescinde ``s`` como el Gerente con una ventana ya leída (todo por el servicio)."""
+    lectura = suministros.datos_de_rescision(prueba.gerente, s.pk)
+    valores = dict(motivo="a_pedido_del_cliente", descripcion="", fecha_acuerdo=str(dias(-1)), acuerdo="1")
+    valores.update(pedido)
+    return suministros.rescindir_suministro(prueba.gerente, s.pk, suministros.PedidoDeRescision(**valores), lectura.huella, lectura.conservados)
+
+
+class RescisionEnLaConsultaTests(BaseDeConsulta):
+    """Los avisos y la marca de la rescisión, el calendario que corta en la última entrega y el filtro «rescindido»."""
+
+    def ficha(self, s, actor=None):
+        return suministros.ficha_de_suministro(actor or self.gerente, s.pk)
+
+    def test_regla_la_ficha_avisa_la_rescision_acordada_con_su_motivo_y_la_ultima_entrega(self):
+        """«Rescisión acordada el dd/mm (motivo). Se entrega hasta el dd/mm…»: con motivo y descripción, y sin descripción cuando no la hay."""
+        s = self.contrato()
+        _rescindir(self, s, motivo="otro", descripcion="Cierra el vivero")
+        self.assertEqual(
+            self.ficha(s).aviso_de_rescision,
+            f"Rescisión acordada el {dias(-1):%d/%m/%Y} (otro: Cierra el vivero). Se entrega hasta el {dias(10):%d/%m/%Y}; los períodos posteriores no se entregan.",
+        )
+        sin_descripcion = self.contrato()
+        _rescindir(self, sin_descripcion)
+        self.assertEqual(
+            self.ficha(sin_descripcion).aviso_de_rescision,
+            f"Rescisión acordada el {dias(-1):%d/%m/%Y} (a pedido del cliente). Se entrega hasta el {dias(10):%d/%m/%Y}; los períodos posteriores no se entregan.",
+        )
+
+    def test_regla_la_ficha_avisa_el_contrato_rescindido(self):
+        """«Rescindido por mutuo acuerdo…»: una vez cerrado por el paso diario 35."""
+        s = self.contrato()
+        _rescindir(self, s, motivo="a_pedido_de_la_empresa")
+        suministros.cerrar_rescisiones(dias(11))
+        self.assertEqual(
+            self.ficha(s).aviso_de_rescision,
+            f"Rescindido por mutuo acuerdo (acordado el {dias(-1):%d/%m/%Y}, a pedido de la empresa). La última entrega fue el {dias(10):%d/%m/%Y}.",
+        )
+
+    def test_regla_sin_rescision_no_hay_aviso(self):
+        """Sin rescisión (ni acordada ni cerrada) no hay aviso; tampoco en un contrato que la dejó sin efecto."""
+        s = self.contrato()
+        self.assertIsNone(self.ficha(s).aviso_de_rescision)
+        _rescindir(self, s)
+        suministros.dejar_sin_efecto_rescision(self.gerente, s.pk, "Siguen", suministros.huella_de(Suministro.objects.get(pk=s.pk)))
+        self.assertIsNone(self.ficha(s).aviso_de_rescision)
+
+    def test_regla_los_periodos_posteriores_a_la_rescision_no_aparecen_en_el_calendario(self):
+        """«Los períodos posteriores a la rescisión no aparecen en el calendario»: con la rescisión acordada y también ya rescindido, el calendario de la ficha
+        termina en la última entrega (día 10), no hay «Ver todo el calendario» y el calendario completo tiene solo esos períodos."""
+        s = self.contrato()
+        _rescindir(self, s)
+        for etapa in ("acordada", "rescindido"):
+            with self.subTest(etapa=etapa):
+                ficha = self.ficha(s)
+                self.assertEqual([f.fecha for f in ficha.calendario], [dias(3), dias(10)])
+                self.assertFalse(ficha.hay_mas_calendario)
+                self.assertEqual([f.fecha for f in suministros.calendario_completo(self.gerente, s.pk).object_list], [dias(3), dias(10)])
+                suministros.cerrar_rescisiones(dias(11))
+
+    def test_regla_el_filtro_de_estado_rescindido_y_la_marca_de_rescision_acordada_en_la_lista(self):
+        """Regla 2 y lista: el filtro «rescindido» trae solo los cerrados; los de rescisión acordada siguen «vigentes» (con la marca) y los comunes no la llevan."""
+        cerrada, acordada, comun = self.contrato(), self.contrato(), self.contrato()
+        _rescindir(self, cerrada)
+        suministros.cerrar_rescisiones(dias(11))
+        _rescindir(self, acordada)
+        self.assertEqual(self.codigos(self.buscar(estado="rescindido")), [cerrada.pk])
+        vigentes = {f.pk: f for f in self.buscar(estado="vigente").object_list}
+        self.assertEqual(sorted(vigentes), sorted([acordada.pk, comun.pk]))
+        self.assertTrue(vigentes[acordada.pk].tiene_rescision_acordada)
+        self.assertFalse(vigentes[comun.pk].tiene_rescision_acordada)
+
+
+class SinCoberturaConAlertaTests(BaseDeConsulta):
+    """Regla 6: «Sin cobertura completa · faltan N» también con una alerta activa."""
+
+    def setUp(self):
+        super().setUp()
+        self.lote = lote_maduro(self.e, 200)
+
+    def fila(self, s, fecha):
+        return next(f for f in suministros.ficha_de_suministro(self.gerente, s.pk).calendario if f.fecha == fecha)
+
+    def finalizado_con_alerta(self, faltan=12, resuelta=False):
+        """Un detalle «finalizado» (por una modificación) con su período del día 3 dentro de la ventana, sin reservas, y la alerta de ese período."""
+        s = suministro(self.e)
+        d = detalle_suministro(s, self.e.variedad, cantidad=30, periodo=7, primera_en_dias=3, estado="finalizado", fecha_fin_detalle=dias(10))
+        alerta_de_periodo(d, dias(3), cantidad_sin_cubrir=faltan, invernadero=self.e.invernadero, resuelta=resuelta)
+        return s, d
+
+    def test_regla_6_un_periodo_con_alerta_activa_muestra_lo_que_falta_aunque_el_calculo_de_cero(self):
+        """Con la alerta activa del período, «Sin cobertura completa · faltan 12» (el N de la alerta), aunque el detalle esté finalizado y el cálculo dé 0
+        (D-64, punto 8, lo retoma COM-04a); el otro período de la ventana, sin alerta, sigue «Reservado»."""
+        s, _ = self.finalizado_con_alerta(12)
+        con_alerta = self.fila(s, dias(3))
+        self.assertEqual((con_alerta.situacion, con_alerta.faltan, con_alerta.texto), ("sin_cobertura", 12, "Sin cobertura completa · faltan 12"))
+        self.assertEqual(self.fila(s, dias(10)).situacion, "reservado")
+
+    def test_regla_6_una_alerta_resuelta_no_cuenta(self):
+        """Una alerta resuelta no cambia la situación del período."""
+        s, _ = self.finalizado_con_alerta(12, resuelta=True)
+        self.assertEqual(self.fila(s, dias(3)).situacion, "reservado")
+
+    def test_regla_6_con_cantidad_sin_cubrir_calculada_manda_el_calculo(self):
+        """Si el cálculo da cantidad sin cubrir (un detalle vigente), manda lo calculado y no el N guardado en la alerta (que es del último intento)."""
+        s = suministro(self.e)
+        d = detalle_suministro(s, self.e.variedad, cantidad=30, periodo=7, primera_en_dias=3)
+        reserva_de_periodo(d, dias(3), [(self.lote, 10)])
+        alerta_de_periodo(d, dias(3), cantidad_sin_cubrir=99, invernadero=self.e.invernadero)
+        self.assertEqual((self.fila(s, dias(3)).situacion, self.fila(s, dias(3)).faltan), ("sin_cobertura", 20))
+
+    def test_regla_6_el_calendario_completo_tambien_la_muestra(self):
+        """El calendario completo (de a 100) usa la misma situación."""
+        s, _ = self.finalizado_con_alerta(12)
+        fila = next(f for f in suministros.calendario_completo(self.gerente, s.pk).object_list if f.fecha == dias(3))
+        self.assertEqual((fila.situacion, fila.faltan), ("sin_cobertura", 12))
+
+    def test_regla_6_sin_consultas_extra_por_periodo_con_alertas(self):
+        """La ficha hace las mismas consultas con una alerta que con tres."""
+        una, _ = self.finalizado_con_alerta(12)
+        s = suministro(self.e)
+        d = detalle_suministro(s, self.e.variedad, cantidad=30, periodo=3, primera_en_dias=0, estado="finalizado", fecha_fin_detalle=dias(12))
+        for n in (0, 3, 6, 9, 12):
+            alerta_de_periodo(d, dias(n), cantidad_sin_cubrir=5, invernadero=self.e.invernadero)
+        suministros.ficha_de_suministro(self.gerente, una.pk)  # calienta cachés
+        with CaptureQueriesContext(connection) as con_una:
+            suministros.ficha_de_suministro(self.gerente, una.pk)
+        with CaptureQueriesContext(connection) as con_varias:
+            suministros.ficha_de_suministro(self.gerente, s.pk)
+        self.assertEqual(len(con_una), len(con_varias))
+
+
+class HistorialDeCambiosTests(BaseDeConsulta):
+    """«Con cambios desde el dd/mm» y «Ver historial de cambios» (`MODALS.sumhist`)."""
+
+    def cadena(self):
+        """Una cadena «reemplaza a» de tres versiones (precio 100, 120 y 150) y un detalle suelto de otra dirección."""
+        s = suministro(self.e, duracion=12)
+        v1 = detalle_suministro(s, self.e.variedad, estado="finalizado", fecha_fin_detalle=dias(10), precio="100.00", primera_en_dias=-10)
+        v2 = detalle_suministro(s, self.e.variedad, estado="finalizado", fecha_fin_detalle=dias(30), precio="120.00", primera_en_dias=11, reemplaza_a=v1)
+        v3 = detalle_suministro(s, self.e.variedad, precio="150.00", primera_en_dias=31, reemplaza_a=v2)
+        suelto = detalle_suministro(s, self.e.variedad, direccion=direccion_de_cliente(self.e.cliente).direccion, precio="999.00")
+        return s, (v1, v2, v3), suelto
+
+    def test_regla_5_el_historial_trae_cada_tramo_con_sus_fechas_del_mas_viejo_al_mas_nuevo(self):
+        """Regla 5: por cadena, los tramos con desde (`fecha_primer_entrega`), hasta (`fecha_fin_detalle`; la última, sin fin) y si siguen vigentes."""
+        s, (v1, v2, v3), _ = self.cadena()
+        (cadena,) = suministros.historial_de_cambios(self.gerente, s.pk)
+        self.assertEqual(cadena.variedad, self.e.variedad)
+        self.assertEqual(
+            [(t.detalle.pk, t.desde, t.hasta, t.vigente) for t in cadena.tramos],
+            [(v1.pk, dias(-10), dias(10), False), (v2.pk, dias(11), dias(30), False), (v3.pk, dias(31), None, True)],
+        )
+        self.assertTrue(cadena.direccion)
+
+    def test_regla_5_un_detalle_sin_cambios_no_tiene_historial(self):
+        """Solo las cadenas con más de una versión: un detalle suelto no aparece; un contrato sin cambios da lista vacía."""
+        s, _, suelto = self.cadena()
+        self.assertNotIn(suelto.pk, [t.detalle.pk for c in suministros.historial_de_cambios(self.gerente, s.pk) for t in c.tramos])
+        self.assertEqual(suministros.historial_de_cambios(self.gerente, self.contrato().pk), [])
+
+    def test_regla_5_el_historial_sale_de_una_modificacion_real(self):
+        """De punta a punta: modificar la cantidad con COM-MOD-SUM crea el sucesor y la ficha dice «Con cambios desde» su primera entrega; el historial trae dos
+        tramos."""
+        s = self.contrato()
+        huella = suministros.huella_de(Suministro.objects.get(pk=s.pk))
+        d = s.detalles.get()
+        suministros.modificar_suministro(
+            self.gerente, s.pk, suministros.CambiosDeSuministro(detalles=[suministros.CambioDeDetalle(detalle_id=d.pk, accion="modificar", cantidad="40")]), huella
+        )
+        ficha = suministros.ficha_de_suministro(self.gerente, s.pk)
+        (fila,) = ficha.detalles
+        self.assertEqual(fila.con_cambios_desde, dias(17))
+        self.assertTrue(ficha.hay_historial)
+        (cadena,) = suministros.historial_de_cambios(self.gerente, s.pk)
+        self.assertEqual([(t.desde, t.hasta, t.vigente) for t in cadena.tramos], [(dias(3), dias(10), False), (dias(17), None, True)])
+
+    def test_regla_el_historial_respeta_el_alcance(self):
+        """403 para otro Vendedor, 404 si no existe, y el Vendedor del contrato lo ve."""
+        s, _, _ = self.cadena()
+        ajeno = self.contrato(self.otro)
+        with self.assertRaises(PermissionDenied):
+            suministros.historial_de_cambios(self.e.vendedor, ajeno.pk)
+        with self.assertRaises(Http404):
+            suministros.historial_de_cambios(self.gerente, 999999)
+        self.assertEqual(len(suministros.historial_de_cambios(self.e.vendedor, s.pk)), 1)
+
+    def test_regla_la_ficha_sabe_si_hay_historial(self):
+        """`hay_historial` y la acción «ver_historial» solo con alguna cadena de más de una versión."""
+        s, _, _ = self.cadena()
+        con = suministros.ficha_de_suministro(self.gerente, s.pk)
+        sin = suministros.ficha_de_suministro(self.gerente, self.contrato().pk)
+        self.assertEqual((con.hay_historial, "ver_historial" in con.acciones), (True, True))
+        self.assertEqual((sin.hay_historial, "ver_historial" in sin.acciones), (False, False))
+
+
+class AccionesDeLaFichaTests(BaseDeConsulta):
+    """Regla 10: «Modificar suministro», «Rescindir suministro» y «Dejar sin efecto la rescisión»: solo lo que la persona puede hacer (ningún botón a un 403)."""
+
+    def acciones(self, s, actor=None):
+        return suministros.ficha_de_suministro(actor or self.gerente, s.pk).acciones
+
+    def test_regla_10_el_gerente_de_un_suministro_vigente_modifica_y_rescinde(self):
+        """Vigente sin rescisión: «Modificar suministro» y «Rescindir suministro» para el Gerente; todavía no «Dejar sin efecto la rescisión»."""
+        acciones = self.acciones(self.contrato())
+        self.assertTrue({"modificar", "rescindir"} <= acciones)
+        self.assertNotIn("dejar_sin_efecto", acciones)
+
+    def test_regla_10_el_vendedor_del_contrato_modifica_pero_no_rescinde(self):
+        """Solo el Gerente rescinde: el Vendedor del contrato ve «Modificar» y no «Rescindir» ni «Dejar sin efecto»."""
+        acciones = self.acciones(self.contrato(), actor=self.e.vendedor)
+        self.assertIn("modificar", acciones)
+        self.assertTrue({"rescindir", "dejar_sin_efecto"}.isdisjoint(acciones))
+
+    def test_regla_10_con_la_rescision_acordada_solo_el_gerente_puede_dejarla_sin_efecto(self):
+        """Con rescisión acordada: no se modifica ni se vuelve a rescindir; el Gerente ve «Dejar sin efecto la rescisión»; el Vendedor, ninguna de las tres."""
+        s = self.contrato()
+        _rescindir(self, s)
+        gerente, vendedor = self.acciones(s), self.acciones(s, actor=self.e.vendedor)
+        self.assertIn("dejar_sin_efecto", gerente)
+        self.assertTrue({"modificar", "rescindir"}.isdisjoint(gerente))
+        self.assertTrue({"modificar", "rescindir", "dejar_sin_efecto"}.isdisjoint(vendedor))
+
+    def test_regla_10_pasada_la_ultima_entrega_ya_no_se_ofrece_dejar_sin_efecto(self):
+        """Después de la fecha de la última entrega (y antes de que el paso 35 cierre el contrato) dejar sin efecto daría `rescision_cerrada`: el botón no se
+        ofrece. El mismo día de la última entrega todavía sí."""
+        s = self.contrato()
+        _rescindir(self, s)
+        Suministro.objects.filter(pk=s.pk).update(fecha_ultima_entrega_rescision=HOY)
+        self.assertIn("dejar_sin_efecto", self.acciones(s))
+        Suministro.objects.filter(pk=s.pk).update(fecha_ultima_entrega_rescision=dias(-1))
+        self.assertNotIn("dejar_sin_efecto", self.acciones(s))
+
+    def test_regla_10_un_suministro_que_no_esta_vigente_no_ofrece_ninguna(self):
+        """Finalizado, resuelto o rescindido: ni modificar, ni rescindir, ni dejar sin efecto."""
+        for estado in ("finalizado", "rescindido"):
+            with self.subTest(estado=estado):
+                s = self.contrato()
+                if estado == "rescindido":
+                    _rescindir(self, s)
+                    suministros.cerrar_rescisiones(dias(11))
+                else:
+                    Suministro.objects.filter(pk=s.pk).update(estado_suministro=estado)
+                self.assertTrue({"modificar", "rescindir", "dejar_sin_efecto"}.isdisjoint(self.acciones(s)))
+
+    def test_regla_10_registrar_cobro_y_solicitudes_siguen_sin_existir(self):
+        """D-25: «Registrar cobro» (COM-08a) y las solicitudes (COM-07a) llegan con sus tareas."""
+        self.assertNotIn("registrar_cobro", self.acciones(self.contrato()))

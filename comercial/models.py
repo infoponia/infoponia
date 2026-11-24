@@ -723,3 +723,42 @@ class ClausulaSuministrante(ClausulaResolutoria):
     def __str__(self):
         """«Cláusula del suministrante de SUM-0001 · Lechuga Crespa»."""
         return f"Cláusula del suministrante de {self.detalle}"
+
+
+class AlertaComercial(models.Model):
+    """Tabla de vínculo entre una alerta de `maestros` y su origen comercial (D-63, T-01; regla A2 de D-37: `Alerta` no conoce a `comercial`).
+    Una FK nula por cada origen posible y **exactamente una** cargada. COM-03b crea `suministro` y `detalle_suministro`; COM-04 suma `partida`,
+    COM-05a1 `entrega` y COM-06a `solicitud`, cada una reescribiendo la restricción. La crea el mismo servicio que crea la alerta, en la misma
+    transacción. Las alertas que se resuelven solas se encuentran por esta tabla, nunca por el texto de la descripción."""
+
+    alerta = models.OneToOneField("maestros.Alerta", on_delete=models.PROTECT, related_name="vinculo_comercial")
+    suministro = models.ForeignKey(Suministro, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")  # MD-122 (COM-07b)
+    detalle_suministro = models.ForeignKey(
+        DetalleSuministro, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas"
+    )  # MD-133
+    fecha_periodo = models.DateField(null=True, blank=True)  # el período de la alerta MD-133
+    cantidad_sin_cubrir = models.PositiveIntegerField(null=True, blank=True)  # se actualiza en cada intento de la pre-reserva (D-63, punto 3)
+
+    class Meta:
+        verbose_name = "Alerta comercial"
+        verbose_name_plural = "Alertas comerciales"
+        constraints = [
+            # Exactamente una FK de origen cargada (D-63, punto 1). En COM-03b: `suministro` o `detalle_suministro`.
+            models.CheckConstraint(
+                condition=(Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False)),
+                name="alerta_comercial_un_solo_origen",
+            ),
+            # detalle_suministro no nulo <=> fecha_periodo y cantidad_sin_cubrir no nulos.
+            models.CheckConstraint(
+                condition=(
+                    Q(detalle_suministro__isnull=False) & Q(fecha_periodo__isnull=False) & Q(cantidad_sin_cubrir__isnull=False)
+                )
+                | (Q(detalle_suministro__isnull=True) & Q(fecha_periodo__isnull=True) & Q(cantidad_sin_cubrir__isnull=True)),
+                name="alerta_comercial_periodo_completo",
+            ),
+        ]
+
+    def __str__(self):
+        """«Alerta comercial #12»."""
+        return f"Alerta comercial #{self.pk}"

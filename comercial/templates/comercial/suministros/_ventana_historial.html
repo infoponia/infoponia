@@ -1,0 +1,29 @@
+{% load iconos comercial %}{% comment %}Ventana «Historial de cambios» (COM-CNS-SUM, regla 5; `MODALS.sumhist` del prototipo): por cada detalle que se modificó, sus tramos del más viejo al más nuevo, con lo que rigió desde y hasta cuándo.
+Solo lectura. Recibe «s» y «cadenas».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal modal-ancho" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Historial de cambios de {{ s.codigo }}</h2>
+    {% for cadena in cadenas %}
+    <div class="detcard">
+      <div class="detcard-h"><b>{{ cadena.variedad }}</b><span class="muted sm">{{ cadena.direccion }}</span></div>
+      <table class="data-table">
+        <thead><tr><th>Rigió desde</th><th>Hasta</th><th class="right">Cantidad</th><th class="right">Precio inicial</th><th>Estado</th></tr></thead>
+        <tbody>
+        {% for t in cadena.tramos %}
+          <tr>
+            <td class="nowrap">{{ t.desde|date:"d/m/Y" }}</td>
+            <td class="nowrap">{% if t.hasta %}{{ t.hasta|date:"d/m/Y" }}{% else %}<span class="muted">fin del contrato</span>{% endif %}</td>
+            <td class="right mono">{{ t.detalle.cantidad_por_periodo }}<span class="sub2">cada {{ t.detalle.periodo_entrega_dias }} días</span></td>
+            <td class="right mono">{{ t.detalle.precio_unitario_suministro|pesos }}<span class="sub2">{% if t.detalle.mecanismo_precio == "fijo" %}fijo{% else %}+{{ t.detalle.porcentaje_ajuste }} % cada {{ t.detalle.meses_ajuste }} meses{% endif %}</span></td>
+            <td>{% include "comercial/suministros/_estado.html" with estado=t.detalle.estado_detalle_suministro texto=t.detalle.get_estado_detalle_suministro_display %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% empty %}
+    <p class="muted">Este suministro no tiene detalles modificados.</p>
+    {% endfor %}
+    <div class="acts"><a class="btn btn-primary" href="{% url 'comercial:suministro' s.pk %}" data-cerrar-ventana data-foco-inicial>Cerrar</a></div>
+  </div>
+</div>

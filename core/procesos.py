@@ -10,8 +10,9 @@
 #   Orden | Paso                              | App
 #   ------+-----------------------------------+------------
 #     10  | Revisar vencimientos de insumos   | inventario
-#     20  | Vencer partidas en cámara         | produccion
+#     20  | Vencer partidas en cámara         | comercial (D-59: toca reservas)
 #     30  | Vencer pagos de suministro        | comercial
+#     35  | Cerrar rescisiones de suministros | comercial (COM-03b)
 #     40  | Pre-reservar suministros          | comercial
 #     50  | Planificar entregas               | comercial
 #

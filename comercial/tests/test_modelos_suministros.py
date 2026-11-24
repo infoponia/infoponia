@@ -291,3 +291,84 @@ class ModelosDeSuministrosTests(ConDatosDeInventario, TestCase):
         ReservaStock.objects.filter(pk=r.pk).update(detalle_venta=None)
         no_viola(lambda: ReservaStock.objects.filter(pk=r.pk).update(detalle_suministro=self.det))
         self.assertEqual(list(self.det.reservas.all()), [r])
+
+
+class AlertaComercialModeloTests(ConDatosDeInventario, TestCase):
+    """`AlertaComercial` (D-63, docs/modelo/comercial.md): la tabla de vínculo con «exactamente un origen» (COM-03b)."""
+
+    def setUp(self):
+        self.e = escenario_comercial()
+        self.sum = suministro(self.e)
+        self.det = detalle_suministro(self.sum, self.e.variedad)
+
+    def _alerta(self):
+        from maestros.tests.fabricas import crear_alerta
+
+        return crear_alerta(self.e.invernadero, "comercial_periodo_sin_cobertura")
+
+    def test_regla_d63_el_vinculo_de_un_periodo_lleva_detalle_fecha_y_cantidad(self):
+        """D-63, punto 3: ``detalle_suministro`` con ``fecha_periodo`` y ``cantidad_sin_cubrir`` es un vínculo válido."""
+        from comercial.models import AlertaComercial
+
+        no_viola(
+            lambda: AlertaComercial.objects.create(
+                alerta=self._alerta(), detalle_suministro=self.det, fecha_periodo=HOY, cantidad_sin_cubrir=5
+            )
+        )
+
+    def test_regla_d63_exactamente_un_origen_ninguno_viola(self):
+        """D-63, punto 1: «exactamente una cargada»; ninguna FK de origen cargada la viola."""
+        from comercial.models import AlertaComercial
+
+        viola(self, lambda: AlertaComercial.objects.create(alerta=self._alerta()))
+
+    def test_regla_d63_exactamente_un_origen_dos_violan(self):
+        """D-63, punto 1: dos FK de origen cargadas a la vez la violan."""
+        from comercial.models import AlertaComercial
+
+        viola(
+            self,
+            lambda: AlertaComercial.objects.create(
+                alerta=self._alerta(), suministro=self.sum, detalle_suministro=self.det, fecha_periodo=HOY, cantidad_sin_cubrir=1
+            ),
+        )
+
+    def test_regla_d63_el_suministro_solo_es_un_origen_valido_sin_datos_de_periodo(self):
+        """D-63, punto 2: la alerta de un suministro no lleva ``fecha_periodo`` ni ``cantidad_sin_cubrir``; con ellos, la base la rechaza."""
+        from comercial.models import AlertaComercial
+
+        no_viola(lambda: AlertaComercial.objects.create(alerta=self._alerta(), suministro=self.sum))
+        viola(self, lambda: AlertaComercial.objects.create(alerta=self._alerta(), suministro=self.sum, fecha_periodo=HOY))
+
+    def test_regla_d63_un_detalle_sin_fecha_o_sin_cantidad_viola(self):
+        """Ficha de AlertaComercial: ``detalle_suministro`` no nulo ⇔ ``fecha_periodo`` y ``cantidad_sin_cubrir`` no nulos."""
+        from comercial.models import AlertaComercial
+
+        viola(self, lambda: AlertaComercial.objects.create(alerta=self._alerta(), detalle_suministro=self.det, cantidad_sin_cubrir=1))
+        viola(self, lambda: AlertaComercial.objects.create(alerta=self._alerta(), detalle_suministro=self.det, fecha_periodo=HOY))
+
+    def test_regla_d63_una_alerta_tiene_un_solo_vinculo(self):
+        """Ficha de AlertaComercial: ``alerta`` es ``OneToOne`` (``related_name="vinculo_comercial"``)."""
+        from comercial.models import AlertaComercial
+
+        alerta = self._alerta()
+        AlertaComercial.objects.create(alerta=alerta, suministro=self.sum)
+        self.assertEqual(alerta.vinculo_comercial.suministro, self.sum)
+        viola(self, lambda: AlertaComercial.objects.create(alerta=alerta, suministro=self.sum))
+
+    def test_regla_invariante_detalle_vigente_con_fecha_de_fin_sin_rescision_se_detecta(self):
+        """Invariante de COM-03b (``verificar_invariantes_de_suministros``): un detalle vigente con ``fecha_fin_detalle`` solo vale con
+        rescisión acordada; un detalle finalizado sin fecha de fin se detecta."""
+        from comercial.tests.fabricas import verificar_invariantes_de_suministros
+
+        verificar_invariantes_de_suministros()
+        DetalleSuministro.objects.filter(pk=self.det.pk).update(fecha_fin_detalle=HOY + timedelta(days=30))
+        with self.assertRaises(AssertionError):
+            verificar_invariantes_de_suministros()
+        Suministro.objects.filter(pk=self.sum.pk).update(
+            motivo_rescision="otro", fecha_acuerdo_rescision=HOY, fecha_registro_rescision=HOY, fecha_ultima_entrega_rescision=HOY
+        )
+        verificar_invariantes_de_suministros()
+        DetalleSuministro.objects.filter(pk=self.det.pk).update(estado_detalle_suministro="finalizado", fecha_fin_detalle=None)
+        with self.assertRaises(AssertionError):
+            verificar_invariantes_de_suministros()

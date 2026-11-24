@@ -743,6 +743,13 @@ class RegistroAuditoria(models.Model):
         REGISTRO_COMPRA_VENTA = "registro_compra_venta", "Registro de compra-venta"
         # Suministros (COM-03a): un solo registro con el suministro, sus cláusulas, detalles, reservas, líneas y cosechas (D-36).
         PACTO_SUMINISTRO = "pacto_suministro", "Pacto de suministro"
+        # COM-03b: modificar (un registro con los detalles finalizados y creados), la pre-reserva de un período (InfoPonia, D-27) y la
+        # rescisión por mutuo acuerdo con su anulación y su cierre diario (paso 35, InfoPonia).
+        MODIFICACION_SUMINISTRO = "modificacion_suministro", "Modificación de suministro"
+        PRE_RESERVA_PERIODO = "pre_reserva_periodo", "Pre-reserva de período"
+        RESCISION_SUMINISTRO = "rescision_suministro", "Rescisión de suministro"
+        ANULACION_RESCISION = "anulacion_rescision", "Anulación de rescisión"
+        CIERRE_RESCISION = "cierre_rescision", "Cierre de rescisión"
         # Proveedores (CMP-01, D-87 punto 8): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_PROVEEDOR = "alta_proveedor", "Alta de proveedor"
         MODIFICACION_PROVEEDOR = "modificacion_proveedor", "Modificación de proveedor"
@@ -982,6 +989,22 @@ class RegistroAuditoria(models.Model):
         "multa_resolucion": "Multa por resolución",
         "clausula_suministrado": "Cláusula del suministrado",
         "periodos_reservados": "Períodos reservados",
+        # COM-03b: las claves de `datos` de la modificación, la pre-reserva y la rescisión (las demás ya existen).
+        "cambios": "Cambios",
+        "detalles_finalizados": "Detalles finalizados",
+        "detalles_creados": "Detalles creados",
+        "motivo_rescision": "Motivo de la rescisión",
+        "descripcion_rescision": "Descripción de la rescisión",
+        "fecha_acuerdo_rescision": "Fecha del acuerdo",
+        "fecha_registro_rescision": "Fecha del registro de la rescisión",
+        "fecha_ultima_entrega_rescision": "Última entrega conservada",
+        "fecha_rescision": "Fecha de la rescisión",
+        "fecha_fin_detalle": "Fecha de fin del detalle",
+        "fecha_periodo": "Fecha del período",
+        "cantidad_sin_cubrir": "Cantidad sin cubrir",
+        "plazo_pago_dias": "Plazo de pago (días)",
+        "motivo_anulacion": "Motivo de la anulación",
+        "indemnizacion_retraso_pago": "Indemnización por atraso en el pago",
         # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
         "tipo_proveedor": "Tipo de proveedor",
@@ -1093,6 +1116,8 @@ class RegistroAuditoria(models.Model):
         "estado_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto", "rescindido": "Rescindido"},
         "mecanismo_precio": {"fijo": "Fijo", "ajuste_periodico": "Ajuste periódico"},
         "estado_detalle_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto"},
+        # COM-03b: el motivo de la rescisión (`core` no importa `comercial`).
+        "motivo_rescision": {"a_pedido_del_cliente": "A pedido del cliente", "a_pedido_de_la_empresa": "A pedido de la empresa", "otro": "Otro"},
         "estado_reserva": {
             "activa": "Activa",
             "lista_para_entrega": "Lista para entrega",
@@ -1300,6 +1325,11 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_VEHICULO,
         RegistroAuditoria.Accion.REGISTRO_COMPRA_VENTA,
         RegistroAuditoria.Accion.PACTO_SUMINISTRO,
+        RegistroAuditoria.Accion.MODIFICACION_SUMINISTRO,
+        RegistroAuditoria.Accion.PRE_RESERVA_PERIODO,
+        RegistroAuditoria.Accion.RESCISION_SUMINISTRO,
+        RegistroAuditoria.Accion.ANULACION_RESCISION,
+        RegistroAuditoria.Accion.CIERRE_RESCISION,
         RegistroAuditoria.Accion.ALTA_PROVEEDOR,
         RegistroAuditoria.Accion.MODIFICACION_PROVEEDOR,
         RegistroAuditoria.Accion.BAJA_PROVEEDOR,

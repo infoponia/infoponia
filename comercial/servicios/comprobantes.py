@@ -7,7 +7,7 @@ from collections import namedtuple
 
 from django.core.exceptions import PermissionDenied, ValidationError
 
-from comercial.models import Contrato
+from comercial.models import Contrato, Suministro
 from core import correo, notificaciones
 from core.models import Usuario, rol_de
 
@@ -22,6 +22,12 @@ PLANTILLAS = {
     Contrato.Tipo.SUMINISTRO: "comercial/correos/comprobante_suministro.txt",
 }
 ASUNTOS = {Contrato.Tipo.COMPRA_VENTA: "Comprobante de tu compra {codigo}", Contrato.Tipo.SUMINISTRO: "Comprobante de tu suministro {codigo}"}
+# COM-MOD-SUM, COM-RSC-SUM y COM-ANL-RSC: el mismo comprobante del estado actual con otro asunto y otra introducción según el hecho.
+ASUNTOS_POR_TIPO = {
+    "modificacion": "Modificación de tu suministro {codigo}",
+    "rescision": "Rescisión de tu suministro {codigo}",
+    "anulacion_rescision": "Rescisión sin efecto de tu suministro {codigo}",
+}
 
 
 def contexto_del_comprobante(contrato):
@@ -35,8 +41,10 @@ def contexto_del_comprobante(contrato):
     return compra_ventas.datos_del_comprobante(contrato)
 
 
-def enviar_comprobante(contrato):
-    """Envía el comprobante al cliente y devuelve el ``estado_comprobante`` en el que queda el contrato.
+def enviar_comprobante(contrato, tipo=None, cambios=None):
+    """Envía el comprobante al cliente y devuelve el ``estado_comprobante`` en el que queda el contrato. ``tipo`` (``modificacion``,
+    ``rescision`` o ``anulacion_rescision``, COM-03b) cambia el asunto y la introducción del correo; ``cambios`` son los `CambioResumido` de la
+    modificación. Sin ``tipo``, es el comprobante de siempre.
 
     - Cliente sin correo (16b): ``para_imprimir``; no se envía nada.
     - Con correo pero sin el correo del sistema configurado, o si el envío falla (16a): ``pendiente_envio``; la venta permanece registrada.
@@ -53,9 +61,9 @@ def enviar_comprobante(contrato):
         return Estado.PENDIENTE_ENVIO
     salio = correo.enviar_correo(
         Destinatario(cliente.pk, cliente.email_cliente),
-        ASUNTOS[contrato.tipo_contrato].format(codigo=contrato.codigo),
+        (ASUNTOS_POR_TIPO[tipo] if tipo else ASUNTOS[contrato.tipo_contrato]).format(codigo=contrato.codigo),
         PLANTILLAS[contrato.tipo_contrato],
-        contexto_del_comprobante(contrato),
+        {**contexto_del_comprobante(contrato), "tipo": tipo, "cambios": list(cambios or [])},
     )
     nuevo = Estado.ENVIADO if salio else Estado.PENDIENTE_ENVIO
     Contrato.objects.filter(pk=contrato.pk).update(estado_comprobante=nuevo)
@@ -90,4 +98,7 @@ def reenviar_comprobante(actor, contrato_id):
         raise ValidationError("El comprobante no está pendiente de envío.", code="comprobante_no_pendiente")
     if not contrato.cliente.email_cliente:
         raise ValidationError("El cliente no tiene correo: el comprobante se entrega impreso.", code="cliente_sin_correo")
-    return enviar_comprobante(contrato)
+    # COM-RSC-SUM 7a: con una rescisión acordada (o rescindido), lo que se reenvía es la constancia de la rescisión.
+    suministro = Suministro.objects.filter(pk=contrato.pk).first()
+    tipo = "rescision" if suministro is not None and suministro.motivo_rescision is not None else None
+    return enviar_comprobante(contrato, tipo=tipo)
