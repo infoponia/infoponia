@@ -1,0 +1,17 @@
+{% load comercial %}{% comment %}La tabla del calendario de un suministro (COM-CNS-SUM, regla 6): fecha pactada, variedad, plantas, precio de ese período y su situación. Recibe «filas».{% endcomment %}
+<table class="data-table">
+  <thead><tr><th>Fecha pactada</th><th>Variedad</th><th class="right">Plantas</th><th class="right">Precio</th><th>Situación</th></tr></thead>
+  <tbody>
+  {% for f in filas %}
+    <tr>
+      <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}</td>
+      <td>{{ f.variedad }}{% if f.condiciones_anteriores %}<span class="sub2">condiciones anteriores</span>{% endif %}</td>
+      <td class="right mono">{{ f.cantidad }}</td>
+      <td class="right nowrap mono">{{ f.precio|pesos }}</td>
+      <td><span class="status-badge {% if f.situacion == 'reservado' %}status-ok{% elif f.situacion == 'sin_cobertura' %}status-warn{% elif f.situacion == 'pasado' %}status-neutral{% else %}status-info{% endif %}">{{ f.texto }}</span></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5" class="muted" style="text-align:center;padding:20px">No hay períodos en este tramo.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

@@ -6,7 +6,16 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from comercial.tests.fabricas import compra_venta, detalle, escenario_comercial, reserva, verificar_invariantes_de_reservas
+from comercial.tests.fabricas import (
+    compra_venta,
+    detalle,
+    detalle_suministro,
+    escenario_comercial,
+    reserva,
+    reserva_de_periodo,
+    suministro,
+    verificar_invariantes_de_reservas,
+)
 from inventario.tests.fabricas import ConDatosDeInventario
 from produccion import extensiones
 from produccion.tests.fabricas import cosecha, lote_maduro
@@ -60,6 +69,20 @@ class ExtensionesDeProduccionTests(ConDatosDeInventario, TestCase):
         self.assertEqual(detalle_de_la_cosecha.contrato, self.venta.codigo)
         self.assertEqual(detalle_de_la_cosecha.fecha_entrega, self.venta.fecha_pactada_venta)
         self.assertEqual(detalle_de_la_cosecha.lotes, [(a.pk, 12, None), (b.pk, 7, None)])
+
+    def test_ext_detalle_con_un_periodo_de_suministro_devuelve_el_codigo_sum_y_la_fecha_del_periodo(self):
+        """COM-03a: la cosecha de la reserva de un período devuelve el código visible del suministro (`SUM-0001`) y la fecha del período."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        s = suministro(self.e)
+        d = detalle_suministro(s, self.e.variedad, cantidad=30, periodo=7, primera_en_dias=3)
+        fecha = timezone.localdate() + timedelta(days=3)
+        r = reserva_de_periodo(d, fecha, [(lote_maduro(self.e, 100), 30)])
+        detalle_de_la_cosecha = extensiones.detalle_de_cosechas([r.cosecha_id])[r.cosecha_id]
+        self.assertEqual(detalle_de_la_cosecha.contrato, s.codigo)
+        self.assertEqual(detalle_de_la_cosecha.fecha_entrega, fecha)
 
     def test_ext_detalle_neutro_una_cosecha_sin_reserva_no_tiene_contrato_y_una_lista_vacia_no_consulta(self):
         """Prueba mínima 2 del punto 2: una cosecha sin reserva figura sin contrato ni lotes; una lista vacía da `{}` sin consultar."""

@@ -39,8 +39,12 @@ def _es_htmx(request):
 @require_safe
 def contratos(request):
     """Pestaña «Contratos» (``tabContratos`` del prototipo, rama ``cv``; COM-CNS-CVT, reglas 1 a 3): las compra-ventas del alcance, con filtros
-    en la URL (se pueden compartir y volver con «Atrás») y páginas de 50. En COM-02 muestra solo compra-ventas (el selector de tipo lo suma
-    COM-03). No audita."""
+    en la URL (se pueden compartir y volver con «Atrás») y páginas de 50. Con ``?tipo=suministro`` (el selector «Compra-ventas / Suministros»,
+    ``ctrSel``, COM-03a) muestra los suministros (COM-CNS-SUM). No audita."""
+    if request.GET.get("tipo") == "suministro":
+        from comercial import views_suministros  # la vista de suministros importa de este módulo: se importa acá para no cruzarlos
+
+        return views_suministros.lista(request)
     filtros = FiltrosDeCompraVentas.desde_get(request.GET)
     es_gerente = request.user.rol == GERENTE
     pagina = compra_ventas.buscar_compra_ventas(request.user, filtros, request.GET.get("pagina"))

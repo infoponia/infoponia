@@ -750,6 +750,8 @@ class RegistroAuditoria(models.Model):
         REACTIVACION_VEHICULO = "reactivacion_vehiculo", "Reactivación de vehículo"
         # Compra-ventas (COM-02): un solo registro con la venta, sus detalles, reservas, líneas y cosechas (D-36).
         REGISTRO_COMPRA_VENTA = "registro_compra_venta", "Registro de compra-venta"
+        # Suministros (COM-03a): un solo registro con el suministro, sus cláusulas, detalles, reservas, líneas y cosechas (D-36).
+        PACTO_SUMINISTRO = "pacto_suministro", "Pacto de suministro"
         # Proveedores (CMP-01, D-87 punto 8): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_PROVEEDOR = "alta_proveedor", "Alta de proveedor"
         MODIFICACION_PROVEEDOR = "modificacion_proveedor", "Modificación de proveedor"
@@ -980,6 +982,15 @@ class RegistroAuditoria(models.Model):
         "reservas": "Reservas",
         "lineas": "Líneas de reserva",
         "cosechas": "Cosechas",
+        # Suministros (COM-03a): las claves de `datos` del registro «pacto_suministro» (las demás ya existen).
+        "suministro": "Suministro",
+        "duracion_meses": "Duración (meses)",
+        "fecha_fin": "Fecha de fin",
+        "estado_suministro": "Estado del suministro",
+        "incumplimientos_tolerados": "Incumplimientos tolerados",
+        "multa_resolucion": "Multa por resolución",
+        "clausula_suministrado": "Cláusula del suministrado",
+        "periodos_reservados": "Períodos reservados",
         # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
         "tipo_proveedor": "Tipo de proveedor",
@@ -1097,6 +1108,10 @@ class RegistroAuditoria(models.Model):
             "concretada": "Concretada",
             "cancelada": "Cancelada",
         },
+        # COM-03a: las listas cerradas del suministro y de su detalle (`core` no importa `comercial`).
+        "estado_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto", "rescindido": "Rescindido"},
+        "mecanismo_precio": {"fijo": "Fijo", "ajuste_periodico": "Ajuste periódico"},
+        "estado_detalle_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto"},
         "estado_reserva": {
             "activa": "Activa",
             "lista_para_entrega": "Lista para entrega",
@@ -1319,6 +1334,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.BAJA_VEHICULO,
         RegistroAuditoria.Accion.REACTIVACION_VEHICULO,
         RegistroAuditoria.Accion.REGISTRO_COMPRA_VENTA,
+        RegistroAuditoria.Accion.PACTO_SUMINISTRO,
         RegistroAuditoria.Accion.ALTA_PROVEEDOR,
         RegistroAuditoria.Accion.MODIFICACION_PROVEEDOR,
         RegistroAuditoria.Accion.BAJA_PROVEEDOR,

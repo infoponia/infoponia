@@ -4,14 +4,17 @@
 
 from django.test import TestCase
 
-from comercial.models import CompraVenta
+from comercial.models import CompraVenta, Suministro
 from comercial.servicios import registrantes
 from comercial.tests.fabricas import (
     compra_venta,
     detalle,
+    detalle_suministro,
     escenario_comercial,
     reserva,
+    reserva_de_periodo,
     segundo_invernadero,
+    suministro,
     verificar_invariantes_de_reservas,
 )
 from core.models import RegistroAuditoria
@@ -144,3 +147,118 @@ class TraspasoDeVendedorTests(ConDatosDeInventario, TestCase):
         """PROD-MOD-INV, regla 2 y postcondición c: `contar_traspaso` suma «Compra-ventas abiertas» a lo que recibe el entrante."""
         self.venta(), self.venta()
         self.assertIn(("Compra-ventas abiertas", 2), invernaderos._aviso_de_personal(self.e.invernadero, {"vendedor": (self.e.vendedor, self.nuevo)})[0]["recibe"])
+
+
+class TraspasoDeSuministrosTests(ConDatosDeInventario, TestCase):
+    """COM-03a, D-60 punto 2: los suministros vigentes pasan al Vendedor nuevo con la misma regla que las compra-ventas."""
+
+    def setUp(self):
+        self.e = escenario_comercial()
+        self.nuevo = crear_vendedor(email="nuevo@infoponia.com")
+        self.addCleanup(verificar_invariantes_de_reservas)
+
+    def contrato(self, estado="vigente"):
+        """Un suministro del Vendedor del escenario con un detalle (cuya primera entrega es dentro de 3 días)."""
+        s = suministro(self.e, estado=estado)
+        detalle_suministro(s, self.e.variedad, cantidad=30, periodo=30, primera_en_dias=3)
+        return s
+
+    def contar(self):
+        return extensiones.contar_traspaso(self.e.invernadero, "vendedor", self.e.vendedor, self.nuevo)
+
+    def traspasar(self):
+        return extensiones.traspasar(crear_gerente(), self.e.invernadero, "vendedor", self.e.vendedor, self.nuevo)
+
+    def vendedor_de(self, s):
+        return Suministro.objects.get(pk=s.pk).vendedor_id
+
+    def test_regla_8_21_8_sin_otro_invernadero_pasan_todos_los_suministros_vigentes(self):
+        """D-60, punto 2: si el saliente no conserva otro invernadero activo, pasan TODOS sus suministros vigentes (no los finalizados,
+        resueltos ni rescindidos), aunque no tengan reservas."""
+        vigente = self.contrato()
+        finalizado = self.contrato(estado="finalizado")
+        self.assertEqual(self.contar(), [("Suministros vigentes", 1)])
+        tocados = self.traspasar()
+        self.assertEqual([t.pk for t in tocados], [vigente.pk])
+        self.assertEqual((self.vendedor_de(vigente), self.vendedor_de(finalizado)), (self.nuevo.pk, self.e.vendedor.pk))
+
+    def test_regla_8_21_8_las_compra_ventas_y_los_suministros_se_cuentan_y_se_pasan_juntos(self):
+        """`contar` informa las dos líneas («Compra-ventas abiertas: N» y «Suministros vigentes: M»); `traspasar` devuelve las dos clases."""
+        venta = compra_venta(self.e)
+        detalle(venta, self.e.variedad, 10)
+        s = self.contrato()
+        self.assertEqual(self.contar(), [("Compra-ventas abiertas", 1), ("Suministros vigentes", 1)])
+        tocados = self.traspasar()
+        self.assertEqual({type(t) for t in tocados}, {CompraVenta, Suministro})
+        self.assertEqual((CompraVenta.objects.get(pk=venta.pk).vendedor_id, self.vendedor_de(s)), (self.nuevo.pk, self.nuevo.pk))
+
+    def test_regla_8_21_8_si_conserva_otro_invernadero_pasan_solo_los_atados_a_este(self):
+        """D-60, punto 2: pasan los suministros cuyas reservas no liberadas son todas de este invernadero (al menos una); los que salen de
+        varios invernaderos, del otro, o no tienen reservas, siguen con el saliente."""
+        sur = segundo_invernadero(self.e)
+        lote_norte, lote_sur = lote_maduro(self.e, 100), lote_maduro(sur, 100)
+        solo_norte, solo_sur, de_los_dos, con_liberada, sin_reservas = (self.contrato() for _ in range(5))
+        fecha = solo_norte.detalles.get().fecha_primer_entrega
+        reserva_de_periodo(solo_norte.detalles.get(), fecha, [(lote_norte, 5)])
+        reserva_de_periodo(solo_sur.detalles.get(), fecha, [(lote_sur, 5)])
+        reserva_de_periodo(de_los_dos.detalles.get(), fecha, [(lote_norte, 3)])
+        reserva_de_periodo(de_los_dos.detalles.get(), fecha, [(lote_sur, 3)])
+        reserva_de_periodo(con_liberada.detalles.get(), fecha, [(lote_norte, 4)])
+        reserva_de_periodo(con_liberada.detalles.get(), fecha, [(lote_sur, 4)], estado="liberada")
+        self.assertEqual(self.contar(), [("Suministros vigentes", 2)])
+        self.traspasar()
+        pasaron = set(Suministro.objects.filter(vendedor=self.nuevo).values_list("pk", flat=True))
+        self.assertEqual(pasaron, {solo_norte.pk, con_liberada.pk})
+        quedan = set(Suministro.objects.filter(vendedor=self.e.vendedor).values_list("pk", flat=True))
+        self.assertEqual(quedan, {solo_sur.pk, de_los_dos.pk, sin_reservas.pk})
+
+    def test_regla_8_21_8_un_invernadero_inactivo_del_saliente_no_cuenta_como_conservado(self):
+        """D-60, punto 2: «otro invernadero ACTIVO»: con el otro inactivo, pasan todos los suministros vigentes."""
+        sur = segundo_invernadero(self.e)
+        Invernadero.objects.filter(pk=sur.invernadero.pk).update(estado_invernadero="inactivo")
+        s = self.contrato()
+        self.traspasar()
+        self.assertEqual(self.vendedor_de(s), self.nuevo.pk)
+
+    def test_regla_8_21_8_las_reservas_del_suministro_no_se_mueven(self):
+        """D-60, punto 3: cambia solo el `vendedor` del contrato; las reservas de sus períodos siguen donde estaban."""
+        lote = lote_maduro(self.e, 100)
+        s = self.contrato()
+        d = s.detalles.get()
+        r = reserva_de_periodo(d, d.fecha_primer_entrega, [(lote, 5)])
+        self.traspasar()
+        r.refresh_from_db()
+        self.assertEqual((r.invernadero_id, r.estado_reserva, r.detalle_suministro_id), (self.e.invernadero.pk, "activa", d.pk))
+
+    def test_regla_8_21_8_sin_entrante_saliente_u_otro_rol_los_suministros_no_pasan(self):
+        """D-60, punto 5: la baja de un Vendedor (sin entrante) no reasigna contratos; tampoco con otro rol."""
+        s = self.contrato()
+        gerente = crear_gerente()
+        self.assertEqual(registrantes.contar_contratos(self.e.invernadero, "vendedor", self.e.vendedor, None), [])
+        self.assertEqual(registrantes.traspasar_contratos(gerente, self.e.invernadero, "vendedor", self.e.vendedor, None), [])
+        self.assertEqual(registrantes.contar_contratos(self.e.invernadero, "capataz", self.e.vendedor, self.nuevo), [])
+        self.assertEqual(self.vendedor_de(s), self.e.vendedor.pk)
+
+    def test_regla_8_21_8_los_suministros_de_otro_vendedor_no_se_tocan(self):
+        """Solo los del saliente."""
+        otro = escenario_comercial(sufijo="2")
+        ajeno = suministro(otro)
+        self.contrato()
+        self.traspasar()
+        self.assertEqual(self.vendedor_de(ajeno), otro.vendedor.pk)
+
+    def test_punta_a_punta_modificar_invernadero_deja_los_suministros_en_su_registro(self):
+        """PROD-MOD-INV, D-60 punto 4 y D-36: el aviso cuenta los suministros que recibe el entrante y, al confirmar, quedan entre los
+        afectados de `modificacion_invernadero`."""
+        a, b = self.contrato(), self.contrato()
+        self.assertIn(
+            ("Suministros vigentes", 2),
+            invernaderos._aviso_de_personal(self.e.invernadero, {"vendedor": (self.e.vendedor, self.nuevo)})[0]["recibe"],
+        )
+        datos = datos_de(self.e.invernadero) | {"vendedor_id": self.nuevo.pk, "personal_confirmado": True}
+        invernaderos.modificar_invernadero(crear_gerente(), self.e.invernadero.pk, **datos)
+        self.assertEqual(set(Suministro.objects.filter(vendedor=self.nuevo).values_list("pk", flat=True)), {a.pk, b.pk})
+        registro = RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.MODIFICACION_INVERNADERO).latest("id")
+        modelos = [(x["modelo"], x["id"]) for x in registro.afectados]
+        for contrato in (a, b):
+            self.assertIn(("comercial.suministro", contrato.pk), modelos)

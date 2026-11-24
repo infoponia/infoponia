@@ -1,0 +1,18 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Ver todo el calendario» de un suministro (COM-CNS-SUM, regla 6): todos los períodos de todos los detalles, de a 100, con su situación. Recibe «s» y «pagina».{% endcomment %}
+{% block titulo %}Calendario de {{ s.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:suministro' s.pk %}">{% icono "back" 15 %} Volver a {{ s.codigo }}</a>
+  <div class="page-h"><h1>Calendario de <span class="mono">{{ s.codigo }}</span></h1></div>
+  <div class="tablewrap">{% include "comercial/suministros/_calendario_tabla.html" with filas=pagina.object_list %}</div>
+  {% if pagina.paginator.num_pages > 1 %}
+  <nav class="pager" aria-label="Páginas">
+    {% if pagina.has_previous %}<a class="rowlink" href="?pagina={{ pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
+    <span class="muted">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} · {{ pagina.paginator.count }} períodos</span>
+    {% if pagina.has_next %}<a class="rowlink" href="?pagina={{ pagina.next_page_number }}">Siguiente ›</a>{% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

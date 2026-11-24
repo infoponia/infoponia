@@ -45,10 +45,56 @@
 .acts-col{display:flex;flex-direction:column;gap:8px}
 .acts-fila{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .modal-ancho{max-width:640px;width:100%}
-@media (max-width:900px){.cv-layout{grid-template-columns:1fr}.cv-resumen{position:static}}
+@media (max-width:900px){.cv-layout{grid-template-columns:minmax(0,1fr)}.cv-resumen{position:static}}
 
 /* El comprobante imprimible: una hoja sola, sin menú. */
 .comprobante{background:#fff;margin:0}
 .comprobante-hoja{max-width:720px;margin:24px auto;padding:0 20px}
 .comprobante .nota{margin-top:18px;font-size:13px;color:var(--muted-foreground)}
 @media print{.no-imprimir{display:none}.comprobante-hoja{margin:0}}
+
+/* COM-03a: el selector «Compra-ventas / Suministros», el detalle del formulario de suministros y el calendario. */
+.sel-tipo{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:#fff}
+.sel-tipo a{padding:8px 14px;font-weight:550;font-size:14px;color:inherit;text-decoration:none}
+.sel-tipo a[aria-current="page"]{background:var(--primary);color:#fff}
+.sel-tipo a:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0 18px}
+.detcard{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;background:#fff}
+.detcard-h{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.sublbl{font-size:13px;font-weight:600;margin:12px 0 6px;color:var(--muted-foreground)}
+.chips{display:flex;gap:6px;margin-top:6px}
+.cal-lista{list-style:none;display:flex;flex-wrap:wrap;gap:6px;padding:0;margin:6px 0}
+.cal-lista li{border:1px solid var(--border);border-radius:999px;padding:2px 10px;font-size:13px;background:#fff}
+.cal-lista li.ahora{background:var(--primary-soft);border-color:var(--primary)}
+.tramos{list-style:none;padding:0;margin:6px 0;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px}
+.ventana-stock{margin-top:8px}
+.continuar{display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:550}
+.cal-nota{display:flex;gap:8px;align-items:flex-start;margin:0;color:var(--muted-foreground);font-size:14px}
+@media (max-width:900px){.grid4{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.grid4{grid-template-columns:1fr}}
+
+/* COM-03a, correcciones de la verificación visual (D-61): el sufijo de un campo («meses», «$ por día») junto al campo; el CUIT y el resumen en su propia línea; el resumen angosto
+   en una columna; los enlaces de la ficha en el verde primario; y que nada de la grilla ensanche la página en un celular. */
+.suf{display:flex;align-items:center;gap:8px}
+.suf .field-input{flex:1;min-width:0}
+.suf>span{color:var(--muted-foreground);font-size:13px;white-space:nowrap}
+.cli-elegido .sub2,.cli-lista .sub2{display:block;font-size:13px;color:var(--muted-foreground);margin-top:2px}
+.cv-resumen .dl{grid-template-columns:1fr;gap:2px}
+.cv-resumen .dl dt{font-size:12.5px;margin-top:10px}
+.cv-resumen .dl dt:first-child{margin-top:0}
+.cv-resumen .dl dd{margin:0;font-weight:500}
+.cv-resumen .sub2{display:block;font-size:13px;color:var(--muted-foreground);font-weight:400}
+.dl a{color:var(--primary);font-weight:550}
+.cv-layout>*,.cv-pasos>*{min-width:0}
+.detcard .grid4>*,.detcard .grid2>*{min-width:0}
+.detcard .tablewrap,.detcard .data-table{max-width:100%}
+.err{margin-top:4px}
+.dl + .detcard,.dl + .tablewrap{margin-top:14px}
+.modal .detcard{margin-bottom:10px}
+.modal .hint{margin:12px 0}
+.page,.page .stack,.page .stack>*{min-width:0}
+.card-b.flush{overflow-x:auto}
+.comprobante{font-family:var(--font-sans,inherit);color:#1c2430}
+.comprobante h1{font-size:22px;margin:0 0 4px}
+.comprobante .dl{margin:14px 0}
+.comprobante .data-table{width:100%}

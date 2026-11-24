@@ -1,0 +1,140 @@
+{% load iconos comercial %}{% comment %}El cuerpo del formulario «Pactar suministro» (COM-PCT-SUM; VIEWS.sumnew del prototipo): tres secciones numeradas (Cliente, Contrato, Detalles) y el resumen a la
+derecha. Es lo que redibuja HTMX en cada cambio de un selector (`calcular/`): solo los selectores y los botones lo piden, NUNCA un campo de texto, de número o de fecha mientras se
+tipea (.claude/rules/interfaz.md). Sin JavaScript, cada cambio se manda con «Actualizar». Los pasos están bloqueados hasta completar el anterior; con un cliente sin correo, las
+secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de `datos_del_formulario`), «datos», «cliente_q», «encontrados», «busco_sin_resultado», «puede_pactar»,
+«motivo», «es_gerente», «url_para_volver», «hay_detalles_cargados», «errores_generales», «aviso_de_stock», «periodos_a_reservar» y «total_de_detalles».{% endcomment %}
+{% url 'comercial:suministro_calcular' as url_calcular %}
+{% if errores_generales %}
+<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{% for mensaje in errores_generales %}{{ mensaje }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
+{% endif %}
+<div class="cv-layout">
+  <div class="cv-pasos">
+
+    {# ---- 1. Cliente ---- #}
+    <section class="card paso" aria-labelledby="paso-1">
+      <div class="card-title"><span class="paso-n">1</span><span id="paso-1">Cliente</span></div>
+      {% if es_gerente %}
+      <div class="fld">
+        <label for="sum-vendedor">Vendedor responsable<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="sum-vendedor" name="vendedor" data-desplegable hx-post="{{ url_calcular }}" hx-trigger="change" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for vendedor, invernaderos in f.vendedores %}
+          <option value="{{ vendedor.pk }}"{% if f.vendedor and f.vendedor.pk == vendedor.pk %} selected{% endif %}>{{ vendedor.get_full_name }} · {% for i in invernaderos %}{{ i.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}</option>
+          {% endfor %}
+        </select>
+        {% for mensaje in f.errores|get_item:"vendedor" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        <div class="hint">El contrato queda a nombre de este Vendedor y el stock sale de sus invernaderos; el registro de auditoría dice que lo cargaste vos.</div>
+      </div>
+      {% endif %}
+
+      {% if f.cliente %}
+      <input type="hidden" name="cliente" value="{{ f.cliente.pk }}">
+      <div class="cli-elegido">
+        <div><b style="font-weight:600">{{ f.cliente }}</b><span class="sub2">CUIT {{ f.cliente.cuit_cliente|cuit }}{% if f.cliente.email_cliente %} · {{ f.cliente.email_cliente }}{% endif %}</span></div>
+        <button class="btn btn-ghost btn-sm" type="submit" name="cambiar_cliente" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Cambiar</button>
+      </div>
+      {% for mensaje in f.errores|get_item:"cliente" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+      {% if f.cliente_sin_correo %}
+      <div class="alert alert-danger" role="alert" style="margin-top:10px">{% icono "x" 16 %}<div>El cliente no tiene correo. Hace falta para el comprobante y para los enlaces de confirmación de cada entrega.
+        <div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="{% url 'comercial:cliente_modificar' f.cliente.pk %}?volver={{ url_para_volver|urlencode:'' }}">Cargar el correo</a></div></div></div>
+      {% endif %}
+      {% else %}
+      <div class="fld">
+        <label for="sum-cliente-q">Buscar al cliente por CUIT, nombre, apellido o razón social<span class="req" aria-hidden="true"> *</span></label>
+        <div class="fila-buscar">
+          <input class="field-input" id="sum-cliente-q" type="search" name="cliente_q" value="{{ cliente_q }}" autocomplete="off" placeholder="Desde 2 caracteres">
+          <button class="btn btn-ghost" type="submit" name="actualizar" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Buscar</button>
+        </div>
+        {% for mensaje in f.errores|get_item:"cliente" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+      </div>
+      {% if encontrados %}
+      <ul class="cli-lista" aria-label="Clientes que coinciden">
+        {% for c in encontrados %}
+        <li><span><b style="font-weight:600">{{ c }}</b><span class="sub2">CUIT {{ c.cuit_cliente|cuit }}</span></span>
+          <button class="btn btn-ghost btn-sm" type="submit" name="cliente" value="{{ c.pk }}" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Elegir<span class="sr"> a {{ c }}</span></button></li>
+        {% endfor %}
+      </ul>
+      {% elif busco_sin_resultado %}
+      <p class="muted">No hay clientes que coincidan.</p>
+      {% endif %}
+      <p class="hint" style="margin-top:8px">¿No está? <a href="{% url 'comercial:cliente_nuevo' %}?volver={{ url_para_volver|urlencode:'' }}">Registrar o reactivar un cliente</a>.{% if hay_detalles_cargados %} Vas a tener que volver a cargar los detalles.{% endif %}</p>
+      {% endif %}
+    </section>
+
+    {# ---- 2. Contrato ---- #}
+    <section class="card paso{% if not f.seccion_2_habilitada %} paso-bloqueado{% endif %}" aria-labelledby="paso-2">
+      <div class="card-title"><span class="paso-n">2</span><span id="paso-2">Contrato</span></div>
+      {% if not f.seccion_2_habilitada %}
+      <p class="muted">{% if f.cliente_sin_correo %}Cargá el correo del cliente para seguir.{% else %}Elegí primero el cliente.{% endif %}</p>
+      {% else %}
+      <div class="grid3">
+        <div class="fld">
+          <label for="sum-duracion">Duración<span class="req" aria-hidden="true"> *</span></label>
+          <div class="suf"><input class="field-input" id="sum-duracion" type="text" inputmode="numeric" name="duracion" value="{{ datos.duracion }}" autocomplete="off"><span>meses</span></div>
+          {% for mensaje in f.errores|get_item:"duracion" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          <div class="hint">{% if f.fecha_fin %}Termina el <b>{{ f.fecha_fin|date:"d/m/Y" }}</b>. {% endif %}De 1 a 120 meses.</div>
+        </div>
+        <div class="fld">
+          <label for="sum-tolerados">Incumplimientos tolerados<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="sum-tolerados" type="text" inputmode="numeric" name="tolerados" value="{{ datos.tolerados }}" autocomplete="off">
+          {% for mensaje in f.errores|get_item:"tolerados" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          <div class="hint">Cuántos incumplimientos acepta el contrato. Al superarlos, se resuelve. Con 0, el primero lo resuelve.</div>
+        </div>
+        <div class="fld">
+          <label for="sum-multa">Multa por resolución<span class="req" aria-hidden="true"> *</span></label>
+          <div class="suf"><input class="field-input" id="sum-multa" type="text" inputmode="decimal" name="multa" value="{{ datos.multa }}" autocomplete="off"><span>$</span></div>
+          {% for mensaje in f.errores|get_item:"multa" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        </div>
+      </div>
+      <div class="sublbl">Cláusula del suministrado</div>
+      <div class="grid3">
+        <div class="fld">
+          <label for="sum-plazo-pago">Plazo de pago<span class="req" aria-hidden="true"> *</span></label>
+          <div class="suf"><input class="field-input" id="sum-plazo-pago" type="text" inputmode="numeric" name="plazo_pago" value="{{ datos.plazo_pago }}" autocomplete="off"><span>días</span></div>
+          {% for mensaje in f.errores|get_item:"plazo_pago" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          <div class="hint">Desde que se concreta cada entrega. De 0 a 365 días.</div>
+        </div>
+        <div class="fld">
+          <label for="sum-indemnizacion-pago">Indemnización por atraso en el pago<span class="req" aria-hidden="true"> *</span></label>
+          <div class="suf"><input class="field-input" id="sum-indemnizacion-pago" type="text" inputmode="decimal" name="indemnizacion_pago" value="{{ datos.indemnizacion_pago }}" autocomplete="off"><span>$ por día</span></div>
+          {% for mensaje in f.errores|get_item:"indemnizacion_pago" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    {# ---- 3. Detalles ---- #}
+    <section class="card paso{% if not f.seccion_3_habilitada %} paso-bloqueado{% endif %}" aria-labelledby="paso-3">
+      <div class="card-title"><span class="paso-n">3</span><span id="paso-3">Detalles</span></div>
+      {% if not f.seccion_3_habilitada %}
+      <p class="muted">{% if f.cliente_sin_correo %}Cargá el correo del cliente para seguir.{% else %}Elegí primero el cliente.{% endif %}</p>
+      {% else %}
+      <p class="muted" style="margin-bottom:12px">Cada variedad va una vez por dirección. El calendario y el precio de cada entrega se calculan solos.</p>
+      {% for fila in f.filas %}{% include "comercial/suministros/_detalle.html" with fila=fila n=forloop.counter %}{% endfor %}
+      <button class="btn btn-ghost" type="submit" name="agregar_detalle" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>{% icono "plus" 15 %} Agregar detalle</button>
+      {% endif %}
+    </section>
+  </div>
+
+  {# ---- el resumen ---- #}
+  <aside class="card cv-resumen" aria-labelledby="resumen-titulo">
+    <div class="card-title"><span id="resumen-titulo">Resumen</span></div>
+    <dl class="dl">
+      {% if es_gerente %}<dt>Vendedor</dt><dd>{% if f.vendedor %}{{ f.vendedor.get_full_name }}{% else %}<span class="muted">—</span>{% endif %}</dd>{% endif %}
+      <dt>Cliente</dt><dd>{% if f.cliente %}{{ f.cliente }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      <dt>Vigencia</dt><dd>{% if f.fecha_fin %}Hasta el {{ f.fecha_fin|date:"d/m/Y" }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      <dt>Detalles</dt><dd>{{ total_de_detalles }}</dd>
+      <dt>Períodos que se reservan ahora</dt><dd>{{ periodos_a_reservar }}<span class="sub2">hasta el {{ f.ventana|date:"d/m/Y" }}</span></dd>
+    </dl>
+    <p class="hint">Al confirmar se reservan los períodos de la ventana de pre-reserva y se programan las cosechas necesarias; el resto lo reserva el sistema cuando entre en la ventana. Se le envía el comprobante al cliente.</p>
+    {% if not puede_pactar %}
+    <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ motivo }}</div></div>
+    {% else %}
+    <div class="acts-col">
+      <button class="btn btn-primary" type="submit" formaction="{% url 'comercial:suministro_revisar' %}" hx-post="{% url 'comercial:suministro_revisar' %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" data-sin-envio-en-curso>Revisar y pactar</button>
+      <button class="btn btn-ghost" type="submit" name="actualizar" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Actualizar</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:contratos' %}?tipo=suministro">Cancelar</a>
+    </div>
+    {% endif %}
+  </aside>
+</div>

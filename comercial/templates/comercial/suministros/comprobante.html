@@ -1,0 +1,38 @@
+{% load estaticos comercial %}<!doctype html>{% comment %}El comprobante imprimible de un suministro (COM-PCT-SUM, variación de datos 15a): una página sola, sin menú y con estilos de impresión. Existe para todo suministro del alcance y se abre desde la
+ficha. Calendario resumido (primera y última fecha, cantidad de entregas y tramos de precio: no cada fecha). Dice «Comprobante interno, sin validez fiscal.». Recibe lo de `suministros.datos_del_comprobante`.{% endcomment %}
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comprobante {{ suministro.codigo }} · InfoPonia</title>
+  <link rel="stylesheet" href="{% static_v 'core/css/infoponia.css' %}">
+  <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+</head>
+<body class="comprobante">
+  <main class="comprobante-hoja">
+    <h1>Comprobante de suministro {{ suministro.codigo }}</h1>
+    <p class="muted">Pactado el {{ suministro.fecha_realizacion|date:"d/m/Y" }}</p>
+    <dl class="dl">
+      <dt>Cliente</dt><dd>{{ cliente }} · CUIT {{ cliente.cuit_cliente|cuit }}</dd>
+      <dt>Vendedor</dt><dd>{{ vendedor.get_full_name }}</dd>
+      <dt>Vigencia</dt><dd>{{ suministro.fecha_realizacion|date:"d/m/Y" }} al {{ suministro.fecha_fin|date:"d/m/Y" }} ({{ suministro.duracion_meses }} meses)</dd>
+      <dt>Incumplimientos tolerados</dt><dd>{{ suministro.incumplimientos_tolerados }}</dd>
+      <dt>Multa por resolución</dt><dd>{{ suministro.multa_resolucion|pesos }}</dd>
+      <dt>Pago de cada entrega</dt><dd>dentro de {{ clausula.plazo_pago_dias }} días; atraso: {{ clausula.indemnizacion_retraso_pago|pesos }} por día</dd>
+    </dl>
+    {% for fila in filas %}
+    <h2 style="font-size:16px;margin:18px 0 6px">{{ fila.variedad }}</h2>
+    <dl class="dl">
+      <dt>Dirección</dt><dd>{{ fila.direccion }}</dd>
+      <dt>Entregas</dt><dd>{{ fila.cantidad }} plantas cada {{ fila.periodo }} días: {{ fila.cantidad_de_entregas }} entregas, del {{ fila.primera_fecha|date:"d/m/Y" }} al {{ fila.ultima_fecha|date:"d/m/Y" }}</dd>
+      <dt>Precio</dt><dd>{{ fila.precio_inicial|pesos }} por planta ({{ fila.mecanismo|lower }}){% if fila.porcentaje %}, con un ajuste de {{ fila.porcentaje }} % cada {{ fila.meses }} meses{% endif %}
+        {% if fila.tramos_de_precio|length > 1 %}<br>{% for desde, precio in fila.tramos_de_precio %}Desde el {{ desde|date:"d/m/Y" }}: {{ precio|pesos }}{% if not forloop.last %} · {% endif %}{% endfor %}{% endif %}</dd>
+      <dt>Cláusula del suministrante</dt><dd>tolerancia de {{ fila.clausula.plazo_entrega_dias }} días; retraso: {{ fila.clausula.indemnizacion_retraso_entrega|pesos }} por día; mínimo por entrega: {{ fila.clausula.cantidad_minima }} plantas; faltante: {{ fila.clausula.indemnizacion_faltante|pesos }} por planta</dd>
+    </dl>
+    {% endfor %}
+    <p class="nota">Comprobante interno, sin validez fiscal.</p>
+    <p class="no-imprimir"><button class="btn btn-primary" type="button" onclick="window.print()">Imprimir</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:suministro' suministro.pk %}">Volver a la ficha</a></p>
+  </main>
+</body>
+</html>

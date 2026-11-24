@@ -1,5 +1,5 @@
-# Comprobante de un contrato (COM-02; paso 16 y extensiones 16a y 16b de COM-REG-CVT). Una sola función para los dos tipos de contrato
-# (COM-03 suma la plantilla del suministro). Se llama SIEMPRE fuera de una transacción (D-14, D-54): un servidor SMTP lento no puede
+# Comprobante de un contrato (COM-02; paso 16 y extensiones 16a y 16b de COM-REG-CVT; COM-03a: paso 15 y extensión 15a de COM-PCT-SUM). Una sola
+# función para los dos tipos de contrato, cada uno con su asunto, su plantilla y su contexto. Se llama SIEMPRE fuera de una transacción (D-14, D-54): un servidor SMTP lento no puede
 # mantener bloqueos tomados. El resultado queda en `Contrato.estado_comprobante`; no hay reintento automático (no hay cola de envíos,
 # `docs/temas_abiertos.md`, «Notificaciones»): el reintento es manual, con «Reenviar comprobante» en la ficha.
 
@@ -7,7 +7,7 @@ from collections import namedtuple
 
 from django.core.exceptions import PermissionDenied, ValidationError
 
-from comercial.models import CompraVenta, Contrato
+from comercial.models import Contrato
 from core import correo, notificaciones
 from core.models import Usuario, rol_de
 
@@ -17,15 +17,22 @@ Estado = Contrato.EstadoDelComprobante
 # «cuenta N» con el id del cliente (anotado en `docs/temas_abiertos.md`, «Correo a quien no tiene cuenta»).
 Destinatario = namedtuple("Destinatario", "pk email")
 
-PLANTILLAS = {Contrato.Tipo.COMPRA_VENTA: "comercial/correos/comprobante_compra_venta.txt"}
+PLANTILLAS = {
+    Contrato.Tipo.COMPRA_VENTA: "comercial/correos/comprobante_compra_venta.txt",
+    Contrato.Tipo.SUMINISTRO: "comercial/correos/comprobante_suministro.txt",
+}
+ASUNTOS = {Contrato.Tipo.COMPRA_VENTA: "Comprobante de tu compra {codigo}", Contrato.Tipo.SUMINISTRO: "Comprobante de tu suministro {codigo}"}
 
 
-def contexto_del_comprobante(venta):
-    """Lo que dice el comprobante de una compra-venta (variación de datos 16a): detalles, cantidades, precios, monto estimado, fecha
-    pactada y modalidad (dirección de envío, o invernadero de retiro con su dirección). Lo usan el correo y la página imprimible."""
-    from comercial.servicios import compra_ventas
+def contexto_del_comprobante(contrato):
+    """Lo que dice el comprobante del contrato. Compra-venta (variación de datos 16a): detalles, cantidades, precios, monto estimado, fecha
+    pactada y modalidad. Suministro (variación 15a): cláusulas y, por detalle, el calendario resumido y el precio. Lo usan el correo y la
+    página imprimible."""
+    from comercial.servicios import compra_ventas, suministros
 
-    return compra_ventas.datos_del_comprobante(venta)
+    if contrato.tipo_contrato == Contrato.Tipo.SUMINISTRO:
+        return suministros.datos_del_comprobante(contrato)
+    return compra_ventas.datos_del_comprobante(contrato)
 
 
 def enviar_comprobante(contrato):
@@ -44,12 +51,11 @@ def enviar_comprobante(contrato):
     if not correo.correo_configurado():
         Contrato.objects.filter(pk=contrato.pk).update(estado_comprobante=Estado.PENDIENTE_ENVIO)
         return Estado.PENDIENTE_ENVIO
-    venta = CompraVenta.objects.get(pk=contrato.pk)
     salio = correo.enviar_correo(
         Destinatario(cliente.pk, cliente.email_cliente),
-        f"Comprobante de tu compra {venta.codigo}",
+        ASUNTOS[contrato.tipo_contrato].format(codigo=contrato.codigo),
         PLANTILLAS[contrato.tipo_contrato],
-        contexto_del_comprobante(venta),
+        contexto_del_comprobante(contrato),
     )
     nuevo = Estado.ENVIADO if salio else Estado.PENDIENTE_ENVIO
     Contrato.objects.filter(pk=contrato.pk).update(estado_comprobante=nuevo)
