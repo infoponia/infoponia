@@ -136,7 +136,7 @@ class RolContadorVistasTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, "Contador")
 
-    def test_d85_el_contador_entra_a_su_inicio_y_su_menu_es_solo_el_panel(self):
+    def test_d85_el_contador_entra_a_su_inicio_y_su_menu_es_panel_contabilidad_y_compras(self):
         """SEG-13 y D-85 punto 6: el Contador entra al inicio (con su rol y la sigla), el menú es «Panel de control» y no hay
         «Estadísticas». La entrada «Contabilidad» la suma CON-03a."""
         self.client.force_login(crear_cuenta(Contador, email="contador@infoponia.com"))
@@ -147,9 +147,9 @@ class RolContadorVistasTests(TestCase):
         self.assertEqual(respuesta.context["sigla"], "CON")
         self.assertEqual(respuesta.context["rol_visible"], "Contador")
         self.assertFalse(respuesta.context["modo_campo"])
-        self.assertEqual([entrada["texto"] for entrada in respuesta.context["menu"]], ["Panel de control", "Compras"])  # «Compras» la registra CMP-03 (D-87 punto 6)
+        self.assertEqual([entrada["texto"] for entrada in respuesta.context["menu"]], ["Panel de control", "Contabilidad", "Compras"])  # «Contabilidad» la registra CON-03a; «Compras», CMP-03 (D-87 punto 6)
         self.assertNotContains(respuesta, "Estadísticas")
-        self.assertEqual([texto for texto, _, _ in menu.menu_de(Usuario.Rol.CONTADOR)], ["Panel de control", "Compras"])
+        self.assertEqual([texto for texto, _, _ in menu.menu_de(Usuario.Rol.CONTADOR)], ["Panel de control", "Contabilidad", "Compras"])
 
     def test_d85_el_contador_no_abre_los_otros_modulos(self):
         """SEG-13 y D-85 punto 6: cuentas, auditoría, producción, alertas, inventario, comercial, compras, IoT, bitácora y

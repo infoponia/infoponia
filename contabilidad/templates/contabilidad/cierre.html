@@ -1,0 +1,42 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos %}
+{% comment %}«Cerrar ejercicio» (CON-CRR-EJE regla 4; ``VIEWS.k_cierre`` del prototipo): el resumen del ejercicio (rango, cantidad de asientos, total del Debe y del Haber), el aviso de que el cierre no se
+puede deshacer y la casilla de confirmación (C9). Es un formulario común: funciona sin JavaScript. Sin «Hay N pagos pendientes» del prototipo: los pagos son de ``compras`` y el cierre no tiene verificaciones (regla 4). Todo se escapa.{% endcomment %}
+{% block titulo %}Cerrar el ejercicio {{ numero_de_ejercicio }} · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="btn btn-text btn-sm" href="{% url 'contabilidad:ejercicios' %}">{% icono "back" 14 %} Contabilidad</a>
+  <div class="page-h" style="margin-top:8px"><h1>Cerrar el ejercicio {{ numero_de_ejercicio }}</h1></div>
+
+  <form method="post" action="{% url 'contabilidad:cierre' ejercicio.pk %}" data-enviando="Cerrando…">
+    {% csrf_token %}
+    <div class="stack">
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">1</span>Resumen del ejercicio</div>
+        <div class="facts">
+          <div><span class="k">Período</span><span class="v">{{ ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}</span></div>
+          <div><span class="k">Asientos</span><span class="v mono">{{ resumen.cantidad_de_asientos }}</span></div>
+          <div><span class="k">Total del Debe</span><span class="v mono">{{ resumen.total_debe|pesos }}</span></div>
+          <div><span class="k">Total del Haber</span><span class="v mono">{{ resumen.total_haber|pesos }}</span></div>
+        </div>
+        <p class="hint" style="margin-top:10px"><a class="link" href="{% url 'contabilidad:libro' %}?ejercicio={{ ejercicio.pk }}">Abrir el libro de gestión de este ejercicio</a> para revisarlo antes de cerrar.</p>
+      </section>
+
+      <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>
+        <b>El cierre no se puede deshacer.</b> Cuando cierres el ejercicio {{ numero_de_ejercicio }}, ya no recibe asientos: un asiento automático con fecha de ese período se registra en el ejercicio abierto con la fecha de hoy (y lo aclara), y uno manual o un contraasiento con esa fecha se rechaza.
+        Los saldos de activo, pasivo y patrimonio neto pasan {% if siguiente_numero %}al ejercicio {{ siguiente_numero }}{% else %}al ejercicio siguiente{% endif %}; los de ingresos y egresos empiezan en cero. El cierre no genera asientos.
+        {% if not es_contador %}Lo cerrás vos porque no hay un Contador activo.{% endif %}
+      </div></div>
+
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">2</span>Confirmación</div>
+        <label class="chk"><input type="checkbox" name="confirmo" value="1" aria-describedby="{% if falta_confirmar %}error-confirmo{% endif %}"> Revisé el libro de gestión y quiero cerrar el ejercicio {{ numero_de_ejercicio }}</label>
+        {% if falta_confirmar %}<div class="err" id="error-confirmo" role="alert">Confirmá que revisaste el libro para cerrar el ejercicio.</div>{% endif %}
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit">Cerrar el ejercicio {{ numero_de_ejercicio }}</button>
+      <a class="btn btn-ghost" href="{% url 'contabilidad:ejercicios' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

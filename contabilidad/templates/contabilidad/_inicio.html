@@ -1,0 +1,7 @@
+{% load iconos %}
+{% comment %}Sección «Contabilidad» del Inicio del responsable contable (`registrar_seccion_de_inicio`, D-43; CON-03a, ``panelCon`` del prototipo): la alerta del ejercicio en cierre. La ve el Contador activo y, sin
+Contador activo, el Gerente. Recibe «datos» con «ejercicio» y «numero». Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Contabilidad</h2>
+  <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>El ejercicio {{ datos.numero }} terminó el {{ datos.ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}.</b> Revisá el libro de gestión y cerralo cuando estés conforme. <a class="link" href="{% url 'contabilidad:libro' %}?ejercicio={{ datos.ejercicio.pk }}">Ver el libro</a> · <a class="link" href="{% url 'contabilidad:cierre' datos.ejercicio.pk %}">Cerrar ejercicio</a></div></div>
+</div>

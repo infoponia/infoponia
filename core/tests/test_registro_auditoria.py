@@ -381,3 +381,29 @@ class TextosLegiblesTests(TestCase):
 
         self.assertEqual(registro.filas_de_cambios(), [])
         self.assertEqual(registro.filas_de_datos(), [])
+
+
+class DiccionariosDeTextosTests(TestCase):
+    """Los diccionarios de textos de la auditoría no repiten claves: una clave repetida deja valer la última sin avisar (cada tarea suma las suyas)."""
+
+    def test_etiquetas_y_valores_visibles_no_repiten_claves(self):
+        """D-36: `ETIQUETAS` y `VALORES_VISIBLES` (y los diccionarios de adentro) tienen cada clave una sola vez."""
+        import ast
+        import collections
+        import inspect
+
+        arbol = ast.parse(inspect.getsource(modelos))
+        repetidas = {}
+        for clase in ast.walk(arbol):
+            if not (isinstance(clase, ast.ClassDef) and clase.name == "RegistroAuditoria"):
+                continue
+            for sentencia in clase.body:
+                if isinstance(sentencia, ast.Assign) and sentencia.targets[0].id in ("ETIQUETAS", "VALORES_VISIBLES"):
+                    for diccionario in ast.walk(sentencia.value):
+                        if isinstance(diccionario, ast.Dict):
+                            claves = [k.value for k in diccionario.keys if isinstance(k, ast.Constant)]
+                            for clave, veces in collections.Counter(claves).items():
+                                if veces > 1:
+                                    repetidas[(sentencia.targets[0].id, clave)] = veces
+
+        self.assertEqual(repetidas, {})

@@ -1,23 +1,24 @@
 # Estado — InfoPonia
 
-Actualizado: 24/11/2026 (COM-04c en rama). Máx. 2 KB; detalle en `docs/historial.md`.
+Actualizado: 24/11/2026 (CON-03a en rama). Máx. 2 KB; detalle en `docs/historial.md`.
 
 ## En curso
 
-- Mergeadas: UI-01, NOT-01, MAE-03, MAE-04, CON-01, INV-01, DIA-01, INV-02, MAE-05, MAE-02c, INV-03, IOT-01, PRD-01, IOT-02, PRD-02, MAE-02d, IOT-03, USR-10, PRD-03, PRD-04, COM-01, IOT-04, CMP-01, COM-02, CMP-02a, IOT-05, COM-03a, CMP-02b, IOT-06, COM-03b, IOT-07, COM-04a (#73), USR-11 (#74), USR-09a (#75), CMP-03 (#76), COM-04b (#77), CON-02 (#78). Revisión pendiente (D-96).
-- COM-04c (faltante y enlace del cliente, paso 27): en rama (`comercial` 0007, `core` 0039). Falta PR, cargar `URL_DEL_SITIO` en Render y pasada manual al cerrar la tanda.
+- Mergeadas: UI-01, NOT-01, MAE-03, MAE-04, CON-01, INV-01, DIA-01, INV-02, MAE-05, MAE-02c, INV-03, IOT-01, PRD-01, IOT-02, PRD-02, MAE-02d, IOT-03, USR-10, PRD-03, PRD-04, COM-01, IOT-04, CMP-01, COM-02, CMP-02a, IOT-05, COM-03a, CMP-02b, IOT-06, COM-03b, IOT-07, COM-04a (#73), USR-11 (#74), USR-09a (#75), CMP-03 (#76), COM-04b (#77), CON-02 (#78), COM-04c (#79). Revisión pendiente (D-96).
+- COM-04c: falta `URL_DEL_SITIO` en Render y pasada manual al cerrar la tanda.
+- CON-03a (libro, plan y cierre): en rama, sin migraciones. Falta PR.
 - «Comercial 1»: C0–C6 validados (D-57–D-68); C7 a validar (D-69); C8 validado (D-94). COM-05a1–COM-08 partidas. IoT: I0 validado; I1–I4 a validar.
 
 ## Siguiente
 
 - Rondas A0 aprobadas: Contabilidad 1–2, Compras 1, Estadísticas 1 (D-84–D-93). Orden: `docs/tareas/orden_de_implementacion.md`.
-- CMP-04 (tras CON-02), COM-05a1 (tras COM-04c), USR-09b y AUD-02.
+- CMP-04, COM-05a1, CON-03b, USR-09b y AUD-02.
 - Procesos: `proceso_diario` (D-56; pasos 5 en CON-02, 20, 25, 35, 40; 27 en COM-04c; 60–62 en CMP-03) y `revision_iot` (D-71); cron al final.
 
 ## Revisiones a mano pendientes (`docs/revisiones_pendientes.md`; D-96)
 
 - UX: 8 · USR-09a: 15 (en Render, tras despliegue) · USR-08: 5 · USR-08b: 6 · AUD-01: 6 · CFG: 1 · MAE-02b: 14 · UI-01: 6 · NOT-01: 7
-- MAE-03: 12 · MAE-04: 10 · CON-01: 6 · DIA-01: 3 · MAE-02c: 12 · MAE-02d: 7 (sin migraciones)
+- MAE-03: 12 · MAE-04: 10 · CON-01: 6 · DIA-01: 3 · MAE-02c: 12 · MAE-02d: 7 · CON-03a: 28 (sin migraciones)
 - Con migración (tras despliegue): INV-01: 14 · INV-02: 16 · MAE-05: 10 · INV-03: 14 · IOT-01: 11 · PRD-01: 15 · PRD-02: 10 · IOT-02: 15 · PRD-03: 12 · PRD-04: 11 · IOT-04: 13 · COM-01: 11 · CMP-01: 17 · CMP-02a: 19 · IOT-05: 17 · COM-03a: 13 · IOT-06: 37 · CMP-02b: 21 · COM-03b: 14 · IOT-07: 11 · COM-04a: 18 · USR-11: 15 · CMP-03: 31 · COM-04b: 16 · CON-02: 16 · COM-04c: 14
 
 ## Esperas y bloqueos

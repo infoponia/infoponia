@@ -1,0 +1,51 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable %}
+{% comment %}«Contabilidad» → «Plan de cuentas» (CON-CNS-PCT; ``tabPlan`` del prototipo): el árbol por rubro y subrubro con el código (rubro.subrubro.cuenta), el nombre, el tipo, para qué se usa la cuenta
+(regla 3: ``DESCRIPCION_DE_CUENTA``) y el saldo en el ejercicio abierto, que lleva al libro de gestión por cuenta (regla 4). Solo consulta: no hay ABM (D-37). El buscador se envía con «Buscar» (sin JavaScript
+funciona igual). Cada cuenta tiene su ancla (#cuenta-1.1.01).{% endcomment %}
+{% block titulo %}Plan de cuentas · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page">
+  <div class="page-h"><h1>Contabilidad</h1></div>
+  {% include "contabilidad/_pestanas.html" with activa="plan" %}
+
+  <p class="muted" style="margin:-6px 0 14px">Estas son las cuentas donde se asientan los hechos de la organización. El plan viene cargado con el sistema y no se modifica desde acá. Sin IVA: es una simplificación declarada.</p>
+
+  <form class="filters" method="get" action="{% url 'contabilidad:plan' %}" role="search">
+    <input class="field-input" type="search" name="q" value="{{ q }}" placeholder="Buscar una cuenta" aria-label="Buscar una cuenta por código, nombre o descripción">
+    <button class="btn btn-ghost" type="submit">Buscar</button>
+    {% if q %}<a class="btn btn-text" href="{% url 'contabilidad:plan' %}">Quitar la búsqueda</a>{% endif %}
+  </form>
+
+  {% if rubros %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th style="width:90px">Código</th><th>Cuenta</th><th>Tipo</th><th class="right">Saldo{% if ejercicio %} (ejercicio abierto){% endif %}</th></tr></thead>
+      <tbody>
+      {% for rubro in rubros %}
+        <tr class="grp"><td colspan="4">{{ rubro.codigo }} · {{ rubro.nombre }}</td></tr>
+        {% for subrubro in rubro.subrubros %}
+          <tr class="grp"><td colspan="4" class="muted">{{ subrubro.codigo }} · {{ subrubro.nombre }}</td></tr>
+          {% for fila in subrubro.filas %}
+          <tr id="cuenta-{{ fila.cuenta.codigo_cuenta }}">
+            <td class="nowrap mono">{{ fila.cuenta.codigo_cuenta }}</td>
+            <td><b>{{ fila.cuenta.nombre_cuenta }}</b><span class="sub2">{{ fila.descripcion }}</span></td>
+            <td>{{ fila.cuenta.get_tipo_cuenta_display }}</td>
+            <td class="right nowrap mono">
+              {% if ejercicio %}
+                <a class="rowlink" href="{% url 'contabilidad:libro' %}?vista=cuenta&amp;cuenta={{ fila.cuenta.codigo_cuenta }}&amp;ejercicio={{ ejercicio.pk }}">{% if fila.con_movimientos %}{{ fila.saldo.saldo|pesos }}{% else %}Sin movimientos{% endif %}<span class="sr"> · ver la cuenta {{ fila.cuenta.codigo_cuenta }} en el libro de gestión</span></a>
+                {% if fila.con_movimientos and fila.saldo.contrario %}<span class="sub2">saldo contrario a su naturaleza</span>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay cuentas con ese texto</b><span>Probá con otro código o con parte del nombre.</span></div>
+  {% endif %}
+  {% if not ejercicio %}<p class="hint" style="margin-top:12px">Todavía no hay un ejercicio abierto: los saldos aparecen cuando se pone en marcha la contabilidad.</p>{% endif %}
+</div>
+{% endblock %}
