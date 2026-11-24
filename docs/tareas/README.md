@@ -87,7 +87,6 @@ por el estudiante el 21/11/2026). Cada tarea espera a las de producción que nec
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
 | IOT-05 | Comandos: emitir, retirar, resolver y cancelar | iot (y un valor en produccion) | hecha (PR #__, 23/11/2026; revisión a mano pendiente) | IOT-03, PRD-01 | `iot/IOT-05-comandos.md` |
-| IOT-06 | Reglas de actuación y ciclo de vida del sistema y del hardware | iot | pendiente | IOT-05 | `iot/IOT-06-reglas-y-ciclo-de-vida.md` |
 | IOT-07 | Orden de mantenimiento automática, su cancelación y el traspaso del Técnico | iot (y migración en produccion) | pendiente | IOT-06, PRD-01 | `iot/IOT-07-orden-de-mantenimiento.md` |
 
 ## Tareas hechas antes del traspaso (18/11/2026)
@@ -126,7 +125,6 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CMP-02b | Cancelar pedido, reenviar invitación y lo que cancela solo | compras | pendiente | CMP-02a | `compras/CMP-02b-cancelar-reenviar-y-bajas.md` |
 | CMP-03 | Orden de compra y pasos diarios 60 a 62 | compras (y el tránsito en inventario) | pendiente | CMP-02b | `compras/CMP-03-orden-de-compra-y-pasos-diarios.md` |
 | CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario) | pendiente | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
 | CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11, CON-02 | `compras/CMP-05-pago-a-proveedores.md` |

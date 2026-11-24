@@ -2,7 +2,7 @@
 # Es el mismo mecanismo que el enlace del cliente (D-65). La base guarda SOLO el resumen SHA-256 del token (``core/enlaces.py``); el token vive en
 # memoria hasta armar la URL del correo. El enlace NO guarda fecha de vencimiento: vence al terminar el día de la fecha límite del pedido, que se
 # lee del pedido al abrir y al registrar. ``crear_enlace`` corre dentro de la transacción del caso de uso; el correo sale en ``on_commit``
-# (``core.correo.enviar_correo``, D-54). Lo de CMP-02b (anular, reemplazar y reenviar) se suma en este mismo archivo.
+# (``core.correo.enviar_correo``, D-54). Lo de CMP-02b (anular, reemplazar y avisar la cancelación) se suma en este mismo archivo.
 
 from collections import namedtuple
 
@@ -150,3 +150,77 @@ def enviar_invitacion(enlace_id, url):
             contexto,
         )
     EnlaceProveedor.objects.filter(pk=enlace_id).update(estado_envio=EstadoEnvio.ENVIADO if enviado else EstadoEnvio.PENDIENTE_ENVIO)
+
+
+# ---- CMP-02b: anular y avisar la cancelación ----
+
+
+def anular_enlaces_de_pedido(pedido):
+    """Pasa a ``anulado`` los enlaces ``vigente`` de ``pedido`` (postcondición c de CMP-CNL-PED; D-88 punto 2) y los devuelve. Los ``usado`` no se
+    tocan: son de quien ya cotizó. Los bloquea (``FOR NO KEY UPDATE``) en orden de id, así que va dentro de la transacción del caso de uso y
+    después del pedido y de sus cotizaciones (docs/patrones/stock.md, sección 5, punto 8)."""
+    vigentes = list(
+        EnlaceProveedor.objects.select_for_update(no_key=True, of=("self",))
+        .filter(invitacion__pedido=pedido, estado=Estado.VIGENTE)
+        .order_by("id")
+    )
+    EnlaceProveedor.objects.filter(pk__in=[e.pk for e in vigentes]).update(estado=Estado.ANULADO)
+    for enlace in vigentes:
+        enlace.estado = Estado.ANULADO
+    return vigentes
+
+
+def enviar_aviso_de_cancelacion(pedido_id):
+    """Postcondición d de CMP-CNL-PED: avisa por correo a todos los proveedores invitados, hayan cotizado o no, que el pedido se canceló. El correo
+    lleva el pedido y las fechas, **sin el motivo** ni los otros proveedores ni precios. Corre **fuera** de toda transacción (``on_commit``); un
+    correo que falla no revierte nada (extensión 7a) y se registra en el log de ``core.correo``. Sin el correo configurado no sale nada."""
+    if not correo_configurado():
+        return
+    from compras.models import Pedido
+
+    pedido = Pedido.objects.get(pk=pedido_id)
+    for invitacion in pedido.invitaciones.select_related("proveedor").order_by("id"):
+        proveedor = invitacion.proveedor
+        enviar_correo(
+            Destinatario(proveedor.pk, proveedor.email_proveedor),
+            f"Pedido de cotización {pedido} cancelado",
+            "compras/correo/cancelacion.txt",
+            {
+                "pedido": str(pedido),
+                "proveedor": proveedor.nombre_para_mostrar,
+                "fecha_pedido": pedido.fecha_pedido,
+                "fecha_cierre": pedido.fecha_cierre_pedido,
+            },
+        )
+
+
+def anular_enlaces_de_proveedor(proveedor):
+    """Regla 3 de CMP-BAJ-PRV (H22): al dar de baja a ``proveedor``, sus enlaces ``vigente`` de pedidos «en cotización» pasan a ``anulado`` (dejan de servir,
+    D-88 punto 2) y se devuelven. Los ``usado`` y los de pedidos que ya no están en cotización no se tocan; tampoco su cotización. Los bloquea
+    (``FOR NO KEY UPDATE``) en orden de id, después del proveedor (que ya bloqueó la baja): cotizar bloquea proveedor → pedido → enlace."""
+    from compras.models import Pedido
+
+    vigentes = list(
+        EnlaceProveedor.objects.select_for_update(no_key=True, of=("self",))
+        .filter(invitacion__proveedor=proveedor, invitacion__pedido__estado_pedido=Pedido.Estado.EN_COTIZACION, estado=Estado.VIGENTE)
+        .order_by("id")
+    )
+    EnlaceProveedor.objects.filter(pk__in=[e.pk for e in vigentes]).update(estado=Estado.ANULADO)
+    for enlace in vigentes:
+        enlace.estado = Estado.ANULADO
+    return vigentes
+
+
+def reemplazar_enlace(invitacion, construir_url):
+    """«Reenviar invitación» (regla 7 de CMP-CNS-PED, H15.1): el enlace vigente de ``invitacion`` pasa a ``reemplazado`` (se bloquea antes) y se crea uno
+    nuevo, cuyo correo sale en ``on_commit`` (``crear_enlace``). Devuelve ``(enlace_nuevo, enlace_anterior)``; el anterior es ``None`` si la invitación no
+    tenía ninguno vigente (por ejemplo, tras la baja y la reactivación del proveedor). Va dentro de la transacción del caso de uso, con el proveedor y el
+    pedido ya bloqueados (D-88 punto 7)."""
+    anterior = (
+        EnlaceProveedor.objects.select_for_update(no_key=True, of=("self",)).filter(invitacion=invitacion, estado=Estado.VIGENTE).first()
+    )
+    if anterior is not None:
+        anterior.estado = Estado.REEMPLAZADO
+        anterior.save(update_fields=["estado"])
+    nuevo, _ = crear_enlace(invitacion, construir_url)
+    return nuevo, anterior

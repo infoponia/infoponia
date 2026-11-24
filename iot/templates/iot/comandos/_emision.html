@@ -1,6 +1,6 @@
 {% load iconos %}{% comment %}El formulario de emisión de un comando (IOT-EMT-CMD, pasos 2 a 8; ``cmdForm`` del prototipo). Dos estados: el formulario (actuador, acción, valor si la acción lo lleva y descripción opcional) y el
 resumen con sus advertencias (paso 6), donde se confirma o se vuelve a cambiar (7a y 7b). Elegir el actuador o la acción vuelve a dibujar el formulario SIN validar («paso=refrescar»: con HTMX solo cambia «#emision»; sin
-JavaScript, el botón «Actualizar el formulario»). Las validaciones corren solo al apretar «Ver resumen» o «Confirmar». Recibe «emision» (para, datos, accion, pendiente, errores, general y resumen).{% endcomment %}
+JavaScript, el botón «Actualizar el formulario»). Las validaciones corren solo al apretar «Ver resumen» o «Confirmar». Recibe «emision» (para, datos, accion, pendiente, reglas, errores, general y resumen). Paso 4: las reglas activas del actuador elegido (IOT-06); la advertencia 6b va en el resumen.{% endcomment %}
 <div id="emision" class="card" style="margin-bottom:18px">
   {% with para=emision.para datos=emision.datos errores=emision.errores resumen=emision.resumen %}
   <div class="card-h"><h3>{% icono "send" 16 %} Emitir comando</h3>
@@ -13,6 +13,8 @@ JavaScript, el botón «Actualizar el formulario»). Las validaciones corren sol
       {% else %}<div class="xs" style="margin-top:6px">El nodo puede estar ejecutándolo: podés cancelarlo en {{ emision.pendiente.segundos }} s.</div>{% endif %}{% endif %}</div></div>{% endif %}
     {% for acc in para.acciones_incompatibles %}{% if forloop.first %}<div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>El nodo no soporta: {% endif %}<b>{{ acc.nombre_accion }}</b>{% if not forloop.last %}, {% else %}. Esas acciones no se ofrecen (alerta «Configuración incompatible»).</div></div>{% endif %}{% endfor %}
 
+    {% if emision.reglas and not resumen %}<div class="alert alert-info" role="status" style="margin-bottom:12px">{% icono "info" 16 %}<div>Este actuador tiene {{ emision.reglas|length }} regla{{ emision.reglas|length|pluralize }} de actuación activa{{ emision.reglas|length|pluralize }}:
+      <ul style="margin:6px 0 0 18px">{% for r in emision.reglas %}<li><a href="{% url 'iot:regla_ficha' r.pk %}"><b>{{ r.codigo }}</b></a>: {{ r.texto }}</li>{% endfor %}</ul></div></div>{% endif %}
     <form method="post" novalidate action="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}">
       {% csrf_token %}
       {% if resumen %}

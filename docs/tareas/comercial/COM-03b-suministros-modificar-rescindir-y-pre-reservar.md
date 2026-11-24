@@ -140,7 +140,7 @@ Si el tiempo apremia, lo último que se recorta es la ventana del historial (que
 ## Verificación a mano (la completa Claude Code al cerrar)
 
 Está en el «Cierre», sección «Verificación a mano» (D-96): los datos se crean a mano, no hay cargador (`comercial/verificacion.py` y `cargar_datos_de_verificacion` se retiraron en D-95 y no vuelven). Hay migraciones nuevas
-(`comercial` 0004 y `core` 0031): `python manage.py migrate`.
+(`comercial` 0004 y `core` 0033): `python manage.py migrate`.
 
 ## Cierre (la completa Claude Code al cerrar)
 
@@ -149,7 +149,7 @@ Está en el «Cierre», sección «Verificación a mano» (D-96): los datos se c
 - **Migraciones** (ninguna de datos; `sqlmigrate` leído: solo `CREATE`, ningún `DROP`, `DELETE` ni `UPDATE`):
   - `comercial/0004_alerta_comercial`: `AlertaComercial` (D-63) con `alerta` (`OneToOne`, `PROTECT`), `suministro` y `detalle_suministro` (FK nulas), `fecha_periodo` y `cantidad_sin_cubrir`; dos restricciones
     (`alerta_comercial_un_solo_origen`: exactamente una FK de origen; `alerta_comercial_periodo_completo`: `detalle_suministro` ⇔ fecha y cantidad).
-  - `core/0031_comercial_suministros_2`: solo `choices` (`modificacion_suministro`, `pre_reserva_periodo`, `rescision_suministro`, `anulacion_rescision`, `cierre_rescision`; SQL vacío).
+  - `core/0033_comercial_suministros_2`: solo `choices` (`modificacion_suministro`, `pre_reserva_periodo`, `rescision_suministro`, `anulacion_rescision`, `cierre_rescision`; SQL vacío).
   - `core/models.py`: `Accion`, `ETIQUETAS` (las claves nuevas de `datos` y de `cambios`), `VALORES_VISIBLES` (`motivo_rescision`) y `ACCIONES_DE_NEGOCIO`. `core/procesos.py`: solo el comentario de la tabla de órdenes.
 - **`maestros`** (D-62, punto 1): los cuatro valores nuevos de `Origen` (`entrega`, `suministro`, `detalle_suministro`, `stock_cosechado`) y 2 pruebas nuevas en `test_alerta.py` (ninguna existente cambió).
 - **Servicios de `comercial`:**
@@ -232,7 +232,7 @@ contratos; (2) el Vendedor modifica uno (formulario, resumen con la huella y la 
 no ve botones y la pantalla de modificar lo devuelve a la ficha con el motivo; (6) el Gerente deja la rescisión sin efecto (motivo obligatorio) y el contrato vuelve a poder modificarse; (7) la rescinde otra vez y
 `proceso_diario --fecha <día siguiente> --solo cerrar_rescisiones` lo pasa a «rescindido» (aviso, sin botones, filtro de la lista); (8) un registro de auditoría por hecho.
 
-*Migraciones*: `makemigrations --check` sin cambios; `sqlmigrate comercial 0004` leído (solo `CREATE TABLE` con sus restricciones, claves foráneas e índices) y `core 0031` (sin SQL); aplicadas en la base de pruebas (recreada una vez, con tu autorización); `manage.py check` sin problemas.
+*Migraciones*: `makemigrations --check` sin cambios; `sqlmigrate comercial 0004` leído (solo `CREATE TABLE` con sus restricciones, claves foráneas e índices) y `core 0033` (sin SQL); aplicadas en la base de pruebas (recreada una vez, con tu autorización); `manage.py check` sin problemas.
 
 **Verifiqué:** el recorrido (con su resultado: OK), las migraciones (arriba) y los dos comandos de pruebas de «Hecho cuando» (2958 y 43, OK), `proceso_diario --listar`. Además, que las pruebas de concurrencia (43) se pueden correr de punta a punta con los bloqueos nuevos.
 
@@ -242,14 +242,14 @@ rescindir, dejar sin efecto y el cierre (`test_com_rsc_sum.py`, `test_com_anl_rs
 
 **No pude verificar:**
 - El envío real de un correo (las pruebas usan `enviar_correo` simulado): con SMTP real, que lleguen el comprobante de la modificación y las constancias de rescisión y de rescisión sin efecto, y que se lean bien.
-- Que Render aplicó `comercial/0004` y `core/0031` (log del despliegue) y que las pantallas abren en producción (Neon).
+- Que Render aplicó `comercial/0004` y `core/0033` (log del despliegue) y que las pantallas abren en producción (Neon).
 - Lo que solo un navegador real ve (CSRF y `Origin`, JavaScript y HTMX, aspecto, celular): va en el paso «Navegador real» de la «Verificación a mano».
 - La campana del **Gerente** con una alerta real: con un Agrónomo activo la alerta va solo al Agrónomo (regla 1 de 8.9); la del Gerente (a la ficha del suministro) la prueba `EnlaceDeAlertaTests`, pero hacerla aparecer a mano exige que el invernadero no tenga Agrónomo activo.
 - Criterio de producto: si el formulario de modificar (con varios detalles) se siente cómodo y si un preaviso igual a la ventana de pre-reserva (14 días) es aceptable para el Jardín Botánico (tema abierto de COM-MOD-SUM y COM-RSC-SUM).
 
 **Verificación a mano** (para el estudiante, autocontenida; se copia a `docs/revisiones_pendientes.md`, M5)
 
-*Antes de empezar.* Con el entorno virtual activo: `python manage.py migrate` (aplica `comercial` 0004 y `core` 0031) y `python manage.py runserver`; abrí `http://127.0.0.1:8000/`. No hay datos cargados: hay que crearlos a mano, en este orden.
+*Antes de empezar.* Con el entorno virtual activo: `python manage.py migrate` (aplica `comercial` 0004 y `core` 0033) y `python manage.py runserver`; abrí `http://127.0.0.1:8000/`. No hay datos cargados: hay que crearlos a mano, en este orden.
 (1) Con el Gerente, en «Usuarios y seguridad», creá un Agrónomo, un Capataz y dos Vendedores (el segundo, para el paso 11); la contraseña es la que definas. (2) En «Producción», creá un invernadero con ese Agrónomo, ese Capataz y el
 primer Vendedor, sus sectores y una variedad («Lechuga Crespa») con su ciclo; sembrá y avanzá un lote hasta «Maduración» con **300 plantas** (como en las rondas de producción). (3) En «Comercial» › «Clientes», creá «Verdulería Los Pinos
 S.R.L.» (CUIT de ejemplo 30-71234567-1) con correo (`compras@lospinos.com`) y dos direcciones («San Martín 123, Garupá» y «Belgrano 45, Garupá»), y «Verdulería El Sol S.R.L.» (CUIT 30-71234568-9) con correo y una dirección. (4) En «Configuración», la
@@ -286,6 +286,6 @@ dentro de 5 días, ajuste periódico de 1000 con 3 % cada 2 meses, tolerancia 1,
 12. **Navegador real (D-96).** Abrí el sistema en una **ventana privada**, entrá con el Vendedor y modificá un suministro **hasta el final**: «Modificar suministro», «Guardar cambios» y «Confirmar cambios»; después, con el Gerente, «Rescindir suministro» hasta «Registrar rescisión» y «Dejar sin efecto la rescisión». Cada paso tiene que mostrar la
     ficha o la ventana esperada, sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola del navegador (F12). Si aparece alguno, avisá: lo más probable es un encabezado que el cliente de Django no ve. Probá también que las ventanas se cierran con «Volver» y con Escape.
 13. *(opcional)* **Sin JavaScript** (desactivalo en el navegador): modificar funciona con «Actualizar», el resumen es una página y las ventanas de rescindir, dejar sin efecto e historial son la ficha con la ventana abierta. **En un celular** (ancho de 390 px): el formulario de modificar, las ventanas y la ficha no se desbordan.
-14. *(después del merge)* En el log de Render, que se aplicaron `comercial/0004_alerta_comercial` y `core/0031_comercial_suministros_2`, y en la «Shell»: `python manage.py proceso_diario --listar` muestra los pasos 35 y 40.
+14. *(después del merge)* En el log de Render, que se aplicaron `comercial/0004_alerta_comercial` y `core/0033_comercial_suministros_2`, y en la «Shell»: `python manage.py proceso_diario --listar` muestra los pasos 35 y 40.
 
 *Lo que ya cubre el recorrido*: los pasos 1, 2, 9 y 10 (con el cliente de Django); si tenés poco tiempo, concentrate en el 8 (alerta y campana), el 4 (errores), el 7 (dos pestañas) y el 12 (navegador real).

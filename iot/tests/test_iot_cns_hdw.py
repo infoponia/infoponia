@@ -162,11 +162,11 @@ class IotCnsHdwServicioTests(fabricas.ConCatalogoIot, TestCase):
     # ---- regla 7: botones ----
 
     def test_regla_7_quien_opera_ve_las_acciones_de_cada_estado_y_quien_consulta_no_ve_ninguna(self):
-        """IOT-CNS-HDW regla 7 y D-30: quien opera el IoT modifica un equipo activo, vuelve a activar uno fuera de servicio y reactiva uno dado de
-        baja; quien solo consulta no tiene acciones; ningún botón lleva a un 403."""
+        """IOT-CNS-HDW regla 7 y D-30: quien opera el IoT modifica y da de baja un equipo activo, vuelve a activar (y da de baja) uno fuera de servicio y
+        reactiva uno dado de baja (la baja se suma en IOT-06); quien solo consulta no tiene acciones; ningún botón lleva a un 403."""
         self.humedad.estado_hardware = "fuera_de_servicio"
-        self.assertEqual(hardware.acciones_permitidas(self.laura, self.temperatura), frozenset({"modificar"}))
-        self.assertEqual(hardware.acciones_permitidas(self.laura, self.humedad), frozenset({"modificar", "volver_a_activar"}))
+        self.assertEqual(hardware.acciones_permitidas(self.laura, self.temperatura), frozenset({"modificar", "baja"}))
+        self.assertEqual(hardware.acciones_permitidas(self.laura, self.humedad), frozenset({"modificar", "volver_a_activar", "baja"}))
         self.assertEqual(hardware.acciones_permitidas(self.laura, self.viejo), frozenset({"reactivar"}))
         self.assertEqual(hardware.acciones_permitidas(self.gerente, self.temperatura), frozenset())
         self.assertEqual(hardware.acciones_permitidas(crear_capataz(), self.temperatura), frozenset())
@@ -180,7 +180,7 @@ class IotCnsHdwServicioTests(fabricas.ConCatalogoIot, TestCase):
     def test_regla_7_un_gerente_sin_agronomo_activo_opera(self):
         """IOT-CNS-HDW regla 7: el Gerente opera donde no hay Agrónomo activo."""
         libre = fabricas.sensor(fabricas.sistema(crear_invernadero("Libre")), "l/1")
-        self.assertEqual(hardware.acciones_permitidas(self.gerente, libre), frozenset({"modificar"}))
+        self.assertEqual(hardware.acciones_permitidas(self.gerente, libre), frozenset({"modificar", "baja"}))
 
     # ---- regla 8 y anuncios ----
 

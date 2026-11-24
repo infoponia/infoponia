@@ -18,9 +18,11 @@ from django.db.models import Count
 from django.db.models.functions import Lower
 from django.http import Http404
 
-from compras.models import Cotizacion, DetallePedido, EnlaceProveedor, InvitacionPedido, Pedido, Proveedor
+from compras.errores import ErrorDeCompras
+from compras.models import MOTIVOS_DE_CANCELACION_AUTOMATICA, Cotizacion, DetallePedido, EnlaceProveedor, InvitacionPedido, Pedido, Proveedor
+from compras.servicios import avisos, enlaces
 from compras.servicios import cotizaciones as servicio_de_cotizaciones
-from compras.servicios import enlaces
+from core import notificaciones
 from core.models import Agronomo, RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.models import Insumo, InsumoInvernadero
 from inventario.servicios import stock
@@ -346,10 +348,10 @@ def registrar_pedido(actor, datos, construir_url):
 # las cotizaciones recibidas y si tiene la fecha límite vencida sin resolver (el panel del Agrónomo los muestra, H16).
 FilaDePedido = namedtuple("FilaDePedido", "pedido monto invernaderos insumos invitados cotizaciones por_resolver")
 # Un proveedor invitado en la ficha (regla 5): si cotizó, su enlace vigente o el último y el estado con que se lo muestra, y si el correo no salió.
-Invitado = namedtuple("Invitado", "invitacion proveedor cotizo enlace estado_del_enlace sin_enviar")
+Invitado = namedtuple("Invitado", "invitacion proveedor cotizo enlace estado_del_enlace sin_enviar puede_reenviar")
 # Una cotización recibida (regla 6), con sus líneas tal como se muestran (``cotizaciones.lineas_para_mostrar``) y su monto.
 CotizacionRecibida = namedtuple("CotizacionRecibida", "cotizacion lineas monto")
-FichaDePedido = namedtuple("FichaDePedido", "pedido monto grupos invitados cotizaciones por_resolver automatica")
+FichaDePedido = namedtuple("FichaDePedido", "pedido monto grupos invitados cotizaciones por_resolver automatica puede_cancelar")
 
 ESTADOS_DEL_PEDIDO = {valor for valor, _ in Pedido.Estado.choices}
 
@@ -465,6 +467,10 @@ def ficha_de_pedido(actor, pedido_id):
         grupos.setdefault(invernadero.pk, (invernadero, []))[1].append(detalle)
     recibidas = list(Cotizacion.objects.filter(pedido=pedido).select_related("proveedor").order_by("id"))
     cotizaron = {c.proveedor_id for c in recibidas}
+    # Reglas 7 y 8 y D-30: solo el Agrónomo del pedido, con el pedido en cotización (y, para reenviar, hasta la fecha límite: D-88 punto 2).
+    es_el_agronomo = rol_de(actor) == Usuario.Rol.AGRONOMO and pedido.agronomo_id == actor.pk
+    puede_cancelar = es_el_agronomo and pedido.en_cotizacion
+    reenvio_abierto = puede_cancelar and hoy <= pedido.fecha_limite_cotizaciones
     invitados = []
     for invitacion in InvitacionPedido.objects.filter(pedido=pedido).select_related("proveedor").prefetch_related("enlaces").order_by("id"):
         enlace = max(invitacion.enlaces.all(), key=lambda e: e.pk, default=None)
@@ -476,6 +482,7 @@ def ficha_de_pedido(actor, pedido_id):
                 enlace,
                 _estado_del_enlace(enlace, pedido, hoy),
                 enlace is not None and enlace.estado == "vigente" and enlace.estado_envio == EnlaceProveedor.EstadoEnvio.PENDIENTE_ENVIO,
+                reenvio_abierto and invitacion.proveedor.activo and invitacion.proveedor_id not in cotizaron,
             )
         )
     return FichaDePedido(
@@ -486,4 +493,200 @@ def ficha_de_pedido(actor, pedido_id):
         cotizaciones=[CotizacionRecibida(c, servicio_de_cotizaciones.lineas_para_mostrar(c), c.monto_cotizacion) for c in recibidas],
         por_resolver=_vencido_por_resolver(pedido, hoy),
         automatica=pedido.causa_cancelacion not in (None, Pedido.Causa.MANUAL),
+        puede_cancelar=puede_cancelar,
     )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-CNL-PED · Cancelar Pedido (CMP-02b). La manual (``cancelar_pedido``) y las automáticas (``cancelar_pedido_automaticamente``: pasos diarios 60 y 62 de
+# CMP-03, y la baja o el traspaso del Agrónomo, MD-62 y H17) usan **la misma función interna**, ``_cancelar``.
+#
+# Bloqueos (docs/patrones/stock.md, sección 5, punto 8; siempre ``FOR NO KEY UPDATE``): la cuenta de quien actúa → el pedido → sus cotizaciones «propuesta»
+# (en orden de id) → sus enlaces vigentes (en orden de id). Cotizar bloquea proveedor → pedido → enlace: el pedido es el mismo punto de espera, así que
+# uno de los dos gana y el otro ve el estado nuevo (6a y 11a). Los correos salen en ``on_commit``; las notificaciones, dentro de la transacción (D-42).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+LARGO_DEL_MOTIVO = Pedido._meta.get_field("motivo_cancelacion").max_length
+# Resumen de la cancelación (pasos 2 y 4): ``cotizaciones`` es ``[(proveedor, monto)]``; ``descartadas`` y ``enlaces`` son lo que se cambiaría; ``invitados``,
+# los proveedores a quienes se avisa.
+ResumenDeCancelacion = namedtuple("ResumenDeCancelacion", "pedido motivo cotizaciones descartadas enlaces invitados")
+
+
+def _motivo_valido(motivo):
+    """Extensión 3a y regla «Motivo»: obligatorio, recortado y de hasta 500 caracteres; si no, ``ValidationError`` en el campo ``motivo``."""
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise _error("motivo", "Contá por qué se cancela el pedido.", "motivo_obligatorio")
+    if len(motivo) > LARGO_DEL_MOTIVO:
+        raise _error("motivo", f"El motivo pasa de {LARGO_DEL_MOTIVO} caracteres.", "motivo_largo")
+    return motivo
+
+
+def _pedido_cancelable_por(actor, pedido_id):
+    """Precondiciones a y b de CMP-CNL-PED y regla «Quién cancela»: ``actor`` es un Agrónomo activo y es quien hizo el pedido (``PermissionDenied``); un
+    pedido inexistente es ``Http404`` (D-28). Devuelve el pedido leído, sin bloquear."""
+    _exigir_agronomo(actor)
+    pedido = Pedido.objects.filter(pk=pedido_id).first()
+    if pedido is None:
+        raise Http404("No existe ese pedido.")
+    if pedido.agronomo_id != actor.pk:
+        raise PermissionDenied("Solo el Agrónomo que hizo el pedido lo puede cancelar.")
+    return pedido
+
+
+def _exigir_en_cotizacion(pedido):
+    """Precondición c y extensión 6a: el pedido sigue «en cotización»; si no, ``ErrorDeCompras`` ``pedido_no_en_cotizacion`` con el estado actual."""
+    if not pedido.en_cotizacion:
+        raise ErrorDeCompras(
+            "pedido_no_en_cotizacion",
+            f"El pedido {pedido} ya no está en cotización: está {pedido.get_estado_pedido_display().lower()}.",
+            datos={"estado": pedido.estado_pedido},
+        )
+
+
+def resumir_cancelacion(actor, pedido_id, motivo):
+    """Pasos 2 y 4 de CMP-CNL-PED: qué se cancela, sin escribir ni bloquear nada. Aplica las mismas precondiciones y el mismo motivo que
+    ``cancelar_pedido``. Devuelve un ``ResumenDeCancelacion``: las cotizaciones recibidas con su monto, cuántas se descartan, cuántos enlaces se anulan y
+    los proveedores invitados (a todos se les avisa por correo)."""
+    pedido = _pedido_cancelable_por(actor, pedido_id)
+    motivo = _motivo_valido(motivo)
+    _exigir_en_cotizacion(pedido)
+    recibidas = list(Cotizacion.objects.filter(pedido=pedido).select_related("proveedor").prefetch_related("lineas").order_by("id"))
+    invitados = [i.proveedor for i in InvitacionPedido.objects.filter(pedido=pedido).select_related("proveedor").order_by("id")]
+    return ResumenDeCancelacion(
+        pedido,
+        motivo,
+        [(c.proveedor, c.monto_cotizacion) for c in recibidas],
+        sum(1 for c in recibidas if c.estado_cotizacion == Cotizacion.Estado.PROPUESTA),
+        EnlaceProveedor.objects.filter(invitacion__pedido=pedido, estado=EnlaceProveedor.Estado.VIGENTE).count(),
+        invitados,
+    )
+
+
+def _cancelar(pedido_id, causa, motivo, actor):
+    """La función interna de la cancelación (CMP-CNL-PED paso 6), dentro de la transacción del llamador. Bloquea el pedido, verifica que siga «en
+    cotización» (6a), lo pasa a «cancelado» con la fecha de cierre de hoy, el motivo y la causa, descarta las cotizaciones «propuesta», anula los enlaces
+    vigentes, audita ``cancelacion_pedido`` y deja en ``on_commit`` el correo a cada invitado (sin el motivo). La manual audita a ``actor``; la automática
+    (causa distinta de ``manual``) audita como InfoPonia (``usuario=None``) y avisa en la campana según H21 (``actor`` es solo a quien no se avisa)."""
+    pedido = Pedido.objects.select_for_update(no_key=True, of=("self",)).select_related("agronomo").get(pk=pedido_id)
+    _exigir_en_cotizacion(pedido)
+    propuestas = list(
+        Cotizacion.objects.select_for_update(no_key=True).filter(pedido=pedido, estado_cotizacion=Cotizacion.Estado.PROPUESTA).order_by("id")
+    )
+    anulados = enlaces.anular_enlaces_de_pedido(pedido)
+    Cotizacion.objects.filter(pk__in=[c.pk for c in propuestas]).update(estado_cotizacion=Cotizacion.Estado.DESCARTADA)
+    hoy = stock.hoy()
+    pedido.estado_pedido = Pedido.Estado.CANCELADO
+    pedido.fecha_cierre_pedido = hoy
+    pedido.motivo_cancelacion = motivo
+    pedido.causa_cancelacion = causa
+    pedido.save(update_fields=["estado_pedido", "fecha_cierre_pedido", "motivo_cancelacion", "causa_cancelacion"])
+    manual = causa == Pedido.Causa.MANUAL
+    RegistroAuditoria.objects.registrar(
+        usuario=actor if manual else None,
+        accion=RegistroAuditoria.Accion.CANCELACION_PEDIDO,
+        afectados=[pedido, *propuestas, *anulados],
+        detalle={
+            "cambios": {
+                "estado": {"antes": Pedido.Estado.EN_COTIZACION.value, "despues": Pedido.Estado.CANCELADO.value},
+                "fecha_cierre_pedido": {"antes": None, "despues": hoy.isoformat()},
+                "motivo_cancelacion": {"antes": None, "despues": motivo},
+                "causa_cancelacion": {"antes": None, "despues": causa},
+            },
+            "datos": {
+                "cotizaciones_descartadas": [referencia(c) for c in propuestas],
+                "enlaces_anulados": [referencia(e) for e in anulados],
+            },
+        },
+    )
+    if not manual:  # H21 y D-87 punto 3: el Agrónomo activo de cada destino o, si falta, el Gerente; nunca a quien hizo la acción
+        destinos = set(DetallePedido.objects.filter(pedido=pedido).values_list("insumo_invernadero__invernadero_id", flat=True))
+        agronomo = pedido.agronomo
+        notificaciones.notificar_a_varios(
+            avisos.destinatarios_por_destino(destinos, excluir=actor),
+            f"Pedido {pedido} cancelado",
+            f"El pedido {pedido} de {agronomo.get_full_name() or agronomo.email} se canceló solo ({motivo}). "
+            "Se avisó por correo a los proveedores invitados.",
+        )
+    transaction.on_commit(lambda: enlaces.enviar_aviso_de_cancelacion(pedido.pk))
+    return pedido
+
+
+def cancelar_pedido(actor, pedido_id, motivo):
+    """CMP-CNL-PED, cancelación manual: el Agrónomo que hizo el pedido lo cancela con un motivo y lo devuelve ya cancelado.
+
+    - Precondiciones a a c, extensiones 3a y 6a: ``_pedido_cancelable_por``, ``_motivo_valido`` y ``_exigir_en_cotizacion`` (esta última, otra vez con el
+      pedido bloqueado). Se puede antes o después de la fecha límite, mientras siga «en cotización».
+    - Postcondiciones a a e y garantías mínimas: ``_cancelar``; es atómica y no toca stock, tránsito, mínimo, reservas, alertas ni contabilidad.
+    - No genera notificación de campana: quien actúa es el único Agrónomo del pedido (H21) y los proveedores se enteran por correo."""
+    _pedido_cancelable_por(actor, pedido_id)
+    motivo = _motivo_valido(motivo)
+    with transaction.atomic():
+        Usuario.objects.select_for_update(no_key=True).filter(pk=actor.pk).first()
+        _actor_sigue_activo(actor)
+        return _cancelar(pedido_id, Pedido.Causa.MANUAL, motivo, actor)
+
+
+def cancelar_pedido_automaticamente(pedido, causa, *, actor=None):
+    """Las cancelaciones automáticas de CMP-CNL-PED (regla «Cancelaciones automáticas»): sin flujo y sin actor humano. ``causa`` es una de las cuatro
+    automáticas (otra es un error de uso: ``ValueError``); el motivo es su literal fijo (``MOTIVOS_DE_CANCELACION_AUTOMATICA``). ``actor`` es la cuenta que
+    dio la baja o hizo el traspaso, solo para no avisarle. Se audita como InfoPonia. Devuelve el pedido cancelado o ``None`` si, releído con el bloqueo, ya no
+    estaba «en cotización» (la usan los pasos diarios de CMP-03). Corre dentro de la transacción del llamador si hay una."""
+    if causa not in MOTIVOS_DE_CANCELACION_AUTOMATICA:
+        raise ValueError(f"{causa!r} no es una causa de cancelación automática.")
+    try:
+        with transaction.atomic():
+            return _cancelar(pedido.pk, causa, MOTIVOS_DE_CANCELACION_AUTOMATICA[causa], actor)
+    except ErrorDeCompras as error:
+        if error.codigo == "pedido_no_en_cotizacion":
+            return None
+        raise
+
+
+# ---- CMP-CNS-PED regla 7 (CMP-02b): «Reenviar invitación» ----
+
+
+def reenviar_invitacion(actor, invitacion_id, construir_url):
+    """Regla 7 de CMP-CNS-PED (H15.1): genera un enlace nuevo para un proveedor invitado que todavía no cotizó, el anterior pasa a «reemplazado» y se le envía el
+    correo con el nuevo (en ``on_commit``; si falla, el enlace queda ``pendiente_envio`` y no hay reintento automático: D-88 punto 6). Devuelve el enlace nuevo.
+
+    - Solo el Agrónomo del pedido (``PermissionDenied``); una invitación inexistente es ``Http404``.
+    - Con todo bloqueado (cuenta → proveedor → pedido → enlace, como al cotizar) se verifica: pedido en cotización (``pedido_no_en_cotizacion``), hoy ≤ fecha límite
+      (``fecha_limite_vencida``: un enlace nuevo nacería vencido, D-88 punto 2), proveedor activo (``proveedor_inactivo``) y sin cotización (``ya_cotizo``).
+    - Se audita ``reenvio_invitacion``; los textos de los dos enlaces los distinguen (D-36)."""
+    _exigir_agronomo(actor)
+    leida = InvitacionPedido.objects.select_related("pedido").filter(pk=invitacion_id).first()
+    if leida is None:
+        raise Http404("No existe esa invitación.")
+    if leida.pedido.agronomo_id != actor.pk:
+        raise PermissionDenied("Solo el Agrónomo que hizo el pedido puede reenviar sus invitaciones.")
+    with transaction.atomic():
+        Usuario.objects.select_for_update(no_key=True).filter(pk=actor.pk).first()
+        _actor_sigue_activo(actor)
+        proveedor = Proveedor.objects.select_for_update(no_key=True).get(pk=leida.proveedor_id)
+        pedido = Pedido.objects.select_for_update(no_key=True).get(pk=leida.pedido_id)
+        _exigir_en_cotizacion(pedido)
+        if stock.hoy() > pedido.fecha_limite_cotizaciones:
+            raise ErrorDeCompras(
+                "fecha_limite_vencida",
+                f"La fecha límite del pedido {pedido} ya pasó: un enlace nuevo no le serviría a {proveedor}.",
+            )
+        if not proveedor.activo:
+            raise ErrorDeCompras("proveedor_inactivo", f"{proveedor} está dado de baja: no se le puede reenviar la invitación.")
+        if Cotizacion.objects.filter(pedido=pedido, proveedor=proveedor).exists():
+            raise ErrorDeCompras("ya_cotizo", f"{proveedor} ya cotizó este pedido: no hace falta reenviarle la invitación.")
+        nuevo, anterior = enlaces.reemplazar_enlace(leida, construir_url)
+        datos = {
+            "proveedor": referencia(proveedor),
+            "pedido": referencia(pedido),
+            "enlace_nuevo": {"id": nuevo.pk, "texto": f"Enlace nuevo de {leida.proveedor} en {pedido}"},
+        }
+        if anterior is not None:
+            datos["enlace_anterior"] = {"id": anterior.pk, "texto": f"Enlace anterior (reemplazado) de {leida.proveedor} en {pedido}"}
+        RegistroAuditoria.objects.registrar(
+            usuario=actor,
+            accion=RegistroAuditoria.Accion.REENVIO_INVITACION,
+            afectados=[pedido, proveedor, leida, *([anterior] if anterior is not None else []), nuevo],
+            detalle={"datos": datos},
+        )
+    return nuevo

@@ -18,13 +18,14 @@ from django.http import Http404
 from django.test import TestCase
 
 from compras.errores import ErrorDeCompras
-from compras.models import Proveedor
-from compras.tests.fabricas import GERENTE, afectado_de, proveedor, tipo_de_insumo
+from compras.models import EnlaceProveedor, Proveedor
+from compras.tests.fabricas import GERENTE, afectado_de, cotizacion_de, detalle_de_pedido, enlace_de, invitar, proveedor, tipo_de_insumo
+from compras.tests.fabricas import pedido as armar_pedido
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_administrador, crear_capataz, crear_gerente
-from inventario.tests.fabricas import perezoso
+from inventario.tests.fabricas import ConDatosDeInventario, existencia, insumo, perezoso
 from maestros.extensiones import Impedimento
-from maestros.tests.fabricas import crear_agronomo, crear_vendedor
+from maestros.tests.fabricas import crear_agronomo, crear_agronomo_con_invernadero, crear_vendedor
 
 proveedores = perezoso("compras.servicios.proveedores")
 BAJA = RegistroAuditoria.Accion.BAJA_PROVEEDOR
@@ -151,3 +152,94 @@ class CmpBajPrvServicioTests(TestCase):
         """D-36: «Estado: Activo → Inactivo»."""
         self.baja()
         self.assertEqual(self.registros().get().filas_de_cambios(), [("Estado", "Activo", "Inactivo")])
+
+
+class CmpBajPrvEnlacesTests(ConDatosDeInventario, TestCase):
+    """Regla 3 de CMP-BAJ-PRV (CMP-02b): si el proveedor estaba invitado a un pedido «en cotización», su enlace deja de servir (pasa a «anulado», D-88 punto 2)
+    y su cotización «propuesta» no se toca (la regla 3 solo dice que no se podrá elegir: eso lo controla CMP-GNR-ODC, CMP-03). La baja anula los enlaces
+    vigentes de sus invitaciones a pedidos en cotización, los bloquea después del proveedor (proveedor → enlace, como al cotizar) y deja lo anulado en la auditoría."""
+
+    def setUp(self):
+        self.gerente = crear_gerente()
+        self.ana, self.invernadero = crear_agronomo_con_invernadero("Norte")
+        self.lechuga = existencia(insumo("Lechuga", unidad="unidad"), self.invernadero, minimo=20, precio="12.50")
+        self.proveedor = proveedor("Semillas del Sur S. A.", n=1)
+        self.otro = proveedor("Viveros del Este S. R. L.", n=2, email="info@este.com")
+        self.pedido = armar_pedido(self.ana)
+        self.detalle = detalle_de_pedido(self.pedido, self.lechuga, cantidad="20")
+        self.enlace, _ = enlace_de(invitar(self.pedido, self.proveedor))
+        self.enlace_del_otro, _ = enlace_de(invitar(self.pedido, self.otro))
+
+    def baja(self):
+        return proveedores.baja_proveedor(self.gerente, self.proveedor.pk)
+
+    def estado(self, enlace):
+        enlace.refresh_from_db()
+        return enlace.estado
+
+    def test_regla_3_el_enlace_vigente_pasa_a_anulado_y_el_de_otro_proveedor_no(self):
+        """Regla 3: solo los enlaces del proveedor dado de baja."""
+        self.baja()
+        self.assertEqual((self.estado(self.enlace), self.estado(self.enlace_del_otro)), ("anulado", "vigente"))
+
+    def test_regla_3_el_enlace_anulado_ya_no_sirve_para_cotizar(self):
+        """D-88 punto 2: el portal dice que el enlace no se puede usar (el proveedor está inactivo y su enlace, anulado)."""
+        from compras.servicios import enlaces
+
+        self.baja()
+        self.assertEqual(enlaces.situacion_del_enlace(enlaces.enlace_por_id(self.enlace.pk)), enlaces.ANULADO)
+
+    def test_regla_3_anula_el_enlace_de_cada_pedido_en_cotizacion_donde_esta_invitado(self):
+        """Regla 3: de todos los pedidos «en cotización», de cualquier Agrónomo."""
+        otro_pedido = armar_pedido(self.ana, dias_al_limite=5)
+        detalle_de_pedido(otro_pedido, self.lechuga, cantidad="5")
+        otro_enlace, _ = enlace_de(invitar(otro_pedido, self.proveedor))
+        self.baja()
+        self.assertEqual((self.estado(self.enlace), self.estado(otro_enlace)), ("anulado", "anulado"))
+
+    def test_regla_3_no_toca_los_enlaces_usados_ni_los_de_pedidos_que_ya_no_estan_en_cotizacion(self):
+        """Regla 3: un enlace «usado» (ya cotizó) y los de un pedido cerrado o cancelado quedan como estaban; su cotización «propuesta» tampoco cambia."""
+        cotizo = armar_pedido(self.ana, dias_al_limite=4)
+        d = detalle_de_pedido(cotizo, self.lechuga, cantidad="5")
+        usado, _ = enlace_de(invitar(cotizo, self.proveedor), estado="usado")
+        cotizacion = cotizacion_de(cotizo, self.proveedor, [(d, 5, "60.00", 2)])
+        cerrado = armar_pedido(self.ana, estado="cerrado")
+        en_cerrado, _ = enlace_de(invitar(cerrado, self.proveedor))
+        self.baja()
+        cotizacion.refresh_from_db()
+        self.assertEqual((self.estado(usado), self.estado(en_cerrado), cotizacion.estado_cotizacion), ("usado", "vigente", "propuesta"))
+
+    def test_regla_3_la_baja_no_cambia_el_pedido(self):
+        """Regla 5: el pedido sigue «en cotización»; solo cambian los enlaces del proveedor."""
+        self.baja()
+        self.pedido.refresh_from_db()
+        self.assertEqual(self.pedido.estado_pedido, "en_cotizacion")
+
+    def test_post_b_los_enlaces_anulados_van_en_la_auditoria_de_la_baja_sin_token(self):
+        """D-36: los enlaces anulados figuran entre los afectados y en ``datos``; el registro nunca lleva el token."""
+        self.baja()
+        registro = RegistroAuditoria.objects.get(accion=BAJA)
+        self.assertEqual([a["id"] for a in registro.afectados if a["modelo"] == "compras.enlaceproveedor"], [self.enlace.pk])
+        self.assertEqual([r["id"] for r in registro.detalle["datos"]["enlaces_anulados"]], [self.enlace.pk])
+        self.assertEqual(registro.detalle["cambios"], {"estado": {"antes": "activo", "despues": "inactivo"}})
+        self.assertNotIn(self.enlace.token_resumen, str(registro.detalle) + str(registro.afectados))
+
+    def test_post_b_sin_enlaces_vigentes_el_registro_queda_como_siempre(self):
+        """Sin enlaces que anular, no aparece ``datos`` en el registro."""
+        EnlaceProveedor.objects.filter(pk=self.enlace.pk).update(estado="vencido")
+        self.baja()
+        self.assertEqual(RegistroAuditoria.objects.get(accion=BAJA).detalle, {"cambios": {"estado": {"antes": "activo", "despues": "inactivo"}}})
+
+    def test_garantia_si_falla_la_auditoria_los_enlaces_siguen_vigentes(self):
+        """La baja es atómica: si se revierte, el proveedor sigue activo y sus enlaces vigentes."""
+        with mock.patch.object(RegistroAuditoria.objects, "registrar", side_effect=RuntimeError("falla")):
+            with self.assertRaises(RuntimeError):
+                self.baja()
+        self.proveedor.refresh_from_db()
+        self.assertEqual((self.proveedor.estado_proveedor, self.estado(self.enlace)), ("activo", "vigente"))
+
+    def test_regla_3_reactivado_el_proveedor_los_enlaces_anulados_no_vuelven(self):
+        """CMP-ALT-PRV (reactivación): los enlaces anulados siguen anulados; para volver a invitarlo hace falta «Reenviar invitación» (CMP-CNS-PED regla 7)."""
+        self.baja()
+        Proveedor.objects.filter(pk=self.proveedor.pk).update(estado_proveedor="activo")
+        self.assertEqual(self.estado(self.enlace), "anulado")

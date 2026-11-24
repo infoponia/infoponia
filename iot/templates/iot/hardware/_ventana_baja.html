@@ -1,0 +1,24 @@
+{% load iconos %}{% comment %}Ventana de dar de baja un equipo (IOT-BAJ-HDW reglas 2 y 7; ventana ``baj:<id>`` del prototipo). Con un comando pendiente, una orden de mantenimiento a realizar o una regla activa que lo usa (precondiciones c a e) no
+deja confirmar y dice cómo resolverlo; si no, explica qué pasa con el equipo y su identificador y, de un actuador, advierte su último estado informado y que después InfoPonia no podrá enviarle comandos. Abrirla (GET) no cambia nada; la baja es un POST.
+Recibe «equipo», «nombre», «datos» (impedimentos y advertencia) y «error».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Dar de baja {{ nombre }} {{ equipo.identificador_equipo }}</h2>
+    {% if datos.impedimentos %}
+    <div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "warn" 16 %}<div>No se puede dar de baja todavía:<ul>{% for i in datos.impedimentos %}<li>{{ i.texto }} {{ i.como_resolver }}</li>{% endfor %}</ul></div></div>
+    <div class="acts"><a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana data-foco-inicial>Entendido</a></div>
+    {% else %}
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{% for e in error %}{{ e }} {% endfor %}</div></div>{% endif %}
+    <p>El equipo deja de operar y su historial se conserva. Su identificador <b>{{ equipo.identificador_equipo }}</b> queda libre para registrar un equipo de reemplazo.</p>
+    {% if datos.advertencia %}<div class="alert alert-warn" role="status" style="margin-bottom:10px">{% icono "warn" 16 %}<div>{{ datos.advertencia }}</div></div>{% endif %}
+    <p class="sm muted">Si el aparato sigue conectado y el nodo sigue enviando su identificador, sus mensajes se rechazan y aparece la alerta «Dispositivo no registrado» indicando que era de este equipo.</p>
+    <form method="post" action="{% url 'iot:hardware_baja' equipo.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:hardware_ficha' equipo.pk %}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

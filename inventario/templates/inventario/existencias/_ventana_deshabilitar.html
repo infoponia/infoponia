@@ -7,7 +7,7 @@ resolverlo, regla 2) y «error» (otro rechazo del servicio). Con impedimentos o
     <h2 id="ventana-titulo">No se puede deshabilitar {{ iin.insumo.nombre_insumo }} en {{ iin.invernadero.nombre_invernadero }}</h2>
     <div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>
       {% if error %}{{ error }}{% else %}Todavía tiene existencias o compromisos:
-      <ul class="inv-impedimentos">{% for texto in impedimentos %}<li>{{ texto }}</li>{% endfor %}</ul>{% endif %}</div></div>
+      <ul class="inv-impedimentos">{% for i in impedimentos %}<li>{{ i.texto }}{% if i.url %} <a href="{{ i.url }}">Ver detalle</a>{% endif %}</li>{% endfor %}</ul>{% endif %}</div></div>
     <div class="acts"><a class="btn btn-primary" href="{% url 'inventario:existencias' %}" data-cerrar-ventana data-foco-inicial>Entendido</a></div>
     {% else %}
     <h2 id="ventana-titulo">¿Deshabilitar {{ iin.insumo.nombre_insumo }} en {{ iin.invernadero.nombre_invernadero }}?</h2>

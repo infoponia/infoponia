@@ -9,17 +9,18 @@
 # (contrato de IOT-BAJ-TAC). Las alertas se crean y se resuelven con el invernadero ya bloqueado.
 #
 # «Se completa en IOT-NN»: ``tiene_lecturas`` (hecha en IOT-03), ``tiene_comandos`` y ``tiene_comando_pendiente`` (hechas en IOT-05), ``tiene_reglas`` (IOT-06) y
-# ``mantenimientos_a_realizar`` (IOT-07). Consultan sus tablas, vacías hasta entonces. La baja del equipo es de IOT-06.
+# ``mantenimientos_a_realizar`` (IOT-07). Consultan sus tablas, vacías hasta entonces. La baja del equipo (IOT-06) está en «baja».
 
 from collections import namedtuple
 from dataclasses import dataclass
 
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import RegistroAuditoria, referencia
 from iot.alcance import invernaderos_que_consulta, puede_operar
@@ -32,6 +33,7 @@ from iot.servicios.sistemas import (
     insumos_de_hardware,
 )
 from iot.servicios.tipos_actuador import bloquear_tipo_activo
+from iot.textos import estado_legible
 from iot.validadores import (
     texto,
     validar_calibracion,
@@ -47,6 +49,7 @@ from maestros.servicios.invernaderos import _actor_sigue_activo, _error_general
 ACCION_MODIFICAR = "modificar"
 ACCION_VOLVER_A_ACTIVAR = "volver_a_activar"
 ACCION_REACTIVAR = "reactivar"
+ACCION_BAJA = "baja"
 
 LARGO_DEL_MODELO = Hardware._meta.get_field("modelo_hardware").max_length
 LARGO_DE_LA_SERIE = Hardware._meta.get_field("numero_serie").max_length
@@ -634,6 +637,101 @@ def reactivar_hardware(actor, equipo_id):
     return equipo
 
 
+# ---- baja (IOT-BAJ-HDW; IOT-06) ----
+# Bloqueos (D-82 y D-78, punto 11): invernadero → sistema → equipo. No toma el tipo del actuador: la baja no crea nada que impida bajar un tipo.
+
+DatosDeBajaDelEquipo = namedtuple("DatosDeBajaDelEquipo", "equipo impedimentos advertencia")
+
+
+def _impedimentos_de_baja(equipo):
+    """Las precondiciones c a e de IOT-BAJ-HDW como ``Impedimento`` con cómo resolverlas (regla 2): un comando pendiente (solo un actuador), una orden de mantenimiento a realizar
+    (IOT-07) y una regla de actuación activa que usa el equipo (como sensor o como actuador)."""
+    impedimentos = []
+    if equipo.clase == "actuador":
+        pendientes = Comando.objects.filter(actuador_id=equipo.pk, estado_comando=Comando.Estado.PENDIENTE).order_by("pk")
+        for comando in pendientes:
+            impedimentos.append(Impedimento("comandos_pendientes", f"Tiene el comando pendiente CMD-{comando.pk}.", "Esperá su resultado o cancelalo desde Comandos."))
+    ordenes = mantenimientos_a_realizar(equipo)
+    if ordenes:
+        impedimentos.append(Impedimento("ordenes_de_mantenimiento", f"Está en {len(ordenes)} orden(es) de mantenimiento a realizar.", "Concretala o cancelala."))
+    usan = ReglaActuacion.objects.filter(Q(sensor_id=equipo.pk) | Q(actuador_id=equipo.pk), estado_regla=ReglaActuacion.Estado.ACTIVA).order_by("pk")
+    codigos = ", ".join(f"RGL-{regla.pk}" for regla in usan)
+    if codigos:
+        impedimentos.append(Impedimento("reglas_activas", f"Lo usan las reglas de actuación activas {codigos}.", "Dalas de baja primero desde Reglas de actuación."))
+    return impedimentos
+
+
+def _advertencia_de_baja(equipo):
+    """Regla 7: de un actuador, su último estado informado por el nodo (o «desconocido») y que, después de la baja, InfoPonia no podrá enviarle comandos. No impide la baja."""
+    if equipo.clase != "actuador":
+        return None
+    if equipo.estado_informado:
+        desde = f" desde las {timezone.localtime(equipo.estado_informado_en):%H:%M}" if equipo.estado_informado_en else ""
+        ultimo = f"{estado_legible(equipo.estado_informado).lower()}{desde}"
+    else:
+        ultimo = "desconocido"
+    return (
+        f"Último estado informado por el nodo: {ultimo}. Después de la baja, InfoPonia no podrá enviarle comandos: si tiene que quedar apagado o cerrado, "
+        "llevalo a ese estado antes, con Emitir comando, o en el invernadero."
+    )
+
+
+def datos_de_baja_del_equipo(actor, equipo_id):
+    """IOT-BAJ-HDW, reglas 2 y 7: lo que muestra la ventana de la baja de un equipo: los impedimentos de las precondiciones c a e y, de un actuador, la advertencia de su último
+    estado. No escribe ni audita. Solo para quien opera el invernadero (``PermissionDenied`` si solo lo consulta); un equipo fuera del alcance de consulta o el nodo, ``Http404``;
+    uno dado de baja, ``equipo_dado_de_baja``."""
+    _exigir_operador(actor)
+    previo = _previo(equipo_id)
+    if not invernaderos_que_consulta(actor).filter(pk=previo["sistema__invernadero_id"]).exists():
+        raise Http404("No existe ese equipo.")
+    equipo = _especifico(Hardware.objects.select_related("sistema__invernadero").get(pk=equipo_id))
+    if not puede_operar(actor, equipo.sistema.invernadero):
+        raise PermissionDenied("Este invernadero lo operás solo si no tiene un Agrónomo activo.")
+    if equipo.estado_hardware == EstadoHw.INACTIVO:
+        raise _error_general("El equipo ya está dado de baja.", "equipo_dado_de_baja")
+    return DatosDeBajaDelEquipo(equipo, _impedimentos_de_baja(equipo), _advertencia_de_baja(equipo))
+
+
+def baja_hardware(actor, equipo_id, ahora):
+    """IOT-BAJ-HDW: baja lógica de un sensor o un actuador, y lo devuelve.
+
+    - Precondición a y regla 1: Agrónomo o Gerente activos, con el alcance de IOT-DSC-SIS (``fuera_de_alcance``, vuelto a verificar DESPUÉS de bloquear); un equipo inexistente, el nodo
+      (regla 3: se da de baja con IOT-BAJ-SIS) o uno fuera del alcance de consulta, ``Http404`` (D-28). Precondición b: activo o fuera de servicio (``equipo_dado_de_baja``).
+    - Precondiciones c a e y regla 2, vueltas a verificar DESPUÉS de bloquear: sin comando pendiente (``comandos_pendientes``), sin orden de mantenimiento a realizar
+      (``ordenes_de_mantenimiento``) y sin regla activa que lo use (``reglas_activas``); los impedimentos llegan juntos con cómo resolverlos.
+    - Postcondición a: «inactivo» con ``fecha_baja`` = hoy; el historial se conserva. Postcondición b: las alertas activas originadas en el equipo (las de su vínculo
+      ``AlertaIot``: claves ``hw:<id>`` y ``sensor:<id>``) pasan a «resuelta». Postcondición c y D-36: UN registro ``baja_hardware``.
+    - Bloqueos: invernadero, sistema y equipo."""
+    _exigir_operador(actor)
+    previo = _previo(equipo_id)
+    if not invernaderos_que_consulta(actor).filter(pk=previo["sistema__invernadero_id"]).exists():
+        raise Http404("No existe ese equipo.")
+    with transaction.atomic():
+        invernadero, _, equipo = _bloquear_equipo(actor, equipo_id, previo)
+        if equipo.estado_hardware == EstadoHw.INACTIVO:
+            raise _error_general("El equipo ya está dado de baja.", "equipo_dado_de_baja")
+        impedimentos = _impedimentos_de_baja(equipo)
+        if impedimentos:
+            raise ValidationError({NON_FIELD_ERRORS: [ValidationError(f"{i.texto} {i.como_resolver}", code=i.codigo) for i in impedimentos]})
+        antes = equipo.estado_hardware
+        equipo.estado_hardware, equipo.fecha_baja = EstadoHw.INACTIVO, timezone.localtime(ahora).date()
+        equipo.save(update_fields=["estado_hardware", "fecha_baja"])
+        vinculos = (
+            AlertaIot.objects.filter(Q(hardware_id=equipo.pk) | Q(telemetria__sensor_id=equipo.pk), alerta__estado_alerta=Alerta.Estado.ACTIVA)
+            .select_related("alerta")
+            .order_by("alerta_id")
+        )
+        resueltas = [api_alertas.resolver_alerta_de_estado(invernadero.pk, v.alerta.tipo_alerta, v.alerta.clave_estado) for v in vinculos]
+        alertas = [alerta for alerta in resueltas if alerta is not None]
+        RegistroAuditoria.objects.registrar(
+            usuario=actor,
+            accion=RegistroAuditoria.Accion.BAJA_HARDWARE,
+            afectados=[equipo, *alertas],
+            detalle={"cambios": {"estado_hardware": {"antes": antes, "despues": EstadoHw.INACTIVO.value}}, "datos": {"alertas_resueltas": [referencia(a) for a in alertas]}},
+        )
+        return equipo
+
+
 # ---- consulta (IOT-CNS-HDW) ----
 
 
@@ -762,8 +860,8 @@ def alertas_activas_del_equipo(equipo):
 
 def acciones_permitidas(actor, equipo):
     """D-30: las acciones que ``actor`` puede hacer sobre ``equipo``, un ``frozenset``. Quien opera el IoT del invernadero (regla 1 de IOT-DSC-SIS),
-    con el sistema no dado de baja: modifica un equipo activo, modifica y vuelve a activar uno fuera de servicio y reactiva uno dado de baja; quien solo
-    consulta, ninguna. **La baja se suma en IOT-06.** Ningún botón lleva a un 403."""
+    con el sistema no dado de baja: modifica y da de baja un equipo activo, modifica, vuelve a activar y da de baja uno fuera de servicio y reactiva uno dado de baja;
+    quien solo consulta, ninguna. Ningún botón lleva a un 403."""
     if actor is None or not actor.is_active:
         return frozenset()
     sistema = equipo.sistema
@@ -776,8 +874,8 @@ def acciones_permitidas(actor, equipo):
     if equipo.estado_hardware == EstadoHw.INACTIVO:
         return frozenset({ACCION_REACTIVAR})
     if equipo.estado_hardware == EstadoHw.FUERA_DE_SERVICIO:
-        return frozenset({ACCION_MODIFICAR, ACCION_VOLVER_A_ACTIVAR})
-    return frozenset({ACCION_MODIFICAR})
+        return frozenset({ACCION_MODIFICAR, ACCION_VOLVER_A_ACTIVAR, ACCION_BAJA})
+    return frozenset({ACCION_MODIFICAR, ACCION_BAJA})
 
 
 def baja_con_identificador(sistema, identificador):

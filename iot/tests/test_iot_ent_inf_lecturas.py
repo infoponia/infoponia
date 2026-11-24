@@ -400,13 +400,17 @@ class IotEntInfLecturasServicioTests(fabricas.ConCatalogoIot, TestCase):
         with mock.patch("iot.servicios.lecturas.evaluar_reglas_de_la_lectura") as reglas:
             self.temperatura("21")
         reglas.assert_called_once()
-        contexto, sensor, telemetria = reglas.call_args.args
+        contexto, sensor, telemetria, ahora = reglas.call_args.args  # IOT-06 suma ``ahora``: los servicios no leen la hora
+        self.assertEqual(ahora, AHORA)
         self.assertEqual((sensor.pk, telemetria.pk), (self.temp.pk, Telemetria.objects.get().pk))
 
-    def test_ext_6_evaluar_reglas_de_la_lectura_no_hace_nada_hasta_iot_06(self):
-        """«Reparto»: `evaluar_reglas_de_la_lectura` queda escrita sin hacer nada («Se completa en IOT-06»): devuelve `None` y no toca las reglas."""
-        regla = fabricas.regla(self.temp, fabricas.actuador(self.sistema, identificador="norte/vent"))
-        self.assertIsNone(lecturas.evaluar_reglas_de_la_lectura(None, self.temp, None))
+    def test_ext_6_evaluar_reglas_de_la_lectura_no_toca_las_reglas_dadas_de_baja(self):
+        """«Reparto» (completado en IOT-06; antes quedaba sin hacer nada): solo se evalúan las reglas ACTIVAS del sensor; una dada de baja no se toca y no se emite nada."""
+        regla = fabricas.regla(self.temp, fabricas.actuador(self.sistema, identificador="norte/vent"), estado_regla="inactiva")
+        self.con_umbral()
+        contexto = lecturas.contexto_del_mensaje(self.sistema, AHORA)
+        telemetria = fabricas.telemetria(self.temp, 40)
+        self.assertEqual(lecturas.evaluar_reglas_de_la_lectura(contexto, self.temp, telemetria, AHORA), [])
         regla.refresh_from_db()
         self.assertEqual((regla.ultima_evaluacion, regla.contador_confirmacion), ("sin_evaluar", 0))
 

@@ -25,3 +25,17 @@ class ComprasConfig(AppConfig):
         registrar_entrada(("Compras", "compras:pedidos", "pkg"), (Usuario.Rol.AGRONOMO,), despues_de="Inventario")
         # CMP-02a: «Insumos bajo el mínimo» con «Pedir» y «Esperando cotizaciones» en el Inicio del Agrónomo (D-87 punto 5).
         extensiones.registrar_seccion_de_inicio(inicio.seccion_de_inicio)
+
+        # CMP-02b (D-87 punto 5). Los registrantes de ``maestros`` e ``inventario`` no son idempotentes: se guardan con una guarda, porque ``ready()`` puede correr más de una vez.
+        from compras.servicios import registrantes
+        from inventario import extensiones as extensiones_de_inventario
+        from maestros import extensiones as extensiones_de_maestros
+
+        extensiones.registrar_efecto_de_baja_de_cuenta(registrantes.efecto_de_baja_de_cuenta)
+        extensiones.registrar_asignaciones_de_cuenta(registrantes.asignaciones_de_cuenta)
+        if (registrantes.contar_traspaso, registrantes.traspasar_pedidos) not in extensiones_de_maestros._TRASPASOS:
+            extensiones_de_maestros.registrar_traspaso(registrantes.contar_traspaso, registrantes.traspasar_pedidos)
+        if registrantes.aviso_de_traspaso not in extensiones_de_maestros._AVISOS_DE_TRASPASO:
+            extensiones_de_maestros.registrar_aviso_de_traspaso(registrantes.aviso_de_traspaso)
+        if registrantes.impedimento_de_deshabilitacion not in extensiones_de_inventario._IMPEDIMENTOS_DE_DESHABILITACION:
+            extensiones_de_inventario.registrar_impedimento_de_deshabilitacion(registrantes.impedimento_de_deshabilitacion)

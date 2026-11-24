@@ -1,0 +1,15 @@
+{% load iconos %}{% comment %}Ventana de desactivar el sistema IoT (IOT-DSC-SIS reglas 2, 3 y 5; ventana ``desc`` del prototipo): dice qué deja de hacer InfoPonia mientras está desconectado, que los comandos pendientes se cancelan y las alertas del sistema
+se resuelven, y que el hardware y las reglas no cambian. Abrirla (GET) no cambia nada; desactivar es un POST.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Desconectar el sistema</h2>
+    <p>Mientras esté desconectado, InfoPonia no acepta mensajes del nodo, no evalúa reglas, no genera alertas y no entrega comandos. Los comandos pendientes se cancelan y las alertas activas del sistema se resuelven. El hardware y las reglas quedan como están. Podés activarlo de nuevo cuando quieras.</p>
+    <form method="post" action="{% url 'iot:sistema_desactivar' sistema.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-ghost" type="submit" data-enviando="Desconectando…">Desconectar</button>
+      </div>
+    </form>
+  </div>
+</div>

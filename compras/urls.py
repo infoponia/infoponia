@@ -11,6 +11,9 @@ urlpatterns = [
     path("pedidos/", views_pedidos.pedidos, name="pedidos"),
     path("pedidos/nuevo/", views_pedidos.pedido_nuevo, name="pedido_nuevo"),
     path("pedidos/<int:pedido_id>/", views_pedidos.pedido_ficha, name="pedido_ficha"),
+    # CMP-02b: cancelar el pedido (formulario, resumen y confirmación) y reenviar la invitación a un proveedor (ventana).
+    path("pedidos/<int:pedido_id>/cancelar/", views_pedidos.pedido_cancelar, name="pedido_cancelar"),
+    path("pedidos/invitaciones/<int:invitacion_id>/reenviar/", views_pedidos.invitacion_reenviar, name="invitacion_reenviar"),
     path("proveedores/", views.proveedores, name="proveedores"),
     path("proveedores/nuevo/", views.proveedor_nuevo, name="proveedor_nuevo"),
     path("proveedores/<int:proveedor_id>/", views.proveedor_ficha, name="proveedor_ficha"),

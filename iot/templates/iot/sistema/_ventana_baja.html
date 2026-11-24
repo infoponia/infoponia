@@ -1,0 +1,29 @@
+{% load iconos %}{% comment %}Ventana de dar de baja el sistema IoT (IOT-BAJ-SIS reglas 2, 4 y 8; ventana ``baj`` sin id del prototipo). Con comandos pendientes u órdenes de mantenimiento a realizar (precondiciones c y d) no deja confirmar y dice cómo
+resolverlo (regla 4). Si no, advierte que la baja es definitiva y lista lo que se da de baja: el nodo (su token deja de servir), cada equipo con su estado, de cada actuador su último estado informado y cada regla activa
+(regla 8). Abrirla (GET) no cambia nada; la baja es un POST. Recibe «datos» (sistema, nodo, equipos, reglas e impedimentos), «equipos» y «reglas» (las líneas ya armadas) y «error».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Dar de baja el Sistema IoT</h2>
+    {% if datos.impedimentos %}
+    <div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "warn" 16 %}<div>No se puede dar de baja todavía:<ul>{% for i in datos.impedimentos %}<li>{{ i.texto }} {{ i.como_resolver }}</li>{% endfor %}</ul></div></div>
+    <div class="acts"><a class="btn btn-primary" href="{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}" data-cerrar-ventana data-foco-inicial>Entendido</a></div>
+    {% else %}
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{% for e in error %}{{ e }} {% endfor %}</div></div>{% endif %}
+    <p>La baja es <b>definitiva</b>. Se dará de baja junto con el sistema:</p>
+    <ul class="blist">
+      <li>El nodo central <b>{{ nodo.nombre_nodo }}</b>; su token deja de servir.</li>
+      {% for e in equipos %}<li>{{ e.nombre }} <span class="id">{{ e.equipo.identificador_equipo }}</span> {% if e.equipo.estado_hardware == "fuera_de_servicio" %}<span class="status-badge status-danger">Fuera de servicio</span>{% else %}<span class="status-badge status-ok">Activo</span>{% endif %}{% if e.ultimo %} <span class="xs muted">· último estado: {{ e.ultimo }}</span>{% endif %}</li>{% endfor %}
+      {% for r in reglas %}<li>Regla de actuación <span class="id">{{ r.codigo }}</span>: {{ r.texto }}.</li>{% endfor %}
+    </ul>
+    {% if hay_actuadores %}<div class="alert alert-warn" role="status" style="margin-bottom:10px">{% icono "warn" 16 %}<div>Después de la baja, InfoPonia no podrá enviar comandos a estos actuadores: quedan en el último estado que informó el nodo. Si alguno tiene que quedar apagado o cerrado, llevalo a ese estado antes, con Emitir comando, o en el invernadero.</div></div>{% endif %}
+    <p class="sm muted">El historial se conserva. Si el invernadero vuelve a necesitar IoT, se registra un sistema nuevo y sus equipos pueden usar los mismos identificadores.</p>
+    <form method="post" action="{% url 'iot:sistema_baja' sistema.pk %}">
+      {% csrf_token %}
+      <div class="acts">
+        <a class="btn btn-primary" href="{% url 'iot:sistema' %}?invernadero={{ sistema.invernadero_id }}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja definitivamente</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>

@@ -241,6 +241,16 @@ class Pedido(models.Model):
         return self.estado_pedido == self.Estado.EN_COTIZACION
 
 
+# Motivo que se guarda en una cancelación automática, según su causa: los literales de la regla 3 de CMP-CNL-PED («Lista de tecnología», paso 3).
+# No se derivan de ``Pedido.Causa`` (esos son los rótulos de las pantallas). La causa ``manual`` no figura: el motivo lo escribe el Agrónomo.
+MOTIVOS_DE_CANCELACION_AUTOMATICA = {
+    Pedido.Causa.NADIE_COTIZO: "nadie cotizó",
+    Pedido.Causa.SIN_COTIZACIONES_ELEGIBLES: "sin cotizaciones elegibles",
+    Pedido.Causa.AGRONOMO_INACTIVO: "Agrónomo inactivo",
+    Pedido.Causa.AGRONOMO_SIN_INVERNADERO: "Agrónomo sin el invernadero de destino",
+}
+
+
 class DetallePedido(models.Model):
     """Una línea del pedido: un insumo habilitado en un invernadero, con la cantidad pedida y una copia del precio de referencia de
     ese momento (docs/modelo/compras.md, «DetallePedido»; R025, R037 y R133). R037 y R133 van juntas en ``insumo_invernadero``

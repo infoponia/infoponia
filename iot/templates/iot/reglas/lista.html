@@ -1,0 +1,48 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«IoT» → «Reglas de actuación» (IOT-CNS-RGL; ``reglas`` del prototipo): las reglas del invernadero elegido, con filtros por estado, sensor y actuador (regla 3), su situación y los motivos por los que no emiten
+(regla 2). «Nueva regla» solo lo ve quien opera el IoT del invernadero (D-30). Los filtros son un formulario GET: sin JavaScript, «Filtrar» recarga la página; con HTMX reemplazan solo la tabla. Sin JavaScript, la
+ventana de baja es la ficha de la regla con la ventana abierta.{% endcomment %}
+{% block titulo %}Reglas de actuación · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page">
+  <div class="page-h">
+    <h1>IoT</h1>
+    <span class="spacer"></span>
+    {% if puede_crear %}<a class="btn btn-primary" href="{% url 'iot:regla_nueva' %}?invernadero={{ elegido.pk }}">{% icono "plus" 14 %} Nueva regla</a>{% endif %}
+  </div>
+  {% include "iot/_marco_invernadero.html" %}
+  {% if not elegido %}
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para mostrar</h3><p class="muted">Cuando haya un invernadero a tu alcance, vas a ver acá sus reglas de actuación.</p></div></div>
+  {% elif not sistema %}
+  <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Este invernadero no tiene Sistema IoT.{% if opera %} Registralo para poder crear reglas. <a href="{% url 'iot:sistema' %}?invernadero={{ elegido.pk }}">Ir a Sistema IoT</a>{% endif %}</div></div>
+  {% else %}
+  <p class="muted" style="margin-bottom:14px">Un sensor dispara una acción sobre un actuador del mismo invernadero.</p>
+  <form class="filters" method="get" action="{% url 'iot:reglas' %}" aria-label="Filtros de reglas"
+        hx-get="{% url 'iot:reglas' %}" hx-target="#tabla-de-reglas" hx-push-url="true" hx-trigger="change, submit">
+    <input type="hidden" name="invernadero" value="{{ elegido.pk }}">
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      <option value="">Todos los estados</option>
+      <option value="activa"{% if filtros.estado == "activa" %} selected{% endif %}>Activas</option>
+      <option value="inactiva"{% if filtros.estado == "inactiva" %} selected{% endif %}>Dadas de baja</option>
+    </select>
+    <select class="field-input" name="sensor" data-desplegable aria-label="Sensor">
+      <option value="">Todos los sensores</option>
+      {% for s in sensores_del_filtro %}<option value="{{ s.pk }}"{% if filtros.sensor_id == s.pk|stringformat:"d" %} selected{% endif %}>{{ s.get_tipo_variable_sensor_display }} · {{ s.identificador_equipo }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="actuador" data-desplegable aria-label="Actuador">
+      <option value="">Todos los actuadores</option>
+      {% for a in actuadores_del_filtro %}<option value="{{ a.pk }}"{% if filtros.actuador_id == a.pk|stringformat:"d" %} selected{% endif %}>{{ a.tipo_actuador.nombre_actuador }} · {{ a.identificador_equipo }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-ghost btn-sm" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="link" href="{% url 'iot:reglas' %}?invernadero={{ elegido.pk }}">Quitar filtros</a>{% endif %}
+  </form>
+  <div id="tabla-de-reglas">{% include "iot/reglas/_tabla.html" %}</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar"></div>
+{% endblock %}

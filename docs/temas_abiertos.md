@@ -574,6 +574,19 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **El portal y el correo de invitación hablan de «usted»** (como el prototipo); las pantallas internas, de «vos». Un token inexistente da 404 con «Este enlace no es válido»; uno que no sirve da 200 con el motivo y sin datos del pedido.
 - **Pruebas:** en un `TestCase` el `on_commit` no corre solo y la redirección sigue antes de `captureOnCommitCallbacks`; las pruebas de las pantallas y el recorrido lo reemplazan por una llamada inmediata, que es lo que pasa en producción. `panelAgr` trae por ahora solo «Insumos bajo el mínimo» y «Esperando cotizaciones»; «Pedidos por resolver» es de CMP-03.
 
+## Abiertos desde CMP-02b (24/11/2026)
+
+- **7a de CMP-CNL-PED dice «el Sistema reintenta el envío»; D-88 punto 6 dice que no hay reintento automático.** Se implementó D-88 (la cancelación permanece y el correo que falla no se reintenta). Corregir la extensión 7a del extracto.
+- **La cancelación manual no genera notificación de campana.** Quien actúa es el único Agrónomo del pedido y los proveedores se enteran por correo. Confirmar si el Gerente debería recibir un aviso.
+- **«En curso» de H20** en `docs/api/extensiones_de_inventario.md` («abierto o con cotizaciones, no cancelado, no vencido sin cotizaciones, sin orden aprobada») no coincide con D-87 punto 5 y el caso de uso («en cotización»). Se implementó lo segundo; corregir el párrafo.
+- **Reenviar solo hasta la fecha límite:** la regla 7 de CMP-CNS-PED y el prototipo no lo dicen; agregarlo a la regla.
+- **Las cancelaciones automáticas se auditan como InfoPonia** aunque haya quien dio la baja (CMP-CNL-PED: «con actor=None»); la persona figura en el registro de la baja o del traspaso. Aclararlo en «Cómo se aplica».
+- **El traspaso cancela aunque el Agrónomo saliente siga activo.** El disparador «Cuando exista OrdenTrabajo, MantenimientoIoT, Contrato o Pedido» decía «si el saliente sigue activo»; MD-62 no lo condiciona.
+- **La ventana de baja de cuentas de `core` no muestra `Asignacion.cantidad`.** CMP-02b pone el número en el texto de lo que pasa; PRD-01 tiene el mismo hueco con las órdenes del Capataz.
+- **El «Ver detalle» de `Impedimento.url`** es genérico (no «Ver pedido»), porque CMP-03 lo usará para las órdenes.
+- **Prototipo:** `c_pedcnl` dice que las cotizaciones «se conservan como consulta» (el caso de uso las descarta) y no tiene resumen antes de confirmar (el caso de uso lo pide, paso 4).
+- **Prueba paralela:** `TypeError: cannot pickle 'traceback' object` con `--keepdb --parallel` tras una migración nueva: es el clon desactualizado de la base de pruebas (`.claude/rules/pruebas.md`), no un fallo intermitente. Corregir la nota de IOT-05.
+
 ## Abiertos desde D-96 (23/11/2026)
 
 - **La verificación vuelve a ser a mano** (pedido del estudiante: mirar capturas consumía demasiados tokens). Se retiraron Playwright, `core/tests/visual.py`, `requirements-dev.txt` y las pruebas visuales de CMP-01 y CMP-02a; siguen el recorrido con el cliente de Django, la revisión de migraciones y el retiro de los cargadores (D-95, puntos 1.a, 1.c y 3). Se reactivó la regla M5 y `docs/revisiones_pendientes.md`, con las secciones de CMP-01 y CMP-02a.
@@ -613,3 +626,12 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Tema abierto con el Jardín Botánico:** que un preaviso igual a la ventana de pre-reserva (14 días) sea aceptable para modificar y rescindir.
 - **Pendientes de Drive.** pendientes_CU: COM-RSC-SUM (2a con la fecha de hoy; el cierre y la rescisión después de una modificación); COM-ANL-RSC (los códigos `sin_rescision` y `rescision_cerrada`); COM-MOD-SUM (detalle sin períodos hasta la nueva fecha de fin; Vendedor solo el Gerente); PROD-PRR-SUM (el aviso de D-63 punto 4 una sola vez; el enlace del Agrónomo). pendientes_MD: nada nuevo.
 
+## Abiertos desde IOT-06 (24/11/2026)
+
+- **`iot/verificacion.py` y el cargador de datos de verificación** (la tarea pedía sumar `norte/sectorA/temp-vieja` y un paso del motivo `equipo_dado_de_baja`): no se hizo, porque D-95 los retiró. El paso del motivo `equipo_dado_de_baja` se cubre en las pruebas (`test_iot_baj_hdw.py`) y en los pasos 26 y 27 de la «Verificación a mano».
+- **`comandos.filas_de_comandos`** es un nombre público nuevo sobre `_filas_de` (IOT-05), para reutilizar el aspecto de la lista de comandos en la ficha de la regla. Está fuera de «Permitido fuera de la app»: confirmar o moverlo.
+- **El historial de la ficha de una regla muestra los últimos 25 comandos** y enlaza a «Comandos» con el origen «Regla de actuación» (el extracto no fija un límite).
+- **«Activar» el sistema es un botón directo** (un POST, sin ventana, como `sys-activar` del prototipo); desactivar y dar de baja llevan ventana. El extracto no dice cuál.
+- **Las pantallas de Hardware, Comandos y Reglas de un sistema dado de baja** dicen «no tiene Sistema IoT» (`sistema_del_invernadero` solo ve el vigente): el historial de un sistema dado de baja no tiene pantalla propia.
+- **Panel de monitoreo:** el enlace a las reglas de actuación (punto 7 de «Cuando existan actuadores, comandos y reglas del IoT», de `docs/disparadores.md`) quedó sin hacer: la tarea no lo pedía.
+- **Migración renumerada:** la de IOT-06 era `core` 0031 y pasó a 0032 al traer `main` (CMP-02b trajo la suya).

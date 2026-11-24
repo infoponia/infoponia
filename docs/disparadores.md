@@ -68,11 +68,11 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    (alertas activas para el Gerente). Nació en NOT-01.
 
 
-## Cuando exista Pedido
+## ~~Cuando exista Pedido~~
 
-**Planificado:** CMP-02b (`registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta`; D-87).
+**Hecho el 24/11/2026 en CMP-02b** (`compras/servicios/registrantes.py`: `efecto_de_baja_de_cuenta` y `asignaciones_de_cuenta`; D-87). Texto original:
 
-1. **Baja de un Agrónomo.** Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se avisa. Regla 4:
+1. ~~**Baja de un Agrónomo.**~~ Postcondición f de USR-BAJ-USR: se cancelan sus pedidos sin orden de compra generada y se avisa. Regla 4:
    la baja lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
    `core/extensiones.py` (D-43); bloquea sus filas después del invernadero y en orden de id.
 
@@ -268,8 +268,8 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    - ~~IOT-02: el aviso de equipos afectados (regla 6 de IOT-MOD-TAC), la compatibilidad sobre actuadores reales (regla 9) y el conteo de la
      baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados. Al crear un actuador, llamar antes a `bloquear_tipo_activo(tipo_id)` (`iot/servicios/tipos_actuador.py`; contrato de D-40).~~ (hecho el 22/11/2026, IOT-02: `recalcular_compatibilidad`; el aviso y el conteo ya los tenía IOT-01)
    - ~~IOT-05: `acciones_en_uso(tipo)` (devuelve `dict[int, list[UsoDeAccion]]`: por id de acción, sus usos con código `RGL-n` o `CMD-n` y valor) y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).~~ (hecho el 23/11/2026, IOT-05: una sola consulta para toda la lista de tipos)
-   - IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.
-2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). IOT-06: desactivar, activar y dar de baja; IOT-07:
+   - ~~IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.~~ (hecho el 24/11/2026, IOT-06)
+2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). ~~IOT-06: desactivar, activar y dar de baja~~ (hecho el 24/11/2026, IOT-06); IOT-07:
    `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
 3. **Hardware** (`docs/casos_de_uso/iot/hardware.md`).
    - ~~IOT-03: la última lectura y la situación por lecturas en la lista y la ficha; los identificadores anunciados (`EquipoAnunciado`) y la
@@ -277,9 +277,9 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
      `recalcular_compatibilidad`** (`iot/servicios/compatibilidad.py`) con los actuadores del sistema: es la única función que calcula y escribe la compatibilidad (D-82: bloquea
      los invernaderos en orden, después del tipo).~~ (hecho el 23/11/2026, IOT-03: `resumen_de_equipos` y `situacion_de` por alertas, «Último dato» en la lista y la ficha, `anuncios.registrar_anuncio` y `tiene_lecturas`)
    - ~~IOT-05: `tiene_comandos(actuador)`, `tiene_comando_pendiente(actuador)`, «Comando pendiente» y el historial de comandos de la ficha.~~ (hecho el 23/11/2026, IOT-05)
-   - IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
+   - ~~IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
      (`iot/servicios/hardware.py`: hoy no ofrece «Dar de baja», para que ningún botón lleve a un 403); y sumar `temp-vieja` (un sensor dado de baja) al cargador de datos de verificación
-     de `iot` (`iot/verificacion.py`) con ese servicio.
+     de `iot` (`iot/verificacion.py`) con ese servicio.~~ (hecho el 24/11/2026, IOT-06; lo del cargador no se hizo: D-95 retiró los cargadores de datos de verificación)
    - IOT-07: las órdenes de mantenimiento al volver a activar (regla 8 de IOT-MOD-HDW) y en la ficha; la precondición d de la baja.
      **Planificado en el lote I4** (`mantenimiento_automatico.md`).
 4. ~~**Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
@@ -287,11 +287,11 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 5. **API del nodo** (`docs/casos_de_uso/iot/entregar_informacion.md`, «Reparto»; lote I2a). IOT-03 las deja escritas sin hacer nada:
    - ~~IOT-05: `explica_un_comando(actuador, estado)` en `iot/servicios/estados.py` (hoy, falso: D-75 punto 1); en modo `local`, no entregar
      comandos (extensión 1b.2); las rutas de comandos del contrato (`docs/api/nodo/`, lote I3).~~ (hecho el 23/11/2026, IOT-05)
-   - IOT-06: `evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)` en `iot/servicios/lecturas.py` (paso 6 y 6a a 6d);
+   - ~~IOT-06: `evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)` en `iot/servicios/lecturas.py` (paso 6 y 6a a 6d);
      `al_volver_a_remoto(sistema)` en `iot/servicios/nodo.py` (1b.3); el reinicio de las reglas cuando el invernadero se queda sin umbral
-     efectivo (5c).
+     efectivo (5c).~~ (hecho el 24/11/2026, IOT-06)
 
-6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), IOT-06 e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
+6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), ~~IOT-06~~ (hecho el 24/11/2026: alta, modificación y reactivación de reglas, con su prueba de concurrencia) e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
    (`bloquear_tipo_activo`) y después el invernadero, el sistema y el equipo (excepción a D-40 y a `docs/patrones/bloqueos.md`). Nació en IOT-02.
 7. **El panel de monitoreo** (`iot/servicios/monitoreo.py` y `iot/templates/iot/monitoreo/_panel.html`). ~~IOT-05~~ (hecho el 23/11/2026): «Comandos pendientes» (indicador y columna de actuadores) y «Emitir comando» desde la fila de cada actuador a quien opera
    (regla 11 de IOT-CNS-LEC); IOT-06: el enlace a las reglas de actuación. Nació en IOT-04.
@@ -337,7 +337,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 
 1. **Alerta del Técnico.** Al registrar o dar de baja el `SistemaIoT` de un invernadero, el caso de uso llama a
    `maestros.servicios.alertas.sincronizar_alertas_de_personal` (la alerta «invernadero sin Técnico activo» solo cuenta con sistema
-   IoT, regla 3 de 8.22). `Invernadero.tiene_sistema_iot()` es verdadero desde IOT-02. Nació en MAE-02a. Al registrar: hecho en IOT-02 (22/11/2026). **Planificado:** IOT-06 (al dar de baja).
+   IoT, regla 3 de 8.22). `Invernadero.tiene_sistema_iot()` es verdadero desde IOT-02. Nació en MAE-02a. Al registrar: hecho en IOT-02 (22/11/2026). Al dar de baja: hecho en IOT-06 (24/11/2026).
 
 ## Cuando exista Hardware, Telemetría, Merma o SolicitudRevisión
 
@@ -384,6 +384,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    que quedan entre los afectados de `modificacion_invernadero` (D-81: `traspasar` ahora devuelve lo que tocó). Siguen los de COM-02, COM-03 e IOT-07.
    **COM-02 (lote C2)** suma las cosechas al traspaso del Capataz (por `ordenes_del_capataz`, D-53) y registra el del Vendedor con la regla de
    D-60 (compra-ventas); **Hecho el 23/11/2026 en COM-03a:** los suministros vigentes, con la misma regla. Los pedidos son de `compras` (fuera de «Comercial 1», D-57).
+   **Hecho el 24/11/2026 en CMP-02b (los pedidos):** `compras` registra su `traspasar` (cancela los pedidos «en cotización» del Agrónomo saliente con algún detalle a ese invernadero, aunque siga activo: MD-62 no lo condiciona) y su aviso (`registrar_aviso_de_traspaso`, D-98); su `contar` devuelve vacío.
    **IOT-07 (lote I4)** registra el del Técnico: pasan al entrante todas las órdenes de mantenimiento a realizar del invernadero (D-79, punto 9).
 
 ## Cuando exista un caso de uso que planifique, haga pedidos, asigne stock o reintente entregas
@@ -393,6 +394,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un invernadero inactivo y la bandeja lo excluye; hecho el 22/11/2026). Nació en MAE-01b.
    **Asignación de stock: COM-02 (lote C2)**, en `stock_maduro` (invernaderos considerados = solo activos). Planificaciones y reintento de
    entregas: COM-03 y COM-05 (**planificado en el lote C5a:** COM-05a, en la planificación inmediata y en el paso 50).
+   **Pedidos: hecho el 24/11/2026 en CMP-02b.** Un invernadero inactivo no se ofrece al armar un pedido (CMP-RLZ-PED lo rechaza con `invernadero_inactivo` vía `bloquear_invernadero_activo`) y la baja del invernadero se impide con un pedido en curso. Quedan las planificaciones, la asignación de stock y el reintento de entregas.
 
 ## Cuando exista Cliente o CompraVenta
 
@@ -465,6 +467,7 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
    solo la escribirá `compras`. `compras` se enchufa a `inventario` por dos vías ya documentadas (`docs/api/extensiones_de_inventario.md`):
    el punto `registrar_impedimento_de_deshabilitacion` (orden de compra aprobada sin recibir, pedido en curso: los usan CMP-DSH-IIN, CMP-BAJ-INS y
    la baja del invernadero) y los servicios de stock (`docs/api/stock.md`) para la **recepción**.
+   **Hecho el 24/11/2026 en CMP-02b:** el código `pedido_en_curso` (un pedido «en cotización» con ese insumo en ese invernadero, con enlace al pedido). Falta `orden_de_compra_aprobada` (CMP-03) y el tránsito (CMP-03 y CMP-04).
    INV-02 ya dejó conectado el punto: CMP-DSH-IIN, CMP-BAJ-INS y la baja del invernadero llaman a `registrar_impedimento_de_deshabilitacion` (`compras` solo registra su función). Su `cant_transito_insumo` ya cuenta en «bajo el mínimo» y se muestra en las existencias.
 2. **Recepción y faltante sin lote.** Por la regla 4 de 8.23 la recepción cancela primero el faltante sin lote y crea un lote nuevo por partida
    (y por fecha de vencimiento); hoy solo lo regulariza un recuento físico (`docs/modelo/inventario.md`, «Diferencias con el caso de uso»). Al
@@ -594,3 +597,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 3. **Ficha del pedido** (`compras/templates/compras/pedidos/ficha.html`): hoy sin acciones. CMP-02b suma «Cancelar pedido» y «Reenviar invitación»; CMP-03, «Comparar cotizaciones y generar orden» y la orden que generó un pedido «cerrado» (regla 4 de CMP-CNS-PED).
 4. **El paso diario 60** pone «vencido» a los enlaces vigentes: la ficha ya muestra «vencido» un enlace vigente con la fecha límite pasada, así que el paso no cambia lo que se ve (`pedidos._estado_del_enlace`).
 
+## Nacidos en CMP-02b
+
+1. **Cuando CMP-03 genere la orden.** `cancelar_pedido_automaticamente(pedido, causa)` ya existe para los pasos 60 y 62 (causas `nadie_cotizo` y `sin_cotizaciones_elegibles`); devuelve `None` si el pedido ya no estaba en cotización, así que los pasos son idempotentes. Hay que completar el impedimento `orden_de_compra_aprobada` (puede usar `Impedimento.url`) y la parte «orden pendiente de aprobación» de la extensión 4c de CMP-RLZ-PED.
+2. **Cuando se toque la ventana de baja de cuentas de `core`.** Mostrar `Asignacion.cantidad` (hoy solo `texto` y `que_pasa`); CMP-02b y PRD-01 meten el número en el texto.

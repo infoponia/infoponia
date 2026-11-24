@@ -6,18 +6,22 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from unittest import mock
+
+from django.core import mail
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.http import Http404
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from compras.errores import ErrorDeCompras
 from compras.models import EnlaceProveedor, Pedido
 from compras.tests.fabricas import cotizacion_de, detalle_de_pedido, enlace_de, invitar, proveedor
 from compras.tests.fabricas import pedido as armar_pedido
 from core.models import RegistroAuditoria
-from core.tests.fabricas import crear_administrador, crear_capataz, crear_gerente
+from core.tests.fabricas import BACKEND_QUE_FALLA, construir_url, crear_administrador, crear_capataz, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, existencia, insumo, perezoso
 from maestros.tests.fabricas import crear_agronomo, crear_agronomo_con_invernadero, crear_invernadero, crear_vendedor
 
@@ -292,3 +296,230 @@ class ProveedorConPedidosTests(ConsultaBase):
         todos = proveedores.pedidos_del_proveedor(self.gerente, self.sur_prv)
         self.assertEqual(sorted(f.pedido.pk for f in todos), sorted([self.pedido.pk, self.ajeno.pk]))
         self.assertEqual({f.pedido.pk: f.cotizo for f in todos}[self.ajeno.pk], False)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-02b, paso 2: «Reenviar invitación» (regla 7 de CMP-CNS-PED, H15.1; D-88 punto 6 y patrón del enlace del proveedor) y las banderas de acción de la ficha.
+# ``reenviar_invitacion(actor, invitacion_id, construir_url)`` devuelve el enlace nuevo. Errores: ``PermissionDenied`` (no es el Agrónomo del pedido),
+# ``Http404`` (la invitación no existe) y ``ErrorDeCompras`` con ``pedido_no_en_cotizacion``, ``fecha_limite_vencida``, ``proveedor_inactivo`` o ``ya_cotizo``.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+@override_settings(CORREO_CONFIGURADO=True)
+class ReenviarInvitacionTests(ConsultaBase):
+    """Regla 7 de CMP-CNS-PED: el Agrónomo del pedido reenvía la invitación a un proveedor que todavía no cotizó."""
+
+    def setUp(self):
+        super().setUp()
+        self.invitacion = self.inv_este.invitacion  # Viveros del Este: no cotizó
+
+    def reenviar(self, actor=None, invitacion=None):
+        """``reenviar_invitacion`` con los correos ejecutados; devuelve el enlace nuevo."""
+        with self.captureOnCommitCallbacks(execute=True):
+            return pedidos.reenviar_invitacion(actor or self.ana, (invitacion or self.invitacion).pk, construir_url)
+
+    def sin_cambios(self):
+        """El enlace viejo sigue vigente, no hay enlace nuevo, ni correo ni auditoría."""
+        self.inv_este.refresh_from_db()
+        self.assertEqual(self.inv_este.estado, "vigente")
+        self.assertEqual(self.invitacion.enlaces.count(), 1)
+        self.assertEqual((mail.outbox, RegistroAuditoria.objects.filter(accion="reenvio_invitacion").count()), ([], 0))
+
+    def test_regla_7_el_enlace_anterior_pasa_a_reemplazado_y_hay_uno_nuevo_vigente(self):
+        """Regla 7 (H15.1): se genera un enlace nuevo y el anterior pasa a «reemplazado»; a lo sumo uno vigente por invitación."""
+        nuevo = self.reenviar()
+        self.inv_este.refresh_from_db()
+        self.assertEqual((self.inv_este.estado, nuevo.estado), ("reemplazado", "vigente"))
+        self.assertNotEqual(nuevo.pk, self.inv_este.pk)
+        self.assertEqual(self.invitacion.enlaces.filter(estado="vigente").count(), 1)
+
+    def test_regla_7_el_enlace_nuevo_sirve_y_el_viejo_no(self):
+        """D-88 punto 2: el enlace reemplazado nunca muestra nada; el nuevo sirve para cotizar."""
+        from compras.servicios import enlaces
+
+        nuevo = self.reenviar()
+        self.assertEqual(enlaces.situacion_del_enlace(enlaces.enlace_por_id(nuevo.pk)), enlaces.SIRVE)
+        self.assertEqual(enlaces.situacion_del_enlace(enlaces.enlace_por_id(self.inv_este.pk)), enlaces.REEMPLAZADO)
+
+    def test_regla_7_se_envia_el_correo_con_el_enlace_nuevo_al_proveedor(self):
+        """Regla 7: el correo con el enlace nuevo va al proveedor (y solo a él), fuera de la transacción; el enlace queda «enviado»."""
+        nuevo = self.reenviar()
+        self.assertEqual([m.to for m in mail.outbox], [["info@este.com"]])
+        self.assertIn("/proveedor/", mail.outbox[0].body)
+        nuevo.refresh_from_db()
+        self.assertEqual(nuevo.estado_envio, "enviado")
+
+    def test_regla_7_si_el_correo_falla_el_enlace_nuevo_queda_pendiente_y_el_viejo_ya_no_sirve(self):
+        """Regla 7 y D-88 punto 6: si el correo falla, el reenvío se registró igual; el enlace queda ``pendiente_envio`` (sin reintento automático)."""
+        with override_settings(EMAIL_BACKEND=BACKEND_QUE_FALLA):
+            nuevo = self.reenviar()
+        nuevo.refresh_from_db()
+        self.inv_este.refresh_from_db()
+        self.assertEqual((nuevo.estado, nuevo.estado_envio, self.inv_este.estado), ("vigente", "pendiente_envio", "reemplazado"))
+
+    def test_regla_7_con_el_correo_sin_configurar_queda_pendiente(self):
+        """API de correo, regla 5: sin la configuración no sale nada y el enlace queda ``pendiente_envio``."""
+        with override_settings(CORREO_CONFIGURADO=False):
+            nuevo = self.reenviar()
+        nuevo.refresh_from_db()
+        self.assertEqual((nuevo.estado_envio, mail.outbox), ("pendiente_envio", []))
+
+    def test_regla_7_se_audita_el_reenvio_sin_guardar_el_token(self):
+        """Regla 7 («Se audita») y D-36: una acción ``reenvio_invitacion`` del Agrónomo, con el proveedor, el pedido y los dos enlaces; sin token."""
+        nuevo = self.reenviar()
+        registro = RegistroAuditoria.objects.get(accion="reenvio_invitacion")
+        self.assertEqual((registro.usuario_id, registro.rol), (self.ana.pk, "agronomo"))
+        modelos = [a["modelo"] for a in registro.afectados]
+        for modelo in ("compras.pedido", "compras.proveedor", "compras.invitacionpedido"):
+            self.assertEqual(modelos.count(modelo), 1)
+        self.assertEqual(modelos.count("compras.enlaceproveedor"), 2)
+        self.assertEqual(registro.detalle["datos"]["enlace_anterior"]["id"], self.inv_este.pk)
+        self.assertEqual(registro.detalle["datos"]["enlace_nuevo"]["id"], nuevo.pk)
+        self.assertNotIn(self.inv_este.token_resumen, str(registro.detalle))
+        self.assertNotIn(nuevo.token_resumen, str(registro.detalle))
+
+    def test_regla_7_el_texto_del_registro_distingue_el_enlace_anterior_del_nuevo(self):
+        """D-36: las referencias guardan el texto de ese momento; el del enlace anterior y el del nuevo se leen distintos en la pantalla de auditoría."""
+        self.reenviar()
+        datos = RegistroAuditoria.objects.get(accion="reenvio_invitacion").detalle["datos"]
+        self.assertIn("anterior", datos["enlace_anterior"]["texto"].lower())
+        self.assertIn("nuevo", datos["enlace_nuevo"]["texto"].lower())
+
+    def test_regla_7_una_invitacion_sin_enlace_vigente_crea_el_enlace_nuevo_y_no_falla(self):
+        """Regla 7 (caso límite): una invitación sin ningún enlace vigente (por ejemplo, un proveedor que se dio de baja y se reactivó: su enlace quedó
+        «anulado») recibe un enlace nuevo; no hay enlace anterior que reemplazar y el registro no lo menciona."""
+        EnlaceProveedor.objects.filter(pk=self.inv_este.pk).update(estado="anulado")
+        nuevo = self.reenviar()
+        self.inv_este.refresh_from_db()
+        self.assertEqual((self.inv_este.estado, nuevo.estado), ("anulado", "vigente"))
+        self.assertEqual([m.to for m in mail.outbox], [["info@este.com"]])
+        registro = RegistroAuditoria.objects.get(accion="reenvio_invitacion")
+        self.assertEqual(registro.detalle["datos"]["enlace_nuevo"]["id"], nuevo.pk)
+        self.assertNotIn("enlace_anterior", registro.detalle["datos"])
+
+    def test_regla_7_solo_el_agronomo_del_pedido_reenvia(self):
+        """Regla 7: «disponible solo para el Agrónomo del pedido»: otro Agrónomo, el Gerente y los demás reciben ``PermissionDenied``."""
+        for actor in (self.beto, self.gerente, crear_capataz(), crear_administrador(), None):
+            with self.subTest(actor=actor):
+                with self.assertRaises(PermissionDenied):
+                    pedidos.reenviar_invitacion(actor, self.invitacion.pk, construir_url)
+        self.sin_cambios()
+
+    def test_regla_7_una_invitacion_inexistente_es_404(self):
+        """D-28."""
+        with self.assertRaises(Http404):
+            pedidos.reenviar_invitacion(self.ana, 987654, construir_url)
+
+    def test_regla_7_el_pedido_tiene_que_estar_en_cotizacion(self):
+        """Regla 7: con el pedido cerrado o cancelado no se reenvía (``pedido_no_en_cotizacion``) y no cambia nada."""
+        for estado, causa in (("cerrado", None), ("cancelado", "manual")):
+            with self.subTest(estado=estado):
+                Pedido.objects.filter(pk=self.pedido.pk).update(
+                    estado_pedido=estado, causa_cancelacion=causa, motivo_cancelacion="x" if causa else "", fecha_cierre_pedido=en(0)
+                )
+                with self.assertRaises(ErrorDeCompras) as contexto:
+                    pedidos.reenviar_invitacion(self.ana, self.invitacion.pk, construir_url)
+                self.assertEqual(contexto.exception.codigo, "pedido_no_en_cotizacion")
+        self.assertEqual(self.invitacion.enlaces.count(), 1)
+
+    def test_regla_7_el_proveedor_no_tiene_que_haber_cotizado(self):
+        """Regla 7: «un proveedor que todavía no cotizó» (``ya_cotizo``)."""
+        cotizacion_de(self.pedido, self.este_prv, [(self.d_lechuga, 20, "250.00", 3)])
+        with self.assertRaises(ErrorDeCompras) as contexto:
+            pedidos.reenviar_invitacion(self.ana, self.invitacion.pk, construir_url)
+        self.assertEqual(contexto.exception.codigo, "ya_cotizo")
+        self.sin_cambios()
+
+    def test_regla_7_el_proveedor_tiene_que_estar_activo(self):
+        """Regla 7 y CMP-BAJ-PRV regla 3: un proveedor dado de baja no recibe invitaciones (``proveedor_inactivo``)."""
+        self.este_prv.estado_proveedor = "inactivo"
+        self.este_prv.save()
+        with self.assertRaises(ErrorDeCompras) as contexto:
+            pedidos.reenviar_invitacion(self.ana, self.invitacion.pk, construir_url)
+        self.assertEqual(contexto.exception.codigo, "proveedor_inactivo")
+        self.sin_cambios()
+
+    def test_regla_7_pasada_la_fecha_limite_no_se_reenvia(self):
+        """D-88 punto 2 (decisión del estudiante, 23/11/2026): un enlace nuevo después de la fecha límite nacería vencido; se rechaza con ``fecha_limite_vencida``."""
+        Pedido.objects.filter(pk=self.pedido.pk).update(fecha_pedido=en(-8), fecha_limite_cotizaciones=en(-1))
+        with self.assertRaises(ErrorDeCompras) as contexto:
+            pedidos.reenviar_invitacion(self.ana, self.invitacion.pk, construir_url)
+        self.assertEqual(contexto.exception.codigo, "fecha_limite_vencida")
+        self.sin_cambios()
+
+    def test_regla_7_el_ultimo_dia_todavia_se_reenvia(self):
+        """D-88 punto 2: el último día todavía se cotiza, así que todavía se reenvía."""
+        Pedido.objects.filter(pk=self.pedido.pk).update(fecha_pedido=en(-3), fecha_limite_cotizaciones=en(0))
+        self.assertEqual(self.reenviar().estado, "vigente")
+
+    def test_garantia_si_falla_la_auditoria_no_queda_nada_ni_sale_el_correo(self):
+        """Atomicidad: si la auditoría falla se revierte el reemplazo y el correo (``on_commit``) no sale."""
+        with mock.patch.object(RegistroAuditoria.objects, "registrar", side_effect=RuntimeError("falla")):
+            with self.captureOnCommitCallbacks(execute=True) as pendientes:
+                with self.assertRaises(RuntimeError):
+                    pedidos.reenviar_invitacion(self.ana, self.invitacion.pk, construir_url)
+        self.assertEqual(pendientes, [])
+        self.sin_cambios()
+
+    def test_regla_7_el_reenvio_no_toca_el_pedido_ni_las_cotizaciones(self):
+        """El reenvío no cambia el pedido ni las cotizaciones recibidas."""
+        cotizacion_de(self.pedido, self.sur_prv, [(self.d_lechuga, 20, "250.00", 3)])
+        antes = (Pedido.objects.get(pk=self.pedido.pk).estado_pedido, self.pedido.cotizaciones.count())
+        self.reenviar()
+        self.assertEqual((Pedido.objects.get(pk=self.pedido.pk).estado_pedido, self.pedido.cotizaciones.count()), antes)
+
+
+class AccionesDeLaFichaTests(ConsultaBase):
+    """Reglas 7 y 8 de CMP-CNS-PED y D-30: la ficha dice qué acciones puede hacer quien mira, para no mostrar botones que llevan a un 403."""
+
+    def invitado(self, ficha, proveedor_):
+        return next(i for i in ficha.invitados if i.proveedor.pk == proveedor_.pk)
+
+    def test_regla_8_el_agronomo_del_pedido_en_cotizacion_puede_cancelar(self):
+        """Regla 8: Cancelar, solo para el Agrónomo del pedido."""
+        self.assertTrue(pedidos.ficha_de_pedido(self.ana, self.pedido.pk).puede_cancelar)
+
+    def test_regla_8_el_gerente_no_cancela_a_mano(self):
+        """Regla 1 y «Quién cancela»: el Gerente ve en solo lectura."""
+        self.assertFalse(pedidos.ficha_de_pedido(self.gerente, self.pedido.pk).puede_cancelar)
+
+    def test_regla_8_un_pedido_cerrado_o_cancelado_no_se_cancela(self):
+        """Precondición c: solo «en cotización»."""
+        for estado, causa in (("cerrado", None), ("cancelado", "manual")):
+            with self.subTest(estado=estado):
+                Pedido.objects.filter(pk=self.pedido.pk).update(
+                    estado_pedido=estado, causa_cancelacion=causa, motivo_cancelacion="x" if causa else "", fecha_cierre_pedido=en(0)
+                )
+                self.assertFalse(pedidos.ficha_de_pedido(self.ana, self.pedido.pk).puede_cancelar)
+
+    def test_regla_7_se_puede_reenviar_a_quien_no_cotizo(self):
+        """Regla 7: el botón aparece para el proveedor que no cotizó, con el pedido en cotización y su proveedor activo."""
+        ficha = pedidos.ficha_de_pedido(self.ana, self.pedido.pk)
+        self.assertTrue(self.invitado(ficha, self.sur_prv).puede_reenviar)
+        self.assertTrue(self.invitado(ficha, self.este_prv).puede_reenviar)
+
+    def test_regla_7_no_se_reenvia_a_quien_ya_cotizo(self):
+        """Regla 7: «un proveedor que todavía no cotizó»."""
+        cotizacion_de(self.pedido, self.sur_prv, [(self.d_lechuga, 20, "250.00", 3)])
+        ficha = pedidos.ficha_de_pedido(self.ana, self.pedido.pk)
+        self.assertFalse(self.invitado(ficha, self.sur_prv).puede_reenviar)
+        self.assertTrue(self.invitado(ficha, self.este_prv).puede_reenviar)
+
+    def test_regla_7_el_gerente_no_reenvia(self):
+        """Regla 7: solo el Agrónomo del pedido."""
+        ficha = pedidos.ficha_de_pedido(self.gerente, self.pedido.pk)
+        self.assertFalse(any(i.puede_reenviar for i in ficha.invitados))
+
+    def test_regla_7_no_se_reenvia_a_un_proveedor_inactivo_ni_vencida_la_fecha_limite_ni_con_el_pedido_cancelado(self):
+        """Regla 7 y D-88 punto 2: las mismas condiciones que el servicio."""
+        self.este_prv.estado_proveedor = "inactivo"
+        self.este_prv.save()
+        ficha = pedidos.ficha_de_pedido(self.ana, self.pedido.pk)
+        self.assertFalse(self.invitado(ficha, self.este_prv).puede_reenviar)
+        self.assertTrue(self.invitado(ficha, self.sur_prv).puede_reenviar)
+        Pedido.objects.filter(pk=self.pedido.pk).update(fecha_pedido=en(-8), fecha_limite_cotizaciones=en(-1))
+        self.assertFalse(any(i.puede_reenviar for i in pedidos.ficha_de_pedido(self.ana, self.pedido.pk).invitados))
+        Pedido.objects.filter(pk=self.pedido.pk).update(
+            estado_pedido="cancelado", causa_cancelacion="manual", motivo_cancelacion="x", fecha_cierre_pedido=en(0)
+        )
+        self.assertFalse(any(i.puede_reenviar for i in pedidos.ficha_de_pedido(self.ana, self.pedido.pk).invitados))

@@ -730,6 +730,15 @@ class RegistroAuditoria(models.Model):
         EMISION_COMANDO = "emision_comando", "Emisión de comando"
         CANCELACION_COMANDO = "cancelacion_comando", "Cancelación de comando"
         RESOLUCION_COMANDO_IOT = "resolucion_comando_iot", "Resolución de comando (IoT)"
+        # Reglas de actuación y ciclo de vida del IoT (IOT-06, D-36): un registro por caso de uso, con todo lo tocado como afectado. Reactivar una regla
+        # se audita como su modificación (con ``datos.reactivada``); dar de baja el sistema o un equipo no lleva nunca el token (D-70).
+        ALTA_REGLA_ACTUACION = "alta_regla_actuacion", "Alta de regla de actuación"
+        MODIFICACION_REGLA_ACTUACION = "modificacion_regla_actuacion", "Modificación de regla de actuación"
+        BAJA_REGLA_ACTUACION = "baja_regla_actuacion", "Baja de regla de actuación"
+        DESACTIVACION_SISTEMA_IOT = "desactivacion_sistema_iot", "Desactivación de sistema IoT"
+        ACTIVACION_SISTEMA_IOT = "activacion_sistema_iot", "Activación de sistema IoT"
+        BAJA_SISTEMA_IOT = "baja_sistema_iot", "Baja de sistema IoT"
+        BAJA_HARDWARE = "baja_hardware", "Baja de hardware"
         # Clientes y vehículos (COM-01, D-36): <acción>_<entidad>. La reactivación se audita aparte de la modificación.
         ALTA_CLIENTE = "alta_cliente", "Alta de cliente"
         MODIFICACION_CLIENTE = "modificacion_cliente", "Modificación de cliente"
@@ -759,6 +768,9 @@ class RegistroAuditoria(models.Model):
         # sin cuenta, con ``rol_externo`` (D-88 punto 5). Cancelar y reenviar son de CMP-02b.
         ALTA_PEDIDO = "alta_pedido", "Alta de pedido de cotización"
         ALTA_COTIZACION = "alta_cotizacion", "Alta de cotización"
+        # CMP-02b: cancelar un pedido (a mano o solo) y reenviar la invitación a un proveedor.
+        CANCELACION_PEDIDO = "cancelacion_pedido", "Cancelación de pedido de cotización"
+        REENVIO_INVITACION = "reenvio_invitacion", "Reenvío de invitación a un proveedor"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1019,6 +1031,16 @@ class RegistroAuditoria(models.Model):
         "estado_hardware": "Estado del equipo",
         "compatibilidad": "Compatibilidad con el nodo",
         "hechos": "Qué pasó con los comandos",
+        # Reglas de actuación y ciclo de vida del IoT (IOT-06). «actuador», «accion», «nodo», «invernadero», «estado_hardware» y «alertas_resueltas» ya existen.
+        "sensor": "Sensor",
+        "condicion": "Condición",
+        "aplicar_valor": "Valor a aplicar",
+        "estado_regla": "Estado de la regla",
+        "estado_sistema": "Estado del sistema IoT",
+        "reactivada": "Se reactivó",
+        "comandos_cancelados": "Comandos cancelados",
+        "equipos": "Equipos dados de baja",
+        "reglas": "Reglas dadas de baja",
         # Pedidos y cotizaciones (CMP-02a): cantidades, importes y fechas van como texto (D-36). «estado», «invernadero»,
         # «insumo» y «agronomo» ya existen, y también «monto_estimado», «detalles» y «lineas» (los de la compra-venta de COM-02): no se repiten, porque en
         # un diccionario la clave de más abajo pisa a la de arriba y cambiaría el texto de aquellas pantallas. Las líneas de la cotización llevan su clave propia.
@@ -1033,6 +1055,14 @@ class RegistroAuditoria(models.Model):
         "monto_cotizacion": "Monto de la cotización",
         "lineas_cotizadas": "Líneas de la cotización",
         "pedido_cubierto": "El pedido quedó cubierto",
+        # CMP-02b: cancelación del pedido y reenvío de la invitación («motivo_cancelacion» ya existe, de otra tarea).
+        "fecha_cierre_pedido": "Fecha de cierre",
+        "causa_cancelacion": "Causa de la cancelación",
+        "cotizaciones_descartadas": "Cotizaciones descartadas",
+        "enlaces_anulados": "Enlaces anulados",
+        "pedidos_cancelados": "Pedidos cancelados",
+        "enlace_anterior": "Enlace anterior",
+        "enlace_nuevo": "Enlace nuevo",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1054,6 +1084,14 @@ class RegistroAuditoria(models.Model):
             "cancelado": "Cancelado",
         },
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
+        # CMP-02b: causas de la cancelación de un pedido (`core` no importa `compras`, A1 de D-37).
+        "causa_cancelacion": {
+            "manual": "Cancelado por el Agrónomo",
+            "nadie_cotizo": "Nadie cotizó",
+            "sin_cotizaciones_elegibles": "Sin cotizaciones elegibles",
+            "agronomo_inactivo": "Agrónomo inactivo",
+            "agronomo_sin_invernadero": "Agrónomo sin el invernadero de destino",
+        },
         # IOT-02: de qué estado vuelve a activarse un equipo (``reactivacion_hardware``).
         "desde": {"fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
         "clase": {"sensor": "Sensor", "actuador": "Actuador"},
@@ -1124,6 +1162,15 @@ class RegistroAuditoria(models.Model):
             "entregada": "Entregada",
             "liberada": "Liberada",
         },
+        # IOT-06: las listas cerradas de las reglas, del sistema IoT y de los equipos (`core` no importa `iot`, A1 de D-37).
+        "condicion": {
+            "supera_maximo": "Supera el máximo del umbral efectivo",
+            "baja_del_minimo": "Baja del mínimo del umbral efectivo",
+            "vuelve_al_rango": "Vuelve a quedar dentro del umbral efectivo",
+        },
+        "estado_regla": {"activa": "Activa", "inactiva": "Inactiva"},
+        "estado_sistema": {"activo": "Activo", "desconectado": "Desconectado", "inactivo": "Dado de baja"},
+        "estado_hardware": {"activo": "Activo", "fuera_de_servicio": "Fuera de servicio", "inactivo": "Dado de baja"},
     }
     SIN_VALOR = "—"
 
@@ -1315,6 +1362,13 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.EMISION_COMANDO,
         RegistroAuditoria.Accion.CANCELACION_COMANDO,
         RegistroAuditoria.Accion.RESOLUCION_COMANDO_IOT,
+        RegistroAuditoria.Accion.ALTA_REGLA_ACTUACION,
+        RegistroAuditoria.Accion.MODIFICACION_REGLA_ACTUACION,
+        RegistroAuditoria.Accion.BAJA_REGLA_ACTUACION,
+        RegistroAuditoria.Accion.DESACTIVACION_SISTEMA_IOT,
+        RegistroAuditoria.Accion.ACTIVACION_SISTEMA_IOT,
+        RegistroAuditoria.Accion.BAJA_SISTEMA_IOT,
+        RegistroAuditoria.Accion.BAJA_HARDWARE,
         RegistroAuditoria.Accion.ALTA_CLIENTE,
         RegistroAuditoria.Accion.MODIFICACION_CLIENTE,
         RegistroAuditoria.Accion.BAJA_CLIENTE,
@@ -1336,6 +1390,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REACTIVACION_PROVEEDOR,
         RegistroAuditoria.Accion.ALTA_PEDIDO,
         RegistroAuditoria.Accion.ALTA_COTIZACION,
+        RegistroAuditoria.Accion.CANCELACION_PEDIDO,
+        RegistroAuditoria.Accion.REENVIO_INVITACION,
     }
 )
 

@@ -1,0 +1,31 @@
+{% load iconos %}{% comment %}La tabla de reglas de «Reglas de actuación» (IOT-CNS-RGL reglas 2 y 5; ``reglas``, ``rglText``, ``ultB`` y ``rglTags`` del prototipo): código, la regla en una frase, su situación (la evaluación y los
+motivos por los que no emite o no se evalúa) y, para quien opera, «Modificar» y «Dar de baja» en una regla activa o «Reactivar» en una dada de baja (D-30: ``acciones`` ya viene filtrado por ``acciones_permitidas``). Es el fragmento
+que HTMX reemplaza al filtrar. Recibe «filas» (cada una con «fila», «tono» y «acciones»), «hay_reglas» y «hay_filtros».{% endcomment %}
+<div class="tablewrap">
+  <table class="data-table">
+    <caption class="sr-only">Reglas de actuación del invernadero</caption>
+    <thead><tr><th>Código</th><th>Regla</th><th>Situación</th><th>Último disparo</th><th><span class="sr-only">Acciones</span></th></tr></thead>
+    <tbody>
+      {% for f in filas %}{% with r=f.fila.regla %}
+      <tr{% if r.estado_regla == "inactiva" %} class="hw-fila-off"{% endif %}>
+        <td><a class="id" href="{% url 'iot:regla_ficha' r.pk %}">{{ f.fila.codigo }}</a></td>
+        <td>{{ f.fila.texto }}</td>
+        <td>
+          {% if r.estado_regla == "inactiva" %}<span class="status-badge status-neutral">Dada de baja</span>
+          {% else %}<span class="status-badge status-{{ f.tono }}">{{ f.fila.evaluacion }}</span>
+          {% for m in f.fila.motivos %}<span class="status-badge status-warn" style="margin-top:4px">{{ m.texto }}</span> {% endfor %}{% endif %}
+        </td>
+        <td class="muted nw">{% if f.fila.ultimo_disparo %}{{ f.fila.ultimo_disparo.emitido_en|date:"d/m H:i" }}<span class="sub2">CMD-{{ f.fila.ultimo_disparo.pk }} · {{ f.fila.ultimo_disparo.get_estado_comando_display }}</span>{% else %}—{% endif %}</td>
+        <td class="right nw">
+          <a class="rowlink" href="{% url 'iot:regla_ficha' r.pk %}" aria-label="Ver la ficha de {{ f.fila.codigo }}">Ver ficha</a>
+          {% if "modificar" in f.acciones %}<a class="rowlink" href="{% url 'iot:regla_modificar' r.pk %}" aria-label="Modificar {{ f.fila.codigo }}">Modificar</a>{% endif %}
+          {% if "baja" in f.acciones %}<a class="rowlink" href="{% url 'iot:regla_baja' r.pk %}" hx-get="{% url 'iot:regla_baja' r.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Dar de baja {{ f.fila.codigo }}">Dar de baja</a>{% endif %}
+          {% if "reactivar" in f.acciones %}<form method="post" action="{% url 'iot:regla_reactivar' r.pk %}" style="display:inline">{% csrf_token %}<button class="rowlink" type="submit" data-enviando="Reactivando…" aria-label="Reactivar {{ f.fila.codigo }}">Reactivar</button></form>{% endif %}
+        </td>
+      </tr>
+      {% endwith %}{% empty %}
+      <tr><td colspan="5" class="muted">{% if hay_filtros and hay_reglas %}Ninguna regla coincide con los filtros.{% else %}No hay reglas en este invernadero.{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

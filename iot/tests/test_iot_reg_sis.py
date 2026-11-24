@@ -596,9 +596,9 @@ class IotRegSisServicioTests(fabricas.ConCatalogoIot, TestCase):
         self.assertEqual((conectividad.estado, conectividad.texto), ("sin_senal", "Todavía no se comunicó"))
 
     def test_acciones_permitidas_ningun_boton_lleva_a_un_403(self):
-        """D-30 y IOT-MOD-SIS regla 1: quien opera el IoT del invernadero modifica y regenera el token; quien solo consulta, nada."""
+        """D-30 y IOT-MOD-SIS regla 1: quien opera el IoT del invernadero modifica y regenera el token (y, desde IOT-06, desactiva el sistema activo y lo da de baja); quien solo consulta, nada."""
         sistema = fabricas.sistema(self.norte)
-        esperado = frozenset({sistemas.ACCION_MODIFICAR, sistemas.ACCION_REGENERAR_TOKEN})
+        esperado = frozenset({sistemas.ACCION_MODIFICAR, sistemas.ACCION_REGENERAR_TOKEN, sistemas.ACCION_DESACTIVAR, sistemas.ACCION_BAJA})
         self.assertEqual(sistemas.acciones_permitidas(self.laura, sistema), esperado)
         self.assertEqual(sistemas.acciones_permitidas(self.gerente, sistema), frozenset())  # hay Agrónomo activo: solo consulta
         libre = fabricas.sistema(crear_invernadero("Libre"))

@@ -96,13 +96,13 @@ class IotEntInfModoServicioTests(fabricas.ConCatalogoIot, TestCase):
         volver.assert_called_once()
         self.assertEqual(volver.call_args.args[0].pk, self.sistema.pk)
 
-    def test_ext_1b3_al_volver_a_remoto_no_hace_nada_hasta_iot_06(self):
-        """«Reparto»: `al_volver_a_remoto` queda escrita sin hacer nada (dice «Se completa en IOT-06»): una regla cumplida sigue cumplida."""
+    def test_ext_1b3_al_volver_a_remoto_reinicia_las_reglas_activas(self):
+        """Extensión 1b.3 (completada en IOT-06; antes `al_volver_a_remoto` no hacía nada): una regla cumplida vuelve a «sin evaluar» con el contador en 0."""
         sensor = fabricas.sensor(self.sistema, "norte/temp")
         regla = fabricas.regla(sensor, fabricas.actuador(self.sistema, identificador="norte/vent"), ultima_evaluacion="cumplida", contador_confirmacion=2)
         nodo.al_volver_a_remoto(self.sistema)
         regla.refresh_from_db()
-        self.assertEqual((regla.ultima_evaluacion, regla.contador_confirmacion), ("cumplida", 2))
+        self.assertEqual((regla.ultima_evaluacion, regla.contador_confirmacion), ("sin_evaluar", 0))
 
     def test_ext_astar_a_un_sistema_desconectado_no_se_le_registra_el_modo(self):
         """Extensión *a: un sistema desconectado no acepta mensajes (el servicio relee el estado ya bloqueado): `SistemaDesconectado`, sin cambios."""

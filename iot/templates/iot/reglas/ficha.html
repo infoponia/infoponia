@@ -1,0 +1,53 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}La ficha de una regla (IOT-CNS-RGL regla 4): la regla en una frase, su estado, su situación (la evaluación y los motivos por los que no emite), sus datos y el historial de los comandos que generó. Los botones salen
+de «acciones» (D-30): modificar, dar de baja (ventana) y reactivar. Sin JavaScript, la ventana de baja es esta página con la ventana abierta («plantilla_de_ventana»). Recibe «regla», «fila», «tono», «acciones»,
+«comandos» y «comandos_total».{% endcomment %}
+{% block titulo %}{{ fila.codigo }} · Reglas de actuación · IoT · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'iot/css/iot.css' %}">
+<script src="{% static_v 'iot/js/iot.js' %}" defer></script>
+<div class="page">
+  <a class="back" href="{% url 'iot:reglas' %}?invernadero={{ elegido.pk }}">{% icono "back" 14 %} Volver al listado</a>
+  <div class="page-h">
+    <h1>{{ fila.codigo }}</h1>
+    {% if regla.estado_regla == "activa" %}<span class="status-badge status-ok">Activa</span>{% else %}<span class="status-badge status-neutral">Dada de baja</span>{% endif %}
+    <span class="spacer"></span>
+    {% if "modificar" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:regla_modificar' regla.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
+    {% if "baja" in acciones %}<a class="btn btn-ghost" href="{% url 'iot:regla_baja' regla.pk %}" hx-get="{% url 'iot:regla_baja' regla.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">{% icono "trash" 14 %} Dar de baja</a>{% endif %}
+    {% if "reactivar" in acciones %}<form method="post" action="{% url 'iot:regla_reactivar' regla.pk %}" style="display:inline">{% csrf_token %}<button class="btn btn-primary" type="submit" data-enviando="Reactivando…">{% icono "ret" 14 %} Reactivar</button></form>{% endif %}
+  </div>
+  {% include "iot/_marco_invernadero.html" %}
+  <div class="card">
+    <div class="card-b"><p style="font-size:15px;line-height:1.6">{{ fila.texto }}.</p></div>
+    <div class="facts">
+      <div><span class="k">Sensor</span><span class="v"><a href="{% url 'iot:hardware_ficha' regla.sensor_id %}">{{ regla.sensor.get_tipo_variable_sensor_display }} · {{ regla.sensor.identificador_equipo }}</a></span></div>
+      <div><span class="k">Actuador</span><span class="v"><a href="{% url 'iot:hardware_ficha' regla.actuador_id %}">{{ regla.actuador.tipo_actuador.nombre_actuador }} · {{ regla.actuador.identificador_equipo }}</a></span></div>
+      <div><span class="k">Condición</span><span class="v">{{ regla.get_condicion_display }}</span></div>
+      <div><span class="k">Acción</span><span class="v">{{ regla.accion.nombre_accion }}{% if regla.aplicar_valor is not None %} · {{ regla.aplicar_valor }} {{ regla.accion.unidad_valor }}{% endif %}</span></div>
+    </div>
+    <div class="facts">
+      <div><span class="k">Evaluación</span><span class="v">{% if regla.estado_regla == "inactiva" %}<span class="status-badge status-neutral">No se evalúa: dada de baja</span>{% else %}<span class="status-badge status-{{ tono }}">{{ fila.evaluacion }}</span>{% endif %}</span></div>
+      <div><span class="k">No emite o no se evalúa</span><span class="v">{% for m in fila.motivos %}<span class="status-badge status-warn">{{ m.texto }}</span> {% empty %}{% if regla.estado_regla == "inactiva" %}—{% else %}Nada lo impide{% endif %}{% endfor %}</span></div>
+      <div><span class="k">Último disparo</span><span class="v">{% if fila.ultimo_disparo %}{{ fila.ultimo_disparo.emitido_en|date:"d/m/Y H:i" }}{% else %}Todavía no disparó{% endif %}</span>{% if fila.ultimo_disparo %}<span class="d">CMD-{{ fila.ultimo_disparo.pk }} · {{ fila.ultimo_disparo.get_estado_comando_display }}</span>{% endif %}</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <div class="card-h"><h3>{% icono "send" 16 %} Comandos que generó</h3><span class="spacer"></span>{% if comandos_total > comandos|length %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;origen=regla&amp;filtro_actuador={{ regla.actuador_id }}">Ver todos ({{ comandos_total }})</a>{% endif %}</div>
+    <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
+      <caption class="sr-only">Comandos que generó la regla</caption>
+      <thead><tr><th>Código</th><th>Acción</th><th>Estado</th><th>Intentos</th><th>Emitido</th></tr></thead>
+      <tbody>{% for f in comandos %}
+        <tr><td><span class="id">{{ f.codigo }}</span></td><td>{{ f.accion_texto }} <span class="code muted">{{ f.codigo_del_comando }}</span></td>
+          <td><span class="status-badge status-{{ f.estado_tono }}">{{ f.estado }}</span></td><td>{{ f.intentos }}</td><td class="muted nw">{{ f.comando.emitido_en|date:"d/m H:i:s" }}</td></tr>
+        {% if f.nota %}<tr class="sub"><td colspan="5"><div class="alert {% if f.comando.resultado_comando == 'rechazado' %}alert-warn{% else %}alert-danger{% endif %}">{% icono "warn" 16 %}<div>{{ f.nota }}</div></div></td></tr>{% endif %}
+      {% empty %}<tr><td colspan="5" class="muted">Esta regla todavía no generó comandos.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block ventanas %}
+<div id="ventana-confirmar">
+  {% if plantilla_de_ventana %}{% include plantilla_de_ventana %}{% endif %}
+</div>
+{% endblock %}

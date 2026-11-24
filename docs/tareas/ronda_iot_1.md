@@ -187,5 +187,5 @@ Salen de `docs/disparadores.md`. Cada archivo de tarea los trae en «Límites».
 | IOT-01 | «Cuando exista Hardware, Telemetría, Merma o SolicitudRevisión», punto 1, para el IoT (el vínculo es `AlertaIot`, D-72) |
 | IOT-02 | «Cuando exista una ocupación de sector, una variedad con semilla o un hardware», punto 4 (`hardware_activo` y el contenido del sector); «Cuando exista SistemaIoT», punto 1 (`tiene_sistema_iot`, el Técnico y la precondición h de PROD-BAJ-INV); «Cuando exista SistemaIoT (alertas)», punto 1, al registrar |
 | IOT-04 | «Cuando exista el caso de uso de consulta de alertas (CU-46) o el panel de IoT (CU-41)», la parte del panel; «Cuando exista SistemaIoT», punto 0 del correo (D-54) |
-| IOT-06 | «Cuando exista SistemaIoT (alertas)», punto 1, al dar de baja |
+| IOT-06 | «Cuando exista SistemaIoT (alertas)», punto 1, al dar de baja (hecho el 24/11/2026); la parte de IOT-06 de los puntos 1, 2, 3 y 5 de «Cuando existan actuadores, comandos y reglas del IoT» (hecho el 24/11/2026; el enlace del panel, punto 7, sigue abierto) |
 | IOT-07 | «Cuando exista SistemaIoT», punto 0 del traspaso del Técnico (D-53); «Cuando existan actuadores, comandos y reglas del IoT», la parte de IOT-07 de los puntos 2 y 3; «Cuando exista OrdenTrabajo, MantenimientoIoT, Contrato o Pedido», la parte del Técnico |
