@@ -807,6 +807,10 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_COSECHA = "planificacion_cosecha", "Planificación de cosecha"
         MODIFICACION_COSECHA = "modificacion_cosecha", "Modificación de cosecha"
         CONCRECION_COSECHA = "concrecion_cosecha", "Concreción de cosecha"
+        # COM-04b: la cámara (PROD-ASG-CAM, PROD-VNC-CAM y el aviso previo). La merma en cámara usa `registro_merma`, que ya existe.
+        ASIGNACION_CAMARA = "asignacion_camara", "Asignación de stock de cámara"
+        VENCIMIENTO_PARTIDA = "vencimiento_partida", "Vencimiento de partida en cámara"
+        AVISO_PARTIDA_POR_VENCER = "aviso_partida_por_vencer", "Aviso de partida por vencer"
         # CMP-03: órdenes de compra (D-87 punto 8): <verbo del dominio>_orden_compra.
         GENERACION_ORDEN_COMPRA = "generacion_orden_compra", "Generación de orden de compra"
         APROBACION_ORDEN_COMPRA = "aprobacion_orden_compra", "Aprobación de orden de compra"
@@ -974,6 +978,7 @@ class RegistroAuditoria(models.Model):
         "dias_anticipacion_cosecha_suministro": "Anticipación de cosecha: suministro (días)",
         "dias_vigencia_enlace_confirmacion": "Vigencia del enlace de confirmación (días)",
         "dias_vigencia_enlace_faltante": "Vigencia del enlace de decisión ante un faltante (días)",
+        "dias_aviso_vencimiento_camara": "Aviso de vencimiento de cámara (días antes)",
         "dias_limite_cotizacion": "Días límite para cotizar",
         "dias_validez_cotizacion": "Validez de las cotizaciones (días)",
         "porc_tolerancia_cobertura_pedido": "Tolerancia de cobertura del pedido (%)",
@@ -1111,6 +1116,18 @@ class RegistroAuditoria(models.Model):
         "pedidos_cancelados": "Pedidos cancelados",
         "enlace_anterior": "Enlace anterior",
         "enlace_nuevo": "Enlace nuevo",
+        # COM-04b: la cámara (asignación, vencimiento, aviso previo y merma en cámara). Solo claves nuevas.
+        "partida": "Partida de cámara",
+        "lineas_recortadas": "Líneas recortadas",
+        "reservas_liberadas": "Reservas liberadas",
+        "recubierto": "Se volvió a cubrir",
+        "sin_cubrir_tras_recorte": "Quedó sin cubrir",
+        "detalles_reabiertos": "Detalles que dejaron de estar pendientes",
+        "ventas_reabiertas": "Ventas que volvieron a «abierta»",
+        "fecha_limite": "Fecha límite de la partida",
+        "dias_para_vencer": "Días para vencer",
+        "alerta_de_merma": "Alerta de merma con producto reservado",
+        "plantas_perdidas": "Plantas perdidas",
         # CMP-03: generación de la orden de compra («orden», «fecha_cierre_pedido» y «cotizaciones_descartadas» ya existen).
         "cotizaciones_seleccionadas": "Cotizaciones seleccionadas",
         "monto_total": "Monto total",
@@ -1222,6 +1239,7 @@ class RegistroAuditoria(models.Model):
         "estado_detalle_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto"},
         # COM-03b: el motivo de la rescisión (`core` no importa `comercial`).
         "motivo_rescision": {"a_pedido_del_cliente": "A pedido del cliente", "a_pedido_de_la_empresa": "A pedido de la empresa", "otro": "Otro"},
+        "estado_stock_cosechado": {"disponible": "Disponible", "agotado": "Agotada", "vencido": "Vencida"},  # COM-04b
         "estado_reserva": {
             "activa": "Activa",
             "lista_para_entrega": "Lista para entrega",
@@ -1461,6 +1479,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_COSECHA,
         RegistroAuditoria.Accion.MODIFICACION_COSECHA,
         RegistroAuditoria.Accion.CONCRECION_COSECHA,
+        RegistroAuditoria.Accion.ASIGNACION_CAMARA,
+        RegistroAuditoria.Accion.VENCIMIENTO_PARTIDA,
+        RegistroAuditoria.Accion.AVISO_PARTIDA_POR_VENCER,
         RegistroAuditoria.Accion.GENERACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.APROBACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.RECHAZO_ORDEN_COMPRA,

@@ -12,6 +12,12 @@ from maestros.models import PARAMETROS_DE_CONFIGURACION, ConfiguracionOperativa,
 from maestros.tests.fabricas import ConDatosDeMaestros, asegurar_datos_de_maestros
 
 MIGRACION = importlib.import_module("maestros.migrations.0007_cargar_configuracion_y_perfil")
+# Parámetros agregados después de la 0007 (COM-04b, MD-134): su valor inicial vive en la migración que agrega la columna.
+MIGRACION_PARAMETROS_POSTERIORES = importlib.import_module("maestros.migrations.0011_dias_aviso_vencimiento_camara")
+VALORES_INICIALES_DE_LAS_MIGRACIONES = {
+    **MIGRACION.VALORES_INICIALES_CONFIGURACION,
+    **MIGRACION_PARAMETROS_POSTERIORES.VALORES_INICIALES_CONFIGURACION,
+}
 
 
 class SingletonsModeloTests(ConDatosDeMaestros, TestCase):
@@ -41,7 +47,7 @@ class SingletonsModeloTests(ConDatosDeMaestros, TestCase):
             "dias_anticipacion_cosecha_suministro": 3, "dias_vigencia_enlace_confirmacion": 3,
             "dias_vigencia_enlace_faltante": 2, "dias_limite_cotizacion": 3, "dias_validez_cotizacion": 7,
             "porc_tolerancia_cobertura_pedido": 0, "cant_maxima_entregas_diarias": 10,
-            "cant_max_ciudades_distintas_diarias": 3,
+            "cant_max_ciudades_distintas_diarias": 3, "dias_aviso_vencimiento_camara": 3,
         }
         for campo, valor in esperados.items():
             with self.subTest(campo=campo):
@@ -114,9 +120,9 @@ class MigracionConfiguracionYPerfilTests(TransactionTestCase):
 
     def test_md89_los_valores_de_la_migracion_coinciden_con_los_default_del_modelo(self):
         """Los valores escritos en la migración y los ``default`` del modelo no se separan."""
-        for campo, valor in MIGRACION.VALORES_INICIALES_CONFIGURACION.items():
+        for campo, valor in VALORES_INICIALES_DE_LAS_MIGRACIONES.items():
             with self.subTest(campo=campo):
                 self.assertEqual(ConfiguracionOperativa._meta.get_field(campo).default, valor)
         self.assertEqual(
-            set(MIGRACION.VALORES_INICIALES_CONFIGURACION), {c for c, *_ in PARAMETROS_DE_CONFIGURACION}
+            set(VALORES_INICIALES_DE_LAS_MIGRACIONES), {c for c, *_ in PARAMETROS_DE_CONFIGURACION}
         )

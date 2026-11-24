@@ -1,6 +1,6 @@
 {% comment %}El grupo «Cosechas» del Inicio del Agrónomo (`secCosecha` del prototipo, `registrar_seccion_de_inicio`, COM-04a): a realizar hoy, vencidas y de invernaderos sin Capataz; cada indicador lleva a la lista de órdenes filtrada por «Cosecha». Recibe «datos» con «cosechas» (a_realizar, hoy, vencidas, sin_capataz). Todo se escapa.{% endcomment %}
 <div class="page" style="margin-top:16px">
-  <h2 style="margin-bottom:12px">Cosechas</h2>
+  <h2 style="margin-bottom:12px">Cosechas y cámara</h2>
   {% with c=datos.cosechas %}
   {% if c.a_realizar %}
   <div class="kpis">
@@ -11,5 +11,12 @@
   {% else %}
   <div class="empty"><b>No hay cosechas por realizar</b><span>Las cosechas automáticas de los contratos y las que planifiques aparecen acá.</span></div>
   {% endif %}
+  {% endwith %}
+  {# COM-04b (`secCosecha` del prototipo): los indicadores de la cámara de sus invernaderos. #}
+  {% with k=datos.cosechas.camara %}
+  <div class="kpis" style="margin-top:12px">
+    <div class="kpi{% if k.por_vencer %} warn{% endif %}"><span class="k">Partidas por vencer</span><span class="v">{{ k.por_vencer }}</span><span class="c">en {{ k.dias_de_aviso }} días o menos</span></div>
+    <div class="kpi"><span class="k">Plantas libres en cámara</span><span class="v">{{ k.libres }}</span><span class="c">sin reservar</span></div>
+  </div>
   {% endwith %}
 </div>

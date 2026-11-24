@@ -11,6 +11,7 @@
 #   ------+-----------------------------------+------------
 #     10  | Revisar vencimientos de insumos   | inventario
 #     20  | Vencer partidas en cámara         | comercial (D-59: toca reservas)
+#     25  | Reasignar cámara                  | comercial (COM-04b: recupera PROD-ASG-CAM)
 #     30  | Vencer pagos de suministro        | comercial
 #     35  | Cerrar rescisiones de suministros | comercial (COM-03b)
 #     40  | Pre-reservar suministros          | comercial

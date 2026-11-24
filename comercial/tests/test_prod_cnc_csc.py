@@ -239,6 +239,33 @@ class PostcondicionesTests(Base):
         self.assertEqual((m.partida_id, m.cantidad, m.origen_id), (partida.pk, 10, self.cosecha.pk))
         self.assertEqual([p.pk for p in resultado.partidas], [partida.pk])
 
+    def test_post_k_el_excedente_programa_la_asignacion_de_camara_despues_de_confirmar(self):
+        """k y D-64 punto 9 (COM-04b): si ingresó producto a la cámara, `transaction.on_commit` corre PROD-ASG-CAM con las partidas creadas; al ejecutarlo, la partida se asigna a
+        la venta que espera esa variedad (la de entrega más próxima)."""
+        espera = detalle(compra_venta(self.e, dias=2), self.e.variedad, 10)
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            resultado = self.cosechando(40)
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(ReservaStock.objects.filter(detalle_venta=espera).count(), 0)  # todavía no: recién después de confirmar
+        callbacks[0]()
+        (partida,) = resultado.partidas
+        self.assertEqual(DetalleReserva.objects.get(reserva__detalle_venta=espera).partida_id, partida.pk)
+
+    def test_post_k_sin_producto_en_la_camara_no_programa_nada(self):
+        """k: si no ingresó nada a la cámara (se cosechó justo lo reservado), no se programa PROD-ASG-CAM."""
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.cosechando(30)
+        self.assertEqual(callbacks, [])
+
+    def test_post_k_si_la_asignacion_falla_no_rompe_la_concrecion(self):
+        """k y garantía mínima 2: la asignación corre después de confirmar y atrapa sus fallas; la concreción queda hecha y la recupera el paso diario 25."""
+        from unittest import mock
+
+        with mock.patch("comercial.servicios.camara._asignar_partida", side_effect=RuntimeError("falla de prueba")), self.assertLogs("infoponia.camara", level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                self.cosechando(40)
+        self.assertEqual(self.releer(OrdenTrabajo, self.cosecha.pk).estado_orden, "concretada")
+
     def test_post_j_sin_contrato_todo_lo_cosechado_ingresa_a_la_camara_y_la_reserva_se_libera(self):
         """j y 4a: la reserva «liberada»; por cada lote con cantidad cosechada > 0, una partida `cosecha_del_agronomo` por lo cosechado."""
         sin = cosecha_manual(self.e, [(self.lote, 40)], dias=1)

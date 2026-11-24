@@ -23,7 +23,7 @@ CAMPOS_DEL_PERFIL = (
 
 
 def parametros(**cambios):
-    """Los 13 parámetros guardados como se envía el formulario (texto), con ``cambios`` encima."""
+    """Los 14 parámetros guardados como se envía el formulario (texto), con ``cambios`` encima."""
     fila = ConfiguracionOperativa.objects.get()
     return {c: str(getattr(fila, c)) for c, *_ in PARAMETROS_DE_CONFIGURACION} | {k: str(v) for k, v in cambios.items()}
 
@@ -89,17 +89,20 @@ class ConfiguracionVistasTests(ConDatosDeMaestros, TestCase):
 
     # ---- lectura ----
 
-    def test_flujo_principal_muestra_los_trece_parametros_y_ninguno_del_logo(self):
-        """Regla 1 y 2 de ADM-MOD-CFG: la pantalla tiene los 13 parámetros con sus valores actuales, el de faltante dentro de
+    def test_flujo_principal_muestra_los_catorce_parametros_y_ninguno_del_logo(self):
+        """Regla 1 y 2 de ADM-MOD-CFG: la pantalla tiene los 14 parámetros (COM-04b suma el aviso de cámara) con sus valores actuales, el de faltante dentro de
         «Comercial», y la lectura no audita (SEG-14)."""
         respuesta = self.client.get(URL)
         self.assertEqual(respuesta.status_code, 200)
         form = respuesta.context["form"]
-        self.assertEqual(len(form.fields), 13)
+        self.assertEqual(len(form.fields), 14)
         self.assertEqual([t for t, _ in form.grupos], ["Producción", "Insumos", "Comercial", "Compras", "Entregas"])
         comercial = dict(form.grupos)["Comercial"]
         self.assertIn("dias_vigencia_enlace_faltante", [c.name for c, _ in comercial])
         self.assertContains(respuesta, "Vigencia del enlace de decisión ante un faltante")
+        self.assertIn("dias_aviso_vencimiento_camara", [c.name for c, _ in comercial])  # COM-04b, MD-134
+        self.assertContains(respuesta, "Aviso de vencimiento de cámara")
+        self.assertContains(respuesta, "0 desactiva el aviso")
         self.assertContains(respuesta, 'name="porc_merma_maxima"')
         self.assertContains(respuesta, 'value="15"')
         self.assertNotRegex(respuesta.content.decode(), r'name="[^"]*logo')  # «logo» es también la clase del marco

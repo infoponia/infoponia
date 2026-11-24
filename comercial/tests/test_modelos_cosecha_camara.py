@@ -119,3 +119,34 @@ class InvariantesTests(Base):
             fecha_bitacora=HOY, hora_bitacora=timezone.localtime().time(),
         )
         verificar_invariantes_de_reservas()
+
+
+class RestriccionDeAlertaComercialTests(Base):
+    """COM-04b (D-63 punto 1, MD-134): `AlertaComercial.partida` y la restricción «exactamente un origen» reescrita con tres FK."""
+
+    def alerta(self, **vinculo):
+        """Una alerta de `maestros` y su `AlertaComercial` con los `vinculo` pedidos."""
+        from comercial.models import AlertaComercial
+        from maestros.tests.fabricas import crear_alerta
+
+        base = crear_alerta(self.e.invernadero, "comercial_partida_por_vencer")
+        return AlertaComercial.objects.create(alerta=base, **vinculo)
+
+    def test_regla_d63_1_una_alerta_con_solo_partida_es_valida(self):
+        """D-63 punto 1: la FK `partida` es un origen más (MD-134, «partida por vencer»)."""
+        partida = partida_cosechada(self.lote, 5)
+        self.assertEqual(self.alerta(partida=partida).partida_id, partida.pk)
+
+    def test_regla_d63_1_una_alerta_sin_ningun_origen_se_rechaza(self):
+        """D-63 punto 1: exactamente una FK de origen; ninguna se rechaza."""
+        viola(self, lambda: self.alerta())
+
+    def test_regla_d63_1_partida_junto_con_otro_origen_se_rechaza(self):
+        """D-63 punto 1: `partida` y `detalle_suministro` (o `suministro`) a la vez se rechazan."""
+        from comercial.tests.fabricas import detalle_suministro, suministro
+
+        partida = partida_cosechada(self.lote, 5)
+        contrato = suministro(self.e)
+        det = detalle_suministro(contrato, self.e.variedad)
+        viola(self, lambda: self.alerta(partida=partida, detalle_suministro=det, fecha_periodo=HOY, cantidad_sin_cubrir=1))
+        viola(self, lambda: self.alerta(partida=partida, suministro=contrato))

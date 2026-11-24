@@ -22,7 +22,7 @@ CAMPOS = [c for c, *_ in PARAMETROS_DE_CONFIGURACION]
 
 
 def actuales():
-    """Los 13 parámetros guardados, ``{campo: valor}``."""
+    """Los 14 parámetros guardados, ``{campo: valor}``."""
     fila = ConfiguracionOperativa.objects.get()
     return {campo: getattr(fila, campo) for campo in CAMPOS}
 
@@ -116,6 +116,22 @@ class AdmModCfgServicioTests(ConDatosDeMaestros, TestCase):
         self.assertEqual(actuales()["dias_vigencia_enlace_faltante"], 5)
         error = error_de(lambda: configuracion.modificar_configuracion(self.gerente, dias_vigencia_enlace_faltante=0))
         self.assertEqual(codigos_de(error, "dias_vigencia_enlace_faltante"), ["minimo"])
+
+    def test_regla_md134_el_aviso_de_vencimiento_de_camara_vale_3_al_inicio_y_admite_0(self):
+        """COM-04b (MD-134, `camara.md`, «Configuración»): `dias_aviso_vencimiento_camara` vale 3 al inicio, es un entero >= 0 y el 0 desactiva el aviso;
+        un valor negativo da `minimo` y no se guarda."""
+        self.assertEqual(actuales()["dias_aviso_vencimiento_camara"], 3)
+        configuracion.modificar_configuracion(self.gerente, dias_aviso_vencimiento_camara=0)
+        self.assertEqual(actuales()["dias_aviso_vencimiento_camara"], 0)
+        error = error_de(lambda: configuracion.modificar_configuracion(self.gerente, dias_aviso_vencimiento_camara=-1))
+        self.assertEqual(codigos_de(error, "dias_aviso_vencimiento_camara"), ["minimo"])
+        self.assertEqual(actuales()["dias_aviso_vencimiento_camara"], 0)
+
+    def test_regla_md134_el_cambio_del_aviso_de_camara_se_audita_con_su_antes_y_despues(self):
+        """COM-04b (D-36): cambiar el aviso deja un `modificacion_configuracion` con el antes y el después."""
+        configuracion.modificar_configuracion(self.gerente, dias_aviso_vencimiento_camara=5)
+        cambios = auditorias()[-1].detalle["cambios"]["dias_aviso_vencimiento_camara"]
+        self.assertEqual((cambios["antes"], cambios["despues"]), (3, 5))
 
     # ---- regla 4 ----
 
