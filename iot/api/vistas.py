@@ -17,7 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from iot.api import autenticacion, limites, reloj, traduccion
 from iot.api.respuestas import respuesta_error, respuesta_ok
 from iot.models import SistemaIoT
-from iot.servicios import anuncios, estados, lecturas, nodo
+from iot.servicios import anuncios, comandos, estados, lecturas, nodo
 
 logger = logging.getLogger("iot.api")
 
@@ -266,6 +266,58 @@ def anuncio_vista(request):
             },
             ahora,
         )
+
+    return _atender(request, tratar)
+
+
+@login_not_required
+@csrf_exempt
+@never_cache
+def comandos_vista(request):
+    """``GET comandos``: el retiro de los comandos disponibles (IOT-RSV-CMD, pasos 1 y 2). Sin cuerpo: salta las verificaciones 7 a 11. El servicio registra la comunicación del
+    nodo (después de leer la anterior, D-78 punto 2): acá no se llama a ``_comunicacion``."""
+
+    def tratar(sistema, objeto, ahora):
+        try:
+            retiro = comandos.retirar_comandos(sistema.pk, ahora)
+        except nodo.SistemaDesconectado:
+            raise _Rechazo(respuesta_error(403, "sistema_desconectado", ahora, "El sistema IoT de este nodo está desconectado en InfoPonia.")) from None
+        return respuesta_ok(
+            {
+                "modo": retiro.modo,
+                "comandos": [
+                    {"id": c.id, "identificador": c.identificador, "comando": c.comando, "valor": c.valor, "intento": c.intento, "espera_segundos": c.espera_segundos}
+                    for c in retiro.comandos
+                ],
+            },
+            ahora,
+        )
+
+    return _atender(request, tratar, metodo="GET", con_cuerpo=False)
+
+
+@login_not_required
+@csrf_exempt
+@never_cache
+def resultado_de_comando_vista(request, comando_id):
+    """``POST comandos/<id>/resultado``: el resultado de un comando (IOT-RSV-CMD, pasos 4 a 6). Verificación 10: la forma; verificación 12: el comando existe, es del nodo y ya se
+    le entregó (404 ``comando_inexistente``). Un resultado repetido o de un comando ya resuelto es 200 ``ya_resuelto``, con constancia en el registro técnico (D-77, punto 2)."""
+
+    def tratar(sistema, objeto, ahora):
+        try:
+            recibido = traduccion.traducir_resultado(objeto, ahora)
+        except traduccion.MensajeMalFormado as error:
+            return _mal_formado(error, ahora)
+        try:
+            r = comandos.registrar_resultado(sistema.pk, comando_id, comandos.ResultadoRecibido(*recibido), ahora)
+        except comandos.ComandoInexistente:
+            logger.warning("Sistema %s · comando %s · comando_inexistente", sistema.pk, comando_id)
+            return respuesta_error(404, "comando_inexistente", ahora, f"El comando {comando_id} no existe o no es de un actuador de este nodo.")
+        except nodo.SistemaDesconectado:
+            raise _Rechazo(respuesta_error(403, "sistema_desconectado", ahora, "El sistema IoT de este nodo está desconectado en InfoPonia.")) from None
+        if r.resultado == "ya_resuelto":
+            logger.warning("Sistema %s · comando %s · ya_resuelto (estado %s)", sistema.pk, comando_id, r.estado_comando)
+        return respuesta_ok({"resultado": r.resultado, "comando": comando_id, "estado_comando": r.estado_comando}, ahora)
 
     return _atender(request, tratar)
 

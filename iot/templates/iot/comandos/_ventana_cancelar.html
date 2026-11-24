@@ -1,0 +1,28 @@
+{% load iconos %}{% comment %}Ventana de cancelar un comando pendiente (IOT-CNL-CMD; ventana ``ccan:<id>`` del prototipo, con los textos de «Cómo se aplica»). Abrirla (GET) no cambia nada; cancelar es un POST. Si el nodo puede estar
+ejecutándolo (regla 2) lo dice con cuánto falta y no ofrece confirmar; si ya no está pendiente, también. Recibe «fila», «puede», «error», «volver» (de dónde vino) y «volver_url».{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">Cancelar {{ fila.codigo }}</h2>
+    {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
+    {% if puede %}
+    <p>Cancelar {{ fila.codigo }}: {{ fila.accion_texto }} sobre {{ fila.actuador.tipo_actuador.nombre_actuador }} {{ fila.actuador.identificador_equipo }}. El nodo no lo va a recibir y no se reintenta.</p>
+    <form method="post" action="{% url 'iot:comando_cancelar' fila.comando.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="volver" value="{{ volver }}">
+      <div class="acts">
+        <a class="btn btn-primary" href="{{ volver_url }}" data-cerrar-ventana data-foco-inicial>Volver</a>
+        <button class="btn btn-ghost" type="submit" data-enviando="Cancelando…">Cancelar comando</button>
+      </div>
+    </form>
+    {% else %}
+    {% if fila.comando.estado_comando != "pendiente" %}
+    <div class="alert alert-info" role="status" style="margin-bottom:6px">{% icono "info" 16 %}<div>{{ fila.codigo }} ya no está pendiente: {{ fila.estado|lower }}.</div></div>
+    {% elif fila.segundos %}
+    <div class="alert alert-warn" role="status" style="margin-bottom:6px">{% icono "warn" 16 %}<div>El nodo puede estar ejecutándolo: podés cancelarlo en {{ fila.segundos }} s.</div></div>
+    {% else %}
+    <div class="alert alert-info" role="status" style="margin-bottom:6px">{% icono "info" 16 %}<div>No podés cancelar este comando: el invernadero lo opera su Agrónomo.</div></div>
+    {% endif %}
+    <div class="acts"><a class="btn btn-primary" href="{{ volver_url }}" data-cerrar-ventana data-foco-inicial>Cerrar</a></div>
+    {% endif %}
+  </div>
+</div>

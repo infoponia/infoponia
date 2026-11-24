@@ -1,5 +1,5 @@
 # Modelos de la app `iot` (nivel 7 de D-37). IOT-01 crea TODO el esquema del módulo (D-72, punto 6), salvo `RegistroComando`
-# (IOT-05, necesita `produccion.Bitacora`) y `MantenimientoTecnico` (IOT-07): las demás tareas agregan comportamiento sin
+# (la crea IOT-05: necesita `produccion.Bitacora`) y `MantenimientoTecnico` (IOT-07): las demás tareas agregan comportamiento sin
 # cambiar modelos. Fuente: docs/modelo/iot.md. Convenciones: nombres de D-05; bajas lógicas; claves foráneas `PROTECT` (la única
 # excepción es `EquipoAnunciado.sistema`, que es `CASCADE`: dato de diseño que cada anuncio del nodo reemplaza, MD-102);
 # comparación de nombres e identificadores sin distinguir mayúsculas (`Lower` en los índices únicos).
@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from core.models import Agronomo, Usuario, rol_de
 from iot import alcance
+from produccion.models import Bitacora
 
 # ---- QuerySets con el alcance por usuario (D-28; docs/modelo/iot.md, «Convenciones de esta ficha») ----
 
@@ -728,6 +729,52 @@ class Comando(models.Model):
 
     def __str__(self):
         return f"CMD-{self.pk}"
+
+
+class RegistroComando(Bitacora):
+    """Registro de bitácora de tipo ``comando`` (IOT-05; MD-110; D-78, punto 3): un registro por HECHO del comando (emitido, intento fallido, ejecutado, fallido,
+    rechazado o cancelado), nunca por el retiro. Hija de ``produccion.Bitacora`` (D-50): vive en ``iot`` por la regla A2 de D-37 (la FK al comando se declara en la app
+    de nivel mayor). El invernadero es el del sistema del actuador y no tiene lote ni etapa. ``numero_intento`` va lleno solo en un intento fallido o sin respuesta;
+    ``responsable`` (del padre) es quien emitió o canceló, y nulo si lo hizo InfoPonia o el nodo."""
+
+    class Resultado(models.TextChoices):
+        EMITIDO = "emitido", "Emitido"
+        INTENTO_FALLIDO = "intento_fallido", "Intento fallido"
+        EJECUTADO = "ejecutado", "Ejecutado"
+        FALLIDO = "fallido", "Fallido"
+        RECHAZADO = "rechazado", "Rechazado"
+        CANCELADO = "cancelado", "Cancelado"
+
+    comando = models.ForeignKey(Comando, on_delete=models.PROTECT, related_name="registros")
+    numero_intento = models.PositiveIntegerField("número de intento", null=True, blank=True)
+    resultado = models.CharField(max_length=20, choices=Resultado.choices)
+
+    class Meta:
+        verbose_name = "Registro de comando"
+        verbose_name_plural = "Registros de comandos"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(resultado__in=["emitido", "intento_fallido", "ejecutado", "fallido", "rechazado", "cancelado"]),
+                name="registro_comando_resultado_valido",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        """Fija lo que este tipo de registro siempre tiene: ``tipo_evento = comando``, el invernadero del sistema del actuador y ningún lote (MD-110). Si quien llama no
+        puso la fecha y la hora (los servicios las ponen desde su ``ahora``), usa las actuales. Una restricción de la hija no ve el campo del padre, así que lo
+        garantiza este método (como el de ``OrigenDocumento`` con ``tipo``)."""
+        self.tipo_evento = Bitacora.TipoEvento.COMANDO
+        self.lote = None
+        if self.invernadero_id is None:
+            self.invernadero_id = self.comando.actuador.sistema.invernadero_id
+        if self.fecha_bitacora is None or self.hora_bitacora is None:
+            ahora = timezone.localtime()
+            self.fecha_bitacora, self.hora_bitacora = ahora.date(), ahora.time()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        """«Registro de CMD-N #M» (texto de la auditoría, D-36)."""
+        return f"Registro de {self.comando} #{self.pk}"
 
 
 # ---- Alertas del IoT (D-72, punto 4) ----

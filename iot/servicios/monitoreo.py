@@ -17,8 +17,9 @@ from inventario.servicios.variedades import umbral_efectivo
 from iot.alcance import invernaderos_que_consulta, invernaderos_que_opera
 from iot.alertas import CODIGOS_DE_ALERTAS_IOT
 from iot.graficos import grafico_de_sensor
-from iot.models import Actuador, AlertaIot, FotoperiodoDiario, NodoCentral, ResumenHorario, Sensor, SistemaIoT, Telemetria
+from iot.models import Actuador, AlertaIot, Comando, FotoperiodoDiario, NodoCentral, ResumenHorario, Sensor, SistemaIoT, Telemetria
 from iot.servicios.alertas_iot import TIPO_NO_REGISTRADO, bajas_por_identificador
+from iot.servicios.comandos import segundos_para_cancelar
 from iot.servicios.sistemas import ESTADOS_VIGENTES, _exigir_operador, conectividad
 from iot.textos import estado_legible, lectura_legible, numero_legible
 from maestros.forms import GRUPOS_IOT
@@ -32,7 +33,8 @@ PERIODO_POR_OMISION = 24
 
 Aviso = namedtuple("Aviso", "tono texto")  # tono: info, warn o danger
 Situacion = namedtuple("Situacion", "clave texto tono")  # tono: neutral, ok, warn o danger
-Indicadores = namedtuple("Indicadores", "sensores_con_problema sensores alertas_activas actuadores_operativos actuadores")
+# ``comandos_pendientes`` (IOT-05, regla 2 y «Indicadores»): los comandos pendientes de los actuadores del sistema.
+Indicadores = namedtuple("Indicadores", "sensores_con_problema sensores alertas_activas actuadores_operativos actuadores comandos_pendientes", defaults=(0,))
 FilaDeAlerta = namedtuple("FilaDeAlerta", "alerta severidad nombre_tipo enlace notificada_por_correo equipo_dado_de_baja")
 FotoperiodoDeAyer = namedtuple("FotoperiodoDeAyer", "estado texto")  # estado: sin_calcular, incompleto, sin_umbral, en_rango o fuera_de_rango
 TarjetaDeSensor = namedtuple(
@@ -40,7 +42,13 @@ TarjetaDeSensor = namedtuple(
     "sensor situacion ultima_lectura texto_del_valor hace sector_fuera_de_servicio serie franja grafico texto_del_nivel fotoperiodo",
 )
 GrupoDeSensores = namedtuple("GrupoDeSensores", "variable nombre subtitulo tarjetas con_problema")
-FilaDeActuador = namedtuple("FilaDeActuador", "actuador estado_texto desde cambiado_en_invernadero situacion compatibilidad")
+# IOT-05: ``comando_pendiente`` es el ``Comando`` pendiente del actuador (o ``None``), ``segundos`` cuánto falta para poder cancelarlo (0: ya se puede) y ``operativo`` si, sin contar el
+# comando pendiente, la situación del actuador sería «operativo» (el indicador «Actuadores operativos» no resta los que esperan un comando).
+FilaDeActuador = namedtuple(
+    "FilaDeActuador",
+    "actuador estado_texto desde cambiado_en_invernadero situacion compatibilidad comando_pendiente segundos operativo",
+    defaults=(None, 0, False),
+)
 FilaDeUmbral = namedtuple("FilaDeUmbral", "variable nombre unidad minimo maximo lo_limita_minimo lo_limita_maximo")
 UmbralDelPanel = namedtuple("UmbralDelPanel", "hay filas variedades rango_solucion")
 ParametroDelPanel = namedtuple("ParametroDelPanel", "campo etiqueta valor")
@@ -119,6 +127,8 @@ def panel(actor, invernadero_id, periodo, ahora):
         ahora=ahora, config=config, conectividad=conect, umbral=umbral, sistema=sistema, periodo=periodo, resumido=resumido,
         ultimas={t.sensor_id: t for t in Telemetria.objects.filter(sensor__sistema=sistema).order_by("sensor_id", "-medida_en", "-id").distinct("sensor_id")},
         sin_actividad={v.hardware_id for v in activos if v.alerta.tipo_alerta == TIPO_SIN_ACTIVIDAD},
+        # IOT-05: los comandos pendientes del sistema, uno por actuador (lo garantiza la base): UNA consulta para todas las filas.
+        pendientes={c.actuador_id: c for c in Comando.objects.filter(actuador__sistema=sistema, estado_comando=Comando.Estado.PENDIENTE)},
         nivel_bajo_desde={v.telemetria.sensor_id: v.telemetria.medida_en for v in activos if v.alerta.tipo_alerta == TIPO_NIVEL_BAJO and v.telemetria is not None},
         series=_series(sistema, periodo, ahora),
         fotoperiodos={f.sensor_id: f for f in FotoperiodoDiario.objects.filter(sensor__sistema=sistema, fecha=ayer)},
@@ -126,7 +136,7 @@ def panel(actor, invernadero_id, periodo, ahora):
     grupos = _grupos(sensores, ctx)
     filas_de_actuadores = [_fila_de_actuador(a, ctx) for a in actuadores]
     alertas = _alertas(actor, invernadero, sistema, activos)
-    operativos = sum(1 for f in filas_de_actuadores if f.situacion.clave == "operativo")
+    operativos = sum(1 for f in filas_de_actuadores if f.operativo)
     return PanelDeMonitoreo(
         invernadero=invernadero,
         periodo=periodo,
@@ -135,7 +145,7 @@ def panel(actor, invernadero_id, periodo, ahora):
         nodo=nodo,
         conectividad=conect,
         avisos=_avisos(sistema, nodo, conect, ahora),
-        indicadores=Indicadores(sum(g.con_problema for g in grupos), len(sensores), len(alertas), operativos, len(actuadores)),
+        indicadores=Indicadores(sum(g.con_problema for g in grupos), len(sensores), len(alertas), operativos, len(actuadores), len(ctx.pendientes)),
         alertas=alertas,
         aviso_de_alertas=_aviso_de_alertas(actor, invernadero, opera),
         grupos=grupos,
@@ -320,7 +330,8 @@ def _grupos(sensores, ctx):
 
 
 def _fila_de_actuador(actuador, ctx):
-    """La fila de un actuador (regla 5; prototipo ``actState`` y ``estInf``): su estado informado, su situación (en orden) y su compatibilidad."""
+    """La fila de un actuador (regla 5; prototipo ``actState`` y ``estInf``): su estado informado, su situación (en orden) y su compatibilidad. IOT-05 suma «Comando pendiente»
+    (después de «fuera de servicio», como en Hardware) y los datos de sus botones: el comando pendiente y cuánto falta para poder cancelarlo."""
     if actuador.estado_hardware == "fuera_de_servicio":
         situacion = Situacion("fuera_de_servicio", "Fuera de servicio", "danger")
     elif actuador.ultimo_mensaje_en is None:
@@ -331,6 +342,10 @@ def _fila_de_actuador(actuador, ctx):
         situacion = Situacion("incompatible", "Configuración incompatible", "warn")
     else:
         situacion = Situacion("operativo", "Operativo", "ok")
+    pendiente = ctx.pendientes.get(actuador.pk)
+    operativo = situacion.clave == "operativo"
+    if pendiente is not None and situacion.clave != "fuera_de_servicio":
+        situacion = Situacion("comando_pendiente", "Comando pendiente", "info")
     return FilaDeActuador(
         actuador=actuador,
         estado_texto=estado_legible(actuador.estado_informado) or "Desconocido",
@@ -338,6 +353,9 @@ def _fila_de_actuador(actuador, ctx):
         cambiado_en_invernadero=actuador.cambiado_en_invernadero,
         situacion=situacion,
         compatibilidad=actuador.get_compatibilidad_display(),
+        comando_pendiente=pendiente,
+        segundos=segundos_para_cancelar(pendiente, ctx.ahora) if pendiente is not None else 0,
+        operativo=operativo,
     )
 
 

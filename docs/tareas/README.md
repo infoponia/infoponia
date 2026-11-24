@@ -86,7 +86,7 @@ por el estudiante el 21/11/2026). Cada tarea espera a las de producción que nec
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| IOT-05 | Comandos: emitir, retirar, resolver y cancelar | iot (y un valor en produccion) | pendiente | IOT-03, PRD-01 | `iot/IOT-05-comandos.md` |
+| IOT-05 | Comandos: emitir, retirar, resolver y cancelar | iot (y un valor en produccion) | hecha (PR #__, 23/11/2026; revisión a mano pendiente) | IOT-03, PRD-01 | `iot/IOT-05-comandos.md` |
 | IOT-06 | Reglas de actuación y ciclo de vida del sistema y del hardware | iot | pendiente | IOT-05 | `iot/IOT-06-reglas-y-ciclo-de-vida.md` |
 | IOT-07 | Orden de mantenimiento automática, su cancelación y el traspaso del Técnico | iot (y migración en produccion) | pendiente | IOT-06, PRD-01 | `iot/IOT-07-orden-de-mantenimiento.md` |
 

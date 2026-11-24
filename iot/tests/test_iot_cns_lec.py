@@ -510,7 +510,7 @@ class IotCnsLecServicioTests(fabricas.ConCatalogoIot, TestCase):
         )
 
     def test_regla_5_los_indicadores_de_actuadores_cuentan_los_operativos_sobre_los_que_no_estan_dados_de_baja(self):
-        """«Indicadores»: «Actuadores operativos» (de N, sin los dados de baja). «Comandos pendientes» no se muestra hasta IOT-05 (D-25: lo que no existe no se muestra)."""
+        """«Indicadores»: «Actuadores operativos» (de N, sin los dados de baja). «Comandos pendientes» lo suma IOT-05 (cambio de esta prueba: antes no existía el indicador; sin comandos, vale 0)."""
         ahora = AHORA - timedelta(minutes=2)
         fabricas.actuador(self.sistema, identificador="norte/a", ultimo_mensaje_en=ahora)
         fabricas.actuador(self.sistema, identificador="norte/b", estado="fuera_de_servicio", ultimo_mensaje_en=ahora)
@@ -518,7 +518,7 @@ class IotCnsLecServicioTests(fabricas.ConCatalogoIot, TestCase):
         fabricas.actuador(self.sistema, identificador="norte/d", estado="inactivo", ultimo_mensaje_en=ahora)
         panel = self.panel()
         self.assertEqual((panel.indicadores.actuadores_operativos, panel.indicadores.actuadores, len(panel.actuadores)), (1, 3, 3))
-        self.assertFalse(hasattr(panel.indicadores, "comandos_pendientes"))
+        self.assertEqual(panel.indicadores.comandos_pendientes, 0)
 
     # ---- regla 6: umbral efectivo, rango y parámetros ----
 

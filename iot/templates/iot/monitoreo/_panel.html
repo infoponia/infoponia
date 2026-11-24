@@ -30,6 +30,7 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
     <div class="kpi{% if panel.indicadores.sensores_con_problema %} danger{% endif %}"><div class="k">Sensores con problema</div><div class="v">{{ panel.indicadores.sensores_con_problema }}<small> de {{ panel.indicadores.sensores }}</small></div></div>
     <div class="kpi{% if panel.indicadores.alertas_activas %} warn{% endif %}"><div class="k">Alertas activas</div><div class="v">{{ panel.indicadores.alertas_activas }}</div></div>
     <div class="kpi"><div class="k">Actuadores operativos</div><div class="v">{{ panel.indicadores.actuadores_operativos }}<small> de {{ panel.indicadores.actuadores }}</small></div></div>
+    <div class="kpi{% if panel.indicadores.comandos_pendientes %} info{% endif %}"><div class="k">Comandos pendientes</div><div class="v">{{ panel.indicadores.comandos_pendientes }}</div></div>
   </div>
 
   <div class="card">
@@ -90,7 +91,11 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
             {% else %}<span class="muted">{{ f.estado_texto }}</span><span class="sub2">El nodo todavía no informó su estado</span>{% endif %}</td>
           <td><span class="status-badge status-{{ f.situacion.tono }}">{{ f.situacion.texto }}</span></td>
           <td>{{ f.compatibilidad }}</td>
-          <td class="right"><a class="rowlink" href="{% url 'iot:hardware_ficha' f.actuador.pk %}?invernadero={{ elegido.pk }}">Ver equipo</a></td>
+          <td class="right nw">
+            <a class="rowlink" href="{% url 'iot:hardware_ficha' f.actuador.pk %}?invernadero={{ elegido.pk }}">Ver equipo</a>
+            {% if panel.opera and f.comando_pendiente %}{% if f.segundos %}<span class="rowlink disabled" aria-disabled="true" title="El nodo puede estar ejecutándolo: podés cancelarlo en {{ f.segundos }} s.">Cancelar</span>{% else %}<a class="rowlink" href="{% url 'iot:comando_cancelar' f.comando_pendiente.pk %}?volver=monitoreo" hx-get="{% url 'iot:comando_cancelar' f.comando_pendiente.pk %}?volver=monitoreo" hx-target="#ventana-confirmar" hx-swap="innerHTML">Cancelar</a>{% endif %}
+            {% elif panel.opera and f.actuador.estado_hardware == "activo" and panel.sistema.estado_sistema == "activo" %}<a class="rowlink" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;actuador={{ f.actuador.pk }}">Emitir comando</a>{% endif %}
+          </td>
         </tr>{% empty %}<tr><td colspan="5" class="muted">Sin actuadores.</td></tr>{% endfor %}
       </tbody>
     </table></div>

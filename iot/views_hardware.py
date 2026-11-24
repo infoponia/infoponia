@@ -22,6 +22,7 @@ from core.acceso import rol_requerido
 from core.models import Usuario
 from iot.contexto import codigos_del_servicio, contexto_del_modulo, errores_del_servicio, es_htmx
 from iot.models import Sensor, TipoActuador
+from iot.servicios import comandos as api_comandos
 from iot.servicios import compatibilidad as api_compatibilidad
 from iot.servicios import hardware as api
 from iot.servicios import sistemas as api_sistemas
@@ -95,7 +96,11 @@ def _contexto_de_la_ficha(request, equipo, **extra):
     contexto = contexto_del_modulo(request, "hardware", equipo.sistema.invernadero_id)
     resumen = api.resumen_de_equipos([equipo])[equipo.pk]
     ultimo, ultimo_en = _ultimo_dato(equipo, resumen.ultima_lectura)
-    return contexto | {
+    comandos = {}
+    if equipo.clase == "actuador":  # IOT-05: el historial de comandos, «Emitir comando» y «Cancelar» (IOT-CNS-HDW regla 6; IOT-CNL-CMD regla 6)
+        filas, total = api_comandos.historial_del_actuador(request.user, equipo, timezone.now())
+        comandos = {"historial": filas, "historial_total": total, "puede_emitir": api_comandos.puede_emitir_a(request.user, equipo)}
+    return contexto | comandos | {
         "equipo": equipo,
         "situacion": api.situacion_de(equipo, resumen.alertas),
         "ultimo": ultimo,
