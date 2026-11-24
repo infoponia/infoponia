@@ -26,6 +26,7 @@ deshabilitado con su motivo. Todo se escapa.{% endcomment %}
       {% endif %}
       {% endif %}
       <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+      {% if url_de_merma_en_camara %}<p class="hint">¿Se perdió producto de la cámara? <a href="{{ url_de_merma_en_camara }}{% if invernadero_id %}?invernadero={{ invernadero_id }}{% endif %}">Pérdida en cámara</a></p>{% endif %}
     </div>
 
     {% if propuesta %}

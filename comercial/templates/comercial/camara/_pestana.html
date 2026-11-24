@@ -1,0 +1,33 @@
+{% comment %}La pestaña «Cámara» de la ficha del invernadero (COM-04b; `camaraTab` y `tabCamara` del prototipo comercial): solo consulta. Recibe «filas» (partidas con lo reservado: disponibles primero, por fecha límite; después las agotadas y vencidas de los últimos 30 días), «indicadores» y «url_de_merma» (el botón «Registrar merma en cámara», solo para el Agrónomo a cargo). Corrige el prototipo (D-61): ordena y limita las cerradas. Todo se escapa.{% endcomment %}
+<div class="card" style="margin-top:12px">
+  <p class="muted sm" style="margin-bottom:10px">Solo consulta: las partidas entran con las cosechas y salen con las entregas. Lo reservado está comprometido con contratos. Las partidas vencidas las da de baja InfoPonia.</p>
+  <div class="kpis three">
+    <div class="kpi"><span class="k">Partidas disponibles</span><span class="v">{{ indicadores.disponibles }}</span><span class="c">{{ indicadores.plantas }} plantas</span></div>
+    <div class="kpi"><span class="k">Plantas libres</span><span class="v">{{ indicadores.libres }}</span><span class="c">sin reservar</span></div>
+    <div class="kpi{% if indicadores.por_vencer %} warn{% endif %}"><span class="k">Por vencer</span><span class="v">{{ indicadores.por_vencer }}</span><span class="c">en {{ indicadores.dias_de_aviso }} días o menos</span></div>
+  </div>
+  {% if url_de_merma %}<p style="margin:12px 0"><a class="btn btn-ghost btn-sm" href="{{ url_de_merma }}">Registrar merma en cámara</a></p>{% endif %}
+  {% if filas %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Partida</th><th>Variedad y origen</th><th>Ingreso</th><th>Fecha límite</th><th class="right">Disponible</th><th class="right">Reservado</th><th class="right">Libre</th><th>Estado</th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+        <tr{% if f.cerrada %} class="r-off"{% endif %}>
+          <td><span class="id mono">{{ f.codigo }}</span></td>
+          <td><b>{{ f.variedad }}</b><span class="sub2">{{ f.lote }} · {{ f.motivo }}</span></td>
+          <td>{{ f.ingreso|date:"d/m/Y" }}</td>
+          <td>{{ f.limite|date:"d/m/Y" }}</td>
+          <td class="right">{{ f.disponible }}</td>
+          <td class="right">{{ f.reservado }}</td>
+          <td class="right"><b>{{ f.libre }}</b></td>
+          <td><span class="status-badge status-{{ f.clase }}">{{ f.estado }}</span>{% if f.merma %}<span class="sub2">Merma por vencimiento: {{ f.merma }} plantas</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay producto en la cámara</b><span>Las partidas entran con las cosechas y salen con las entregas.</span></div>
+  {% endif %}
+</div>

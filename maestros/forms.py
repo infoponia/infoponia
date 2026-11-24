@@ -273,6 +273,9 @@ GRUPOS_DE_PARAMETROS = [
         ("dias_anticipacion_cosecha_suministro", "días", "No puede superar la pre-reserva de suministros."),
         ("dias_vigencia_enlace_confirmacion", "días", ""),
         ("dias_vigencia_enlace_faltante", "días", ""),
+        # COM-04b (MD-134, `VIEWS.cfg` del prototipo comercial): el aviso previo al vencimiento de una partida de la cámara.
+        ("dias_aviso_vencimiento_camara", "días antes",
+         "Con esta anticipación se avisa al Agrónomo y al Vendedor de una partida con stock libre. 0 desactiva el aviso."),
     ]),
     ("Compras", [
         ("dias_limite_cotizacion", "días", ""),

@@ -667,6 +667,8 @@ PARAMETROS_DE_CONFIGURACION = [
     ("dias_anticipacion_cosecha_suministro", "Anticipación de cosecha: suministro", 3, 0, None),
     ("dias_vigencia_enlace_confirmacion", "Vigencia del enlace de confirmación", 3, 1, None),
     ("dias_vigencia_enlace_faltante", "Vigencia del enlace de decisión ante un faltante", 2, 1, None),
+    # COM-04b (MD-134): 0 desactiva el aviso previo al vencimiento de una partida de la cámara.
+    ("dias_aviso_vencimiento_camara", "Aviso de vencimiento de cámara", 3, 0, None),
     ("dias_limite_cotizacion", "Días límite para cotizar", 3, 1, None),
     ("dias_validez_cotizacion", "Validez de las cotizaciones", 7, 1, None),
     ("porc_tolerancia_cobertura_pedido", "Tolerancia de cobertura del pedido", 0, 0, 100),
@@ -743,6 +745,7 @@ class ConfiguracionOperativa(models.Model):
     dias_vigencia_enlace_faltante = models.IntegerField(
         "vigencia del enlace de decisión ante un faltante (días)", default=2
     )
+    dias_aviso_vencimiento_camara = models.IntegerField("aviso de vencimiento de cámara (días antes)", default=3)  # COM-04b, MD-134
     dias_limite_cotizacion = models.IntegerField("días límite para cotizar", default=3)
     dias_validez_cotizacion = models.IntegerField("validez de las cotizaciones (días)", default=7)
     porc_tolerancia_cobertura_pedido = models.IntegerField("tolerancia de cobertura del pedido (%)", default=0)

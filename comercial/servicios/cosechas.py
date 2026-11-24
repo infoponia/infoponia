@@ -20,8 +20,9 @@
 # El enlace del cliente (`EnlaceCliente`, D-65) iría siempre al final: lo suma COM-04c. Una cosecha que se concreta y otra operación sobre su reserva se
 # ponen en fila en el paso 7.
 #
-# Fuera de esta tarea: la asignación automática de cámara de las partidas que nacen (PROD-ASG-CAM, postcondición k: COM-04b), el enlace y el correo del
-# cliente en el camino de faltante (COM-04c), planificar la entrega (postcondición n: COM-05) y los asientos (D-57).
+# La asignación automática de cámara de las partidas que nacen (PROD-ASG-CAM, postcondición k) y de las líneas de cámara que se liberan (h) se programa con
+# `camara_comercial.programar_asignacion_de_camara` (`transaction.on_commit`, D-64 punto 9; COM-04b). Fuera de esta tarea: el enlace y el correo del cliente en el camino
+# de faltante (COM-04c), planificar la entrega (postcondición n: COM-05) y los asientos (D-57).
 
 import json
 from collections import namedtuple
@@ -34,6 +35,7 @@ from django.http import Http404
 
 from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
 from comercial.servicios import calendario, faltantes, stock_maduro
+from comercial.servicios import camara as camara_comercial  # PROD-ASG-CAM (COM-04b); `camara` es el núcleo físico de `produccion`
 from comercial.servicios.stock_maduro import Periodo
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
@@ -1049,7 +1051,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
       perdidas `mermas.aplicar_merma` (m); `cosechas.concretar_orden` (a); la reserva (h: con contrato «lista para entrega», salvo cubierto 0, que la
       «libera»; sin contrato, «liberada»); las partidas (i y j, con el costo de la salida del lote); con contrato y faltante (13a, regla «Faltante»),
       `stock_maduro.asignar(..., origen_cosecha="encadenada")` y lo no cubierto por el camino de faltante (l). Sin el `on_commit` de PROD-ASG-CAM
-      (k: COM-04b) ni el enlace del cliente (COM-04c); la postcondición n (planificar la entrega) es de COM-05.
+      (k) la programa con `on_commit`; el enlace del cliente es de COM-04c y la postcondición n (planificar la entrega), de COM-05.
     - Postcondiciones o a r y D-36: aviso al Agrónomo y, con faltante o excedente, al Vendedor; UN registro `concrecion_cosecha`.
     """
     cosecha = _cosecha_del_capataz(actor, cosecha_id)
@@ -1099,6 +1101,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
                 partidas.append(
                     camara.crear_partida(p.lote, cantidad, motivo, fecha_cosecha=fecha, fecha_ingreso=fecha, costo_unitario=r.costo_unitario, origen=cosecha)
                 )
+        camara_comercial.programar_asignacion_de_camara([p.pk for p in partidas])  # k (D-64 punto 9): corre después de confirmar; el paso 25 la recupera si falla
         faltante = sum(p.linea.cantidad_reservada - min(p.cosechada, p.linea.cantidad_reservada) for p in planes) if con_contrato else 0
         asignacion, sin_cubrir = None, 0
         if faltante:
@@ -1287,6 +1290,7 @@ def _cancelar_en_transaccion(actor, cosecha, motivo, *, recubrir):
     DetalleReserva.objects.filter(reserva=reserva, lote__isnull=False).update(cantidad_cosechada=None)
     ReservaStock.objects.filter(pk=reserva.pk).update(estado_reserva=ReservaStock.Estado.LIBERADA)
     reserva.estado_reserva = ReservaStock.Estado.LIBERADA
+    camara_comercial.programar_asignacion_de_camara([l.partida_id for l in lineas if l.partida_id])  # h (D-64 punto 9): el stock de cámara que apartaba vuelve a estar libre
     asignacion, sin_cubrir = None, 0
     if contrato is not None and recubrir and cubierto > 0:
         if _ya_pendiente(contrato):  # 6c y 8d: no se intenta volver a cubrir; la cantidad se suma al faltante
@@ -1319,8 +1323,8 @@ def cancelar_cosecha(actor, cosecha_id, motivo, huella):
       motivo obligatorio y de hasta 300 (`motivo_obligatorio`, `motivo_largo`).
     - Paso 8, en UNA transacción con los bloqueos del encabezado: se relee y se verifica que la cosecha siga «a realizar» (8a, `orden_no_a_realizar`) y que
       no hayan cambiado la cosecha, su reserva ni el estado del detalle y de la venta desde el resumen (8b, `cosecha_cambio`).
-    - Postcondiciones f y g (extensiones 8c y 8d): ver `_cancelar_en_transaccion`. Sin el `on_commit` de PROD-ASG-CAM (h: COM-04b) ni el enlace del cliente
-      (COM-04c). Sin bitácora ni movimientos de stock (regla del CU).
+    - Postcondiciones f y g (extensiones 8c y 8d): ver `_cancelar_en_transaccion`. El `on_commit` de PROD-ASG-CAM (h) lo programa `_cancelar_en_transaccion`; el enlace del cliente
+      es de COM-04c. Sin bitácora ni movimientos de stock (regla del CU).
     - Postcondiciones k y l (D-42): aviso al Capataz con el motivo y, con contrato, al Vendedor con lo que se volvió a cubrir y lo que quedó sin cubrir.
     - Postcondiciones m y n y D-36: UN registro `cancelacion_orden`.
     """

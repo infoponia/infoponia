@@ -317,7 +317,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
    `registrar_impedimento_de_baja` en `AppConfig.ready()`. Todo caso de uso que cree algo que impide la baja llama a
    `bloquear_invernadero_activo` antes de crearlo (contrato de D-40 y de `docs/patrones/bloqueos.md`). Nació en MAE-01a.
    **Hecho el 22/11/2026 en PRD-01:** los impedimentos `lotes_activos` y `ordenes_a_realizar` (de todos los tipos de orden, D-64 punto 12) y la
-   pestaña «Lotes activos». ~~Sigue abierto lo de la cámara (`partidas_en_camara`, COM-04)~~ Hecho el 24/11/2026 en COM-04a: el impedimento `partidas_en_camara` de la baja del invernadero y las cosechas en la bandeja y la lista; la pestaña «Cámara» sigue siendo de COM-04b.
+   pestaña «Lotes activos». ~~Sigue abierto lo de la cámara (`partidas_en_camara`, COM-04)~~ Hecho el 24/11/2026 en COM-04a: el impedimento `partidas_en_camara` de la baja del invernadero y las cosechas en la bandeja y la lista; ~~la pestaña «Cámara» sigue siendo de COM-04b~~ Hecho el 24/11/2026 en COM-04b: la pestaña «Cámara» (`registrar_pestana_de_invernadero("camara", …)`; la ven en la práctica el Gerente y el Agrónomo, porque la ficha del invernadero no abre para el Capataz ni el Vendedor: `docs/temas_abiertos.md`).
    **COM-02 (lote C2):** las cosechas «a realizar» impiden la baja (las cuenta el registrante de PRD-01 si cuenta por `OrdenTrabajo`; si no,
    COM-02 las suma) y PROD-ASG-STK bloquea los invernaderos antes de crearlas. Las partidas en cámara y su pestaña: COM-04.
    **Planificado (lote C4):** COM-04 registra la pestaña «Cámara» (desde `comercial`, porque muestra lo reservado) y el impedimento
@@ -449,9 +449,9 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
 
    **PRD-03 ya existe:** el asiento de la merma va dentro de `mermas.registrar_merma` (después de `aplicar_merma`) y el de cada consumo, dentro de `aplicaciones.registrar_aplicacion` (después de cada `Consumo`); ninguno de los dos devuelve hoy lo que hace falta para el asiento más que `Merma.cant_merma`, el costo de `ResultadoMerma` y `Consumo.monto_consumo`.
 
-## Cuando se retome la cámara de frío (D-45)
+## ~~Cuando se retome la cámara de frío (D-45)~~ (cerrado el 24/11/2026, COM-04b)
 
-1. **Cámara.** Pestaña `camaraTab` de la ficha del invernadero, `PROD-ASG-CAM` y la extensión 10c de `PROD-REG-MRM` (recorta las
+1. ~~**Cámara.**~~ Hecho el 24/11/2026 en COM-04b (`comercial/servicios/camara.py` y `merma_camara.py`: la pestaña «Cámara», PROD-ASG-CAM con el paso 25, PROD-VNC-CAM con el paso 20 y la extensión 10c de PROD-REG-MRM). Texto original: Pestaña `camaraTab` de la ficha del invernadero, `PROD-ASG-CAM` y la extensión 10c de `PROD-REG-MRM` (recorta las
    reservas de `comercial`). Va con la ronda de cosecha y comercial: necesita `StockCosechado` y `ReservaStock`.
    **Planificado (21/11/2026, D-57):** entra en la ronda «Comercial 1», tarea COM-04 (`docs/tareas/ronda_comercial_1.md`).
    **Lote C4:** COM-04 lo programa (`docs/casos_de_uso/produccion/camara.md` y la sección «Comercial 1» de `merma.md`).
@@ -484,7 +484,7 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
    lo crea **COM-04a**, junto con `anulacion_de_resolucion` y el filtro (`docs/api/produccion.md`, sección 11); COM-07a los usa.
 4. ~~**Módulo IoT** (en paralelo): decide qué pasa con el hardware de un sector que sale de servicio.~~ **Resuelto el 20/11/2026:** no se toca; sus sensores no generan alertas ambientales mientras el sector esté fuera de servicio (`temas_abiertos.md`). PROD-PNR-FDS no cambia.
 5. **Cámara de producto** (ronda futura): las partidas de cámara de PROD-REG-MRM (extensiones 4a y 10c, causas de cámara) y el movimiento «salida por merma».
-   **Planificado (lote C4):** COM-04 (sección «Comercial 1» de `merma.md`; `MovimientoStock`, D-64 punto 1). Hecho el 24/11/2026 en COM-04a: `MovimientoStock`, «salida por merma» en `aplicar_merma`, las causas `dano_en_camara`, `vencimiento_en_camara` y `dano_en_entrega`.
+   **Planificado (lote C4):** COM-04 (sección «Comercial 1» de `merma.md`; `MovimientoStock`, D-64 punto 1). Hecho el 24/11/2026 en COM-04a: `MovimientoStock`, «salida por merma» en `aplicar_merma`, las causas `dano_en_camara`, `vencimiento_en_camara` y `dano_en_entrega`. Hecho el 24/11/2026 en COM-04b: las extensiones 4a, 4b, 10c y 10d de PROD-REG-MRM sobre una partida (`merma_camara.py`; solo «Daño en cámara», `docs/temas_abiertos.md`).
 
 
 ## ~~Cuando exista el modelo completo de Variedad (INV-03)~~ (cerrado el 22/11/2026, INV-03)
@@ -606,10 +606,17 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 
 ## Cuando se programen COM-04b y COM-04c — nace con COM-04a (24/11/2026)
-1. **`on_commit` de PROD-ASG-CAM (COM-04b).** `concretar_cosecha` y `cancelar_cosecha` (y `cancelar_cosecha_incluida`) no disparan la asignación automática de cámara de las partidas que crean o liberan (postcondiciones k y h): COM-04b registra el `transaction.on_commit` en `comercial/servicios/cosechas.py`. Hasta entonces las recupera el paso diario 25.
-2. **«Pérdida en cámara» y pestaña «Cámara» (COM-04b).** `entradas_de_comercial` devuelve `merma_en_camara = None`: COM-04b lo completa junto con la pantalla.
+1. ~~**`on_commit` de PROD-ASG-CAM (COM-04b).**~~ Hecho el 24/11/2026 en COM-04b (`camara.programar_asignacion_de_camara` en `concretar_cosecha` y en `_cancelar_en_transaccion`). Texto original: `concretar_cosecha` y `cancelar_cosecha` (y `cancelar_cosecha_incluida`) no disparan la asignación automática de cámara de las partidas que crean o liberan (postcondiciones k y h): COM-04b registra el `transaction.on_commit` en `comercial/servicios/cosechas.py`. Hasta entonces las recupera el paso diario 25.
+2. ~~**«Pérdida en cámara» y pestaña «Cámara» (COM-04b).**~~ Hecho el 24/11/2026 en COM-04b (`entradas_de_comercial` devuelve la URL de `comercial:merma_camara`). Texto original: `entradas_de_comercial` devuelve`merma_en_camara = None`: COM-04b lo completa junto con la pantalla.
 3. **Enlace y correo del camino de faltante (COM-04c).** `faltantes.seguir_camino_de_faltante` no crea el enlace del cliente ni manda el correo (ni el aviso «registrá vos la decisión» sin correo): COM-04c los suma en la misma función; también la prueba de concurrencia «cancelar contra la decisión del cliente».
 4. **Planificar la entrega (COM-05a1)** cuando una cosecha deja lista una venta o un período (postcondición n de PROD-CNC-CSC) y los **asientos** (D-57, CON-04c) originados en cada `salida_por_cosecha`.
+
+## Lo que deja COM-04b (nace el 24/11/2026)
+1. **COM-04c.** `camara._asignar_partida` (paso 7 de PROD-ASG-CAM) no anula el enlace de decisión del cliente de la venta que vuelve a «abierta»; `camara._recubrir` usa `faltantes.seguir_camino_de_faltante`, así que el enlace nuevo y el correo del camino de faltante (3a.2a de PROD-VNC-CAM, 10c de PROD-REG-MRM) se suman en esa misma función. También la prueba de concurrencia «merma en cámara contra la decisión del cliente» (`test_camara_concurrencia.py`).
+2. **COM-05a1.** La condición «sin detalle de entrega en una entrega no cancelada» de `camara._candidatos`; el paso 9 y la postcondición e de PROD-ASG-CAM (planificar la entrega); y, en `camara._vencer_en_transaccion` y `merma_camara._registrar`, quitar las líneas recortadas de su entrega «a realizar» y cancelar la que queda vacía (postcondición d y extensión 3a de PROD-VNC-CAM; 10c).
+3. **COM-06a.** La extensión 3b de PROD-VNC-CAM (partida con líneas en una entrega en curso); llamar a `camara.resolver_aviso_de_partida` cuando una entrega agota una partida.
+4. **CON-04c.** Los asientos de `vencimiento_partida` y de `registro_merma` sobre una partida (se originan en la `Merma` y su `MovimientoStock`, que ya guardan el costo).
+5. **Decisión pendiente (ficha del invernadero).** Si el Capataz y el Vendedor tienen que ver la pestaña «Cámara», `maestros.views.invernadero` (hoy `rol_requerido(GERENTE, AGRONOMO)`) tiene que abrirse a esos roles, con sus pruebas.
 
 ## Antes de las presentaciones — nace con USR-09a (24/11/2026)
 1. **Subir el HSTS de un día a un año.** `HSTS_SEGUNDOS` de `config/seguridad.py` vale 86400 (D-99). Si Render lleva días en https sin problemas, pasarlo a 31536000. Sin subdominios ni preload, salvo decisión nueva.

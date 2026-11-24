@@ -1,0 +1,10 @@
+{% autoescape off %}Hola,
+
+Buenas noticias: el faltante de tu compra {{ codigo }} en {{ nombre_organizacion }} quedó cubierto.
+
+{{ variedad }}: vas a recibir {{ cantidad }} plantas más para la fecha pactada, el {{ fecha|date:"d/m/Y" }}.
+Ya no necesitás decidir nada sobre ese faltante.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

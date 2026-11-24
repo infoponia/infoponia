@@ -158,6 +158,36 @@ class PostcondicionesTests(Base):
         self.cancelar()
         self.assertEqual(DetalleReserva.objects.get(partida=partida, reserva__cosecha=self.cosecha).cantidad_reservada, 10)
 
+    def test_post_h_las_lineas_de_camara_que_se_liberan_programan_la_asignacion_de_camara(self):
+        """h y D-64 punto 9 (COM-04b): si la reserva liberada tenía líneas de cámara, `transaction.on_commit` corre PROD-ASG-CAM con esas partidas (el stock que apartaba vuelve a
+        estar libre)."""
+        from unittest import mock
+
+        partida = self.camara(5)
+        cosecha = reserva(detalle(compra_venta(self.e, dias=12), self.e.variedad, 20), [(self.lote, 10), (partida, 5)]).cosecha
+        with mock.patch("comercial.servicios.camara.asignar_camara") as asignar, self.captureOnCommitCallbacks(execute=True) as callbacks:
+            self.cancelar(cosecha=cosecha)
+        self.assertEqual(len(callbacks), 1)
+        asignar.assert_called_once_with([partida.pk])
+
+    def test_post_h_una_cosecha_sin_lineas_de_camara_no_programa_nada(self):
+        """h: sin líneas de cámara en la reserva liberada no se programa PROD-ASG-CAM."""
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.cancelar()
+        self.assertEqual(callbacks, [])
+
+    def test_post_h_la_cancelacion_incluida_tambien_programa_la_asignacion(self):
+        """h: `cancelar_cosecha_incluida` (COM-DCD-FLT, COM-05) usa la misma lógica y programa PROD-ASG-CAM con las partidas de cámara que libera."""
+        from unittest import mock
+        from django.db import transaction
+
+        partida = self.camara(5)
+        cosecha = reserva(detalle(compra_venta(self.e, dias=12), self.e.variedad, 20), [(self.lote, 10), (partida, 5)]).cosecha
+        with mock.patch("comercial.servicios.camara.asignar_camara") as asignar, self.captureOnCommitCallbacks(execute=True):
+            with transaction.atomic():
+                cosechas.cancelar_cosecha_incluida(None, cosecha, "Se cancela la venta", recubrir=False, avisar=False)
+        asignar.assert_called_once_with([partida.pk])
+
     def test_post_g_con_contrato_el_detalle_se_vuelve_a_cubrir_sin_los_lotes_de_la_cosecha_cancelada(self):
         """g y 8c: con otro lote, `asignar` reserva los 30 del contrato fuera del lote cancelado y programa una cosecha nueva (automática); el detalle y la
         venta siguen abiertos."""

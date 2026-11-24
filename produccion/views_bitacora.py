@@ -18,6 +18,7 @@ from django.views.decorators.vary import vary_on_headers
 from core.acceso import rol_requerido
 from core.models import Usuario, rol_de
 from produccion import formularios
+from produccion.extensiones import entradas_de_comercial
 from produccion.errores import ErrorDeProduccion
 from produccion.servicios import alcance, aplicaciones, bitacora, mermas
 from produccion.views import _en_vivo, _errores_por_campo, _firma, _ocultar_al_gerente, _servicio
@@ -107,6 +108,8 @@ def registrar_merma(request):
         "firma": firma,
         "cambio_la_firma": cambio_la_firma,
         "es_capataz": rol_de(request.user) == CAPATAZ,
+        # COM-04b (D-64 punto 11): la opción «Pérdida en cámara» (extensión 4a de PROD-REG-MRM) solo si `comercial` la registró y hay partidas; si no, `None`.
+        "url_de_merma_en_camara": entradas_de_comercial(request.user).merma_en_camara,
     }
     plantilla = "produccion/_merma_formulario.html" if _en_vivo(request) else "produccion/registrar_merma.html"
     return render(request, plantilla, contexto)

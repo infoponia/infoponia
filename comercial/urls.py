@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_contratos, views_cosechas, views_suministros
+from comercial import views, views_camara, views_contratos, views_cosechas, views_suministros
 
 app_name = "comercial"
 
@@ -54,6 +54,8 @@ urlpatterns = [
     path("cosechas/<int:cosecha_id>/concretar/revisar/", views_cosechas.concretar_revisar, name="cosecha_concretar_revisar"),
     path("cosechas/<int:cosecha_id>/cancelar/", views_cosechas.cancelar, name="cosecha_cancelar"),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
+    path("camara/merma/", views_camara.merma, name="merma_camara"),  # COM-04b
+
     path("clientes/", views.clientes, name="clientes"),
     path("clientes/nuevo/", views.cliente_nuevo, name="cliente_nuevo"),
     path("clientes/<int:cliente_id>/", views.cliente, name="cliente"),

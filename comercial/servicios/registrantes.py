@@ -161,9 +161,11 @@ def acciones_de_cosechas(usuario, cosecha_ids):
 
 
 def entradas_de_comercial(usuario):
-    """`registrar_entradas_de_comercial`: «Planificar cosecha» para el Agrónomo con algún invernadero activo a su cargo; `merma_en_camara` (la pantalla
-    de COM-04b) todavía no existe: `None`."""
+    """`registrar_entradas_de_comercial`: «Planificar cosecha» para el Agrónomo con algún invernadero activo a su cargo y `merma_en_camara` (COM-04b, extensión 4a de
+    PROD-REG-MRM) para el Agrónomo o el Capataz con algún invernadero activo con partidas disponibles (extensión 4b: aunque no tenga lotes activos). Nunca una URL a un 403."""
     from django.urls import reverse
+
+    from comercial.servicios import merma_camara
 
     from core.models import Usuario, rol_de
     from produccion.extensiones import EntradasDeComercial
@@ -172,13 +174,15 @@ def entradas_de_comercial(usuario):
     if getattr(usuario, "is_active", False) and rol_de(usuario) == Usuario.Rol.AGRONOMO:
         if Invernadero.objects.filter(agronomo_id=usuario.pk, estado_invernadero=Invernadero.Estado.ACTIVO).exists():
             planificar = reverse("comercial:cosecha_planificar")
-    return EntradasDeComercial(planificar, None)
+    merma_en_camara = reverse("comercial:merma_camara") if merma_camara.invernaderos_con_merma_en_camara(usuario) else None
+    return EntradasDeComercial(planificar, merma_en_camara)
 
 
 def seccion_de_cosechas(usuario):
-    """`registrar_seccion_de_inicio` (`secCosecha` del prototipo, COM-04a): el grupo «Cosechas» del Inicio del Agrónomo, después de la sección de PRD-04:
-    las cosechas «a realizar» de sus invernaderos activos que son de hoy, las vencidas (fecha programada anterior a hoy) y las de invernaderos sin
-    Capataz activo. `None` para los demás roles. Una sola consulta."""
+    """`registrar_seccion_de_inicio` (`secCosecha` del prototipo, COM-04a y COM-04b): el grupo «Cosechas y cámara» del Inicio del Agrónomo, después de la sección de PRD-04:
+    las cosechas «a realizar» de sus invernaderos activos que son de hoy, las vencidas (fecha programada anterior a hoy) y las de invernaderos sin Capataz activo, y los
+    indicadores de la cámara (partidas por vencer y plantas libres). `None` para los demás roles. Una consulta de cosechas y una de partidas."""
+    from comercial.servicios import camara
     from core.models import Usuario, rol_de
     from core.extensiones import SeccionDeInicio
     from django.utils import timezone
@@ -192,7 +196,10 @@ def seccion_de_cosechas(usuario):
             estado_orden=OrdenTrabajo.Estado.A_REALIZAR, invernadero__agronomo_id=usuario.pk, invernadero__estado_invernadero=Invernadero.Estado.ACTIVO
         ).values_list("fecha_programada_orden", "invernadero__capataz__is_active")
     )
+    invernaderos = list(Invernadero.objects.filter(agronomo_id=usuario.pk, estado_invernadero=Invernadero.Estado.ACTIVO).values_list("pk", flat=True))
+    indicadores = camara.indicadores_de_camara(invernaderos, hoy)
     datos = {
+        "camara": {"por_vencer": indicadores["por_vencer"], "libres": indicadores["libres"], "dias_de_aviso": indicadores["dias_de_aviso"]},
         "a_realizar": len(filas),
         "hoy": sum(1 for fecha, _ in filas if fecha == hoy),
         "vencidas": sum(1 for fecha, _ in filas if fecha < hoy),

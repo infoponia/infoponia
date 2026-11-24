@@ -744,15 +744,18 @@ class AlertaComercial(models.Model):
     )  # MD-133
     fecha_periodo = models.DateField(null=True, blank=True)  # el período de la alerta MD-133
     cantidad_sin_cubrir = models.PositiveIntegerField(null=True, blank=True)  # se actualiza en cada intento de la pre-reserva (D-63, punto 3)
+    # COM-04b (MD-134, D-64 punto 10): «partida por vencer». La FK vive acá (regla A2 de D-37: `StockCosechado` es de `produccion`, nivel menor).
+    partida = models.ForeignKey(StockCosechado, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas_comerciales")
 
     class Meta:
         verbose_name = "Alerta comercial"
         verbose_name_plural = "Alertas comerciales"
         constraints = [
-            # Exactamente una FK de origen cargada (D-63, punto 1). En COM-03b: `suministro` o `detalle_suministro`.
+            # Exactamente una FK de origen cargada (D-63, punto 1). Desde COM-04b: `suministro`, `detalle_suministro` o `partida`.
             models.CheckConstraint(
-                condition=(Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True))
-                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False)),
+                condition=(Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False) & Q(partida__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=False)),
                 name="alerta_comercial_un_solo_origen",
             ),
             # detalle_suministro no nulo <=> fecha_periodo y cantidad_sin_cubrir no nulos.

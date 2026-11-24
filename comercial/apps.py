@@ -13,7 +13,7 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import pre_reserva, registrantes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import camara, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -71,3 +71,31 @@ class ComercialConfig(AppConfig):
         extensiones_de_maestros.registrar_enlace_de_alerta((pre_reserva.TIPO_DE_ALERTA,), pre_reserva.enlaces_de_alertas_de_periodo)
         registrar_paso_diario("pre_reservar_suministros", "Pre-reservar suministros", 40, pre_reserva.pre_reservar_suministros)
         registrar_paso_diario("cerrar_rescisiones", "Cerrar rescisiones de suministros", 35, suministros.cerrar_rescisiones)  # COM-RSC-SUM, regla «Cierre»
+
+        # COM-04b (D-64 puntos 9 y 10, D-62 y D-56): la cámara. Las dos alertas (con su enlace a la pestaña «Cámara»), los pasos 20 (vencer partidas) y 25 (reasignar cámara; recupera
+        # PROD-ASG-CAM) y la pestaña «Cámara» de la ficha del invernadero (que se registra una sola vez: `ready()` puede correr más de una vez).
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=camara.TIPO_POR_VENCER,
+                nombre="Partida por vencer",
+                destinatario=Destinatario.AGRONOMO_O_GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.ESTADO,
+                origen=Origen.STOCK_COSECHADO,
+            )
+        )
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=camara.TIPO_MERMA_RESERVADA,
+                nombre="Merma en cámara con producto reservado",
+                destinatario=Destinatario.AGRONOMO_O_GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.EVENTO,
+                origen=Origen.MERMA,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta((camara.TIPO_POR_VENCER, camara.TIPO_MERMA_RESERVADA), camara.enlaces_de_alertas_de_camara)
+        registrar_paso_diario("vencer_partidas_en_camara", "Vencer partidas en cámara", 20, camara.vencer_partidas_en_camara)
+        registrar_paso_diario("reasignar_camara", "Reasignar cámara", 25, camara.reasignar_camara)
+        if "camara" not in [clave for clave, _, _ in extensiones_de_maestros._PESTANAS]:
+            extensiones_de_maestros.registrar_pestana_de_invernadero("camara", "Cámara", camara.pestana_de_camara)

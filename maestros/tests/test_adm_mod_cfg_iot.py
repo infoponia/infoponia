@@ -4,7 +4,7 @@
 #
 # Contrato nuevo del servicio: ``modificar_configuracion(actor, *, ahora=None, **valores)`` acepta también los 14 campos de ``PARAMETROS_IOT``; ``ahora`` es el reloj (un ``datetime`` con zona; por omisión,
 # el actual) y solo sirve para la fecha de la advertencia 5b: así las pruebas nunca dependen de la hora real. ``Resultado.advertencias`` suma la 5b. Pantalla: ``FormularioConfiguracion`` sigue con
-# sus 13 campos y un formulario aparte, ``FormularioConfiguracionIot`` (14 campos, en ``context["form_iot"]``), va dentro del mismo ``<form>``; la vista le pasa al servicio solo los campos IoT que
+# sus 14 campos (COM-04b suma uno) y un formulario aparte, ``FormularioConfiguracionIot`` (14 campos, en ``context["form_iot"]``), va dentro del mismo ``<form>``; la vista le pasa al servicio solo los campos IoT que
 # vienen en el POST.
 
 import re
@@ -301,7 +301,7 @@ class AdmModCfgIotVistaTests(ConDatosDeMaestros, TestCase):
         self.client.login(username=self.gerente.email, password=CLAVE)
 
     def trece(self, **cambios):
-        """Los 13 parámetros de producción guardados, como los manda el formulario de MAE-04 (texto)."""
+        """Los 14 parámetros de producción guardados, como los manda el formulario de MAE-04 (texto)."""
         return {c: str(v) for c, v in produccion().items()} | {k: str(v) for k, v in cambios.items()}
 
     def todos(self, **cambios):
@@ -311,13 +311,13 @@ class AdmModCfgIotVistaTests(ConDatosDeMaestros, TestCase):
 
     # ---- (1) los 13 y el formulario aparte ----
 
-    def test_regla_2b_el_formulario_de_produccion_sigue_con_trece_campos_y_el_del_iot_trae_los_catorce(self):
-        """MAE-04 no cambia: `FormularioConfiguracion` conserva sus 13 campos (ninguno del IoT); los 14 van en el formulario aparte (`context["form_iot"]`), que la pantalla dibuja dentro del mismo `<form>`."""
-        self.assertEqual(len(FormularioConfiguracion().fields), 13)
+    def test_regla_2b_el_formulario_de_produccion_sigue_con_catorce_campos_y_el_del_iot_trae_los_catorce(self):
+        """MAE-04 no cambia: `FormularioConfiguracion` conserva sus 14 campos (los 13 de MAE-04 y el aviso de cámara de COM-04b) (ninguno del IoT); los 14 van en el formulario aparte (`context["form_iot"]`), que la pantalla dibuja dentro del mismo `<form>`."""
+        self.assertEqual(len(FormularioConfiguracion().fields), 14)
         self.assertFalse(set(FormularioConfiguracion().fields) & set(CAMPOS_IOT))
         respuesta = self.client.get(URL)
         self.assertEqual(list(respuesta.context["form_iot"].fields), CAMPOS_IOT)
-        self.assertEqual(len(respuesta.context["form"].fields), 13)
+        self.assertEqual(len(respuesta.context["form"].fields), 14)
 
     def test_regla_2b_un_post_con_solo_los_trece_no_modifica_ningun_parametro_del_iot(self):
         """El POST de MAE-04 (solo los 13) sigue funcionando y no toca los 14, aunque tengan valores distintos de los iniciales: la vista le pasa al servicio solo los campos IoT que vienen. Sin auditoría de ellos."""

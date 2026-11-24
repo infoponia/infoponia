@@ -131,13 +131,15 @@ def _cubierto(cantidad_reservada, cantidad_cosechada, lote_id):
     return min(cantidad_cosechada, cantidad_reservada) if lote_id and cantidad_cosechada is not None else cantidad_reservada
 
 
-def cantidad_sin_cubrir(detalle):
+def cantidad_sin_cubrir(detalle, *, pedida=None):
     """Regla 10 de 8.8: la cantidad pedida menos la cubierta por las líneas de sus reservas no liberadas. La cantidad cubierta de una línea
     (regla 9 de 8.8): de lote sin cosechar, la reservada; de lote cosechado, ``min(cosechada, reservada)``; de partida, la reservada. Un
-    detalle confirmado, rechazado o cancelado no tiene. Nunca menor que 0. Con un ``Periodo``, lo de ese período (``sin_cubrir_de_periodos``)."""
+    detalle confirmado, rechazado o cancelado no tiene. Nunca menor que 0. Con un ``Periodo``, lo de ese período (``sin_cubrir_de_periodos``).
+    ``pedida`` (COM-04b, D-64 punto 13): solo para un detalle «confirmado» que perdió producto: la cantidad que el cliente aceptó
+    (`cant_entregada_venta`) hace de cantidad pedida y el estado ya no lo excluye."""
     if isinstance(detalle, Periodo):
         return sin_cubrir_de_periodos([detalle])[detalle]
-    if detalle.estado_detalle_venta in (
+    if pedida is None and detalle.estado_detalle_venta in (
         DetalleVenta.Estado.CONFIRMADO,
         DetalleVenta.Estado.RECHAZADO,
         DetalleVenta.Estado.CANCELADO,
@@ -149,7 +151,7 @@ def cantidad_sin_cubrir(detalle):
         .values_list("cantidad_reservada", "cantidad_cosechada", "lote_id")
     )
     cubierto = sum(_cubierto(reservada, cosechada, lote_id) for reservada, cosechada, lote_id in lineas)
-    return max(0, detalle.cant_solicitada_venta - cubierto)
+    return max(0, (detalle.cant_solicitada_venta if pedida is None else pedida) - cubierto)
 
 
 def sin_cubrir_de_periodos(periodos):
@@ -422,7 +424,7 @@ def invernaderos_considerados(contrato):
     return list(consulta.order_by("pk"))
 
 
-def _verificar(detalle, cantidad, fecha_entrega, parametro):
+def _verificar(detalle, cantidad, fecha_entrega, parametro, confirmado=False):
     """Precondiciones a, b y c (las garantiza el caso de uso base; si no se cumplen es un error de programación): ``RuntimeError`` sin
     transacción y ``ValueError`` con un detalle que no se puede cubrir, una cantidad que no es un entero mayor que cero o una fecha o un
     parámetro inválidos. ``detalle`` es un ``DetalleVenta`` «abierto» de una venta «abierta» o un ``Periodo`` de un detalle y un suministro
@@ -447,15 +449,21 @@ def _verificar(detalle, cantidad, fecha_entrega, parametro):
             raise ValueError("La fecha no es un período del calendario del detalle (precondición b).")
         return Periodo(releido, fecha_entrega)
     detalle = DetalleVenta.objects.select_related("compra_venta", "variedad").get(pk=detalle.pk)
-    if (
-        detalle.estado_detalle_venta != DetalleVenta.Estado.ABIERTO
-        or detalle.compra_venta.estado_venta != detalle.compra_venta.Estado.ABIERTA
-    ):
-        raise ValueError("El detalle tiene que ser un detalle «abierto» de una venta «abierta» (precondición b).")
+    esperado = DetalleVenta.Estado.CONFIRMADO if confirmado else DetalleVenta.Estado.ABIERTO
+    if detalle.estado_detalle_venta != esperado or detalle.compra_venta.estado_venta != detalle.compra_venta.Estado.ABIERTA:
+        raise ValueError(
+            "El detalle tiene que ser un detalle «confirmado» de una venta «abierta» (D-64 punto 13)."
+            if confirmado
+            else "El detalle tiene que ser un detalle «abierto» de una venta «abierta» (precondición b)."
+        )
+    if confirmado and detalle.cant_entregada_venta is None:
+        raise ValueError("Un detalle «confirmado» tiene la cantidad aceptada (`cant_entregada_venta`).")
     return detalle
 
 
-def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_excluidos=(), origen_cosecha=Cosecha.OrigenCosecha.AUTOMATICA):
+def asignar(
+    origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_excluidos=(), origen_cosecha=Cosecha.OrigenCosecha.AUTOMATICA, confirmado=False
+):
     """PROD-ASG-STK: reserva stock maduro para ``detalle`` y programa las cosechas necesarias. Devuelve
     ``Asignacion(cubierta, sin_cubrir, reservas, cosechas)``.
 
@@ -468,16 +476,18 @@ def asignar(origen, detalle, cantidad, fecha_entrega, parametro, *, lotes_exclui
       Maduración (reglas 7, 9 a 11 de 8.6; 2 y 3 de 8.20); los lotes de un invernadero sin Capataz activo no se consideran y, si podían
       asignarse, queda la alerta «sin Capataz» (`maestros`, D-41). ``lotes_excluidos``: lotes que no se consideran (PCU 7, lo usa COM-04a).
     - ``origen_cosecha`` (D-64 punto 5): el origen de las cosechas que crea; PROD-CNC-CSC (13a) pasa «encadenada».
+    - ``confirmado`` (COM-04b, D-64 punto 13): el detalle es uno «confirmado» que perdió producto (merma en cámara o vencimiento); se cubre con
+      la cantidad aceptada (`cant_entregada_venta`) como cantidad pedida. Solo lo usan esos dos caminos.
     - Pasos 6 y 7 y extensiones 4a y 5b: una reserva por invernadero (regla 1 de 8.8), «lista para entrega» si todo es de cámara y «activa»
       si tiene un lote; esta con su cosecha «a realizar», con la prioridad media y el Capataz del invernadero (reglas 2 de 8.8 y 3 de 8.11).
     - Paso 10: dentro de la transacción (D-42) una notificación por cosecha al Capataz y otra al Agrónomo del invernadero, si hay uno activo.
     - No cambia la cantidad de ningún lote ni de ninguna partida (regla 14 de 8.8), ni el estado del detalle ni de la venta, y no audita.
     """
-    detalle = _verificar(detalle, cantidad, fecha_entrega, parametro)
+    detalle = _verificar(detalle, cantidad, fecha_entrega, parametro, confirmado)
     es_periodo = isinstance(detalle, Periodo)
     detalle_de_contrato = detalle.detalle if es_periodo else detalle
     contrato = detalle_de_contrato.suministro if es_periodo else detalle_de_contrato.compra_venta
-    a_reservar = min(cantidad, cantidad_sin_cubrir(detalle))
+    a_reservar = min(cantidad, cantidad_sin_cubrir(detalle, pedida=detalle.cant_entregada_venta) if confirmado else cantidad_sin_cubrir(detalle))
     if a_reservar <= 0:
         return Asignacion(0, 0, [], [])
     considerados = invernaderos_considerados(contrato)

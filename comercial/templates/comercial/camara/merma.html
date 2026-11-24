@@ -1,0 +1,10 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos %}
+{% comment %}«Registrar merma en cámara» (COM-04b, PROD-REG-MRM sobre una partida): página completa, pensada también para el celular del Capataz. El bloque que cambia con el invernadero y la partida es «_merma_formulario.html» (HTMX lo reemplaza dentro de #merma-vivo, sin mover el scroll ni validar; sin JavaScript, cada botón es un POST común con su «accion»). No está en el prototipo comercial: se arma con el mismo esquema de la merma de PRD-03 (D-61). Solo el Agrónomo a cargo y el Capataz asignado llegan acá.{% endcomment %}
+{% block titulo %}Registrar merma en cámara · InfoPonia{% endblock %}
+{% block contenido %}
+<div class="page narrow">
+  <a class="back" href="{% url 'produccion:registrar_merma' %}">{% icono "chev" 14 %} Registrar merma</a>
+  <div class="page-h"><h1>Registrar merma en cámara</h1><div class="sub">Elegí el invernadero y la partida, indicá cuántas plantas se perdieron y la causa. Si la pérdida supera el stock libre, vas a ver qué contratos pierden producto antes de confirmar.</div></div>
+  <div id="merma-vivo" hx-target="#merma-vivo" hx-swap="innerHTML show:none">{% include "comercial/camara/_merma_formulario.html" %}</div>
+</div>
+{% endblock %}

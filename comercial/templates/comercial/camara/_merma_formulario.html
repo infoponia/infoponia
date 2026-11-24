@@ -1,0 +1,72 @@
+{% load iconos %}{% comment %}El formulario de «Registrar merma en cámara» (COM-04b): lo que HTMX reemplaza dentro de #merma-vivo. Recibe «invernaderos», «invernadero_id», «partidas» (FilaDePartidaConMerma), «partida_id», «valores» (lo escrito), «errores» ({campo: mensaje}), «causas» ([(valor, texto)]), «resumen» (ResumenDeMermaEnCamara o None), «firma» y «cambio_la_firma». Cambiar el invernadero o la partida solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Todo se escapa.{% endcomment %}
+<form id="merma-form" method="post" action="{% url 'comercial:merma_camara' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general or errores.partida %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.partida }}</div>{% endif %}
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">1 · ¿Dónde?</div>
+      <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'comercial:merma_camara' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for i in invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+        </select>
+        {% if not invernaderos %}<div class="hint">Ninguno de tus invernaderos tiene partidas en la cámara.</div>{% endif %}</div>
+      {% if invernadero_id %}
+      {% if partidas %}
+      <div class="fld"><label for="partida">Partida<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="partida" name="partida" data-desplegable hx-post="{% url 'comercial:merma_camara' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+          <option value="">Seleccionar…</option>
+          {% for p in partidas %}<option value="{{ p.partida_id }}"{% if p.partida_id == partida_id %} selected{% endif %}>{{ p.codigo }} · {{ p.variedad }} · lote {{ p.lote_codigo }} · vence el {{ p.fecha_limite|date:"d/m/Y" }} · {{ p.disponible }} disponibles ({{ p.libre }} libres)</option>{% endfor %}
+        </select></div>
+      {% else %}
+      <div class="empty"><b>No hay partidas disponibles en este invernadero</b><span>Elegí otro invernadero o cancelá. Las partidas entran a la cámara con las cosechas.</span></div>
+      {% endif %}
+      {% endif %}
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+    </div>
+
+    {% if partida_id %}
+    <div class="card">
+      <div class="card-title">2 · Qué se perdió</div>
+      <div class="grid2">
+        <div class="fld"><label for="cantidad">Plantas perdidas<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="cantidad" name="cantidad" type="number" min="1" step="1" inputmode="numeric" value="{{ valores.cantidad }}">
+          {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% else %}<div class="hint">Entre 1 y las plantas disponibles de la partida.</div>{% endif %}</div>
+        <div class="fld"><label for="causa">Causa<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="causa" name="causa" data-desplegable>
+            <option value="">Seleccionar…</option>
+            {% for valor, texto in causas %}<option value="{{ valor }}"{% if valores.causa == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+          </select>
+          {% if errores.causa %}<div class="err">{{ errores.causa }}</div>{% else %}<div class="hint">El vencimiento lo registra InfoPonia solo.</div>{% endif %}</div>
+      </div>
+      <div class="fld"><label for="descripcion">Descripción (opcional)</label>
+        <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="300">{{ valores.descripcion }}</textarea>
+        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
+    </div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen de la merma en cámara"><div class="card-title">Resumen</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <p class="sm"><b>Partida:</b> <span class="mono">{{ resumen.partida.codigo }}</span> · {{ resumen.variedad }}</p>
+      <p class="sm"><b>Plantas perdidas:</b> {{ resumen.cantidad }} · <b>Causa:</b> {% for valor, texto in causas %}{% if valor == resumen.causa %}{{ texto }}{% endif %}{% endfor %}{% if resumen.descripcion %} · {{ resumen.descripcion }}{% endif %}</p>
+      <p class="sm"><b>Plantas disponibles de la partida:</b> {{ resumen.partida.cantidad_disponible_cosechado }} → <b>{{ resumen.disponible_resultante }}</b>{% if resumen.disponible_resultante == 0 %} (la partida queda agotada){% endif %}</p>
+      {% if resumen.recortes %}
+      <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>
+        <p>La pérdida supera el stock libre de la partida ({{ resumen.libre }} plantas): estos contratos pierden producto.</p>
+        <ul>{% for codigo, plantas in resumen.recortes %}<li><b>{{ codigo }}</b>: {{ plantas }} plantas</li>{% endfor %}</ul>
+        <p>Se intentará volver a cubrirlos con otro stock; lo que no se pueda cubrir sigue el camino de faltante y se avisa al Vendedor.</p>
+      </div></div>
+      {% endif %}
+      <input type="hidden" name="firma" value="{{ firma }}">
+      <input type="hidden" name="visto_disponible" value="{{ resumen.partida.cantidad_disponible_cosechado }}">
+    </div>
+    {% endif %}
+
+    <div class="footbar">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…">Ver resumen</button>
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar merma</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'produccion:registrar_merma' %}">Cancelar</a>
+    </div>
+    {% endif %}
+  </div>
+</form>
