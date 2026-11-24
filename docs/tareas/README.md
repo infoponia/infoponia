@@ -63,8 +63,8 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 |---|---|---|---|---|---|
 | COM-01 | App `comercial`, clientes y vehículos | comercial | hecha (PR #__, 23/11/2026; revisión a mano pendiente) | MAE-05 | `comercial/COM-01-clientes-y-vehiculos.md` |
 | COM-02 | Stock maduro y compra-venta | comercial (y modelos en produccion, D-59) | hecha (PR #65, 23/11/2026) | COM-01, USR-10, PRD-04 | `comercial/COM-02-stock-maduro-y-compra-venta.md` |
-| COM-03a | Suministros: pactar y consultar | comercial | hecha (PR #__, 23/11/2026) | COM-02 |`comercial/COM-03a-suministros-pactar-y-consultar.md` |
-| COM-03b | Suministros: modificar, rescindir, dejar sin efecto y pre-reservar (pasos 35 y 40) | comercial (y los orígenes de alertas en maestros, D-62) | pendiente | COM-03a, MAE-02d (DIA-01, hecha) | `comercial/COM-03b-suministros-modificar-rescindir-y-pre-reservar.md` |
+| COM-03a | Suministros: pactar y consultar | comercial | hecha (PR #68, 23/11/2026) | COM-02 |`comercial/COM-03a-suministros-pactar-y-consultar.md` |
+| COM-03b | Suministros: modificar, rescindir, dejar sin efecto y pre-reservar (pasos 35 y 40) | comercial (y los orígenes de alertas en maestros, D-62) | hecha (PR #__, 24/11/2026) | COM-03a, MAE-02d (DIA-01, hecha) |`comercial/COM-03b-suministros-modificar-rescindir-y-pre-reservar.md` |
 | COM-04a | Cosechas: núcleo en produccion; planificar, modificar, concretar y cancelar | comercial y produccion (todo el núcleo, D-64, también el de la entrega, D-68, y la bitácora de las solicitudes, D-69) | pendiente | COM-03b | `comercial/COM-04a-cosechas.md` |
 | COM-04b | Cámara: asignación, vencimiento y merma en cámara (pasos 20 y 25) | comercial (y un parámetro en maestros) | pendiente | COM-04a | `comercial/COM-04b-camara.md` |
 | COM-04c | Faltante y enlace del cliente (paso 27) | comercial (y piezas de core) | pendiente | COM-04b | `comercial/COM-04c-faltante-y-enlace-del-cliente.md` |

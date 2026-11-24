@@ -32,6 +32,15 @@ urlpatterns = [
         views_suministros.suministro_reenviar_comprobante,
         name="suministro_reenviar_comprobante",
     ),
+    # COM-03b: modificar (con calcular/ y revisar/), rescindir, dejar sin efecto la rescisión y el historial de cambios.
+    path("contratos/suministros/<int:suministro_id>/modificar/", views_suministros.suministro_modificar, name="suministro_modificar"),
+    path("contratos/suministros/<int:suministro_id>/modificar/calcular/", views_suministros.suministro_modificar_calcular, name="suministro_modificar_calcular"),
+    path("contratos/suministros/<int:suministro_id>/modificar/revisar/", views_suministros.suministro_modificar_revisar, name="suministro_modificar_revisar"),
+    path("contratos/suministros/<int:suministro_id>/rescindir/", views_suministros.suministro_rescindir, name="suministro_rescindir"),
+    path(
+        "contratos/suministros/<int:suministro_id>/dejar-sin-efecto-rescision/", views_suministros.suministro_dejar_sin_efecto, name="suministro_dejar_sin_efecto"
+    ),
+    path("contratos/suministros/<int:suministro_id>/historial/", views_suministros.suministro_historial, name="suministro_historial"),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
     path("clientes/", views.clientes, name="clientes"),
     path("clientes/nuevo/", views.cliente_nuevo, name="cliente_nuevo"),

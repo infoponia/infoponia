@@ -1,0 +1,21 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}El resumen de la modificación como página (respaldo sin JavaScript de la ventana de «_resumen_modificacion.html»; COM-MOD-SUM, pasos 8 y 9). «Volver a la carga» manda el formulario de nuevo con todo lo
+cargado; «Confirmar cambios» modifica. Recibe «resumen», «s» y «campos».{% endcomment %}
+{% block titulo %}Resumen · Modificar {{ s.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Resumen de los cambios de <span class="mono">{{ s.codigo }}</span></h1></div>
+  <div class="card">
+    {% include "comercial/suministros/_resumen_modificacion_lista.html" %}
+    <form method="post" action="{% url 'comercial:suministro_modificar' s.pk %}">
+      {% csrf_token %}
+      {% include "comercial/suministros/_campos_ocultos_modificar.html" %}
+      <div class="acts">
+        <button class="btn btn-ghost" type="submit" name="actualizar" value="1">Volver a la carga</button>
+        <button class="btn btn-primary" type="submit" name="confirmar" value="1" data-enviando="Guardando…">Confirmar cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

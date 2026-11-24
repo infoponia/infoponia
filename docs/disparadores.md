@@ -112,7 +112,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 6. **Cierre de una rescisión (nace en COM-03, lote C3).** El paso diario 35 (`cerrar_rescisiones`) pasa a «rescindido» un suministro con
    rescisión acordada el día siguiente a su última entrega conservada. COM-05 (o COM-06) le suma la condición «sin entregas del contrato
    a realizar», para no cerrar un contrato con una entrega atrasada.
-   **Planificado (lote C5a):** COM-05a (la condición en `cerrar_rescisiones`).
+   **Hecho en COM-03b (24/11/2026):** el paso 35 existe y cierra sin esperar entregas. **Planificado (lote C5a):** COM-05a (la condición en `cerrar_rescisiones`).
 
 7. **Lo que deja COM-04 para las entregas (nace en el lote C4).** COM-05 lo suma al crear `Entrega`:
    - PROD-ASG-CAM: la condición «sin detalle de entrega en una entrega no cancelada» de sus candidatos y el paso 9 (COM-PNF-ENT); lo mismo
@@ -188,6 +188,11 @@ COM-07 (COM-RSV-SUM): si un suministro con rescisión acordada supera sus incump
 igual, con su multa (la resolución prevalece, regla «Mientras se entregan…» de COM-RSC-SUM). La resolución deja los datos de la rescisión
 como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porque no está «vigente».
 **Planificado (lote C7):** COM-07b (`docs/casos_de_uso/comercial/resolucion.md`, paso 4.5; el paso 33 corre antes del 35, D-69 punto 7).
+
+## Cuando se programen COM-05a1 y COM-06 — nace con COM-03b (24/11/2026)
+
+1. **Rescisión después de una modificación.** `periodos_conservados` (`comercial/servicios/suministros.py`) mira solo los detalles «vigentes», como dice `suministro.md`: los períodos de la ventana que quedaron en un detalle finalizado por una modificación y todavía se entregan no cuentan. Un contrato así puede quedar «rescindido» en el acto con entregas pendientes. Con «el cierre espera las entregas a realizar» (punto 6 de «Cuando exista Entrega») la fecha de la última entrega y el cierre tienen que mirar también las entregas de esos detalles.
+2. **Reenvío de la constancia de «rescisión sin efecto».** `comprobantes.reenviar_comprobante` deduce la constancia de la rescisión de `motivo_rescision`; después de dejarla sin efecto no queda marca y reenvía el comprobante común. Si hace falta reenviar esa constancia, hay que guardar qué documento quedó pendiente (decisión y migración aparte).
 
 ## Cuando exista Cosecha
 
@@ -583,8 +588,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 
 ## Cuando se programen COM-03b y COM-04 — nace con COM-03a (23/11/2026)
-
-1. **Calendario de la ficha con detalles finalizados.** Un período de un detalle finalizado que cae dentro de la ventana se muestra «Reservado» (los finalizados no tienen cantidad sin cubrir hasta D-64, punto 8). COM-04 le da la cantidad sin cubrir y COM-03b, los períodos posteriores a la rescisión; revisar `comercial/servicios/suministros.py`, `_filas_de_calendario`.
+1. **Calendario de la ficha con detalles finalizados.** Un período de un detalle finalizado que cae dentro de la ventana se muestra «Reservado» (los finalizados no tienen cantidad sin cubrir hasta D-64, punto 8). ~~COM-03b, los períodos posteriores a la rescisión~~ **Hecho en COM-03b (24/11/2026):** el calendario corta en `fecha_fin_detalle` y un período con la alerta «sin cobertura completa» activa dice «Sin cobertura completa · faltan N». **Queda para COM-04a:** la cantidad sin cubrir de un período de un detalle finalizado y que la pre-reserva (`comercial/servicios/pre_reserva.py`, `_periodos_a_pre_reservar` y `_pre_reservar_periodo`) retome esos períodos; revisar también `comercial/servicios/suministros.py`, `_filas_de_calendario`.
 
 ## Cuando se programe CMP-03 (completa lo que CMP-02a dejó a medias) — nace con CMP-02a
 

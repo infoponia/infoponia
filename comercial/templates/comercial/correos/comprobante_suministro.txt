@@ -1,8 +1,14 @@
 {% load comercial %}{% autoescape off %}Hola {{ cliente }},
 
-Registramos tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }} el {{ suministro.fecha_realizacion|date:"d/m/Y" }}.
+{% if tipo == "modificacion" %}Modificamos tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }}. Los cambios son:
+{% for c in cambios %}
+- {{ c.texto }} (rige desde el {{ c.rige_desde|date:"d/m/Y" }})
+{% endfor %}
+Así queda el contrato:{% elif tipo == "rescision" %}Registramos la rescisión por mutuo acuerdo de tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }}.{% elif tipo == "anulacion_rescision" %}Dejamos sin efecto la rescisión de tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }}: el contrato sigue como estaba.{% else %}Registramos tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }} el {{ suministro.fecha_realizacion|date:"d/m/Y" }}.{% endif %}
 
-Vigencia: del {{ suministro.fecha_realizacion|date:"d/m/Y" }} al {{ suministro.fecha_fin|date:"d/m/Y" }} ({{ suministro.duracion_meses }} meses)
+{% if suministro.motivo_rescision %}Rescisión por mutuo acuerdo: {{ suministro.get_motivo_rescision_display|lower }}{% if suministro.descripcion_rescision %} ({{ suministro.descripcion_rescision }}){% endif %}. Acordada el {{ suministro.fecha_acuerdo_rescision|date:"d/m/Y" }}; la última entrega es el {{ suministro.fecha_ultima_entrega_rescision|date:"d/m/Y" }}. No tiene multa ni indemnización.
+
+{% endif %}Vigencia: del {{ suministro.fecha_realizacion|date:"d/m/Y" }} al {{ suministro.fecha_fin|date:"d/m/Y" }} ({{ suministro.duracion_meses }} meses)
 Vendedor responsable: {{ vendedor.get_full_name }}
 Incumplimientos tolerados: {{ suministro.incumplimientos_tolerados }}
 Multa por resolución: {{ suministro.multa_resolucion|pesos }}

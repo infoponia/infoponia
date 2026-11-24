@@ -1,0 +1,5 @@
+{% load comercial %}{% comment %}Lo que dice el resumen de la modificación (paso 8), en la ventana y en la página: cada cambio con la fecha desde la que rige. Recibe «resumen» y «s».{% endcomment %}
+<ul class="resumen-cambios" style="margin:0 0 12px 18px">
+  {% for c in resumen.cambios %}<li>{{ c.texto }} <span class="muted">· rige desde el {{ c.rige_desde|date:"d/m/Y" }}</span></li>{% endfor %}
+</ul>
+<p class="hint">Lo ya reservado, cosechado o entregado no cambia. Los detalles modificados pasan a «finalizado» y se crea su sucesor. Se le envía al cliente el comprobante del contrato modificado{% if not s.cliente.email_cliente %} (no tiene correo: queda para imprimir){% endif %}.</p>
