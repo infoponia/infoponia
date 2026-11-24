@@ -4,13 +4,14 @@
 #     baja dice cuántos pedidos se cancelarán, regla 4 de USR-BAJ-USR).
 #   - ``maestros``: el traspaso del rol ``agronomo`` (``contar_traspaso``, ``aviso_de_traspaso`` y ``traspasar_pedidos``): cancelan los pedidos del saliente con algún
 #     detalle a ese invernadero.
-#   - ``inventario``: ``impedimento_de_deshabilitacion`` (H20: un pedido «en cotización» impide deshabilitar el insumo, código ``pedido_en_curso``).
+#   - ``inventario``: ``impedimento_de_deshabilitacion`` (H20: un pedido «en cotización» impide deshabilitar el insumo, código ``pedido_en_curso``; una orden no
+#     terminada con una línea a ese insumo, código ``orden_de_compra_aprobada``, CMP-03).
 # Todo corre dentro de la transacción del servicio que llama, después de sus bloqueos de cuentas e invernaderos; los pedidos que cancela los bloquea en orden de
 # id (``pedidos.cancelar_pedido_automaticamente``). Las lecturas hacen una consulta para toda la lista, nunca una por fila.
 
 from django.urls import reverse
 
-from compras.models import DetallePedido, Pedido
+from compras.models import DetalleOrdenCompra, DetallePedido, OrdenCompra, Pedido
 from compras.servicios import pedidos
 from core.extensiones import Asignacion, Efecto
 from core.models import Usuario, referencia, rol_de
@@ -112,12 +113,14 @@ def traspasar_pedidos(actor, invernadero, rol, saliente, entrante):
 
 def impedimento_de_deshabilitacion(insumo_invernadero):
     """`inventario.registrar_impedimento_de_deshabilitacion` (H20, D-87 punto 5): un impedimento ``pedido_en_curso`` por cada pedido «en cotización» que pide ese
-    ``InsumoInvernadero``, con el enlace a su ficha. No se cancela solo. Solo lectura; una sola consulta."""
+    ``InsumoInvernadero``, con el enlace a su ficha, y un ``orden_de_compra_aprobada`` por cada orden **no terminada** (pendiente de aprobación, aprobada o
+    parcialmente recibida) con una línea a ese insumo en ese invernadero (H20 amplía el alcance; el código queda igual para no tocar ``inventario``). Ninguno se
+    resuelve solo. Solo lectura; una consulta por cada tipo."""
     en_curso = Pedido.objects.filter(
         estado_pedido=Pedido.Estado.EN_COTIZACION,
         pk__in=DetallePedido.objects.filter(insumo_invernadero=insumo_invernadero).values("pedido_id"),
     ).order_by("id")
-    return [
+    impedimentos = [
         Impedimento(
             "pedido_en_curso",
             f"Está en el pedido {pedido}, en cotización hasta el {pedido.fecha_limite_cotizaciones:%d/%m}.",
@@ -126,3 +129,17 @@ def impedimento_de_deshabilitacion(insumo_invernadero):
         )
         for pedido in en_curso
     ]
+    sin_terminar = OrdenCompra.objects.filter(
+        estado_orden_compra__in=OrdenCompra.NO_TERMINADAS,
+        pk__in=DetalleOrdenCompra.objects.filter(detalle_cotizacion__detalle_pedido__insumo_invernadero=insumo_invernadero).values("orden_id"),
+    ).order_by("id")
+    impedimentos += [
+        Impedimento(
+            "orden_de_compra_aprobada",
+            f"Tiene mercadería en la orden de compra {orden} ({orden.get_estado_orden_compra_display().lower()}).",
+            "Esperá a recibirla, a cerrarla con faltante o a que el Gerente la rechace.",
+            reverse("compras:orden_ficha", args=[orden.pk]),
+        )
+        for orden in sin_terminar
+    ]
+    return impedimentos

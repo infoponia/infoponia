@@ -147,9 +147,9 @@ class RolContadorVistasTests(TestCase):
         self.assertEqual(respuesta.context["sigla"], "CON")
         self.assertEqual(respuesta.context["rol_visible"], "Contador")
         self.assertFalse(respuesta.context["modo_campo"])
-        self.assertEqual([entrada["texto"] for entrada in respuesta.context["menu"]], ["Panel de control"])
+        self.assertEqual([entrada["texto"] for entrada in respuesta.context["menu"]], ["Panel de control", "Compras"])  # «Compras» la registra CMP-03 (D-87 punto 6)
         self.assertNotContains(respuesta, "Estadísticas")
-        self.assertEqual([texto for texto, _, _ in menu.menu_de(Usuario.Rol.CONTADOR)], ["Panel de control"])
+        self.assertEqual([texto for texto, _, _ in menu.menu_de(Usuario.Rol.CONTADOR)], ["Panel de control", "Compras"])
 
     def test_d85_el_contador_no_abre_los_otros_modulos(self):
         """SEG-13 y D-85 punto 6: cuentas, auditoría, producción, alertas, inventario, comercial, compras, IoT, bitácora y

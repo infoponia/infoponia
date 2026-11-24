@@ -45,7 +45,8 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   credenciales), para que las pruebas den lo mismo en cada máquina y en el CI. Las pruebas que necesitan el correo lo
   encienden con `@override_settings(CORREO_CONFIGURADO=True)`.
 - Después de una migración nueva, con `--keepdb --parallel` los clones de la base de pruebas no la reciben y falla con un
-  error de columna inexistente. Si aparece, corré una vez sin `--keepdb` y con `--noinput` para recrear la base
+  error de columna inexistente. Si aparece, recreá la base de pruebas sin pedir permiso (es una base `test_…`, `CLAUDE.md`, D-101): corré una vez
+  sin `--keepdb` y con `--noinput`
   (`python manage.py test core.tests.test_usuario --parallel --noinput --exclude-tag concurrencia --exclude-tag migracion`) y después volvé a
   `--keepdb`.
 - Si tus pruebas usan datos cargados por una migración (Georef, plan de cuentas, categorías del sistema), leé
@@ -61,7 +62,7 @@ Las pruebas se escriben en `<app>/tests/` y se acumulan: el CI corre todas en ca
   (después, `Remove-Item Env:DJANGO_DEBUG, Env:DJANGO_SECRET_KEY` para volver al modo normal, que necesita `DJANGO_DEBUG=1`
   en tu `.env`: desde USR-09a, D-99, sin esa variable `DEBUG` queda apagado).
   Con la herramienta Bash: `DJANGO_DEBUG=0 DJANGO_SECRET_KEY=clave-falsa-solo-para-pruebas .venv/Scripts/python.exe manage.py test`.
-  Si la base `test_infoponia` quedó de una corrida interrumpida, agregá `--noinput` para recrearla.
+  Si la base `test_infoponia` quedó de una corrida interrumpida, agregá `--noinput` para recrearla (es una base de prueba: no pide permiso).
 
 ## Nombres
 

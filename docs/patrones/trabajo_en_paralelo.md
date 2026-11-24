@@ -68,7 +68,7 @@ mergear aparece el error «Conflicting migrations detected; multiple leaf nodes�
 está en `main`** (`CLAUDE.md`). Hay dos salidas:
 
 - **Tu migración todavía no está en `main` (lo normal).** Regenerala sobre la de la otra persona:
-  1. Desaplicá la tuya en tu base local, antes de borrarla: `python manage.py migrate <app> <numero_anterior_a_la_tuya>`.
+  1. Desaplicá la tuya en tu base local, antes de borrarla: `python manage.py migrate <app> <numero_anterior_a_la_tuya>`. (Desaplicar una migración puede perder datos de tu base de desarrollo: si lo hace Claude Code, que te pregunte antes.)
   2. Hacé el merge de `origin/main` y borrá tu archivo de migración (solo el tuyo).
   3. `python manage.py makemigrations <app> -n <nombre_claro>`: Django la numera a continuación de la de `main`.
   4. `python manage.py migrate` y corré las pruebas de la app.
@@ -76,7 +76,7 @@ está en `main`** (`CLAUDE.md`). Hay dos salidas:
   una migración de fusión que une las dos líneas. Sirve, pero deja un archivo más; se prefiere la primera salida.
 
 Con `--keepdb` y `--parallel`, después de cambiar migraciones hay que recrear la base de pruebas una vez
-(`--keepdb` se omite esa vez).
+(`--keepdb` se omite esa vez, con `--noinput`; es una base `test_…`, no pide permiso, D-101).
 
 ## Documentos que escribe una sola persona
 

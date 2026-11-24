@@ -1,0 +1,109 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Comparar cotizaciones y generar orden» (CMP-GNR-ODC pasos 3 a 8; ``VIEWS.c_gen`` del prototipo). Recibe «pedido», «comparacion» (``Comparacion``), «eleccion» (``EleccionActual``: la cobertura de lo elegido hasta ahora),
+«elegidas_ids», «observaciones» y «errores». Dos vistas (paso 4): por insumo (cada detalle con su tabla de líneas del precio unitario más bajo al más alto, junto al precio de referencia y a la cobertura) y por cotización (cada
+una completa). El Sistema no preselecciona nada. **Se elige la cotización completa** (regla «Cotización elegida completa»; el prototipo permitía líneas sueltas, que el caso de uso no admite): cada fila de la tabla de
+un insumo y cada tarjeta tiene su botón «Elegir esta cotización» / «Quitar»; una cotización de un proveedor inactivo o con la validez vencida se muestra marcada y sin botón (4b y 4c). Todo viaja en un solo formulario y
+cada botón vuelve a dibujar la pantalla con la cobertura nueva, sin JavaScript y sin validar mientras se escribe. «Revisar la orden» muestra el resumen del paso 9.{% endcomment %}
+{% block titulo %}Generar la orden del pedido {{ pedido }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <a class="btn btn-text" href="{% url 'compras:pedido_ficha' pedido.pk %}">{% icono "back" 14 %} Pedido {{ pedido }}</a>
+  <div class="page-h"><h1>Generar la orden del pedido {{ pedido }}</h1></div>
+
+  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if not comparacion.puede_generar %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>Con las cotizaciones que se pueden elegir, el pedido no podrá generar una orden.</b> Hay insumos sin ofertas o con ofertas insuficientes. Cancelá el pedido y hacé uno nuevo.</div></div>
+  {% endif %}
+
+  <form method="post" action="{% url 'compras:pedido_generar_orden' pedido.pk %}" novalidate>
+    {% csrf_token %}
+    {% for i in elegidas_ids %}<input type="hidden" name="cotizacion" value="{{ i }}">{% endfor %}
+    <div class="with-aside">
+      <div class="stack">
+        <h2 class="ped-sub">Por insumo</h2>
+        {% for d in comparacion.detalles %}
+        <div class="card seg">
+          <div class="card-h"><b>{{ d.detalle.insumo_invernadero.insumo.nombre_insumo }}</b><span class="muted sm">{{ d.detalle.insumo_invernadero.invernadero.nombre_invernadero }} · pidió {{ d.pedida|cant:d.detalle.insumo_invernadero.insumo.unidad_medida_insumo }} · se acepta desde {{ d.minima|num:d.detalle.insumo_invernadero.insumo.unidad_medida_insumo }} · referencia {{ d.referencia|pesos }}</span>
+            <span class="spacer"></span>
+            {% if d.problema == "sin_ofertas" %}<span class="status-badge status-danger">Sin ofertas</span>{% elif d.problema == "ofertas_insuficientes" %}<span class="status-badge status-danger">Ofertas insuficientes</span>{% endif %}
+          </div>
+          {% if d.lineas %}
+          <div class="tablewrap">
+            <table class="data-table">
+              <thead><tr><th>Proveedor</th><th class="right">Ofrece</th><th class="right">Precio unitario</th><th class="right">Plazo</th><th class="right"><span class="sr">Elegir</span></th></tr></thead>
+              <tbody>
+              {% for l in d.lineas %}
+              <tr{% if not l.elegible %} class="dis"{% endif %}>
+                <td>{{ l.proveedor.nombre_para_mostrar }}{% if not l.elegible %}<span class="sub2"><span class="status-badge status-warn">{% if not l.proveedor.activo %}Proveedor inactivo{% else %}Validez vencida{% endif %}</span></span>{% endif %}</td>
+                <td class="right nowrap mono">{{ l.cantidad|cant:d.detalle.insumo_invernadero.insumo.unidad_medida_insumo }}{% if l.sobra %}<span class="sub2 warn-t">{{ l.sobra|num:d.detalle.insumo_invernadero.insumo.unidad_medida_insumo }} más de lo pedido</span>{% elif l.cantidad < d.pedida %}<span class="sub2">menos de lo pedido</span>{% endif %}</td>
+                <td class="right nowrap mono">{{ l.unitario|pesos }}{% if l.mas_bajo %}<span class="sub2 ok-t"><b>el más bajo</b></span>{% endif %}</td>
+                <td class="right nowrap">{{ l.plazo }} día{{ l.plazo|pluralize }}</td>
+                <td class="right nowrap">{% if l.elegible %}{% if l.cotizacion.pk in elegidas_ids %}<span class="status-badge status-ok">Elegida</span>{% else %}<button class="btn btn-ghost btn-sm" type="submit" name="accion" value="elegir:{{ l.cotizacion.pk }}" data-sin-envio-en-curso>Elegir<span class="sr"> la cotización de {{ l.proveedor.nombre_para_mostrar }}</span></button>{% endif %}{% endif %}</td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p class="hint" style="padding:0 20px 12px">Se elige la cotización completa de ese proveedor, con todas sus líneas.</p>
+          {% else %}
+          <p class="muted" style="margin:0;padding:16px 20px">Nadie cotizó este insumo.</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        <h2 class="ped-sub">Por cotización</h2>
+        {% for c in comparacion.cotizaciones %}
+        <div class="card seg">
+          <div class="card-h">
+            <b>{{ c.proveedor.nombre_para_mostrar }}</b>
+            {% if c.motivo == "proveedor_inactivo" %}<span class="status-badge status-warn">Proveedor inactivo</span>{% elif c.motivo == "validez_vencida" %}<span class="status-badge status-warn">Validez vencida</span>{% endif %}
+            <span class="muted sm">Enviada el {{ c.cotizacion.fecha_cotizacion|date:"d/m/Y" }} · válida hasta el {{ c.cotizacion.fecha_validez_cotizacion|date:"d/m/Y" }}</span>
+            <span class="spacer"></span><b class="mono">{{ c.monto|pesos }}</b>
+            {% if c.elegible %}{% if c.cotizacion.pk in elegidas_ids %}<button class="btn btn-ghost btn-sm" type="submit" name="accion" value="quitar:{{ c.cotizacion.pk }}" data-sin-envio-en-curso>Quitar<span class="sr"> la cotización de {{ c.proveedor.nombre_para_mostrar }}</span></button>{% else %}<button class="btn btn-primary btn-sm" type="submit" name="accion" value="elegir:{{ c.cotizacion.pk }}" data-sin-envio-en-curso>Elegir esta cotización<span class="sr"> de {{ c.proveedor.nombre_para_mostrar }}</span></button>{% endif %}{% endif %}
+          </div>
+          <div class="tablewrap">
+            <table class="data-table">
+              <thead><tr><th>Insumo</th><th>Destino</th><th class="right">Ofrece</th><th class="right">Total de la línea</th><th class="right">Plazo</th></tr></thead>
+              <tbody>
+              {% for l in c.lineas %}
+              <tr><td>{{ l.detalle_pedido.insumo_invernadero.insumo.nombre_insumo }}</td><td>{{ l.detalle_pedido.insumo_invernadero.invernadero.nombre_invernadero }}</td><td class="right nowrap mono">{{ l.cantidad_cotizada|cant:l.detalle_pedido.insumo_invernadero.insumo.unidad_medida_insumo }}</td><td class="right nowrap mono">{{ l.total_linea|pesos }}</td><td class="right nowrap">{{ l.plazo_entrega_dias }} día{{ l.plazo_entrega_dias|pluralize }}</td></tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if c.cotizacion.observaciones_cotizacion %}<p class="hint" style="padding:0 20px 12px"><b>Observaciones del proveedor:</b> {{ c.cotizacion.observaciones_cotizacion }}</p>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <aside id="cobertura">
+        <div class="panel">
+          <h3>Lo que va a comprar</h3>
+          {% for x in eleccion.coberturas %}
+          <div class="rs-r" style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border)">
+            <div><b>{{ x.detalle.insumo_invernadero.insumo.nombre_insumo }}</b><span class="sub2">{{ x.detalle.insumo_invernadero.invernadero.nombre_invernadero }} · {{ x.elegida|num:x.detalle.insumo_invernadero.insumo.unidad_medida_insumo }} de {{ x.pedida|num:x.detalle.insumo_invernadero.insumo.unidad_medida_insumo }}</span></div>
+            {% if x.cubierto %}<span class="status-badge status-ok">Cubierto</span>{% elif x.elegida %}<span class="status-badge status-warn">Falta {{ x.falta|num:x.detalle.insumo_invernadero.insumo.unidad_medida_insumo }}</span>{% else %}<span class="status-badge status-neutral">Sin elegir</span>{% endif %}
+          </div>
+          {% endfor %}
+          <dl class="dl two" style="margin-top:14px"><dt>Cotizaciones elegidas</dt><dd>{{ eleccion.elegidas|length }}</dd><dt>Proveedores</dt><dd>{{ eleccion.proveedores }}</dd><dt>Monto de la orden</dt><dd><b>{{ eleccion.monto|pesos }}</b></dd></dl>
+        </div>
+        {% for x in eleccion.coberturas %}{% if x.sobra %}<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Se compra más de lo pedido de {{ x.detalle.insumo_invernadero.insumo.nombre_insumo }}: {{ x.sobra|cant:x.detalle.insumo_invernadero.insumo.unidad_medida_insumo }} de más. Está permitido.</div></div>{% endif %}{% endfor %}
+        {% if eleccion.elegidas and not eleccion.cubierto %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Todavía hay insumos sin cubrir. Cada uno tiene que llegar al mínimo aceptable.</div></div>{% endif %}
+        <div class="panel">
+          <div class="field" style="margin:0">
+            <label class="field-label" for="observaciones">Observaciones para el Gerente</label>
+            <textarea class="field-input" id="observaciones" name="observaciones" rows="3" placeholder="Opcional: por qué elegiste estos proveedores.">{{ observaciones }}</textarea>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…"{% if not eleccion.cubierto %} disabled{% endif %}>Revisar la orden</button>
+      <a class="btn btn-danger" href="{% url 'compras:pedido_cancelar' pedido.pk %}">Cancelar pedido</a>
+      <a class="btn btn-ghost" href="{% url 'compras:pedido_ficha' pedido.pk %}">Volver</a>
+      <span class="muted sm" style="align-self:center">{% if eleccion.cubierto %}La orden queda pendiente de aprobación del Gerente.{% else %}Elegí cotizaciones hasta cubrir todos los insumos.{% endif %}</span>
+    </div>
+  </form>
+</div>
+{% endblock %}

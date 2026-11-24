@@ -18,7 +18,10 @@ básica en Django: explicá lo que hacés y por qué, en español con voseo.
   «Permitido fuera de la app».
 - No hagas commits, push ni operaciones de Git que modifiquen el historial. Los commits los hacen los estudiantes.
 - **Números de decisión.** Se asignan por orden de creación, no por reserva. Una decisión planificada se nombra por su lote o tarea. El número se toma al final, después de `git fetch`, mirando `docs/decisiones/` en `main`; si dos PR chocan, renumera el que se mergea segundo; una decisión ya mergeada no se renumera nunca; una prueba lleva el número de una decisión en su nombre solo si esa decisión ya está en `main`. Proponé el número recién al cerrar la tarea (M3).
-- Antes de borrar datos o tablas, frená y preguntá. Vale también para la base local y para los datos de prueba. Cuenta como borrar: `DROP`, `DELETE` o `TRUNCATE` a mano, `flush`, `migrate <app> zero`, `--fake` seguido de un borrado, borrar el archivo o la base de datos, y descartar la base de `--keepdb`. Contame qué se pierde, por qué hace falta y qué alternativa hay, y esperá mi respuesta. Si una migración no se puede deshacer, no la arregles tocando las tablas: avisame.
+- **Antes de borrar datos de mi base de desarrollo, frená y preguntá.** Es la que uso con `runserver` en `localhost:5433`, la que no se llama `test_…`. Cuenta como borrar: `DROP`, `DELETE` o `TRUNCATE` a mano, `flush`, `migrate <app> zero`, `--fake` seguido de un borrado, borrar la base o su archivo, y todo lo que pierda datos de esa base. Contame qué se pierde, por qué hace falta y qué alternativa hay, y esperá mi respuesta. Si una migración no se puede deshacer, no la arregles tocando las tablas: avisame.
+- **Las bases de prueba no piden permiso (D-101).** Son las que Django crea con nombre `test_…` (por ejemplo `test_infoponia` o sus clones de `--parallel`) en el servidor local: recrearlas, descartarlas, correr con `--noinput` y sin `--keepdb`, o que las pruebas hagan `flush` o `TRUNCATE` por su cuenta. `manage.py test` crea y descarta sus propias bases `test_…`: eso no requiere permiso.
+- **Cómo distinguirlas.** Antes de ejecutar algo que borre datos, comprobá contra qué base va. Es de prueba solo si su nombre empieza con `test_` y está en el servidor local. Si el nombre no empieza con `test_`, si no podés confirmarlo o si `DATABASE_URL` apunta a otro servidor, tratala como mi base de desarrollo y preguntame. Un comando manual (`flush`, `DROP`, `DELETE`, `TRUNCATE`, `migrate … zero`) usa por defecto la base de desarrollo: preguntame, salvo que lo apuntes explícitamente a una base `test_…`.
+- La base de producción (Neon y Render) y cualquier base que no sea la local siguen prohibidas («Seguridad»).
 - **Verificación (recorrido por prueba; a mano, el estudiante: D-96).** Antes de cerrar una tarea, hacé lo que dice `docs/patrones/verificacion_a_mano.md`:
   (1) un **recorrido** de punta a punta con el cliente de Django (`<app>/tests/test_recorrido_<tema>.py`), por rol y estado;
   (2) si la tarea tiene migración, `sqlmigrate` de la nueva y aplicarla en la base de pruebas;
@@ -129,7 +132,7 @@ python manage.py test core.tests.test_usuario --keepdb --parallel --exclude-tag 
 
 - El repositorio es público: ningún secreto en el código.
 - No leas `.env`. Nunca pidas ni uses la cadena de conexión de Neon ni la clave secreta de producción.
-- Trabajás solo contra la base local.
+- Trabajás solo contra la base local: la de desarrollo (con preguntar antes de borrar, ver «Comportamiento») y las bases `test_…`. Nunca contra Neon, Render ni ningún otro servidor.
 
 ## Al terminar cada tarea
 

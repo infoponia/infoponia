@@ -665,3 +665,12 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **No existe `docs/modelo/core.md`.** `Usuario` y los roles están en D-01, D-09, D-11 y D-85, y el Contador también en `docs/modelo/contabilidad.md` (MD-114, R010). Pendiente decidir si se crea un extracto de `core`.
 - **La ventana de reactivación** (`_ventana_confirmar.html`) usa la variable `titular_activo` en lugar de `gerente_activo`.
 
+## CMP-03 (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **Las pruebas «aprobar contra la baja del proveedor» y «contra la baja del invernadero» son invariantes, no carreras.** Una orden no terminada ya impide las dos bajas (H20 y H22), así que la baja se rechaza siempre y no hay resultado que dependa del orden de bloqueo; las carreras reales son generar contra la baja del proveedor y dos aprobaciones del mismo insumo (esta última solo falla al sacar a la vez los bloqueos del invernadero, de la existencia y de los proveedores y el de `sumar_transito`).
+- **La generación audita con un solo registro** (`generacion_orden_compra`: pedido, cotizaciones, orden y detalles); las postcondiciones g y h del caso de uso piden dos.
+- **«Mañana vence la cotización» (paso 61)** se tomó como `fecha_validez == hoy + 1` y se recuerda solo la primera elegible; el documento no dice qué día cuenta como «mañana» ni qué pasa con varias (D-100, a validar).
+- **«Órdenes rechazadas» del Inicio del Agrónomo** muestra las de los últimos 7 días (el criterio del prototipo `panelAgr`): ningún documento lo fija.
+- **`cancelar_pedido_automaticamente` acepta `hoy` y `aviso`** (opcionales): sin `hoy`, `--fecha` no podría simular la fecha de cierre; sin `aviso`, el paso 62 no podría usar el texto de D-87.
+- **Textos de CMP-03 redactados al implementar:** los correos de descarte y de aprobación y las notificaciones de la orden (pendiente de aprobación, aprobada, rechazada) y de los pasos 60 y 61; los documentos fijan qué dicen, no sus palabras.
+- **La lista de órdenes no tiene paginación** (como la de pedidos): con muchas órdenes conviene paginarla.

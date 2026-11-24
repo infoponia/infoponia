@@ -73,6 +73,8 @@ def _contexto_de_la_ficha(request, proveedor_id, **extra):
         "acciones": api.acciones_permitidas(request.user, proveedor),
         # CMP-02a, regla 4 de CMP-CNS-PRV: sus pedidos, según el alcance de quien mira (las órdenes, pagos y reclamos se suman de CMP-03 a CMP-06).
         "pedidos": api.pedidos_del_proveedor(request.user, proveedor),
+        # CMP-03, regla 4 de CMP-CNS-PRV: sus órdenes de compra, según el alcance de quien mira (los pagos y reclamos se suman en CMP-05 y CMP-06).
+        "ordenes": api.ordenes_del_proveedor(request.user, proveedor),
         **extra,
     }
 

@@ -1,5 +1,5 @@
-# Modelos de `compras` (nivel 6 de D-37): Proveedor (CMP-01) y, desde CMP-02a, Pedido, DetallePedido, InvitacionPedido, EnlaceProveedor,
-# Cotizacion y DetalleCotizacion. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88 y D-89). Nunca se borra una fila de
+# Modelos de `compras` (nivel 6 de D-37): Proveedor (CMP-01), desde CMP-02a Pedido, DetallePedido, InvitacionPedido, EnlaceProveedor,
+# Cotizacion y DetalleCotizacion y, desde CMP-03, OrdenCompra y DetalleOrdenCompra. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88 y D-89). Nunca se borra una fila de
 # negocio: hay estados. A2 de D-37: toda FK o M2M se declara acá, en la app de nivel mayor. Ningún import de `comercial` ni de
 # `produccion` (A1).
 
@@ -11,7 +11,8 @@ from django.db.models import F, Q, Sum
 from django.db.models.functions import Coalesce, Round
 from django.utils import timezone
 
-from core.models import Agronomo, Usuario, rol_de
+from compras.precios import precio_unitario_para_mostrar
+from core.models import Agronomo, Gerente, Usuario, rol_de
 from core.validadores import validar_telefono
 from inventario.models import InsumoInvernadero, TipoInsumo
 from maestros.validadores import formatear_cuit
@@ -421,3 +422,173 @@ class DetalleCotizacion(models.Model):
     def __str__(self):
         """«Insumo · Invernadero» de la línea (texto de la auditoría)."""
         return str(self.detalle_pedido)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Órdenes de compra (CMP-03). Fuente: docs/modelo/compras.md («OrdenCompra» y «DetalleOrdenCompra»; reglas 13, 16, 18, 23 y 24 de 8.16, D-89).
+# ``AlertaCompras`` no está acá: la crea CMP-04 junto con ``ReclamoProveedor`` (su FK).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+class OrdenCompraQuerySet(models.QuerySet):
+    """El alcance por usuario de las órdenes de compra, en un único lugar (CLAUDE.md, «Arquitectura»)."""
+
+    def en_alcance_de(self, actor):
+        """Regla 1 de CMP-CNS-ODC: el Agrónomo activo ve las órdenes con algún destino en los invernaderos que tiene a cargo; el Gerente activo, todas;
+        el Contador activo, todas en solo lectura (D-87 punto 6, USR-11); cualquier otra cuenta, una cuenta inactiva o ``None``, ninguna."""
+        if actor is None or not actor.is_active:
+            return self.none()
+        rol = rol_de(actor)
+        if rol in (Usuario.Rol.GERENTE, Usuario.Rol.CONTADOR):
+            return self.all()
+        if rol == Usuario.Rol.AGRONOMO:
+            return self.filter(
+                pk__in=DetalleOrdenCompra.objects.filter(
+                    detalle_cotizacion__detalle_pedido__insumo_invernadero__invernadero__agronomo_id=actor.pk
+                ).values("orden_id")
+            )
+        return self.none()
+
+    def con_monto(self):
+        """Anota ``monto_orden``: Σ ``total_linea`` de sus detalles (D-89 punto 5: derivado, no una columna; no se llama ``monto_total`` porque es la propiedad)."""
+        importe = models.DecimalField(max_digits=16, decimal_places=2)
+        return self.annotate(
+            monto_orden=Coalesce(Sum("detalles__total_linea", output_field=importe), Decimal("0.00"), output_field=importe)
+        )
+
+
+class OrdenCompra(models.Model):
+    """La orden que arma el Agrónomo con las cotizaciones elegidas de un pedido y resuelve el Gerente (docs/modelo/compras.md, «OrdenCompra»; R011).
+    Nace «pendiente de aprobación» y pasa a «aprobada» o «rechazada» (CMP-APR-ODC); los estados de recepción los aplica CMP-04. Una por pedido
+    (regla 13 de 8.16): ``pedido`` es ``OneToOne``, así que la base impide dos. El monto es derivado (``monto_total``)."""
+
+    class Estado(models.TextChoices):
+        PENDIENTE_APROBACION = "pendiente_aprobacion", "Pendiente de aprobación"
+        APROBADA = "aprobada", "Aprobada"
+        RECHAZADA = "rechazada", "Rechazada"
+        PARCIALMENTE_RECIBIDA = "parcialmente_recibida", "Parcialmente recibida"
+        RECIBIDA = "recibida", "Recibida"
+        RECIBIDA_CON_FALTANTE = "recibida_con_faltante", "Recibida con faltante"
+
+    # «No terminada» (H20 y H22): impide deshabilitar el insumo de destino y dar de baja a su proveedor.
+    NO_TERMINADAS = (Estado.PENDIENTE_APROBACION, Estado.APROBADA, Estado.PARCIALMENTE_RECIBIDA)
+
+    pedido = models.OneToOneField(Pedido, on_delete=models.PROTECT, related_name="orden_compra")
+    fecha_emision = models.DateField("fecha de emisión")
+    fecha_resolucion = models.DateField("fecha de resolución", null=True, blank=True)
+    estado_orden_compra = models.CharField(max_length=25, choices=Estado.choices, default=Estado.PENDIENTE_APROBACION)
+    observaciones = models.TextField("observaciones del Agrónomo", blank=True)
+    motivo_rechazo = models.TextField("motivo del rechazo", blank=True)
+    # R011: el Gerente que la resolvió; vacío mientras está pendiente.
+    gerente = models.ForeignKey(Gerente, on_delete=models.PROTECT, null=True, blank=True, related_name="ordenes_resueltas")
+
+    objects = OrdenCompraQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-id"]
+        verbose_name = "Orden de compra"
+        verbose_name_plural = "Órdenes de compra"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(
+                    estado_orden_compra__in=[
+                        "pendiente_aprobacion",
+                        "aprobada",
+                        "rechazada",
+                        "parcialmente_recibida",
+                        "recibida",
+                        "recibida_con_faltante",
+                    ]
+                ),
+                name="orden_estado_valido",
+            ),
+            # Modelo, «OrdenCompra»: resuelta (estado distinto de pendiente) ⇔ tiene Gerente y fecha de resolución (R011).
+            models.CheckConstraint(
+                condition=(Q(estado_orden_compra="pendiente_aprobacion") & Q(gerente__isnull=True) & Q(fecha_resolucion__isnull=True))
+                | (~Q(estado_orden_compra="pendiente_aprobacion") & Q(gerente__isnull=False) & Q(fecha_resolucion__isnull=False)),
+                name="orden_resolucion_coherente_con_estado",
+            ),
+            # Modelo, «OrdenCompra»: rechazada ⇔ motivo no vacío.
+            models.CheckConstraint(
+                condition=(Q(estado_orden_compra="rechazada") & ~Q(motivo_rechazo=""))
+                | (~Q(estado_orden_compra="rechazada") & Q(motivo_rechazo="")),
+                name="orden_motivo_de_rechazo_coherente_con_estado",
+            ),
+        ]
+
+    def __str__(self):
+        """«OC-0007»: el identificador que ven las pantallas, los correos y la auditoría (D-36)."""
+        return f"OC-{self.pk:04d}" if self.pk else "OC-nueva"
+
+    @property
+    def pendiente(self):
+        """True si la orden espera la decisión del Gerente."""
+        return self.estado_orden_compra == self.Estado.PENDIENTE_APROBACION
+
+    @property
+    def monto_total(self):
+        """Σ de los totales de sus detalles (derivado). Usa los detalles ya traídos con ``prefetch_related("detalles")`` si los hay."""
+        return sum((detalle.total_linea for detalle in self.detalles.all()), Decimal("0.00"))
+
+
+class DetalleOrdenCompra(models.Model):
+    """Una línea de la orden: copia de una línea de cotización elegida (docs/modelo/compras.md, «DetalleOrdenCompra»; R022 y R023). Copia la cantidad
+    **cotizada** (P2) y el **total** de la línea (D-89); el unitario es derivado (``compras.precios.precio_unitario``). **R026 se deriva**
+    (``detalle_pedido``): guardarla repetiría un dato que no puede ser distinto (regla 5 de 8.17); el proveedor también. Lo recibido y el cierre con
+    faltante son de CMP-04."""
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "pendiente", "Pendiente"
+        COMPLETO = "completo", "Completo"
+        CERRADO_CON_FALTANTE = "cerrado_con_faltante", "Cerrado con faltante"
+
+    orden = models.ForeignKey(OrdenCompra, on_delete=models.PROTECT, related_name="detalles")
+    # R023: una línea de cotización genera a lo sumo un detalle de orden.
+    detalle_cotizacion = models.OneToOneField(DetalleCotizacion, on_delete=models.PROTECT, related_name="detalle_orden")
+    cantidad_detalle_orden = models.DecimalField("cantidad", max_digits=14, decimal_places=3)
+    total_linea = models.DecimalField("total de la línea", max_digits=14, decimal_places=2)
+    # Nula hasta la aprobación: fecha de resolución + plazo de la línea (regla 23 de 8.16).
+    fecha_entrega_esperada = models.DateField("fecha de entrega esperada", null=True, blank=True)
+    estado_detalle_orden = models.CharField(max_length=25, choices=Estado.choices, default=Estado.PENDIENTE)
+    motivo_cierre_faltante = models.TextField("motivo del cierre con faltante", blank=True)
+    # Técnico (D-91): para ordenar la bandeja de pagos.
+    fecha_cierre_faltante = models.DateField("fecha del cierre con faltante", null=True, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Detalle de orden de compra"
+        verbose_name_plural = "Detalles de orden de compra"
+        constraints = [
+            models.CheckConstraint(condition=Q(cantidad_detalle_orden__gt=0), name="detalle_orden_cantidad_positiva"),
+            models.CheckConstraint(condition=Q(total_linea__gt=0), name="detalle_orden_total_positivo"),
+            models.CheckConstraint(
+                condition=Q(estado_detalle_orden__in=["pendiente", "completo", "cerrado_con_faltante"]), name="detalle_orden_estado_valido"
+            ),
+            # Modelo, «DetalleOrdenCompra»: cerrado con faltante ⇔ motivo no vacío y fecha de cierre.
+            models.CheckConstraint(
+                condition=(
+                    Q(estado_detalle_orden="cerrado_con_faltante") & ~Q(motivo_cierre_faltante="") & Q(fecha_cierre_faltante__isnull=False)
+                )
+                | (~Q(estado_detalle_orden="cerrado_con_faltante") & Q(motivo_cierre_faltante="") & Q(fecha_cierre_faltante__isnull=True)),
+                name="detalle_orden_faltante_coherente_con_estado",
+            ),
+        ]
+
+    def __str__(self):
+        """«Insumo · Invernadero» de la línea (texto de la auditoría)."""
+        return str(self.detalle_cotizacion.detalle_pedido)
+
+    @property
+    def detalle_pedido(self):
+        """R026 derivada: el detalle del pedido que cubre esta línea (``detalle_cotizacion.detalle_pedido``)."""
+        return self.detalle_cotizacion.detalle_pedido
+
+    @property
+    def proveedor(self):
+        """El proveedor de la línea (línea de cotización → cotización → proveedor)."""
+        return self.detalle_cotizacion.cotizacion.proveedor
+
+    @property
+    def unitario_para_mostrar(self):
+        """El precio unitario derivado con dos decimales (D-89 puntos 1 y 7), para pantallas y correos."""
+        return precio_unitario_para_mostrar(self)

@@ -230,3 +230,44 @@ def registrar_salida_por_consumo(iin_id, partes, *, origen_id, fecha=None):
         salida(sin_lote, falta)
     alertas_de_stock.reevaluar_alertas_del_insumo(existencia.pk)
     return movimientos
+
+
+# ---- escritura de compras: cantidad en tránsito (D-90 punto 1; docs/api/stock.md, «Escritura de compras»; regla 22 de 8.16) ----
+# El tránsito es lo que se pidió y todavía no llegó: NO es stock (regla 1 de 8.19), así que no crea movimientos, no toca lotes ni ``referencia_precio``
+# (regla 6 de 8.18) y no reevalúa alertas: aprobar una orden no resuelve «bajo el mínimo», se resuelve al recibir (CMP-APR-ODC postcondición d).
+# Corren dentro de la transacción de quien llama, con el invernadero ya bloqueado; bloquean la existencia y la vuelven a leer. No auditan.
+
+
+def _cantidad_de_transito(valor, unidad):
+    """``valor`` validado con los decimales de la unidad y mayor que cero. Es un error de uso de quien llama (``ValueError``; un ``float``, ``TypeError``)."""
+    try:
+        cantidad = validar_cantidad(valor, unidad)
+    except ValidationError as error:
+        raise ValueError(f"Cantidad de tránsito inválida: {error.messages[0]}") from error
+    if cantidad <= 0:
+        raise ValueError("La cantidad de tránsito tiene que ser mayor que cero.")
+    return cantidad
+
+
+def _cambiar_transito(iin_id, cantidad, signo):
+    """Bloquea y relee el ``InsumoInvernadero``, valida ``cantidad`` y le suma ``signo × cantidad`` al tránsito (nunca queda negativo: ``ValueError``)."""
+    existencia = (
+        InsumoInvernadero.objects.select_for_update(no_key=True, of=("self",)).select_related("insumo").get(pk=iin_id)
+    )
+    cantidad = _cantidad_de_transito(cantidad, existencia.insumo.unidad_medida_insumo)
+    nuevo = existencia.cant_transito_insumo + signo * cantidad
+    if nuevo < 0:
+        raise ValueError(f"No se puede restar {cantidad} del tránsito: solo hay {existencia.cant_transito_insumo} en tránsito.")
+    existencia.cant_transito_insumo = nuevo
+    existencia.save(update_fields=["cant_transito_insumo"])
+    return existencia
+
+
+def sumar_transito(iin_id, cantidad):
+    """Suma ``cantidad`` a ``cant_transito_insumo`` del ``InsumoInvernadero`` ``iin_id`` y lo devuelve (la usa CMP-03 al aprobar una orden)."""
+    return _cambiar_transito(iin_id, cantidad, 1)
+
+
+def restar_transito(iin_id, cantidad):
+    """Resta ``cantidad`` del tránsito y devuelve el ``InsumoInvernadero`` (la usa CMP-04 al recibir y al cerrar con faltante). ``ValueError`` si quedaría negativo."""
+    return _cambiar_transito(iin_id, cantidad, -1)

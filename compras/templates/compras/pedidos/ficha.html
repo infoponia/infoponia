@@ -11,11 +11,16 @@ correo falló); y las cotizaciones recibidas, en solo lectura desde que llegan. 
     <h1>Pedido {{ pedido }}</h1>
     <span class="status-badge {% if pedido.estado_pedido == 'en_cotizacion' %}status-info{% else %}status-neutral{% endif %}">{{ pedido.get_estado_pedido_display }}</span>
     {% if ficha.por_resolver %}<span class="status-badge status-warn">Fecha límite vencida</span>{% endif %}
-    {% if ficha.puede_cancelar %}<span class="spacer"></span><a class="btn btn-danger" href="{% url 'compras:pedido_cancelar' pedido.pk %}">Cancelar pedido</a>{% endif %}
+    {% if ficha.puede_generar or ficha.puede_cancelar %}<span class="spacer"></span>{% endif %}
+    {% if ficha.puede_generar %}<a class="btn btn-primary" href="{% url 'compras:pedido_generar_orden' pedido.pk %}">{% icono "sliders" 15 %} Comparar cotizaciones y generar orden</a>{% endif %}
+    {% if ficha.puede_cancelar %}<a class="btn btn-danger" href="{% url 'compras:pedido_cancelar' pedido.pk %}">Cancelar pedido</a>{% endif %}
   </div>
 
   {% if ficha.por_resolver %}
   <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div>Venció la fecha límite el {{ pedido.fecha_limite_cotizaciones|date:"d/m/Y" }}. {% if es_gerente %}Lo resuelve el Agrónomo que hizo el pedido.{% else %}Hay {{ ficha.cotizaciones|length }} cotización{{ ficha.cotizaciones|length|pluralize:"es" }} para revisar.{% endif %}</div></div>
+  {% endif %}
+  {% if ficha.orden %}
+  <div class="alert alert-ok" role="status" style="margin-bottom:16px">{% icono "check" 16 %}<div>Con este pedido se generó la orden de compra <a href="{% url 'compras:orden_ficha' ficha.orden.pk %}"><b>{{ ficha.orden }}</b></a>: {{ ficha.orden.get_estado_orden_compra_display|lower }}.</div></div>
   {% endif %}
   {% if pedido.estado_pedido == "cancelado" %}
   <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div><b>Motivo de la cancelación:</b> {{ pedido.motivo_cancelacion|default:"—" }}</div></div>

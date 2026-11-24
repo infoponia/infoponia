@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
 {% comment %}Ficha del proveedor (CMP-CNS-PRV regla 4, VIEWS.c_prv del prototipo): sus datos y los botones que le corresponden a quien mira («acciones», D-30). Solo el
 Gerente modifica, da de baja y reactiva; el Agrónomo solo consulta (regla 5). Los pedidos, órdenes, pagos y reclamos se suman de CMP-02a a CMP-06.
 La baja abre una ventana con HTMX; sin JavaScript, su enlace lleva a esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
@@ -46,6 +46,28 @@ La baja abre una ventana con HTMX; sin JavaScript, su enlace lleva a esta págin
       </div>
       {% else %}
       <p class="muted" style="margin:0;padding:16px 20px">Todavía no se le pidieron cotizaciones ni se le compró. Cuando haya pedidos y órdenes, se ven acá.</p>
+      {% endif %}
+    </div>
+    <div class="card seg">
+      <div class="card-h"><b>Órdenes de compra</b></div>
+      {% if ordenes %}
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Orden</th><th>Pedido</th><th>Estado</th><th class="right">Sus líneas</th></tr></thead>
+          <tbody>
+          {% for f in ordenes %}
+          <tr>
+            <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}"><b>{{ f.orden }}</b></a><span class="sub2">{{ f.orden.fecha_emision|date:"d/m/Y" }}</span></td>
+            <td><a class="prv-nombre" href="{% url 'compras:pedido_ficha' f.orden.pedido_id %}">{{ f.orden.pedido }}</a></td>
+            <td><span class="status-badge {% if f.orden.estado_orden_compra == 'pendiente_aprobacion' %}status-warn{% elif f.orden.estado_orden_compra == 'rechazada' %}status-danger{% elif f.orden.estado_orden_compra == 'aprobada' %}status-info{% else %}status-ok{% endif %}">{{ f.orden.get_estado_orden_compra_display }}</span></td>
+            <td class="right nowrap mono">{{ f.monto|pesos }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0;padding:16px 20px">Todavía no se le compró. Cuando una orden incluya sus cotizaciones, se ve acá.</p>
       {% endif %}
     </div>
   </div>

@@ -661,3 +661,38 @@ Los pasos están en «Verificación a mano» de `docs/tareas/usuarios/USR-09a-en
 1. Después del primer merge con el workflow: en GitHub, Settings → Branches (o Rules), exigir que
    el check de `pruebas.yml` pase para poder mergear a main.
 
+## CMP-03 · Tarea CMP-03 (orden de compra y pasos diarios)
+
+Los 31 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-03-orden-de-compra-y-pasos-diarios.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay dos migraciones nuevas (`compras` 0003 y `core` 0036, esta última solo cambia los `choices`): `python manage.py migrate`. Tu `.env` necesita `DJANGO_DEBUG=1` (desde USR-09a). Para ver los correos sin enviarlos, correo en modo consola (`CORREO_CONSOLA=1` en `.env`).
+
+- [ ] 1. Ana, Inicio: «Pedidos por resolver» en 1 y «Pedidos que vencieron» con «Resolver».
+- [ ] 2. Ana, ficha de P1: «Comparar cotizaciones y generar orden»; el Gerente no lo ve y Beto da 403.
+- [ ] 3. «Comparar cotizaciones y generar orden»: «Por insumo» y «Por cotización», «el más bajo» marcado, nada elegido y «Revisar la orden» deshabilitado.
+- [ ] 4. Elegir A: lechuga cubierta, tomate «Falta 8», $ 330,00.
+- [ ] 5. Elegir B: todo cubierto, $ 430,00 y 2 proveedores.
+- [ ] 6. Elegir también C: aviso de 10 lechugas de más; «Quitar» en C vuelve a $ 430,00.
+- [ ] 7. «Revisar la orden»: resumen con $ 430,00 frente a $ 450,00 (−$ 20,00, −4,4 %), C descartada y las observaciones; no se generó nada.
+- [ ] 8. «Volver a corregir» conserva la elección y las observaciones.
+- [ ] 9. «Confirmar la orden»: OC pendiente de aprobación y un solo correo, a Hortalizas del Oeste (C), sin los otros proveedores.
+- [ ] 10. Ficha de P1 «Cerrado» con el enlace a la orden; `/compras/pedidos/<N>/generar-orden/` a mano vuelve a la ficha con el motivo.
+- [ ] 11. Gerente, Inicio: «Órdenes por aprobar» en 1, tabla con «Revisar» y notificación en la campana.
+- [ ] 12. Gerente, Compras → Órdenes: atajo «Por aprobar»; Ana no ve «Revisar».
+- [ ] 13. «Revisar y decidir»: pedido, Agrónoma, observaciones, líneas por proveedor, comprado frente a pedido y monto frente al estimado.
+- [ ] 14. «Aprobar orden»: resumen con las fechas de entrega (hoy + 3, + 4 y + 5), el tránsito 0 → 20 de cada insumo y «no registra ningún pago»; «Volver» no cambia nada.
+- [ ] 15. «Confirmar aprobación»: orden aprobada, tránsito 20 en Inventario y dos correos con solo las líneas de cada proveedor.
+- [ ] 16. Ana recibe el aviso de la aprobación; el Gerente no recibe el suyo.
+- [ ] 17. «Auditoría»: aprobación de orden y dos modificaciones de insumo con el tránsito antes y después.
+- [ ] 18. Con la orden aprobada: deshabilitar la Lechuga y dar de baja al proveedor A se rechazan nombrando la orden.
+- [ ] 19. Ficha del proveedor A con «Órdenes de compra» ($ 330,00); la de C, «Todavía no se le compró»; Beto no ve la orden.
+- [ ] 20. P2 (Lechuga 20, solo A, total $ 200) vencido; Ana genera su orden.
+- [ ] 21. Rechazar sin motivo: el error sale bajo el campo y nada cambia.
+- [ ] 22. Rechazar con motivo: resumen, correo a A sin el motivo, orden «Rechazada», «Órdenes rechazadas» en el Inicio de Ana y el tránsito sin cambio.
+- [ ] 23. `/compras/ordenes/<id>/resolver/` de una orden ya resuelta vuelve a la ficha con la decisión.
+- [ ] 24. P3 con la cotización vencida: «Validez vencida» sin botón «Elegir», «Ofertas insuficientes» y «Cancelar pedido».
+- [ ] 25. (Opcional) Orden con cotización vencida: sin «Aprobar orden» y con el motivo propuesto para rechazar.
+- [ ] 26. `proceso_diario --listar` muestra los pasos 60, 61 y 62.
+- [ ] 27. P4 sin cotizaciones: `--solo pedidos_vencidos` lo cancela («Nadie cotizó»); correrlo otra vez no repite nada.
+- [ ] 28. P5 (validez hasta mañana): aviso de vencimiento, recordatorio de validez (una vez) y, con `--fecha` pasado mañana, cancelación por «Sin cotizaciones elegibles».
+- [ ] 29. **Navegador real** (ventana privada): generar, aprobar y rechazar hasta el final sin 403 ni «Verificación CSRF fallida».
+- [ ] 30. Roles: Capataz 403 en Órdenes; Beto lista vacía y 403 en la ficha; Gerente 403 en generar; Ana 403 en resolver.
+- [ ] 31. (Opcional) Sin JavaScript y en un celular.

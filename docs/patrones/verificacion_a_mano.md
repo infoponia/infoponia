@@ -14,7 +14,7 @@ prueba los crea él (los cargadores no vuelven). Si algo de acá contradice a `C
 | 5 | Claude Code | **Verificación a mano**: los pasos para el estudiante, con mucho detalle (abajo). Se anotan en `docs/revisiones_pendientes.md` (M5). | Archivo de la tarea, `revisiones_pendientes.md`, texto del PR |
 | 6 | El estudiante | Hace los pasos y los tacha en `revisiones_pendientes.md` (y en `estado.md`) en el mismo commit o PR. | `revisiones_pendientes.md` |
 
-Claude Code **no abre un navegador ni mira capturas** y no deja la base local cargada: no toca la base local de desarrollo.
+Claude Code **no abre un navegador ni mira capturas** y no deja la base local cargada: no toca la base local de desarrollo (las bases `test_…` sí las crea y las descarta cuando hace falta).
 
 ## El recorrido (con el cliente de Django)
 

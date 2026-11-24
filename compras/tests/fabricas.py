@@ -182,3 +182,36 @@ def cotizacion_de(pedido, proveedor, lineas, validez_en_dias=10, observaciones="
             plazo_entrega_dias=plazo,
         )
     return cotizacion
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Órdenes de compra (CMP-03). Armadas directo en la base, sin pasar por los servicios.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.models import DetalleOrdenCompra, OrdenCompra  # noqa: E402
+
+
+def orden_de(pedido, cotizaciones, estado="pendiente_aprobacion", gerente=None, hoy=None, motivo=""):
+    """Una ``OrdenCompra`` de ``pedido`` con un detalle por cada línea de las ``cotizaciones`` (que pasan a «seleccionada», o a «descartada» si la
+    orden es «rechazada»; el pedido, a «cerrado»). Si ``estado`` no es «pendiente de aprobación» hace falta ``gerente`` (y ``motivo`` si es
+    «rechazada»); la fecha de resolución es ``hoy``. No calcula la fecha de entrega esperada: la pone el servicio al aprobar."""
+    hoy = hoy or timezone.localdate()
+    resuelta = estado != "pendiente_aprobacion"
+    if pedido.estado_pedido == "en_cotizacion":
+        Pedido.objects.filter(pk=pedido.pk).update(estado_pedido="cerrado", fecha_cierre_pedido=hoy)
+        pedido.refresh_from_db()
+    orden = OrdenCompra.objects.create(
+        pedido=pedido,
+        fecha_emision=hoy,
+        fecha_resolucion=hoy if resuelta else None,
+        estado_orden_compra=estado,
+        gerente=gerente if resuelta else None,
+        motivo_rechazo=motivo,
+    )
+    for cotizacion in cotizaciones:
+        Cotizacion.objects.filter(pk=cotizacion.pk).update(estado_cotizacion="descartada" if estado == "rechazada" else "seleccionada")
+        for linea in cotizacion.lineas.order_by("id"):
+            DetalleOrdenCompra.objects.create(
+                orden=orden, detalle_cotizacion=linea, cantidad_detalle_orden=linea.cantidad_cotizada, total_linea=linea.total_linea
+            )
+    return orden

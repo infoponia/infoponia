@@ -1,0 +1,54 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen de la aprobación (CMP-APR-ODC paso 6) antes de confirmar: la fecha de entrega esperada de cada línea, cómo subirá la cantidad en tránsito de cada insumo en cada invernadero, que cada proveedor recibirá solo sus
+líneas y que la aprobación no registra ningún pago. Recibe «resumen» (``ResumenDeAprobacion``). «Confirmar aprobación» aprueba (pasos 7 y 8); «Volver» no cambia nada.{% endcomment %}
+{% block titulo %}Confirmar la aprobación de {{ resumen.orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá la aprobación de la orden {{ resumen.orden }}</h1></div>
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>Aprobar <b>no registra ningún pago</b>: el pago a cada proveedor se registra después de recibir la mercadería. Cada proveedor recibe por correo solo sus propias líneas.</div></div>
+
+  <div class="stack">
+    <div class="card seg">
+      <div class="card-h"><b>Entregas esperadas</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Proveedor</th><th>Insumo</th><th>Destino</th><th class="right">Cantidad</th><th>Entrega esperada</th></tr></thead>
+          <tbody>
+          {% for d, fecha in resumen.entregas %}
+          <tr><td>{{ d.detalle_cotizacion.cotizacion.proveedor.nombre_para_mostrar }}</td><td>{{ d.detalle_pedido.insumo_invernadero.insumo.nombre_insumo }}</td><td>{{ d.detalle_pedido.insumo_invernadero.invernadero.nombre_invernadero }}</td><td class="right nowrap mono">{{ d.cantidad_detalle_orden|cant:d.detalle_pedido.insumo_invernadero.insumo.unidad_medida_insumo }}</td><td class="nowrap">{{ fecha|date:"d/m/Y" }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card seg">
+      <div class="card-h"><b>Cantidad en tránsito</b><span class="muted sm">lo pedido que todavía no llegó</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th>Invernadero</th><th class="right">Ahora</th><th class="right">Suma</th><th class="right">Quedará</th></tr></thead>
+          <tbody>
+          {% for iin, antes, suma, despues in resumen.transito %}
+          <tr><td>{{ iin.insumo.nombre_insumo }}</td><td>{{ iin.invernadero.nombre_invernadero }}</td><td class="right nowrap mono">{{ antes|num:iin.insumo.unidad_medida_insumo }}</td><td class="right nowrap mono">+ {{ suma|num:iin.insumo.unidad_medida_insumo }}</td><td class="right nowrap mono"><b>{{ despues|cant:iin.insumo.unidad_medida_insumo }}</b></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <dl class="dl two">
+        <dt>Proveedores que reciben su orden</dt>
+        <dd>{% for p in resumen.proveedores %}<span class="chip-fijo">{{ p.proveedor.nombre_para_mostrar }} · {{ p.proveedor.email_proveedor }} · {{ p.lineas|length }} línea{{ p.lineas|length|pluralize }}</span>{% endfor %}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'compras:orden_resolver' resumen.orden.pk %}" novalidate>
+    {% csrf_token %}
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar_aprobacion" data-enviando="Aprobando…">Confirmar aprobación</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
