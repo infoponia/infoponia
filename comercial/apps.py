@@ -13,7 +13,7 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import camara, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import camara, enlaces, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -97,5 +97,7 @@ class ComercialConfig(AppConfig):
         extensiones_de_maestros.registrar_enlace_de_alerta((camara.TIPO_POR_VENCER, camara.TIPO_MERMA_RESERVADA), camara.enlaces_de_alertas_de_camara)
         registrar_paso_diario("vencer_partidas_en_camara", "Vencer partidas en cámara", 20, camara.vencer_partidas_en_camara)
         registrar_paso_diario("reasignar_camara", "Reasignar cámara", 25, camara.reasignar_camara)
+        # COM-04c (D-65 punto 7): el paso 27 pasa a «vencido» el enlace de decisión sin respuesta y avisa al Vendedor una sola vez.
+        registrar_paso_diario("avisar_enlaces_vencidos", "Avisar enlaces vencidos", 27, enlaces.avisar_enlaces_vencidos)
         if "camara" not in [clave for clave, _, _ in extensiones_de_maestros._PESTANAS]:
             extensiones_de_maestros.registrar_pestana_de_invernadero("camara", "Cámara", camara.pestana_de_camara)

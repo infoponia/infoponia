@@ -21,7 +21,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from comercial.models import AlertaComercial, DetalleReserva, DetalleVenta, ReservaStock
+from comercial.models import AlertaComercial, DetalleReserva, DetalleVenta, EnlaceCliente, ReservaStock
 from comercial.servicios import camara
 from comercial.tests.fabricas import (
     compra_venta,
@@ -190,6 +190,18 @@ class ProdVncCamServicioTests(Base):
         self.correr()
         d.refresh_from_db()
         self.assertEqual((d.estado_detalle_venta, d.compra_venta.estado_venta, d.fecha_pendiente_decision), ("pendiente_decision", "pendiente_decision", HOY))
+
+    def test_ext_3a_2a_el_cliente_con_correo_recibe_el_enlace_nuevo_y_va_a_la_auditoria(self):
+        """Extensión 3a.2a (COM-04c): lo que no se cubre sigue el camino de faltante completo: enlace vigente para el cliente y el enlace en la auditoría del vencimiento."""
+        p = self.vencida(40)
+        d = self.venta(30)
+        reserva(d, [(p, 30)])
+        self.sin_stock_de_lote()
+        self.correr()
+        creado = EnlaceCliente.objects.get(compra_venta=d.compra_venta)
+        self.assertEqual((creado.estado, creado.fecha_vencimiento), ("vigente", HOY + timedelta(days=2)))
+        registro = RegistroAuditoria.objects.get(accion="vencimiento_partida")
+        self.assertIn("comercial.enlacecliente", {a["modelo"] for a in registro.afectados})
 
     def test_ext_3a_un_detalle_pendiente_no_se_vuelve_a_cubrir_y_suma_al_faltante(self):
         """Extensión 3a: un detalle «pendiente de decisión» no llama a `asignar` (precondición b de PROD-ASG-STK): va directo al camino de faltante con la fecha de pendiente nueva, aunque haya otra partida."""

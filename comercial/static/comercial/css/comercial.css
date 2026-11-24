@@ -98,3 +98,27 @@
 .comprobante h1{font-size:22px;margin:0 0 4px}
 .comprobante .dl{margin:14px 0}
 .comprobante .data-table{width:100%}
+
+/* ---- Portal público del cliente (COM-DCD-FLT; COM-04c): una sola columna, para celular y computadora; mismo estilo que el del proveedor ---- */
+.portal{min-height:100vh;padding:28px 16px 20px;display:flex;flex-direction:column;align-items:center}
+.portal-marca{align-self:center}
+.portal-avisos{width:100%;max-width:880px;margin-bottom:14px}
+.portal-p{width:100%}
+.portal-h{margin-bottom:18px}
+.portal-h h1{margin-bottom:4px}
+.portal .stack{display:grid;gap:18px;margin-top:18px}
+.portal-radio{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px;font-weight:500;cursor:pointer}
+.portal-lista{margin:0 0 10px;padding-left:20px;display:grid;gap:6px;font-size:14px}
+.rline{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;background:#fff}
+.portal-resumen{margin-bottom:18px}
+.portal-condiciones{margin-top:18px}
+.tabla-responsive{overflow-x:auto}
+.portal-form .footbar{justify-content:flex-start}
+.alert-ok{background:#f4faf5;border-color:#c6e3cb;color:#1f5a2b}
+@media (max-width:640px){
+  .portal-resumen .data-table thead{display:none}
+  .portal-resumen .data-table tr{display:block;padding:10px 0;border-bottom:1px solid var(--border)}
+  .portal-resumen .data-table tbody tr:last-child{border-bottom:none}
+  .portal-resumen .data-table td{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border:0;text-align:right}
+  .portal-resumen .data-table td::before{content:attr(data-etiqueta);font-weight:600;color:var(--muted-foreground);text-align:left}
+}

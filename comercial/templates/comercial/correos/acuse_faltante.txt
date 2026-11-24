@@ -1,0 +1,12 @@
+{% load comercial %}{% autoescape off %}Hola {{ cliente }},
+
+Registramos tu decisión sobre el faltante de tu compra {{ codigo }} en {{ nombre_organizacion }}:
+{% for fila in filas %}
+- {{ fila.variedad }}: {% if fila.acepta %}recibirás {{ fila.cantidad }} plantas, {{ fila.subtotal|pesos }}.{% else %}no lo recibirás ni se te cobrará.{% endif %}{% endfor %}
+
+{% if cancelada %}Como rechazaste todo, la compra quedó cancelada.{% else %}Monto total de la compra: {{ total|pesos }}.
+Fecha pactada de entrega: {{ fecha_pactada|date:"d/m/Y" }}.{% endif %}
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

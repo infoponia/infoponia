@@ -49,6 +49,9 @@ def contratos(request):
     es_gerente = request.user.rol == GERENTE
     pagina = compra_ventas.buscar_compra_ventas(request.user, filtros, request.GET.get("pagina"))
     puede, motivo = compra_ventas.puede_registrar(request.user)
+    from comercial.servicios import faltantes  # el Vendedor ve cuántas ventas esperan una decisión que él puede registrar (COM-DCD-FLT, 1a)
+
+    para_decidir = len(faltantes.ventas_para_decidir(request.user)) if request.user.rol == VENDEDOR else 0
     consulta = urlencode({k: v for k, v in request.GET.items() if k != "pagina" and v})
     return render(
         request,
@@ -60,6 +63,7 @@ def contratos(request):
             "es_gerente": es_gerente,
             "vendedores": [v for v, _ in compra_ventas._vendedores_con_invernaderos()] if es_gerente else [],
             "puede_registrar": puede,
+            "para_decidir": para_decidir,
             "motivo": motivo,
             "consulta": consulta,
         },

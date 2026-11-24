@@ -75,7 +75,7 @@ ResumenDeConcrecion = namedtuple("ResumenDeConcrecion", "errores lotes total_res
 ResultadoConcrecion = namedtuple("ResultadoConcrecion", "cosecha reserva partidas mermas asignacion faltante")
 Estimacion = namedtuple("Estimacion", "cubierto sin_cubrir origenes hace_falta_cosecha")
 ResumenDeCancelacion = namedtuple("ResumenDeCancelacion", "cosecha reserva lineas contrato fecha_entrega cubierto ya_pendiente estimacion huella")
-CancelacionDeCosecha = namedtuple("CancelacionDeCosecha", "cosecha reserva lineas cubierto asignacion sin_cubrir notificar_a")
+CancelacionDeCosecha = namedtuple("CancelacionDeCosecha", "cosecha reserva lineas cubierto asignacion sin_cubrir notificar_a enlaces", defaults=((),))
 # El contrato que cubre una cosecha: `tipo` es "cv" o "sum"; `detalle` el `DetalleVenta` o el `DetalleSuministro`; `contrato` la compra-venta o el suministro;
 # `fecha_entrega` la pactada o la del período; `periodo` el `Periodo` (solo en un suministro).
 Contrato = namedtuple("Contrato", "tipo detalle contrato fecha_entrega periodo")
@@ -1103,7 +1103,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
                 )
         camara_comercial.programar_asignacion_de_camara([p.pk for p in partidas])  # k (D-64 punto 9): corre después de confirmar; el paso 25 la recupera si falla
         faltante = sum(p.linea.cantidad_reservada - min(p.cosechada, p.linea.cantidad_reservada) for p in planes) if con_contrato else 0
-        asignacion, sin_cubrir = None, 0
+        asignacion, sin_cubrir, enlace_nuevo = None, 0, None
         if faltante:
             detalle_actual = contrato.detalle.__class__.objects.get(pk=contrato.detalle.pk)
             puede = (
@@ -1120,7 +1120,8 @@ def concretar_cosecha(actor, cosecha_id, datos):
             else:
                 sin_cubrir = faltante
             if sin_cubrir:
-                faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else detalle_actual, sin_cubrir, origen=actor)
+                camino = faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else detalle_actual, sin_cubrir, origen=actor)
+                enlace_nuevo = camino.enlace  # COM-04c: el enlace del cliente va a la auditoría de quien lo crea
         reservado_total = sum(p.linea.cantidad_reservada for p in planes)
         cosechado_total = sum(p.cosechada for p in planes)
         perdido_total = sum(p.total_perdidas for p in planes)
@@ -1138,6 +1139,8 @@ def concretar_cosecha(actor, cosecha_id, datos):
             afectados += [*asignacion.reservas, *asignacion.cosechas]
         if contrato is not None:
             afectados.append(contrato.detalle)
+        if enlace_nuevo is not None:
+            afectados.append(enlace_nuevo)
         cambios = {
             "estado": {"antes": Estado.A_REALIZAR.value, "despues": Estado.CONCRETADA.value},
             "fecha_resolucion_orden": {"antes": None, "despues": _fecha(hoy)},
@@ -1291,7 +1294,7 @@ def _cancelar_en_transaccion(actor, cosecha, motivo, *, recubrir):
     ReservaStock.objects.filter(pk=reserva.pk).update(estado_reserva=ReservaStock.Estado.LIBERADA)
     reserva.estado_reserva = ReservaStock.Estado.LIBERADA
     camara_comercial.programar_asignacion_de_camara([l.partida_id for l in lineas if l.partida_id])  # h (D-64 punto 9): el stock de cámara que apartaba vuelve a estar libre
-    asignacion, sin_cubrir = None, 0
+    asignacion, sin_cubrir, enlaces_nuevos = None, 0, []
     if contrato is not None and recubrir and cubierto > 0:
         if _ya_pendiente(contrato):  # 6c y 8d: no se intenta volver a cubrir; la cantidad se suma al faltante
             sin_cubrir = cubierto
@@ -1304,8 +1307,10 @@ def _cancelar_en_transaccion(actor, cosecha, motivo, *, recubrir):
         else:
             sin_cubrir = cubierto
         if sin_cubrir:
-            faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else DetalleVenta.objects.get(pk=contrato.detalle.pk), sin_cubrir, origen=actor)
-    return CancelacionDeCosecha(cosecha, reserva, lineas, cubierto, asignacion, sin_cubrir, [])
+            camino = faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else DetalleVenta.objects.get(pk=contrato.detalle.pk), sin_cubrir, origen=actor)
+            if camino.enlace is not None:
+                enlaces_nuevos.append(camino.enlace)
+    return CancelacionDeCosecha(cosecha, reserva, lineas, cubierto, asignacion, sin_cubrir, [], enlaces_nuevos)
 
 
 def _aviso_de_cancelacion(cosecha, motivo, actor, cuentas):
@@ -1360,6 +1365,7 @@ def cancelar_cosecha(actor, cosecha_id, motivo, huella):
             afectados += [contrato.detalle, contrato.contrato]
         if resultado.asignacion is not None:
             afectados += [*resultado.asignacion.reservas, *resultado.asignacion.cosechas]
+        afectados += resultado.enlaces
         cambios = {
             "estado": {"antes": Estado.A_REALIZAR.value, "despues": Estado.CANCELADA.value},
             "fecha_resolucion_orden": {"antes": None, "despues": _fecha(stock.hoy())},

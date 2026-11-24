@@ -52,6 +52,20 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
       </div>
     </div>
 
+    {% if ficha.pendiente %}
+    <div class="card">
+      <div class="card-title">Pendiente de decisión del cliente</div>
+      <ul class="portal-lista">
+        {% for p in ficha.pendiente.pendientes %}<li>{{ p.variedad }}: espera desde el {{ p.desde|date:"d/m/Y" }}</li>{% endfor %}
+      </ul>
+      {% if ficha.pendiente.vence %}<p>El cliente puede decidir hasta el <b>{{ ficha.pendiente.vence|date:"d/m/Y" }}</b>.</p>{% endif %}
+      {% if ficha.pendiente.aviso %}<p><span class="status-badge status-warn">{{ ficha.pendiente.aviso }}</span></p>{% endif %}
+      {% if ficha.pendiente.puede_decidir %}
+      <div class="acts-fila"><a class="btn btn-primary" href="{% url 'comercial:faltante_decidir' venta.pk %}">Registrar decisión de faltante</a></div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="card-title">Entregas</div>
       <p class="muted">La entrega se planifica cuando todo el producto esté listo.</p>

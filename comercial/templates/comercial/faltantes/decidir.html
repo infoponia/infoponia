@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Registrar decisión de faltante» del Vendedor (COM-DCD-FLT, extensión 1a; no está en el prototipo, D-61): la misma pantalla del cliente (`_decision.html`) dentro del diseño de
+la aplicación. Recibe «datos», «paso», «filas», «url», «resumen», «generales» y «es_cliente» (falso).{% endcomment %}
+{% block titulo %}Registrar decisión de faltante · {{ datos.venta.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow portal-p">
+  <a class="back" href="{% url 'comercial:compra_venta' datos.venta.pk %}">{% icono "back" 15 %} Volver a {{ datos.venta.codigo }}</a>
+  {% include "comercial/faltantes/_decision.html" %}
+</div>
+{% endblock %}

@@ -674,3 +674,17 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **`cancelar_pedido_automaticamente` acepta `hoy` y `aviso`** (opcionales): sin `hoy`, `--fecha` no podría simular la fecha de cierre; sin `aviso`, el paso 62 no podría usar el texto de D-87.
 - **Textos de CMP-03 redactados al implementar:** los correos de descarte y de aprobación y las notificaciones de la orden (pendiente de aprobación, aprobada, rechazada) y de los pasos 60 y 61; los documentos fijan qué dicen, no sus palabras.
 - **La lista de órdenes no tiene paginación** (como la de pedidos): con muchas órdenes conviene paginarla.
+
+## COM-04c (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **`ROL_CLIENTE_ENLACE` y `rol_externo` ya existían** (CMP-02a): COM-04c no los tocó y no creó `core/tests/test_auditoria_rol_externo.py`; lo cubre `core/tests/test_registro_auditoria.py::test_d88_*`.
+- **`URL_DEL_SITIO` y la ruta `/cliente/`:** la tarea no los listaba en «Permitido fuera de la app». Se sumó el ajuste `URL_DEL_SITIO` en `config/settings.py` (de la variable de entorno; con DEBUG vale `http://localhost:8000`) y `path("cliente/", …)` en `config/urls.py`, con permiso del estudiante, porque el paso diario 20 manda el correo sin un pedido web delante. Documentar el ajuste en `docs/patrones/enlace_del_cliente.md` (sección 3, punto 4 dice «`settings` del sitio»).
+- **El actor de `cancelar_cosecha_incluida` en la extensión 1a es el Vendedor** (la doc dice siempre `None`): así el aviso al Capataz y al Agrónomo dice «cancelada por <Vendedor>».
+- **El aviso «registrá vos la decisión» no lleva URL** (`notificar` no tiene ese campo): el botón está en la ficha de la venta y en «Faltantes para decidir».
+- **COM-DCD-FLT bloquea las partidas de las líneas de todos los detalles pendientes**, no solo las de los rechazados, para que 6b sea confiable frente a una merma o una asignación sobre un detalle aceptado. El orden de bloqueo no cambia. Documentar en `docs/patrones/bloqueos.md`.
+- **Dos detalles de la misma venta sin cubrir en un mismo caso de uso** crean el enlace dos veces: el primero queda `reemplazado` y su correo no sale; sin correo del cliente, el Vendedor puede recibir dos avisos iguales. Raro; aceptado.
+- **Sin HTMX en el flujo del cliente ni del Vendedor:** páginas completas y un POST (`Vary: HX-Request`); el respaldo sin JavaScript es el único camino. `interfaz.md` pide HTMX donde haga falta: acá no hizo falta.
+- **La prueba «merma en cámara contra la decisión del cliente»** está en `test_com_dcd_flt.py` (`ComDcdFltConcurrenciaTests`, comparte el escenario) y no en `test_camara_concurrencia.py`, que lo anota en su encabezado.
+- **Planificar la entrega (paso 7 y postcondición m de COM-DCD-FLT)** no se hace: es de COM-05a1 (`docs/disparadores.md`, «Lo que deja COM-04c»).
+- **Se agregó** «Faltantes para decidir (N)» en la lista de Contratos del Vendedor y `estado_del_faltante` para la ficha (D-61: el prototipo no tiene la pantalla del Vendedor).
+- **Pendiente de la tanda (no es un desvío): la pasada manual en navegador real** (ventana privada; CSRF real, `Origin` y los encabezados de `/cliente/`) queda para cuando se cierre la tanda de «Comercial 1», y **cargar `URL_DEL_SITIO` en Render** (sin barra final; por ejemplo `https://<servicio>.onrender.com`). Sin la variable, los enlaces del cliente quedan «No se pudo enviar» y el Vendedor decide por él. Pasos 3 y 14 de la «Verificación a mano» de COM-04c.

@@ -1,0 +1,13 @@
+{% extends "comercial/cliente/base.html" %}{% load iconos %}
+{% comment %}Paso 9 de COM-DCD-FLT (`VIEWS.dcd`, `S.p.done` del prototipo): «Gracias. Recibimos su decisión.» con lo que recibirá. Recibe «hecho» (de la sesión).{% endcomment %}
+{% block titulo %}Recibimos su decisión · {{ nombre_organizacion }}{% endblock %}
+{% block contenido %}
+<div class="portal-h"><h1>Gracias. Recibimos su decisión.</h1></div>
+<div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Su decisión quedó registrada y este enlace ya no puede volver a usarse. Si tiene correo, le enviamos el acuse.</div></div>
+<section class="sec" aria-label="Lo que recibirá">
+  <ul class="portal-lista">
+    {% for f in hecho.filas %}<li>{{ f.variedad }}: {% if f.acepta %}recibirá <b>{{ f.cantidad }} plantas</b>.{% else %}no lo recibirá ni se le cobrará.{% endif %}</li>{% endfor %}
+  </ul>
+  {% if hecho.cancelada %}<p>Como no recibirá ningún producto, la compra quedó cancelada.</p>{% else %}<p>Monto total de la compra: <b>{{ hecho.total }}</b>.</p>{% endif %}
+</section>
+{% endblock %}

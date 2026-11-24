@@ -23,7 +23,8 @@ from django.db import transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock
+from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, EnlaceCliente, ReservaStock
+from comercial.tests.fabricas import enlace as un_enlace
 from comercial.servicios import cosechas, stock_maduro
 from comercial.tests.fabricas import (
     compra_venta,
@@ -167,14 +168,16 @@ class PostcondicionesTests(Base):
         cosecha = reserva(detalle(compra_venta(self.e, dias=12), self.e.variedad, 20), [(self.lote, 10), (partida, 5)]).cosecha
         with mock.patch("comercial.servicios.camara.asignar_camara") as asignar, self.captureOnCommitCallbacks(execute=True) as callbacks:
             self.cancelar(cosecha=cosecha)
-        self.assertEqual(len(callbacks), 1)
+        # Desde COM-04c hay además el `on_commit` del correo del enlace (el camino de faltante): se verifica la asignación de cámara, no la cantidad de callbacks.
         asignar.assert_called_once_with([partida.pk])
 
     def test_post_h_una_cosecha_sin_lineas_de_camara_no_programa_nada(self):
         """h: sin líneas de cámara en la reserva liberada no se programa PROD-ASG-CAM."""
-        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+        from unittest import mock
+
+        with mock.patch("comercial.servicios.camara.asignar_camara") as asignar, self.captureOnCommitCallbacks(execute=True):
             self.cancelar()
-        self.assertEqual(callbacks, [])
+        asignar.assert_not_called()  # desde COM-04c el correo del enlace también usa `on_commit`: se verifica que no corra PROD-ASG-CAM
 
     def test_post_h_la_cancelacion_incluida_tambien_programa_la_asignacion(self):
         """h: `cancelar_cosecha_incluida` (COM-DCD-FLT, COM-05) usa la misma lógica y programa PROD-ASG-CAM con las partidas de cámara que libera."""
@@ -222,6 +225,25 @@ class PostcondicionesTests(Base):
         resultado = self.cancelar()
         self.assertEqual((resultado.asignacion.cubierta, resultado.sin_cubrir), (0, 30))
         self.assertEqual(self.releer(DetalleVenta, self.detalle.pk).estado_detalle_venta, "pendiente_decision")
+
+    def test_post_g_8c_lo_que_no_se_cubre_deja_un_enlace_vigente_para_el_cliente(self):
+        """8c (COM-04c): el camino de faltante crea el enlace de decisión del cliente (vigente) y va a la auditoría de la cancelación."""
+        self.camara(12)
+        self.cancelar()
+        creado = EnlaceCliente.objects.get(compra_venta__detalles=self.detalle)
+        self.assertEqual((creado.estado, creado.fecha_vencimiento), ("vigente", HOY + timedelta(days=2)))
+        registro = RegistroAuditoria.objects.get(accion="cancelacion_orden")
+        self.assertIn("comercial.enlacecliente", {a["modelo"] for a in registro.afectados})
+
+    def test_ext_8d_el_enlace_nuevo_reemplaza_al_vigente_con_el_plazo_desde_la_fecha_nueva(self):
+        """8d (COM-04c): un detalle que ya esperaba recibe un enlace nuevo con las cantidades actualizadas; el anterior pasa a `reemplazado`."""
+        DetalleVenta.objects.filter(pk=self.detalle.pk).update(estado_detalle_venta="pendiente_decision", fecha_pendiente_decision=en(-3))
+        CompraVenta.objects.filter(pk=self.venta.pk).update(estado_venta="pendiente_decision")
+        viejo, _ = un_enlace(self.venta, vence=en(-1))
+        self.cancelar()
+        viejo.refresh_from_db()
+        nuevo = EnlaceCliente.objects.get(compra_venta=self.venta, estado="vigente")
+        self.assertEqual((viejo.estado, nuevo.fecha_vencimiento), ("reemplazado", HOY + timedelta(days=2)))
 
     def test_ext_8d_un_detalle_que_ya_esperaba_no_llama_a_asignar_y_actualiza_la_fecha(self):
         """6c y 8d: sin `asignar` (aunque haya stock): el camino de faltante con la cantidad liberada y la fecha de pendiente de hoy."""

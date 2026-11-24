@@ -216,7 +216,7 @@ def _registrar(actor, datos, previo):
         if recorte.lineas:  # 10c.6: la alerta para el Agrónomo (regla 2 de 8.9) y el aviso al Vendedor de cada contrato afectado
             alerta = camara._avisar_merma_reservada(partida, resultado.merma, recubierto, recorte.por_detalle, "Merma en la partida")
         afectados = [partida, resultado.merma, resultado.movimiento, *[l for l, _ in recorte.lineas], *recorte.reservas_liberadas]
-        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles]
+        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces]
         if alerta is not None:
             afectados.append(alerta)
         recortes = _recortes_de(recorte.por_detalle)
