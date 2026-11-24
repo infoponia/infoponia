@@ -1,0 +1,81 @@
+{% load iconos %}{% comment %}El formulario de emisión de un comando (IOT-EMT-CMD, pasos 2 a 8; ``cmdForm`` del prototipo). Dos estados: el formulario (actuador, acción, valor si la acción lo lleva y descripción opcional) y el
+resumen con sus advertencias (paso 6), donde se confirma o se vuelve a cambiar (7a y 7b). Elegir el actuador o la acción vuelve a dibujar el formulario SIN validar («paso=refrescar»: con HTMX solo cambia «#emision»; sin
+JavaScript, el botón «Actualizar el formulario»). Las validaciones corren solo al apretar «Ver resumen» o «Confirmar». Recibe «emision» (para, datos, accion, pendiente, errores, general y resumen).{% endcomment %}
+<div id="emision" class="card" style="margin-bottom:18px">
+  {% with para=emision.para datos=emision.datos errores=emision.errores resumen=emision.resumen %}
+  <div class="card-h"><h3>{% icono "send" 16 %} Emitir comando</h3>
+    {% if para.elegido %}<span class="spacer"></span><span class="sm muted">Estado informado: <b>{{ para.elegido.estado_texto }}</b>{% if para.elegido.desde %} desde las {{ para.elegido.desde|date:"H:i" }}{% endif %}</span>{% endif %}
+  </div>
+  <div class="card-b">
+    {% for mensaje in emision.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+    {% if para.bloqueo and not emision.general %}<div class="alert alert-danger" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>{{ para.bloqueo }}
+      {% if emision.pendiente %}{% if emision.pendiente.cancelable %}<div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="{% url 'iot:comando_cancelar' emision.pendiente.comando.pk %}?volver=comandos" hx-get="{% url 'iot:comando_cancelar' emision.pendiente.comando.pk %}?volver=comandos" hx-target="#ventana-confirmar" hx-swap="innerHTML">Cancelar {{ emision.pendiente.codigo }}</a></div>
+      {% else %}<div class="xs" style="margin-top:6px">El nodo puede estar ejecutándolo: podés cancelarlo en {{ emision.pendiente.segundos }} s.</div>{% endif %}{% endif %}</div></div>{% endif %}
+    {% for acc in para.acciones_incompatibles %}{% if forloop.first %}<div class="alert alert-warn" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>El nodo no soporta: {% endif %}<b>{{ acc.nombre_accion }}</b>{% if not forloop.last %}, {% else %}. Esas acciones no se ofrecen (alerta «Configuración incompatible»).</div></div>{% endif %}{% endfor %}
+
+    <form method="post" novalidate action="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}">
+      {% csrf_token %}
+      {% if resumen %}
+      <input type="hidden" name="actuador" value="{{ resumen.actuador.pk }}">
+      <input type="hidden" name="accion" value="{{ resumen.accion.pk }}">
+      <input type="hidden" name="valor" value="{{ datos.valor|default_if_none:'' }}">
+      <input type="hidden" name="descripcion" value="{{ resumen.descripcion }}">
+      <h4 class="sec-h">Resumen del comando</h4>
+      <div class="resumen"><dl>
+        <dt>Actuador</dt><dd>{{ resumen.actuador.tipo_actuador.nombre_actuador }} · {{ resumen.actuador.identificador_equipo }}</dd>
+        <dt>Acción</dt><dd>{{ resumen.accion.nombre_accion }} <span class="code muted">{{ resumen.accion.comando.codigo }}</span></dd>
+        {% if resumen.valor is not None %}<dt>Valor</dt><dd>{{ resumen.valor }} {{ resumen.accion.unidad_valor }}</dd>{% endif %}
+        <dt>Descripción</dt><dd>{% if resumen.descripcion %}{{ resumen.descripcion }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+      </dl></div>
+      {% for a in resumen.advertencias %}<div class="alert {% if a.clave == 'reglas' or a.clave == 'mismo_estado' %}alert-info{% else %}alert-warn{% endif %}" role="status" style="margin-bottom:10px">{% if a.clave == 'reglas' or a.clave == 'mismo_estado' %}{% icono "info" 16 %}{% else %}{% icono "warn" 16 %}{% endif %}<div>{{ a.texto }}</div></div>{% endfor %}
+      <div class="row" style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary" type="submit" name="paso" value="emitir" data-enviando="Emitiendo…">{% icono "send" 14 %} Confirmar y emitir</button>
+        <button class="btn btn-ghost" type="submit" name="paso" value="refrescar" data-sin-envio-en-curso>Cambiar</button>
+        <span class="xs muted">El nodo lo retira en su próxima consulta.</span>
+      </div>
+      {% else %}
+      <div class="grid2">
+        <div class="fld">
+          <label for="cmd-actuador">Actuador<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="cmd-actuador" name="actuador" data-desplegable data-sin-envio-en-curso hx-post="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}" hx-include="closest form" hx-vals='{"paso": "refrescar"}' hx-trigger="change" hx-target="#emision" hx-select="#emision" hx-swap="outerHTML">
+            <option value="">Seleccioná un actuador</option>
+            {% for f in para.actuadores %}<option value="{{ f.actuador.pk }}"{% if emision.actuador_id == f.actuador.pk %} selected{% endif %}>{{ f.actuador.tipo_actuador.nombre_actuador }} · {{ f.actuador.identificador_equipo }} ({{ f.sector }}){% if f.comando_pendiente %} · pendiente{% endif %}</option>{% endfor %}
+          </select>
+          {% for e in errores.actuador %}<div class="err">{{ e }}</div>{% endfor %}
+          {% if not para.actuadores and not para.bloqueo %}<div class="hint">Este sistema no tiene actuadores activos.</div>{% endif %}
+        </div>
+        <div class="fld">
+          <label for="cmd-accion">Acción<span class="req" aria-hidden="true"> *</span></label>
+          {% if para.acciones and not para.bloqueo %}
+          <select class="field-input" id="cmd-accion" name="accion" data-desplegable data-sin-envio-en-curso hx-post="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}" hx-include="closest form" hx-vals='{"paso": "refrescar"}' hx-trigger="change" hx-target="#emision" hx-select="#emision" hx-swap="outerHTML">
+            <option value="">Seleccioná la acción</option>
+            {% for a in para.acciones %}<option value="{{ a.pk }}"{% if emision.accion.pk == a.pk %} selected{% endif %}>{{ a.nombre_accion }}</option>{% endfor %}
+          </select>
+          {% else %}
+          <select class="field-input" id="cmd-accion" data-desplegable disabled><option>{% if para.bloqueo %}No se puede emitir ahora{% elif para.elegido %}No hay acciones disponibles{% else %}Primero elegí el actuador{% endif %}</option></select>
+          {% endif %}
+          {% for e in errores.accion %}<div class="err">{{ e }}</div>{% endfor %}
+        </div>
+      </div>
+      {% if emision.accion.requiere_valor %}
+      <div class="fld">
+        <label for="cmd-valor">Valor ({{ emision.accion.unidad_valor }})<span class="req" aria-hidden="true"> *</span></label>
+        <input class="field-input" id="cmd-valor" name="valor" type="text" inputmode="numeric" value="{{ datos.valor|default_if_none:'' }}" autocomplete="off">
+        {% for e in errores.valor %}<div class="err">{{ e }}</div>{% empty %}<div class="hint">Número entero entre {{ emision.accion.valor_minimo }} y {{ emision.accion.valor_maximo }} {{ emision.accion.unidad_valor }}.</div>{% endfor %}
+      </div>
+      {% endif %}
+      <div class="fld">
+        <label for="cmd-descripcion">Descripción (opcional)</label>
+        <input class="field-input" id="cmd-descripcion" name="descripcion" type="text" maxlength="300" value="{{ datos.descripcion }}" autocomplete="off">
+        {% for e in errores.descripcion %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary" type="submit" name="paso" value="resumen" data-enviando="Verificando…"{% if para.bloqueo or not para.actuadores %} disabled{% endif %}>{% icono "send" 14 %} Ver resumen</button>
+        <noscript><button class="btn btn-ghost btn-sm" type="submit" name="paso" value="refrescar">Actualizar el formulario</button></noscript>
+        <span class="xs muted">El nodo lo retira en su próxima consulta. Hasta {{ max_intentos }} intentos, uno cada {{ intervalo }} s.</span>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+  {% endwith %}
+</div>

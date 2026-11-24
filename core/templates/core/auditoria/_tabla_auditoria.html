@@ -20,7 +20,8 @@ Todo texto guardado se escapa solo (autoescape): los nombres de las cuentas los 
       <tr>
         <td class="mono" style="font-size:12px;white-space:nowrap">{{ registro.fecha_hora|date:"d/m/Y H:i" }}</td>
         <td>
-          {% if registro.usuario_id is None %}<b style="font-weight:600">InfoPonia</b>
+          {% if registro.es_de_actor_externo %}<b style="font-weight:600">{{ registro.rol_visible }}</b>
+          {% elif registro.usuario_id is None %}<b style="font-weight:600">InfoPonia</b>
           {% else %}<b style="font-weight:600">{{ registro.usuario.get_full_name|default:registro.usuario.email }}</b><div class="muted" style="font-size:11px">{{ registro.rol_visible }}</div>{% endif %}
         </td>
         <td>{{ registro.get_accion_display }}</td>

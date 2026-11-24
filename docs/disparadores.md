@@ -262,7 +262,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 1. **Tipos de actuador** (`docs/casos_de_uso/iot/tipos_de_actuador.md`).
    - ~~IOT-02: el aviso de equipos afectados (regla 6 de IOT-MOD-TAC), la compatibilidad sobre actuadores reales (regla 9) y el conteo de la
      baja (regla 2 de IOT-BAJ-TAC) con actuadores registrados. Al crear un actuador, llamar antes a `bloquear_tipo_activo(tipo_id)` (`iot/servicios/tipos_actuador.py`; contrato de D-40).~~ (hecho el 22/11/2026, IOT-02: `recalcular_compatibilidad`; el aviso y el conteo ya los tenía IOT-01)
-   - IOT-05: `acciones_en_uso(tipo)` (devuelve `dict[int, list[UsoDeAccion]]`: por id de acción, sus usos con código `RGL-n` o `CMD-n` y valor) y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).
+   - ~~IOT-05: `acciones_en_uso(tipo)` (devuelve `dict[int, list[UsoDeAccion]]`: por id de acción, sus usos con código `RGL-n` o `CMD-n` y valor) y `acciones_con_historial(tipo)` por comandos (pendientes y con historial).~~ (hecho el 23/11/2026, IOT-05: una sola consulta para toda la lista de tipos)
    - IOT-06: `acciones_en_uso(tipo)` por reglas de actuación activas.
 2. **Sistema IoT** (`docs/casos_de_uso/iot/sistema_iot.md`). IOT-06: desactivar, activar y dar de baja; IOT-07:
    `ordenes_a_realizar_del_sistema(sistema)` (precondición d de IOT-BAJ-SIS). **Planificado en el lote I4** (`mantenimiento_automatico.md`, «Lecturas»).
@@ -271,7 +271,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
      compatibilidad contra anuncios reales; `tiene_lecturas(sensor)` con lecturas reales. **Al anunciar equipos, la API llama a
      `recalcular_compatibilidad`** (`iot/servicios/compatibilidad.py`) con los actuadores del sistema: es la única función que calcula y escribe la compatibilidad (D-82: bloquea
      los invernaderos en orden, después del tipo).~~ (hecho el 23/11/2026, IOT-03: `resumen_de_equipos` y `situacion_de` por alertas, «Último dato» en la lista y la ficha, `anuncios.registrar_anuncio` y `tiene_lecturas`)
-   - IOT-05: `tiene_comandos(actuador)`, `tiene_comando_pendiente(actuador)`, «Comando pendiente» y el historial de comandos de la ficha.
+   - ~~IOT-05: `tiene_comandos(actuador)`, `tiene_comando_pendiente(actuador)`, «Comando pendiente» y el historial de comandos de la ficha.~~ (hecho el 23/11/2026, IOT-05)
    - IOT-06: `tiene_reglas(equipo)` y las reglas que usan el equipo en la ficha; la baja (IOT-BAJ-HDW), **que se suma a `acciones_permitidas(actor, equipo)`**
      (`iot/servicios/hardware.py`: hoy no ofrece «Dar de baja», para que ningún botón lleve a un 403); y sumar `temp-vieja` (un sensor dado de baja) al cargador de datos de verificación
      de `iot` (`iot/verificacion.py`) con ese servicio.
@@ -280,15 +280,15 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 4. ~~**Enlaces de las alertas del IoT** (D-62): `registrar_enlace_de_alerta` hacia la ficha del equipo, el alta con `?identificador=` o el
    panel. **IOT-04.**~~ (hecho el 23/11/2026, IOT-04: `enlaces_de_alertas_iot`)
 5. **API del nodo** (`docs/casos_de_uso/iot/entregar_informacion.md`, «Reparto»; lote I2a). IOT-03 las deja escritas sin hacer nada:
-   - IOT-05: `explica_un_comando(actuador, estado)` en `iot/servicios/estados.py` (hoy, falso: D-75 punto 1); en modo `local`, no entregar
-     comandos (extensión 1b.2); las rutas de comandos del contrato (`docs/api/nodo/`, lote I3).
+   - ~~IOT-05: `explica_un_comando(actuador, estado)` en `iot/servicios/estados.py` (hoy, falso: D-75 punto 1); en modo `local`, no entregar
+     comandos (extensión 1b.2); las rutas de comandos del contrato (`docs/api/nodo/`, lote I3).~~ (hecho el 23/11/2026, IOT-05)
    - IOT-06: `evaluar_reglas_de_la_lectura(contexto, sensor, telemetria)` en `iot/servicios/lecturas.py` (paso 6 y 6a a 6d);
      `al_volver_a_remoto(sistema)` en `iot/servicios/nodo.py` (1b.3); el reinicio de las reglas cuando el invernadero se queda sin umbral
      efectivo (5c).
 
-6. **Orden de bloqueos con un tipo de actuador (D-82).** IOT-05, IOT-06 e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
+6. **Orden de bloqueos con un tipo de actuador (D-82).** ~~IOT-05~~ (hecho el 23/11/2026: `emitir_comando`, con su prueba de concurrencia), IOT-06 e IOT-07: todo flujo que toque un actuador y su tipo toma primero el tipo
    (`bloquear_tipo_activo`) y después el invernadero, el sistema y el equipo (excepción a D-40 y a `docs/patrones/bloqueos.md`). Nació en IOT-02.
-7. **El panel de monitoreo** (`iot/servicios/monitoreo.py` y `iot/templates/iot/monitoreo/_panel.html`). IOT-05: «Comandos pendientes» (indicador y columna de actuadores) y «Emitir comando» desde la fila de cada actuador a quien opera
+7. **El panel de monitoreo** (`iot/servicios/monitoreo.py` y `iot/templates/iot/monitoreo/_panel.html`). ~~IOT-05~~ (hecho el 23/11/2026): «Comandos pendientes» (indicador y columna de actuadores) y «Emitir comando» desde la fila de cada actuador a quien opera
    (regla 11 de IOT-CNS-LEC); IOT-06: el enlace a las reglas de actuación. Nació en IOT-04.
 
 ## ~~Cuando exista InsumoInvernadero~~ (cerrado el 21/11/2026, INV-02)
@@ -505,7 +505,7 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 
 1. ~~**Estado «fuera de servicio».**~~ Hecho el 23/11/2026 en PRD-04. ~~ Ningún caso de uso de MAE-03 lo produce; `maestros` ya lo muestra y ya ofrece «Volver a activar» y «Dar de baja». PRD-04 agrega `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio` (lote 5 de `docs/api/extensiones_de_maestros.md`) y registra `registrar_efecto_de_vuelta_a_servicio` y `registrar_efecto_de_baja_de_sector`. La clave `fuera_de_servicio` ya está en `VALORES_VISIBLES["estado"]`.~~
-2. ~~**Tipos de bitácora y filtro de la consulta.**~~ Hecho el 23/11/2026 en PRD-04 para `fuera_de_servicio` y `reubicacion` (`bitacora.TIPOS_DE_FILTRO` los incluye). Quedan `cosecha`, `incumplimiento_de_clausula`, `anulacion_de_resolucion` (COM-04a) y `comando` (IOT-05). [no tachar este renglón entero: sigue vigente para esas tareas]* PRD-04 suma `fuera_de_servicio` y `reubicacion` a `Bitacora.TipoEvento`, reemplaza la restricción `bitacora_tipo_evento_valido` (hoy: siembra, transicion, merma, aplicacion, otro_evento y consumo) y los suma a `bitacora.TIPOS_DE_FILTRO` (el filtro de PROD-CNS-BIT). Lo mismo harán COM-04a (`cosecha`, `incumplimiento_de_clausula`, `anulacion_de_resolucion`) e IOT-05 (`comando`). Nace en PRD-03.
+2. ~~**Tipos de bitácora y filtro de la consulta.**~~ Hecho el 23/11/2026 en PRD-04 para `fuera_de_servicio` y `reubicacion` (`bitacora.TIPOS_DE_FILTRO` los incluye). Quedan `cosecha`, `incumplimiento_de_clausula`, `anulacion_de_resolucion` (COM-04a) y `comando`: IOT-05 (23/11/2026) lo sumó a `Bitacora.TipoEvento` y a su restricción (`produccion` 0006), pero **no** a `bitacora.TIPOS_DE_FILTRO` (estaba fuera de su «Límites»): falta sumarlo para que el filtro «Tipo» de la consulta lo ofrezca. [no tachar este renglón entero: sigue vigente para esas tareas]* PRD-04 suma `fuera_de_servicio` y `reubicacion` a `Bitacora.TipoEvento`, reemplaza la restricción `bitacora_tipo_evento_valido` (hoy: siembra, transicion, merma, aplicacion, otro_evento y consumo) y los suma a `bitacora.TIPOS_DE_FILTRO` (el filtro de PROD-CNS-BIT). Lo mismo harán COM-04a (`cosecha`, `incumplimiento_de_clausula`, `anulacion_de_resolucion`) e IOT-05 (`comando`). Nace en PRD-03.
 3.3. ~~**Prueba de concurrencia que PRD-03 no pudo escribir:**~~ Hecho el 23/11/2026 en PRD-04 (`produccion/tests/test_fds_concurrencia.py`, en los dos órdenes).~~ «merma contra poner el sector fuera de servicio» (`produccion/tests/test_merma_concurrencia.py`; `docs/patrones/bloqueos.md`, «Lote 5»). La merma toma cuentas → invernadero → variedad → sectores con pérdidas → lote → ocupaciones. Nace en PRD-03.~~
 4. **Inicio del Agrónomo con filtro por invernadero.** `registrar_seccion_de_inicio` solo recibe al usuario; la sección de PRD-04 muestra todos sus invernaderos activos juntos. Cuando `core` permita a una sección recibir un parámetro (por ejemplo `?invernadero=`), sumar los chips «Todos / <invernadero>» del prototipo. También suma COM-04a el grupo «Cosechas» después de esta sección (`cosecha.md`).
 
@@ -565,7 +565,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando se programe COM-04c o CMP-02a (lo que llegue primero) — nace con el lote 2 de Compras
 
-1. Crear `rol_externo` en `core` con `ROL_CLIENTE_ENLACE` y `ROL_PROVEEDOR_ENLACE` (D-65 punto 8; D-88 punto 5). La segunda tarea solo suma su constante.
+1. ~~Crear `rol_externo` en `core` con `ROL_CLIENTE_ENLACE` y `ROL_PROVEEDOR_ENLACE` (D-65 punto 8; D-88 punto 5). La segunda tarea solo suma su constante.~~ Hecho el 23/11/2026 en CMP-02a: las dos constantes, `RegistroAuditoria.objects.registrar(..., rol_externo=)` y su texto visible («Cliente (mediante enlace)» ya está en `VALORES_VISIBLES["rol"]`). **COM-04c solo lo usa** con `ROL_CLIENTE_ENLACE`, y tiene que responder con `Referrer-Policy: same-origin` y no `no-referrer` (D-65 y D-88, corregidas: con `no-referrer` el navegador manda `Origin: null` y el CSRF rechaza los POST del portal; `compras/views_proveedor.py` es el modelo, y la «Verificación a mano» de la tarea lleva el paso de «navegador real», D-96). Para las etiquetas de la auditoría, no repetir claves de `ETIQUETAS` que ya existen (`detalles`, `lineas`, `monto_estimado`): la última pisa a la primera.
 
 ## Cuando se programe COM-01 o CMP-01 (lo que llegue primero) — nace con el lote 2 de Compras
 
@@ -573,7 +573,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 ## Cuando se programen CMP-02a, CMP-02b, CMP-03 y CMP-05 (completan lo que CMP-01 dejó vacío)
 
-1. **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
+1. **Hecho el 23/11/2026 en CMP-02a** (`tiene_pedidos_u_ordenes` y la tarjeta de pedidos de la ficha, `proveedores.pedidos_del_proveedor`); las órdenes, pagos y reclamos de la ficha se suman de CMP-03 a CMP-06. Texto original: **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
 2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
 3. **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
 4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).
@@ -582,3 +582,11 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 ## Cuando se programen COM-03b y COM-04 — nace con COM-03a (23/11/2026)
 
 1. **Calendario de la ficha con detalles finalizados.** Un período de un detalle finalizado que cae dentro de la ventana se muestra «Reservado» (los finalizados no tienen cantidad sin cubrir hasta D-64, punto 8). COM-04 le da la cantidad sin cubrir y COM-03b, los períodos posteriores a la rescisión; revisar `comercial/servicios/suministros.py`, `_filas_de_calendario`.
+
+## Cuando se programe CMP-03 (completa lo que CMP-02a dejó a medias) — nace con CMP-02a
+
+1. **Regla 4c de CMP-RLZ-PED:** `pedidos.ya_pedido` cuenta hoy solo los pedidos «en cotización»; sumar los pedidos «cerrados» cuya orden de compra está «pendiente de aprobación» (regla 14 de 8.15), con el texto de la advertencia («su orden de compra está pendiente de aprobación»).
+2. **Inicio del Agrónomo:** `compras/servicios/inicio.py` trae «Insumos bajo el mínimo» y «Esperando cotizaciones»; CMP-03 suma «Pedidos por resolver» (con su lista y el botón «Resolver») y «Órdenes rechazadas»; CMP-04, «Por recibir».
+3. **Ficha del pedido** (`compras/templates/compras/pedidos/ficha.html`): hoy sin acciones. CMP-02b suma «Cancelar pedido» y «Reenviar invitación»; CMP-03, «Comparar cotizaciones y generar orden» y la orden que generó un pedido «cerrado» (regla 4 de CMP-CNS-PED).
+4. **El paso diario 60** pone «vencido» a los enlaces vigentes: la ficha ya muestra «vencido» un enlace vigente con la fecha límite pasada, así que el paso no cambia lo que se ve (`pedidos._estado_del_enlace`).
+

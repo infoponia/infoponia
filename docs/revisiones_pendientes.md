@@ -1,7 +1,7 @@
 # Revisiones a mano pendientes — InfoPonia
 
-> **Congelado desde el 23/11/2026** (pedido del estudiante): ya no se agregan secciones ni se tachan pasos (la regla M5 quedó en desuso). La verificación la hace Claude Code antes de cerrar cada tarea
-> (`docs/patrones/verificacion_por_claude.md`). Lo que hay abajo es historial de lo que se verificó a mano hasta entonces.
+> **Vigente otra vez desde el 23/11/2026 (D-96).** La verificación vuelve a ser a mano, sin navegador automatizado ni cargadores de datos: los datos de prueba los crea quien verifica, con los valores que dice cada tarea.
+> Las secciones anteriores a CMP-01 se escribieron cuando todavía existía el cargador (`cargar_datos_de_verificacion`, retirado en D-95): donde lo nombran, hay que crear los datos a mano.
 
 Pasos que una persona tiene que hacer a mano (en el navegador, en Render o en GitHub) y que las pruebas no cubren.
 Claude Code no lee este archivo salvo que el estudiante lo pida; `docs/estado.md` tiene una línea por sección.
@@ -395,6 +395,74 @@ Los 13 pasos están en «Verificación a mano» de `docs/tareas/iot/IOT-04-revis
 - [ ] 11. En «Auditoría», `revision_periodica_iot` y `modificacion_configuracion` con su antes y su después.
 - [ ] 12. Gerente: en «Sur», «Registrar Sistema IoT»; en «Norte», solo consulta y con el aviso de quién recibe las alertas. El Agrónomo no ve «Modificar parámetros» y a `/configuracion/` le da 403.
 - [ ] 13. Sin JavaScript, el panel se ve entero y el período se cambia con «Ver».
+
+## CMP-01 · Tarea CMP-01 (app `compras` y proveedores)
+
+Los 17 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-01-app-compras-y-proveedores.md` (con los valores de ejemplo y lo que crea cada paso), copiados acá para ir tachándolos (M5). Hay dos migraciones nuevas (`compras` 0001 y `core` 0026): `python manage.py migrate`. No hay datos cargados: se crean en los pasos. Entrá con el Gerente.
+
+- [ ] 1. «Compras» aparece en el menú (ícono de caja); abre «Proveedores» sin filas y con el texto de que todavía no hay.
+- [ ] 2. Alta de una persona jurídica con dos especialidades: la ficha con el aviso «Registramos a …», el CUIT con guiones y las dos categorías.
+- [ ] 3. Otra alta con el mismo CUIT: el error sale debajo del CUIT («Ya está registrado como …») y lo escrito se conserva.
+- [ ] 4. Varios errores a la vez (CUIT inválido, razón social y correo vacíos, teléfono `abc`): salen todos juntos, cada uno junto a su campo.
+- [ ] 5. Persona física: se ocultan los campos de razón social y aparecen nombre y apellido; sin datos da sus errores y con datos se registra.
+- [ ] 6. Baja: la ventana se abre sin recargar la página; «Cancelar» no cambia nada; confirmar vuelve a la lista con el aviso y el proveedor deja de verse entre los activos.
+- [ ] 7. Reactivar desde el alta: con el CUIT de un inactivo aparece «Reactivar con estos datos» y conserva lo escrito.
+- [ ] 8. Reactivar desde la ficha: estado «Inactivos» → ficha con «Reactivar» (sin «Editar datos» ni «Dar de baja»); el formulario trae sus datos y el CUIT fijo.
+- [ ] 9. Modificar: cambiar el teléfono, error por campo con el correo vacío, y el CUIT se puede cambiar mientras no tenga pedidos (con pedidos queda fijo).
+- [ ] 10. Filtros: por nombre, por CUIT (con y sin guiones, o una parte), por estado y por categoría; «Quitar filtros» y el aviso de que no hay resultados.
+- [ ] 11. Categoría dada de baja: no se ve ni se ofrece en la ficha y el formulario, pero el vínculo se conserva al modificar.
+- [ ] 12. «Auditoría»: alta, modificación, baja y reactivación de proveedor; el CUIT se audita con 11 dígitos.
+- [ ] 13. Agrónomo: ve la lista y la ficha sin botones de cambio, y escribir la dirección de «Nuevo proveedor» a mano da 403.
+- [ ] 14. (Opcional) Vendedor o Capataz: sin «Compras» en el menú y `/compras/proveedores/` da 403.
+- [ ] 15. (Opcional) Sin JavaScript: «Dar de baja» abre la ficha con la ventana abierta; el alta muestra los dos grupos de campos y todas las categorías.
+- [ ] 16. (Opcional) En un ancho de celular (390 px) la página no se desplaza a los costados; la tabla scrollea dentro de su contenedor.
+- [ ] 17. **Navegador real (D-96).** En una ventana privada, con sesión del Gerente, repetí el alta (paso 2) y la baja (paso 6) hasta el final: sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola (F12).
+
+## CMP-02a · Tarea CMP-02a (pedido de cotización y portal del proveedor)
+
+Los 19 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-02a-pedido-y-portal-del-proveedor.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay dos migraciones nuevas (`compras` 0002 y `core` 0028): `python manage.py migrate`. Para ver los correos sin enviarlos, correo en modo consola (`CORREO_CONSOLA=1` en `.env`).
+
+- [ ] 1. Agrónoma Ana, «Panel de control»: «Insumos bajo el mínimo: 1» con **Pedir**, que abre «Nuevo pedido» con la Lechuga y la cantidad sugerida (15).
+- [ ] 2. «Agregar otro insumo del catálogo»: el Nutriente (Invernadero Sur) aparece como segundo renglón; escribir 3.
+- [ ] 3. «Habilitarlo en un invernadero» (Sustrato): con precio 0 da el error junto al campo y no se pierde el pedido; con 30,00 queda habilitado y agregado; «Quitar» lo saca.
+- [ ] 4. «Revisar pedido» con cantidad 0, fecha de hoy y sin proveedores: los tres errores salen juntos, cada uno junto a su campo, y lo escrito se conserva.
+- [ ] 5. Proveedores: filtro propuesto («Los que venden lo que pedís»), «Seleccionar todos» solo de la lista filtrada, «Todos los proveedores» y que un proveedor dado de baja no aparece.
+- [ ] 6. Resumen con $ 550,00 (por invernadero, con precio de referencia y subtotal); «Volver a corregir» no muestra errores; «Confirmar pedido» lleva a la ficha con «Enviamos el pedido …».
+- [ ] 7. En la terminal, dos correos con enlaces distintos, el detalle, la dirección y la fecha límite, y sin ningún precio; los dos invitados figuran «No cotizó» con el enlace «Vigente».
+- [ ] 8. Proveedor (ventana privada): al abrir el enlace la dirección pasa a `/proveedor/enlace/` sin el código; se ve el pedido sin precios de referencia ni el otro proveedor.
+- [ ] 9. Portal con errores (nada cotizado; cantidad 0, precio 10,123, plazo 0 y validez anterior a la fecha límite): salen junto a cada campo.
+- [ ] 10. Cotizar la Lechuga (20, total 250, 3 días) y el Nutriente (4, total 120, 2 días): el resumen muestra el unitario y la advertencia «se envía una sola vez»; enviar.
+- [ ] 11. «Recibimos su cotización…», el acuse en la terminal con $ 370,00 y, al volver a abrir el enlace, «Ya envió su cotización» en solo lectura y sin botón para enviar otra.
+- [ ] 12. Ana, ficha: «Cotizó» con el enlace «Usado», la cotización en «Cotizaciones recibidas» y **un** aviso «Pedido … cubierto» en la campana; con el otro proveedor (precio unitario, el rótulo cambia) no llega un segundo aviso.
+- [ ] 13. Gerente: «Pedidos» en modo consulta, sin «Nuevo pedido» y sin botones de cambio; la dirección de «Nuevo pedido» a mano da 403; «Auditoría» con «Alta de pedido de cotización» y dos «Alta de cotización» con «Proveedor (mediante enlace)».
+- [ ] 14. Ficha del proveedor: la tarjeta «Pedidos» lista el pedido (con «Cotizó») y el CUIT ya no se puede editar.
+- [ ] 15. (Opcional) Con el correo sin configurar: cada invitado figura «No se pudo enviar» y aparece el aviso con qué hacer.
+- [ ] 16. La otra Agrónoma o el Capataz abren `/compras/pedidos/<número>/`: 403.
+- [ ] 17. (Opcional) Con la fecha límite en el pasado (a mano en la base): el enlace da «Este enlace no se puede usar · El plazo para cotizar terminó.» y el pedido figura «Fecha límite vencida».
+- [ ] 18. (Opcional) Sin JavaScript y en un ancho de celular (390 px): «Nuevo pedido» y el portal siguen funcionando y no se cortan las tarjetas.
+- [ ] 19. **Navegador real (D-96).** En una ventana privada, enviá la cotización hasta el final (y confirmá el pedido y la habilitación del paso 3): sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola (F12).
+
+## IOT-05 · Tarea IOT-05 (comandos: emitir, retirar, resolver con reintentos y cancelar)
+
+Los 17 pasos son los de «Verificación a mano» de `docs/tareas/iot/IOT-05-comandos.md` (con los datos que hay que crear a mano, en orden, y sus valores), copiados acá para ir tachándolos (M5). Hay tres migraciones nuevas (`iot` 0004, `produccion` 0006 y `core` 0029): `python manage.py migrate`; después `python manage.py runserver` y abrí `http://localhost:8000`. No hay datos cargados: creá a mano, en este orden, (a) un **Agrónomo** (Laura) a cargo del invernadero «Norte», un **Gerente** y un **Técnico**; un segundo invernadero «Libre» **sin Agrónomo**; (b) en «IoT · Sistema IoT» de «Norte», el sistema (anotá el token); (c) en «IoT · Hardware» de «Norte», dos actuadores con un insumo de «Repuestos de hardware» cada uno: `norte/sectorA/ventilador` (tipo «Ventilador», con un sector) y `norte/sectorA/ventana` (tipo «Ventana»); (d) en «Libre», un sistema y `libre/ventilador` (tipo «Ventilador»). Con el Gerente, «Configuración · Módulo IoT»: **1 reintento y 10 s de intervalo** (al final, volver a 3 y 60). Node-RED con los dos flujos (`docs/api/nodo/node-red/README.md`, secciones 1 a 4) y, en otra terminal, `python manage.py revision_iot --cada 30`. Si no tenés Node-RED, los pasos 5 a 12 se pueden cubrir con la API (`GET comandos` y `POST comandos/<id>/resultado`, con `Authorization: Bearer <token>`).
+
+- [ ] 1. **Escenario 6 · Emitir un comando manual.** Con Laura, IoT → «Comandos»: elegí «Ventana · norte/sectorA/ventana» y la acción «Fijar posición»; aparece el campo «Valor (%)» con «Número entero entre 0 y 100 %.». Escribí 40, tocá «Ver resumen» y después «Confirmar y emitir». Tiene que verse el aviso «Comando CMD-n pendiente. El nodo lo retira en su próxima consulta…» y la fila «Pendiente», «0 de 2». En unos segundos, «Ejecutado»; en la ficha de la ventana (Hardware), «Posición 40» y el historial con el comando.
+- [ ] 2. **Advertencia «ya está en ese estado» (paso 1 de la tarea).** Con el ventilador ya «Encendido» (por el flujo de Node-RED), elegí «Encender» y «Ver resumen»: «Según el último estado que informó el nodo, el actuador ya está encendido…». Confirmá: queda «Ejecutado».
+- [ ] 3. **Errores de validación.** «Fijar posición» con 150, con 12.5 y con el campo vacío, y «Ver resumen»: el error junto al campo («Ingresá un número entero entre 0 y 100 %, sin decimales.» o «Ingresá el valor…») y ningún comando creado. Sin elegir actuador: «Seleccioná un actuador.».
+- [ ] 4. **Tiempo mínimo entre comandos (6f).** Justo después de un comando ejecutado, emití otro al mismo actuador: el resumen advierte «El actuador cambió de estado hace… faltan n s… Podés emitirlo igual.» y deja confirmar.
+- [ ] 5. **Escenario 7 · Falla del actuador.** En Node-RED, flujo de comandos → «Fallar cada intento»; emití «Apagar» al ventilador. El primer intento falla (la fila sigue «Pendiente», «1 de 2»); al segundo queda «Fallido» con «El actuador falló en 2 intentos…», el ventilador pasa a «Fuera de servicio» y aparece la alerta crítica «Comando fallido» en Monitoreo. En la vuelta siguiente de `revision_iot` llega el correo. «Emitir comando» ya no se ofrece para ese actuador: la pantalla dice «Volvé a activarlo desde Hardware antes de emitir comandos.». Después, en su ficha, «Volver a activar».
+- [ ] 6. **Escenario 8 · El nodo no reconoce el comando.** «Rechazar (no reconoce)» y emití «Cerrar» a la ventana: queda «Rechazado por el nodo», sin reintentos y con la nota; aparece «Configuración incompatible», el actuador sigue activo y «Cerrar» ya no se ofrece al emitir (el formulario avisa «El nodo no soporta: Cerrar»).
+- [ ] 7. **Escenario 9 · Caída del nodo.** Emití un comando, esperá a que el nodo lo retire y detené los flujos unos 4 minutos. En la vuelta de la revisión: alerta crítica «Nodo sin comunicación» (y su correo). El comando sigue «Pendiente» y no consumió intentos. Volvé a arrancar los flujos: se resuelve la alerta y el comando se ejecuta.
+- [ ] 8. **Escenario 13 · Cancelar un comando trabado.** «No responder»; emití un comando. Mientras el nodo lo tiene, «Cancelar» está deshabilitado con «Cancelable en n s» y la ventana (si la abrís a mano) lo explica. Cuando vence el intento, «Cancelar» → «Cancelar comando»: «Cancelado», aviso «CMD-n cancelado…», y se puede emitir otro al mismo actuador.
+- [ ] 9. **Modo local (paso 2 de la tarea).** En el flujo de lecturas, «Modo local». Emití un comando: el resumen avisa «El nodo está operando en modo local…» y queda «Pendiente» con «0 de 2» aunque pase el tiempo. «Modo remoto»: el nodo lo retira y se ejecuta.
+- [ ] 10. **Bitácora y auditoría (pasos 3 y 4 de la tarea).** Producción → «Bitácora» (invernadero «Norte»): los registros de tipo «Comando» con cada hecho («Falló: …», «Sin respuesta», «cancelado», «ejecutado»). Con el Gerente, «Auditoría»: «Emisión de comando», «Cancelación de comando» y «Resolución de comando (IoT)». (El filtro «Tipo» de la bitácora todavía no ofrece «Comando»: queda para otra tarea.)
+- [ ] 11. **Panel y ficha.** Monitoreo: el indicador «Comandos pendientes», la situación «Comando pendiente» del actuador y, en su fila, «Cancelar» (o «Emitir comando» si no hay pendiente). Ficha del actuador (Hardware → «Ver ficha»): «Emitir comando», la tarjeta «Comandos» con los últimos 10 y «Ver todos (n)» filtrado por ese actuador.
+- [ ] 12. **Lista y filtros.** «Comandos»: filtrá por estado, actuador y origen (el filtro no recarga la página con JavaScript y aparece «Limpiar filtros»); con más de 25 comandos, «Siguiente» y «Anterior» conservan los filtros.
+- [ ] 13. **Gerente.** En «Norte» (tiene Agrónomo activo): ve la lista y el aviso «Norte tiene Agrónomo activo…», pero **sin** formulario ni «Cancelar». En «Libre» (sin Agrónomo): «Operás este invernadero como Gerente…», emite, y su comando sale «Manual · … (Gerente)»; en Auditoría figura su nombre.
+- [ ] 14. **Rol sin acceso y alcance.** El Técnico o un Capataz escriben `/iot/comandos/` a mano: 403. Un Agrónomo de otro invernadero, con `?invernadero=<id de Norte>`: 404. Sin sesión: lleva al ingreso. (Los botones nunca llevan a un 403.)
+- [ ] 15. **Navegador real (D-96).** En una ventana privada, entrá con Laura y hacé **de punta a punta** el formulario de «Comandos» (elegir actuador y acción, «Ver resumen», «Confirmar y emitir») y la cancelación («Cancelar» → «Cancelar comando»): sin «Prohibido (403)», sin «Verificación CSRF fallida» y sin errores en la consola (F12). Mirá además que la lista, la ficha y el panel se vean bien (la tabla no se corta, «Cancelar» no se parte).
+- [ ] 16. (Opcional) **Sin JavaScript y en un celular.** Desactivá JavaScript: elegí el actuador y tocá «Actualizar el formulario», elegí la acción y volvé a tocarlo; «Ver resumen» y «Confirmar y emitir» funcionan; «Cancelar» abre la misma página con la ventana. En un ancho de 390 px no hay desborde horizontal.
+- [ ] 17. (Opcional) **Después del despliegue:** en el log de Render, que se aplicaron las tres migraciones.
 
 ## CFG · Configuración del repositorio
 

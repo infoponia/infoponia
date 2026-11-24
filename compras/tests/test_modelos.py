@@ -179,3 +179,245 @@ class AuditoriaDeProveedoresTests(TestCase):
         for clave in ("tipo_proveedor", "cuit", "razon_social", "especialidades"):
             self.assertIn(clave, etiquetas)
         self.assertEqual(RegistroAuditoria.VALORES_VISIBLES["tipo_proveedor"], {"juridica": "Persona jurídica", "fisica": "Persona física"})
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-02a, paso 1: Pedido, DetallePedido, InvitacionPedido, EnlaceProveedor, Cotizacion y DetalleCotizacion.
+# Fuente: docs/modelo/compras.md y D-88. Lo que la base garantiza por sí sola (respaldo de las reglas de los servicios).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from datetime import timedelta  # noqa: E402
+from decimal import Decimal  # noqa: E402
+
+from django.utils import timezone  # noqa: E402
+
+from compras.models import DetalleCotizacion, EnlaceProveedor, Pedido  # noqa: E402
+from compras.tests.fabricas import cotizacion_de, detalle_de_pedido, enlace_de, invitar  # noqa: E402
+from compras.tests.fabricas import pedido as armar_pedido  # noqa: E402
+from core.tests.fabricas import crear_gerente  # noqa: E402
+from inventario.tests.fabricas import ConDatosDeInventario, existencia, insumo  # noqa: E402
+from maestros.tests.fabricas import crear_agronomo, crear_agronomo_con_invernadero  # noqa: E402
+
+
+class PedidosRestriccionesTests(ConDatosDeInventario, TestCase):
+    """Las restricciones de la base de los pedidos, sus detalles, invitaciones, enlaces y cotizaciones."""
+
+    def setUp(self):
+        self.agronomo, self.invernadero = crear_agronomo_con_invernadero()
+        self.existencia = existencia(insumo(), self.invernadero, minimo=10, precio="12.50")
+        self.proveedor = proveedor()
+        self.pedido = armar_pedido(self.agronomo)
+
+    def rechazo(self, crear, restriccion):
+        """Falla la prueba si la base no rechaza ``crear()`` con un ``IntegrityError`` que nombre ``restriccion``."""
+        with self.assertRaises(IntegrityError) as contexto:
+            with transaction.atomic():
+                crear()
+        nombres = (restriccion,) if isinstance(restriccion, str) else restriccion
+        self.assertTrue(any(n in str(contexto.exception) for n in nombres), str(contexto.exception))
+
+    def crear_pedido_crudo(self, **campos):
+        """Un ``Pedido`` con fecha límite pasado mañana y ``campos`` pisados, sin pasar por la fábrica."""
+        hoy = timezone.localdate()
+        datos = {"agronomo": self.agronomo, "fecha_pedido": hoy, "fecha_limite_cotizaciones": hoy + timedelta(days=2)}
+        datos.update(campos)
+        return Pedido.objects.create(**datos)
+
+    # ---- Pedido ----
+
+    def test_regla_pedido_nace_en_cotizacion_sin_fecha_de_cierre(self):
+        """CMP-RLZ-PED postcondición a: el pedido nace «en cotización» y sin fecha de cierre; se muestra como «P-0031»."""
+        self.assertEqual(self.pedido.estado_pedido, "en_cotizacion")
+        self.assertIsNone(self.pedido.fecha_cierre_pedido)
+        self.assertEqual(str(self.pedido), f"P-{self.pedido.pk:04d}")
+        self.assertTrue(self.pedido.en_cotizacion)
+
+    def test_modelo_pedido_cerrado_o_cancelado_exige_fecha_de_cierre_y_en_cotizacion_no_la_tiene(self):
+        """Modelo «Pedido»: ``estado ∈ {cerrado, cancelado}`` ⇔ ``fecha_cierre_pedido`` no nula (MD-124)."""
+        with self.subTest("cerrado sin fecha de cierre"):
+            self.rechazo(lambda: self.crear_pedido_crudo(estado_pedido="cerrado"), "pedido_cierre_coherente_con_estado")
+        with self.subTest("en cotización con fecha de cierre"):
+            self.rechazo(
+                lambda: self.crear_pedido_crudo(fecha_cierre_pedido=timezone.localdate()), "pedido_cierre_coherente_con_estado"
+            )
+
+    def test_modelo_pedido_cancelado_exige_causa_y_solo_el_cancelado_la_tiene(self):
+        """Modelo «Pedido»: ``estado = cancelado`` ⇔ ``causa_cancelacion`` no nula."""
+        hoy = timezone.localdate()
+        with self.subTest("cancelado sin causa"):
+            self.rechazo(
+                lambda: self.crear_pedido_crudo(estado_pedido="cancelado", fecha_cierre_pedido=hoy),
+                "pedido_causa_coherente_con_estado",
+            )
+        with self.subTest("cerrado con causa"):
+            self.rechazo(
+                lambda: armar_pedido(self.agronomo, estado="cerrado", causa="nadie_cotizo"), "pedido_causa_coherente_con_estado"
+            )
+
+    def test_modelo_pedido_cancelacion_manual_exige_motivo_y_las_automaticas_no(self):
+        """Modelo «Pedido» (MD-124): ``causa = manual`` ⇒ motivo no vacío; las automáticas guardan su texto fijo, pero la base no lo exige."""
+        self.rechazo(
+            lambda: armar_pedido(self.agronomo, estado="cancelado", causa="manual", motivo=""), "pedido_manual_con_motivo"
+        )
+        manual = armar_pedido(self.agronomo, estado="cancelado", causa="manual", motivo="Ya no hace falta")
+        automatico = armar_pedido(self.agronomo, estado="cancelado", causa="nadie_cotizo")
+        self.assertEqual((manual.causa_cancelacion, automatico.causa_cancelacion), ("manual", "nadie_cotizo"))
+
+    def test_regla_fecha_limite_es_posterior_al_dia_del_pedido(self):
+        """CMP-RLZ-PED regla «Fecha límite de cotizaciones»: como mínimo el día siguiente al del pedido (extensión 8a)."""
+        hoy = timezone.localdate()
+        self.rechazo(lambda: self.crear_pedido_crudo(fecha_limite_cotizaciones=hoy), "pedido_limite_posterior_al_pedido")
+
+    def test_modelo_estado_y_causa_son_de_lista_cerrada(self):
+        """Modelo «Pedido»: el estado y la causa solo toman los valores del modelo."""
+        self.rechazo(
+            lambda: armar_pedido(self.agronomo, estado="vencido", cerrado_el=timezone.localdate()),
+            # Un estado inventado también rompe la coherencia con la fecha de cierre: Postgres informa la primera que encuentra.
+            ("pedido_estado_valido", "pedido_cierre_coherente_con_estado"),
+        )
+        self.rechazo(
+            lambda: armar_pedido(self.agronomo, estado="cancelado", causa="porque_si", motivo="x"), "pedido_causa_valida"
+        )
+
+    # ---- DetallePedido ----
+
+    def test_regla_detalle_unico_un_par_insumo_invernadero_por_pedido(self):
+        """CMP-RLZ-PED regla «Detalle único» (extensión 4b): un pedido no repite el par insumo–invernadero; en otro pedido sí."""
+        detalle_de_pedido(self.pedido, self.existencia)
+        self.rechazo(lambda: detalle_de_pedido(self.pedido, self.existencia), "detalle_pedido_unico_por_insumo_invernadero")
+        detalle_de_pedido(armar_pedido(self.agronomo), self.existencia)
+
+    def test_regla_detalle_cantidad_y_precio_son_mayores_que_cero(self):
+        """CMP-RLZ-PED regla «Cantidad pedida» y modelo «DetallePedido»: cantidad > 0 y precio de referencia > 0."""
+        self.rechazo(lambda: detalle_de_pedido(self.pedido, self.existencia, cantidad="0"), "detalle_pedido_cantidad_positiva")
+        self.rechazo(lambda: detalle_de_pedido(self.pedido, self.existencia, precio="0"), "detalle_pedido_precio_positivo")
+
+    def test_regla_monto_estimado_es_la_suma_de_cantidad_por_precio_de_referencia(self):
+        """CMP-RLZ-PED regla «Precio y monto estimado»: el subtotal es cantidad × precio copiado (2 decimales) y el monto, su suma;
+        ``con_monto`` da lo mismo que la suma de los subtotales."""
+        otra = existencia(insumo("Fertilizante", unidad="kg"), self.invernadero, minimo=1, precio="3.33")
+        d1 = detalle_de_pedido(self.pedido, self.existencia, cantidad="4", precio="12.50")
+        d2 = detalle_de_pedido(self.pedido, otra, cantidad="2.5", precio="3.33")
+        self.assertEqual((d1.subtotal, d2.subtotal), (Decimal("50.00"), Decimal("8.33")))
+        self.assertEqual(Pedido.objects.con_monto().get(pk=self.pedido.pk).monto_estimado, Decimal("58.33"))
+        self.assertEqual(Pedido.objects.con_monto().get(pk=armar_pedido(self.agronomo).pk).monto_estimado, Decimal("0.00"))
+
+    # ---- InvitacionPedido y EnlaceProveedor ----
+
+    def test_regla_un_proveedor_se_invita_una_sola_vez_por_pedido(self):
+        """CMP-RLZ-PED postcondición c y R157: única ``(pedido, proveedor)``."""
+        invitar(self.pedido, self.proveedor)
+        self.rechazo(lambda: invitar(self.pedido, self.proveedor), "invitacion_pedido_unica_por_proveedor")
+
+    def test_d88_a_lo_sumo_un_enlace_vigente_por_invitacion(self):
+        """D-88 punto 1: índice único parcial «un ``vigente`` por invitación»; los demás estados pueden repetirse."""
+        invitacion = invitar(self.pedido, self.proveedor)
+        enlace_de(invitacion)
+        self.rechazo(lambda: enlace_de(invitacion), "enlace_un_vigente_por_invitacion")
+        enlace_de(invitacion, estado="reemplazado")
+        enlace_de(invitacion, estado="anulado")
+
+    def test_d88_usado_si_y_solo_si_tiene_fecha_de_uso(self):
+        """Modelo «EnlaceProveedor»: ``estado = usado`` ⇔ ``fecha_uso`` no nula."""
+        invitacion = invitar(self.pedido, self.proveedor)
+        self.rechazo(
+            lambda: EnlaceProveedor.objects.create(invitacion=invitacion, token_resumen="a" * 64, estado="usado"),
+            "enlace_usado_coherente_con_fecha_de_uso",
+        )
+        self.rechazo(
+            lambda: EnlaceProveedor.objects.create(
+                invitacion=invitacion, token_resumen="b" * 64, estado="vigente", fecha_uso=timezone.now()
+            ),
+            "enlace_usado_coherente_con_fecha_de_uso",
+        )
+
+    def test_d88_el_resumen_del_token_es_unico_y_el_estado_de_envio_de_lista_cerrada(self):
+        """D-88 punto 1: ``token_resumen`` único; ``estado_envio`` nulo, ``enviado`` o ``pendiente_envio``."""
+        invitacion = invitar(self.pedido, self.proveedor)
+        enlace, _ = enlace_de(invitacion, estado="anulado")
+        self.rechazo(
+            lambda: EnlaceProveedor.objects.create(invitacion=invitacion, token_resumen=enlace.token_resumen, estado="anulado"),
+            "token_resumen",
+        )
+        self.rechazo(
+            lambda: EnlaceProveedor.objects.create(
+                invitacion=invitacion, token_resumen="c" * 64, estado="anulado", estado_envio="roto"
+            ),
+            "enlace_estado_envio_valido",
+        )
+
+    # ---- Cotizacion y DetalleCotizacion ----
+
+    def test_c8_una_cotizacion_por_proveedor_y_por_pedido(self):
+        """CMP-ENV-COT regla «Una cotización por proveedor y por pedido» (C8): única ``(pedido, proveedor)``; el mismo proveedor
+        puede cotizar otro pedido."""
+        detalle = detalle_de_pedido(self.pedido, self.existencia)
+        cotizacion_de(self.pedido, self.proveedor, [(detalle, 10, "100.00", 3)])
+        self.rechazo(
+            lambda: cotizacion_de(self.pedido, self.proveedor, [(detalle, 10, "90.00", 3)]),
+            "cotizacion_unica_por_pedido_y_proveedor",
+        )
+        cotizacion_de(armar_pedido(self.agronomo), self.proveedor, [])
+
+    def test_regla_una_linea_por_detalle_del_pedido_en_cada_cotizacion(self):
+        """CMP-ENV-COT regla «Líneas de la cotización»: a lo sumo una línea por detalle de pedido."""
+        detalle = detalle_de_pedido(self.pedido, self.existencia)
+        cotizacion = cotizacion_de(self.pedido, self.proveedor, [(detalle, 10, "100.00", 3)])
+        self.rechazo(
+            lambda: DetalleCotizacion.objects.create(
+                cotizacion=cotizacion, detalle_pedido=detalle, cantidad_cotizada=1, total_linea=Decimal("1.00"), plazo_entrega_dias=1
+            ),
+            "linea_cotizacion_unica_por_detalle",
+        )
+
+    def test_regla_cantidad_total_y_plazo_de_la_linea(self):
+        """CMP-ENV-COT reglas 6a y 6c con las actualizaciones de A0: cantidad > 0 (puede superar la pedida: P2), total > 0 y plazo ≥ 1."""
+        detalle = detalle_de_pedido(self.pedido, self.existencia, cantidad="10")
+        mayor = cotizacion_de(self.pedido, self.proveedor, [(detalle, 25, "250.00", 1)])
+        self.assertEqual(mayor.lineas.get().cantidad_cotizada, Decimal("25.000"))
+        for cantidad, total, plazo, restriccion in (
+            (0, "10.00", 1, "linea_cotizacion_cantidad_positiva"),
+            (5, "0", 1, "linea_cotizacion_total_positivo"),
+            (5, "10.00", 0, "linea_cotizacion_plazo_minimo"),
+        ):
+            with self.subTest(restriccion=restriccion):
+                otro = armar_pedido(self.agronomo)
+                d = detalle_de_pedido(otro, self.existencia)
+                self.rechazo(lambda: cotizacion_de(otro, self.proveedor, [(d, cantidad, total, plazo)]), restriccion)
+
+    def test_regla_monto_de_la_cotizacion_es_la_suma_de_los_totales_de_sus_lineas(self):
+        """CMP-ENV-COT regla «Subtotal y monto» (D-89 punto 5): el monto es derivado, la suma de los ``total_linea``."""
+        otra = existencia(insumo("Fertilizante", unidad="kg"), self.invernadero, minimo=1)
+        d1 = detalle_de_pedido(self.pedido, self.existencia)
+        d2 = detalle_de_pedido(self.pedido, otra)
+        cotizacion = cotizacion_de(self.pedido, self.proveedor, [(d1, 10, "100.10", 3), (d2, 10, "50.05", 2)])
+        self.assertEqual(cotizacion.monto_cotizacion, Decimal("150.15"))
+        self.assertEqual(cotizacion.estado_cotizacion, "propuesta")
+
+    def test_regla_los_pedidos_se_ven_segun_el_rol(self):
+        """CMP-CNS-PED regla 1: el Agrónomo ve los pedidos que él realizó; el Gerente, todos; nadie más."""
+        otro_agronomo = crear_agronomo(email="otro.agronomo@infoponia.com")
+        ajeno = armar_pedido(otro_agronomo)
+        self.assertEqual(set(Pedido.objects.en_alcance_de(self.agronomo)), {self.pedido})
+        self.assertEqual(set(Pedido.objects.en_alcance_de(crear_gerente())), {self.pedido, ajeno})
+        sin_alcance = (
+            crear_capataz(),
+            crear_vendedor(),
+            crear_administrador(),
+            crear_agronomo(email="baja@infoponia.com", activo=False),
+            None,
+        )
+        for cuenta in sin_alcance:
+            with self.subTest(cuenta=cuenta):
+                self.assertEqual(list(Pedido.objects.en_alcance_de(cuenta)), [])
+
+    def test_las_dos_acciones_nuevas_son_de_negocio_y_los_campos_tienen_nombre_visible(self):
+        """D-87 punto 8 y D-36: ``alta_pedido`` y ``alta_cotizacion`` están clasificadas; los campos nuevos tienen etiqueta y los
+        roles externos, su texto («Proveedor (mediante enlace)»)."""
+        from core.models import ACCIONES_DE_NEGOCIO
+
+        Accion = RegistroAuditoria.Accion
+        self.assertTrue({Accion.ALTA_PEDIDO, Accion.ALTA_COTIZACION} <= ACCIONES_DE_NEGOCIO)
+        for clave in ("fecha_limite_cotizaciones", "monto_estimado", "detalles", "invitaciones", "monto_cotizacion", "lineas_cotizadas"):
+            self.assertIn(clave, RegistroAuditoria.ETIQUETAS)
+        self.assertEqual(RegistroAuditoria.VALORES_VISIBLES["rol"]["proveedor_enlace"], "Proveedor (mediante enlace)")

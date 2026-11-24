@@ -12,5 +12,7 @@ urlpatterns = [
     path("estados", vistas.estados_vista, name="estados"),
     path("modo", vistas.modo_vista, name="modo"),
     path("anuncio", vistas.anuncio_vista, name="anuncio"),
+    path("comandos", vistas.comandos_vista, name="comandos"),
+    path("comandos/<int:comando_id>/resultado", vistas.resultado_de_comando_vista, name="comando_resultado"),
     re_path(r"^.*$", vistas.ruta_inexistente, name="ruta_inexistente"),
 ]

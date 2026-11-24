@@ -1,0 +1,38 @@
+{% extends "compras/proveedor/base.html" %}{% load iconos formato_inventario %}
+{% comment %}La cotización que el proveedor ya envió, en solo lectura (CMP-ENV-COT extensión 2b; H15.2: hasta el final del día de la fecha límite). Líneas, monto, fecha de
+validez, observaciones y fecha de envío. Sin botón para enviar otra.{% endcomment %}
+{% block titulo %}Su cotización · {{ nombre_organizacion }}{% endblock %}
+{% block contenido %}
+<div class="portal-h">
+  <h1>Ya envió su cotización</h1>
+  <p class="muted">Pedido {{ pedido }} · {{ proveedor.nombre_para_mostrar }}</p>
+</div>
+<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Recibimos su cotización y no se puede modificar ni reemplazar. Si necesita cambiar algo, comuníquese con {{ nombre_organizacion }}. Puede volver a verla con este enlace hasta el {{ pedido.fecha_limite_cotizaciones|date:"d/m/Y" }} inclusive.</div></div>
+{% if cotizacion %}
+<section class="sec portal-resumen" aria-label="Su cotización">
+  <div class="tabla-responsive">
+  <table class="data-table">
+    <thead><tr><th>Insumo</th><th>Destino</th><th class="right">Cantidad</th><th class="right">Precio unitario</th><th class="right">Total</th><th class="right">Plazo</th></tr></thead>
+    <tbody>
+    {% for l in lineas %}
+      <tr>
+        <td data-etiqueta="Insumo">{{ l.insumo }}</td>
+        <td data-etiqueta="Destino">{{ l.invernadero }}</td>
+        <td class="right mono" data-etiqueta="Cantidad">{{ l.cantidad|num:l.unidad_medida }} {{ l.unidad }}</td>
+        <td class="right mono" data-etiqueta="Precio unitario">{% if l.unitario %}{{ l.unitario|pesos }}{% else %}—{% endif %}</td>
+        <td class="right mono" data-etiqueta="Total">{{ l.total|pesos }}</td>
+        <td class="right mono" data-etiqueta="Plazo">{{ l.plazo }} {% if l.plazo == 1 %}día{% else %}días{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <dl class="dl two portal-condiciones">
+    <dt>Monto de la cotización</dt><dd><b>{{ monto|pesos }}</b></dd>
+    <dt>Válida hasta</dt><dd>{{ cotizacion.fecha_validez_cotizacion|date:"d/m/Y" }}</dd>
+    <dt>Enviada el</dt><dd>{{ cotizacion.enviada_el|date:"d/m/Y H:i" }}</dd>
+    {% if cotizacion.observaciones_cotizacion %}<dt>Observaciones</dt><dd>{{ cotizacion.observaciones_cotizacion }}</dd>{% endif %}
+  </dl>
+</section>
+{% endif %}
+{% endblock %}

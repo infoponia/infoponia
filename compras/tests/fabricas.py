@@ -104,3 +104,81 @@ def ref(objeto, texto=None):
 def afectado_de(proveedor):
     """Cómo queda un proveedor entre los afectados de un registro de auditoría (D-36), sin el rol (solo lo llevan las cuentas)."""
     return {"modelo": "compras.proveedor", "id": proveedor.pk, "texto": str(proveedor)}
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Pedidos, enlaces y cotizaciones (CMP-02a). Armados directo en la base, sin pasar por los servicios: cada prueba arma sus datos.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from datetime import timedelta  # noqa: E402
+from decimal import Decimal  # noqa: E402
+
+from django.utils import timezone  # noqa: E402
+
+from compras.models import Cotizacion, DetalleCotizacion, DetallePedido, EnlaceProveedor, InvitacionPedido, Pedido  # noqa: E402
+from core.enlaces import nuevo_token  # noqa: E402
+
+
+def pedido(agronomo, dias_al_limite=3, estado="en_cotizacion", causa=None, motivo="", cerrado_el=None, **extra):
+    """Un ``Pedido`` de ``agronomo`` hecho hoy, con la fecha límite dentro de ``dias_al_limite`` días. Sin detalles ni invitados."""
+    hoy = timezone.localdate()
+    if estado != "en_cotizacion" and cerrado_el is None:
+        cerrado_el = hoy
+    return Pedido.objects.create(
+        agronomo=agronomo,
+        fecha_pedido=hoy,
+        fecha_limite_cotizaciones=hoy + timedelta(days=dias_al_limite),
+        estado_pedido=estado,
+        causa_cancelacion=causa,
+        motivo_cancelacion=motivo,
+        fecha_cierre_pedido=cerrado_el,
+        **extra,
+    )
+
+
+def detalle_de_pedido(pedido, existencia, cantidad="10", precio=None):
+    """Un detalle de ``pedido`` para la ``existencia`` (``InsumoInvernadero``); el precio por omisión es su precio de referencia."""
+    return DetallePedido.objects.create(
+        pedido=pedido,
+        insumo_invernadero=existencia,
+        cantidad_detalle=Decimal(str(cantidad)),
+        precio_unitario_de_pedido=Decimal(str(precio)) if precio is not None else existencia.referencia_precio,
+    )
+
+
+def invitar(pedido, proveedor):
+    """La invitación de ``proveedor`` a ``pedido``, sin enlace."""
+    return InvitacionPedido.objects.create(pedido=pedido, proveedor=proveedor)
+
+
+def enlace_de(invitacion, estado="vigente", usado_el=None, envio=None):
+    """Un enlace de ``invitacion`` en ``estado``. Devuelve ``(enlace, token)``: el token solo vive en la prueba."""
+    token, resumen = nuevo_token()
+    if estado == "usado" and usado_el is None:
+        usado_el = timezone.now()
+    enlace = EnlaceProveedor.objects.create(
+        invitacion=invitacion, token_resumen=resumen, estado=estado, fecha_uso=usado_el, estado_envio=envio
+    )
+    return enlace, token
+
+
+def cotizacion_de(pedido, proveedor, lineas, validez_en_dias=10, observaciones="", estado="propuesta"):
+    """Una cotización de ``proveedor`` para ``pedido``. ``lineas = [(detalle_pedido, cantidad, total_linea, plazo_en_dias)]``."""
+    hoy = timezone.localdate()
+    cotizacion = Cotizacion.objects.create(
+        pedido=pedido,
+        proveedor=proveedor,
+        fecha_cotizacion=hoy,
+        fecha_validez_cotizacion=hoy + timedelta(days=validez_en_dias),
+        observaciones_cotizacion=observaciones,
+        estado_cotizacion=estado,
+    )
+    for detalle, cantidad, total, plazo in lineas:
+        DetalleCotizacion.objects.create(
+            cotizacion=cotizacion,
+            detalle_pedido=detalle,
+            cantidad_cotizada=Decimal(str(cantidad)),
+            total_linea=Decimal(str(total)),
+            plazo_entrega_dias=plazo,
+        )
+    return cotizacion

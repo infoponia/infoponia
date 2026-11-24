@@ -45,7 +45,7 @@ Si algo de acá contradice un caso de uso, manda el caso de uso: avisá.
    muestra la pantalla «Este enlace no se puede usar» con el motivo que el caso de uso permite (venció, ya se usó, fue reemplazado por uno
    más nuevo, la venta se canceló o ya no tiene nada pendiente) y los datos de contacto del Vendedor. Un token que no existe da «Este enlace
    no es válido», sin más.
-3. Las páginas de `/cliente/…` responden con `Cache-Control: no-store`, `Referrer-Policy: no-referrer` y `X-Robots-Tag: noindex`, y con el
+3. Las páginas de `/cliente/…` responden con `Cache-Control: no-store`, `Referrer-Policy: same-origin` (no `no-referrer`: con esa política el navegador manda `Origin: null` en los POST y el CSRF los rechaza; D-65 corregida, igual que D-88) y `X-Robots-Tag: noindex`, y con el
    decorador `never_cache`. No leen `request.user`: una sesión de usuario abierta en el mismo navegador no cambia nada.
 4. La sesión del enlace no da acceso a otra cosa: cada vista vuelve a leer el enlace por el id de la sesión, verifica que siga sirviendo y
    muestra solo la venta del enlace (garantía «El Cliente solo ve su venta»).

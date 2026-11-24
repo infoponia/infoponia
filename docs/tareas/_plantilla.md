@@ -46,11 +46,11 @@ Si el tiempo apremia, lo último que se recorta es: <paso> (se anota como dispar
 - Comando de pruebas: python manage.py test <app>.tests --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion
   (y las de concurrencia y de migración de esta tarea, con sus etiquetas, si las hay)
 
-## Verificación (la completa Claude Code al cerrar)
+## Verificación a mano (la completa Claude Code al cerrar)
 
-<!-- Ya no hay «Verificación a mano» (docs/patrones/verificacion_por_claude.md). Al cerrar, Claude Code escribe tres listas:
-**Verifiqué** (el recorrido, lo visual y las migraciones, con su resultado), **Lo cubre una prueba** (nombre de la prueba) y **No pude verificar** (y por qué); y una cuarta, **Pasos para replicar**
-(opcionales para el estudiante, con mucho detalle: D-95). -->
+<!-- Al cerrar, Claude Code escribe los pasos para el estudiante, con mucho detalle (`docs/patrones/verificacion_a_mano.md`, D-96): qué crear a mano (no hay cargadores) con valores concretos, dónde tocar,
+qué tiene que ver, por rol y por estado, y qué cubre ya una prueba. Si la tarea tiene pantallas públicas o formularios que se envían, incluye el paso de «navegador real» (ventana privada y enviar hasta el final).
+Antes de los pasos van tres listas: **Verifiqué** (el recorrido y las migraciones, con su resultado), **Lo cubre una prueba** (nombre de la prueba) y **No pude verificar** (y por qué). -->
 
 ## Cierre (la completa Claude Code al cerrar)
 

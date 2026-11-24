@@ -164,7 +164,7 @@ y otro con correo y dos direcciones. En «Configuración», pre-reserva de 14 d�
     (con `reemplaza_a`, `fecha_fin_detalle` y `fecha_base_ajuste`), `ClausulaSuministrado` y `ClausulaSuministrante` (con la abstracta `ClausulaResolutoria`),
     `ReservaStock.detalle_suministro` con la restricción C3 (`reserva_stock_un_solo_detalle`) y la secuencia `comercial_suministro_numero_seq` (con su reverso). Todas las
     restricciones de las fichas; el par vigente (variedad, dirección) es un `UniqueConstraint` con `condition`.
-  - `core/0028_comercial_suministros`: solo `choices` (`pacto_suministro`; SQL vacío). `core/models.py`: `Accion`, `ETIQUETAS`, `VALORES_VISIBLES` y `ACCIONES_DE_NEGOCIO`, nada más.
+  - `core/0030_comercial_suministros`: solo `choices` (`pacto_suministro`; SQL vacío). `core/models.py`: `Accion`, `ETIQUETAS`, `VALORES_VISIBLES` y `ACCIONES_DE_NEGOCIO`, nada más.
 - **Servicios de `comercial`:**
   - `calendario.py` (nuevo, funciones puras): `sumar_meses`, `meses_transcurridos`, `calendario`, `precio_en`, `tramos_de_precio`, `ventana` y `rige_desde`.
   - `stock_maduro.py`: `Periodo`, `asignar` y `cantidad_sin_cubrir` con un período, `sin_cubrir_de_periodos` (una consulta), `simular` y `simular_varias` (verificación
@@ -267,7 +267,7 @@ con 150, sí; (4) par repetido, ajuste periódico con sus tramos, mínimo mayor 
 error de stock, ventana del resumen), la ficha con todas las situaciones del calendario, el calendario completo, el comprobante, el Gerente, el Agrónomo (403), cuatro pantallas en un celular (sin scroll horizontal)
 y el pacto entero sin JavaScript. Sin errores de JavaScript ni de consola. Lo que vi mal se corrigió (tabla de arriba).
 
-*Migraciones*: `makemigrations --check` sin cambios; `sqlmigrate comercial 0003` leído (solo `CREATE`; la secuencia con su reverso) y `core 0028` (sin SQL); aplicadas en la base de pruebas (se recreó dos veces); `manage.py check` sin problemas.
+*Migraciones*: `makemigrations --check` sin cambios; `sqlmigrate comercial 0003` leído (solo `CREATE`; la secuencia con su reverso) y `core 0030` (sin SQL); aplicadas en la base de pruebas (se recreó dos veces); `manage.py check` sin problemas.
 
 **Verifiqué:** todo lo anterior, con su resultado. Además, medí que `disponible` y `asignar` de compra-venta mantienen sus consultas (9 y 23) contra el módulo de `HEAD`.
 
@@ -277,14 +277,14 @@ las pantallas y el `volver` (`test_suministros_vistas.py`); el flujo completo (`
 
 **No pude verificar:**
 - El envío real de un correo (las pruebas usan `enviar_correo` simulado): con SMTP real, que el comprobante llegue y se lea bien.
-- Que Render aplicó `comercial/0003` y `core/0028` (log del despliegue) y que las pantallas abren en producción (Neon).
+- Que Render aplicó `comercial/0003` y `core/0030` (log del despliegue) y que las pantallas abren en producción (Neon).
 - Impresión real del comprobante (el botón «Imprimir» y el papel) y navegadores que no sean Chromium (Firefox, Edge).
 - Georef real de producción (las pruebas usan los datos de la migración): que las direcciones del cliente se listen con su localidad.
 - Criterio de producto: si la pantalla «Pactar suministro» (con muchos detalles) se siente cómoda para el Jardín Botánico.
 
 **Pasos para replicar** (opcionales; para el estudiante, autocontenidos)
 
-*Antes de empezar.* Con el entorno virtual activo: `python manage.py migrate` (aplica `comercial` 0003 y `core` 0028) y `python manage.py runserver`; abrí `http://127.0.0.1:8000/`. No hay datos
+*Antes de empezar.* Con el entorno virtual activo: `python manage.py migrate` (aplica `comercial` 0003 y `core` 0030) y `python manage.py runserver`; abrí `http://127.0.0.1:8000/`. No hay datos
 cargados: hay que crearlos a mano, en este orden. (1) Con el Gerente, en «Usuarios y seguridad», creá un Agrónomo, un Capataz y dos Vendedores (el segundo, para el paso 11); la contraseña es la que definas.
 (2) En «Producción», creá un invernadero con ese Agrónomo, ese Capataz y el primer Vendedor, sus sectores y una variedad («Lechuga Crespa») con su ciclo; sembrá y avanzá un lote hasta «Maduración» con
 **300 plantas**, como en las rondas de producción (las pruebas lo arman por código, así que este paso es el único que no pude recorrer en el navegador). (3) En «Comercial» › «Clientes», creá «Verdulería Los Pinos S.R.L.» (CUIT de ejemplo 30-71234567-1) **con** correo
@@ -313,6 +313,6 @@ pre-reserva de suministros en 14 días (viene así). Entrá con el primer Vended
     segundo: el aviso dice «Suministros vigentes: 2» y después los contratos son del Vendedor nuevo (las reservas no se mueven).
 11. *(opcional)* **Sin JavaScript** (desactivalo en el navegador): el pacto funciona con «Actualizar» y el resumen como página. **En un celular** (ancho de 390 px): la lista, el formulario, la ficha y el
     calendario no se desbordan.
-12. *(después del merge)* En el log de Render, que se aplicaron `comercial/0003_suministros` y `core/0028_comercial_suministros`.
+12. *(después del merge)* En el log de Render, que se aplicaron `comercial/0003_suministros` y `core/0030_comercial_suministros`.
 
 *Lo que ya cubre el recorrido*: los pasos 2 a 8 (con el cliente de Django) y las capturas del navegador; si tenés poco tiempo, concentrate en el 4 (tabla de stock), el 6 (ficha y avisos) y el 9.

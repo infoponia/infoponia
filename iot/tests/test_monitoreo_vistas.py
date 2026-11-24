@@ -500,10 +500,10 @@ class PestanaDeMonitoreoVistaTests(MonitoreoVistasBase):
 
     def test_monitoreo_es_la_primera_pestana_y_esta_activa(self):
         """La pestaña «Monitoreo» es la primera (como `NAV` del prototipo), con `aria-selected="true"` en esta pantalla y enlace a `/iot/monitoreo/` con el invernadero elegido; las demás
-        siguen (Hardware, Sistema IoT, Tipos de actuador)."""
+        siguen (Comandos, que suma IOT-05, Hardware, Sistema IoT, Tipos de actuador)."""
         html = self.pagina(self.laura).content.decode()
         pestanas = re.findall(r'<a class="tab"[^>]*>([^<]+)</a>', html)
-        self.assertEqual(pestanas, ["Monitoreo", "Hardware", "Sistema IoT", "Tipos de actuador"])
+        self.assertEqual(pestanas, ["Monitoreo", "Comandos", "Hardware", "Sistema IoT", "Tipos de actuador"])
         primera = re.search(r'<a class="tab"[^>]*>Monitoreo</a>', html).group(0)
         self.assertIn('aria-selected="true"', primera)
         self.assertIn(f"{self.url}?invernadero={self.norte.pk}", unescape(primera))

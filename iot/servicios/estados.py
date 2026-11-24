@@ -6,7 +6,8 @@ from collections import namedtuple
 
 from django.db import transaction
 
-from iot.models import Actuador, AlertaIot, Hardware, Sensor, SistemaIoT
+from iot.catalogo import estado_que_deja
+from iot.models import Actuador, AlertaIot, Comando, Hardware, Sensor, SistemaIoT
 from iot.servicios.auditoria_nodo import auditar_entrega
 from iot.servicios.lecturas import _Cambios, _equipo_de, _fecha
 from maestros.servicios import alertas as api_alertas
@@ -20,8 +21,13 @@ ResultadoDeEstado = namedtuple("ResultadoDeEstado", "resultado motivo detalle", 
 
 
 def explica_un_comando(actuador, estado):
-    """Postcondición p: el estado lo explica un comando de InfoPonia ejecutado sobre ese actuador. **Se completa en IOT-05** (comandos): hasta entonces, falso (D-75, punto 1)."""
-    return False
+    """Postcondición p y D-78, punto 4: un estado operativo lo explica un comando de InfoPonia si el ÚLTIMO comando ejecutado del actuador deja exactamente ese estado
+    (``ESTADO_QUE_DEJA``, con su valor en ``nivel:<n>`` y ``posicion:<n>``) y se resolvió DESPUÉS del estado informado anterior (o no había uno). Completo desde IOT-05 (D-75, punto 1)."""
+    ultimo = Comando.objects.filter(actuador_id=actuador.pk, estado_comando=Comando.Estado.EJECUTADO).select_related("accion__comando").order_by("-resuelto_en", "-pk").first()
+    if ultimo is None or estado_que_deja(ultimo.accion.comando.codigo, ultimo.valor_comando) != estado:
+        return False
+    anterior = actuador.estado_informado_en
+    return anterior is None or ultimo.resuelto_en > anterior
 
 
 def _rechazo(motivo, detalle):

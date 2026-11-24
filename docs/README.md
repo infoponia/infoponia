@@ -88,14 +88,14 @@ Fuera de `docs/`, el esquema también cambia `CLAUDE.md`, `.claude/rules/pruebas
 2. **Planificar y programar** (Claude Code): lee `estado.md`, la tarea y solo lo que ella lista. Un plan por tarea, aprobado
    una vez; después hace todos sus pasos de corrido. Frena solo en L7 y L9 y, en los pasos de servicios, para que el
    estudiante revise las pruebas que fallan.
-3. **Verificar y cerrar** (Claude Code propone, el estudiante aplica): antes de cerrar, Claude Code verifica la tarea (recorrido con el cliente de Django, verificación visual con
-   Playwright si hay pantallas y revisión de la migración: `patrones/verificacion_por_claude.md`) y completa «Cierre» y «Verificación» (con los «Pasos para replicar», opcionales) en la tarea; propone el `estado.md` nuevo, la fila del índice de tareas,
-   una línea para `historial.md`, las decisiones nuevas, los disparadores cumplidos o nuevos y lo que quedó distinto de lo escrito (`temas_abiertos.md`). El paso «Cierre de documentación» de
-   cada tarea es esa misma propuesta (**M3**).
-4. **Revisar antes de mergear** (el estudiante): que el CI esté en verde y leer la lista «No pude verificar» del «Cierre»; si la tarea toca pantallas, mirar una. Claude Code le da, al final de la ronda, los «Pasos para replicar» con mucho detalle:
-   son opcionales (D-95). Ya no hay revisiones a mano pendientes (la regla **M5** y `revisiones_pendientes.md` quedaron congeladas; lo anotado ahí es historial).
+3. **Verificar y cerrar** (Claude Code propone, el estudiante aplica): antes de cerrar, Claude Code corre el «Comando de pruebas», hace el recorrido con el cliente de Django y revisa la migración
+   (`patrones/verificacion_a_mano.md`, D-96: sin navegador ni capturas); completa «Cierre» y «Verificación a mano» en la tarea (con el paso de «navegador real» si hay pantallas públicas o formularios); propone el
+   `estado.md` nuevo, la fila del índice de tareas, una línea para `historial.md`, la sección de `revisiones_pendientes.md`, las decisiones nuevas, los disparadores cumplidos o nuevos y lo que quedó distinto de lo
+   escrito (`temas_abiertos.md`). El paso «Cierre de documentación» de cada tarea es esa misma propuesta (**M3**).
+4. **Revisar a mano** (el estudiante): hace los pasos de «Verificación a mano» y los tacha en `revisiones_pendientes.md` y en `estado.md`, en el mismo commit (**M5**). Antes de mergear, además, que el CI esté en verde
+   y leer la lista «No pude verificar» del «Cierre».
 
-La regla M6 es de las personas, no de Claude Code: por eso está acá y no en `CLAUDE.md` (que tiene M1 a M4, las del cierre de una tarea).
+Las reglas M5 y M6 son de las personas, no de Claude Code: por eso están acá y no en `CLAUDE.md` (que tiene M1 a M4, las del cierre de una tarea).
 
 ## Prompt para pedirle una tarea a Claude Code
 

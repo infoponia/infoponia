@@ -1,5 +1,5 @@
 # Recorrido de punta a punta de «Compras» → «Proveedores» (CMP-01): los pasos de la antigua «Verificación a mano», hechos por una prueba con el cliente de Django, en el orden en que los haría
-# una persona (docs/patrones/verificacion_por_claude.md). Cada paso nombra el caso de uso y la regla que verifica. Es una sola prueba larga a propósito: lo que se verifica es que el
+# una persona (docs/patrones/verificacion_a_mano.md). Cada paso nombra el caso de uso y la regla que verifica. Es una sola prueba larga a propósito: lo que se verifica es que el
 # flujo completo encadena bien (alta, errores, baja, reactivación, modificación, auditoría y roles), no cada regla suelta (eso lo hacen test_cmp_*.py y test_proveedores_vistas.py).
 
 from django.test import TestCase

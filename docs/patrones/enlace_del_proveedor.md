@@ -35,6 +35,8 @@ caso de uso: avisá.
    inexistente: «Este enlace no es válido».
 2. Cada vista vuelve a leer el enlace por la sesión y verifica que siga sirviendo. Solo se muestra el pedido del enlace, **sin** el precio de
    referencia, sin otras cotizaciones y sin los otros invitados (regla 6 de 8.16).
+3. Las páginas de `/proveedor/…` responden con `Cache-Control: no-store`, `Referrer-Policy: same-origin` y `X-Robots-Tag: noindex` (D-88, corregida el
+   23/11/2026: con `no-referrer` el navegador manda `Origin: null` en los POST y el CSRF de Django los rechaza).
 
 ## 4. Registrar la cotización (CMP-ENV-COT, paso 11)
 

@@ -378,7 +378,7 @@ class RegistrarTests(Base):
         consumo = Consumo.objects.get(aplicacion=resultado.aplicacion)
         movimientos = list(consumo.movimientos_de_insumo.all())
         self.assertEqual([(m.lote_insumo_id, m.cantidad, m.tipo_movimiento) for m in movimientos], [(lote.pk, D("5"), "salida_por_consumo")])
-        self.assertEqual(movimientos[0].fecha.date(), HOY)
+        self.assertEqual(timezone.localtime(movimientos[0].fecha).date(), HOY)  # la fecha se guarda en UTC: se compara en hora local (entre las 21 y las 24 h locales difieren)
 
     def test_post_c_con_vencimiento_el_reparto_fefo_o_el_corregido_se_aplica_por_lote(self):
         """Postcondición c y regla «Reparto»: sin corregir, FEFO (4 del corto y 2 del largo); un movimiento por lote."""

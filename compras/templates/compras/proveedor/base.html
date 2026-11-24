@@ -1,0 +1,23 @@
+{% extends "core/base.html" %}{% load iconos estaticos %}
+{% comment %}Marco del portal público del proveedor (CMP-ENV-COT, D-88 punto 4): sin menú, sin campana y sin ninguna dato de la sesión de un usuario. Una sola
+columna que se adapta al celular. Muestra los mensajes de Django (el de «Recibimos su cotización») con las convenciones de D-29, y a diferencia del marco de
+las pantallas sin sesión no usa la tarjeta angosta de 420 px: la cotización completa se arma en una sola pantalla.{% endcomment %}
+{% block titulo %}Pedido de cotización · {{ nombre_organizacion }}{% endblock %}
+{% block cuerpo %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="portal">
+  <div class="auth-brand portal-marca">
+    <div class="logo">{% icono "leafmark" 16 %}</div>
+    <div><b>{{ nombre_organizacion }}</b><small>Pedido de cotización</small></div>
+  </div>
+  {% if messages %}
+  <div data-avisos class="portal-avisos">
+    {% for mensaje in messages %}{% if mensaje.level >= 40 %}<div class="alert alert-danger" role="status" data-aviso data-tipo="error">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% else %}<div class="alert alert-ok" role="status" data-aviso data-tipo="ok">{% icono "check" 16 %}<div>{{ mensaje }}</div></div>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+  <main class="page narrow portal-p">
+    {% block contenido %}{% endblock %}
+  </main>
+</div>
+<div class="avisos" id="avisos" role="status" aria-live="polite"></div>
+{% endblock %}
