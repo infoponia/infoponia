@@ -3,6 +3,7 @@
 # Las dos de `camara` de la sección 10 (`egresar_de_partida`, `devolver_a_partida`) están en `test_camara_nucleo.py`.
 # Fuente: docs/api/produccion.md (sección 10), D-68 (puntos 2 y 3), COM-CNC-ENT (reglas «Merma de entrega» y «Envases»).
 
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from decimal import Decimal
 from unittest import mock
 
@@ -21,7 +22,7 @@ from produccion.tests.fabricas import insumo_adicional, invernadero_con_producci
 HOY = timezone.localdate()
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     @classmethod
     def setUpTestData(cls):
         cls.e = invernadero_con_produccion()

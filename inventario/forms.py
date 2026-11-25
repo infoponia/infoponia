@@ -201,7 +201,7 @@ ETAPAS_FIJAS = ("germinacion", "maduracion")
 RANGOS_DEL_FORMULARIO = (
     ("temp_ambiente", "Temperatura ambiente", "°C", "f"),
     ("humedad", "Humedad", "%", "f"),
-    ("intensidad_luz", "Intensidad lumínica", "µmol", "f"),
+    ("intensidad_luz", "Intensidad lumínica", "lux", "f"),
     ("fotoperiodo", "Fotoperíodo", "h/día", "m"),
 )
 CAMPOS_DE_RANGO = [f"{variable}_{lado}" for variable, *_ in RANGOS_DEL_FORMULARIO for lado in ("min", "max")]

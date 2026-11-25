@@ -9,7 +9,8 @@
 #   `sembrado` es `((sector_id, plantines), ...)` (el sector que no figura toma lo planificado); `ajustes`, `AjusteDeInsumo(existencia_id,
 #   utilizada=None, devuelta=None, lotes=None)` (`lotes`: `((lote_de_insumo_id, cantidad), ...)`, extensión 17b).
 #
-# Sin asiento ni ejercicio (D-45): la postcondición j y las precondiciones c y d NO se prueban (Fuera de la ronda).
+# CON-04a (D-92): la postcondición j (un asiento por consumo, Debe Productos en Proceso / Haber Insumos en Stock, con la fecha efectiva de la
+# siembra) se prueba en `ConcretarSiembraAsientoTests`. Las precondiciones c y d (ejercicio y cuentas) NO se prueban: se cumplen solas (D-92 punto 2).
 # Códigos y campos: sin_permiso; orden_no_pendiente (19a, con el estado actual); fecha_invalida (fecha_efectiva); cantidad_invalida
 # (sembrado, utilizada, devuelta o lotes); sector_no_elegible (sembrado); motivo_largo (motivo_diferencia).
 # Hecho en PRD-01: el precio de referencia es obligatorio y mayor que cero (INV-01), así que «precio de referencia vacío» no existe.
@@ -22,6 +23,11 @@ from django.http import Http404
 from django.test import TestCase
 from django.utils import timezone
 
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Capataz, Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.models import InsumoInvernadero, LoteInsumo, MovimientoInsumo
@@ -50,7 +56,7 @@ def rechazo(llamada):
     raise AssertionError("Se esperaba un ErrorDeProduccion y no se lanzó ninguno.")
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero completo (sectores de 100 agujeros, semilla con 1.000 unidades de precio 2,00) y una orden de 50 plantines."""
 
     def setUp(self):
@@ -93,6 +99,7 @@ class Base(ConDatosDeInventario, TestCase):
         self.assertFalse(RegistroAuditoria.objects.filter(accion="concrecion_siembra").exists())
         self.assertEqual(set(ReservaInsumo.objects.values_list("estado", flat=True)), {"activa"})
         self.assertEqual(sum(o.cant_agujeros_ocupados for o in OcupacionSector.objects.all()), 0)
+        self.assertEqual(AsientoContable.objects.count(), 0)  # CON-04a: tampoco quedan asientos
 
     def disponible_de_la_semilla(self):
         return sum(l.cantidad_disponible for l in LoteInsumo.objects.filter(insumo_invernadero=self.e.existencia_semilla))
@@ -491,3 +498,121 @@ class ConcretarSiembraTests(Base):
         sector = self.e.sectores["germinacion"]
         self.assertEqual(api_sectores.agujeros_de([sector])[sector.pk].comprometidos, 50)
         self.assertEqual(self.disponible_de_la_semilla(), D("1000"))
+
+
+class ConcretarSiembraAsientoTests(Base):
+    """CON-04a · PROD-CNC-SMB postcondición j (D-92 puntos 2 a 6 y 9, D-86): un asiento por consumo, originado en el consumo, Debe Productos en
+    Proceso / Haber Insumos en Stock por `monto_consumo`, con la fecha efectiva de la siembra."""
+
+    def lineas(self, asiento):
+        """Los movimientos del asiento como `[(cuenta, tipo, importe)]`, ordenados."""
+        return sorted(
+            (m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento)
+            for m in MovimientoContable.objects.filter(asiento=asiento).select_related("cuenta")
+        )
+
+    def test_post_j_un_asiento_por_consumo_productos_en_proceso_contra_insumos_en_stock(self):
+        """Postcondición j y D-92 puntos 5 y 6: la semilla (50 × $2,00) y el adicional (10 × $4,00) tienen cada uno su consumo y su asiento, con el
+        consumo como origen, el monto del consumo como importe y la fecha de hoy. No hay ejercicio de antes: lo abre la autorrecuperación (H9)."""
+        self.adicional_reservado("10")
+        self.concretar()
+        consumos = list(Consumo.objects.order_by("pk"))
+        self.assertEqual({c.monto_consumo for c in consumos}, {D("100.00"), D("40.00")})
+        self.assertEqual(AsientoContable.objects.count(), 2)
+        for consumo in consumos:
+            asiento = AsientoContable.objects.get(origen_id=consumo.pk)
+            self.assertEqual(asiento.fecha_asiento, hoy())
+            esperado = [(cuentas.INSUMOS_EN_STOCK, HABER, consumo.monto_consumo), (cuentas.PRODUCTOS_EN_PROCESO, DEBE, consumo.monto_consumo)]
+            self.assertEqual(self.lineas(asiento), sorted(esperado))
+        self.assertEqual(EjercicioContable.objects.get().ultimo_numero_asiento, 2)
+        verificar_invariantes_contables()
+
+    def test_post_j_un_consumo_de_cero_pesos_no_tiene_asiento_y_no_falla(self):
+        """D-92 punto 5 y H11: un consumo cuyo monto redondea a $0,00 (0,4 kg a $0,01) se registra y no genera asiento; el de la semilla sí."""
+        adicional = insumo_adicional(self.e, stock=50, unidad="kg", precio="0.01")
+        reservar(self.orden, adicional, "0.4")
+        self.concretar()
+        consumo_cero = Consumo.objects.get(siembra=self.orden, insumo_invernadero=adicional)
+        self.assertEqual(consumo_cero.monto_consumo, D("0.00"))
+        self.assertFalse(AsientoContable.objects.filter(origen_id=consumo_cero.pk).exists())
+        self.assertEqual(AsientoContable.objects.count(), 1)
+        self.assertEqual(Siembra.objects.get(pk=self.orden.pk).estado_orden, "concretada")
+        verificar_invariantes_contables()
+
+    def test_post_j_la_fecha_del_asiento_es_la_efectiva_de_la_siembra_no_la_de_hoy(self):
+        """D-92 punto 4 y H10: una siembra con fecha efectiva de hace 3 días (orden creada hace 5) asienta con esa fecha, en el ejercicio que la contiene."""
+        abierto = ejercicio_abierto(hoy() - timedelta(days=30))
+        orden = orden_de_siembra(self.e, plantines=10, sector="crecimiento", dias=-5)
+        self.concretar(orden, fecha_efectiva=hoy() - timedelta(days=3))
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.fecha_asiento, asiento.ejercicio_id), (hoy() - timedelta(days=3), abierto.pk))
+        self.assertNotIn("Fecha del hecho", asiento.descripcion_asiento)
+        verificar_invariantes_contables()
+
+    def test_d102_una_fecha_en_un_ejercicio_cerrado_no_rechaza_y_el_asiento_va_al_abierto_con_la_aclaracion(self):
+        """D-102 (D-84 punto 5): si la fecha efectiva cae en un ejercicio ya cerrado, la siembra se concreta igual y el asiento va al abierto, con
+        la fecha de hoy y la aclaración de la fecha real."""
+        ejercicio(EjercicioContable.Estado.CERRADO, hoy() - timedelta(days=60), hoy() - timedelta(days=1))
+        abierto = ejercicio_abierto(hoy())
+        orden = orden_de_siembra(self.e, plantines=10, sector="crecimiento", dias=-5)
+        fecha = hoy() - timedelta(days=3)
+        self.concretar(orden, fecha_efectiva=fecha)
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.fecha_asiento, asiento.ejercicio_id), (hoy(), abierto.pk))
+        self.assertIn(f"Fecha del hecho: {fecha:%d/%m/%Y}", asiento.descripcion_asiento)
+        self.assertEqual(Siembra.objects.get(pk=orden.pk).fecha_siembra, fecha)
+        verificar_invariantes_contables()
+
+    def test_post_j_la_ficha_del_asiento_muestra_el_consumo_de_la_siembra_sin_enlace(self):
+        """CON-04a, «enlace al origen»: la ficha del libro nombra el consumo de la siembra y no lleva dirección (el Contador no abre la orden)."""
+        from contabilidad import extensiones as extensiones_de_contabilidad
+
+        self.concretar()
+        texto, url = extensiones_de_contabilidad.enlace_de_origen(AsientoContable.objects.get().origen)
+        self.assertEqual(texto, f"Consumo · {Consumo.objects.get(siembra=self.orden).descripcion_evento}")
+        self.assertIsNone(url)
+
+    def test_post_j_la_descripcion_del_asiento_es_la_del_consumo(self):
+        """El asiento lleva la descripción legible del consumo («Siembra OT-0004: Semilla…, 50 unidades»), que es lo que lee el Contador en el libro."""
+        self.concretar()
+        consumo = Consumo.objects.get(siembra=self.orden)
+        self.assertEqual(AsientoContable.objects.get(origen_id=consumo.pk).descripcion_asiento, consumo.descripcion_evento)
+
+    def test_post_o_los_asientos_van_entre_los_afectados_del_registro_de_auditoria_y_en_sus_datos(self):
+        """Postcondición o y D-92 punto 3: el único registro `concrecion_siembra` nombra cada asiento entre sus afectados y en `datos`; el asiento y
+        cada movimiento tienen su propio registro de auditoría (los hace `contabilidad`, no se repiten)."""
+        self.adicional_reservado("10")
+        self.concretar()
+        registro = RegistroAuditoria.objects.get(accion="concrecion_siembra")
+        afectados = {(a["modelo"], a["id"]) for a in registro.afectados}
+        for asiento in AsientoContable.objects.all():
+            self.assertIn(("contabilidad.asientocontable", asiento.pk), afectados)
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 2)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="alta_asiento_contable").count(), 2)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="concrecion_siembra").count(), 1)
+
+    def test_garantia_si_falla_el_segundo_asiento_no_queda_ni_el_primero_ni_nada_de_la_concrecion(self):
+        """D-22 y `docs/patrones/asientos.md` §4: si el asiento del segundo consumo falla, se revierte todo: sin lote, consumos, movimientos de
+        stock, asientos ni registro de auditoría."""
+        real = servicio_de_asientos.registrar_asiento_automatico
+        llamadas = []
+
+        def falla_en_la_segunda(*args, **kwargs):
+            llamadas.append(1)
+            if len(llamadas) == 2:
+                raise RuntimeError("falla del asiento")
+            return real(*args, **kwargs)
+
+        self.adicional_reservado("10")
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=falla_en_la_segunda):
+            with self.assertRaises(RuntimeError):
+                self.concretar()
+        self.assertEqual(len(llamadas), 2)
+        self.nada_cambio()
+        self.assertEqual(self.disponible_de_la_semilla(), D("1000"))
+
+    def test_garantia_un_rechazo_no_crea_asientos_ni_abre_el_ejercicio(self):
+        """Un rechazo de la concreción (cantidad inválida) no deja asientos ni abre un ejercicio: lo verificado va antes de lo escrito."""
+        self.rechazo(sembrado=((self.e.sectores["germinacion"].pk, 51),))
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.assertEqual(EjercicioContable.objects.count(), 0)

@@ -2,8 +2,8 @@
 # bitácora (`AplicacionInsumos`) que origina un `Consumo` por insumo, descuenta los lotes de insumo, reparte el costo entre los lotes de plantas del
 # alcance (`ImputacionCosto`) y reevalúa las alertas de stock. Las vistas solo orquestan: todas las reglas están acá.
 # Fuente: docs/casos_de_uso/produccion/aplicacion_de_insumos.md («Cómo se aplica en la ronda «Producción 1»»), docs/patrones/costo_del_lote.md,
-# docs/patrones/bloqueos.md (sección `produccion`, «Lote 5»), D-51 y D-52. Fuera de la ronda (D-45): el asiento (postcondición f) y las
-# precondiciones c y d (ejercicio y cuentas). El Capataz NO recibe valores, destinos, reparto ni avisos de stock: los servicios no los devuelven
+# docs/patrones/bloqueos.md (sección `produccion`, «Lote 5»), D-51 y D-52. CON-04a: un asiento por consumo (postcondición f; D-92); las
+# precondiciones c y d (ejercicio y cuentas) se cumplen solas (D-92 punto 2). El Capataz NO recibe valores, destinos, reparto ni avisos de stock: los servicios no los devuelven
 # (regla «Qué ve cada rol»), no solo la plantilla.
 
 from collections import namedtuple
@@ -25,7 +25,7 @@ from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
 from produccion.models import AplicacionInsumos, Bitacora, Consumo, ImputacionCosto, Lote, OcupacionSector
-from produccion.servicios import alcance, costos
+from produccion.servicios import alcance, asientos_de_produccion, costos
 from produccion.servicios.bloqueos import traducir as _bloquear
 
 # `_partes_de_salida` es el único lugar que sabe cómo mandar el resto sin lote al «faltante sin lote» de `inventario` (PRD-01): se reutiliza.
@@ -446,6 +446,14 @@ def _escribir(actor, plan, iin_ids):
     lotes_con_costo = [plan.lotes[pk] for pk in sorted(plan.lotes) if plan.lotes[pk].costo_acumulado != costo_antes[pk]]
     for lote in lotes_con_costo:
         Lote.objects.filter(pk=lote.pk).update(costo_acumulado=lote.costo_acumulado)
+    # Postcondición f de PROD-REG-APL; D-92 puntos 3 a 6: un asiento por consumo (no por imputación), con la fecha de la aplicación, al final de los
+    # bloqueos (el ejercicio va último, D-86). Imputado a lotes: Debe Productos en Proceso; sin imputaciones (a gasto): Debe Gastos de Producción.
+    asientos_creados = asientos_de_produccion.referencias_de(
+        [
+            asientos_de_produccion.asentar_consumo(actor, consumo, any(parte > 0 for parte in linea.reparto[1].values()), hoy, hoy)
+            for consumo, linea in zip(consumos, plan.lineas)
+        ]
+    )
     claves = [f"insumo:{i}" for i in iin_ids]
     alertas = list(
         Alerta.objects.filter(
@@ -475,10 +483,12 @@ def _escribir(actor, plan, iin_ids):
     }
     if alertas:
         datos_de_auditoria["alertas_creadas"] = [referencia(a) for a in alertas]
+    if asientos_creados:
+        datos_de_auditoria["asientos"] = [referencia(a) for a in asientos_creados]
     RegistroAuditoria.objects.registrar(
         usuario=actor,
         accion=RegistroAuditoria.Accion.REGISTRO_APLICACION,
-        afectados=[aplicacion, *consumos, *movimientos, *imputaciones, *lotes_de_insumo, *lotes_con_costo, *alertas],
+        afectados=[aplicacion, *consumos, *movimientos, *imputaciones, *lotes_de_insumo, *lotes_con_costo, *alertas, *asientos_creados],
         detalle={"cambios": cambios, "datos": datos_de_auditoria},
     )
     return ResultadoDeAplicacion(aplicacion, _lineas_publicas(plan, actor))

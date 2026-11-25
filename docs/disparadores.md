@@ -463,14 +463,14 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
    ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).~~
    Hecho en CON-04b (24/11/2026): `confirmar_ajuste` crea el asiento de cada movimiento de ajuste; la carga inicial va contra Capital Inicial (D-92 punto 7). Las precondiciones c y d se cumplen solas (D-92 punto 2).
 
-1. **Reabrir seis casos de uso de la ronda «Producción 1».** Hasta entonces no verifican el ejercicio vigente ni las
+1. ~~**Reabrir seis casos de uso de la ronda «Producción 1».** Hasta entonces no verifican el ejercicio vigente ni las
    cuentas, ni crean `AsientoContable`: PROD-CNC-SMB y PROD-CNC-TRN (precondiciones c y d y su asiento), PROD-REG-MRM,
    PROD-PNR-FDS, CMP-AJT-STK y PROD-REG-APL (el asiento y las precondiciones contables que cada uno tenga en «CU
    extendidos»; el extracto de cada caso de uso las marca «Fuera de la ronda (D-45)»). Hay que reabrir sus servicios (PRD-01,
    PRD-02, PRD-03, PRD-04 e INV-02; en PRD-02, `concretar_transicion` y `aplicar_merma`, que suman el ejercicio, las cuentas «Pérdidas por Mermas» y «Productos en Proceso» y el asiento de la merma) y sus pruebas, incluidas las de concurrencia, y respetar el orden de bloqueos del
-   patrón. Anotar lo mismo en pendientes_CU (Drive).
+   patrón. Anotar lo mismo en pendientes_CU (Drive).~~ **Hecho en CON-04a (25/11/2026), salvo CMP-AJT-STK (CON-04b):** PROD-CNC-SMB, PROD-CNC-TRN, PROD-REG-MRM, PROD-REG-APL y PROD-PNR-FDS crean su asiento con `registrar_asiento_automatico` (`produccion/servicios/asientos_de_produccion.py`). Las precondiciones c y d se cumplen solas (D-92 punto 2). Queda anotar lo mismo en pendientes_CU (Drive).
 
-   **PRD-03 ya existe:** el asiento de la merma va dentro de `mermas.registrar_merma` (después de `aplicar_merma`) y el de cada consumo, dentro de `aplicaciones.registrar_aplicacion` (después de cada `Consumo`); ninguno de los dos devuelve hoy lo que hace falta para el asiento más que `Merma.cant_merma`, el costo de `ResultadoMerma` y `Consumo.monto_consumo`.
+   ~~**PRD-03 ya existe:** el asiento de la merma va dentro de `mermas.registrar_merma` (después de `aplicar_merma`) y el de cada consumo, dentro de `aplicaciones.registrar_aplicacion` (después de cada `Consumo`); ninguno de los dos devuelve hoy lo que hace falta para el asiento más que `Merma.cant_merma`, el costo de `ResultadoMerma` y `Consumo.monto_consumo`.~~ Hecho en CON-04a.
 
 ## ~~Cuando se retome la cámara de frío (D-45)~~ (cerrado el 24/11/2026, COM-04b)
 

@@ -3,6 +3,7 @@
 # ve qué (D-30), los 404 donde corresponde, los errores por campo, que el HTML se escapa, que la respuesta del Capataz NO contiene valores en dinero, que «Ver resumen» no
 # escribe y que todo funciona sin JavaScript (un POST común) y con HTMX (solo el bloque que cambia, sin validar). Cliente de prueba de Django.
 
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from datetime import timedelta
 from decimal import Decimal
 
@@ -29,7 +30,7 @@ def hoy():
     return timezone.localdate()
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     def setUp(self):
         self.e = invernadero_con_produccion()
         self.gerente = crear_gerente()

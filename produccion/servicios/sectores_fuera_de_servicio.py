@@ -37,7 +37,7 @@ from produccion.models import (
     Siembra,
     TransicionEtapa,
 )
-from produccion.servicios import alcance, costos, mermas
+from produccion.servicios import alcance, asientos_de_produccion, costos, mermas
 from produccion.servicios import lotes as api_lotes
 from produccion.servicios import ordenes as api_ordenes
 from produccion.servicios.bloqueos import traducir as _bloquear
@@ -631,6 +631,13 @@ def _escribir(actor, plan, datos):
     )
     registro.sectores.add(sector)
 
+    # CON-04a (precondiciones c y d: se cumplen solas, D-92 punto 2; D-92 punto 9): un asiento por cada merma (Debe Pérdidas por Mermas / Haber Productos en
+    # Proceso por su costo), con la fecha EFECTIVA del fuera de servicio. Va al final de los bloqueos: el ejercicio es lo último que se bloquea (D-86). La
+    # reubicación y la cancelación de órdenes no asientan; una merma de costo $0 tampoco (H11).
+    asientos_creados = asientos_de_produccion.referencias_de(
+        [asientos_de_produccion.asentar_merma(actor, r.merma, r.costo, fecha, timezone.localdate()) for r in resultados]
+    )
+
     # Paso 15 y extensión 15a: una sola notificación, solo si el invernadero tiene un Capataz activo.
     capataz = invernadero.capataz
     if capataz is not None and capataz.is_active:
@@ -686,12 +693,14 @@ def _escribir(actor, plan, datos):
         datos_de_auditoria["alertas_creadas"] = [referencia(a) for a in alertas]
     if ordenes:
         datos_de_auditoria["ordenes_canceladas"] = [referencia(o) for o in ordenes]
+    if asientos_creados:
+        datos_de_auditoria["asientos"] = [referencia(a) for a in asientos_creados]
     RegistroAuditoria.objects.registrar(
         usuario=actor,
         accion=RegistroAuditoria.Accion.FUERA_DE_SERVICIO_SECTOR,
         afectados=[
             sector, *destinos.values(), invernadero, registro, *reubicaciones, *ocupaciones_nuevas, *origen, *[r.merma for r in resultados],
-            *alertas, *ordenes, *reservas, *resueltas, *lotes,
+            *alertas, *ordenes, *reservas, *resueltas, *lotes, *asientos_creados,
         ],
         detalle={"cambios": cambios, "datos": datos_de_auditoria},
     )

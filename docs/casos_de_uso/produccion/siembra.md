@@ -301,8 +301,8 @@ Relaciones con otros casos de uso: no incluye («include») otros casos de uso n
 Precondiciones
 a. El Capataz está autenticado en el Sistema.
 b. Existe al menos una orden de trabajo de siembra en estado "a realizar" asignada al Capataz.
-c. Existe un ejercicio contable vigente.
-d. Existen las cuentas contables "Productos en Proceso" e "Insumos en Stock".
+c. Existe un ejercicio contable vigente. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
+d. Existen las cuentas contables "Productos en Proceso" e "Insumos en Stock". *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
 
 Garantías mínimas
 - La operación es atómica. Si el caso de uso se cancela o falla, la orden permanece en estado "a realizar", sus
@@ -552,8 +552,8 @@ Las decisiones de modelo (herencia, agujeros derivados, costo guardado) están e
 
 ### Lo que NO se hace en la ronda (D-45)
 
-- **Asientos contables** (postcondición j de PROD-CNC-SMB, y las precondiciones de ejercicio vigente y de cuentas «Productos en Proceso» e «Insumos en Stock»): no se verifican ni se crean. El consumo queda con su monto; el asiento lo generará
-  `contabilidad` cuando exista. Se anota en `docs/temas_abiertos.md`.
+- ~~**Asientos contables** (postcondición j de PROD-CNC-SMB, y las precondiciones de ejercicio vigente y de cuentas «Productos en Proceso» e «Insumos en Stock»): no se verifican ni se crean. El consumo queda con su monto; el asiento lo generará
+  `contabilidad` cuando exista. Se anota en `docs/temas_abiertos.md`.~~ **Hecho en CON-04a (25/11/2026):** un asiento por consumo, Debe «Productos en Proceso» / Haber «Insumos en Stock» por `monto_consumo`, con la fecha efectiva de la siembra (`produccion/servicios/asientos_de_produccion.py`). Las precondiciones c y d se cumplen solas (D-92 punto 2).
 - (Antes de D-52 el «origen» no se implementaba; ahora sí: `Bitacora` y `OrdenTrabajo` heredan de `contabilidad.OrigenDocumento` y los movimientos de insumo del consumo lo tienen como `origen`.)
 - Cosechas, entregas y mantenimiento: no existen. Las únicas órdenes son siembras y transiciones.
 
@@ -596,7 +596,7 @@ Las filas que dicen qué bloquear (los sectores de la orden, sus reservas) se le
 - **Auditoría**: un registro `concrecion_siembra` con afectados orden, lote, ocupaciones, sectores, reservas, insumos del invernadero, lotes de insumo, consumos, movimientos y bitácoras.
 - **Notificación** al Agrónomo que planificó la orden (si lo hubo y no es quien actúa), con las diferencias, dentro de la transacción (D-42). Si planificó InfoPonia, no se notifica a nadie.
 - **Concurrencia (19a)**: si la orden ya no está «a realizar» al registrar → `orden_no_pendiente` con el estado actual; no se escribe nada.
-- Las precondiciones de ejercicio y cuentas contables **no se verifican** (D-45).
+- ~~Las precondiciones de ejercicio y cuentas contables **no se verifican** (D-45).~~ Siguen sin verificarse, pero ya no por estar fuera de la ronda: se cumplen solas (D-92 punto 2).
 
 ### Pantallas
 

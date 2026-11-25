@@ -42,8 +42,8 @@ Relaciones con otros casos de uso
 Precondiciones
 a. El actor está autenticado en el Sistema.
 b. El actor tiene a su cargo (Agrónomo) o asignado (Capataz) al menos un invernadero en estado «activo».
-c. Existe un ejercicio contable vigente.
-d. Existen las cuentas contables «Insumos en Stock», «Productos en Proceso» y «Gastos de Producción».
+c. Existe un ejercicio contable vigente. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
+d. Existen las cuentas contables «Insumos en Stock», «Productos en Proceso» y «Gastos de Producción». *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
 
 Garantías mínimas
 - La operación es atómica. Si el caso de uso se cancela o falla, no se registra ningún registro de bitácora, consumo,
@@ -257,8 +257,8 @@ Temas abiertos
 
 ### Lo que NO se hace en la ronda (D-45)
 
-- **Asientos contables** (postcondición f y las precondiciones c y d: ejercicio vigente y cuentas «Insumos en Stock», «Productos en Proceso» y «Gastos de Producción»): no se verifican ni se crean. El consumo queda con su monto y, si se imputó a lotes, con sus imputaciones; el asiento lo generará `contabilidad`.
-- La cuenta «Gastos de Producción» sigue siendo una propuesta (MD-90): no hace falta en la ronda.
+- ~~**Asientos contables** (postcondición f y las precondiciones c y d: ejercicio vigente y cuentas «Insumos en Stock», «Productos en Proceso» y «Gastos de Producción»): no se verifican ni se crean. El consumo queda con su monto y, si se imputó a lotes, con sus imputaciones; el asiento lo generará `contabilidad`.~~ **Hecho en CON-04a (25/11/2026):** un asiento por consumo (no por imputación), con la fecha de la aplicación: Debe «Productos en Proceso» si el consumo quedó con imputaciones, o «Gastos de Producción» si quedó sin ellas (también cuando la categoría es «como costo de los lotes» pero no hay lotes de plantas en el alcance, extensión 10c) / Haber «Insumos en Stock».
+- ~~La cuenta «Gastos de Producción» sigue siendo una propuesta (MD-90): no hace falta en la ronda.~~ «Gastos de Producción» (5.1.03) ya está en el plan de cuentas aprobado y la usa este caso de uso.
 
 ### Qué hace cada parte
 

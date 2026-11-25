@@ -17,6 +17,7 @@ from maestros.servicios import sectores as api_sectores
 from maestros.tests.fabricas import asegurar_datos_de_maestros
 from produccion.models import Lote, OrdenTrabajo, ReservaInsumo, TransicionEtapa
 from produccion.servicios import transiciones
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
 from produccion.tests.fabricas import (
     codigos_del_rechazo,
     invernadero_con_produccion,
@@ -38,6 +39,7 @@ class CancelarOrdenConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
     def setUp(self):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04a: concretar una siembra asienta
         self.e = invernadero_con_produccion(geografia_propia=True)
         self.orden = orden_de_siembra(self.e, plantines=50)
 

@@ -90,11 +90,11 @@ class LoteExistenteConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual(Siembra.objects.filter(tipo_siembra="carga_inicial").count(), 0)
         self.assertEqual(Lote.objects.count(), 1)  # solo el de la siembra normal
         self.assertEqual(RegistroAuditoria.objects.filter(accion="registro_lote_existente").count(), 0)
-        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.assertEqual(AsientoContable.objects.count(), 1)  # CON-04a: solo el de la siembra normal (su consumo de semilla); la carga no asentó
 
     def test_regla_la_carga_primero_concretar_espera_y_las_dos_terminan_bien(self):
         """Al revés: la carga toma el invernadero primero; la concreción de una siembra normal espera y se concreta después (concretar una normal no
-        está impedido por una carga previa). Dos lotes, un asiento. OJO: esta prueba NO falla si se quita un bloqueo (las dos terminan bien con o sin él);
+        está impedido por una carga previa). Dos lotes, dos asientos (el de la carga y el consumo de la siembra normal, CON-04a). OJO: esta prueba NO falla si se quita un bloqueo (las dos terminan bien con o sin él);
         solo comprueba que el orden de bloqueos no se traba."""
         self.armar()
         concretar = self.siembra_normal_para_concretar()
@@ -102,7 +102,7 @@ class LoteExistenteConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         exitos, rechazos, otros = separar(resultados)
         self.assertEqual((len(exitos), len(rechazos), otros), (2, 0, []))
         self.assertEqual(Lote.objects.count(), 2)
-        self.assertEqual(AsientoContable.objects.count(), 1)
+        self.assertEqual(AsientoContable.objects.count(), 2)
         verificar_invariantes_contables()
 
     # ---- Dos cargas sobre el mismo sector ----

@@ -26,15 +26,22 @@
 # `cantidad_<existencia_id>`, con los decimales de la unidad); reparto_supera_lote (8c.2a, campo `reparto_<existencia_id>`); distribucion_incompleta (10b,
 # mismo campo, con `datos={"debe_sumar": ...}`); descripcion_larga (500); cambio_simultaneo (12a, con `datos={"cambios": [...]}`).
 #
-# Una prueba por regla y por postcondición a a e y g a i (la f, el asiento, y las precondiciones c y d son contables: fuera, D-45).
+# Una prueba por regla y por postcondición a a e y g a i. CON-04a: la postcondición f (un asiento por consumo) se prueba en `RegistrarAsientoTests`;
+# las precondiciones c y d (ejercicio y cuentas) no se prueban: se cumplen solas (D-92 punto 2).
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.http import Http404
 from django.test import TestCase
 from django.utils import timezone
 
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.models import InsumoInvernadero, LoteInsumo, MovimientoInsumo, TipoInsumo
@@ -67,7 +74,7 @@ def tipo(consumo):
     return TipoInsumo.objects.filter(nombre_tipo_insumo=f"Cat {consumo}").first() or tipo_de_insumo(f"Cat {consumo}", consumo=consumo)
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.e = invernadero_con_produccion()
@@ -118,6 +125,7 @@ class Base(ConDatosDeInventario, TestCase):
         self.assertFalse(ImputacionCosto.objects.exists())
         self.assertFalse(MovimientoInsumo.objects.filter(tipo_movimiento="salida_por_consumo", origen__bitacora__isnull=False).exists())
         self.assertFalse(RegistroAuditoria.objects.filter(accion="registro_aplicacion").exists())
+        self.assertEqual(AsientoContable.objects.count(), 0)  # CON-04a
         self.assertEqual(Lote.objects.get(pk=self.a.pk).costo_acumulado, D("100.00"))
         self.assertEqual(Lote.objects.get(pk=self.b.pk).costo_acumulado, D("50.00"))
 
@@ -572,3 +580,117 @@ class PlantasDelAlcanceTests(Base):
         )
         self.assertEqual(uno, ((self.b.pk, 40),))
         self.assertEqual(rechazo(lambda: aplicaciones.plantas_del_alcance(crear_gerente(), self.datos())).codigo, "sin_permiso")
+
+
+class RegistrarAsientoTests(Base):
+    """CON-04a · PROD-REG-APL postcondición f (D-92 puntos 2 a 6 y 9, D-86): un asiento por consumo, originado en el consumo, por su monto y con la fecha
+    de la aplicación (hoy): Debe «Productos en Proceso» si el costo se imputó a lotes o «Gastos de Producción» si va a gasto / Haber «Insumos en Stock»."""
+
+    def lineas(self, asiento):
+        return sorted(
+            (m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento)
+            for m in MovimientoContable.objects.filter(asiento=asiento).select_related("cuenta")
+        )
+
+    def asiento_de(self, resultado, habilitado):
+        consumo = Consumo.objects.get(aplicacion=resultado.aplicacion, insumo_invernadero=habilitado)
+        return consumo, AsientoContable.objects.get(origen_id=consumo.pk)
+
+    def test_post_f_un_insumo_como_gasto_asienta_gastos_de_produccion_contra_insumos_en_stock(self):
+        """Postcondición f, rama «va a gasto»: 5 L de limpiador a $5,00 = $25,00 → Debe Gastos de Producción / Haber Insumos en Stock, origen el consumo,
+        fecha de hoy y la descripción legible del consumo. No había ejercicio: lo abre la autorrecuperación (H9)."""
+        resultado = self.registrar(self.linea(self.limpiador, "5"))
+        consumo, asiento = self.asiento_de(resultado, self.limpiador)
+        self.assertEqual(asiento.fecha_asiento, HOY)
+        self.assertEqual(asiento.descripcion_asiento, consumo.descripcion_evento)
+        esperado = [(cuentas.GASTOS_DE_PRODUCCION, DEBE, D("25.00")), (cuentas.INSUMOS_EN_STOCK, HABER, D("25.00"))]
+        self.assertEqual(self.lineas(asiento), sorted(esperado))
+        self.assertEqual(EjercicioContable.objects.get().ultimo_numero_asiento, 1)
+        verificar_invariantes_contables()
+
+    def test_post_f_un_insumo_imputado_a_lotes_asienta_productos_en_proceso_contra_insumos_en_stock(self):
+        """Postcondición f, rama «imputado a lotes»: 7 kg de abono a $4,00 = $28,00 (repartido en dos lotes de plantas) → un solo asiento por el consumo."""
+        resultado = self.registrar(self.linea(self.abono, "7"))
+        consumo, asiento = self.asiento_de(resultado, self.abono)
+        self.assertEqual(consumo.imputaciones.count(), 2)
+        esperado = [(cuentas.PRODUCTOS_EN_PROCESO, DEBE, D("28.00")), (cuentas.INSUMOS_EN_STOCK, HABER, D("28.00"))]
+        self.assertEqual(self.lineas(asiento), sorted(esperado))
+        self.assertEqual(AsientoContable.objects.count(), 1)  # uno por consumo, no uno por imputación (D-92, «alternativas»)
+        verificar_invariantes_contables()
+
+    def test_post_f_sin_lotes_de_plantas_en_el_alcance_un_insumo_de_costo_de_lotes_asienta_a_gasto(self):
+        """Extensión 10c y D-92: el consumo sin imputaciones va a gasto aunque la categoría sea «como costo de los lotes»: Debe Gastos de Producción."""
+        resultado = self.registrar(self.linea(self.abono, "2"), alcance="sectores", sector_ids=(self.e.sectores["maduracion"].pk,))
+        consumo, asiento = self.asiento_de(resultado, self.abono)
+        self.assertFalse(consumo.imputaciones.exists())
+        self.assertIn((cuentas.GASTOS_DE_PRODUCCION, DEBE, D("8.00")), self.lineas(asiento))
+        self.assertNotIn(cuentas.PRODUCTOS_EN_PROCESO, [c for c, _, _ in self.lineas(asiento)])
+
+    def test_post_f_un_asiento_por_consumo_con_importes_distintos(self):
+        """D-92 punto 6: dos insumos (uno a gasto, uno a lotes) tienen cada uno su asiento, con su cuenta y su monto; los números son 1 y 2."""
+        resultado = self.registrar(self.linea(self.limpiador, "5"), self.linea(self.abono, "7"))
+        self.assertEqual(AsientoContable.objects.count(), 2)
+        self.assertIn((cuentas.GASTOS_DE_PRODUCCION, DEBE, D("25.00")), self.lineas(self.asiento_de(resultado, self.limpiador)[1]))
+        self.assertIn((cuentas.PRODUCTOS_EN_PROCESO, DEBE, D("28.00")), self.lineas(self.asiento_de(resultado, self.abono)[1]))
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])
+        verificar_invariantes_contables()
+
+    def test_post_f_un_consumo_de_cero_pesos_no_asienta_y_no_falla(self):
+        """D-92 punto 5 y H11: 0,4 kg a $0,01 redondea a $0,00: el consumo se registra y no genera asiento; el otro insumo sí."""
+        barato = self.stock("Barato", "como_gasto", 10, "kg", "0.01")
+        resultado = self.registrar(self.linea(barato, "0.4"), self.linea(self.limpiador, "5"))
+        consumo = Consumo.objects.get(aplicacion=resultado.aplicacion, insumo_invernadero=barato)
+        self.assertEqual(consumo.monto_consumo, D("0.00"))
+        self.assertFalse(AsientoContable.objects.filter(origen_id=consumo.pk).exists())
+        self.assertEqual(AsientoContable.objects.count(), 1)
+
+    def test_post_f_la_ficha_del_asiento_muestra_el_consumo_de_la_aplicacion_con_su_fecha_sin_enlace(self):
+        """CON-04a, «enlace al origen»: la ficha del libro nombra el consumo de la aplicación y su fecha, sin dirección."""
+        from contabilidad import extensiones as extensiones_de_contabilidad
+
+        resultado = self.registrar(self.linea(self.limpiador, "5"))
+        consumo = Consumo.objects.get(aplicacion=resultado.aplicacion)
+        texto, url = extensiones_de_contabilidad.enlace_de_origen(AsientoContable.objects.get().origen)
+        self.assertEqual(texto, f"Consumo · {consumo.descripcion_evento} ({HOY:%d/%m/%Y})")
+        self.assertIsNone(url)
+
+    def test_post_h_los_asientos_van_entre_los_afectados_del_registro_de_auditoria_y_en_sus_datos(self):
+        """Postcondición h y D-92 punto 3: `registro_aplicacion` nombra cada asiento entre sus afectados y en `datos`; el asiento y sus movimientos los
+        audita `contabilidad`."""
+        self.registrar(self.linea(self.limpiador, "5"), self.linea(self.abono, "7"))
+        registro = RegistroAuditoria.objects.get(accion="registro_aplicacion")
+        afectados = {(a["modelo"], a["id"]) for a in registro.afectados}
+        for asiento in AsientoContable.objects.all():
+            self.assertIn(("contabilidad.asientocontable", asiento.pk), afectados)
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 2)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="alta_asiento_contable").count(), 2)
+
+    def test_regla_que_ve_cada_rol_el_capataz_registra_con_asiento_y_no_recibe_valores(self):
+        """«Qué ve cada rol»: el asiento se crea igual cuando registra el Capataz, pero lo que se le devuelve sigue sin valores ni destino."""
+        resultado = self.registrar(self.linea(self.limpiador, "5"))
+        self.assertEqual(AsientoContable.objects.count(), 1)
+        self.assertEqual((resultado.lineas[0].valor, resultado.lineas[0].destino), (None, None))
+
+    def test_garantia_si_falla_el_segundo_asiento_no_queda_nada_de_la_aplicacion(self):
+        """D-22 y `docs/patrones/asientos.md` §4: si el asiento del segundo consumo falla, se revierte todo (ni el primer asiento, ni consumos, ni
+        imputaciones, ni descuento de stock)."""
+        real = servicio_de_asientos.registrar_asiento_automatico
+        llamadas = []
+
+        def falla_en_la_segunda(*args, **kwargs):
+            llamadas.append(1)
+            if len(llamadas) == 2:
+                raise RuntimeError("falla del asiento")
+            return real(*args, **kwargs)
+
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=falla_en_la_segunda):
+            with self.assertRaises(RuntimeError):
+                self.registrar(self.linea(self.limpiador, "5"), self.linea(self.abono, "7"))
+        self.assertEqual(len(llamadas), 2)
+        self.nada_se_escribio()
+        self.assertEqual(self.disponible(self.stock_lote(self.limpiador)), D("20"))
+
+    def test_garantia_un_rechazo_no_crea_asientos_ni_abre_el_ejercicio(self):
+        """Un rechazo (cantidad inválida) no deja asientos ni abre un ejercicio."""
+        rechazo(lambda: self.registrar(self.linea(self.limpiador, "-1")))
+        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, 0))

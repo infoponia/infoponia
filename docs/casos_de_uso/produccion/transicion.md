@@ -356,8 +356,8 @@ Puntos de extensión
 Precondiciones
 a. El Capataz está autenticado en el Sistema.
 b. Existe al menos una orden de trabajo de transición en estado “a realizar” asignada al Capataz.
-c. Existe un ejercicio contable vigente.
-d. Existen las cuentas contables “Pérdidas por Mermas” y “Productos en Proceso”.
+c. Existe un ejercicio contable vigente. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
+d. Existen las cuentas contables “Pérdidas por Mermas” y “Productos en Proceso”. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
 
 Garantías mínimas
 - La operación es atómica, incluido el caso de uso que lo extiende. Si el caso de uso se cancela o falla:
@@ -695,7 +695,7 @@ Reglas de negocio que aplican:
 
 ### Lo que NO se hace en la ronda (D-45)
 
-- **Asientos** (precondiciones c y d de CNC-TRN y la postcondición e de PROD-REG-MRM): no se verifica el ejercicio ni las cuentas, y no se crea asiento. El **costo acumulado del lote sí baja** (`docs/patrones/costo_del_lote.md`).
+- ~~**Asientos** (precondiciones c y d de CNC-TRN y la postcondición e de PROD-REG-MRM): no se verifica el ejercicio ni las cuentas, y no se crea asiento.~~ **Hecho en CON-04a (25/11/2026):** la merma de las plantas sin trasladar asienta Debe «Pérdidas por Mermas» / Haber «Productos en Proceso» por su costo, con la fecha efectiva de la transición; la transición en sí no asienta. El **costo acumulado del lote baja** (`docs/patrones/costo_del_lote.md`).
 - **Movimiento de stock «salida por merma»** (postcondición d de PROD-REG-MRM): no existe `MovimientoStock` ni stock de plantas en la ronda; no se crea.
 - **Alerta de plantas comprometidas, condición 1** (reservas de cosecha): no hay cosechas. La **condición 2** (la transición «a realizar» queda con menos plantas) está programada y probada, pero **desde CNC-TRN no puede dispararse** (se evalúa «sin contar la orden que se concreta»); la ejerce PRD-03 con la merma desde la pantalla.
 - Partida en cámara y causas de cámara: fuera.

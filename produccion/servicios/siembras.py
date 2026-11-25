@@ -1,13 +1,14 @@
 # Servicios de siembra de `produccion` (PRD-01): PROD-PNF-SMB · Planificar Siembra (paso 5) y PROD-CNC-SMB · Concretar Siembra (paso 6, al final).
 # Fuente: docs/casos_de_uso/produccion/siembra.md (casos y «Decisiones de aplicación»), docs/api/produccion.md, docs/patrones/bloqueos.md
 # (sección `produccion`), docs/patrones/stock.md (sección 5) y D-22, D-30, D-32, D-36, D-40, D-42, D-45, D-50, D-52 y D-53.
+# CON-04a: la concreción asienta cada consumo (postcondición j; D-92 puntos 2 a 6 y 9, D-86).
 #
 # PLANIFICAR. Un caso de uso es una función de servicio dentro de `transaction.atomic()` (D-22); las vistas solo orquestan.
 # - `datos_de_planificacion`: lo que presentan los pasos 2 a 12. No escribe.
 # - `resumen_de_planificacion`: valida TODO y devuelve el resumen del paso 16. No escribe ni bloquea.
 # - `planificar_siembra`: valida, bloquea en el orden de bloqueos.md (cuentas → invernadero → variedad → sectores → insumos → filas
 #   propias), VUELVE A VERIFICAR TODO bajo bloqueo (extensión 18b) y recién entonces escribe: la orden, sus ocupaciones, sus reservas, el
-#   aviso al Capataz y un único registro de auditoría. Sin asientos ni ejercicio (D-45).
+#   aviso al Capataz y un único registro de auditoría. Planificar no asienta (solo concretar).
 # Todos los rechazos de negocio son `ErrorDeProduccion(codigo, mensaje, campo)`; los textos están en voseo rioplatense.
 
 from collections import defaultdict, namedtuple
@@ -30,6 +31,7 @@ from maestros.servicios import sectores as api_sectores
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
 from produccion.models import Bitacora, Consumo, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra
+from produccion.servicios import asientos_de_produccion
 from produccion.servicios import consumos as consumos_de_reserva
 from produccion.servicios import costos
 from produccion.servicios import lotes as api_lotes
@@ -931,14 +933,14 @@ def concretar_siembra(actor, orden_id, datos):
     """PROD-CNC-SMB: concreta una siembra y devuelve el `Lote` creado.
 
     - Precondiciones a y b y requisito especial: `actor` es el Capataz activo asignado a la orden (`sin_permiso`) y la orden está «a
-      realizar» (`orden_no_pendiente`, extensión 19a, con el estado actual). Las c y d (ejercicio y cuentas) no se verifican (D-45).
+      realizar» (`orden_no_pendiente`, extensión 19a, con el estado actual). Las c y d (ejercicio y cuentas) se cumplen solas (D-92 punto 2).
     - Reglas y extensiones 6a, 6b, 8a, 9a, 10a, 13a, 15a, 17b y 19b: ver `_verificar_concrecion` y `_lotes_de_salida`.
     - Postcondición a: la orden pasa a «concretada» (fecha de resolución = hoy, fecha de siembra = la efectiva, motivo si lo hubo). b: el
       lote en Germinación con su costo (suma de los montos redondeados). c y d: las ocupaciones guardan lo sembrado y, con él, se liberan
       los agujeros comprometidos (se derivan, D-50). e y f: las reservas se cierran con `consumos.cerrar_reserva`. g e i: FEFO a la fecha
       efectiva (o los lotes elegidos) y un movimiento por lote; lo que no cubren sale del «faltante sin lote». h: un consumo por reserva
       consumida, CON SU BITÁCORA, creado ANTES que sus movimientos (D-52 punto 5). k: aviso al Agrónomo que planificó. l a o: UN registro.
-      p: la alerta «stock inconsistente» la deja `inventario` al reevaluar. Sin asientos (D-45).
+      p: la alerta «stock inconsistente» la deja `inventario` al reevaluar. j (CON-04a): un asiento por consumo, el último paso con bloqueos.
     - Bloqueos (`FOR NO KEY UPDATE`, docs/patrones/bloqueos.md): cuentas del Capataz y del Agrónomo (orden de id) → invernadero →
       variedad → sectores de la orden → insumos y existencias (orden de id) → [los lotes de insumo los toma `inventario`] → la orden,
       sus reservas y sus ocupaciones. Después se repite TODO lo verificado. Todo o nada (D-22).
@@ -1017,6 +1019,11 @@ def _registrar_concrecion(actor, plan):
         movimientos += stock.registrar_salida_por_consumo(linea.existencia.pk, partes, origen_id=consumo.pk, fecha=fecha)
     for existencia in {l.existencia.pk: l.existencia for l in plan.lineas}.values():
         alertas_de_stock.reevaluar_alertas_del_insumo(existencia.pk)  # también los insumos cuya reserva quedó «cancelada»
+    # Postcondición j de PROD-CNC-SMB; D-92 puntos 3 a 6: un asiento por consumo (Productos en Proceso / Insumos en Stock) con la fecha efectiva, al final
+    # de los bloqueos de la concreción: el ejercicio es lo último que se bloquea (D-86 punto 2). Un consumo de $0 no asienta (H11).
+    asientos_creados = asientos_de_produccion.referencias_de(
+        [asientos_de_produccion.asentar_consumo(actor, consumo, True, fecha, hoy) for consumo, _ in consumos_creados]
+    )
     antes_de_la_orden = {"estado": siembra.estado_orden}
     siembra.estado_orden = Estado.CONCRETADA
     siembra.fecha_resolucion_orden = hoy
@@ -1050,6 +1057,14 @@ def _registrar_concrecion(actor, plan):
     if plan.motivo:
         cambios["motivo_diferencia_siembra"] = {"antes": "", "despues": plan.motivo}
     lotes_de_insumo = {m.lote_insumo_id: m.lote_insumo for m in movimientos}
+    datos_de_auditoria = {
+        "lote": referencia(lote),
+        "cantidad_sembrada": str(plan.total),
+        "cant_plantines_siembra": str(siembra.cant_plantines_siembra),
+        "costo_acumulado": str(costo),
+    }
+    if asientos_creados:
+        datos_de_auditoria["asientos"] = [referencia(a) for a in asientos_creados]
     RegistroAuditoria.objects.registrar(
         usuario=actor,
         accion=RegistroAuditoria.Accion.CONCRECION_SIEMBRA,
@@ -1063,16 +1078,9 @@ def _registrar_concrecion(actor, plan):
             *lotes_de_insumo.values(),
             *[c for c, _ in consumos_creados],
             *movimientos,
+            *asientos_creados,
         ],
-        detalle={
-            "cambios": cambios,
-            "datos": {
-                "lote": referencia(lote),
-                "cantidad_sembrada": str(plan.total),
-                "cant_plantines_siembra": str(siembra.cant_plantines_siembra),
-                "costo_acumulado": str(costo),
-            },
-        },
+        detalle={"cambios": cambios, "datos": datos_de_auditoria},
     )
     return lote
 

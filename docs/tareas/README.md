@@ -132,7 +132,7 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
 | PRD-05 | Registrar Lote Existente | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
-| CON-04a | Asientos de producción (reapertura) | produccion | pendiente | CON-02 (PRD-04, hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
+| CON-04a | Asientos de producción (reapertura) | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02 (hecha), PRD-04 (hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | pendiente | CON-02, COM-04a, COM-04b, COM-06a | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
 | CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11 (hecha), COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
 
@@ -142,6 +142,6 @@ Plan completo en `docs/tareas/ronda_estadisticas_1.md`. Va última; EST-03 esper
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| EST-01 | App `estadisticas` y estadísticas de producción | estadisticas | pendiente | PRD-03 (hecha); mejor después de CON-04a | `estadisticas/EST-01-app-y-estadisticas-de-produccion.md` |
+| EST-01 | App `estadisticas` y estadísticas de producción | estadisticas | pendiente | PRD-03 (hecha); CON-04a (hecha) | `estadisticas/EST-01-app-y-estadisticas-de-produccion.md` |
 | EST-02 | Estadísticas consolidadas del Gerente | estadisticas | pendiente | EST-01, CON-03a, CMP-06 | `estadisticas/EST-02-estadisticas-consolidadas.md` |
 | EST-03 | Lo comercial dentro de las consolidadas | estadisticas | pendiente | EST-02, COM-08c | `estadisticas/EST-03-estadisticas-comerciales-en-las-consolidadas.md` |

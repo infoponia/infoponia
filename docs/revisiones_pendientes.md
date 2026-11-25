@@ -1151,3 +1151,26 @@ Los 41 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 39. **Navegador real:** ventana privada, iniciar sesión y recorrer registrar y contraasentar hasta el final; sin 403 ni «Verificación CSRF fallida»; HTMX sin recarga ni salto.
 - [ ] 40. (Opcional) Con JavaScript desactivado todo sigue funcionando.
 - [ ] 41. (Opcional) En un celular.
+
+
+## CON-04a · Tarea CON-04a (asientos de producción)
+
+Los 17 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-04a-asientos-de-produccion.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). **No tiene migración**: no hay que correr `migrate` por esta tarea.
+
+- [ ] 1. Como Contador, «Contabilidad › Libro de gestión»: sin asientos *(lo cubre el recorrido)*.
+- [ ] 2. Crear a mano el invernadero «Invernadero Norte», los sectores «Germinación 1», «Crecimiento 1» y «Crecimiento 2» (100 agujeros), la variedad «Lechuga Crespa» (Germinación y Crecimiento), su semilla a $ 2,00 con 1.000 unidades, «Limpiador» (como gasto, $ 5,00, 20 L) y «Abono» (como costo de los lotes, $ 4,00, 30 kg). Como Agrónomo, planificar la siembra de 50 plantines; como Capataz, concretarla («Ver resumen» y «Confirmar»).
+- [ ] 3. Como Contador: asiento N.º 1, fecha de hoy, Debe Productos en Proceso / Haber Insumos en Stock por $ 100,00; su ficha dice «Consumo · Siembra OT-…» sin enlace *(lo cubre `ConcretarSiembraAsientoTests`)*.
+- [ ] 4. Repetir la siembra con 5 kg de Abono como adicional: un asiento por cada consumo *(lo cubre el recorrido y `test_regla_h8_dos_concreciones…`)*.
+- [ ] 5. Transición con 40 de 50 plantas ubicadas y causa «Plaga»: asiento Debe Pérdidas por Mermas / Haber Productos en Proceso por $ 20,00; sin plantas perdidas, ningún asiento *(lo cubre `ConcretarTransicionAsientoTests`)*.
+- [ ] 6. Merma de 4 plantas del lote: asiento por $ 8,00 *(lo cubre `RegistrarMermaAsientoTests`)*.
+- [ ] 7. Aplicación de 2 L de Limpiador a todo el invernadero, como Capataz (sin ver importes): asiento Debe Gastos de Producción / Haber Insumos en Stock por $ 10,00 *(lo cubre `RegistrarAsientoTests`)*.
+- [ ] 8. Aplicación de 7 kg de Abono: un solo asiento de $ 28,00 contra Productos en Proceso; en un sector sin plantas, contra Gastos de Producción.
+- [ ] 9. Poner fuera de servicio «Crecimiento 1» reubicando 20 plantas: un asiento por la merma de las plantas sin reubicar, ninguno por la reubicación ni por cancelar la orden pendiente *(lo cubre `AsientosDeLasMermasTests`)*.
+- [ ] 10. Aplicar 0,4 kg a un insumo de $ 0,01: se registra sin asiento *(lo cubre una prueba)*.
+- [ ] 11. Libro y fichas como Contador y como Gerente: totales, cuentas, importes, fechas y orígenes sin enlace; el Plan de cuentas muestra los movimientos.
+- [ ] 12. «Auditoría» como Gerente: el registro de cada caso de uso nombra sus asientos y hay registros aparte de alta de asiento y de movimiento.
+- [ ] 13. Como Capataz, Agrónomo y Vendedor, abrir `/contabilidad/` a mano: 403 *(lo cubre el recorrido)*.
+- [ ] 14. Todo o nada: no se puede forzar a mano; lo cubren las pruebas `test_garantia_si_falla_el_segundo_asiento…`.
+- [ ] 15. *(Opcional)* Fecha efectiva en un ejercicio cerrado: el asiento va al abierto con la fecha de hoy y la aclaración *(lo cubren las pruebas `test_d102_…`)*.
+- [ ] 16. **Navegador real**: en una ventana privada, enviar hasta el final «Concretar», «Registrar merma», «Registrar aplicación» y «Poner fuera de servicio»; si aparece «Prohibido (403)», «Verificación CSRF fallida» o un error en la consola (F12), avisar.
+- [ ] 17. *(Opcional)* Sin JavaScript en «Concretar» y «Registrar merma», y en el celular la bandeja del Capataz.
