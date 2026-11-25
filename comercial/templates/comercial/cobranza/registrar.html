@@ -1,0 +1,16 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Registrar cobro de suministro» (COM-REG-CBR; `INIT.cobro` y `VIEWS.cobro` del prototipo, D-61): una página con tres secciones numeradas, «Cliente», «Entregas que paga» y «Pago». «Entregas que paga» aparece al elegir el cliente y «Pago», al elegir al menos
+una entrega. El cuerpo («_cuerpo.html») es lo que HTMX redibuja al marcar una entrega o cambiar un filtro, sin validar y sin mover el scroll; sin JavaScript, «Calcular total» vuelve a dibujar la página. «Revisar y registrar» lleva al resumen (otra página,
+que no escribe); «Confirmar cobro» está en el resumen. Con «novalidate»: las reglas son del servicio. Recibe lo de «_cuerpo.html».{% endcomment %}
+{% block titulo %}Registrar cobro · Cobranza · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <a class="back" href="{% url 'comercial:cobranza' %}">{% icono "back" 15 %} Volver a Cobranza</a>
+  <div class="page-h"><h1>Registrar cobro de suministro</h1></div>
+  <form id="form-cobro" method="post" action="{% url 'comercial:cobranza_registrar' %}" novalidate>
+    {% csrf_token %}
+    <div id="cuerpo-cobro">{% include "comercial/cobranza/_cuerpo.html" %}</div>
+  </form>
+</div>
+{% endblock %}

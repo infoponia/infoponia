@@ -1226,6 +1226,7 @@ def ficha_de_suministro(actor, suministro_id):
     hay_mas = any(
         calendario.calendario(d, hasta=desde - timedelta(days=1)) or calendario.calendario(d, desde=hasta + timedelta(days=1)) for d in detalles
     )
+    entregas_del_contrato = entregas.entregas_del_contrato(suministro.pk, hoy)
     acciones = {"ver_cliente"}
     if suministro.estado_comprobante == Suministro.EstadoDelComprobante.PENDIENTE_ENVIO and suministro.cliente.email_cliente:
         acciones.add("reenviar_comprobante")
@@ -1239,6 +1240,9 @@ def ficha_de_suministro(actor, suministro_id):
                 acciones.add("rescindir")
         elif es_gerente and suministro.fecha_ultima_entrega_rescision >= hoy:
             acciones.add("dejar_sin_efecto")
+    # Regla 10 (COM-08a): «Registrar cobro» si hay entregas sin pagar y el actor es su Vendedor o el Gerente (el alcance ya lo garantiza; ningún botón lleva a un 403).
+    if any(f.estado_pago in ("pendiente", "en_mora") for f in entregas_del_contrato):
+        acciones.add("registrar_cobro")
     hay_historial = any(d.reemplaza_a_id for d in detalles)
     if hay_historial:
         acciones.add("ver_historial")
@@ -1273,7 +1277,7 @@ def ficha_de_suministro(actor, suministro_id):
         acciones=frozenset(acciones),
         aviso_de_rescision=_aviso_de_rescision(suministro),
         hay_historial=hay_historial,
-        entregas=entregas.entregas_del_contrato(suministro.pk, hoy),
+        entregas=entregas_del_contrato,
         discrepancias=list(
             DiscrepanciaEntrega.objects.filter(entrega__contrato_entrega_id=suministro.pk).select_related("entrega").prefetch_related("lineas").order_by("numero")
         ),
@@ -1854,6 +1858,12 @@ def modificar_suministro(actor, suministro_id, cambios, huella):
         if plan.contrato:
             s.save()
             s.clausula_suministrado.save()
+        # COM-08a (D-94 punto 12): si cambia la indemnización por día de la cláusula, rige para las entregas que todavía no vencieron (el día del vencimiento todavía vale el cambio); las ya vencidas conservan la que
+        # tenían al vencer. Las toma el contrato: dos modificaciones o un cobro del mismo contrato quedan en fila por la cuenta del Vendedor, que todos bloquean primero.
+        if "indemnizacion_retraso_pago" in plan.contrato:
+            Entrega.objects.filter(contrato_entrega_id=s.pk, estado_orden="concretada", fecha_vencimiento_pago__gte=stock.hoy()).update(
+                indemnizacion_retraso_dia=plan.contrato["indemnizacion_retraso_pago"][1]
+            )
 
         # Postcondiciones a y c: finalizar los detalles (primero, para liberar el par vigente) y crear los sucesores.
         finalizados, creados, clausulas = [], [], []

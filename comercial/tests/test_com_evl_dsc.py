@@ -19,7 +19,7 @@ from django.utils import timezone
 from comercial.models import AlertaComercial, Entrega, LineaDiscrepancia, SolicitudRevision, Suministro
 from comercial.servicios import solicitudes
 from comercial.tests.base_solicitudes import BaseDeSolicitudes, HOY, codigos, poner_estado
-from comercial.tests.fabricas import queja_aceptada
+from comercial.tests.fabricas import cobro, queja_aceptada
 from contabilidad.models import AsientoContable
 from core.models import Notificacion, RegistroAuditoria, Usuario
 from maestros.models import Alerta
@@ -204,14 +204,14 @@ class ComEvlDscServicioTests(BaseDeSolicitudes):
         self.assertEqual(self.solicitud(x).estado_solicitud, "pendiente")
 
     def test_ext_6a_con_la_entrega_pagada_todo_se_reintegra_con_el_medio_elegido(self):
-        """Extensión 6a (D-69 punto 8: `estado_de_pago` simulado): pagada ⇒ descontado 0, reintegrado todo, medio obligatorio; el monto a cobrar no cambia."""
+        """Extensión 6a (D-69 punto 8; con un cobro REAL desde COM-08a, reemplaza a la prueba con `mock.patch` de `estado_de_pago`): pagada ⇒ descontado 0, reintegrado todo, medio obligatorio; el monto a cobrar no cambia."""
         x = self.armar()
-        with mock.patch("comercial.servicios.entregas.estado_de_pago", return_value={x.entrega.pk: "pagada"}):
-            resumen = self.resumen(x.solicitud)
-            self.assertEqual((resumen.descontado, resumen.reintegrado, resumen.necesita_medio), (D("0.00"), D("15.00"), True))
-            self.assertEqual(codigos(self.rechazo(self.resolver, x.solicitud)), ["medio_obligatorio"])
-            self.assertEqual(self.resumen(x.solicitud, medio="cheque").errores["medio_reintegro"][0][0], "medio_obligatorio")
-            self.resolver(x.solicitud, medio="transferencia")
+        cobro([x.entrega])
+        resumen = self.resumen(x.solicitud)
+        self.assertEqual((resumen.descontado, resumen.reintegrado, resumen.necesita_medio), (D("0.00"), D("15.00"), True))
+        self.assertEqual(codigos(self.rechazo(self.resolver, x.solicitud)), ["medio_obligatorio"])
+        self.assertEqual(self.resumen(x.solicitud, medio="cheque").errores["medio_reintegro"][0][0], "medio_obligatorio")
+        self.resolver(x.solicitud, medio="transferencia")
         s = self.solicitud(x)
         self.assertEqual((s.monto_descontado, s.monto_reintegrado, s.medio_reintegro), (D("0.00"), D("15.00"), "transferencia"))
         self.assertEqual(solicitudes.entregas.monto_a_cobrar([x.entrega.pk])[x.entrega.pk], D("500.00"))
@@ -293,15 +293,15 @@ class ComEvlDscServicioTests(BaseDeSolicitudes):
                 Suministro.objects.filter(pk=x.contrato.pk).update(cantidad_incumplimientos=0, estado_suministro="vigente")  # vuelve al estado del resumen (y al invariante del contador)
 
     def test_ext_8b_un_cobro_o_el_estado_de_pago_cambian_la_huella(self):
-        """Extensión 8b: si la entrega se cobra (cambia su estado de pago) entre el resumen y la confirmación, la confirmación se rechaza y el resumen nuevo ve la entrega pagada."""
+        """Extensión 8b (con un cobro REAL desde COM-08a, reemplaza a la prueba con `mock.patch`): si la entrega se cobra (cambia su estado de pago) entre el resumen y la confirmación, la confirmación se rechaza y el resumen nuevo ve la entrega pagada."""
         x = self.armar()
         resumen = self.resumen(x.solicitud)
-        with mock.patch("comercial.servicios.entregas.estado_de_pago", return_value={x.entrega.pk: "pagada"}):
-            error = self.rechazo(solicitudes.resolver_solicitud, self.gerente, x.solicitud.pk, self.datos(), resumen.huella)
-            self.assertIn("el estado de pago de la entrega", error.error_dict["__all__"][0].params["cambios"])
-            nuevo = self.resumen(x.solicitud)
-            self.assertTrue(nuevo.lectura.pagada)
-            self.assertNotEqual(nuevo.huella, resumen.huella)
+        cobro([x.entrega])
+        error = self.rechazo(solicitudes.resolver_solicitud, self.gerente, x.solicitud.pk, self.datos(), resumen.huella)
+        self.assertIn("el estado de pago de la entrega", error.error_dict["__all__"][0].params["cambios"])
+        nuevo = self.resumen(x.solicitud)
+        self.assertTrue(nuevo.lectura.pagada)
+        self.assertNotEqual(nuevo.huella, resumen.huella)
 
     def test_ext_8b_otra_aceptacion_de_la_misma_entrega_cambia_el_monto_a_cobrar(self):
         """Extensión 8b: otra queja aceptada de la misma entrega mientras tanto (baja el monto a cobrar y sube el contador): `solicitud_cambio` con el monto a cobrar entre lo que cambió."""

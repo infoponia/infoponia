@@ -15,6 +15,7 @@ from django.http import Http404
 
 from comercial.models import AlertaComercial, Anulacion, LineaDiscrepancia, SolicitudRevision, Suministro
 from comercial.servicios import solicitudes
+from comercial.tests.fabricas import cobro
 from comercial.tests.base_solicitudes import BaseDeSolicitudes, HOY, codigos, poner_estado
 from comercial.tests.fabricas import queja_aceptada, resolucion_del_suministro
 from contabilidad.models import AsientoContable
@@ -164,27 +165,27 @@ class ComAnlSrvServicioTests(BaseDeSolicitudes):
         self.assertEqual(self.datos_anul(y).bloqueo[0], "resolucion_del_contrato")
 
     def test_ext_2b_si_la_entrega_ya_se_cobro_con_el_descuento_hay_que_anular_primero_el_cobro(self):
-        """Extensión 2b (D-69 punto 8: `estado_de_pago` simulado hasta COM-08a): aceptada con descuento y la entrega «pagada» ⇒ `entrega_cobrada`: «Primero anulá el cobro de OT-…»."""
+        """Extensión 2b (D-69 punto 8; con un cobro REAL desde COM-08a, reemplaza a la prueba con `mock.patch` de `estado_de_pago`): aceptada con descuento y la entrega cobrada ⇒ `entrega_cobrada`: «Primero anulá el cobro de OT-…»."""
         x = self.aceptada()
-        with mock.patch("comercial.servicios.entregas.estado_de_pago", return_value={x.entrega.pk: "pagada"}):
-            datos = self.datos_anul(x)
-            self.assertEqual(datos.bloqueo[0], "entrega_cobrada")
-            self.assertIn(f"Primero anulá el cobro de {x.entrega.codigo}", datos.texto_del_bloqueo)
-            error = self.rechazo(solicitudes.anular_resolucion, self.gerente, x.solicitud.pk, MOTIVO, datos.huella)
+        cobro([x.entrega])
+        datos = self.datos_anul(x)
+        self.assertEqual(datos.bloqueo[0], "entrega_cobrada")
+        self.assertIn(f"Primero anulá el cobro de {x.entrega.codigo}", datos.texto_del_bloqueo)
+        error = self.rechazo(solicitudes.anular_resolucion, self.gerente, x.solicitud.pk, MOTIVO, datos.huella)
         self.assertEqual((codigos(error), self.solicitud(x).estado_solicitud), (["entrega_cobrada"], "aceptada"))
 
     def test_ext_2c_si_la_indemnizacion_ya_se_reintegro_no_se_puede_anular_parcial_ni_total(self):
-        """Extensión 2c (D-69 punto 5): `monto_reintegrado > 0` ⇒ `indemnizacion_reintegrada` («ya se le reintegró al cliente»): con reintegro parcial (6d) y total (6a, entrega pagada)."""
+        """Extensión 2c (D-69 punto 5; el reintegro total con un cobro REAL desde COM-08a, reemplaza a la prueba con `mock.patch`): `monto_reintegrado > 0` ⇒ `indemnizacion_reintegrada` («ya se le reintegró al cliente»): con reintegro parcial (6d) y total (6a, entrega cobrada)."""
         parcial = self.armar(por_planta="200.00")
         self.resolver(parcial.solicitud, medio="efectivo")
         datos = self.datos_anul(parcial)
         self.assertEqual(datos.bloqueo[0], "indemnizacion_reintegrada")
         self.assertIn("$ 100,00 por efectivo", datos.texto_del_bloqueo)
         total = self.armar()
-        with mock.patch("comercial.servicios.entregas.estado_de_pago", return_value={total.entrega.pk: "pagada"}):
-            self.resolver(total.solicitud, medio="transferencia")
-            self.assertEqual(self.datos_anul(total).bloqueo[0], "indemnizacion_reintegrada")  # descontado 0: no es 2b
-            error = self.rechazo(solicitudes.anular_resolucion, self.gerente, total.solicitud.pk, MOTIVO, self.datos_anul(total).huella)
+        cobro([total.entrega])
+        self.resolver(total.solicitud, medio="transferencia")
+        self.assertEqual(self.datos_anul(total).bloqueo[0], "indemnizacion_reintegrada")  # descontado 0: no es 2b
+        error = self.rechazo(solicitudes.anular_resolucion, self.gerente, total.solicitud.pk, MOTIVO, self.datos_anul(total).huella)
         self.assertEqual(codigos(error), ["indemnizacion_reintegrada"])
         self.assertEqual((self.solicitud(total).estado_solicitud, Anulacion.objects.count()), ("aceptada", 0))
 

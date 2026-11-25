@@ -1,0 +1,21 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}El comprobante de cobro para imprimir (el cliente sin correo, «Imprimir comprobante»; Lista de tecnología, 11 de COM-REG-CBR): el cliente, el código, la fecha y el medio; por entrega, su fecha, el contrato, el monto total, lo descontado, el monto a cobrar, el vencimiento y, si hubo atraso, los días y la indemnización;
+y el total. De uso interno, sin validez fiscal. Recibe lo de `cobranza.contexto_del_comprobante_de_cobro`.{% endcomment %}
+{% block titulo %}Comprobante {{ codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Comprobante de cobro · <span class="mono">{{ codigo }}</span></h1><div class="sub">{{ cliente }} · {{ fecha|date:"d/m/Y" }} · {{ medio }}</div></div>
+  <div class="card" style="margin-top:12px"><div class="card-title">Detalle por entrega</div>
+    <table class="data-table"><thead><tr><th>Entrega</th><th class="right">Total</th><th class="right">Descontado</th><th class="right">A cobrar</th><th>Vencimiento</th><th class="right">Atraso</th></tr></thead><tbody>
+    {% for l in lineas %}<tr><td><span class="mono">{{ l.entrega }}</span><span class="sub2">{{ l.contrato }} · concretada el {{ l.fecha_concrecion|date:"d/m/Y" }}</span></td>
+      <td class="right mono">{{ l.monto_total|pesos }}</td><td class="right mono">{{ l.descontado|pesos }}</td><td class="right mono">{{ l.monto_a_cobrar|pesos }}</td>
+      <td>{{ l.vencimiento|date:"d/m/Y" }}</td><td class="right mono">{% if l.dias_atraso %}{{ l.dias_atraso }} día{{ l.dias_atraso|pluralize }} · {{ l.indemnizacion|pesos }}{% else %}—{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+    <dl class="dl" style="margin-top:10px"><dt>Total de las entregas</dt><dd class="mono">{{ base|pesos }}</dd>
+      {% if indemnizacion > 0 %}<dt>Indemnización por atraso en el pago</dt><dd class="mono">{{ indemnizacion|pesos }}</dd>{% endif %}
+      <dt>Total cobrado</dt><dd class="mono"><b>{{ total|pesos }}</b></dd></dl>
+    <p class="muted" style="padding:0 16px">Comprobante interno, sin validez fiscal.</p></div>
+  <div class="acts-fila" style="margin-top:12px"><button class="btn btn-ghost" type="button" onclick="window.print()">Imprimir comprobante</button></div>
+</div>
+{% endblock %}

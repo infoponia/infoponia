@@ -12,8 +12,9 @@ from django.db import transaction
 from django.http import Http404
 from django.urls import reverse
 
-from comercial.models import AlertaComercial, Entrega, Vehiculo
+from comercial.models import AlertaComercial, Entrega, LineaPago, Vehiculo
 from comercial.servicios import concrecion, entregas
+from comercial.servicios.compra_ventas import texto_de_pesos
 from comercial.servicios.confirmacion import TIPO_NO_RECONOCIDA
 from contabilidad.servicios.responsables import responsable_contable
 from core import notificaciones
@@ -28,7 +29,7 @@ MENSAJE_SIN_ACCESO = "Tu cuenta no tiene acceso a esta acción."
 LARGO_DE_LA_DESCRIPCION = 500
 GERENTE = Usuario.Rol.GERENTE
 Resultado = AlertaComercial.Resultado
-SIN_COBRO = "Sin cobro registrado"  # hasta COM-08a
+SIN_COBRO = "Sin cobro registrado"
 ASIENTOS_FUERA_DE_LA_RONDA = "Fuera de esta ronda · contabilidad"  # regla 1; D-57
 TEXTO_DEL_RESULTADO_EN_EL_AVISO = {
     Resultado.NO_LLEGO_PERDIDO: "no llegó al cliente (producto perdido)",
@@ -130,15 +131,24 @@ def ficha_de_no_reconocida(actor, alerta_id):
         confirmacion=entrega.get_estado_confirmacion_cliente_display() or "",
         motivo_del_cliente=motivo,
         consumos=consumos,
-        cobro=SIN_COBRO,
+        cobro=_texto_del_cobro(entrega),
         asientos=ASIENTOS_FUERA_DE_LA_RONDA,
         resultados=list(Resultado.choices),
     )
 
 
 def _tiene_cobro_vigente(entrega):
-    """Regla 5: si la entrega ya se cobró, hay que anular primero el cobro (COM-ANL-CBR). Hasta COM-08a no hay cobros de entregas de suministro: siempre `False`; COM-08a lo completa con sus `LineaPago`."""
-    return False
+    """Regla 5: si la entrega ya se cobró (tiene una `LineaPago` vigente, COM-08a), hay que anular primero el cobro (COM-ANL-CBR). Un cobro anulado no cuenta."""
+    return LineaPago.objects.filter(entrega_id=entrega.pk, vigente=True).exists()
+
+
+def _texto_del_cobro(entrega):
+    """Regla 1: «COB-0032 · 25/11/2026 · Transferencia · $ 47.200,00» (el código, la fecha, el medio y el monto del cobro vigente) o «Sin cobro registrado»."""
+    linea = LineaPago.objects.select_related("pago").filter(entrega_id=entrega.pk, vigente=True).first()
+    if linea is None:
+        return SIN_COBRO
+    pago = linea.pago
+    return f"{pago.codigo} · {pago.fecha_pago:%d/%m/%Y} · {pago.get_medio_pago_display()} · {texto_de_pesos(pago.monto_pagado)}"
 
 
 def atender_entrega_no_reconocida(actor, alerta_id, resultado, descripcion):

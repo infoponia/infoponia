@@ -116,9 +116,9 @@ class FichaDelCliente:
 
 
 def entregas_sin_cobrar(actor, cliente):
-    """COM-06a (`clientes.md`, «Se completa en»): las entregas de suministro **concretadas** del cliente que todavía se deben (ninguna está «pagada» hasta COM-08a), dentro del alcance de
-    ``actor`` (el Vendedor, las de sus contratos), por vencimiento: `[{codigo, contrato, monto, vencimiento, estado_pago, texto_del_estado}]`. El monto es el monto a cobrar
-    (`entregas.monto_a_cobrar`). Dos consultas."""
+    """COM-06a y COM-08a (`clientes.md`, «Se completa en»): las entregas de suministro **concretadas** del cliente que todavía se deben (sin un cobro vigente y sin estar saldadas), dentro del alcance de
+    ``actor`` (el Vendedor, las de sus contratos), por vencimiento: `[{codigo, contrato, contrato_id, monto, vencimiento, estado_pago, dias_de_mora, texto_del_estado}]`. El monto es el monto a cobrar
+    (`entregas.monto_a_cobrar`); el estado, «pendiente» o «en_mora» (con «En mora · 5 días»). Tres consultas."""
     from comercial.servicios import entregas as servicio_de_entregas
     from inventario.servicios import stock
 
@@ -128,11 +128,14 @@ def entregas_sin_cobrar(actor, cliente):
         .select_related("contrato_entrega")
         .order_by("fecha_vencimiento_pago", "pk")
     )
-    montos = servicio_de_entregas.monto_a_cobrar([e.pk for e in lista])
     hoy = stock.hoy()
+    estados = servicio_de_entregas.estado_de_pago([e.pk for e in lista], hoy)
+    montos = servicio_de_entregas.monto_a_cobrar([e.pk for e in lista])
     filas = []
     for e in lista:
-        estado = servicio_de_entregas._estado_de_pago(e.fecha_vencimiento_pago, hoy)
+        if estados[e.pk] == "pagada":
+            continue  # cobrada o saldada: ya no se debe
+        estado = estados[e.pk].estado
         filas.append(
             {
                 "codigo": e.codigo,
@@ -141,7 +144,8 @@ def entregas_sin_cobrar(actor, cliente):
                 "monto": montos[e.pk],
                 "vencimiento": e.fecha_vencimiento_pago,
                 "estado_pago": estado,
-                "texto_del_estado": servicio_de_entregas.TEXTO_DEL_PAGO.get(estado, ""),
+                "dias_de_mora": (hoy - e.fecha_vencimiento_pago).days if estado == "en_mora" else 0,
+                "texto_del_estado": servicio_de_entregas._texto_del_estado_de_pago(estados[e.pk], e.fecha_vencimiento_pago, hoy),
             }
         )
     return filas
@@ -207,11 +211,12 @@ def pendientes_del_cliente(cliente, actor):
     ]
     if codigos:
         pendientes.append(f"Compra-ventas abiertas: {len(codigos)} ({', '.join(codigos)}).")
-    # COM-06a (regla 1 de COM-BAJ-CLT): las entregas sin cobrar (con su monto) y las discrepancias pendientes. Las quejas son de COM-06b y el estado de pago, de COM-08a.
+    # COM-06a (regla 1 de COM-BAJ-CLT): las entregas sin cobrar (con su monto) y las discrepancias pendientes. Las quejas son de COM-06b; COM-08a suma cuántas están en mora.
     sin_cobrar = entregas_sin_cobrar(actor, cliente)
     if sin_cobrar:
         total = sum((f["monto"] for f in sin_cobrar), Decimal("0.00"))
-        pendientes.append(f"Entregas sin cobrar: {len(sin_cobrar)} (${total}; la primera vence el {sin_cobrar[0]['vencimiento']:%d/%m/%Y}).")
+        en_mora = sum(1 for f in sin_cobrar if f["estado_pago"] == "en_mora")  # COM-08a: cuántas ya están en mora
+        pendientes.append(f"Entregas sin cobrar: {len(sin_cobrar)} (${total}; la primera vence el {sin_cobrar[0]['vencimiento']:%d/%m/%Y}{f'; {en_mora} en mora' if en_mora else ''}).")
     discrepancias = discrepancias_pendientes(actor, cliente)
     if discrepancias:
         pendientes.append(f"Discrepancias pendientes: {len(discrepancias)} ({', '.join(d['codigo'] for d in discrepancias)}).")

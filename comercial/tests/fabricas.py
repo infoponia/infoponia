@@ -737,11 +737,12 @@ def entrega(contrato, reservas, *, fecha=None, transportista=None, estado="a_rea
     return nueva
 
 
-def marcar_concretada(entrega_, *, cantidades=None):
+def marcar_concretada(entrega_, *, cantidades=None, hace_dias=0):
     """COM-06a: deja ``entrega_`` «concretada» **directo en la base** (sin pasar por `concretar_entrega`, que prueba el bloque 2), con los datos de la concreción que exigen la
     base y `verificar_invariantes_de_entregas`: por línea, entregada, perdida, devuelta y monto, y en la entrega el total (y, en un suministro, el vencimiento del pago con el plazo de
-    la cláusula). ``cantidades`` es una lista de ``(entregada, perdida, devuelta)`` en el orden de las líneas (por omisión, todo lo planificado se entrega). No toca reservas, cámara,
-    detalles ni contrato. Devuelve la entrega refrescada."""
+    la cláusula). ``cantidades`` es una lista de ``(entregada, perdida, devuelta)`` en el orden de las líneas (por omisión, todo lo planificado se entrega). COM-08a: ``hace_dias`` la
+    concreta en el pasado (la fecha de resolución y, a partir de ella, el vencimiento del pago) y, en un suministro, copia la indemnización por día de la cláusula en la entrega (D-94, punto 12),
+    como `concretar_entrega`. No toca reservas, cámara, detalles ni contrato. Devuelve la entrega refrescada."""
     from comercial.models import ClausulaSuministrado, CompraVenta, DetalleEntrega, Entrega
     from comercial.servicios import entregas as servicio
 
@@ -755,11 +756,14 @@ def marcar_concretada(entrega_, *, cantidades=None):
         DetalleEntrega.objects.filter(pk=linea.pk).update(cant_entregada=entregada, cant_perdida=perdida, cant_devuelta=devuelta, monto_pagar=monto)
         total += monto
     vencimiento = None
+    por_dia = None
+    concrecion = hoy - timedelta(days=hace_dias)
     if not CompraVenta.objects.filter(pk=entrega_.contrato_entrega_id).exists():
         clausula = ClausulaSuministrado.objects.filter(suministro_id=entrega_.contrato_entrega_id).first()
-        vencimiento = hoy + timedelta(days=clausula.plazo_pago_dias if clausula else 30)
+        vencimiento = concrecion + timedelta(days=clausula.plazo_pago_dias if clausula else 30)
+        por_dia = clausula.indemnizacion_retraso_pago if clausula else None
     Entrega.objects.filter(pk=entrega_.pk).update(
-        estado_orden="concretada", fecha_resolucion_orden=hoy, monto_total_entrega=total, fecha_vencimiento_pago=vencimiento
+        estado_orden="concretada", fecha_resolucion_orden=concrecion, monto_total_entrega=total, fecha_vencimiento_pago=vencimiento, indemnizacion_retraso_dia=por_dia
     )
     entrega_.refresh_from_db()
     return entrega_
@@ -789,6 +793,109 @@ def pago_de_compra_venta(venta, medio="efectivo", *, monto=None, estado="vigente
         confirmados = DetalleVenta.objects.filter(compra_venta=venta, estado_detalle_venta="confirmado")
         monto = sum((Decimal(d.cant_entregada_venta or 0) * d.precio_unitario_de_venta for d in confirmados), Decimal("0.00")) or Decimal("100.00")
     return PagoCliente.objects.create(cliente=venta.cliente, compra_venta=venta, medio_pago=medio, fecha_pago=timezone.localdate(), monto_pagado=monto, estado_pago=estado)
+
+
+def entrega_de_suministro(escenario, lote_, *, contrato=None, cantidad=10, precio="100.00", plazo_pago=10, indemnizacion_pago="300.00", hace_dias=0, cantidades=None, vendedor=None, cliente_=None):
+    """COM-08a: una entrega de suministro ya concretada, armada directo (ver `marcar_concretada`), de ``cantidad`` plantas a ``precio`` (por omisión $ 1.000,00), con ``hace_dias`` de concretada: vence
+    ``plazo_pago`` días después de eso. Sin ``contrato`` crea un suministro nuevo del cliente del escenario (con su plazo de pago y su indemnización por día); con ``contrato``, suma otra entrega (otro
+    período del mismo detalle, de modo que dos de un contrato no chocan). ``vendedor`` y ``cliente_`` arman el contrato nuevo de otro Vendedor o de otro cliente (este necesita una dirección). Devuelve la `Entrega` refrescada."""
+    from comercial.models import DetalleEntrega
+
+    if contrato is None:
+        contrato = suministro(escenario, plazo_pago=plazo_pago, indemnizacion_pago=indemnizacion_pago, vendedor=vendedor, cliente_=cliente_)
+        detalle_ = detalle_suministro(contrato, escenario.variedad, cantidad=cantidad, primera_en_dias=0, precio=precio)
+    else:
+        detalle_ = contrato.detalles.order_by("pk").first()
+    k = DetalleEntrega.objects.filter(detalle_suministro=detalle_).count()
+    fecha_periodo = detalle_.fecha_primer_entrega + timedelta(days=detalle_.periodo_entrega_dias * k)
+    reserva_ = reserva_lista(None, lote_, cantidad, fecha_entrega=fecha_periodo, detalle_suministro=detalle_)
+    nueva = entrega(contrato, [reserva_], fecha=timezone.localdate())
+    return marcar_concretada(nueva, cantidades=cantidades, hace_dias=hace_dias)
+
+
+def entrega_en_mora(escenario, lote_, *, dias_de_mora=3, plazo_pago=10, **extra):
+    """COM-08a: una entrega de suministro concretada que venció hace ``dias_de_mora`` días (hace `plazo_pago + dias_de_mora` que se concretó). Sin pago ni aviso: la deja así `marcar_concretada`; el
+    paso 30 es el que la avisa. Acepta lo de `entrega_de_suministro`."""
+    return entrega_de_suministro(escenario, lote_, plazo_pago=plazo_pago, hace_dias=plazo_pago + dias_de_mora, **extra)
+
+
+def cobro(entregas_, *, medio="efectivo", usuario=None, fecha=None, estado="vigente", aviso="enviado"):
+    """COM-08a: un `PagoCliente` de suministro de ``entregas_`` (todas de un mismo cliente) creado directo, con una `LineaPago` por entrega: lo cobrado es su monto a cobrar de hoy y el atraso, los días
+    entre su vencimiento y ``fecha`` (por omisión, hoy) por la indemnización por día que guardó la entrega. ``estado = anulado`` deja el pago y sus líneas anulados (como lo hará COM-08b). No resuelve
+    alertas ni manda nada: es para las pruebas de las restricciones, del estado de pago y de las fichas; el cobro real lo registra `cobranza.registrar_cobro`."""
+    from django.db import connection
+
+    from comercial.models import Contrato, LineaPago, PagoCliente
+    from comercial.servicios import entregas as servicio
+
+    entregas_ = list(entregas_)
+    fecha = fecha or timezone.localdate()
+    vigente = estado == "vigente"
+    montos = servicio.monto_a_cobrar([e.pk for e in entregas_])
+    lineas, total = [], Decimal("0.00")
+    for e in entregas_:
+        dias = max(0, (fecha - e.fecha_vencimiento_pago).days)
+        indemnizacion = (Decimal(dias) * (e.indemnizacion_retraso_dia or Decimal("0.00"))).quantize(Decimal("0.01"))
+        lineas.append((e, montos[e.pk], dias, indemnizacion))
+        total += montos[e.pk] + indemnizacion
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT nextval('comercial_cobro_numero_seq')")
+        numero = cursor.fetchone()[0]
+    cliente_ = Contrato.objects.get(pk=entregas_[0].contrato_entrega_id).cliente
+    pago = PagoCliente.objects.create(
+        tipo_pago="suministro", numero=numero, cliente=cliente_, medio_pago=medio, fecha_pago=fecha, monto_pagado=total, estado_pago=estado, usuario=usuario, estado_aviso_cliente=aviso
+    )
+    for e, monto, dias, indemnizacion in lineas:
+        LineaPago.objects.create(pago=pago, entrega=e, monto_cobrado=monto, dias_atraso=dias, indemnizacion_atraso=indemnizacion, vigente=vigente)
+    return pago
+
+
+def verificar_invariantes_de_cobros():
+    """Invariantes de `docs/modelo/comercial.md`, «PagoCliente», «LineaPago» y «Entrega» (COM-08a; `cobranza.md`, «Pruebas»), los que la base no puede vigilar: se llama al final de cada prueba que
+    cobra. Verifica que (1) un pago de suministro tiene al menos una línea y uno de compra-venta ninguna; (2) `monto_pagado` es Σ (`monto_cobrado` + `indemnizacion_atraso`) de sus líneas; (3) `vigente`
+    de cada línea es el estado de su pago; (4) las entregas de un pago son de suministro, están concretadas y son del cliente del pago; (5) una entrega con línea vigente tiene `monto_cobrado` igual a su
+    monto a cobrar; (6) solo una entrega de suministro concretada tiene `fecha_aviso_mora`; (7) una entrega en mora, sin pagar y con `fecha_aviso_mora` tiene su alerta «pago en mora» activa si su
+    invernadero está activo. (El de «un pago anulado tiene su `Anulacion`» es de COM-08b.) Lanza `AssertionError` con lo que encuentra."""
+    from comercial.models import AlertaComercial, CompraVenta, Entrega, LineaPago, PagoCliente
+    from comercial.servicios import entregas as servicio
+
+    problemas = []
+    hoy = timezone.localdate()
+    for p in PagoCliente.objects.order_by("pk"):
+        lineas = list(p.lineas.select_related("entrega"))
+        if p.tipo_pago == "compra_venta":
+            if lineas:
+                problemas.append(f"{p.codigo}: un pago de compra-venta con {len(lineas)} líneas de pago")
+            continue
+        if not lineas:
+            problemas.append(f"{p.codigo}: un pago de suministro sin líneas")
+            continue
+        suma = sum((l.monto_cobrado + l.indemnizacion_atraso for l in lineas), Decimal("0.00"))
+        if p.monto_pagado != suma:
+            problemas.append(f"{p.codigo}: monto pagado {p.monto_pagado} distinto de la suma de sus líneas {suma}")
+        for l in lineas:
+            if l.vigente != (p.estado_pago == "vigente"):
+                problemas.append(f"{p.codigo}: la línea #{l.pk} con vigente={l.vigente} y el pago {p.estado_pago}")
+            e = l.entrega
+            if e.estado_orden != "concretada" or e.fecha_vencimiento_pago is None:
+                problemas.append(f"{p.codigo}: la línea #{l.pk} es de {e.codigo}, que no es una entrega de suministro concretada")
+            elif e.contrato_entrega.cliente_id != p.cliente_id:
+                problemas.append(f"{p.codigo}: la línea #{l.pk} es de {e.codigo}, de otro cliente")
+        for l in lineas:
+            if l.vigente and l.monto_cobrado != servicio.monto_a_cobrar([l.entrega_id])[l.entrega_id]:
+                problemas.append(f"{p.codigo}: lo cobrado de {l.entrega.codigo} ({l.monto_cobrado}) no es su monto a cobrar")
+    cobradas = set(LineaPago.objects.filter(vigente=True).values_list("entrega_id", flat=True))
+    en_ventas = set(CompraVenta.objects.values_list("pk", flat=True))
+    for e in Entrega.objects.filter(fecha_aviso_mora__isnull=False).select_related("invernadero").order_by("pk"):
+        if e.estado_orden != "concretada" or e.contrato_entrega_id in en_ventas or e.fecha_vencimiento_pago is None:
+            problemas.append(f"{e.codigo}: con fecha de aviso de mora y no es una entrega de suministro concretada")
+            continue
+        monto = servicio.monto_a_cobrar([e.pk])[e.pk]
+        if e.pk not in cobradas and monto > 0 and e.fecha_vencimiento_pago < hoy and e.invernadero.estado_invernadero == "activo":
+            if not AlertaComercial.objects.filter(entrega=e, alerta__tipo_alerta="comercial_pago_en_mora", alerta__estado_alerta="activa").exists():
+                problemas.append(f"{e.codigo}: en mora y avisada, sin su alerta «pago en mora» activa")
+    if problemas:
+        raise AssertionError("Invariantes de cobros rotos: " + "; ".join(problemas))
 
 
 def discrepancia(entrega_, *, minima=None, con_alerta=True):

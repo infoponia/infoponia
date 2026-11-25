@@ -1,0 +1,54 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}La ficha del cobro (no está en el prototipo, D-61): el cobro, sus entregas con lo cobrado y el atraso, quién lo registró y el estado del comprobante con «Reenviar comprobante» (pendiente de envío y con correo) o «Imprimir comprobante» (sin correo). La anulación es de COM-08b. Recibe «ficha».{% endcomment %}
+{% block titulo %}{{ ficha.codigo }} · Cobranza · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:cobranza' %}?vista=cobros">{% icono "back" 15 %} Volver a Cobranza</a>
+  <div class="page-h"><h1>Cobro <span class="mono">{{ ficha.codigo }}</span></h1>
+    <div class="sub"><span class="status-badge {% if ficha.estado == 'vigente' %}status-ok{% else %}status-neutral{% endif %}">{% if ficha.estado == "vigente" %}Vigente{% else %}Anulado{% endif %}</span></div></div>
+  <div class="card seg">
+    <div class="card-h"><h3>El cobro</h3></div>
+    <div class="card-b">
+      <dl class="dl two">
+        <dt>Cliente</dt><dd>{{ ficha.cliente.nombre_visible }}</dd>
+        <dt>Fecha del pago</dt><dd>{{ ficha.fecha|date:"d/m/Y" }}</dd>
+        <dt>Medio de pago</dt><dd>{{ ficha.medio }}</dd>
+        <dt>Registrado por</dt><dd>{% if ficha.usuario %}{{ ficha.usuario }}{% else %}<span class="muted">—</span>{% endif %}</dd>
+        <dt>Montos a cobrar</dt><dd class="mono">{{ ficha.base|pesos }}</dd>
+        <dt>Indemnización por atraso</dt><dd class="mono">{{ ficha.indemnizacion|pesos }}</dd>
+        <dt>Total cobrado</dt><dd class="mono"><b>{{ ficha.total|pesos }}</b></dd>
+      </dl>
+    </div>
+  </div>
+  <div class="card seg" style="margin-top:12px">
+    <div class="card-h"><h3>Entregas</h3></div>
+    <div class="card-b">
+      <table class="data-table">
+        <thead><tr><th>Entrega</th><th>Concretada</th><th>Vencimiento</th><th class="right">Cobrado</th><th class="right">Atraso</th></tr></thead>
+        <tbody>
+        {% for l in ficha.lineas %}
+          <tr><td><span class="mono">{{ l.codigo }}</span><span class="sub2">{{ l.contrato_codigo }}</span></td>
+            <td>{{ l.fecha_concrecion|date:"d/m/Y" }}</td><td>{{ l.vencimiento|date:"d/m/Y" }}</td>
+            <td class="right mono">{{ l.monto_cobrado|pesos }}</td>
+            <td class="right mono">{% if l.dias_atraso %}{{ l.dias_atraso }} día{{ l.dias_atraso|pluralize }} · {{ l.indemnizacion|pesos }}{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card seg" style="margin-top:12px">
+    <div class="card-h"><h3>Comprobante</h3></div>
+    <div class="card-b">
+      {% if ficha.aviso == "enviado" %}<p style="margin-top:0">El comprobante se envió al cliente.</p>
+      {% elif ficha.aviso == "pendiente_envio" %}<p style="margin-top:0"><span class="status-badge status-warn">Pendiente de envío</span> No salió todavía: se reintenta solo cada día.</p>
+      {% else %}<p style="margin-top:0"><span class="status-badge status-neutral">Sin correo</span> El cliente no tiene correo: el comprobante se entrega impreso.</p>{% endif %}
+      <div class="acts-fila">
+        {% if ficha.puede_reenviar %}<form method="post" action="{% url 'comercial:cobro_reenviar_comprobante' ficha.pago.pk %}">{% csrf_token %}<button class="btn btn-ghost" type="submit" data-enviando="Enviando…">Reenviar comprobante</button></form>{% endif %}
+        {% if ficha.puede_imprimir %}<a class="btn btn-ghost" href="{% url 'comercial:cobro_comprobante' ficha.pago.pk %}">Imprimir comprobante</a>{% endif %}
+      </div>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:12px">El asiento de este cobro no se genera en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+</div>
+{% endblock %}

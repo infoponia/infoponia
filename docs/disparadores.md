@@ -163,9 +163,9 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      **Planificado (lote C7; D-69, punto 1):** las solicitudes, **COM-07a** (`solicitudes.md`, «Lo que completa a otras tareas»: el
      registrante del enlace de las dos alertas, `monto_a_cobrar` con lo **descontado**, D-69 punto 9); COM-RSV-SUM, **COM-07b**
      (`resolucion.md`).~~ **Cumplido por COM-07a (25/11/2026):** el registrante del enlace de las dos alertas lleva a la ficha de la solicitud, `monto_a_cobrar` resta lo descontado y COM-RSV-QJA usa `intentos_fallidos`. Lo que quedaba, COM-RSV-SUM, **lo cumple COM-07b (25/11/2026)**: ver el punto 11.
-   - **COM-08:** `Entrega.pago` (R154) y C7 de `PagoCliente` como {xor}; `estado_de_pago` con «pagada» (MD-125, MD-136) y la alerta «pago en
+   - ~~**COM-08:** `Entrega.pago` (R154) y C7 de `PagoCliente` como {xor}; `estado_de_pago` con «pagada» (MD-125, MD-136) y la alerta «pago en
      mora» (COM-VNC-PAG); el cobro en COM-ATN-ENR (regla 1) y su regla 5.
-     **Planificado (lote C8):** todo en **COM-08a** (`cobranza.md`). R154 no es `Entrega.pago`: es la tabla `LineaPago` (D-94, punto 2).
+     **Planificado (lote C8):** todo en **COM-08a** (`cobranza.md`). R154 no es `Entrega.pago`: es la tabla `LineaPago` (D-94, punto 2).~~ **Hecho en COM-08a (25/11/2026):** `LineaPago` (R154), C7 como {xor} con `tipo_pago`, `estado_de_pago` con «pagada», la alerta «pago en mora» con el paso 30, y el cobro en COM-ATN-ENR (regla 1 y regla 5, con un cobro vigente real).
    - **Ronda de contabilidad:** los asientos de la entrega, de sus mermas y de sus consumos (postcondiciones e, g y h de COM-CNC-ENT); el aviso
      a quien registra los asientos manuales (postcondición b de COM-ATN-ENR).
 
@@ -183,6 +183,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      **Planificado (lote C8):** la entrega pagada con datos reales y el cobro en la huella, **COM-08a** (`cobranza.md`, «Lo que completa a
      otras tareas»; el cobro bloquea el invernadero de origen y la entrega, sin el suministro: `bloqueos.md`, «Cobranza»); `Anulacion.pago`,
      `cliente_pago_en_fecha` y las restricciones de `Anulacion`, **COM-08b**.
+     **Hecho en COM-08a (25/11/2026):** la entrega pagada con datos reales en 6a de COM-EVL-DSC y de COM-RSV-QJA, el cobro como cambio de la huella (8b) y 2b de COM-ANL-SRV, que ahora exige un **cobro vigente real** (una entrega saldada cuenta como «pagada» pero no tiene un cobro que anular); el cobro bloquea el invernadero de origen y la entrega. Siguen para **COM-08b**: `Anulacion.pago`, `cliente_pago_en_fecha` y las restricciones de `Anulacion`.
    - **Ronda de contabilidad:** el asiento de cada indemnización (simple o compuesto, con lo descontado y lo reintegrado que guarda la
      solicitud), el contraasiento de cada `Anulacion` y el asiento de la multa por resolución (MD-123).
 
@@ -199,9 +200,16 @@ como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porq
 
 - **Ronda de contabilidad:** el asiento de la multa por resolución (Debe «Indemnizaciones por Resolución de Contratos» / Haber «Indemnizaciones a Pagar», MD-123), su pago con un asiento manual
   (CU-17), la precondición c y la extensión 5b de COM-RSV-SUM (D-57, D-69 punto 8). Hoy la multa se informa en la alerta, en el aviso al cliente y en la ficha («fuera de esta ronda»).
-- **COM-08a:** COM-REG-CBR cobra las entregas concretadas de un contrato «resuelto» (la resolución las conserva y lo prueba `test_regla_que_no_cambia_lo_ya_ocurrido`, sin cobros reales); con
-  `LineaPago` hay que probarlo con datos reales.
+- ~~**COM-08a:** COM-REG-CBR cobra las entregas concretadas de un contrato «resuelto» (la resolución las conserva y lo prueba `test_regla_que_no_cambia_lo_ya_ocurrido`, sin cobros reales); con
+  `LineaPago` hay que probarlo con datos reales.~~ **Hecho en COM-08a (25/11/2026):** `test_regla_un_contrato_finalizado_o_resuelto_se_cobra_igual` (`test_com_reg_cbr.py`) y el paso 30 con un contrato resuelto (`test_regla_6_un_contrato_resuelto_o_finalizado_entra_porque_la_deuda_sigue`).
 - **Cuando se modifique `maestros.Alerta`:** `descripcion_alerta` admite 200 caracteres y el caso de uso pide 500 para la alerta «suministro resuelto» (`docs/temas_abiertos.md`, COM-07b).
+
+## Lo que deja COM-08a (nace el 25/11/2026)
+
+- **Ronda de contabilidad:** el asiento del cobro (precondición c y postcondición d de COM-REG-CBR: Debe Caja o Banco c/c, Haber Deudores por Ventas e Indemnizaciones por Atraso en el Pago; D-57, D-94 punto 16). Hoy el cobro guarda todo lo que el asiento necesita (el medio, lo cobrado y el atraso de cada entrega en `LineaPago`) y no crea ninguno; la ficha y el resumen dicen «Fuera de esta ronda · contabilidad».
+- **COM-08b:** anular un cobro (COM-ANL-CBR: la alerta «pago en mora» se asegura de nuevo con `reevaluar_mora`, `Anulacion.pago`, `cliente_pago_en_fecha`, la fecha del cobro anulado en `registrar_cobro`) y el cobro de 6a de COM-CNL-CVT. Mientras tanto, un cobro mal registrado no se puede anular (estado de paso, `docs/temas_abiertos.md`).
+- **Cuando se modifique `maestros.Alerta`:** `descripcion_alerta` admite 200 caracteres y el caso de uso dice 500 para la alerta «pago en mora» (la API recorta; `docs/temas_abiertos.md`, COM-08a).
+- **Cuando se arme el cron único (D-56):** el paso 30 se suma a la lista de lo que corre; hasta entonces, a mano con `python manage.py proceso_diario --solo vencer_pagos`.
 
 ## Cuando se programen COM-05a1 y COM-06 — nace con COM-03b (24/11/2026)
 
@@ -567,8 +575,8 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 3. **COM-06 (entregas concretadas, quejas y discrepancias):** la ficha y la baja muestran las entregas sin cobrar, con el monto a cobrar y
    el vencimiento, y las quejas o discrepancias pendientes. **Planificado (lote C6):** las entregas sin cobrar y las discrepancias, COM-06a;
    las quejas, COM-06b (`rutas.md` y `confirmacion.md`, «Lo que completa a otras tareas»).
-4. **COM-08 (cobranza):** el estado de pago de cada entrega (pagada o en mora, MD-139) en la ficha. **Planificado (lote C8):** COM-08a
-   (`cobranza.md`, «Lo que completa a otras tareas», fila COM-01).
+4. ~~**COM-08 (cobranza):** el estado de pago de cada entrega (pagada o en mora, MD-139) en la ficha. **Planificado (lote C8):** COM-08a
+   (`cobranza.md`, «Lo que completa a otras tareas», fila COM-01).~~ **Hecho el 25/11/2026 en COM-08a:** la ficha del cliente muestra las entregas sin cobrar con «En mora · N días» y «Registrar cobro» (las cobradas y las saldadas no figuran) y la baja informa cuántas están en mora (no bloquea).
 
 ## Completan el ABM de vehículo (COM-01, lote C1)
 

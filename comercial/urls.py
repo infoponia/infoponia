@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_rutas, views_solicitudes, views_suministros
+from comercial import views, views_camara, views_cobranza, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_rutas, views_solicitudes, views_suministros
 
 app_name = "comercial"
 
@@ -75,6 +75,13 @@ urlpatterns = [
     path("entregas/<int:entrega_id>/comprobante/", views_rutas.comprobante, name="entrega_comprobante"),
     # COM-06b (COM-ATN-ENR): el Gerente atiende la entrega que el cliente dice no haber recibido.
     path("entregas/<int:entrega_id>/no-reconocida/", views_entregas.no_reconocida, name="entrega_no_reconocida"),
+    # COM-08a: la cobranza de suministros (COM-REG-CBR): la pestaña, registrar (con su resumen), la ficha del cobro, el comprobante y «Reenviar comprobante».
+    path("cobranza/", views_cobranza.lista, name="cobranza"),
+    path("cobranza/registrar/", views_cobranza.registrar, name="cobranza_registrar"),
+    path("cobranza/registrar/revisar/", views_cobranza.revisar, name="cobranza_revisar"),
+    path("cobranza/cobros/<int:pago_id>/", views_cobranza.cobro, name="cobro"),
+    path("cobranza/cobros/<int:pago_id>/comprobante/", views_cobranza.comprobante, name="cobro_comprobante"),
+    path("cobranza/cobros/<int:pago_id>/reenviar-comprobante/", views_cobranza.reenviar_comprobante, name="cobro_reenviar_comprobante"),
     # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
     # COM-07a: las solicitudes de revisión (quejas y discrepancias): la pestaña, la ficha con el panel del Gerente, el resumen, anular, el comprobante y «Reenviar aviso».
     path("solicitudes/", views_solicitudes.lista, name="solicitudes"),

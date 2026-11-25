@@ -1,0 +1,24 @@
+{% load comercial %}{% autoescape off %}Hola, {{ cliente }}:
+
+Registramos tu pago. Este es el comprobante de cobro {{ codigo }}.
+
+Fecha del pago: {{ fecha|date:"d/m/Y" }}
+Medio de pago: {{ medio }}
+
+Detalle por entrega:
+{% for l in lineas %}- {{ l.entrega }} ({{ l.contrato }}), concretada el {{ l.fecha_concrecion|date:"d/m/Y" }}
+  Monto total: {{ l.monto_total|pesos }}{% if l.descontado > 0 %}
+  Indemnizaciones descontadas: {{ l.descontado|pesos }}{% endif %}
+  Monto a cobrar: {{ l.monto_a_cobrar|pesos }}
+  Vencimiento del pago: {{ l.vencimiento|date:"d/m/Y" }}{% if l.dias_atraso > 0 %}
+  Atraso: {{ l.dias_atraso }} día{{ l.dias_atraso|pluralize }}; indemnización por atraso: {{ l.indemnizacion|pesos }}{% endif %}
+{% endfor %}
+Total de las entregas: {{ base|pesos }}
+{% if indemnizacion > 0 %}Indemnización por atraso en el pago: {{ indemnizacion|pesos }}
+{% endif %}Total cobrado: {{ total|pesos }}
+
+Comprobante interno, sin validez fiscal.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

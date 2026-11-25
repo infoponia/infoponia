@@ -77,6 +77,7 @@ del alta con los datos guardados.{% endcomment %}
           <tr><td class="mono nowrap"><a href="{% url 'comercial:suministro' f.contrato_id %}">{{ f.codigo }}</a><span class="sub2">{{ f.contrato }}</span></td><td class="right mono">{{ f.monto|pesos }}</td><td class="nowrap">{{ f.vencimiento|date:"d/m/Y" }}</td>
             <td><span class="status-badge {% if f.estado_pago == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{{ f.texto_del_estado }}</span></td></tr>
         {% endfor %}</tbody></table></div>
+      <div class="card-b"><a class="btn btn-ghost" href="{% url 'comercial:cobranza_registrar' %}?cliente={{ ficha.cliente.pk }}">Registrar cobro</a></div>
     </div>
     {% endif %}
     {% if ficha.discrepancias %}

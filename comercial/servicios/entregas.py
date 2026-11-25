@@ -34,6 +34,8 @@ from comercial.models import (
     DetalleSuministro,
     DetalleVenta,
     Entrega,
+    LineaPago,
+    PagoCliente,
     ReservaStock,
     SolicitudRevision,
     Suministro,
@@ -43,7 +45,7 @@ from comercial.servicios import calendario, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
 from core.extensiones import Asignacion, Efecto, ImpedimentoDeCuenta
-from core.models import RegistroAuditoria, Usuario, referencia, rol_de
+from core.models import RegistroAuditoria, Usuario, referencia, rol_de, texto_de
 from core.procesos import ResumenDePaso
 from inventario.models import InsumoInvernadero
 from inventario.servicios import stock
@@ -1030,6 +1032,14 @@ def planificar_entregas(hoy):
             solicitudes.enviar_aviso_de_resolucion(solicitud_id)
         except Exception:  # noqa: BLE001
             logger.exception("Falló el reintento del aviso de la solicitud %s", solicitud_id)
+    from comercial.servicios import cobranza  # adentro: `cobranza` importa este módulo
+
+    for pago_id in list(PagoCliente.objects.filter(estado_aviso_cliente=PagoCliente.EstadoDelAviso.PENDIENTE_ENVIO).order_by("pk").values_list("pk", flat=True)):  # COM-08a, 11a de COM-REG-CBR: el comprobante de cobro
+        procesados += 1
+        try:
+            cobranza.enviar_comprobante_de_cobro(pago_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Falló el reintento del comprobante del cobro %s", pago_id)
     siguen = Entrega.objects.filter(estado_orden=A_REALIZAR, modalidad_entrega=ENVIO, transportista__isnull=True).count()
     return ResumenDePaso(procesados, creados, resueltos, f"{siguen} entregas siguen sin transportista")
 
@@ -1164,13 +1174,49 @@ def monto_a_cobrar(entrega_ids):
     return resultado
 
 
+CobroDeEntrega = namedtuple("CobroDeEntrega", "pago_id codigo fecha quien")
+
+
+class EstadoDePago(str):
+    """El estado de pago de una entrega de suministro concretada (COM-08a; D-94 punto 4): «pendiente», «en_mora» o «pagada», con `.estado`, `.saldada` (monto a cobrar 0: MD-125) y `.cobro`
+    (un `CobroDeEntrega` con el código, la fecha y quién lo registró, o `None`). DIFERENCIA CON LA DOCUMENTACIÓN: D-94 y `cobranza.md` lo describen como una tupla; es un `str` con atributos (decidido por
+    el estudiante) para que lo que ya comparaba con el texto («pagada», «en_mora») siga andando sin tocarse. Se compara, se hashea y se muestra como el texto."""
+
+    def __new__(cls, estado, saldada=False, cobro=None):
+        obj = super().__new__(cls, estado)
+        obj.saldada = saldada
+        obj.cobro = cobro
+        return obj
+
+    @property
+    def estado(self):
+        """El mismo texto, como `str` común."""
+        return str.__str__(self)
+
+
 def estado_de_pago(entrega_ids, hoy):
-    """``{id de entrega: «pendiente» | «en_mora» | None}`` de las entregas de suministro concretadas: «en mora» si ``hoy`` pasó su vencimiento y «pendiente» si no (MD-136, MD-139). ``None``
-    si no es de suministro o no está concretada. «Pagada» llega con COM-08a. Una consulta."""
+    """``{id de entrega: EstadoDePago | None}`` de las entregas de suministro concretadas (D-94 punto 4): «pagada» si tiene una `LineaPago` vigente (con su `cobro`) o si su monto a cobrar es 0
+    (saldada, MD-125); si no, «en_mora» si ``hoy`` pasó su vencimiento y «pendiente» en otro caso (MD-139). ``None`` si no es de suministro o no está concretada. Una consulta por tabla: entregas,
+    líneas de pago vigentes y solicitudes aceptadas."""
     entrega_ids = list(entrega_ids)
     resultado = {i: None for i in entrega_ids}
-    for entrega_id, vencimiento in Entrega.objects.filter(pk__in=entrega_ids, fecha_vencimiento_pago__isnull=False).values_list("pk", "fecha_vencimiento_pago"):
-        resultado[entrega_id] = _estado_de_pago(vencimiento, hoy)
+    if not entrega_ids:
+        return resultado
+    entregas_ = list(Entrega.objects.filter(pk__in=entrega_ids, fecha_vencimiento_pago__isnull=False).values_list("pk", "fecha_vencimiento_pago", "monto_total_entrega"))
+    cobros = {}
+    for linea in LineaPago.objects.filter(entrega_id__in=entrega_ids, vigente=True).select_related("pago__usuario"):
+        pago = linea.pago
+        cobros[linea.entrega_id] = CobroDeEntrega(pago.pk, pago.codigo, pago.fecha_pago, texto_de(pago.usuario) if pago.usuario_id else "")
+    descontado = dict(
+        SolicitudRevision.objects.filter(entrega_id__in=entrega_ids, estado_solicitud=SolicitudRevision.Estado.ACEPTADA).values("entrega_id").annotate(total=Sum("monto_descontado")).values_list("entrega_id", "total")
+    )
+    for entrega_id, vencimiento, total in entregas_:
+        if entrega_id in cobros:
+            resultado[entrega_id] = EstadoDePago("pagada", False, cobros[entrega_id])
+        elif max(Decimal("0.00"), (total or Decimal("0.00")) - (descontado.get(entrega_id) or Decimal("0.00"))) == 0:
+            resultado[entrega_id] = EstadoDePago("pagada", True, None)
+        else:
+            resultado[entrega_id] = EstadoDePago(_estado_de_pago(vencimiento, hoy))
     return resultado
 
 
@@ -1259,7 +1305,7 @@ FilaDeEntregaDeContrato = namedtuple(
     "codigo invernadero fecha cuando atrasada estado estado_texto transportista es_retiro confirmacion monto vencimiento estado_pago estado_pago_texto",
     defaults=(None, None, None, ""),  # COM-06a: lo que se fija al concretar (el estado de pago, solo en un suministro; «pagada» llega con COM-08a)
 )
-TEXTO_DEL_PAGO = {"pendiente": "Pendiente", "en_mora": "En mora"}
+TEXTO_DEL_PAGO = {"pendiente": "Pendiente", "en_mora": "En mora", "pagada": "Pagada"}
 EntregasDelPanel = namedtuple("EntregasDelPanel", "a_realizar de_hoy sin_transportista proximas")
 ProximaEntrega = namedtuple("ProximaEntrega", "codigo cliente fecha cuando atrasada")
 
@@ -1271,11 +1317,24 @@ def _estado_de_pago(vencimiento, hoy):
     return "en_mora" if hoy > vencimiento else "pendiente"
 
 
+def _texto_del_estado_de_pago(estado, vencimiento, hoy):
+    """Regla 7 de COM-CNS-SUM: «Pagada · COB-0001» (con el cobro), «Saldada», «En mora · 5 días» (los días desde el vencimiento) o «Pendiente»; vacío si no hay estado (no es de suministro o no se concretó)."""
+    if estado is None:
+        return ""
+    if estado == "pagada":
+        return "Saldada" if estado.saldada else f"Pagada · {estado.cobro.codigo}"
+    if estado == "en_mora":
+        dias = (hoy - vencimiento).days
+        return f"En mora · {dias} {'día' if dias == 1 else 'días'}"
+    return TEXTO_DEL_PAGO.get(estado, "")
+
+
 def entregas_del_contrato(contrato_id, hoy):
     """Regla 4 de COM-CNS-CVT y regla 7 de COM-CNS-SUM: las entregas de un contrato (todas, en cualquier estado), por fecha programada e id, con el invernadero de origen, la fecha (con
     «Atrasada» si corresponde, MD-139), el estado, el transportista (o «Retiro») y, en un suministro, su confirmación («No confirmada»). Una consulta, sin consultas por entrega. El alcance
     lo garantiza la ficha que la llama."""
-    lista = Entrega.objects.filter(contrato_entrega_id=contrato_id).select_related("invernadero", "transportista").order_by("fecha_programada_orden", "pk")
+    lista = list(Entrega.objects.filter(contrato_entrega_id=contrato_id).select_related("invernadero", "transportista").order_by("fecha_programada_orden", "pk"))
+    estados = estado_de_pago([e.pk for e in lista if e.fecha_vencimiento_pago is not None], hoy)  # COM-08a: una consulta por tabla para toda la lista
     filas = []
     for e in lista:
         a_realizar = e.estado_orden == A_REALIZAR
@@ -1293,8 +1352,8 @@ def entregas_del_contrato(contrato_id, hoy):
                 confirmacion=e.get_estado_confirmacion_cliente_display() if e.estado_confirmacion_cliente else "",
                 monto=e.monto_total_entrega,
                 vencimiento=e.fecha_vencimiento_pago,
-                estado_pago=_estado_de_pago(e.fecha_vencimiento_pago, hoy),
-                estado_pago_texto=TEXTO_DEL_PAGO.get(_estado_de_pago(e.fecha_vencimiento_pago, hoy), ""),
+                estado_pago=estados.get(e.pk),
+                estado_pago_texto=_texto_del_estado_de_pago(estados.get(e.pk), e.fecha_vencimiento_pago, hoy),
             )
         )
     return filas

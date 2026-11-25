@@ -1,0 +1,98 @@
+{% load iconos comercial %}{% comment %}El cuerpo de «Registrar cobro» (también es lo que devuelve HTMX): «1 Cliente», «2 Entregas que paga», «3 Pago» y el resumen parcial. Nada se valida acá: marcar una entrega, los filtros y el cliente solo redibujan.
+Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se cambia. Recibe «grupos», «cliente», «cliente_fijo», «filas», «contratos», «datos», «filtros», «marcadas», «ocultas», «elegidas», «base», «indemnizacion», «total», «hay_pendientes», «medios», «errores», «error».{% endcomment %}
+{% if error %}<div class="alert alert-warn" role="alert" style="margin-bottom:14px">{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
+<input type="hidden" name="cliente_fijo" value="{% if cliente_fijo %}1{% else %}0{% endif %}">
+{% for id in ocultas %}<input type="hidden" name="entrega" value="{{ id }}">{% endfor %}
+<div class="stack">
+  <section class="sec">
+    <div class="sec-h"><span class="sec-num">1</span>Cliente</div>
+    {% if cliente and cliente_fijo %}
+      <input type="hidden" name="cliente" value="{{ cliente.cliente_id }}">
+      <div class="fld"><span class="lbl">Cliente</span><div><b>{{ cliente.cliente }}</b></div><div class="hint">Se registra el cobro de este cliente.</div></div>
+    {% else %}
+      <div class="fld">
+        <label class="lbl" for="cobro-cliente">Cliente <span class="req">*</span></label>
+        <select class="field-input" id="cobro-cliente" name="cliente" data-desplegable hx-post="{% url 'comercial:cobranza_registrar' %}" hx-trigger="change" hx-target="#cuerpo-cobro" hx-swap="innerHTML show:none" data-sin-envio-en-curso>
+          <option value="">Elegí el cliente…</option>
+          {% for g in grupos %}<option value="{{ g.cliente_id }}"{% if cliente and cliente.cliente_id == g.cliente_id %} selected{% endif %}>{{ g.cliente }} · {{ g.cantidad }} entrega{{ g.cantidad|pluralize }} sin pagar</option>{% endfor %}
+        </select>
+        <div class="hint">Solo aparecen los clientes con entregas por cobrar. Sin JavaScript, elegilo y tocá «Calcular total».</div>
+      </div>
+    {% endif %}
+  </section>
+
+  {% if cliente %}
+  <section class="sec">
+    <div class="sec-h"><span class="sec-num">2</span>Entregas que paga</div>
+    <div class="filters" style="margin-bottom:10px">
+      <select class="field-input" name="contrato" data-desplegable aria-label="Contrato" hx-post="{% url 'comercial:cobranza_registrar' %}" hx-trigger="change" hx-target="#cuerpo-cobro" hx-swap="innerHTML show:none" data-sin-envio-en-curso>
+        <option value="">Todos los contratos</option>
+        {% for id, codigo in contratos %}<option value="{{ id }}"{% if filtros.contrato_id == id %} selected{% endif %}>{{ codigo }}</option>{% endfor %}
+      </select>
+      <select class="field-input" name="estado" data-desplegable aria-label="Estado de pago" hx-post="{% url 'comercial:cobranza_registrar' %}" hx-trigger="change" hx-target="#cuerpo-cobro" hx-swap="innerHTML show:none" data-sin-envio-en-curso>
+        <option value="">Pendientes y en mora</option>
+        <option value="pendiente"{% if filtros.estado == "pendiente" %} selected{% endif %}>Pendientes</option>
+        <option value="en_mora"{% if filtros.estado == "en_mora" %} selected{% endif %}>En mora</option>
+      </select>
+    </div>
+    <p class="hint">De la que vence primero a la última. Cada entrega se paga completa. Si el cliente paga menos que el total, elegí solo las que su pago cubre.</p>
+    {% if errores.entregas %}<div class="err" role="alert">Elegí al menos una entrega.</div>{% endif %}
+    <div class="tablewrap">
+    <table class="data-table plain">
+      <thead><tr><th style="width:40px"><span class="sr">Incluir</span></th><th>Entrega</th><th>Concretada</th><th class="right">Monto a cobrar</th><th>Vencimiento del pago</th><th>Estado</th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+        <tr>
+          <td><input type="checkbox" name="entrega" value="{{ f.entrega_id }}" id="entrega-{{ f.entrega_id }}" aria-label="Incluir {{ f.codigo }}"{% if f.entrega_id|stringformat:"s" in marcadas %} checked{% endif %} hx-post="{% url 'comercial:cobranza_registrar' %}" hx-trigger="change" hx-target="#cuerpo-cobro" hx-swap="innerHTML show:none" data-sin-envio-en-curso></td>
+          <td><span class="mono">{{ f.codigo }}</span><span class="sub2">{{ f.contrato_codigo }} · sale del {{ f.invernadero }}</span></td>
+          <td>{{ f.fecha_concrecion|date:"d/m/Y" }}</td>
+          <td class="right"><b class="mono">{{ f.monto_a_cobrar|pesos }}</b><span class="sub2">Total {{ f.monto_total|pesos }}{% if f.descontado > 0 %} − {{ f.descontado|pesos }} de indemnizaciones{% else %}, sin descuentos{% endif %}</span></td>
+          <td>{{ f.vencimiento|date:"d/m/Y" }}<span class="sub2{% if f.dias_de_atraso %} danger-t{% endif %}">{% if f.dias_de_atraso %}{{ f.dias_de_atraso }} día{{ f.dias_de_atraso|pluralize }} de atraso · {{ f.indemnizacion|pesos }}{% else %}Sin atraso{% endif %}</span></td>
+          <td><span class="status-badge {% if f.estado == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{% if f.estado == "en_mora" %}En mora{% else %}Pendiente{% endif %}</span>
+            {% for p in f.solicitudes_pendientes %} <span class="status-badge status-warn">{{ p.tipo|capfirst }} {{ p.codigo }} pendiente ({{ p.fecha|date:"d/m" }})</span>{% endfor %}
+            {% if f.no_reconocida %} <span class="status-badge status-danger">No reconocida</span>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="muted" style="text-align:center;padding:20px">No hay entregas con estos filtros.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% if hay_pendientes %}<div class="alert alert-warn" role="status" style="margin-top:10px">{% icono "warn" 16 %}<div>Una entrega elegida tiene una queja o una discrepancia pendiente. Si se acepta después del cobro, la indemnización ya no se descuenta: se reintegra al cliente.</div></div>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if cliente and elegidas %}
+  <section class="sec">
+    <div class="sec-h"><span class="sec-num">3</span>Pago</div>
+    <div class="fld">
+      <label class="lbl" for="cobro-medio">Medio de pago <span class="req">*</span></label>
+      <select class="field-input" id="cobro-medio" name="medio_pago" data-desplegable>
+        <option value="">Elegí el medio…</option>
+        {% for valor, texto in medios %}<option value="{{ valor }}"{% if datos.medio_pago == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+      </select>
+      <div class="hint">Uno por cobro. El efectivo va a Caja; los demás, a Banco.</div>
+      {% if errores.medio_pago %}<div class="err" role="alert">Elegí el medio de pago.</div>{% endif %}
+    </div>
+    <div class="fld"><span class="lbl">Fecha del pago</span><div>{{ hoy|date:"d/m/Y" }}</div><div class="hint">Es la fecha de hoy: no se registran cobros con fecha anterior.</div></div>
+  </section>
+  {% endif %}
+
+  <div class="card seg">
+    <div class="card-h"><h3>Resumen</h3></div>
+    <div class="card-b">
+      <dl class="dl two">
+        <dt>Entregas</dt><dd class="mono">{{ elegidas|length }}</dd>
+        <dt>Montos a cobrar</dt><dd class="mono">{{ base|pesos }}</dd>
+        <dt>Indemnización por atraso en el pago</dt><dd class="mono">{{ indemnizacion|pesos }}<span class="sub2">Días de atraso × lo pactado por día. Se calcula sola y no se puede cambiar ni perdonar.</span></dd>
+        <dt>Total a cobrar</dt><dd class="mono"><b>{{ total|pesos }}</b></dd>
+      </dl>
+      <p class="muted">El asiento del cobro (Caja o Banco contra Deudores por Ventas e Indemnizaciones por Atraso en el Pago) no se programa en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+    </div>
+  </div>
+</div>
+<div class="acts-fila" style="margin-top:14px">
+  <button class="btn btn-ghost" type="submit" name="accion" value="calcular">Calcular total</button>
+  <button class="btn btn-primary" type="submit" formaction="{% url 'comercial:cobranza_revisar' %}" data-enviando="Revisando…"{% if not elegidas %} disabled{% endif %}>Revisar y registrar</button>
+  <a class="btn btn-ghost" href="{% url 'comercial:cobranza' %}">Cancelar</a>
+</div>

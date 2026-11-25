@@ -24,7 +24,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
         <dt>Entrega</dt><dd><span class="mono">{{ l.entrega.codigo }}</span><span class="sub2">Concretada el {{ l.entrega.fecha_resolucion_orden|date:"d/m/Y" }}</span></dd>
         <dt>Transportista</dt><dd>{% if l.entrega.transportista %}{{ l.entrega.transportista.get_full_name }}{% else %}<span class="muted">Retiro en invernadero</span>{% endif %}</dd>
         <dt>Presentada</dt><dd>{{ s.fecha_solicitud|date:"d/m/Y" }}</dd>
-        <dt>Pago de la entrega</dt><dd>{% if l.estado_de_pago == "pagada" %}<span class="status-badge status-ok">Pagada</span>{% elif l.estado_de_pago == "en_mora" %}<span class="status-badge status-danger">En mora</span>{% else %}<span class="status-badge status-warn">Pendiente</span>{% endif %}<span class="sub2">{{ l.monto_a_cobrar|pesos }} a cobrar</span></dd>
+        <dt>Pago de la entrega</dt><dd>{% if l.estado_de_pago == "pagada" %}<span class="status-badge status-ok">{% if l.cobro %}Pagada · {{ l.cobro.codigo }}{% else %}Saldada{% endif %}</span>{% if l.cobro %}<span class="sub2">Cobrada el {{ l.cobro.fecha|date:"d/m/Y" }}{% if l.cobro.quien %} por {{ l.cobro.quien }}{% endif %}</span>{% endif %}{% elif l.estado_de_pago == "en_mora" %}<span class="status-badge status-danger">En mora</span>{% else %}<span class="status-badge status-warn">Pendiente</span>{% endif %}<span class="sub2">{{ l.monto_a_cobrar|pesos }} a cobrar</span></dd>
       </dl>
     </div>
   </div>
