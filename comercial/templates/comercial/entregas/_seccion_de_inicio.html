@@ -1,0 +1,23 @@
+{% comment %}El grupo «Entregas» del Inicio del Gerente y del Vendedor (`secComercial` del prototipo, `registrar_seccion_de_inicio`, COM-05a2): «Entregas de hoy» (a realizar con fecha ≤ hoy), «Sin transportista» (en rojo si hay) y «Próximas entregas» (las 5 primeras, con «Ver todas»). Cada indicador lleva a la lista con su filtro. Recibe «datos» con «entregas». Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Entregas</h2>
+  {% with g=datos.entregas %}
+  {% if g.a_realizar %}
+  <div class="kpis">
+    <a class="kpi{% if g.de_hoy %} warn{% endif %}" href="{{ g.url_de_la_lista }}" style="text-decoration:none;color:inherit"><span class="k">Entregas de hoy</span><span class="v">{{ g.de_hoy }}</span><span class="c">de hoy o atrasadas</span></a>
+    <a class="kpi{% if g.sin_transportista %} danger{% endif %}" href="{{ g.url_sin_transportista }}" style="text-decoration:none;color:inherit"><span class="k">Sin transportista</span><span class="v">{{ g.sin_transportista }}</span><span class="c">con envío, a realizar</span></a>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-title">Próximas entregas</div>
+    <table class="data-table"><thead><tr><th>Entrega</th><th>Cliente</th><th>Fecha</th></tr></thead><tbody>
+    {% for p in g.proximas %}
+      <tr><td class="mono">{{ p.codigo }}</td><td>{{ p.cliente }}</td><td class="nowrap">{{ p.fecha|date:"d/m/Y" }}<span class="sub2{% if p.atrasada %} danger-t{% endif %}">{{ p.cuando }}</span></td></tr>
+    {% endfor %}
+    </tbody></table>
+    <div class="acts-fila"><a class="btn btn-ghost" href="{{ g.url_de_la_lista }}">Ver todas</a></div>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay entregas a realizar</b><span>InfoPonia las planifica solas cuando todo el producto de una venta o de un período está listo.</span></div>
+  {% endif %}
+  {% endwith %}
+</div>

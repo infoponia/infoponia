@@ -1,0 +1,22 @@
+{% comment %}La tabla de «Envasado» (también es lo que devuelve HTMX). Columnas: entrega y contrato, cliente (debajo «Retiro», el transportista o «Sin transportista»), contenido y peso, fecha programada (con
+«Atrasada»), envasado («Planificado» o «Sin planificar» en ámbar) y la acción «Planificar envasado» / «Modificar envasado», o «En curso» sin botón (extensión 3b). Vacía (2a): «No hay entregas para envasar.»
+Recibe «filas» (FilaDeEnvasado) y «hay_filtros». Todo se escapa.{% endcomment %}
+<div class="tablewrap">
+  <table class="data-table">
+    <thead><tr><th>Entrega</th><th>Cliente</th><th>Contenido</th><th>Fecha programada</th><th>Envasado</th><th></th></tr></thead>
+    <tbody>
+    {% for f in filas %}
+      <tr>
+        <td class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b><span class="sub2">{{ f.contrato_codigo }} · {{ f.invernadero }}</span></td>
+        <td><b style="font-weight:600">{{ f.cliente }}</b><span class="sub2">{% if f.es_retiro %}Retiro{% elif f.transportista %}{{ f.transportista }}{% else %}Sin transportista{% endif %}</span></td>
+        <td>{{ f.contenido|join:", " }}<span class="sub2 mono">{{ f.peso|floatformat:"-2" }} kg</span></td>
+        <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span></td>
+        <td>{% if f.tiene_envasado %}<span class="status-badge status-ok">Planificado</span>{% else %}<span class="status-badge status-warn">Sin planificar</span>{% endif %}</td>
+        <td class="right">{% if f.en_curso %}<span class="status-badge status-info">En curso</span>{% else %}<a class="rowlink" href="{% url 'comercial:envasado_entrega' f.entrega.pk %}">{% if f.tiene_envasado %}Modificar envasado{% else %}Planificar envasado{% endif %}<span class="sr"> de la entrega {{ f.codigo }}</span></a>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="muted" style="text-align:center;padding:24px">{% if hay_filtros %}No hay entregas para envasar con estos filtros.{% else %}No hay entregas para envasar.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

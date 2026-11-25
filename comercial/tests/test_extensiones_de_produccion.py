@@ -161,8 +161,20 @@ class AccionesYEntradasDeComercialTests(ConDatosDeInventario, TestCase):
 
         self.assertTrue(extensiones.entradas_de_comercial(self.e.agronomo).planificar_cosecha.endswith("/comercial/cosechas/planificar/"))
         for otro in (self.e.capataz, self.e.vendedor, crear_gerente()):
-            self.assertEqual(tuple(extensiones.entradas_de_comercial(otro)), (None, None))
+            self.assertEqual(tuple(extensiones.entradas_de_comercial(otro)), (None, None, None))
         self.assertIsNone(extensiones.entradas_de_comercial(self.e.agronomo).merma_en_camara)
+
+    def test_ext_entradas_envasado_solo_para_el_agronomo_con_un_invernadero_activo_a_cargo(self):
+        """COM-05a2, API punto 4: `envasado` es la pantalla «Envasado» para el Agrónomo con algún invernadero activo a cargo; nadie más (nunca una URL a un 403)."""
+        from core.tests.fabricas import crear_gerente
+        from maestros.models import Invernadero
+        from maestros.tests.fabricas import crear_agronomo
+
+        self.assertTrue(extensiones.entradas_de_comercial(self.e.agronomo).envasado.endswith("/comercial/envasado/"))
+        for otro in (self.e.capataz, self.e.vendedor, crear_gerente(), crear_agronomo(email="sin.invernadero@infoponia.com")):
+            self.assertIsNone(extensiones.entradas_de_comercial(otro).envasado, otro.email)
+        Invernadero.objects.filter(pk=self.e.invernadero.pk).update(estado_invernadero=Invernadero.Estado.INACTIVO)
+        self.assertIsNone(extensiones.entradas_de_comercial(self.e.agronomo).envasado)
 
     def test_regla_la_seccion_de_cosechas_del_inicio_cuenta_hoy_vencidas_y_sin_capataz(self):
         """`secCosecha`: solo para el Agrónomo; a realizar, de hoy, vencidas y de invernaderos sin Capataz activo."""

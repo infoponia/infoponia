@@ -175,7 +175,9 @@ def entradas_de_comercial(usuario):
         if Invernadero.objects.filter(agronomo_id=usuario.pk, estado_invernadero=Invernadero.Estado.ACTIVO).exists():
             planificar = reverse("comercial:cosecha_planificar")
     merma_en_camara = reverse("comercial:merma_camara") if merma_camara.invernaderos_con_merma_en_camara(usuario) else None
-    return EntradasDeComercial(planificar, merma_en_camara)
+    # COM-05a2: «Envasado» (PROD-PNF-ENV) para el mismo Agrónomo que puede planificar cosechas: con algún invernadero activo a su cargo. Nunca una URL a un 403.
+    envasado = reverse("comercial:envasado") if planificar is not None else None
+    return EntradasDeComercial(planificar, merma_en_camara, envasado)
 
 
 def seccion_de_cosechas(usuario):
@@ -186,7 +188,8 @@ def seccion_de_cosechas(usuario):
     from core.models import Usuario, rol_de
     from core.extensiones import SeccionDeInicio
     from django.utils import timezone
-    from produccion.models import Cosecha, OrdenTrabajo
+    from comercial.models import Entrega
+    from produccion.models import Cosecha, OrdenTrabajo, ReservaInsumo
 
     if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.AGRONOMO:
         return None
@@ -198,7 +201,14 @@ def seccion_de_cosechas(usuario):
     )
     invernaderos = list(Invernadero.objects.filter(agronomo_id=usuario.pk, estado_invernadero=Invernadero.Estado.ACTIVO).values_list("pk", flat=True))
     indicadores = camara.indicadores_de_camara(invernaderos, hoy)
+    # COM-05a2 («Entregas sin envasado», `secCosecha`; entregas.md, «Pantallas»): las entregas «a realizar» de sus invernaderos activos sin ninguna reserva de insumo activa. Una consulta.
+    sin_envasado = (
+        Entrega.objects.filter(estado_orden=OrdenTrabajo.Estado.A_REALIZAR, invernadero_id__in=invernaderos)
+        .exclude(pk__in=ReservaInsumo.objects.filter(estado=ReservaInsumo.Estado.ACTIVA).values("orden_id"))
+        .count()
+    )
     datos = {
+        "sin_envasado": sin_envasado,
         "camara": {"por_vencer": indicadores["por_vencer"], "libres": indicadores["libres"], "dias_de_aviso": indicadores["dias_de_aviso"]},
         "a_realizar": len(filas),
         "hoy": sum(1 for fecha, _ in filas if fecha == hoy),
@@ -206,3 +216,26 @@ def seccion_de_cosechas(usuario):
         "sin_capataz": sum(1 for _, activo in filas if not activo),
     }
     return SeccionDeInicio("comercial/cosechas/_seccion_de_inicio.html", {"cosechas": datos})
+
+
+def seccion_de_entregas(usuario):
+    """`registrar_seccion_de_inicio` (`secComercial` del prototipo, COM-05a2): el grupo «Entregas» del Inicio del Gerente y del Vendedor, dentro de su alcance: «Entregas de hoy» (a realizar con
+    fecha ≤ hoy), «Sin transportista» (con envío) y «Próximas entregas» (las 5 primeras, con «Ver todas»). No incluye cobranza ni solicitudes (COM-08, COM-07). `None` para los demás roles.
+    Dos consultas para todo el grupo."""
+    from comercial.servicios import entregas
+    from core.models import Usuario, rol_de
+    from core.extensiones import SeccionDeInicio
+    from inventario.servicios import stock
+
+    if not getattr(usuario, "is_active", False) or rol_de(usuario) not in (Usuario.Rol.GERENTE, Usuario.Rol.VENDEDOR):
+        return None
+    panel = entregas.entregas_del_panel(usuario, stock.hoy())
+    datos = {
+        "a_realizar": panel.a_realizar,
+        "de_hoy": panel.de_hoy,
+        "sin_transportista": panel.sin_transportista,
+        "proximas": panel.proximas,
+        "url_de_la_lista": entregas.url_de_entregas(),
+        "url_sin_transportista": entregas.url_de_entregas(transportista="_"),
+    }
+    return SeccionDeInicio("comercial/entregas/_seccion_de_inicio.html", {"entregas": datos})

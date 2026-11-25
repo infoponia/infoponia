@@ -121,3 +121,5 @@ class ComercialConfig(AppConfig):
             extensiones_de_maestros.registrar_impedimento_de_transportista(entregas.impedimentos_de_transportista)
         extensiones_de_core.registrar_asignaciones_de_cuenta(entregas.asignaciones_de_cuenta)
         extensiones_de_core.registrar_efecto_de_baja_de_cuenta(entregas.efecto_de_baja_de_cuenta)
+        # COM-05a2: el grupo «Entregas» del Inicio del Gerente y del Vendedor (después de la sección de cosechas del Agrónomo; `registrar_seccion_de_inicio` es idempotente).
+        extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_entregas)

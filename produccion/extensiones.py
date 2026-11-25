@@ -13,8 +13,9 @@ DetalleDeCosecha = namedtuple("DetalleDeCosecha", "contrato fecha_entrega lotes"
 
 # COM-04a (D-64 punto 11): qué botones de `comercial` muestran las pantallas de `produccion`. Cada campo es una URL o `None`.
 AccionesDeCosecha = namedtuple("AccionesDeCosecha", "concretar modificar cancelar")
-# `planificar_cosecha`: URL o `None`; `merma_en_camara`: URL o `None`. COM-05a2 suma `envasado` con valor por defecto (D-66).
-EntradasDeComercial = namedtuple("EntradasDeComercial", "planificar_cosecha merma_en_camara")
+# `planificar_cosecha`: URL o `None`; `merma_en_camara`: URL o `None`; `envasado` (COM-05a2, D-66): la pantalla «Envasado» o `None`. `envasado` tiene valor por
+# defecto, así que quien arma la tupla con dos campos sigue funcionando.
+EntradasDeComercial = namedtuple("EntradasDeComercial", "planificar_cosecha merma_en_camara envasado", defaults=(None,))
 
 _RESERVADO_DE_LOTE = []
 _DETALLE_DE_COSECHA = []
@@ -102,7 +103,7 @@ def registrar_entradas_de_comercial(funcion):
 
 def entradas_de_comercial(usuario):
     """Las entradas de `comercial` para `usuario`; sin registrante, ninguna (todas `None`)."""
-    entradas = EntradasDeComercial(None, None)
+    entradas = EntradasDeComercial(None, None, None)
     for funcion in list(_ENTRADAS_DE_COMERCIAL):
         entradas = funcion(usuario)
     return entradas

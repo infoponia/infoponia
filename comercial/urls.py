@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_faltantes, views_suministros
+from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_suministros
 
 app_name = "comercial"
 
@@ -58,6 +58,11 @@ urlpatterns = [
     path("contratos/compra-ventas/<int:venta_id>/decidir-faltante/", views_faltantes.decidir, name="faltante_decidir"),
     # Entregas (COM-05a1): la lista de entregas de Comercial, con `?entrega=<id>` (la alerta) y `?transportista=<id>` (la ficha del invernadero › «Logística»).
     path("entregas/", views_entregas.lista, name="entregas"),
+    # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
+    path("envasado/", views_envasado.lista, name="envasado"),
+    path("envasado/<int:entrega_id>/", views_envasado.entrega, name="envasado_entrega"),
+    path("envasado/<int:entrega_id>/calcular/", views_envasado.calcular, name="envasado_calcular"),
+    path("envasado/<int:entrega_id>/revisar/", views_envasado.revisar, name="envasado_revisar"),
     # Clientes (COM-ALT-CLT, COM-MOD-CLT, COM-BAJ-CLT, COM-CNS-CLT).
     path("camara/merma/", views_camara.merma, name="merma_camara"),  # COM-04b
 

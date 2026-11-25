@@ -47,8 +47,11 @@ NOTA_DEL_VEHICULO = "Se asigna desde el vehículo, en Comercial › Vehículos."
 LARGO_DE_MARCA_Y_MODELO = Vehiculo._meta.get_field("marca").max_length
 CAPACIDAD_MAXIMA = Decimal("999999.99")  # DecimalField(8, 2)
 
-FilaDeVehiculo = namedtuple("FilaDeVehiculo", "vehiculo invernadero en_ruta")
-FichaDelVehiculo = namedtuple("FichaDelVehiculo", "vehiculo transportista invernadero en_ruta")
+# COM-05a2: `entregas_a_realizar` (la columna de la lista) y `carga` (la tarjeta «Carga de los próximos días» de la ficha) completan lo que dejó COM-01.
+FilaDeVehiculo = namedtuple("FilaDeVehiculo", "vehiculo invernadero en_ruta entregas_a_realizar", defaults=(0,))
+FichaDelVehiculo = namedtuple("FichaDelVehiculo", "vehiculo transportista invernadero en_ruta carga", defaults=((),))
+CargaDelDia = namedtuple("CargaDelDia", "fecha entregas peso capacidad excede")
+DIAS_DE_CARGA = 7  # regla 2 de COM-CNS-VEH: las primeras 7 fechas con entregas
 OpcionDeTransportista = namedtuple("OpcionDeTransportista", "transportista invernadero")
 
 
@@ -105,6 +108,30 @@ def carga_maxima_asignada(vehiculo, desde):
     totales = {fecha: sum((pesos[e] for e in ids), Decimal("0")) for fecha, ids in por_dia.items()}
     fecha = max(totales, key=lambda f: (totales[f], -f.toordinal()))
     return totales[fecha], fecha
+
+
+def carga_de_los_proximos_dias(vehiculo, desde):
+    """Regla 2 de COM-CNS-VEH: las primeras 7 fechas desde ``desde`` en las que el transportista del vehículo tiene entregas no canceladas, cada una con su cantidad de entregas, su
+    peso (``peso_de_entregas``) y la capacidad del vehículo (``excede`` si el peso la supera). Sin transportista o sin entregas, lista vacía. Dos consultas, sin consultas por fecha."""
+    from comercial.servicios import entregas
+
+    if vehiculo.transportista_id is None:
+        return []
+    por_dia = defaultdict(list)
+    for entrega_id, fecha in (
+        Entrega.objects.filter(transportista_id=vehiculo.transportista_id, fecha_programada_orden__gte=desde)
+        .exclude(estado_orden="cancelada")
+        .values_list("pk", "fecha_programada_orden")
+        .order_by("fecha_programada_orden", "pk")
+    ):
+        por_dia[fecha].append(entrega_id)
+    fechas = sorted(por_dia)[:DIAS_DE_CARGA]
+    pesos = entregas.peso_de_entregas([e for f in fechas for e in por_dia[f]])
+    carga = []
+    for fecha in fechas:
+        peso = sum((pesos[e] for e in por_dia[fecha]), Decimal("0"))
+        carga.append(CargaDelDia(fecha, len(por_dia[fecha]), peso, vehiculo.capacidad_carga, peso > vehiculo.capacidad_carga))
+    return carga
 
 
 # ---- textos ----
@@ -538,8 +565,8 @@ def _invernadero_de(transportista):
 def buscar_vehiculos(actor, texto="", estado="", invernadero_id=None):
     """COM-CNS-VEH, regla 1: los vehículos por patente (sin importar mayúsculas, espacios ni guiones), tipo o nombre del
     transportista, filtrados por ``estado`` (vacío: todos) y por el invernadero de su transportista, ordenados por patente. Cada
-    ``FilaDeVehiculo`` trae el invernadero y si está en ruta hoy (MD-118); el transportista y su invernadero se precargan (sin
-    consultas por fila). No audita (SEG-14)."""
+    ``FilaDeVehiculo`` trae el invernadero, si está en ruta hoy (MD-118) y sus entregas «a realizar» (COM-05a2); el transportista y su invernadero se precargan y las entregas
+    se cuentan con una sola consulta (sin consultas por fila). No audita (SEG-14)."""
     _exigir_gerente(actor)
     lista = (
         Vehiculo.objects.en_alcance_de(actor)
@@ -561,20 +588,26 @@ def buscar_vehiculos(actor, texto="", estado="", invernadero_id=None):
     if invernadero is not None:
         lista = lista.filter(transportista__invernadero_asignado__invernadero_id=invernadero)
     hoy = timezone.localdate()
-    return [
-        FilaDeVehiculo(v, _invernadero_de(v.transportista), v.esta_en_ruta(hoy)) for v in lista.order_by("patente", "id")
-    ]
+    vehiculos = list(lista.order_by("patente", "id"))
+    a_realizar = dict(
+        Entrega.objects.filter(transportista_id__in=[v.transportista_id for v in vehiculos if v.transportista_id], estado_orden="a_realizar")
+        .values_list("transportista_id")
+        .annotate(cantidad=Count("pk"))
+        .order_by()
+    )
+    return [FilaDeVehiculo(v, _invernadero_de(v.transportista), v.esta_en_ruta(hoy), a_realizar.get(v.transportista_id, 0)) for v in vehiculos]
 
 
 def ficha_del_vehiculo(actor, vehiculo_id):
-    """COM-CNS-VEH, regla 2: el vehículo con su transportista, el invernadero de este y si está en ruta hoy. La carga asignada
-    frente a la capacidad se suma en COM-05a2. 404 si no existe."""
+    """COM-CNS-VEH, regla 2: el vehículo con su transportista, el invernadero de este, si está en ruta hoy y la carga de los próximos días frente a su capacidad (COM-05a2,
+    ``carga_de_los_proximos_dias``). 404 si no existe."""
     _exigir_gerente(actor)
     vehiculo = get_object_or_404(
         Vehiculo.objects.en_alcance_de(actor).select_related("transportista__invernadero_asignado__invernadero"), pk=vehiculo_id
     )
+    hoy = timezone.localdate()
     return FichaDelVehiculo(
-        vehiculo, vehiculo.transportista, _invernadero_de(vehiculo.transportista), vehiculo.esta_en_ruta(timezone.localdate())
+        vehiculo, vehiculo.transportista, _invernadero_de(vehiculo.transportista), vehiculo.esta_en_ruta(hoy), carga_de_los_proximos_dias(vehiculo, hoy)
     )
 
 

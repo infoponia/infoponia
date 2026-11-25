@@ -1,0 +1,43 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}El resumen del envasado (COM-05a2, paso 8 de PROD-PNF-ENV; el prototipo registraba sin resumen): la entrega (cliente, fecha y modalidad) y, por envase, la cantidad anterior y la nueva, lo disponible que le
+queda y los quitados, con el aviso de 8b. «Confirmar envasado» registra; «Volver a la carga» (8d) vuelve a la carga con lo mismo; «Cancelar» (*a) descarta. Recibe «resumen» (ResumenDeEnvasado), «fila», «carga» y «busqueda».
+No escribe. Todo se escapa.{% endcomment %}
+{% block titulo %}Resumen del envasado {{ fila.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <a class="back" href="{% url 'comercial:envasado' %}">{% icono "chev" 14 %} Envasado</a>
+  <div class="page-h"><h1>Resumen del envasado de <span class="mono">{{ fila.codigo }}</span></h1>
+    <div class="sub">{{ fila.cliente }} · {{ fila.fecha|date:"d/m/Y" }} · {% if fila.es_retiro %}Retiro en invernadero{% else %}Envío a domicilio{% endif %}</div></div>
+  <form method="post" action="{% url 'comercial:envasado_entrega' fila.entrega.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ carga.huella }}">
+    <input type="hidden" name="busqueda" value="{{ busqueda }}">
+    {% for iin_id, cantidad in carga.filas %}<input type="hidden" name="cantidad_{{ iin_id }}" value="{{ cantidad }}">{% endfor %}
+    <div class="stack">
+      <div class="card"><div class="card-title">Envases</div>
+        <table class="data-table"><thead><tr><th>Envase</th><th class="right">Antes</th><th class="right">Ahora</th><th class="right">Queda disponible</th><th></th></tr></thead><tbody>
+        {% for f in resumen.filas %}
+          <tr>
+            <td>{{ f.nombre }}</td>
+            <td class="right mono">{% if f.anterior is None %}—{% else %}{{ f.anterior|floatformat:"-3" }}{% endif %}</td>
+            <td class="right mono">{{ f.nueva|floatformat:"-3" }} <span class="muted">{{ f.unidad }}</span></td>
+            <td class="right mono">{{ f.queda|floatformat:"-3" }}</td>
+            <td>{% if f.situacion == "nuevo" %}<span class="status-badge status-ok">Nuevo</span>{% elif f.situacion == "cambia" %}<span class="status-badge status-warn">Cambia</span>{% else %}<span class="status-badge status-neutral">Sin cambios</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        {% for nombre, unidad, cantidad in resumen.quitados %}
+          <tr><td>{{ nombre }}</td><td class="right mono">{{ cantidad|floatformat:"-3" }} <span class="muted">{{ unidad }}</span></td><td class="right">—</td><td class="right">—</td><td><span class="status-badge status-danger">Se quita</span></td></tr>
+        {% endfor %}
+        </tbody></table>
+        {% if resumen.aviso_sin_envasado %}<div class="hint" role="status">La entrega va a quedar sin envasado planificado: al concretarla se declaran los envases usados.</div>{% endif %}
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" type="submit" data-enviando="Guardando…">Confirmar envasado</button>
+      <button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" data-sin-envio-en-curso>Volver a la carga</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:envasado' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

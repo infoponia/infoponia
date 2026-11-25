@@ -104,7 +104,13 @@ class EntradasDeComercialTests(TestCase):
         """API, punto 4: sin registrante, `EntradasDeComercial(None, None)`: ningún acceso."""
         with mock.patch.object(extensiones, "_ENTRADAS_DE_COMERCIAL", []):
             entradas = extensiones.entradas_de_comercial(object())
-        self.assertEqual((entradas.planificar_cosecha, entradas.merma_en_camara), (None, None))
+        self.assertEqual((entradas.planificar_cosecha, entradas.merma_en_camara, entradas.envasado), (None, None, None))
+
+    def test_ext_entradas_envasado_tiene_valor_por_defecto(self):
+        """API punto 4 (COM-05a2): quien arma la tupla con dos campos sigue funcionando; `envasado` queda en `None`."""
+        entradas = extensiones.EntradasDeComercial("/plan/", "/camara/")
+        self.assertIsNone(entradas.envasado)
+        self.assertEqual(extensiones.EntradasDeComercial("/plan/", "/camara/", "/envasado/").envasado, "/envasado/")
 
     def test_ext_entradas_con_registrante_devuelve_lo_que_este_arma(self):
         """API, punto 4: URL o `None` en `planificar_cosecha` y `merma_en_camara`."""

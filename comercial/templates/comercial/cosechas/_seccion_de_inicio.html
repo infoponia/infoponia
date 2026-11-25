@@ -17,6 +17,8 @@
   <div class="kpis" style="margin-top:12px">
     <div class="kpi{% if k.por_vencer %} warn{% endif %}"><span class="k">Partidas por vencer</span><span class="v">{{ k.por_vencer }}</span><span class="c">en {{ k.dias_de_aviso }} días o menos</span></div>
     <div class="kpi"><span class="k">Plantas libres en cámara</span><span class="v">{{ k.libres }}</span><span class="c">sin reservar</span></div>
+    {# COM-05a2 (`secCosecha`): las entregas a realizar de sus invernaderos sin envasado planificado; lleva a «Envasado». #}
+    <a class="kpi{% if datos.cosechas.sin_envasado %} warn{% endif %}" href="{% url 'comercial:envasado' %}" style="text-decoration:none;color:inherit"><span class="k">Entregas sin envasado</span><span class="v">{{ datos.cosechas.sin_envasado }}</span><span class="c">a realizar, sin envases reservados</span></a>
   </div>
   {% endwith %}
 </div>

@@ -1,5 +1,5 @@
 # Pruebas de COM-PNF-ENT · Planificar Entrega (COM-05a1): `ComPnfEntServicioTests` (la planificación inmediata: reglas, postcondiciones a a g, i y m, y las extensiones 1a, 2a, 3a, 4a,
-# 6a, 7a, 8b y \*a; el aviso de envasado, postcondición h, es de COM-05a2) y `ComPnfEntDiariaTests` (el paso diario 50: las cuatro partes, j, k, l y n, y el reintento de los correos).
+# 6a, 7a, 8b y \*a; el aviso de envasado, postcondición h, lo suma COM-05a2) y `ComPnfEntDiariaTests` (el paso diario 50: las cuatro partes, j, k, l y n, y el reintento de los correos).
 # Fuente: docs/casos_de_uso/comercial/entregas.md («COM-PNF-ENT», «Cómo se aplica en la ronda «Comercial 1»»), D-66 y D-42.
 
 from datetime import timedelta
@@ -456,6 +456,75 @@ class ComPnfEntServicioTests(Base):
             entregas.programar_para_reservas([r.pk, activa.pk, None])
             entregas.programar_para_reservas([activa.pk])
         self.assertEqual(len(callbacks), 1)
+
+
+    # ---- el aviso de envasado (postcondición h, paso 10; COM-05a2) ----
+
+    def test_post_h_el_agronomo_recibe_planifica_el_envasado_al_crearse_la_entrega(self):
+        """Postcondición h y paso 10: «Planificá el envasado de OT-0231» al Agrónomo del invernadero, con la fecha, el cliente, la modalidad, el contenido, el peso y dónde está la pantalla."""
+        venta, det, r = self.venta_lista(100)
+        e = self.una(entregas.planificar_venta(venta.pk, HOY)).entrega
+        (aviso,) = [a for a in self.avisos(self.e.agronomo) if a.titulo.startswith("Planificá el envasado")]
+        self.assertEqual(aviso.titulo, f"Planificá el envasado de {e.codigo}")
+        self.assertEqual(
+            aviso.detalle,
+            f"Entrega del {e.fecha_programada_orden:%d/%m} a {self.e.cliente.nombre_visible} (envío): 100 {self.e.variedad} · {entregas._kg(entregas.peso_de_entregas([e.pk])[e.pk])}. Está en Producción › Envasado.",
+        )
+
+    def test_post_h_un_retiro_tambien_avisa_al_agronomo_con_la_modalidad_retiro(self):
+        """Postcondición h: el aviso vale para toda entrega nueva, también un retiro: «(retiro)»."""
+        venta, det, r = self.venta_lista(modalidad="retiro")
+        self.una(entregas.planificar_venta(venta.pk, HOY))
+        (aviso,) = [a for a in self.avisos(self.e.agronomo) if a.titulo.startswith("Planificá el envasado")]
+        self.assertIn("(retiro): ", aviso.detalle)
+
+    def test_regla_invernadero_sin_agronomo_activo_no_se_avisa_el_envasado(self):
+        """Regla «Invernadero sin Agrónomo» de PROD-PNF-ENV: sin Agrónomo activo el aviso no se envía (lo verá el que se asigne); la entrega se planifica igual."""
+        from core.models import Usuario
+
+        Usuario.objects.filter(pk=self.e.agronomo.pk).update(is_active=False)
+        venta, det, r = self.venta_lista()
+        self.una(entregas.planificar_venta(venta.pk, HOY))
+        self.assertEqual([a for a in self.avisos(self.e.agronomo) if a.titulo.startswith("Planificá el envasado")], [])
+        self.assertEqual(Entrega.objects.count(), 1)
+
+    def test_post_h_cada_entrega_nueva_avisa_una_vez_y_planificar_dos_veces_no_repite_el_aviso(self):
+        """Postcondición h: un aviso por cada entrega nueva; planificar de nuevo lo que ya tiene entrega no crea otra ni avisa otra vez."""
+        venta, det, r = self.venta_lista()
+        self.una(entregas.planificar_venta(venta.pk, HOY))
+        self.assertEqual(entregas.planificar_venta(venta.pk, HOY), [])
+        self.assertEqual(len([a for a in self.avisos(self.e.agronomo) if a.titulo.startswith("Planificá el envasado")]), 1)
+
+    def test_ext_4a_el_agrupamiento_avisa_el_envasado_con_la_entrega_completa(self):
+        """Paso 10 en el agrupamiento (extensión 4a): al agregar líneas a la entrega existente, el aviso sale otra vez con la entrega completa (las dos variedades y el peso nuevo)."""
+        otra = self.otra_variedad("Rúcula")
+        s = suministro(self.e)
+        d1 = detalle_suministro(s, self.e.variedad, cantidad=100, primera_en_dias=3)
+        d2 = detalle_suministro(s, otra, cantidad=40, primera_en_dias=3)
+        fecha = d1.fecha_primer_entrega
+        reserva_lista(None, self.lote, 100, fecha_entrega=fecha, detalle_suministro=d1)
+        primera = self.una(entregas.planificar_periodo(d1.pk, fecha, HOY)).entrega
+        reserva_lista(None, lote_maduro(self.e, 100, variedad=otra), 40, fecha_entrega=fecha, detalle_suministro=d2)
+        self.una(entregas.planificar_periodo(d2.pk, fecha, HOY))
+        avisos = [a for a in self.avisos(self.e.agronomo) if a.titulo == f"Planificá el envasado de {primera.codigo}"]
+        self.assertEqual(len(avisos), 2)
+        self.assertIn(f"100 {self.e.variedad}", avisos[1].detalle)
+        self.assertIn(f"40 {otra}", avisos[1].detalle)
+
+    def test_regla_el_aviso_de_envasado_recorta_el_contenido_y_cierra_con_el_total_de_plantas(self):
+        """«Avisos y textos»: si el detalle pasa de 500 caracteres, se recorta con «…» y se cierra con el total de plantas, sin perder la pantalla donde está."""
+        prefijo, partes = "Entrega del 26/11 a Pérez SA (envío): ", [f"{n} Variedad número {n}" for n in range(1, 60)]
+        texto = entregas._con_contenido(prefijo, partes, " · 12,40 kg. Está en Producción › Envasado.", 5000)
+        self.assertLessEqual(len(texto), 500)
+        self.assertIn("(5000 plantas en total)", texto)
+        self.assertTrue(texto.endswith("Está en Producción › Envasado."))
+
+    def test_post_h_el_paso_50_que_planifica_una_venta_pendiente_tambien_avisa_el_envasado(self):
+        """Paso 50, parte 1 (recuperación): la entrega que crea la corrida diaria también avisa «Planificá el envasado» al Agrónomo."""
+        venta, det, r = self.venta_lista()
+        entregas.planificar_entregas(HOY)
+        self.assertEqual(Entrega.objects.count(), 1)
+        self.assertEqual(len([a for a in self.avisos(self.e.agronomo) if a.titulo.startswith("Planificá el envasado")]), 1)
 
 
 class ComPnfEntDiariaTests(Base):

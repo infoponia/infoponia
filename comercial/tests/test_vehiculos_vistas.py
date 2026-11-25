@@ -107,7 +107,7 @@ class VehiculosListaYFichaTests(ConGeoref, TestCase):
         self.assertContains(respuesta, "Norte")
         self.assertContains(respuesta, "Sin transportista")
         self.assertContains(respuesta, "Con estos vehículos los transportistas hacen las entregas con envío. Cada vehículo tiene a lo sumo un transportista y trabaja para el invernadero de él.")
-        self.assertNotContains(respuesta, "Entregas a realizar")  # la columna la suma COM-05
+        self.assertContains(respuesta, "Entregas a realizar")  # la columna la suma COM-05a2 (antes de ella, esta prueba afirmaba que no estaba)
 
     def test_regla_1_filtra_por_texto_estado_e_invernadero(self):
         """Regla 1: ``?q=``, ``?estado=`` e ``?invernadero=``."""

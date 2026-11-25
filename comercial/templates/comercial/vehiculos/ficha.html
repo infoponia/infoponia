@@ -35,6 +35,19 @@ JavaScript); «Reactivar» es un POST sin ventana.{% endcomment %}
         <dt>Situación</dt><dd>{% if ficha.en_ruta %}En ruta hoy{% elif vehiculo.activo %}En el invernadero{% else %}<span class="muted">—</span>{% endif %}</dd>
       </dl>
     </div>
+    {# COM-05a2 (regla 2 de COM-CNS-VEH): las primeras 7 fechas con entregas, cada una con su peso frente a la capacidad. #}
+    <div class="card">
+      <div class="card-title">{% icono "truck" 14 %} Carga de los próximos días</div>
+      {% if ficha.carga %}
+      <table class="data-table"><thead><tr><th>Fecha</th><th class="right">Entregas</th><th class="right">Peso</th><th class="right">Capacidad</th></tr></thead><tbody>
+      {% for c in ficha.carga %}
+        <tr><td class="nowrap">{{ c.fecha|date:"d/m/Y" }}</td><td class="right mono">{{ c.entregas }}</td><td class="right mono{% if c.excede %} danger-t{% endif %}">{{ c.peso|kg }}</td><td class="right mono">{{ c.capacidad|kg }}</td></tr>
+      {% endfor %}
+      </tbody></table>
+      {% else %}
+      <p class="muted">Sin entregas asignadas para los próximos días.</p>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

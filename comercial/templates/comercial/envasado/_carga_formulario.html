@@ -1,0 +1,69 @@
+{% comment %}El formulario de la carga de envases (COM-05a2; pasos 4 a 7). Recibe «datos» (DatosDeEnvasado), «fila» (FilaDeEnvasado), «busqueda», «generales», «hay_errores». Respaldo sin JavaScript: todos los botones son
+envíos comunes con `formaction`; con HTMX, solo los botones (Actualizar, Buscar, Agregar, Quitar) redibujan este bloque, sin validar al tipear y sin mover el scroll. Todo se escapa.{% endcomment %}
+<form method="post" action="{% url 'comercial:envasado_entrega' fila.entrega.pk %}" novalidate hx-target="#envasado-formulario" hx-swap="innerHTML show:none">
+  {% csrf_token %}
+  <input type="hidden" name="huella" value="{{ datos.huella }}">
+  {% for m in generales %}<div class="err" role="alert" style="margin-bottom:10px">{{ m }}</div>{% endfor %}
+  <div class="stack">
+    <div class="card"><div class="card-title">La entrega</div>
+      <dl class="dl">
+        <dt>Cliente</dt><dd>{{ fila.cliente }}</dd>
+        <dt>Destino</dt><dd>{{ fila.destino }}</dd>
+        <dt>Modalidad</dt><dd>{% if fila.es_retiro %}Retiro en invernadero{% else %}Envío a domicilio{% endif %}{% if not fila.es_retiro %} · {% if fila.transportista %}{{ fila.transportista }}{% else %}<span class="muted">Sin transportista</span>{% endif %}{% endif %}</dd>
+        <dt>Fecha programada</dt><dd>{{ fila.fecha|date:"d/m/Y" }}{% if fila.atrasada %} <span class="status-badge status-danger">Atrasada</span>{% endif %}</dd>
+        <dt>Contenido</dt><dd>{{ fila.contenido|join:", " }} <span class="muted">· {{ fila.peso|floatformat:"-2" }} kg en total</span></dd>
+      </dl>
+      {% for aviso in datos.avisos %}<div class="hint" role="status">{{ aviso }}{% if forloop.first and aviso == "Este invernadero no tiene envases habilitados." %} Habilitalo en <a href="{{ datos.url_habilitar }}">las existencias del invernadero</a>.{% endif %}</div>{% endfor %}
+    </div>
+
+    {% if datos.bloqueo %}
+    <div class="alert alert-info" role="status">{{ datos.bloqueo }}</div>
+    {% else %}
+    <div class="card"><div class="card-title">Envases a reservar</div>
+      {% if datos.filas %}
+      <table class="data-table"><thead><tr><th>Envase</th><th>Cantidad</th><th class="right">Disponible</th><th></th></tr></thead><tbody>
+      {% for f in datos.filas %}
+        <tr>
+          <td><b style="font-weight:600">{{ f.nombre }}</b>{% if f.aviso %}<span class="sub2">{{ f.aviso }}</span>{% endif %}</td>
+          <td><input class="field-input" id="cantidad_{{ f.insumo_invernadero_id }}" name="cantidad_{{ f.insumo_invernadero_id }}" type="text" inputmode="decimal" autocomplete="off" value="{{ f.cantidad }}" aria-label="Cantidad de {{ f.nombre }} ({{ f.unidad }})"{% if f.error %} aria-invalid="true"{% endif %}> <span class="muted">{{ f.unidad }}</span>
+            {% if f.error %}<div class="err">{{ f.error }}</div>{% if f.ayuda %}<div class="hint">{{ f.ayuda }}</div>{% endif %}{% endif %}</td>
+          <td class="right mono">{{ f.disponible|floatformat:"-3" }}{% if f.queda is not None and not f.error %}<span class="sub2">quedan {{ f.queda|floatformat:"-3" }}</span>{% endif %}</td>
+          <td class="right"><button class="btn btn-ghost btn-sm" type="submit" name="quitar" value="{{ f.insumo_invernadero_id }}" formaction="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" hx-post="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" data-sin-envio-en-curso>Quitar<span class="sr"> {{ f.nombre }}</span></button></td>
+        </tr>
+      {% endfor %}
+      </tbody></table>
+      {% else %}
+      <p class="muted">Todavía no agregaste ningún envase.</p>
+      {% endif %}
+    </div>
+
+    <div class="card"><div class="card-title">Agregar un envase</div>
+      <div class="filters">
+        <input class="field-input q" type="search" name="busqueda" value="{{ busqueda }}" placeholder="Buscar un envase por nombre" aria-label="Buscar un envase" autocomplete="off">
+        <button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" hx-post="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" data-sin-envio-en-curso>Buscar</button>
+      </div>
+      {% if datos.ofrecidos %}
+      <table class="data-table"><thead><tr><th>Envase</th><th class="right">Disponible</th><th>Cantidad</th><th></th></tr></thead><tbody>
+      {% for o in datos.ofrecidos %}
+        <tr>
+          <td>{{ o.nombre }}{% if o.en_carga %}<span class="sub2">Ya está en la carga: agregarlo reemplaza su cantidad.</span>{% endif %}</td>
+          <td class="right mono">{{ o.disponible|floatformat:"-3" }} <span class="muted">{{ o.unidad }}</span></td>
+          <td><input class="field-input" name="nueva_{{ o.insumo_invernadero_id }}" type="text" inputmode="decimal" autocomplete="off" aria-label="Cantidad de {{ o.nombre }} para agregar"></td>
+          <td class="right"><button class="btn btn-ghost btn-sm" type="submit" name="agregar" value="{{ o.insumo_invernadero_id }}" formaction="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" hx-post="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" data-sin-envio-en-curso>Agregar<span class="sr"> {{ o.nombre }}</span></button></td>
+        </tr>
+      {% endfor %}
+      </tbody></table>
+      {% elif busqueda %}
+      <p class="muted">Ningún envase coincide con la búsqueda.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+    {% if not datos.bloqueo %}
+    <button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" hx-post="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" data-sin-envio-en-curso>Actualizar</button>
+    <button class="btn btn-primary" type="submit" formaction="{% url 'comercial:envasado_revisar' fila.entrega.pk %}" data-enviando="Calculando…"{% if hay_errores %} disabled{% endif %}>Revisar</button>
+    {% endif %}
+    <a class="btn btn-ghost" href="{% url 'comercial:envasado' %}">Cancelar</a>
+  </div>
+</form>
