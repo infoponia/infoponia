@@ -817,3 +817,97 @@ class ComCnlCvtConEntregaConcretadaRealTests(Base):
         self.assertEqual([d.pk for d in alcance.detalles], [pendiente.pk])
         self.assertEqual([e.pk for e in alcance.concretadas], [e1.pk])
         self.assertEqual([e.pk for e in alcance.a_realizar], [e2.pk])
+
+
+class ComCnlCvtVistaConCobroTests(Base):
+    """COM-08b (paso 6; extensión 6a de COM-CNL-CVT): la sección «Cobro de lo entregado» de la pantalla de cancelación (el monto, el medio de pago con botones de opción, el texto y el asiento como «Fuera de esta ronda · contabilidad»), el resumen
+    con el cobro (ventana con HTMX y página sin JavaScript; no escribe), el error del medio junto a su campo y la confirmación que cobra y deja la venta «concretada»."""
+
+    def venta(self):
+        """Una venta de dos entregas con la primera concretada de verdad y la segunda de mañana (para poder cancelar): `(venta, entrega_concretada)`."""
+        venta, _, _, e1, _ = ComCnlCvtConEntregaConcretadaRealTests.venta_con_una_entrega_concretada(self, fecha_de_la_segunda=HOY + timedelta(days=1))
+        return venta, e1
+
+    def url(self, venta, nombre="cancelar"):
+        return reverse(f"comercial:compra_venta_{nombre}", args=[venta.pk])
+
+    def pedido(self, venta, **extra):
+        """Lo que manda la pantalla: la huella que vio, el motivo y, con entregas concretadas, el medio de pago."""
+        return {"huella": compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk).huella, "motivo": "cliente_desistio", "descripcion": "", **extra}
+
+    def test_flujo_principal_la_pantalla_pide_el_cobro_de_lo_entregado_con_el_medio_y_dice_que_queda_concretada(self):
+        """6a, paso 4: la sección 3 «Cobro de lo entregado» con el monto a cobrar, los cuatro medios de pago y el texto «La venta ya tiene entregas concretadas…»; el motivo pasa a la sección 4; el estado final es «Concretada»."""
+        venta, e1 = self.venta()
+        self.client.force_login(self.e.vendedor)
+        html = unescape(self.client.get(self.url(venta)).content.decode())
+        for esperado in (
+            "3 · Cobro de lo entregado",
+            "4 · Motivo",
+            "La venta ya tiene entregas concretadas: lo entregado se cobra ahora, en un solo pago. El resto se cancela.",
+            e1.codigo,
+            texto_de_pesos(sum((l.monto_pagar for l in DetalleEntrega.objects.filter(entrega=e1)), Decimal("0.00"))),
+            "Fuera de esta ronda · contabilidad",
+            "Concretada (se cobra lo entregado)",
+        ):
+            self.assertIn(esperado, html)
+        for medio in ("efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"):
+            self.assertIn(f'name="medio_pago" value="{medio}"', html)
+
+    def test_regla_sin_entregas_concretadas_la_pantalla_no_tiene_la_seccion_de_cobro(self):
+        """Sin entregas concretadas la pantalla queda como antes: el motivo es la sección 3, sin medio de pago, y el estado final es «Cancelada»."""
+        v = self.todo()
+        self.client.force_login(self.e.vendedor)
+        html = unescape(self.client.get(self.url(v.venta)).content.decode())
+        self.assertNotIn("Cobro de lo entregado", html)
+        self.assertNotIn('name="medio_pago"', html)
+        self.assertIn("3 · Motivo", html)
+
+    def test_ext_6a_revisar_sin_medio_vuelve_a_la_pantalla_con_el_error_junto_al_campo_y_no_escribe(self):
+        """6a.2: «Revisar y cancelar» sin medio vuelve a la pantalla (200) con «Elegí el medio de pago…» junto a sus botones de opción; no escribe nada."""
+        venta, _ = self.venta()
+        self.client.force_login(self.e.vendedor)
+        respuesta = self.client.post(self.url(venta, "cancelar_revisar"), self.pedido(venta))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("Elegí el medio de pago con que el cliente paga lo entregado.", unescape(respuesta.content.decode()))
+        self.assertEqual((CompraVenta.objects.get(pk=venta.pk).estado_venta, PagoCliente.objects.count()), ("abierta", 0))
+
+    def test_ext_6a_el_resumen_muestra_el_cobro_con_htmx_y_sin_javascript_y_no_escribe(self):
+        """Pasos 6 y 7 con 6a: el resumen (la ventana con HTMX y la página sin JavaScript) muestra el cobro con su medio, «Concretada (se cobra lo entregado)» y manda el medio en un campo oculto; no escribe nada."""
+        venta, e1 = self.venta()
+        self.client.force_login(self.e.vendedor)
+        datos = self.pedido(venta, medio_pago="transferencia")
+        monto = texto_de_pesos(sum((l.monto_pagar for l in DetalleEntrega.objects.filter(entrega=e1)), Decimal("0.00")))
+        for extra in ({}, {"HTTP_HX_REQUEST": "true"}):
+            html = unescape(self.client.post(self.url(venta, "cancelar_revisar"), datos, **extra).content.decode())
+            for esperado in ("Cobro de lo entregado", monto, "Transferencia", "Concretada (se cobra lo entregado)", 'name="medio_pago" value="transferencia"', "Confirmar cancelación"):
+                self.assertIn(esperado, html, extra)
+        self.assertEqual((CompraVenta.objects.get(pk=venta.pk).estado_venta, PagoCliente.objects.count()), ("abierta", 0))
+
+    def test_flujo_principal_confirmar_cobra_lo_entregado_y_vuelve_a_la_ficha_con_la_venta_concretada(self):
+        """Paso 8 con 6a: confirma con el medio: la venta queda «concretada», se crea el pago y el aviso breve lo dice («Se cobró lo entregado…»); la ficha muestra el pago."""
+        venta, e1 = self.venta()
+        self.client.force_login(self.e.vendedor)
+        respuesta = self.client.post(self.url(venta), self.pedido(venta, medio_pago="efectivo"), follow=True)
+        self.assertEqual(respuesta.redirect_chain[-1][0], reverse("comercial:compra_venta", args=[venta.pk]))
+        self.assertEqual(CompraVenta.objects.get(pk=venta.pk).estado_venta, "concretada")
+        pago = PagoCliente.objects.get(compra_venta=venta)
+        html = unescape(respuesta.content.decode())
+        self.assertIn(f"{venta.codigo} cancelada. Se cobró lo entregado ({texto_de_pesos(pago.monto_pagado)}, efectivo) y la venta quedó concretada.", html)
+        self.assertEqual(pago.medio_pago, "efectivo")
+
+    def test_ext_6a_confirmar_sin_medio_vuelve_a_la_pantalla_con_el_error_y_no_cobra(self):
+        """Confirmar sin medio (pantalla vieja o sin JavaScript): vuelve a la pantalla con el error junto al campo, conserva el motivo y no cobra ni cancela."""
+        venta, _ = self.venta()
+        self.client.force_login(self.e.vendedor)
+        respuesta = self.client.post(self.url(venta), self.pedido(venta))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("Elegí el medio de pago con que el cliente paga lo entregado.", unescape(respuesta.content.decode()))
+        self.assertRegex(respuesta.content.decode(), r'name="motivo" value="cliente_desistio"[^>]*checked')
+        self.assertEqual((CompraVenta.objects.get(pk=venta.pk).estado_venta, PagoCliente.objects.count()), ("abierta", 0))
+
+    def test_ext_6a_volver_del_resumen_conserva_el_medio_elegido(self):
+        """«Volver» del resumen sin JavaScript deja la pantalla con el motivo y el medio que se habían elegido."""
+        venta, _ = self.venta()
+        self.client.force_login(self.e.vendedor)
+        html = self.client.post(self.url(venta), {**self.pedido(venta, medio_pago="tarjeta_debito"), "volver": "1"}).content.decode()
+        self.assertRegex(html, r'name="medio_pago" value="tarjeta_debito"[^>]*checked')

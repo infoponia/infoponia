@@ -9,6 +9,7 @@ pantalla). «Volver» cierra la ventana. Recibe «resumen», «datos_post» (mot
       <input type="hidden" name="huella" value="{{ datos_post.huella }}">
       <input type="hidden" name="motivo" value="{{ datos_post.motivo }}">
       <input type="hidden" name="descripcion" value="{{ datos_post.descripcion }}">
+      <input type="hidden" name="medio_pago" value="{{ datos_post.medio_pago }}">
       <div class="acts">
         <a class="btn btn-ghost" href="{% url 'comercial:compra_venta_cancelar' resumen.datos.venta.pk %}" data-cerrar-ventana>Volver</a>
         <button class="btn btn-danger" type="submit" data-enviando="Cancelando…" data-foco-inicial>Confirmar cancelación</button>

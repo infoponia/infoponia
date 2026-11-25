@@ -93,7 +93,7 @@ class PestanaTests(BaseDeVistas):
         html = texto(self.ir("cobranza", QUERY_STRING="vista=cobros"))
         for esperado in (pago.codigo, e.codigo, "Efectivo", "$ 1.600,00", "incluye $ 600,00 por atraso", "Vigente", reverse("comercial:cobro", args=[pago.pk])):
             self.assertIn(esperado, html)
-        self.assertNotIn("Anular", html)
+        self.assertIn(reverse("comercial:cobro_anular", args=[pago.pk]), html)  # COM-08b: antes de ella la lista no tenía «Anular» (`assertNotIn("Anular", html)`); ahora el Gerente lo ve (el Vendedor no: `AnulacionVistasTests`)
 
     def test_el_contador_rojo_de_la_pestana_cuenta_las_entregas_en_mora(self):
         """La pestaña «Cobranza» muestra cuántas entregas están en mora (solo si hay)."""
@@ -320,3 +320,192 @@ class PanelYFichasTests(BaseDeVistas):
         html = texto(self.ir("solicitud", solicitud.pk))
         self.assertIn(f"Pagada · {pago.codigo}", html)
         self.assertIn(f"Cobrada el {HOY:%d/%m/%Y}", html)
+
+
+class AnulacionVistasTests(BaseDeVistas):
+    """COM-08b (paso 6; `cobranza.md`, «Pantallas» y «Anular un cobro»): «Anular» en «Cobros registrados» y en la ficha (solo el Gerente, con el cobro vigente), la pantalla con lo que va a pasar, el motivo y la casilla, la ficha
+    del cobro anulado con «Registrar el cobro correcto» y la fecha de 7a en «Registrar cobro». Ningún botón lleva a un 403 (D-30)."""
+
+    def un_cobro(self, *, dias_de_mora=3, fecha=None):
+        """Un cobro vigente de una entrega en mora (hecho con la fábrica: el servicio de cobro ya tiene sus pruebas) y su entrega."""
+        e = self.en_mora(dias_de_mora=dias_de_mora)
+        return cobro([e], usuario=self.gerente, fecha=fecha), e
+
+    def anular_por_la_pantalla(self, pago, *, motivo="Se cargó con el medio equivocado.", pago_en_fecha=True, **extra):
+        """Lo que hace el Gerente: abre la pantalla, escribe el motivo, marca la casilla y confirma."""
+        self.client.force_login(self.gerente)
+        huella = self.client.get(reverse("comercial:cobro_anular", args=[pago.pk])).context["datos"].huella
+        datos = {"huella": huella, "motivo": motivo, **({"cliente_pago_en_fecha": "1"} if pago_en_fecha else {})}
+        return self.client.post(reverse("comercial:cobro_anular", args=[pago.pk]), datos, **extra)
+
+    # ---- permisos y botones ----
+
+    def test_regla_solo_el_gerente_ve_y_abre_anular_el_vendedor_recibe_403(self):
+        """«Anular» solo para el Gerente: el Vendedor del contrato no lo ve en la lista ni en la ficha y, por URL, recibe 403 (GET y POST); el Gerente lo ve en las dos. Un cobro anulado no lo ofrece."""
+        pago, _ = self.un_cobro()
+        anular = reverse("comercial:cobro_anular", args=[pago.pk])
+        lista = texto(self.ir("cobranza", usuario=self.e.vendedor, QUERY_STRING="vista=cobros"))
+        self.assertNotIn(anular, lista)
+        self.assertNotIn(anular, texto(self.ir("cobro", pago.pk, usuario=self.e.vendedor)))
+        self.assertEqual(self.ir("cobro_anular", pago.pk, usuario=self.e.vendedor).status_code, 403)
+        self.assertEqual(self.enviar("cobro_anular", pago.pk, datos={"motivo": "x", "huella": "x"}, usuario=self.e.vendedor).status_code, 403)
+        self.assertIn(anular, texto(self.ir("cobranza", QUERY_STRING="vista=cobros")))
+        self.assertIn(anular, texto(self.ir("cobro", pago.pk)))
+        self.assertEqual(PagoCliente.objects.get(pk=pago.pk).estado_pago, "vigente")
+        self.anular_por_la_pantalla(pago)
+        self.assertNotIn(anular, texto(self.ir("cobranza", QUERY_STRING="vista=cobros")))
+        self.assertNotIn(anular, texto(self.ir("cobro", pago.pk)))
+
+    def test_regla_los_demas_roles_reciben_403_en_anular(self):
+        """El Agrónomo, el Capataz y el Transportista no entran a «Anular»; un anónimo, a la pantalla de ingreso."""
+        pago, _ = self.un_cobro()
+        for rol in (self.e.agronomo, self.e.capataz, crear_transportista(email="t3@infoponia.com")):
+            self.assertEqual(self.ir("cobro_anular", pago.pk, usuario=rol).status_code, 403, rol)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("comercial:cobro_anular", args=[pago.pk])).status_code, 302)
+
+    def test_ext_1a_un_cobro_de_compra_venta_no_tiene_anular_y_por_url_informa(self):
+        """1a: sin botón (su ficha es 404) y, por URL, el mensaje «va dentro del asiento de la entrega y se corrige con un asiento manual»; no se anula nada."""
+        venta = compra_venta(self.e, dias=0)
+        entrega_concretada(venta, [reserva_lista(detalle(venta, self.e.variedad, 10), self.lote, 10)], con_pago=True)
+        pago = venta.pagos.get()
+        self.client.force_login(self.gerente)
+        respuesta = self.client.get(reverse("comercial:cobro_anular", args=[pago.pk]), follow=True)
+        self.assertIn("asiento manual", texto(respuesta))
+        self.client.post(reverse("comercial:cobro_anular", args=[pago.pk]), {"motivo": "x", "huella": "x"})
+        self.assertEqual(PagoCliente.objects.get(pk=pago.pk).estado_pago, "vigente")
+
+    # ---- la pantalla ----
+
+    def test_flujo_principal_la_pantalla_dice_que_pasa_con_cada_entrega_y_pide_el_motivo(self):
+        """Paso 2: el cobro, qué va a pasar con cada entrega («vuelve a en mora» o «vuelve a pendiente»), el contraasiento como «Fuera de esta ronda · contabilidad», el motivo y la casilla; con su texto explicativo."""
+        en_mora, pendiente = self.en_mora(dias_de_mora=3), self.concretada()
+        pago = cobro([en_mora, pendiente], usuario=self.gerente)
+        html = texto(self.ir("cobro_anular", pago.pk))
+        for esperado in (
+            pago.codigo,
+            "vuelve a «en mora»",
+            "vuelve a «pendiente»",
+            "Fuera de esta ronda · contabilidad",
+            "Motivo",
+            "El cliente pagó en esa fecha",
+            "Anular cobro",
+            "El cobro queda anulado con su historia y sus entregas vuelven a estar sin pagar. Después podés registrar el cobro correcto.",
+        ):
+            self.assertIn(esperado, html)
+        self.assertIn(en_mora.codigo, html)
+        self.assertIn(pendiente.codigo, html)
+
+    def test_ext_3a_sin_motivo_el_error_sale_junto_al_campo_y_no_se_anula(self):
+        """3a: sin motivo la pantalla vuelve con el error junto al campo (conserva la casilla) y el cobro sigue vigente."""
+        pago, _ = self.un_cobro()
+        respuesta = self.anular_por_la_pantalla(pago, motivo="  ")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("Escribí el motivo de la anulación.", texto(respuesta))
+        self.assertIn("checked", texto(respuesta))
+        self.assertEqual(PagoCliente.objects.get(pk=pago.pk).estado_pago, "vigente")
+
+    def test_flujo_principal_anular_lleva_a_la_ficha_con_el_cobro_anulado_y_registrar_el_cobro_correcto(self):
+        """Pasos 5 a 7: anula, vuelve a la ficha («COB-… anulado»), que muestra la anulación (fecha, Gerente, motivo, si el cliente pagó) y «Registrar el cobro correcto» (con `?anulacion=`)."""
+        pago, e = self.un_cobro()
+        respuesta = self.anular_por_la_pantalla(pago, follow=True)
+        pago.refresh_from_db()
+        html = texto(respuesta)
+        self.assertEqual((pago.estado_pago, respuesta.redirect_chain[-1][0]), ("anulado", reverse("comercial:cobro", args=[pago.pk])))
+        self.assertIn(f"{pago.codigo} anulado", html)
+        for esperado in ("Anulación", "Se cargó con el medio equivocado.", "Todavía no se registró.", "Registrar el cobro correcto", f"?anulacion={pago.anulacion_de_cobro.pk}"):
+            self.assertIn(esperado, html)
+        self.assertEqual(len(self.alertas_de(e, activas=True)), 1)
+
+    def test_ext_5a_un_cobro_ya_anulado_informa_y_vuelve_a_la_ficha(self):
+        """5a: abrir «Anular» de un cobro ya anulado (o confirmar con una pantalla vieja) informa y vuelve a la ficha; no se anula dos veces."""
+        pago, _ = self.un_cobro()
+        self.client.force_login(self.gerente)
+        huella = self.client.get(reverse("comercial:cobro_anular", args=[pago.pk])).context["datos"].huella
+        self.anular_por_la_pantalla(pago)
+        respuesta = self.client.post(reverse("comercial:cobro_anular", args=[pago.pk]), {"huella": huella, "motivo": "Otra vez."}, follow=True)
+        self.assertEqual(respuesta.redirect_chain[-1][0], reverse("comercial:cobro", args=[pago.pk]))
+        self.assertIn("ya está anulado", texto(respuesta))
+        self.assertIn("ya está anulado", texto(self.client.get(reverse("comercial:cobro_anular", args=[pago.pk]), follow=True)))
+        self.assertEqual(PagoCliente.objects.get(pk=pago.pk).anulacion_de_cobro.__class__.objects.filter(pago_cliente=pago).count(), 1)
+
+    def test_regla_si_cambio_la_huella_vuelve_a_la_pantalla_con_lo_que_pasa_ahora(self):
+        """`cambio_simultaneo`: con una huella vieja la pantalla vuelve (200) con el aviso y los datos nuevos, y no se anula."""
+        pago, _ = self.un_cobro()
+        self.client.force_login(self.gerente)
+        respuesta = self.client.post(reverse("comercial:cobro_anular", args=[pago.pk]), {"huella": "vieja", "motivo": "Motivo."})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("cambió el cobro o el día", texto(respuesta))
+        self.assertEqual(PagoCliente.objects.get(pk=pago.pk).estado_pago, "vigente")
+
+    # ---- el cobro correcto (7a) ----
+
+    def test_ext_7a_registrar_el_cobro_correcto_propone_la_fecha_del_cobro_anulado_y_se_registra_con_ella(self):
+        """7a de punta a punta por las pantallas: el cobro original es de hace 2 días (3 días de atraso, $ 900,00); se anula con «el cliente pagó»; «Registrar el cobro correcto» abre con el cliente y las entregas elegidos, la casilla
+        marcada y la fecha del cobro anulado; el resumen y el registro usan esa fecha (no 5 días de atraso); el cobro correcto carga `anulacion_corregida`; volver a la URL informa que ya se registró."""
+        from datetime import timedelta
+
+        antes = HOY - timedelta(days=2)
+        pago, e = self.un_cobro(dias_de_mora=5, fecha=antes)
+        self.anular_por_la_pantalla(pago)
+        anulacion = pago.anulacion_de_cobro
+        self.client.force_login(self.gerente)
+        url = reverse("comercial:cobranza_registrar") + f"?anulacion={anulacion.pk}"
+        html = texto(self.client.get(url))
+        for esperado in ("Usar la fecha del cobro anulado", f"{antes:%d/%m}", "Es la fecha del cobro anulado: el cliente pagó ese día.", f"{antes:%d/%m/%Y}"):
+            self.assertIn(esperado, html)
+        self.assertRegex(html, r'name="usar_fecha_anulada"[^>]*checked')
+        self.assertIn(f'name="entrega" value="{e.pk}"', html)
+        datos = {**self.pedido([e], "efectivo"), "anulacion": str(anulacion.pk), "usar_fecha_anulada": "1"}
+        resumen = self.client.post(reverse("comercial:cobranza_revisar"), datos)
+        self.assertEqual((resumen.context["resumen"].fecha_pago, resumen.context["resumen"].indemnizacion), (antes, D("900.00")))
+        self.assertIn("Es la fecha del cobro anulado", texto(resumen))
+        respuesta = self.client.post(reverse("comercial:cobranza_registrar"), {**datos, "accion": "confirmar", "huella": resumen.context["resumen"].huella}, follow=True)
+        nuevo = PagoCliente.objects.get(anulacion_corregida=anulacion)
+        self.assertEqual((nuevo.fecha_pago, nuevo.monto_pagado, respuesta.redirect_chain[-1][0]), (antes, D("1900.00"), reverse("comercial:cobro", args=[nuevo.pk])))
+        otra_vez = self.client.get(url, follow=True)
+        self.assertIn("El cobro correcto de esa anulación ya se registró.", texto(otra_vez))
+        self.assertEqual(otra_vez.redirect_chain[-1][0], reverse("comercial:cobranza"))
+        self.assertIn(nuevo.codigo, texto(self.ir("cobro", pago.pk)))  # la ficha del anulado muestra el cobro que lo corrigió
+
+    def test_ext_7a_desmarcar_la_casilla_con_htmx_redibuja_con_la_fecha_de_hoy_sin_validar(self):
+        """La casilla es un selector: con HTMX solo vuelve el cuerpo; desmarcada, la fecha es la de hoy y el atraso se calcula a hoy. No muestra errores."""
+        from datetime import timedelta
+
+        pago, e = self.un_cobro(dias_de_mora=5, fecha=HOY - timedelta(days=2))
+        self.anular_por_la_pantalla(pago)
+        anulacion = pago.anulacion_de_cobro
+        datos = {**self.pedido([e], ""), "anulacion": str(anulacion.pk)}
+        self.client.force_login(self.gerente)
+        con = texto(self.client.post(reverse("comercial:cobranza_registrar"), {**datos, "usar_fecha_anulada": "1"}, HTTP_HX_REQUEST="true"))
+        sin = texto(self.client.post(reverse("comercial:cobranza_registrar"), datos, HTTP_HX_REQUEST="true"))
+        self.assertNotIn("<html", con)
+        self.assertIn("Es la fecha del cobro anulado", con)
+        self.assertIn(f"{HOY:%d/%m/%Y}", sin)
+        self.assertIn("Es la fecha de hoy", sin)
+        self.assertNotIn("Elegí el medio de pago", sin)
+
+    def test_ext_7a_si_el_cliente_no_pago_ese_dia_no_hay_casilla(self):
+        """Sin `cliente_pago_en_fecha` la pantalla abre con el cliente y las entregas elegidos pero sin la casilla: es un cobro común con la fecha de hoy."""
+        pago, e = self.un_cobro()
+        self.anular_por_la_pantalla(pago, pago_en_fecha=False)
+        self.client.force_login(self.gerente)
+        html = texto(self.client.get(reverse("comercial:cobranza_registrar") + f"?anulacion={pago.anulacion_de_cobro.pk}"))
+        self.assertNotIn("Usar la fecha del cobro anulado", html)
+        self.assertIn(f'name="entrega" value="{e.pk}"', html)
+
+    def test_ext_7a_solo_el_gerente_abre_el_cobro_correcto_el_vendedor_recibe_403(self):
+        """`?anulacion=` es del Gerente (la anulación es suya): el Vendedor del contrato recibe 403."""
+        pago, _ = self.un_cobro()
+        self.anular_por_la_pantalla(pago)
+        url = reverse("comercial:cobranza_registrar") + f"?anulacion={pago.anulacion_de_cobro.pk}"
+        self.client.force_login(self.e.vendedor)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_ext_7a_el_cobro_correcto_ya_registrado_no_vuelve_a_ofrecerse_en_la_ficha(self):
+        """Con las entregas ya cobradas de nuevo (aunque no sea por 7a), la ficha del anulado deja de ofrecer «Registrar el cobro correcto»."""
+        pago, e = self.un_cobro()
+        self.anular_por_la_pantalla(pago)
+        self.assertIn("Registrar el cobro correcto", texto(self.ir("cobro", pago.pk)))
+        cobro([e], usuario=self.gerente)  # un cobro común de la misma entrega
+        self.assertNotIn("Registrar el cobro correcto", texto(self.ir("cobro", pago.pk)))

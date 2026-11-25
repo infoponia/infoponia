@@ -282,7 +282,9 @@ SolicitudPendiente = namedtuple("SolicitudPendiente", "codigo tipo fecha")
 ListaDeCobros = namedtuple("ListaDeCobros", "pagina filas")
 FilaDeCobro = namedtuple("FilaDeCobro", "pago_id codigo fecha cliente cliente_id entregas medio monto atraso estado estado_texto")
 LineaDeLaFicha = namedtuple("LineaDeLaFicha", "entrega_id codigo contrato_codigo fecha_concrecion vencimiento monto_total monto_cobrado dias_atraso indemnizacion")
-FichaDeCobro = namedtuple("FichaDeCobro", "pago codigo cliente fecha medio estado usuario base indemnizacion total lineas aviso puede_reenviar puede_imprimir")
+FichaDeCobro = namedtuple(
+    "FichaDeCobro", "pago codigo cliente fecha medio estado usuario base indemnizacion total lineas aviso puede_reenviar puede_imprimir anulacion cobro_correcto puede_anular puede_registrar_correcto"
+)
 
 
 @dataclass
@@ -901,6 +903,12 @@ def ficha_de_cobro(actor, pago_id):
         for l in pago.lineas.select_related("entrega__contrato_entrega").order_by("entrega__numero")
     ]
     atraso = sum((l.indemnizacion for l in lineas), Decimal("0.00"))
+    es_gerente = rol_de(actor) == GERENTE
+    anulacion = Anulacion.objects.select_related("usuario").filter(pago_cliente_id=pago.pk).first()  # COM-08b: la anulación (fecha, Gerente, motivo, si el cliente pagó) y el cobro que la corrigió
+    cobro_correcto = PagoCliente.objects.filter(anulacion_corregida_id=anulacion.pk).first() if anulacion is not None else None
+    puede_registrar_correcto = False
+    if es_gerente and anulacion is not None and cobro_correcto is None:  # paso 7: «Registrar el cobro correcto», mientras queden entregas por cobrar de ese cobro
+        puede_registrar_correcto = bool(anulacion_para_registrar(actor, anulacion.pk).entrega_ids)
     return FichaDeCobro(
         pago=pago,
         codigo=pago.codigo,
@@ -916,6 +924,10 @@ def ficha_de_cobro(actor, pago_id):
         aviso=pago.estado_aviso_cliente,
         puede_reenviar=pago.estado_aviso_cliente == PagoCliente.EstadoDelAviso.PENDIENTE_ENVIO and bool(pago.cliente.email_cliente),
         puede_imprimir=pago.estado_aviso_cliente == PagoCliente.EstadoDelAviso.SIN_CORREO,
+        anulacion=anulacion,
+        cobro_correcto=cobro_correcto,
+        puede_anular=es_gerente and pago.estado_pago == PagoCliente.Estado.VIGENTE,
+        puede_registrar_correcto=puede_registrar_correcto,
     )
 
 

@@ -1,0 +1,48 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Anular cobro» (COM-ANL-CBR, pasos 2 a 4; `MODALS.anlcbr` del prototipo, que acá es una página: sin JavaScript todo funciona, D-61): el cobro, qué va a pasar con cada entrega (vuelve a «pendiente» o a «en mora», con su alerta), el contraasiento como «Fuera de esta ronda · contabilidad»
+(D-57), el motivo obligatorio y la casilla «El cliente pagó en esa fecha». Solo el Gerente. Recibe «datos» (`DatosDeAnulacionDeCobro`), «motivo», «cliente_pago_en_fecha», «errores», «generales» y «error».{% endcomment %}
+{% block titulo %}Anular {{ datos.codigo }} · Cobranza · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:cobro' datos.pago.pk %}">{% icono "back" 15 %} Volver al cobro</a>
+  <div class="page-h"><h1>Anular <span class="mono">{{ datos.codigo }}</span></h1><div class="sub">{{ datos.cliente }} · {{ datos.fecha|date:"d/m/Y" }} · {{ datos.medio }} · <span class="mono">{{ datos.monto|pesos }}</span></div></div>
+
+  {% if error %}<div class="alert alert-warn" role="alert">{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
+  {% for e in generales %}<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{{ e }}</div></div>{% endfor %}
+
+  <div class="card seg">
+    <div class="card-h"><h3>Qué va a pasar</h3></div>
+    <div class="card-b">
+      <p style="margin-top:0">El cobro queda anulado con su historia y sus entregas vuelven a estar sin pagar. Después podés registrar el cobro correcto.</p>
+      <ul class="clist">
+        {% for e in datos.entregas %}
+        <li><span class="mono">{{ e.codigo }}</span> ({{ e.contrato_codigo }}): {{ e.monto_cobrado|pesos }}{% if e.dias_atraso %} y {{ e.indemnizacion|pesos }} de atraso{% endif %} →
+          {% if e.alerta %}<b class="danger-t">vuelve a «en mora»</b>: se activa otra vez su alerta «Pago en mora»{% else %}<b>vuelve a «pendiente»</b>{% endif %}.</li>
+        {% endfor %}
+        <li>Se avisa al Vendedor de cada contrato. Al cliente no se le escribe.</li>
+      </ul>
+      <p class="muted">El contraasiento del cobro{% if datos.indemnizacion > 0 %}, con la indemnización por atraso,{% endif %}: <span class="status-badge status-neutral">{{ datos.contraasiento }}</span></p>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'comercial:cobro_anular' datos.pago.pk %}" novalidate style="margin-top:12px">
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ datos.huella }}">
+    <div class="fld">
+      <label class="lbl" for="motivo">Motivo <span class="req">*</span></label>
+      <textarea class="field-input" id="motivo" name="motivo" rows="3" maxlength="500">{{ motivo }}</textarea>
+      <div class="hint">Hasta 500 caracteres. Queda en el registro de la anulación.</div>
+      {% for e in errores.motivo %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="fld">
+      <label class="check"><input type="checkbox" name="cliente_pago_en_fecha" value="1"{% if cliente_pago_en_fecha %} checked{% endif %}> El cliente pagó en esa fecha (se corrige un error de carga)</label>
+      <div class="hint">Si lo marcás, al registrar el cobro correcto se propone la fecha del cobro anulado ({{ datos.fecha|date:"d/m/Y" }}), para no cobrarle un atraso que no tuvo.</div>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-danger" type="submit" data-enviando="Anulando…">Anular cobro</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:cobro' datos.pago.pk %}">Volver</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

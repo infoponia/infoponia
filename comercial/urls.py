@@ -82,6 +82,8 @@ urlpatterns = [
     path("cobranza/cobros/<int:pago_id>/", views_cobranza.cobro, name="cobro"),
     path("cobranza/cobros/<int:pago_id>/comprobante/", views_cobranza.comprobante, name="cobro_comprobante"),
     path("cobranza/cobros/<int:pago_id>/reenviar-comprobante/", views_cobranza.reenviar_comprobante, name="cobro_reenviar_comprobante"),
+    # COM-08b: anular un cobro (COM-ANL-CBR; solo el Gerente).
+    path("cobranza/cobros/<int:pago_id>/anular/", views_cobranza.anular, name="cobro_anular"),
     # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
     # COM-07a: las solicitudes de revisión (quejas y discrepancias): la pestaña, la ficha con el panel del Gerente, el resumen, anular, el comprobante y «Reenviar aviso».
     path("solicitudes/", views_solicitudes.lista, name="solicitudes"),

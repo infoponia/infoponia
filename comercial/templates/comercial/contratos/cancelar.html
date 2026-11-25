@@ -1,8 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
 {% comment %}«Cancelar compra-venta» (COM-CNL-CVT, COM-05b; `INIT.cvcancel`, `VIEWS.cvcancel` del prototipo): «Qué se cancela» (cada detalle con su efecto), «Qué pasa con el producto» (lo que vuelve a los
 lotes, a las partidas y lo ya cosechado que ingresa a la cámara; las cosechas y las entregas que se cancelan) y «Motivo» (botones de opción, descripción opcional), con el resumen al costado. Con una
-entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja seguir. «Revisar y cancelar» muestra el resumen (ventana con HTMX o página sin JavaScript) y no escribe. La sección «Cobro de
-lo entregado» del prototipo es de la extensión 6a (COM-06 y COM-08b). Recibe «datos», «motivos», «motivo», «descripcion» y «errores». Correcciones al prototipo: «Cierre» de la tarea (D-61).{% endcomment %}
+entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja seguir. «Revisar y cancelar» muestra el resumen (ventana con HTMX o página sin JavaScript) y no escribe. Con entregas concretadas (6a, COM-08b) suma la sección «Cobro de lo entregado» del prototipo (los detalles ya entregados, lo que se cobra y el medio de pago) y el estado final pasa a «Concretada». Recibe «datos», «motivos», «motivo», «descripcion», «medios», «medio_pago» y «errores». Correcciones al prototipo: «Cierre» de la tarea (D-61).{% endcomment %}
 {% block titulo %}Cancelar {{ datos.venta.codigo }} · Contratos · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
@@ -42,8 +41,25 @@ lo entregado» del prototipo es de la extensión 6a (COM-06 y COM-08b). Recibe �
             {% if datos.venta.estado_venta == "pendiente_decision" %}<li>El enlace con el que el cliente decide el faltante queda sin efecto.</li>{% endif %}
           </ul>
         </section>
+        {% if datos.cobro %}
         <section class="card">
-          <div class="card-title">3 · Motivo</div>
+          <div class="card-title">3 · Cobro de lo entregado</div>
+          <p class="muted" style="margin-top:0">La venta ya tiene entregas concretadas: lo entregado se cobra ahora, en un solo pago. El resto se cancela.</p>
+          <div class="tablewrap"><table class="data-table plain">
+            <thead><tr><th>Entrega</th><th>Concretada</th><th class="right">Monto</th></tr></thead>
+            <tbody>{% for f in datos.cobro.entregas %}<tr><td class="mono">{{ f.codigo }}</td><td>{{ f.fecha|date:"d/m/Y" }}</td><td class="right mono">{{ f.monto|pesos }}</td></tr>{% endfor %}</tbody>
+            <tfoot><tr><th colspan="2" class="right">Monto a cobrar</th><th class="right mono">{{ datos.cobro.total|pesos }}</th></tr></tfoot>
+          </table></div>
+          <fieldset class="modalidad" aria-describedby="medio-ayuda">
+            <legend>Medio de pago <span class="req">*</span></legend>
+            {% for valor, texto in medios %}<label><input type="radio" name="medio_pago" value="{{ valor }}"{% if medio_pago == valor %} checked{% endif %}{% if errores.medio_pago %} aria-invalid="true"{% endif %}> {{ texto }}</label>{% endfor %}
+          </fieldset>
+          {% for m in errores.medio_pago %}<div class="err" role="alert">{{ m }}</div>{% empty %}<div class="hint" id="medio-ayuda">El cliente paga ahora, con un solo medio. El efectivo va a Caja; los demás, a Banco.</div>{% endfor %}
+          <p class="muted">El asiento del cobro: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span></p>
+        </section>
+        {% endif %}
+        <section class="card">
+          <div class="card-title">{% if datos.cobro %}4{% else %}3{% endif %} · Motivo</div>
           <fieldset class="modalidad" aria-describedby="motivo-ayuda">
             <legend>Motivo de la cancelación</legend>
             {% for valor, texto in motivos %}<label><input type="radio" name="motivo" value="{{ valor }}"{% if motivo == valor %} checked{% endif %}{% if errores.motivo %} aria-invalid="true"{% endif %}> {{ texto }}</label>{% endfor %}
@@ -60,7 +76,8 @@ lo entregado» del prototipo es de la extensión 6a (COM-06 y COM-08b). Recibe �
             <dt>Detalles cancelados</dt><dd class="mono">{{ cuantos }}</dd>
             <dt>Cosechas canceladas</dt><dd class="mono">{{ datos.cosechas|length }}</dd>
             <dt>Entregas canceladas</dt><dd class="mono">{{ datos.entregas|length }}</dd>
-            <dt>Estado final</dt><dd><span class="status-badge status-neutral">Cancelada</span></dd>
+            {% if datos.cobro %}<dt>Se cobra</dt><dd class="mono">{{ datos.cobro.total|pesos }}</dd>{% endif %}
+            <dt>Estado final</dt><dd><span class="status-badge status-neutral">{% if datos.cobro %}Concretada (se cobra lo entregado){% else %}Cancelada{% endif %}</span></dd>
           </dl>
         </div>
         <div class="alert alert-info"><div>{% if datos.comprobante %}Se enviará el comprobante a {{ datos.comprobante }}.{% else %}El cliente no tiene correo: vas a tener que imprimir el comprobante.{% endif %}</div></div>
