@@ -7,8 +7,8 @@
 from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
-from comercial.models import CompraVenta, DetalleVenta, EnlaceCliente, Entrega, ReservaStock
-from comercial.servicios import camara, compra_ventas, cosechas, entregas, faltantes
+from comercial.models import CompraVenta, DetalleVenta, EnlaceCliente, Entrega, PagoCliente, ReservaStock
+from comercial.servicios import camara, compra_ventas, concrecion, cosechas, entregas, faltantes
 from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
 from comercial.servicios.cosechas import DatosDeConcrecion
 from comercial.tests.fabricas import (
@@ -23,6 +23,7 @@ from comercial.tests.fabricas import (
     reserva,
     reserva_lista,
     transportista_con_vehiculo,
+    verificar_invariantes_de_cobros,
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_reservas,
 )
@@ -32,7 +33,7 @@ from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_in
 from maestros.models import Localidad
 from maestros.tests.fabricas import asegurar_datos_de_maestros
 from produccion.models import Cosecha
-from produccion.tests.fabricas import codigos_del_rechazo, lote_maduro, separar
+from produccion.tests.fabricas import codigos_del_rechazo, lote_maduro, separar, variedad_con_stock
 
 HOY = timezone.localdate()
 
@@ -196,3 +197,49 @@ class ComCnlCvtConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
         self.assertIn("venta_cambio", codigos(rechazos[0]))
         self.assertEqual((self.estado_de_la_venta(), Entrega.objects.get(pk=self.entrega.pk).transportista_id), ("abierta", self.t.pk))
+
+    # ---- contra concretar la otra entrega de una venta con una entrega concretada (6a; COM-08b) ----
+
+    def venta_de_retiro_con_una_entrega_concretada(self):
+        """Una venta de **retiro** con dos detalles (dos variedades) y dos entregas «a realizar» de hoy, sin transportista: la primera se concreta de verdad (no es la última de la venta: no se cobra); la segunda
+        queda para concretar. El retiro no necesita ruta (COM-06a). Deja `self.venta`, `self.e1`, `self.e2`."""
+        self.armar()
+        otra, _ = variedad_con_stock(self.e, "Otra variedad")
+        lote_b = lote_maduro(self.e, 500, variedad=otra)
+        self.venta = compra_venta(self.e, dias=0, modalidad="retiro", retiro=self.e.invernadero)
+        d1, d2 = detalle(self.venta, self.e.variedad, 50), detalle(self.venta, otra, 30)
+        self.e1 = entrega(self.venta, [reserva_lista(d1, self.lote, 50)], fecha=HOY)
+        self.e2 = entrega(self.venta, [reserva_lista(d2, lote_b, 30)], fecha=HOY)
+        self.addCleanup(verificar_invariantes_de_cobros)
+        datos = concrecion.DatosDeConcrecion(sin_envases=True, medio_pago="efectivo")
+        concrecion.concretar_entrega(self.e.vendedor, self.e1.pk, datos, concrecion.resumen_de_concrecion(self.e.vendedor, self.e1.pk, datos).huella)
+
+    def cancelar_con_cobro(self):
+        """La cancelación con el cobro de lo entregado, con la huella que vio la pantalla antes de que arrancara la otra operación."""
+        huella = compra_ventas.datos_de_cancelacion(self.e.vendedor, self.venta.pk).huella
+        return lambda: compra_ventas.cancelar_compra_venta(self.e.vendedor, self.venta.pk, DatosDeCancelacionDeVenta("cliente_desistio", "", "efectivo"), huella)
+
+    def concretar_la_segunda(self):
+        datos = concrecion.DatosDeConcrecion(sin_envases=True, medio_pago="efectivo")
+        huella = concrecion.resumen_de_concrecion(self.e.vendedor, self.e2.pk, datos).huella
+        return lambda: concrecion.concretar_entrega(self.e.vendedor, self.e2.pk, datos, huella)
+
+    def pagos_vigentes(self):
+        return PagoCliente.objects.filter(compra_venta=self.venta, estado_pago="vigente").count()
+
+    def test_regla_6a_cancelar_primero_y_la_concrecion_de_la_otra_entrega_recibe_entrega_no_concretable(self):
+        """6a y 8a: con la cancelación primero, cobra lo entregado y cancela la entrega pendiente; la concreción, que espera el invernadero, relee y recibe `entrega_no_concretable`: un solo pago y la venta «concretada»."""
+        self.venta_de_retiro_con_una_entrega_concretada()
+        exitos, rechazos, otros = separar(correr_a_la_vez(self.cancelar_con_cobro(), self.concretar_la_segunda(), primera="a"))
+        self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
+        self.assertIn("entrega_no_concretable", codigos(rechazos[0]))
+        self.assertEqual((self.estado_de_la_venta(), Entrega.objects.get(pk=self.e2.pk).estado_orden, self.pagos_vigentes()), ("concretada", "cancelada", 1))
+
+    def test_regla_6a_concretar_primero_y_la_cancelacion_no_cobra_dos_veces(self):
+        """6a y 8a: con la concreción primero (la última entrega: la venta queda «concretada» con su pago, postcondición k de COM-CNC-ENT), la cancelación relee y recibe `venta_cambio` o `venta_no_cancelable`:
+        no cobra lo entregado por segunda vez (un solo pago vigente)."""
+        self.venta_de_retiro_con_una_entrega_concretada()
+        exitos, rechazos, otros = separar(correr_a_la_vez(self.concretar_la_segunda(), self.cancelar_con_cobro(), primera="a"))
+        self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
+        self.assertIn(codigos(rechazos[0])[0], ("venta_cambio", "venta_no_cancelable"))
+        self.assertEqual((self.estado_de_la_venta(), Entrega.objects.get(pk=self.e2.pk).estado_orden, self.pagos_vigentes()), ("concretada", "concretada", 1))

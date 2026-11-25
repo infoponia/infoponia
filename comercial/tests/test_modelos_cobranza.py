@@ -1,7 +1,8 @@
 # Pruebas de los modelos de COM-08a (paso 1): `LineaPago` (R154, D-94 punto 2), lo nuevo de `PagoCliente` (`tipo_pago`, `numero`, `usuario`, `estado_aviso_cliente` y C7 como {xor}; D-94 punto 3), lo nuevo de
 # `Entrega` (la mora y la indemnización por día; D-94 puntos 5 y 12), la secuencia del número de cobro, las acciones y etiquetas de auditoría de `core`, las fábricas nuevas y
 # `verificar_invariantes_de_cobros`. Una prueba por restricción de la base (la viola y no la viola).
-# Fuente: docs/modelo/comercial.md («PagoCliente», «LineaPago», «Entrega»), D-94 puntos 2, 3, 5 y 12, D-36 (auditoría) y docs/casos_de_uso/comercial/cobranza.md («Pruebas»).
+# COM-08b suma lo suyo: `Anulacion.pago_cliente` y `cliente_pago_en_fecha`, `PagoCliente.anulacion_corregida` y los dos invariantes nuevos (D-94 puntos 10 y 11).
+# Fuente: docs/modelo/comercial.md («PagoCliente», «LineaPago», «Entrega», «Anulacion»), D-94 puntos 2, 3, 5, 10, 11 y 12, D-36 (auditoría) y docs/casos_de_uso/comercial/cobranza.md («Pruebas»).
 
 from datetime import timedelta
 from decimal import Decimal
@@ -10,9 +11,11 @@ from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from comercial.models import AlertaComercial, Entrega, LineaPago, PagoCliente
+from comercial.models import AlertaComercial, Anulacion, Entrega, LineaPago, PagoCliente
 from comercial.tests.fabricas import (
+    anulacion_de_cobro,
     cobro,
+    discrepancia,
     entrega_de_suministro,
     entrega_en_mora,
     escenario_comercial,
@@ -314,3 +317,111 @@ class AuditoriaDeCobranzaTests(TestCase):
         """D-36: el nombre visible de lo que auditan el cobro y el vencimiento."""
         for clave in ("monto_pagado", "numero_cobro", "indemnizacion_atraso_total", "fecha_aviso_mora", "detalle_de_entregas", "medio_pago", "fecha_pago"):
             self.assertIn(clave, RegistroAuditoria.ETIQUETAS)
+
+
+class AnulacionDeCobroRestriccionesTests(Base):
+    """COM-08b, D-94 punto 11 y `docs/modelo/comercial.md`, «Anulacion»: las restricciones de la base. El campo se llama `pago_cliente` (no `pago`: `compras.Pago` ya le da ese acceso inverso a `OrigenDocumento`)."""
+
+    def una_de_cobro(self, **campos):
+        pago = cobro([self.concretada()])
+        return Anulacion.objects.create(usuario=self.gerente, pago_cliente=pago, motivo_anulacion="Error de carga.", cliente_pago_en_fecha=False, **campos)
+
+    def test_regla_la_anulacion_de_un_cobro_se_crea_con_su_pago_y_su_indicacion(self):
+        """Una `Anulacion` con `pago_cliente` y `cliente_pago_en_fecha` (sin solicitud ni copia de la resolución) es válida, y el pago llega a ella por `anulacion_de_cobro`."""
+        anulacion = self.una_de_cobro()
+        self.assertEqual(anulacion.pago_cliente.anulacion_de_cobro, anulacion)
+        self.assertIsNone(anulacion.solicitud_id)
+
+    def test_regla_exactamente_uno_de_solicitud_y_pago_ninguno_rechaza(self):
+        """Restricción «exactamente uno de `solicitud` y `pago_cliente`»: sin ninguno, la base lo rechaza."""
+        viola(self, lambda: Anulacion.objects.create(usuario=self.gerente, motivo_anulacion="x"))
+
+    def test_regla_exactamente_uno_de_solicitud_y_pago_los_dos_rechaza(self):
+        """Con los dos (una solicitud y un pago), la base lo rechaza."""
+        solicitud = discrepancia(self.concretada())
+        pago = cobro([self.concretada()])
+        viola(
+            self,
+            lambda: Anulacion.objects.create(
+                usuario=self.gerente, solicitud=solicitud, pago_cliente=pago, motivo_anulacion="x", estado_anulado="rechazada", cliente_pago_en_fecha=False
+            ),
+        )
+
+    def test_regla_pago_y_cliente_pago_en_fecha_van_juntos(self):
+        """`pago_cliente` no nulo ⇔ `cliente_pago_en_fecha` no nulo: un pago sin la indicación, o la indicación sin pago, se rechazan."""
+        pago = cobro([self.concretada()])
+        viola(self, lambda: Anulacion.objects.create(usuario=self.gerente, pago_cliente=pago, motivo_anulacion="x"))
+        solicitud = discrepancia(self.concretada())
+        viola(self, lambda: Anulacion.objects.create(usuario=self.gerente, solicitud=solicitud, estado_anulado="rechazada", motivo_anulacion="x", cliente_pago_en_fecha=True))
+
+    def test_regla_estado_anulado_va_con_la_solicitud_en_los_dos_sentidos(self):
+        """`solicitud` no nula ⇔ `estado_anulado` no nulo: una solicitud sin estado anulado (antes lo permitía la base) y un estado anulado sin solicitud (una anulación de cobro), ahora se rechazan."""
+        solicitud = discrepancia(self.concretada())
+        viola(self, lambda: Anulacion.objects.create(usuario=self.gerente, solicitud=solicitud, motivo_anulacion="x"))
+        pago = cobro([self.concretada()])
+        viola(self, lambda: Anulacion.objects.create(usuario=self.gerente, pago_cliente=pago, cliente_pago_en_fecha=True, estado_anulado="rechazada", motivo_anulacion="x"))
+
+    def test_regla_un_pago_se_anula_una_sola_vez(self):
+        """`pago_cliente` es un OneToOne: la segunda anulación del mismo pago se rechaza (D-94 punto 11)."""
+        anulacion = self.una_de_cobro()
+        viola(self, lambda: Anulacion.objects.create(usuario=self.gerente, pago_cliente=anulacion.pago_cliente, motivo_anulacion="otra", cliente_pago_en_fecha=False))
+
+    def test_regla_una_anulacion_corrige_a_lo_sumo_un_cobro(self):
+        """`PagoCliente.anulacion_corregida` es un OneToOne (D-94 punto 10): una anulación se usa una sola vez; el segundo cobro con la misma se rechaza, y el primero llega a ella por `cobro_correcto`."""
+        anulacion = self.una_de_cobro()
+        primero = cobro([self.concretada()])
+        PagoCliente.objects.filter(pk=primero.pk).update(anulacion_corregida=anulacion)
+        self.assertEqual(anulacion.cobro_correcto.pk, primero.pk)
+        segundo = cobro([self.concretada()])
+        viola(self, lambda: PagoCliente.objects.filter(pk=segundo.pk).update(anulacion_corregida=anulacion))
+
+    def test_regla_la_fabrica_deja_el_pago_y_sus_lineas_anulados(self):
+        """`anulacion_de_cobro` (fábrica): el pago queda «anulado» y sus líneas con `vigente = False`; sin `anular`, no toca nada."""
+        pago = cobro([self.concretada()])
+        anulacion_de_cobro(pago)
+        pago.refresh_from_db()
+        self.assertEqual(pago.estado_pago, "anulado")
+        self.assertFalse(LineaPago.objects.filter(pago=pago, vigente=True).exists())
+        verificar_invariantes_de_cobros()
+        otro = cobro([self.concretada()])
+        anulacion_de_cobro(otro, anular=False)
+        otro.refresh_from_db()
+        self.assertEqual(otro.estado_pago, "vigente")
+
+    def test_el_texto_de_una_anulacion_es_legible_en_la_auditoria(self):
+        """`__str__` de la anulación (texto de `referencia()`, D-36)."""
+        anulacion = self.una_de_cobro()
+        self.assertEqual(str(anulacion), f"Anulación #{anulacion.pk}")
+
+
+class InvariantesDeAnulacionDeCobroTests(Base):
+    """COM-08b: los invariantes 8 y 9 de `verificar_invariantes_de_cobros()`."""
+
+    def test_un_pago_anulado_sin_anulacion_rompe(self):
+        """Invariante 8: un pago «anulado» sin su `Anulacion` rompe."""
+        pago = cobro([self.concretada()])
+        PagoCliente.objects.filter(pk=pago.pk).update(estado_pago="anulado")
+        LineaPago.objects.filter(pago=pago).update(vigente=False)
+        self.rompe("un pago anulado con 0 anulaciones")
+
+    def test_un_pago_vigente_con_una_anulacion_rompe(self):
+        """Invariante 8: un pago vigente con una `Anulacion` rompe."""
+        pago = cobro([self.concretada()])
+        anulacion_de_cobro(pago, anular=False)
+        self.rompe("un pago vigente con una anulación")
+
+    def test_un_pago_anulado_con_su_anulacion_pasa(self):
+        """Invariante 8: el caso bueno, con la fábrica de `cobro(estado="anulado")` y con `anulacion_de_cobro`."""
+        cobro([self.concretada()], estado="anulado")
+        anulacion_de_cobro(cobro([self.concretada()]))
+        verificar_invariantes_de_cobros()
+
+    def test_un_cobro_que_corrige_solo_con_entregas_del_cobro_anulado_pasa_y_con_otra_rompe(self):
+        """Invariante 9: `anulacion_corregida` con las entregas del cobro anulado pasa; con una entrega que no era de él, rompe."""
+        e1, e2 = self.concretada(), self.concretada()
+        anulacion = anulacion_de_cobro(cobro([e1]))
+        correcto = cobro([e1])
+        PagoCliente.objects.filter(pk=correcto.pk).update(anulacion_corregida=anulacion)
+        verificar_invariantes_de_cobros()
+        LineaPago.objects.filter(pago=correcto).update(entrega=e2)
+        self.rompe("tiene entregas que no eran del cobro anulado")

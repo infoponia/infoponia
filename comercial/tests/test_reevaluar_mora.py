@@ -16,10 +16,10 @@ from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from comercial.models import Entrega, LineaPago, PagoCliente
+from comercial.models import Entrega
 from comercial.servicios import cobranza
 from comercial.tests.base_cobranza import HOY, BaseDeCobranza
-from comercial.tests.fabricas import cobro, discrepancia, discrepancia_aceptada, queja
+from comercial.tests.fabricas import anulacion_de_cobro, cobro, discrepancia, discrepancia_aceptada, queja
 from maestros.extensiones import Enlace
 from maestros.models import Alerta, Invernadero
 from maestros.servicios import alertas as servicio_de_alertas
@@ -228,8 +228,7 @@ class ReevaluarMoraTests(BaseDeCobranza):
         primera = self.reevaluar(e, avisar=True)
         pago = cobro([e])
         self.reevaluar(e)
-        PagoCliente.objects.filter(pk=pago.pk).update(estado_pago="anulado")
-        LineaPago.objects.filter(pago=pago).update(vigente=False)
+        anulacion_de_cobro(pago)  # COM-08b: el mismo estado (pago anulado y líneas no vigentes) con su `Anulacion`, que pide el invariante 8
         nueva = self.reevaluar(e, avisar=False)
         self.assertNotEqual(nueva.pk, primera.pk)
         self.assertEqual((len(self.alertas_de(e)), len(self.alertas_de(e, activas=True)), len(self.alertas_de(e, activas=False))), (2, 1, 1))

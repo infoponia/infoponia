@@ -857,6 +857,8 @@ class RegistroAuditoria(models.Model):
         # COM-08a (D-94): el cobro de entregas de suministro (Vendedor o Gerente) y el vencimiento del pago de una entrega (paso diario 30, InfoPonia).
         REGISTRO_COBRO = "registro_cobro", "Registro de cobro de suministro"  # COM-REG-CBR
         VENCIMIENTO_PAGO = "vencimiento_pago", "Vencimiento del pago de una entrega"  # COM-VNC-PAG
+        # COM-08b (D-94 punto 11): la anulación de un cobro de suministro (Gerente).
+        ANULACION_COBRO = "anulacion_cobro", "Anulación de cobro de suministro"  # COM-ANL-CBR
         # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
         CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
         EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
@@ -1125,6 +1127,14 @@ class RegistroAuditoria(models.Model):
         "indemnizacion_atraso_total": "Indemnización por atraso total",
         "fecha_aviso_mora": "Fecha del aviso de mora",
         "detalle_de_entregas": "Detalle por entrega",
+        # COM-08b (D-94 puntos 10, 11 y 14): la anulación de un cobro («motivo_anulacion», «estado_pago», «fecha_pago» y «monto_pagado» ya existen), el cobro que la corrige y el pago de lo entregado al cancelar una venta.
+        "estado_pago": "Estado del pago",
+        "cobro_anulado": "Cobro anulado",
+        "cliente_pago_en_fecha": "El cliente pagó en esa fecha",
+        "entregas_que_vuelven": "Entregas que vuelven a estar sin pagar",
+        "anulacion_corregida": "Anulación que corrige",
+        "fecha_concrecion_venta": "Fecha de concreción de la venta",
+        "pago_de_lo_entregado": "Pago de lo entregado",
         # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
         "tipo_proveedor": "Tipo de proveedor",
@@ -1410,6 +1420,8 @@ class RegistroAuditoria(models.Model):
             "concretada": "Concretada",
             "cancelada": "Cancelada",
         },
+        # COM-08b: el estado de un pago de cliente (`core` no importa `comercial`).
+        "estado_pago": {"vigente": "Vigente", "anulado": "Anulado"},
         # COM-03a: las listas cerradas del suministro y de su detalle (`core` no importa `comercial`).
         "estado_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto", "rescindido": "Rescindido"},
         "mecanismo_precio": {"fijo": "Fijo", "ajuste_periodico": "Ajuste periódico"},
@@ -1709,6 +1721,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.RESOLUCION_SUMINISTRO_DESCARTADA,  # COM-07b
         RegistroAuditoria.Accion.ATENCION_SUMINISTRO_RESUELTO,  # COM-07b
         RegistroAuditoria.Accion.REGISTRO_COBRO,  # COM-08a
+        RegistroAuditoria.Accion.ANULACION_COBRO,  # COM-08b
         RegistroAuditoria.Accion.VENCIMIENTO_PAGO,  # COM-08a
         RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
         RegistroAuditoria.Accion.EMISION_RECLAMO,

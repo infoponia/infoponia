@@ -15,10 +15,10 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from comercial.models import CompraVenta, DetalleVenta, Entrega, EnlaceCliente, ReservaStock
+from comercial.models import CompraVenta, DetalleEntrega, DetalleVenta, Entrega, EnlaceCliente, PagoCliente, ReservaStock
 from comercial.servicios import compra_ventas, concrecion, cosechas, entregas
 from comercial.servicios.cosechas import DatosDeConcrecion
-from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta, texto_de_pesos
 from comercial.tests.fabricas import (
     compra_venta,
     detalle,
@@ -31,6 +31,7 @@ from comercial.tests.fabricas import (
     transportista_con_vehiculo,
     vehiculo_en_ruta,
     venta_con_todo,
+    verificar_invariantes_de_cobros,
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_reservas,
 )
@@ -387,16 +388,21 @@ class ComCnlCvtServicioTests(Base):
         self.assertEqual(codigos(c.exception), ["entrega_en_curso"])
         self.assertEqual((CompraVenta.objects.get(pk=v.venta.pk).estado_venta, self.estado_de(Entrega, v.entrega).estado_orden), ("abierta", "a_realizar"))
 
-    def test_ext_6a_con_una_entrega_concretada_se_rechaza_con_venta_con_entregas_concretadas(self):
-        """Extensión 6a (llega con COM-06 y COM-08b): antes de COM-06 ninguna entrega se concreta; si una prueba la arma, el servicio rechaza `venta_con_entregas_concretadas`."""
+    def test_ext_6a_con_una_entrega_concretada_ya_no_se_rechaza_pide_el_medio_de_pago_para_cobrar_lo_entregado(self):
+        """Extensión 6a (COM-08b; D-94 punto 14). REEMPLAZA a `test_ext_6a_con_una_entrega_concretada_se_rechaza_con_venta_con_entregas_concretadas` (COM-05b), que esperaba el rechazo `venta_con_entregas_concretadas`:
+        ese código ya no existe. Con una entrega concretada armada con la fábrica, `datos_de_cancelacion` la lista, calcula el monto a cobrar de lo entregado y **no** bloquea; confirmar sin el medio de pago se
+        rechaza con `medio_de_pago_obligatorio` (6a.2) y no cambia nada."""
         v = self.todo()
         marcar_concretada(v.entrega)  # COM-06a: una concretada con sus cantidades y su monto (antes, solo el estado)
         datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, v.venta.pk)
         self.assertEqual([e.codigo for e in datos.concretadas], [v.entrega.codigo])
+        self.assertIsNone(datos.bloqueo)
+        self.assertGreater(datos.cobro.total, Decimal("0.00"))
         with self.assertRaises(ValidationError) as c:
             compra_ventas.cancelar_compra_venta(self.e.vendedor, v.venta.pk, DatosDeCancelacionDeVenta("otro"), datos.huella)
-        self.assertEqual(codigos(c.exception), ["venta_con_entregas_concretadas"])
+        self.assertEqual(codigos(c.exception), ["medio_de_pago_obligatorio"])
         self.assertEqual(CompraVenta.objects.get(pk=v.venta.pk).estado_venta, "abierta")
+        self.assertEqual(PagoCliente.objects.count(), 0)
 
     def test_ext_8a_si_la_venta_cambio_de_estado_no_se_registra_nada(self):
         """Extensión 8a: la venta cambió de estado mientras se miraba el resumen: se informa y no se cambia nada."""
@@ -641,32 +647,165 @@ class ComCnlCvtVistaTests(Base):
 class ComCnlCvtConEntregaConcretadaRealTests(Base):
     """COM-06a (`rutas.md`, «Lo que completa a otras tareas», fila COM-05b): las pruebas de 6a y de D-67 punto 4 con una entrega **concretada de verdad** (con `concrecion.concretar_entrega`), no armada con la fábrica."""
 
-    def venta_con_una_entrega_concretada(self):
-        """Una venta con dos detalles (dos variedades) y dos entregas de hoy del mismo transportista, con la ruta iniciada; se concreta la primera (no es la última de la venta: no se cobra).
+    def venta_con_una_entrega_concretada(self, fecha_de_la_segunda=HOY):
+        """Una venta con dos detalles (dos variedades) y dos entregas del mismo transportista (la primera de hoy y la segunda de ``fecha_de_la_segunda``, hoy por omisión), con la ruta iniciada; se concreta la
+        primera (no es la última de la venta: no se cobra). Con la segunda de hoy, queda «en curso» (4a); COM-08b la pone de mañana para poder cancelar la venta (6a).
         Devuelve `(venta, detalle_entregado, detalle_pendiente, entrega_concretada, entrega_pendiente)`."""
         otra, _ = variedad_con_stock(self.e, "Otra variedad")
         lote_a, lote_b = lote_maduro(self.e, 500), lote_maduro(self.e, 500, variedad=otra)
         venta = compra_venta(self.e, dias=0)
         entregado, pendiente = detalle(venta, self.e.variedad, 50), detalle(venta, otra, 30)
         e1 = entrega(venta, [reserva_lista(entregado, lote_a, 50)], transportista=self.t, fecha=HOY)
-        e2 = entrega(venta, [reserva_lista(pendiente, lote_b, 30)], transportista=self.t, fecha=HOY)
+        e2 = entrega(venta, [reserva_lista(pendiente, lote_b, 30)], transportista=self.t, fecha=fecha_de_la_segunda)
         iniciar_ruta_de(self.t)
         datos = concrecion.DatosDeConcrecion(sin_envases=True)
         resumen = concrecion.resumen_de_concrecion(self.t, e1.pk, datos)
         concrecion.concretar_entrega(self.t, e1.pk, datos, resumen.huella)
         return venta, entregado, pendiente, e1, e2
 
-    def test_ext_6a_con_una_entrega_concretada_real_el_servicio_sigue_rechazando_hasta_la_cobranza(self):
-        """Extensión 6a (COM-08b la hace posible): con una entrega concretada de verdad, `datos_de_cancelacion` la lista, `cancelar_compra_venta` rechaza con `venta_con_entregas_concretadas` y no cambia nada (ni la venta, ni los detalles, ni la entrega pendiente)."""
-        venta, entregado, pendiente, e1, e2 = self.venta_con_una_entrega_concretada()
+    # ---- extensión 6a (COM-08b; D-94 punto 14): REEMPLAZA a `test_ext_6a_con_una_entrega_concretada_real_el_servicio_sigue_rechazando_hasta_la_cobranza` (COM-06a), que esperaba el rechazo
+    # `venta_con_entregas_concretadas` («hasta la cobranza»). Con COM-08b la cancelación cobra lo entregado y la venta queda «concretada». ----
+
+    def monto_de(self, entrega_):
+        """Σ `monto_pagar` de las líneas de ``entrega_`` (lo que registró la entrega, regla 32 de 8.6)."""
+        return sum((l.monto_pagar for l in DetalleEntrega.objects.filter(entrega=entrega_)), Decimal("0.00"))
+
+    def cancelar_con_cobro(self, actor, venta, medio="efectivo", motivo="cliente_desistio", descripcion=""):
+        datos = compra_ventas.datos_de_cancelacion(actor, venta.pk)
+        return compra_ventas.cancelar_compra_venta(actor, venta.pk, DatosDeCancelacionDeVenta(motivo, descripcion, medio), datos.huella)
+
+    def test_ext_6a_con_una_entrega_concretada_real_se_cancela_lo_pendiente_y_se_cobra_lo_entregado(self):
+        """Extensión 6a y postcondición f: con una entrega concretada de verdad, `datos_de_cancelacion` la lista con el monto a cobrar de lo entregado (Σ `monto_pagar`) y no bloquea; al confirmar con el medio de
+        pago, la venta queda «concretada» con `fecha_concrecion_venta` y los datos de la cancelación, la entrega pendiente y su detalle se cancelan y el detalle ya entregado no cambia."""
+        venta, entregado, pendiente, e1, e2 = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
         datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk)
-        self.assertEqual([e.codigo for e in datos.concretadas], [e1.codigo])
-        with self.assertRaises(ValidationError) as c:
-            compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro"), datos.huella)
-        self.assertEqual(codigos(c.exception), ["venta_con_entregas_concretadas"])
+        self.assertEqual(([e.codigo for e in datos.concretadas], datos.bloqueo), ([e1.codigo], None))
+        self.assertEqual(datos.cobro.total, self.monto_de(e1))
+        self.assertGreater(datos.cobro.total, Decimal("0.00"))
+        self.assertEqual([(f.codigo, f.fecha, f.monto) for f in datos.cobro.entregas], [(e1.codigo, HOY, self.monto_de(e1))])
+        self.cancelar_con_cobro(self.e.vendedor, venta, "efectivo", "cliente_no_retiro", "Se fue de viaje.")
+        v = CompraVenta.objects.get(pk=venta.pk)
+        self.assertEqual((v.estado_venta, v.fecha_concrecion_venta, v.motivo_cancelacion_venta, v.descripcion_cancelacion, v.fecha_cancelacion_venta), ("concretada", HOY, "cliente_no_retiro", "Se fue de viaje.", HOY))
+        self.assertEqual(self.estado_de(Entrega, e2).estado_orden, "cancelada")
+        self.assertEqual(self.estado_de(Entrega, e1).estado_orden, "concretada")
+        self.assertEqual((self.estado_de(DetalleVenta, entregado).estado_detalle_venta, self.estado_de(DetalleVenta, pendiente).estado_detalle_venta), ("confirmado", "cancelado"))
+
+    def test_post_f_el_cobro_es_un_pago_de_compra_venta_por_lo_entregado_con_el_medio_elegido(self):
+        """Postcondición f y D-94 punto 14: un `PagoCliente` de tipo `compra_venta` de la venta y su cliente, con el medio, la fecha de hoy, el monto = Σ `monto_pagar` de las entregas concretadas, «vigente», el usuario que
+        canceló, sin número ni líneas de pago; y la venta concretada tiene exactamente un pago vigente (invariante de COM-06a)."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        self.cancelar_con_cobro(self.e.vendedor, venta, "transferencia")
+        pago = PagoCliente.objects.get()
+        self.assertEqual(
+            (pago.tipo_pago, pago.compra_venta_id, pago.cliente_id, pago.medio_pago, pago.fecha_pago, pago.monto_pagado, pago.estado_pago, pago.usuario_id, pago.numero),
+            ("compra_venta", venta.pk, venta.cliente_id, "transferencia", HOY, self.monto_de(e1), "vigente", self.e.vendedor.pk, None),
+        )
+        self.assertEqual(pago.lineas.count(), 0)
+        self.assertEqual(PagoCliente.objects.filter(compra_venta=venta, estado_pago="vigente").count(), 1)
+        verificar_invariantes_de_cobros()
+
+    def test_regla_cobro_de_lo_entregado_cada_medio_de_la_lista_se_admite(self):
+        """Regla «Medio de pago» (regla 15 de 8.13): los cuatro medios de `PagoCliente.medio_pago` valen."""
+        for medio in ("efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"):
+            venta, _, _, _, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+            self.cancelar_con_cobro(self.e.vendedor, venta, medio)
+            self.assertEqual(PagoCliente.objects.get(compra_venta=venta).medio_pago, medio)
+
+    def test_ext_6a_el_medio_de_pago_es_obligatorio_con_entregas_concretadas(self):
+        """6a.2: sin medio (o con uno que no es de la lista) se rechaza `medio_de_pago_obligatorio` y no cambia nada (ni la venta, ni los detalles, ni la entrega pendiente, ni el pago)."""
+        venta, entregado, pendiente, e1, e2 = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        huella = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk).huella
+        for medio in ("", "cheque"):
+            with self.assertRaises(ValidationError) as c:
+                compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro", "", medio), huella)
+            self.assertEqual(codigos(c.exception), ["medio_de_pago_obligatorio"])
         self.assertEqual(CompraVenta.objects.get(pk=venta.pk).estado_venta, "abierta")
-        self.assertEqual(self.estado_de(Entrega, e2).estado_orden, "a_realizar")
-        self.assertEqual(self.estado_de(DetalleVenta, entregado).estado_detalle_venta, "confirmado")
+        self.assertEqual((self.estado_de(Entrega, e2).estado_orden, self.estado_de(DetalleVenta, pendiente).estado_detalle_venta), ("a_realizar", "abierto"))
+        self.assertEqual(PagoCliente.objects.count(), 0)
+
+    def test_ext_6a_sin_entregas_concretadas_el_medio_de_pago_no_se_admite(self):
+        """6a.2: sin entregas concretadas no hay nada que cobrar: un medio de pago se rechaza con `medio_no_admitido` y la venta no se cancela."""
+        v = self.todo()
+        huella = compra_ventas.datos_de_cancelacion(self.e.vendedor, v.venta.pk).huella
+        with self.assertRaises(ValidationError) as c:
+            compra_ventas.cancelar_compra_venta(self.e.vendedor, v.venta.pk, DatosDeCancelacionDeVenta("otro", "", "efectivo"), huella)
+        self.assertEqual(codigos(c.exception), ["medio_no_admitido"])
+        self.assertEqual(CompraVenta.objects.get(pk=v.venta.pk).estado_venta, "abierta")
+        self.assertIsNone(compra_ventas.datos_de_cancelacion(self.e.vendedor, v.venta.pk).cobro)
+
+    def test_ext_6a_sin_entregas_concretadas_la_venta_sigue_quedando_cancelada_y_sin_pago(self):
+        """Lo que no cambia: sin entregas concretadas la venta queda «cancelada» y no se crea ningún pago (regla «Asientos»: sin cobro, sin pago)."""
+        v = self.todo()
+        self.cancelar(self.e.vendedor, v)
+        self.assertEqual((CompraVenta.objects.get(pk=v.venta.pk).estado_venta, PagoCliente.objects.count()), ("cancelada", 0))
+
+    def test_ext_6a_el_resumen_muestra_el_cobro_y_el_estado_final_concretada(self):
+        """Paso 6 con 6a: el resumen dice «Concretada (se cobra lo entregado)» y trae el cobro con el medio; sin medio, se rechaza con `medio_de_pago_obligatorio` (la misma validación que la confirmación)."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        resumen = compra_ventas.resumen_de_cancelacion_de_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro", "", "efectivo"))
+        self.assertEqual((resumen.estado_final, resumen.datos.cobro.total), ("Concretada (se cobra lo entregado)", self.monto_de(e1)))
+        with self.assertRaises(ValidationError) as c:
+            compra_ventas.resumen_de_cancelacion_de_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro"))
+        self.assertEqual(codigos(c.exception), ["medio_de_pago_obligatorio"])
+
+    def test_ext_6a_la_cancelacion_no_toca_la_entrega_concretada_ni_su_monto(self):
+        """Lo entregado no se deshace: la entrega concretada conserva su estado, su monto total y su fecha de resolución."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        antes = Entrega.objects.filter(pk=e1.pk).values("estado_orden", "monto_total_entrega", "fecha_resolucion_orden").get()
+        self.cancelar_con_cobro(self.e.vendedor, venta)
+        self.assertEqual(Entrega.objects.filter(pk=e1.pk).values("estado_orden", "monto_total_entrega", "fecha_resolucion_orden").get(), antes)
+
+    def test_ext_6a_si_cancela_el_gerente_el_aviso_al_vendedor_dice_lo_que_se_cobro(self):
+        """Postcondición h con 6a (aviso): «CV-… cancelada» al Vendedor, con «Se cobró lo entregado: $ … en efectivo.»; el Gerente no se avisa a sí mismo."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        self.cancelar_con_cobro(self.gerente, venta, "efectivo")
+        (aviso,) = [a for a in self.avisos(self.e.vendedor) if a.titulo == f"{venta.codigo} cancelada"]
+        self.assertIn(f"Se cobró lo entregado: {texto_de_pesos(self.monto_de(e1))} en efectivo.", aviso.detalle)
+        self.assertEqual(self.avisos(self.gerente), [])
+
+    def test_ext_6a_la_auditoria_incluye_el_pago_y_el_paso_de_la_venta_a_concretada(self):
+        """Postcondición i con 6a (D-36): el pago entre los afectados y `cambios.estado_venta` de «abierta» a «concretada» con la fecha de concreción; el monto, en `datos`."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        self.cancelar_con_cobro(self.e.vendedor, venta, "transferencia")
+        pago = PagoCliente.objects.get()
+        registro = RegistroAuditoria.objects.get(accion="cancelacion_compra_venta")
+        self.assertTrue(any(a["modelo"] == "comercial.pagocliente" and a["id"] == pago.pk for a in registro.afectados))
+        self.assertEqual(registro.detalle["cambios"]["estado_venta"], {"antes": "abierta", "despues": "concretada"})
+        self.assertEqual(registro.detalle["cambios"]["fecha_concrecion_venta"]["despues"], f"{HOY:%d/%m/%Y}")
+        self.assertIn(str(self.monto_de(e1)), registro.detalle["datos"]["pago_de_lo_entregado"])
+
+    def test_ext_6a_el_comprobante_de_cancelacion_muestra_el_cobro_de_lo_entregado(self):
+        """Postcondición g con 6a: el comprobante (el correo y la página imprimible, `datos_del_comprobante`) tiene la sección «Cobro de lo entregado»: cada entrega con su monto, el total y el medio."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        with override_settings(CORREO_CONFIGURADO=True):
+            self.cancelar_con_cobro(self.e.vendedor, venta, "tarjeta_debito")
+        cobro = compra_ventas.datos_del_comprobante(CompraVenta.objects.get(pk=venta.pk))["cancelacion"].cobro
+        self.assertEqual((cobro.total, cobro.medio, [(f.codigo, f.monto) for f in cobro.entregas]), (self.monto_de(e1), "Tarjeta de débito", [(e1.codigo, self.monto_de(e1))]))
+        (correo_enviado,) = mail.outbox
+        self.assertIn("Cobro de lo entregado", correo_enviado.body)
+        self.assertIn(texto_de_pesos(self.monto_de(e1)), correo_enviado.body)
+        self.assertIn("Tarjeta de débito", correo_enviado.body)
+
+    def test_ext_6a_un_comprobante_sin_cobro_no_tiene_la_seccion(self):
+        """Sin entregas concretadas el comprobante de cancelación sigue como antes: sin sección de cobro."""
+        v = self.todo()
+        with override_settings(CORREO_CONFIGURADO=True):
+            self.cancelar(self.e.vendedor, v)
+        self.assertIsNone(compra_ventas.datos_del_comprobante(CompraVenta.objects.get(pk=v.venta.pk))["cancelacion"].cobro)
+        self.assertNotIn("Cobro de lo entregado", mail.outbox[0].body)
+
+    def test_ext_8a_una_entrega_que_se_concreta_mientras_tanto_cambia_el_monto_a_cobrar_y_no_se_registra_nada(self):
+        """Extensión 8a con 6a (la huella suma la lista de entregas concretadas y su monto): si la otra entrega se concreta entre el resumen y la confirmación, `venta_cambio` (o `venta_no_cancelable`, si esa
+        concreción cerró la venta): no se cobra el monto viejo ni se cancela nada."""
+        venta, _, pendiente, e1, e2 = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk)
+        marcar_concretada(e2)
+        antes = (RegistroAuditoria.objects.count(), Notificacion.objects.count())
+        with self.assertRaises(ValidationError) as c:
+            compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro", "", "efectivo"), datos.huella)
+        self.assertEqual(codigos(c.exception), ["venta_cambio"])
+        self.assertEqual((RegistroAuditoria.objects.count(), Notificacion.objects.count()), antes)
+        self.assertEqual((PagoCliente.objects.count(), CompraVenta.objects.get(pk=venta.pk).estado_venta), (0, "abierta"))
 
     def test_d67_4_los_detalles_a_cancelar_son_los_que_no_tienen_linea_en_una_entrega_concretada(self):
         """D-67 punto 4 con datos reales: el detalle confirmado y ya entregado (con línea en una entrega concretada) no se cancela; el que sigue sin entregar sí."""

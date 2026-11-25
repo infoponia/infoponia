@@ -847,7 +847,33 @@ def cobro(entregas_, *, medio="efectivo", usuario=None, fecha=None, estado="vige
     )
     for e, monto, dias, indemnizacion in lineas:
         LineaPago.objects.create(pago=pago, entrega=e, monto_cobrado=monto, dias_atraso=dias, indemnizacion_atraso=indemnizacion, vigente=vigente)
+    if not vigente:  # COM-08b: un pago anulado tiene exactamente una `Anulacion` (invariante); el pago y sus líneas ya nacen anulados
+        _crear_anulacion_de_cobro(pago, usuario=None, cliente_pago_en_fecha=False, motivo="Error de carga.")
     return pago
+
+
+def _crear_anulacion_de_cobro(pago, *, usuario, cliente_pago_en_fecha, motivo, fecha=None):
+    """Crea la `Anulacion` de ``pago`` (sin tocar el pago ni sus líneas)."""
+    from comercial.models import Anulacion
+    from core.models import Gerente
+    from core.tests.fabricas import crear_gerente
+
+    usuario = usuario or Gerente.objects.filter(is_active=True).first() or crear_gerente()
+    return Anulacion.objects.create(
+        usuario=usuario, pago_cliente=pago, motivo_anulacion=motivo, cliente_pago_en_fecha=cliente_pago_en_fecha, fecha_anulacion=fecha or timezone.localdate()
+    )
+
+
+def anulacion_de_cobro(pago, *, usuario=None, cliente_pago_en_fecha=False, motivo="Error de carga.", anular=True):
+    """COM-08b: la `Anulacion` de un cobro de suministro creada directo en la base (D-94, punto 11). Con ``anular`` (por omisión) además deja el pago «anulado» y sus líneas con `vigente = False`,
+    como lo hace `cobranza.anular_cobro`; no resuelve ni crea alertas ni manda nada. Para las pruebas de las restricciones, de 7a y de lo que se desbloquea al anular; la anulación real la hace el servicio."""
+    from comercial.models import LineaPago, PagoCliente
+
+    creada = _crear_anulacion_de_cobro(pago, usuario=usuario, cliente_pago_en_fecha=cliente_pago_en_fecha, motivo=motivo)
+    if anular:
+        PagoCliente.objects.filter(pk=pago.pk).update(estado_pago="anulado")
+        LineaPago.objects.filter(pago_id=pago.pk).update(vigente=False)
+    return creada
 
 
 def verificar_invariantes_de_cobros():
@@ -855,8 +881,8 @@ def verificar_invariantes_de_cobros():
     cobra. Verifica que (1) un pago de suministro tiene al menos una línea y uno de compra-venta ninguna; (2) `monto_pagado` es Σ (`monto_cobrado` + `indemnizacion_atraso`) de sus líneas; (3) `vigente`
     de cada línea es el estado de su pago; (4) las entregas de un pago son de suministro, están concretadas y son del cliente del pago; (5) una entrega con línea vigente tiene `monto_cobrado` igual a su
     monto a cobrar; (6) solo una entrega de suministro concretada tiene `fecha_aviso_mora`; (7) una entrega en mora, sin pagar y con `fecha_aviso_mora` tiene su alerta «pago en mora» activa si su
-    invernadero está activo. (El de «un pago anulado tiene su `Anulacion`» es de COM-08b.) Lanza `AssertionError` con lo que encuentra."""
-    from comercial.models import AlertaComercial, CompraVenta, Entrega, LineaPago, PagoCliente
+    invernadero está activo; (8, COM-08b) un pago anulado tiene exactamente una `Anulacion` y uno vigente ninguna; (9, COM-08b) un cobro con `anulacion_corregida` tiene solo entregas del cobro anulado. Lanza `AssertionError` con lo que encuentra."""
+    from comercial.models import AlertaComercial, Anulacion, CompraVenta, Entrega, LineaPago, PagoCliente
     from comercial.servicios import entregas as servicio
 
     problemas = []
@@ -884,6 +910,18 @@ def verificar_invariantes_de_cobros():
         for l in lineas:
             if l.vigente and l.monto_cobrado != servicio.monto_a_cobrar([l.entrega_id])[l.entrega_id]:
                 problemas.append(f"{p.codigo}: lo cobrado de {l.entrega.codigo} ({l.monto_cobrado}) no es su monto a cobrar")
+    for p in PagoCliente.objects.filter(tipo_pago="suministro").order_by("pk"):  # COM-08b (D-94, puntos 10 y 11)
+        anulaciones = Anulacion.objects.filter(pago_cliente_id=p.pk).count()
+        if p.estado_pago == "anulado" and anulaciones != 1:
+            problemas.append(f"{p.codigo}: un pago anulado con {anulaciones} anulaciones (tiene que tener exactamente una)")
+        if p.estado_pago == "vigente" and anulaciones:
+            problemas.append(f"{p.codigo}: un pago vigente con una anulación")
+        if p.anulacion_corregida_id is not None:
+            anulado = PagoCliente.objects.filter(anulacion_de_cobro__pk=p.anulacion_corregida_id).first()
+            propias = set(p.lineas.values_list("entrega_id", flat=True))
+            del_anulado = set(anulado.lineas.values_list("entrega_id", flat=True)) if anulado is not None else set()
+            if anulado is None or not propias <= del_anulado:
+                problemas.append(f"{p.codigo}: corrige una anulación y tiene entregas que no eran del cobro anulado")
     cobradas = set(LineaPago.objects.filter(vigente=True).values_list("entrega_id", flat=True))
     en_ventas = set(CompraVenta.objects.values_list("pk", flat=True))
     for e in Entrega.objects.filter(fecha_aviso_mora__isnull=False).select_related("invernadero").order_by("pk"):
