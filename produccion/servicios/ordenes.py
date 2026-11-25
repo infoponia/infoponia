@@ -88,6 +88,8 @@ def _clave_de_bandeja(fila):
 def _resumen_de(hija):
     """El texto corto de lo que hace la orden («Lechuga Crespa · 50 plantines»); vacío si su hija no se conoce."""
     if isinstance(hija, Siembra):
+        if hija.tipo_siembra == Siembra.TipoSiembra.CARGA_INICIAL:  # PRD-05: un lote existente, sin Capataz
+            return f"{hija.variedad} · {hija.cant_plantines_siembra} plantas · carga inicial"
         return f"{hija.variedad} · {hija.cant_plantines_siembra} plantines"
     if isinstance(hija, TransicionEtapa):
         return f"{hija.lote.codigo} · {hija.lote.siembra.variedad} → {hija.etapa_destino.tipo_etapa.nombre_etapa}"

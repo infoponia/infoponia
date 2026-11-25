@@ -7,7 +7,9 @@ from datetime import date
 
 from django.utils import timezone
 
-from produccion.servicios import aplicaciones, bitacora, mermas, sectores_fuera_de_servicio, siembras, transiciones
+from decimal import Decimal, InvalidOperation
+
+from produccion.servicios import aplicaciones, bitacora, lotes_existentes, mermas, sectores_fuera_de_servicio, siembras, transiciones
 
 PRIORIDADES = (("", "Sin prioridad (cuenta como media)"), ("alta", "Alta"), ("media", "Media"), ("baja", "Baja"))
 
@@ -55,6 +57,38 @@ def siembra_desde_post(datos):
         prioridad=datos.get("prioridad") or None,
         descripcion=datos.get("descripcion", ""),
         insumos_adicionales=adicionales,
+    )
+
+
+def monto(valor):
+    """Un monto escrito con coma o con punto como `Decimal`; vacío es 0. Un texto que no es un número se pasa tal cual (no es `Decimal`): lo rechaza el
+    servicio con `costo_invalido`, como a cualquier otro cliente."""
+    texto = str(valor if valor is not None else "").strip().replace(",", ".")
+    if not texto:
+        return Decimal("0")
+    try:
+        return Decimal(texto)
+    except InvalidOperation:
+        return texto
+
+
+def lote_existente_desde_post(datos):
+    """Los `DatosDeLoteExistente` de «Registrar lote existente» (PROD-REG-LTE): los campos `sector_<id>` (plantas por sector) que traen algo escrito.
+    Un valor que no es un entero se pasa como -1 para que el servicio lo rechace (`cantidad_invalida`)."""
+    distribucion = tuple(
+        (int(clave[len("sector_"):]), entero(valor) if entero(valor) is not None else -1)
+        for clave, valor in datos.items()
+        if clave.startswith("sector_") and clave[len("sector_"):].isdigit() and valor.strip()
+    )
+    return lotes_existentes.DatosDeLoteExistente(
+        invernadero_id=entero(datos.get("invernadero")),
+        variedad_id=entero(datos.get("variedad")),
+        etapa_id=entero(datos.get("etapa")),
+        fecha_siembra=fecha(datos.get("fecha_siembra")),
+        fecha_ingreso_etapa=fecha(datos.get("fecha_ingreso_etapa")),
+        cantidad=entero(datos.get("cantidad")),
+        costo_estimado=monto(datos.get("costo_estimado")),
+        distribucion=distribucion,
     )
 
 

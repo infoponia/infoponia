@@ -23,8 +23,8 @@ from maestros.models import Invernadero
 from produccion import formularios
 from produccion.errores import ErrorDeProduccion
 from produccion import extensiones
-from produccion.models import Merma, OrdenTrabajo
-from produccion.servicios import ordenes, siembras, transiciones
+from produccion.models import Lote, Merma, OrdenTrabajo
+from produccion.servicios import lotes_existentes, ordenes, siembras, transiciones
 
 AGRONOMO, CAPATAZ, GERENTE = Usuario.Rol.AGRONOMO, Usuario.Rol.CAPATAZ, Usuario.Rol.GERENTE
 # Los campos que no entran en la «firma» de lo que se calculó.
@@ -102,6 +102,7 @@ def lista(request):
         "estados": ESTADOS_DEL_FILTRO,
         "filtros": {"invernadero": request.GET.get("invernadero", ""), "tipo": filtros.tipo or "", "estado": filtros.estado or ""},
         "es_gerente": rol_de(request.user) == GERENTE,
+        "hay_lotes_existentes": bool(lotes_existentes.invernaderos_disponibles(request.user)),  # PRD-05: «Registrar lote existente»
         "activa": "ordenes",
     }
     plantilla = "produccion/_tabla_de_ordenes.html" if _en_vivo(request) else "produccion/lista.html"
@@ -196,6 +197,78 @@ def nueva_siembra(request):
                 contexto["errores"] = _errores_por_campo(error)
                 contexto["para_habilitar"] = _para_habilitar_la_semilla(error)
     plantilla = "produccion/_nueva_siembra_formulario.html" if _en_vivo(request) else "produccion/nueva_siembra.html"
+    return render(request, plantilla, contexto)
+
+
+# ---- Registrar lote existente (PROD-REG-LTE, PRD-05) ----
+
+
+@rol_requerido(AGRONOMO, GERENTE)
+@never_cache
+@vary_on_headers("HX-Request")
+@require_http_methods(["GET", "HEAD", "POST"])
+def registrar_lote_existente(request):
+    """«Registrar lote existente» (PROD-REG-LTE): invernadero → variedad → etapa actual → fechas, plantas y costo → distribución por sector → resumen
+    con el asiento. No está en el prototipo: se armó con el patrón de «Nueva siembra» (D-61). Cambiar el invernadero, la variedad o la etapa (HTMX o
+    «Continuar» sin JavaScript) solo redibuja lo que depende de ellos, sin validar. «Ver resumen» valida todo y no escribe; «Confirmar registro» vuelve a
+    verificar bajo bloqueo y escribe. Tras registrar vuelve a esta dirección con `?registrado=<lote>`, que muestra la confirmación con sus enlaces."""
+    _ocultar_al_gerente(request)
+    datos = request.POST if request.method == "POST" else request.GET
+    accion = datos.get("accion", "") if request.method == "POST" else ""
+    invernadero_id, variedad_id, etapa_id = (formularios.entero(datos.get(c)) for c in ("invernadero", "variedad", "etapa"))
+    errores_de_carga = {}
+    try:
+        ofrecido = _servicio(
+            lotes_existentes.datos_de_registro,
+            request.user,
+            invernadero_id,
+            variedad_id if invernadero_id else None,
+            etapa_id if invernadero_id and variedad_id else None,
+        )
+    except ErrorDeProduccion as error:  # un invernadero que ya no está disponible, una variedad dada de baja...: se vuelve a la lista de invernaderos
+        errores_de_carga = _errores_por_campo(error)
+        invernadero_id = variedad_id = etapa_id = None
+        ofrecido = lotes_existentes.datos_de_registro(request.user)
+    contexto = {
+        "ofrecido": ofrecido,
+        "valores": dict(datos.items()),
+        "invernadero_id": invernadero_id,
+        "variedad_id": variedad_id,
+        "etapa_id": etapa_id,
+        "es_primera_etapa": bool(ofrecido.etapas) and etapa_id == ofrecido.etapas[0].etapa_id,
+        "errores": errores_de_carga,
+        "resumen": None,
+        "firma": "",
+        "activa": "ordenes",
+        "cambio_la_firma": False,
+        "registrado": None,
+        "entradas": extensiones.entradas_de_comercial(request.user),
+    }
+    if request.method != "POST" and datos.get("registrado"):
+        # La confirmación: solo de un lote de un invernadero que la cuenta tiene a su cargo (si no, no se muestra nada).
+        contexto["registrado"] = (
+            Lote.objects.filter(pk=formularios.entero(datos.get("registrado")), invernadero__agronomo_id=request.user.pk)
+            .select_related("etapa__tipo_etapa", "siembra__variedad")
+            .first()
+        )
+    if accion in ("calcular", "confirmar"):
+        if not (invernadero_id and variedad_id and etapa_id):
+            # Si el invernadero dejó de estar disponible mientras tanto (extensión 10a), se informa qué cambió y no un genérico.
+            contexto["errores"] = errores_de_carga or {"general": "Elegí el invernadero, la variedad y la etapa antes de seguir."}
+        else:
+            carga = formularios.lote_existente_desde_post(datos)
+            firma = _firma(datos)
+            try:
+                if accion == "confirmar" and datos.get("firma") == firma:
+                    lote = _servicio(lotes_existentes.registrar_lote_existente, request.user, carga)
+                    messages.success(request, f"El lote {lote.codigo} quedó registrado.")
+                    return redirect(f"{request.path}?registrado={lote.pk}")
+                contexto["cambio_la_firma"] = accion == "confirmar"
+                contexto["resumen"] = _servicio(lotes_existentes.resumen_de_registro, request.user, carga)
+                contexto["firma"] = firma
+            except ErrorDeProduccion as error:
+                contexto["errores"] = _errores_por_campo(error)
+    plantilla = "produccion/_lote_existente_formulario.html" if _en_vivo(request) else "produccion/registrar_lote_existente.html"
     return render(request, plantilla, contexto)
 
 

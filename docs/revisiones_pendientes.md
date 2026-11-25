@@ -953,3 +953,35 @@ Los 24 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-05-
 - [ ] 23. Sin JavaScript
 - [ ] 24. Celular
 
+## PRD-05 · Tarea PRD-05 (registrar lote existente)
+
+Los 28 pasos son los de «Verificación a mano» de `docs/tareas/produccion/PRD-05-registrar-lote-existente.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). **Tiene migraciones** (`produccion` 0010 y `core` 0043) **y una pantalla nueva** («Registrar lote existente»). **Es un formulario que se envía:** el paso 26 es el de «navegador real». Usá un invernadero de verificación nuevo: el paso 27 es irreversible para ese invernadero y los pasos 1 a 27 dejan datos en tu base de desarrollo (un asiento no se borra).
+
+- [ ] 1. `python manage.py migrate` y `showmigrations produccion core`: aplicadas `produccion.0010_carga_inicial_de_lotes` y `core.0045_carga_inicial_de_lotes`; las siembras que ya tenías quedan «Normal» y con Capataz *(lo cubre una prueba)*.
+- [ ] 2. `python manage.py runserver` y abrir `http://localhost:8000/`.
+- [ ] 3. Gerente: crear a mano el invernadero «Invernadero Carga Inicial» (dirección urbana, Calle Falsa 123) con el Agrónomo y el Capataz nuevos.
+- [ ] 4. Agrónomo nuevo: crear sus seis sectores de 100 agujeros (G-1 Germinación, C-1 Crecimiento, F-1 Floración, FR-1 Fructificación, M-1 y M-2 Maduración).
+- [ ] 5. Comprobar que el invernadero no tiene ninguna orden en «Producción» → «Órdenes de trabajo».
+- [ ] 6. Agrónomo: el botón «Registrar lote existente» en «Producción» y en la pestaña «Lotes activos» de la ficha *(lo cubre una prueba)*.
+- [ ] 7. Elegir invernadero → variedad → etapa Maduración: aparecen los campos y M-1 y M-2 con «libres: 100», sin errores y sin validar *(lo cubre una prueba)*.
+- [ ] 8. Completar (siembra hace 40 días, ingreso hace 10, 180 plantas, costo 12000, M-1 100, M-2 80) y «Ver resumen»: costo por planta $66,67, «quedan 0 / 20 libres» y el asiento Debe Productos en Proceso / Haber Capital Inicial; no se guardó nada *(lo cubre una prueba)*.
+- [ ] 9. Cambiar el costo después del resumen y «Confirmar registro»: avisa «Cambiaste un dato…» y no registra *(lo cubre una prueba)*.
+- [ ] 10. «Confirmar registro»: aviso verde y tarjeta «El lote L-N quedó registrado» con «Planificar su transición» *(lo cubre el recorrido)*.
+- [ ] 11. El lote en «Lotes activos»: Maduración, 180 de 180, $66.67 por planta, la fecha de ingreso cargada y el fin estimado.
+- [ ] 12. Los agujeros bajaron: M-1 sin libres y M-2 con 20 *(lo cubre una prueba)*.
+- [ ] 13. La orden de la carga: tipo Siembra, concretada, «Sin Capataz (carga inicial)», creada, programada y resuelta = hoy, fecha de siembra = hace 40 días; el Capataz no la ve en su bandeja *(lo cubre una prueba)*.
+- [ ] 14. Bitácora con el filtro «Carga inicial»: fecha de ingreso, lote, sectores M-1 y M-2 y la descripción *(lo cubre una prueba)*.
+- [ ] 15. Contador: el asiento de hoy «Carga inicial del lote L-N», Debe 1.1.05 Productos en Proceso $12.000,00 / Haber 3.1.01 Capital Inicial $12.000,00 *(lo cubre el recorrido)*.
+- [ ] 16. Gerente, «Auditoría»: el registro «Registro de lote existente» con la siembra, el lote, las ocupaciones, los sectores, la bitácora y el asiento entre los afectados *(lo cubre una prueba)*.
+- [ ] 17. Opcional: el fragmento de PowerShell que muestra las tres fechas de la orden en hoy, la de siembra pasada y el Capataz en `None`.
+- [ ] 18. Segundo lote en Crecimiento con costo $0 (ingreso hace 4 días): «con costo $0 no se registra ningún asiento» y el libro sigue con un solo asiento *(lo cubre una prueba)*.
+- [ ] 19. Elegir Germinación: debajo del ingreso, «Suele coincidir con la fecha de siembra»; con otra etapa, no *(lo cubre una prueba)*.
+- [ ] 20. «Nueva transición» del lote de Crecimiento: «termina el» = ingreso cargado + días de Crecimiento; planificarla *(lo cubre el recorrido)*.
+- [ ] 21. Capataz, «Concretar»: «Entre el [ingreso cargado] y hoy»; la fecha de hace 6 días se rechaza y la de hoy concreta *(lo cubre el recorrido)*.
+- [ ] 22. Errores junto a su campo: plantas 0, costo -5 / 10,555 / abc, fecha de siembra mañana, ingreso anterior o futuro, suma de sectores que no cierra, agujeros que no alcanzan *(lo cubre una prueba)*.
+- [ ] 23. Sin sectores para la etapa (extensión 7d) *(lo cubre una prueba)*.
+- [ ] 24. Gerente: sin botón y la dirección escrita a mano da «página no encontrada» *(lo cubre una prueba)*.
+- [ ] 25. Capataz con la dirección a mano: acceso denegado; otro Agrónomo no ve el invernadero de verificación en su desplegable *(lo cubre una prueba)*.
+- [ ] 26. **Navegador real** (ventana privada, y otra vez sin JavaScript): una carga de 10 plantas en Floración, «Ver resumen» y «Confirmar registro» hasta el final; sin «Prohibido (403)» ni errores en la consola.
+- [ ] 27. **Al final, irreversible para este invernadero:** concretar una siembra normal; la acción «Registrar lote existente» desaparece y no vuelve, y la pantalla lo explica *(lo cubre una prueba)*.
+- [ ] 28. Opcional: en un celular de 360 px la pantalla, con el resumen y el asiento, se lee bien.

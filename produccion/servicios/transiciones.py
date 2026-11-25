@@ -23,7 +23,8 @@ from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
 from produccion.models import Bitacora, Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
 from produccion.servicios import lotes as api_lotes
-from produccion.servicios import mermas, ordenes
+from produccion.servicios import mermas, ordenes, sectores_elegibles
+from produccion.servicios.sectores_elegibles import SectorNoElegible  # noqa: F401  (se conserva el nombre en este módulo)
 from produccion.servicios.bloqueos import traducir as _bloquear
 
 # Un lote de los que ve el Agrónomo al planificar (paso 2 del CU), con lo que pide el CU y el motivo por el que no se puede elegir
@@ -184,7 +185,6 @@ DatosDePlanificacionDeTransicion = namedtuple(
 )
 SectorElegible = namedtuple("SectorElegible", "sector_id nombre libres")
 # `motivo`: `fuera_de_servicio`, `perfil_incompatible` o `sin_lugar`; `texto`, la explicación (con los lotes y órdenes que lo ocupan).
-SectorNoElegible = namedtuple("SectorNoElegible", "sector_id nombre motivo texto")
 # El resumen del paso 11. `distribucion` y `sectores_de_origen` son listas de `(sector, plantas)`.
 ResumenDeTransicion = namedtuple(
     "ResumenDeTransicion",
@@ -297,37 +297,9 @@ def _exigir_formato(datos):
 
 
 def _sectores_del_destino(lote, etapa_destino):
-    """Los sectores del tipo de la etapa destino (regla «Sector elegible», pasos 7 a 9 y extensión 3c): `(elegibles, no_elegibles)`.
-    Elegible: ACTIVO, compatible por perfil familiar y con capacidad libre mayor que cero. Los inactivos no figuran; los fuera de servicio,
-    los de otro perfil y los llenos van entre los no elegibles con su motivo. No se valida el umbral ambiental."""
-    sectores = list(
-        SectorProduccion.objects.filter(invernadero_id=lote.invernadero_id, tipo_etapa_id=etapa_destino.tipo_id)
-        .exclude(estado_sector=SectorProduccion.Estado.INACTIVO)
-        .select_related("tipo_etapa")
-        .order_by("id")
-    )
-    agujeros = api_sectores.agujeros_de(sectores)
-    perfiles = api_lotes.perfil_de_sector([s.pk for s in sectores])
-    perfil = lote.siembra.variedad.perfil_familia
-    incompatibles = [s for s in sectores if s.estado_sector == SectorProduccion.Estado.ACTIVO and perfiles[s.pk] not in (None, perfil)]
-    contenido = api_sectores.contenido_de_sectores(incompatibles) if incompatibles else {}
-    elegibles, no_elegibles = {}, []
-    for s in sectores:
-        libres = agujeros[s.pk].libres
-        if s.estado_sector != SectorProduccion.Estado.ACTIVO:
-            no_elegibles.append(SectorNoElegible(s.pk, s.nombre_sector, "fuera_de_servicio", "Fuera de servicio: no se puede elegir."))
-        elif perfiles[s.pk] not in (None, perfil):
-            quienes = ", ".join(c.texto for c in contenido.get(s.pk, []))
-            no_elegibles.append(
-                SectorNoElegible(
-                    s.pk, s.nombre_sector, "perfil_incompatible", f"Tiene plantas de otro perfil familiar ({perfiles[s.pk]}): {quienes}."
-                )
-            )
-        elif libres <= 0:
-            no_elegibles.append(SectorNoElegible(s.pk, s.nombre_sector, "sin_lugar", "Sin agujeros libres."))
-        else:
-            elegibles[s.pk] = (s, agujeros[s.pk])
-    return elegibles, no_elegibles
+    """Los sectores del tipo de la etapa destino (regla «Sector elegible», pasos 7 a 9 y extensión 3c): `(elegibles, no_elegibles)`. La lógica vive
+    en `sectores_elegibles` (PRD-05 la comparte con PROD-REG-LTE sin cambiarla); acá solo se la llama con los datos del lote."""
+    return sectores_elegibles.sectores_elegibles(lote.invernadero_id, etapa_destino.tipo_id, lote.siembra.variedad.perfil_familia)
 
 
 def _exigir_capacidad_total(lote, elegibles, no_elegibles):

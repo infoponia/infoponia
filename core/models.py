@@ -837,6 +837,7 @@ class RegistroAuditoria(models.Model):
         REGISTRO_PAGO_PROVEEDOR = "registro_pago_proveedor", "Registro de pago a proveedor"
         PLANIFICACION_ENVASADO = "planificacion_envasado", "Planificación de envasado"  # COM-05a2 (PROD-PNF-ENV)
         CANCELACION_COMPRA_VENTA = "cancelacion_compra_venta", "Cancelación de compra-venta"  # COM-05b (COM-CNL-CVT)
+        REGISTRO_LOTE_EXISTENTE = "registro_lote_existente", "Registro de lote existente"  # PRD-05 (PROD-REG-LTE, D-92 punto 12)
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1207,6 +1208,10 @@ class RegistroAuditoria(models.Model):
         "reservas_creadas": "Envases reservados",
         "cantidad_reservada": "Cantidad reservada",
         "estado_reserva_insumo": "Estado de la reserva de envase",
+        # PRD-05 (PROD-REG-LTE): la carga de un lote existente.
+        "tipo_siembra": "Tipo de siembra",
+        "fecha_ingreso_etapa": "Fecha de ingreso a la etapa",
+        "costo_estimado": "Costo estimado del lote",
         "estado_ejercicio": "Estado del ejercicio",
         "ejercicio": "Ejercicio contable",
         "numero_asiento": "Número de asiento",
@@ -1271,6 +1276,8 @@ class RegistroAuditoria(models.Model):
         # CMP-01: `core` no importa `compras` (A1 de D-37), así que la lista cerrada se repite acá.
         "tipo_proveedor": {"juridica": "Persona jurídica", "fisica": "Persona física"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
+        # PRD-05: el tipo de la siembra (carga inicial = lote existente).
+        "tipo_siembra": {"normal": "Normal", "carga_inicial": "Carga inicial"},
         # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
         "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
         # COM-04a (D-64 punto 5): `core` no importa `produccion` (A1 de D-37), así que la lista cerrada se repite acá.
@@ -1601,6 +1608,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REGISTRO_PAGO_PROVEEDOR,
         RegistroAuditoria.Accion.PLANIFICACION_ENVASADO,
         RegistroAuditoria.Accion.CANCELACION_COMPRA_VENTA,
+        RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
     }
 )
 

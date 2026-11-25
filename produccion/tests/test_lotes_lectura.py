@@ -12,7 +12,9 @@ from django.utils import timezone
 
 from inventario.tests.fabricas import ConDatosDeInventario, perezoso
 from produccion.models import Lote, OcupacionSector
-from produccion.tests.fabricas import invernadero_con_produccion, lote_activo, orden_de_siembra
+from produccion.tests.fabricas import (
+    invernadero_con_produccion, lote_activo, lote_con_ciclo, lote_de_carga_inicial, orden_de_siembra, orden_de_transicion,
+)
 
 lotes = perezoso("produccion.servicios.lotes")
 
@@ -100,3 +102,60 @@ class LotesLecturaTests(ConDatosDeInventario, TestCase):
             lote_activo(self.e)
         con_cinco = consultas(lambda: lotes.lotes_activos_de([self.e.invernadero.pk]))
         self.assertEqual(con_uno, con_cinco)
+
+
+class LotesDeCargaInicialLecturaTests(ConDatosDeInventario, TestCase):
+    """PRD-05, lectura (D-92 punto 12; L3 de «Registrar Lote Existente»): sin transición concretada hacia la etapa actual, la entrada a la etapa
+    es la `fecha_bitacora` de la entrada `carga_inicial` del lote, también en la primera etapa (interpretación del estudiante, 25/11/2026)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.e = invernadero_con_produccion()
+        cls.hoy = timezone.localdate()
+
+    def test_post_b_la_entrada_a_la_etapa_actual_es_la_de_la_carga_inicial(self):
+        """Un lote cargado en Crecimiento: la entrada es el ingreso cargado, no la fecha de siembra."""
+        lote = lote_de_carga_inicial(self.e, etapa="crecimiento", ingreso=self.hoy - timedelta(days=4), siembra=self.hoy - timedelta(days=40))
+        self.assertEqual(lotes.fecha_de_entrada_a_la_etapa(Lote.objects.get(pk=lote.pk)), self.hoy - timedelta(days=4))
+
+    def test_regla_l3_en_la_primera_etapa_manda_el_ingreso_cargado_y_no_la_siembra(self):
+        """Lote de carga inicial en Germinación con ingreso distinto de la fecha de siembra: usa el ingreso."""
+        lote = lote_de_carga_inicial(self.e, etapa="germinacion", ingreso=self.hoy - timedelta(days=5), siembra=self.hoy - timedelta(days=9))
+        self.assertEqual(lotes.fecha_de_entrada_a_la_etapa(Lote.objects.get(pk=lote.pk)), self.hoy - timedelta(days=5))
+
+    def test_regla_8_21_5_un_lote_normal_en_germinacion_sigue_usando_la_fecha_de_siembra(self):
+        """Sin regresión: un lote normal en Germinación toma `siembra.fecha_siembra`."""
+        lote = lote_activo(self.e)
+        Siembra = lote.siembra.__class__
+        Siembra.objects.filter(pk=lote.siembra_id).update(fecha_siembra=self.hoy - timedelta(days=7))
+        self.assertEqual(lotes.fecha_de_entrada_a_la_etapa(Lote.objects.get(pk=lote.pk)), self.hoy - timedelta(days=7))
+
+    def test_post_b_la_entrada_a_maduracion_y_la_fecha_maxima_de_cosecha_salen_de_la_carga_inicial(self):
+        """Lote cargado en Maduración: entrada a Maduración = ingreso cargado; fecha máxima = ingreso + `duracion_dias` de Maduración (10)."""
+        lote = lote_de_carga_inicial(self.e, etapa="maduracion", ingreso=self.hoy - timedelta(days=3))
+        lote = Lote.objects.get(pk=lote.pk)
+        self.assertEqual(lotes.fecha_de_entrada_a_maduracion(lote), self.hoy - timedelta(days=3))
+        self.assertEqual(lotes.fecha_maxima_de_cosecha(lote), self.hoy - timedelta(days=3) + timedelta(days=10))
+
+    def test_regla_l3_un_lote_cargado_en_otra_etapa_no_entro_a_maduracion(self):
+        """Un lote cargado en Crecimiento no tiene fecha de entrada a Maduración."""
+        lote = lote_de_carga_inicial(self.e, etapa="crecimiento")
+        self.assertIsNone(lotes.fecha_de_entrada_a_maduracion(Lote.objects.get(pk=lote.pk)))
+
+    def test_regla_l3_una_transicion_concretada_hacia_la_etapa_actual_manda_sobre_la_carga_inicial(self):
+        """Si el lote ya transicionó hacia la etapa actual, la entrada es la `fecha_transicion` (la carga inicial es de otra etapa)."""
+        lote = lote_de_carga_inicial(self.e, etapa="germinacion", ingreso=self.hoy - timedelta(days=30), siembra=self.hoy - timedelta(days=30))
+        orden_de_transicion(self.e, lote, estado="concretada", fecha_efectiva=self.hoy - timedelta(days=2), dias=0)
+        lote = Lote.objects.get(pk=lote.pk)
+        self.assertNotEqual(lote.etapa.tipo_etapa.codigo, "germinacion")
+        self.assertEqual(lotes.fecha_de_entrada_a_la_etapa(lote), self.hoy - timedelta(days=2))
+
+    def test_d50_lotes_activos_de_incluye_la_entrada_de_la_carga_inicial_sin_consultas_por_fila(self):
+        """`lotes_activos_de` muestra la entrada cargada y hace las mismas consultas con 1 o con 3 lotes."""
+        lote_de_carga_inicial(self.e, etapa="maduracion", ingreso=self.hoy - timedelta(days=6))
+        una = consultas(lambda: lotes.lotes_activos_de([self.e.invernadero.pk]))
+        lote_de_carga_inicial(self.e, etapa="crecimiento", ingreso=self.hoy - timedelta(days=2))
+        lote_de_carga_inicial(self.e, etapa="floracion", ingreso=self.hoy - timedelta(days=1))
+        self.assertEqual(consultas(lambda: lotes.lotes_activos_de([self.e.invernadero.pk])), una)
+        filas = {f.etapa_codigo: f for f in lotes.lotes_activos_de([self.e.invernadero.pk])}
+        self.assertEqual(filas["maduracion"].fecha_de_entrada, self.hoy - timedelta(days=6))

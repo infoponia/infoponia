@@ -191,6 +191,7 @@ TIPOS_DE_FILTRO = [
         Bitacora.TipoEvento.OTRO_EVENTO,
         Bitacora.TipoEvento.FUERA_DE_SERVICIO,  # PRD-04 (docs/disparadores.md, «Cuando exista PROD-PNR-FDS»)
         Bitacora.TipoEvento.REUBICACION,
+        Bitacora.TipoEvento.CARGA_INICIAL,  # PRD-05: la carga de un lote existente
         Bitacora.TipoEvento.COSECHA,  # COM-04a (docs/disparadores.md, «Cuando exista `produccion` completa», punto 3)
         Bitacora.TipoEvento.INCUMPLIMIENTO_DE_CLAUSULA,
         Bitacora.TipoEvento.ANULACION_DE_RESOLUCION,
