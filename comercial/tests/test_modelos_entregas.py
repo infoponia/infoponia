@@ -337,3 +337,29 @@ class LaEntregaNoEsDeProduccionTests(Base):
         self.assertEqual(contexto.exception.codigo, "orden_no_cancelable")
         self.entrega.refresh_from_db()
         self.assertEqual(self.entrega.estado_orden, "a_realizar")
+
+
+class RestriccionDeReservaDeInsumoTests(Base):
+    """COM-05a2 (D-66 punto 8): `ReservaInsumo` pasa a «a lo sumo una activa por orden e insumo»: una entrega puede volver a reservar un envase que quitó."""
+
+    def test_regla_reserva_dos_activas_del_mismo_insumo_en_una_entrega_violan(self):
+        """Modelo, «ReservaInsumo», restricciones de la base: único `(orden, insumo_invernadero)` con `estado = activa`."""
+        from comercial.tests.fabricas import envase
+        from produccion.tests.fabricas import reservar
+
+        entrega_ = self.crear()
+        bandeja = envase(self.e.invernadero)
+        reservar(entrega_, bandeja, 5)
+        viola(self, lambda: reservar(entrega_, bandeja, 3))
+
+    def test_regla_reserva_una_cancelada_y_una_activa_del_mismo_insumo_no_violan(self):
+        """D-66 punto 8: el envase quitado (reserva «cancelada») puede volver a agregarse con una reserva nueva «activa»."""
+        from comercial.tests.fabricas import envase
+        from produccion.models import ReservaInsumo
+        from produccion.tests.fabricas import reservar
+
+        entrega_ = self.crear()
+        bandeja = envase(self.e.invernadero)
+        reservar(entrega_, bandeja, 5, estado="cancelada")
+        reservar(entrega_, bandeja, 3)
+        self.assertEqual(sorted(ReservaInsumo.objects.filter(orden=entrega_).values_list("estado", flat=True)), ["activa", "cancelada"])

@@ -1,0 +1,26 @@
+{% extends "core/base_con_sesion.html" %}{% load estaticos %}
+{% comment %}«Producción» → «Envasado» (COM-05a2, PROD-PNF-ENV; `tabEnvasado` del prototipo, última definición): las entregas «a realizar» de los invernaderos del Agrónomo, por fecha programada. Filtros por
+invernadero (si tiene más de uno a cargo) y por fecha programada: formulario GET común (sin JavaScript funciona igual con «Filtrar»; con HTMX solo se redibuja la tabla; nunca se filtra al tipear).
+Recibe «filas», «invernaderos», «invernadero_id», «fecha» y «hay_filtros».{% endcomment %}
+{% block titulo %}Envasado · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Envasado</h1></div>
+  <p class="muted" style="margin:0 0 12px">Las entregas las planifica InfoPonia. Reservá los envases de cada una: se descuentan del stock recién al concretarla.</p>
+
+  <form class="filters" method="get" action="{% url 'comercial:envasado' %}" role="search"
+        hx-get="{% url 'comercial:envasado' %}" hx-target="#tabla-de-envasado" hx-push-url="true">
+    {% if invernaderos %}
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero">
+      <option value="">Todos mis invernaderos</option>
+      {% for i in invernaderos %}<option value="{{ i.pk }}"{% if invernadero_id == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <input class="field-input" type="date" name="fecha" value="{{ fecha }}" aria-label="Fecha programada">
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+  </form>
+
+  <div id="tabla-de-envasado">{% include "comercial/envasado/_tabla.html" %}</div>
+</div>
+{% endblock %}

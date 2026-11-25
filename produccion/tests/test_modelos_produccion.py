@@ -103,12 +103,15 @@ class ModelosDeProduccionTests(ConDatosDeInventario, TestCase):
 
     # ---- ReservaInsumo ----
 
-    def test_regla_reserva_dos_reservas_de_la_misma_orden_e_insumo_violan_unico_aunque_una_este_cancelada(self):
-        """Ficha «ReservaInsumo»: único `(orden, insumo_invernadero)` SIN condición en PRD-01 (punto 6 de «Tipos futuros»)."""
+    def test_regla_reserva_a_lo_sumo_una_activa_por_orden_e_insumo(self):
+        """Ficha «ReservaInsumo»: único `(orden, insumo_invernadero)` solo entre las «activa» (D-66 punto 8, COM-05a2). Reemplaza a la de PRD-01, que
+        afirmaba «sin condición»: dos activas violan; una cancelada y una activa no."""
         orden = orden_suelta(self.e.invernadero, Tipo.ENTREGA)
-        primera = reservar(orden, self.e.existencia_semilla, 5)
-        ReservaInsumo.objects.filter(pk=primera.pk).update(estado="cancelada")
+        reservar(orden, self.e.existencia_semilla, 5)
         viola(self, lambda: reservar(orden, self.e.existencia_semilla, 3))
+        otra = orden_suelta(self.e.invernadero, Tipo.ENTREGA)
+        reservar(otra, self.e.existencia_semilla, 5, estado="cancelada")
+        reservar(otra, self.e.existencia_semilla, 3)
 
     def test_regla_reserva_cantidad_reservada_positiva(self):
         """`cantidad_reservada > 0`."""

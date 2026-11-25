@@ -767,3 +767,16 @@ def verificar_invariantes_de_entregas():
     if problemas:
         raise AssertionError("Invariantes de entregas rotos: " + "; ".join(problemas))
 
+
+def envase(invernadero, stock=30, unidad="unidad", *, nombre="Bandeja PET 1 kg", vence=None, activo=True, habilitado=True, insumo_activo=True, minimo=0):
+    """Un envase (insumo de la categoría del sistema «envases», D-66 punto 8) habilitado en `invernadero` con `stock` en un lote (`vence` es su fecha de vencimiento;
+    `stock=0` no crea lote). Devuelve el `InsumoInvernadero`. `activo=False` deja inactivo el insumo del invernadero; `habilitado=False`, también (no se ofrece);
+    `insumo_activo=False`, el insumo del catálogo. COM-05a2 (PROD-PNF-ENV)."""
+    from inventario.tests.fabricas import categoria_del_sistema, existencia, insumo, lote
+
+    base = insumo(nombre=nombre, tipo=categoria_del_sistema("envases"), unidad=unidad, controla_vencimiento=vence is not None, activo=insumo_activo)
+    creado = existencia(base, invernadero, minimo=minimo, activo=activo and habilitado)
+    if Decimal(str(stock)) > 0:
+        lote(creado, stock, vence=vence)
+    return creado
+

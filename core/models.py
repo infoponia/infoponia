@@ -829,6 +829,7 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_ENTREGA = "planificacion_entrega", "Planificación de entrega"
         MODIFICACION_ENTREGA = "modificacion_entrega", "Modificación de entrega"
         ASIGNACION_TRANSPORTISTA = "asignacion_transportista", "Asignación de transportista"
+        PLANIFICACION_ENVASADO = "planificacion_envasado", "Planificación de envasado"  # COM-05a2 (PROD-PNF-ENV)
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1176,6 +1177,10 @@ class RegistroAuditoria(models.Model):
         "entregas_sin_transportista": "Entregas que quedan sin transportista",
         "estado_confirmacion_cliente": "Confirmación del cliente",
         "estado_aviso_cliente": "Aviso al cliente",
+        # COM-05a2 (PROD-PNF-ENV, postcondiciones e y f): las reservas de envases de una entrega.
+        "reservas_creadas": "Envases reservados",
+        "cantidad_reservada": "Cantidad reservada",
+        "estado_reserva_insumo": "Estado de la reserva de envase",
         "estado_ejercicio": "Estado del ejercicio",
         "ejercicio": "Ejercicio contable",
         "numero_asiento": "Número de asiento",
@@ -1558,6 +1563,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_ENTREGA,
         RegistroAuditoria.Accion.MODIFICACION_ENTREGA,
         RegistroAuditoria.Accion.ASIGNACION_TRANSPORTISTA,
+        RegistroAuditoria.Accion.PLANIFICACION_ENVASADO,
     }
 )
 

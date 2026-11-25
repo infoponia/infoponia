@@ -900,7 +900,7 @@ POR_PAGINA = 50
 POR_PAGINA_DEL_CALENDARIO = 100
 DIAS_ATRAS_DEL_CALENDARIO = 30
 DIAS_ADELANTE_DEL_CALENDARIO = 28
-TEXTOS_DE_SITUACION = {"pasado": "Pasado", "reservado": "Reservado", "fuera_de_la_ventana": "Fuera de la ventana"}
+TEXTOS_DE_SITUACION = {"pasado": "Pasado", "reservado": "Reservado", "fuera_de_la_ventana": "Fuera de la ventana", "entrega_planificada": "Entrega planificada"}
 
 
 @dataclass
@@ -970,7 +970,7 @@ class FilaDeDetalle:
 
 @dataclass
 class FilaDeCalendario:
-    """Regla 6: un período (fecha, detalle) con su situación: ``pasado``, ``reservado``, ``sin_cobertura`` o ``fuera_de_la_ventana``."""
+    """Regla 6: un período (fecha, detalle) con su situación: ``entrega_planificada`` (COM-05a2), ``pasado``, ``reservado``, ``sin_cobertura`` o ``fuera_de_la_ventana``."""
 
     fecha: date
     detalle: object
@@ -999,6 +999,7 @@ class FichaDeSuministro:
     aviso_de_limite: str | None
     acciones: frozenset
     aviso_de_rescision: str | None = None  # COM-03b: la rescisión acordada o el contrato rescindido
+    entregas: list = field(default_factory=list)  # COM-05a2 (regla 7): las entregas del contrato (`entregas.entregas_del_contrato`)
     hay_historial: bool = False  # COM-03b: alguna cadena «reemplaza a» con más de una versión («Ver historial de cambios»)
 
 
@@ -1044,10 +1045,14 @@ def _filas_de_calendario(fechas, hoy, ventana):
         if en_la_ventana
         else {}
     )
+    # COM-05a2 (regla 6): un período con línea en una entrega «a realizar» dice «Entrega planificada», sea cual sea su fecha. Dos consultas para toda la página.
+    con_entrega = entregas.periodos_con_entrega([(detalle.pk, fecha) for fecha, detalle, _ in fechas])
     filas = []
     for fecha, detalle, reemplazado in fechas:
         faltan = 0
-        if fecha < hoy:
+        if (detalle.pk, fecha) in con_entrega:
+            situacion, texto = "entrega_planificada", TEXTOS_DE_SITUACION["entrega_planificada"]
+        elif fecha < hoy:
             situacion, texto = "pasado", TEXTOS_DE_SITUACION["pasado"]
         elif fecha <= ventana:
             faltan = sin_cubrir[Periodo(detalle, fecha)] or con_alerta.get((detalle.pk, fecha), 0)
@@ -1221,6 +1226,7 @@ def ficha_de_suministro(actor, suministro_id):
         acciones=frozenset(acciones),
         aviso_de_rescision=_aviso_de_rescision(suministro),
         hay_historial=hay_historial,
+        entregas=entregas.entregas_del_contrato(suministro.pk, hoy),
     )
 
 

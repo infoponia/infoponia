@@ -19,7 +19,7 @@ from functools import partial
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Case, Exists, F, IntegerField, OuterRef, Q, Value, When
+from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, Value, When
 from django.urls import reverse
 
 from comercial.models import (
@@ -463,6 +463,24 @@ def _avisar_al_vendedor(contrato, titulo, detalle):
     return vendedor
 
 
+def _avisar_envasado_al_agronomo(entrega, contrato, peso):
+    """Paso 10 (h) de COM-PNF-ENT («Avisos y textos»): al Agrónomo del invernadero de origen, si su cuenta está activa, «Planificá el envasado de OT-0231». Sin Agrónomo
+    activo no se envía (regla «Invernadero sin Agrónomo» de PROD-PNF-ENV: lo verá el que se asigne). El texto nombra la pantalla («Producción › Envasado»), sin enlace (D-42).
+    Se avisa por cada entrega nueva y, en el agrupamiento (extensión 4a), con la entrega completa. Dentro de la transacción (D-42)."""
+    agronomo = _usuario_activo(Invernadero.objects.filter(pk=entrega.invernadero_id).values_list("agronomo_id", flat=True).first())
+    if agronomo is None:
+        return None
+    partes, total = _contenido(entrega)
+    modalidad = "retiro" if entrega.modalidad_entrega == RETIRO else "envío"
+    prefijo = f"Entrega del {entrega.fecha_programada_orden:%d/%m} a {_cliente_de(contrato)} ({modalidad}): "
+    notificaciones.notificar(
+        agronomo,
+        _acotar(f"Planificá el envasado de {entrega.codigo}", LARGO_DEL_TITULO),
+        _con_contenido(prefijo, partes, f" · {_kg(peso)}. Está en Producción › Envasado.", total),
+    )
+    return agronomo
+
+
 def _avisar_nueva_entrega_al_transportista(entrega, contrato, peso):
     """Paso 9 (c) y 1b.4.3: «Nueva entrega para el 26/11»."""
     partes, total = _contenido(entrega)
@@ -634,6 +652,7 @@ def _planificar_en_invernadero(origen, invernadero_id, hoy):
             _avisar_al_vendedor(contrato, f"Entrega sin transportista: {entrega.codigo}", detalle)
         if prometida < hoy:
             _aviso_de_retraso(entrega, contrato, prometida)
+        _avisar_envasado_al_agronomo(entrega, contrato, peso)  # paso 10 (h): COM-05a2
         _marcar_aviso_pendiente(entrega, contrato, cambio_de_fecha=False)
         cantidades = cantidades_planificadas([l.pk for l in creadas])
         datos = {
@@ -680,6 +699,7 @@ def _agregar_a_entrega_existente(entrega, contrato, lineas, reservas, hoy):
             f"Cambió la entrega {entrega.codigo}",
             _acotar(f"Se agregaron {', '.join(partes)} de {contrato.codigo}. Peso nuevo: {_kg(nueva)}.", LARGO_DEL_DETALLE),
         )
+    _avisar_envasado_al_agronomo(entrega, contrato, nueva)  # paso 10 (h): con la entrega completa (COM-05a2)
     _marcar_aviso_pendiente(entrega, contrato, cambio_de_fecha=False)
     RegistroAuditoria.objects.registrar(
         usuario=None,
@@ -1146,6 +1166,73 @@ def _destino_de_la_fila(entrega):
     direccion = entrega.direccion_destino
     hija = direccion.concreta()
     return f"{hija.texto()}, {direccion.localidad.nombre_localidad}" if hija is not direccion else str(direccion)
+
+
+# ---- COM-05a2: las entregas en el panel de control y en las fichas de los contratos (entregas.md, «Pantallas» y «Lo que completa a otras tareas») ----
+
+FilaDeEntregaDeContrato = namedtuple(
+    "FilaDeEntregaDeContrato", "codigo invernadero fecha cuando atrasada estado estado_texto transportista es_retiro confirmacion"
+)
+EntregasDelPanel = namedtuple("EntregasDelPanel", "a_realizar de_hoy sin_transportista proximas")
+ProximaEntrega = namedtuple("ProximaEntrega", "codigo cliente fecha cuando atrasada")
+
+
+def entregas_del_contrato(contrato_id, hoy):
+    """Regla 4 de COM-CNS-CVT y regla 7 de COM-CNS-SUM: las entregas de un contrato (todas, en cualquier estado), por fecha programada e id, con el invernadero de origen, la fecha (con
+    «Atrasada» si corresponde, MD-139), el estado, el transportista (o «Retiro») y, en un suministro, su confirmación («No confirmada»). Una consulta, sin consultas por entrega. El alcance
+    lo garantiza la ficha que la llama."""
+    lista = Entrega.objects.filter(contrato_entrega_id=contrato_id).select_related("invernadero", "transportista").order_by("fecha_programada_orden", "pk")
+    filas = []
+    for e in lista:
+        a_realizar = e.estado_orden == A_REALIZAR
+        filas.append(
+            FilaDeEntregaDeContrato(
+                codigo=e.codigo,
+                invernadero=str(e.invernadero),
+                fecha=e.fecha_programada_orden,
+                cuando=_cuando(e.fecha_programada_orden, hoy, a_realizar) if a_realizar else "",
+                atrasada=a_realizar and e.fecha_programada_orden < hoy,
+                estado=e.estado_orden,
+                estado_texto=TEXTO_DEL_ESTADO[e.estado_orden],
+                transportista=e.transportista.get_full_name() if e.transportista_id else "",
+                es_retiro=e.modalidad_entrega == RETIRO,
+                confirmacion=e.get_estado_confirmacion_cliente_display() if e.estado_confirmacion_cliente else "",
+            )
+        )
+    return filas
+
+
+def entregas_del_panel(actor, hoy):
+    """El grupo «Entregas» del panel del Gerente y del Vendedor, dentro de su alcance: las «a realizar» (`a_realizar`), «Entregas de hoy» (`de_hoy`: con fecha programada ≤ hoy, de hoy o
+    atrasadas), «Sin transportista» (`sin_transportista`: con envío) y «Próximas entregas» (`proximas`: las 5 primeras por fecha e id). Dos consultas, sin consultas por entrega."""
+    del_alcance = Entrega.objects.en_alcance_de(actor).filter(estado_orden=A_REALIZAR)
+    cuentas = del_alcance.aggregate(
+        total=Count("pk"),
+        de_hoy=Count("pk", filter=Q(fecha_programada_orden__lte=hoy)),
+        sin_transportista=Count("pk", filter=Q(modalidad_entrega=ENVIO, transportista__isnull=True)),
+    )
+    proximas = [
+        ProximaEntrega(e.codigo, e.contrato_entrega.cliente.nombre_visible, e.fecha_programada_orden, _cuando(e.fecha_programada_orden, hoy, True), e.fecha_programada_orden < hoy)
+        for e in del_alcance.select_related("contrato_entrega__cliente").order_by("fecha_programada_orden", "pk")[:5]
+    ]
+    return EntregasDelPanel(cuentas["total"], cuentas["de_hoy"], cuentas["sin_transportista"], proximas)
+
+
+def periodos_con_entrega(periodos):
+    """Regla 6 de COM-CNS-SUM: de los ``periodos`` (``[(id del detalle de suministro, fecha)]``), el conjunto de los que tienen una línea con cantidad planificada en una entrega «a
+    realizar» («Entrega planificada» en el calendario). Dos consultas para todos los períodos de la página."""
+    periodos = set(periodos)
+    if not periodos:
+        return set()
+    lineas = list(
+        DetalleEntrega.objects.filter(
+            entrega__estado_orden=A_REALIZAR,
+            detalle_suministro_id__in={d for d, _ in periodos},
+            fecha_periodo__in={f for _, f in periodos},
+        ).values_list("pk", "detalle_suministro_id", "fecha_periodo")
+    )
+    planificadas = cantidades_planificadas([pk for pk, _, _ in lineas])
+    return {(d, f) for pk, d, f in lineas if (d, f) in periodos and planificadas[pk] > 0}
 
 
 def lista_de_entregas(actor, filtros, hoy):

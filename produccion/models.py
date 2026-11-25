@@ -153,8 +153,11 @@ class ReservaInsumo(models.Model):
         verbose_name_plural = "Reservas de insumo"
         indexes = [models.Index(fields=["insumo_invernadero", "estado"], name="reserva_insumo_stock_idx")]
         constraints = [
-            # Sin condición en PRD-01 (la cambia COM-05a2 a «a lo sumo una activa», D-66 punto 8).
-            models.UniqueConstraint(fields=["orden", "insumo_invernadero"], name="reserva_insumo_unica_por_orden"),
+            # COM-05a2 (D-66 punto 8; docs/modelo/produccion.md, «Restricciones de la base»): a lo sumo UNA ACTIVA por orden e insumo. Un envase quitado del
+            # envasado de una entrega deja su reserva «cancelada» y, si se vuelve a agregar, nace otra. PRD-01 tenía la restricción sin condición.
+            models.UniqueConstraint(
+                fields=["orden", "insumo_invernadero"], condition=Q(estado="activa"), name="reserva_insumo_una_activa_por_orden"
+            ),
             models.CheckConstraint(condition=Q(cantidad_reservada__gt=0), name="reserva_insumo_reservada_positiva"),
             models.CheckConstraint(
                 condition=Q(estado__in=["activa", "consumida", "cancelada"]), name="reserva_insumo_estado_valido"

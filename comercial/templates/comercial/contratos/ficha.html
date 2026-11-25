@@ -68,7 +68,7 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
 
     <div class="card">
       <div class="card-title">Entregas</div>
-      <p class="muted">La entrega se planifica cuando todo el producto esté listo.</p>
+      {% include "comercial/entregas/_de_contrato.html" with entregas=ficha.entregas %}
     </div>
 
     <div class="card">

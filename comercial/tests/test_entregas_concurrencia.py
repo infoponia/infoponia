@@ -1,6 +1,6 @@
 # Pruebas de concurrencia de las entregas (COM-05a1, paso 7; docs/casos_de_uso/comercial/entregas.md, «Pruebas»; docs/patrones/bloqueos.md, «Entregas y envasado»): dos
 # planificaciones por el último lugar de un transportista (el semáforo es el invernadero de origen: una queda sin transportista), una planificación contra una merma en cámara que libera la
-# reserva (en los dos órdenes) y dos corridas del paso 50 a la vez. La del envasado (COM-05a2) y la de la cancelación de la venta (COM-05b) llegan con sus tareas. Dos hilos, dos
+# reserva (en los dos órdenes) y dos corridas del paso 50 a la vez. La merma en cámara contra el envasado de la entrega es de COM-05a2 (abajo; el resto del envasado, en `test_envasado_concurrencia.py`); la de la cancelación de la venta llega con COM-05b. Dos hilos, dos
 # conexiones, el orden fijado con ``primera``. Son ``TransactionTestCase``: sin Georef de la migración (el cliente tiene una dirección en la localidad propia que arma
 # `geografia_propia`). Todas terminan verificando los invariantes de las reservas y de las entregas. Nunca un error 500: el que pierde espera y relee (8b).
 
@@ -8,10 +8,11 @@ from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
 from comercial.models import AlertaComercial, Entrega
-from comercial.servicios import entregas, merma_camara
+from comercial.servicios import entregas, envasado, merma_camara
 from comercial.servicios.merma_camara import DatosDeMermaEnCamara
 from comercial.tests.fabricas import (
     compra_venta,
+    envase,
     detalle,
     direccion_de_cliente,
     escenario_comercial,
@@ -22,7 +23,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_reservas,
 )
-from core.tests.concurrencia import correr_a_la_vez
+from core.tests.concurrencia import codigos, correr_a_la_vez
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.models import Localidad
@@ -107,3 +108,44 @@ class EntregasConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual((rechazos, otros), ([], []), resultados)
         self.assertEqual(Entrega.objects.count(), 1)
         self.assertEqual(sum(r.creados for r in buenos), 1)
+
+    def merma_que_vacia_la_entrega(self, envasar_primero):
+        """Una entrega de 30 plantas con una partida de 30 y un envase de 20: la merma en cámara de las 30 la vacía; el envasado reserva 5 envases."""
+        self.armar("800")
+        venta = compra_venta(self.e, dias=3, direccion=self.direccion)
+        det = detalle(venta, self.e.variedad, 30)
+        p = partida_cosechada(self.lote, 30)
+        reserva(det, [(p, 30)])
+        (resultado,) = entregas.planificar_venta(venta.pk, HOY)
+        entrega_ = resultado.entrega
+        bandeja = envase(self.e.invernadero, 20)
+        carga = envasado.CargaDeEnvasado(entrega_.pk, ((bandeja.pk, "5"),), envasado.huella_de(entrega_.pk))
+        envasar = lambda: envasado.planificar_envasado(self.e.agronomo, carga)
+        merma = lambda: merma_camara.registrar_merma_en_camara(self.e.agronomo, DatosDeMermaEnCamara(p.pk, 30, "dano_en_camara", "", None))
+        return entrega_, bandeja, (envasar, merma) if envasar_primero else (merma, envasar)
+
+    def test_regla_una_merma_que_vacia_la_entrega_primero_y_el_envasado_ve_la_entrega_cancelada(self):
+        """COM-05a2, 10a: la merma en cámara vacía la entrega (se cancela) y el envasado, que espera al invernadero, la encuentra cancelada: `entrega_no_a_realizar`; sin reservas de envase activas."""
+        from comercial.models import Entrega as EntregaModelo
+        from produccion.models import ReservaInsumo
+
+        entrega_, bandeja, (primera_op, segunda_op) = self.merma_que_vacia_la_entrega(envasar_primero=False)
+        resultados = correr_a_la_vez(primera_op, segunda_op, primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], resultados)
+        self.assertEqual(codigos(rechazos[0]), ["entrega_no_a_realizar"])
+        self.assertEqual(EntregaModelo.objects.get(pk=entrega_.pk).estado_orden, "cancelada")
+        self.assertFalse(ReservaInsumo.objects.filter(orden_id=entrega_.pk, estado="activa").exists())
+
+    def test_regla_un_envasado_primero_y_la_merma_que_vacia_la_entrega_cancela_tambien_los_envases(self):
+        """COM-05a2: el envasado registra y la merma después cancela la entrega vacía: las reservas de envase pasan a «cancelada» sin consumo y los envases vuelven a estar libres."""
+        from inventario.servicios import stock
+        from produccion.models import ReservaInsumo
+
+        entrega_, bandeja, (primera_op, segunda_op) = self.merma_que_vacia_la_entrega(envasar_primero=True)
+        resultados = correr_a_la_vez(primera_op, segunda_op, primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual((rechazos, otros), ([], []), resultados)
+        (r,) = ReservaInsumo.objects.filter(orden_id=entrega_.pk)
+        self.assertEqual((r.estado, r.cantidad_utilizada), ("cancelada", None))
+        self.assertEqual(stock.disponible_para_planificar([bandeja.pk], HOY)[bandeja.pk], 20)

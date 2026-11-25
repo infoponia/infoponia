@@ -76,6 +76,11 @@ solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha
     </div>
 
     <div class="card">
+      <div class="card-title">Entregas</div>
+      {% include "comercial/entregas/_de_contrato.html" with entregas=ficha.entregas con_confirmacion=True %}
+    </div>
+
+    <div class="card">
       <div class="card-title">Comprobante</div>
       <p>
         {% if s.estado_comprobante == "enviado" %}<span class="status-badge status-ok">Enviado</span> a {{ s.cliente.email_cliente }}.

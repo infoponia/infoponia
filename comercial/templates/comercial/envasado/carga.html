@@ -1,0 +1,13 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Planificar / modificar envasado» (COM-05a2, PROD-PNF-ENV; `VIEWS.env` del prototipo): la página de la carga. Recibe lo que arma `_contexto` de `views_envasado`: «datos» (DatosDeEnvasado), «fila»,
+«busqueda», «generales», «hay_errores» y «modifica».{% endcomment %}
+{% block titulo %}{% if modifica %}Modificar{% else %}Planificar{% endif %} envasado {{ fila.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <a class="back" href="{% url 'comercial:envasado' %}">{% icono "chev" 14 %} Envasado</a>
+  <div class="page-h"><h1>{% if modifica %}Modificar envasado{% else %}Envasado{% endif %} de <span class="mono">{{ fila.codigo }}</span></h1>
+    <div class="sub">{{ fila.cliente }} · {{ fila.contrato_codigo }} · {{ fila.invernadero }}</div></div>
+  <div id="envasado-formulario">{% include "comercial/envasado/_carga_formulario.html" %}</div>
+</div>
+{% endblock %}

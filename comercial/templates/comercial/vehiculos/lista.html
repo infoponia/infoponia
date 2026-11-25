@@ -28,7 +28,7 @@ Recibe «filas» (FilaDeVehiculo), «q», «estado», «invernadero_id» e «inv
 
   <div class="tablewrap">
     <table class="data-table">
-      <thead><tr><th>Patente</th><th>Tipo y modelo</th><th class="right">Capacidad</th><th>Transportista</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Patente</th><th>Tipo y modelo</th><th class="right">Capacidad</th><th>Transportista</th><th class="right">Entregas a realizar</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
       <tbody>
       {% for fila in filas %}
         <tr>
@@ -36,12 +36,13 @@ Recibe «filas» (FilaDeVehiculo), «q», «estado», «invernadero_id» e «inv
           <td>{{ fila.vehiculo.get_tipo_vehiculo_display }}<span class="sub2">{{ fila.vehiculo.marca }} {{ fila.vehiculo.modelo }}</span></td>
           <td class="right">{{ fila.vehiculo.capacidad_carga|kg }}</td>
           <td>{% if fila.vehiculo.transportista %}{{ fila.vehiculo.transportista.get_full_name|default:fila.vehiculo.transportista.email }}<span class="sub2">{% if fila.invernadero %}{{ fila.invernadero.nombre_invernadero }}{% else %}Sin invernadero{% endif %}</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
+          <td class="right">{% if fila.entregas_a_realizar %}<a class="rowlink" href="{% url 'comercial:entregas' %}?transportista={{ fila.vehiculo.transportista_id }}">{{ fila.entregas_a_realizar }}<span class="sr"> entregas a realizar de {{ fila.vehiculo.patente }}</span></a>{% else %}<span class="muted">0</span>{% endif %}</td>
           <td>{% if fila.en_ruta %}<span class="status-badge status-info">En ruta</span>{% endif %}</td>
           <td>{% if fila.vehiculo.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:vehiculo' fila.vehiculo.pk %}">Ver<span class="sr"> el vehículo {{ fila.vehiculo.patente }}</span></a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">{% if q or estado or invernadero_id %}Ningún vehículo coincide con la búsqueda.{% else %}Todavía no hay vehículos. Registrá el primero con «Registrar vehículo».{% endif %}</td></tr>
+        <tr><td colspan="8" class="muted" style="text-align:center;padding:24px">{% if q or estado or invernadero_id %}Ningún vehículo coincide con la búsqueda.{% else %}Todavía no hay vehículos. Registrá el primero con «Registrar vehículo».{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -1,0 +1,22 @@
+{% comment %}Las entregas de un contrato en su ficha (COM-CNS-CVT regla 4 y COM-CNS-SUM regla 7, COM-05a2): invernadero de origen, fecha programada, estado («Atrasada» si corresponde), transportista o «Retiro» y, en un suministro, la confirmación del cliente; monto, vencimiento y pago, «—» hasta COM-06 y COM-08. Recibe «entregas» (FilaDeEntregaDeContrato) y, si es un suministro, «con_confirmacion». Todo se escapa.{% endcomment %}
+{% if entregas %}
+<div class="tablewrap">
+  <table class="data-table">
+    <thead><tr><th>Entrega</th><th>Invernadero</th><th>Fecha</th><th>Estado</th><th>Transportista</th>{% if con_confirmacion %}<th>Confirmación</th><th class="right">Monto</th><th>Vencimiento</th><th>Pago</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for f in entregas %}
+      <tr>
+        <td class="mono nowrap">{{ f.codigo }}</td>
+        <td>{{ f.invernadero }}</td>
+        <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}{% if f.cuando %}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span>{% endif %}</td>
+        <td><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span>{% if f.atrasada %} <span class="status-badge status-danger">Atrasada</span>{% endif %}</td>
+        <td>{% if f.es_retiro %}Retiro{% elif f.transportista %}{{ f.transportista }}{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
+        {% if con_confirmacion %}<td>{{ f.confirmacion|default:"—" }}</td><td class="right">—</td><td>—</td><td>—</td>{% endif %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">La entrega se planifica cuando todo el producto esté listo.</p>
+{% endif %}
