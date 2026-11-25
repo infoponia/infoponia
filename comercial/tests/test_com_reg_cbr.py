@@ -584,3 +584,65 @@ class Paso50ReintentaElComprobanteTests(BaseDeCobranza):
         with override_settings(CORREO_CONFIGURADO=False):
             con = entregas.planificar_entregas(HOY)
         self.assertEqual(con.procesados, sin.procesados + 1)
+
+
+class ComRegCbrFechaDelCobroAnuladoTests(BaseDeCobranza):
+    """COM-08b (paso 3 de la tarea; D-94 punto 10): la regla «Fecha del pago» de COM-REG-CBR sigue siendo «hoy, nunca una fecha anterior» **salvo** en el camino de 7a de COM-ANL-CBR (`DatosDeCobro.anulacion_id` y
+    `usar_fecha_anulada`). Los casos de 7a con sus límites están en `test_com_anl_cbr.py`; acá, los dos códigos de error que `cobranza.md` («Registrar el cobro») asigna a COM-REG-CBR: `fecha_no_admitida` y
+    `anulacion_ya_usada`."""
+
+    LUEGO = HOY + timedelta(days=4)
+
+    def cobro_anulado(self, *, pago_en_fecha=True):
+        """Un cobro de dos entregas en mora, registrado hoy por el Gerente y anulado 4 días después. Devuelve `(anulacion, e1, e2)`."""
+        e1, e2 = self.en_mora(dias_de_mora=3), self.en_mora(dias_de_mora=3)
+        datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[e1.pk, e2.pk], medio_pago="efectivo")
+        pago = cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, HOY).huella, HOY)
+        previo = cobranza.datos_de_anulacion_de_cobro(self.gerente, pago.pk, self.LUEGO)
+        return cobranza.anular_cobro(self.gerente, pago.pk, "Error de carga.", pago_en_fecha, previo.huella, self.LUEGO), e1, e2
+
+    def datos(self, entregas_, **extra):
+        return DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[e.pk for e in entregas_], medio_pago="efectivo", **extra)
+
+    def test_regla_fecha_del_pago_sin_la_anulacion_que_la_justifica_se_rechaza_con_fecha_no_admitida(self):
+        """`usar_fecha_anulada` sin `anulacion_id` (una fecha anterior sin la anulación que la justifica): `fecha_no_admitida`, en el resumen y en el registro; no se cobra nada."""
+        e = self.en_mora(dias_de_mora=3)
+        datos = self.datos([e], usar_fecha_anulada=True)
+        self.assertEqual(codigos(self.rechazo(cobranza.resumen_de_cobro, self.gerente, datos, HOY)), ["fecha_no_admitida"])
+        huella = cobranza.resumen_de_cobro(self.gerente, self.datos([e]), HOY).huella
+        self.assertEqual(codigos(self.rechazo(cobranza.registrar_cobro, self.gerente, datos, huella, HOY)), ["fecha_no_admitida"])
+        self.assertEqual(PagoCliente.objects.filter(tipo_pago="suministro").count(), 0)
+
+    def test_regla_fecha_del_pago_sin_7a_es_siempre_la_de_hoy(self):
+        """Sin el camino de 7a, la fecha del cobro es la de hoy aunque exista una anulación con `cliente_pago_en_fecha`: `fecha_pago = hoy`, `anulacion_corregida` nula."""
+        anulacion_, e1, _ = self.cobro_anulado()
+        datos = self.datos([e1], anulacion_id=anulacion_.pk)
+        pago = cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, self.LUEGO).huella, self.LUEGO)
+        self.assertEqual((pago.fecha_pago, pago.anulacion_corregida_id), (self.LUEGO, None))
+
+    def test_regla_fecha_del_pago_el_resumen_de_7a_muestra_la_fecha_del_cobro_anulado(self):
+        """Paso 8 con 7a: el resumen muestra la fecha del cobro anulado y, en la huella, esa fecha: la pantalla vuelve al paso 6 si cambia."""
+        anulacion_, e1, e2 = self.cobro_anulado()
+        datos = self.datos([e1, e2], anulacion_id=anulacion_.pk, usar_fecha_anulada=True)
+        resumen = cobranza.resumen_de_cobro(self.gerente, datos, self.LUEGO)
+        self.assertEqual((resumen.fecha_pago, resumen.indemnizacion), (HOY, D("1800.00")))
+        self.assertNotEqual(resumen.huella, cobranza.resumen_de_cobro(self.gerente, self.datos([e1, e2], anulacion_id=anulacion_.pk), self.LUEGO).huella)
+
+    def test_regla_fecha_del_pago_con_7a_nunca_es_posterior_a_hoy(self):
+        """«Nunca posterior» (`cobranza.md`, «Fecha del pago»): la fecha de 7a es la del cobro anulado, que no puede ser futura; si el reloj retrocede (`hoy` anterior a la fecha del cobro anulado), `fecha_no_admitida`."""
+        anulacion_, e1, _ = self.cobro_anulado()
+        datos = self.datos([e1], anulacion_id=anulacion_.pk, usar_fecha_anulada=True)
+        self.assertEqual(codigos(self.rechazo(cobranza.resumen_de_cobro, self.gerente, datos, HOY - timedelta(days=1))), ["fecha_no_admitida"])
+
+    def test_ext_anulacion_ya_usada_el_segundo_cobro_correcto_de_la_misma_anulacion_se_rechaza(self):
+        """`anulacion_ya_usada` («El cobro correcto de esa anulación ya se registró»): el primer cobro correcto confirma; el segundo, aunque sea de la otra entrega del cobro anulado, no se registra."""
+        anulacion_, e1, e2 = self.cobro_anulado()
+        primero = self.datos([e1], anulacion_id=anulacion_.pk, usar_fecha_anulada=True)
+        cobranza.registrar_cobro(self.gerente, primero, cobranza.resumen_de_cobro(self.gerente, primero, self.LUEGO).huella, self.LUEGO)
+        segundo = self.datos([e2], anulacion_id=anulacion_.pk, usar_fecha_anulada=True)
+        error = self.rechazo(cobranza.resumen_de_cobro, self.gerente, segundo, self.LUEGO)
+        self.assertEqual(codigos(error), ["anulacion_ya_usada"])
+        self.assertIn("ya se registró", " ".join(error.messages))
+        huella = cobranza.resumen_de_cobro(self.gerente, self.datos([e2]), self.LUEGO).huella
+        self.assertEqual(codigos(self.rechazo(cobranza.registrar_cobro, self.gerente, segundo, huella, self.LUEGO)), ["anulacion_ya_usada"])
+        self.assertEqual(PagoCliente.objects.filter(tipo_pago="suministro", estado_pago="vigente").count(), 1)

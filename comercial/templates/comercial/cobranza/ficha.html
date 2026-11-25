@@ -1,5 +1,5 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
-{% comment %}La ficha del cobro (no está en el prototipo, D-61): el cobro, sus entregas con lo cobrado y el atraso, quién lo registró y el estado del comprobante con «Reenviar comprobante» (pendiente de envío y con correo) o «Imprimir comprobante» (sin correo). La anulación es de COM-08b. Recibe «ficha».{% endcomment %}
+{% comment %}La ficha del cobro (no está en el prototipo, D-61): el cobro, sus entregas con lo cobrado y el atraso, quién lo registró y el estado del comprobante con «Reenviar comprobante» (pendiente de envío y con correo) o «Imprimir comprobante» (sin correo). COM-08b suma «Anular» (solo el Gerente, con el cobro vigente), la anulación (fecha, Gerente, motivo, si el cliente pagó) y el cobro que la corrigió, con «Registrar el cobro correcto». Recibe «ficha».{% endcomment %}
 {% block titulo %}{{ ficha.codigo }} · Cobranza · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
@@ -7,6 +7,23 @@
   <a class="back" href="{% url 'comercial:cobranza' %}?vista=cobros">{% icono "back" 15 %} Volver a Cobranza</a>
   <div class="page-h"><h1>Cobro <span class="mono">{{ ficha.codigo }}</span></h1>
     <div class="sub"><span class="status-badge {% if ficha.estado == 'vigente' %}status-ok{% else %}status-neutral{% endif %}">{% if ficha.estado == "vigente" %}Vigente{% else %}Anulado{% endif %}</span></div></div>
+  {% if ficha.puede_anular %}<div class="acts-fila" style="margin-bottom:12px"><a class="btn btn-danger" href="{% url 'comercial:cobro_anular' ficha.pago.pk %}">Anular</a></div>{% endif %}
+  {% if ficha.anulacion %}
+  <div class="card seg" style="margin-bottom:12px">
+    <div class="card-h"><h3>Anulación</h3></div>
+    <div class="card-b">
+      <dl class="dl two">
+        <dt>Fecha</dt><dd>{{ ficha.anulacion.fecha_anulacion|date:"d/m/Y" }}</dd>
+        <dt>Anulado por</dt><dd>{{ ficha.anulacion.usuario }}</dd>
+        <dt>Motivo</dt><dd>{{ ficha.anulacion.motivo_anulacion }}</dd>
+        <dt>El cliente pagó en la fecha del cobro</dt><dd>{% if ficha.anulacion.cliente_pago_en_fecha %}Sí{% else %}No{% endif %}</dd>
+        <dt>Cobro correcto</dt><dd>{% if ficha.cobro_correcto %}<a class="rowlink" href="{% url 'comercial:cobro' ficha.cobro_correcto.pk %}"><span class="mono">{{ ficha.cobro_correcto.codigo }}</span></a>{% else %}<span class="muted">Todavía no se registró.</span>{% endif %}</dd>
+      </dl>
+      <p class="muted">El contraasiento no se genera en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+      {% if ficha.puede_registrar_correcto %}<div class="acts-fila"><a class="btn btn-primary" href="{% url 'comercial:cobranza_registrar' %}?anulacion={{ ficha.anulacion.pk }}">Registrar el cobro correcto</a></div>{% endif %}
+    </div>
+  </div>
+  {% endif %}
   <div class="card seg">
     <div class="card-h"><h3>El cobro</h3></div>
     <div class="card-b">

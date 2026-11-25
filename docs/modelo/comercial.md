@@ -17,7 +17,7 @@ una compra-venta (COM-05b, MD-130, en «CompraVenta»). El C6 suma lo de la conc
 `IntentoFallido`, `SolicitudRevision`, `DiscrepanciaEntrega` y `LineaDiscrepancia` (COM-06a) y `Queja` (COM-06b), con `AlertaComercial.solicitud`
 y el enlace de confirmación (D-68). El C7 suma `Anulacion` (MD-135), la aplicación de la indemnización y el aviso al cliente en
 `SolicitudRevision` y `Suministro.solicitud_resolucion` (COM-07a, D-69). El C8 suma `LineaPago` (R154), lo nuevo de `PagoCliente` y la mora
-en `Entrega` (COM-08a) y `Anulacion.pago` con `PagoCliente.anulacion_corregida` (COM-08b, D-94). Con el C8, el extracto está completo para la
+en `Entrega` (COM-08a) y `Anulacion.pago_cliente` con `PagoCliente.anulacion_corregida` (COM-08b, D-94). Con el C8, el extracto está completo para la
 ronda. Los nombres COM-03, COM-04, COM-05a, COM-06, COM-07 y COM-08 de abajo se leen con la tabla de la sección 1 del plan (D-67, punto 2;
 D-68, punto 1; D-69, punto 1; D-94, punto 1). `Transportista` vive en `core` (D-01) y su
 invernadero en `maestros.TransportistaInvernadero` (D-55, `docs/modelo/maestros.md`).
@@ -600,7 +600,7 @@ cancelada con entregas concretadas (6a de COM-CNL-CVT).
 | R116 | Cliente, «realiza» | PagoCliente → Cliente = 1 | `cliente`, FK a `Cliente`, `PROTECT`, `related_name="pagos"` |
 | R117 | Compra-venta, «corresponde» | 0..1 / 0..1 | `compra_venta`, FK nula a `CompraVenta`, `PROTECT`, `related_name="pagos"` |
 | R154 | Entrega, «cancela» | PagoCliente → Entrega = 0..\* (1..\* en un suministro) | Por `LineaPago` (COM-08a) |
-| MD-135 | Anulacion | 0..1 | `Anulacion.pago` (COM-08b) |
+| MD-135 | Anulacion | 0..1 | `Anulacion.pago_cliente` (COM-08b) |
 
 - Restricciones de la base: `monto_pagado > 0`; único `(compra_venta)` con `estado_pago = vigente` (una venta se paga una vez). **C7 (COM-06a:
   `compra_venta` no nula; COM-08a la reescribe como el {xor} del modelo, D-94 punto 3):** `tipo_pago = compra_venta` ⇔ `compra_venta` no nula;
@@ -739,10 +739,10 @@ solicitud (COM-ANL-SRV, COM-07a) y un cobro de suministro (COM-ANL-CBR, **COM-08
 |---|---|---|---|
 | MD-135 | Usuario, «anula» | 1 | `usuario`, FK a `core.Usuario`, `PROTECT` |
 | MD-135 | SolicitudRevision, «anula» | 0..1 | `solicitud`, FK nula a `SolicitudRevision`, `PROTECT`, `related_name="anulaciones"` (una solicitud puede anularse más de una vez, una por cada resolución) |
-| MD-135 | PagoCliente, «anula» | 0..1 | `pago`, `OneToOneField` nulo a `PagoCliente`, `PROTECT`, `related_name="anulacion"` (**COM-08b**): un pago se anula una sola vez. **Sin copia** de los datos del pago: el pago anulado los conserva, con `estado_pago = anulado` (D-94, punto 11) |
+| MD-135 | PagoCliente, «anula» | 0..1 | `pago_cliente`, `OneToOneField` nulo a `PagoCliente`, `PROTECT`, `related_name="anulacion_de_cobro"` (**COM-08b**; no se llama `pago` porque `compras.Pago` ya le da ese acceso inverso a `OrigenDocumento`, error E006): un pago se anula una sola vez. **Sin copia** de los datos del pago: el pago anulado los conserva, con `estado_pago = anulado` (D-94, punto 11) |
 
 - Restricciones de la base: `motivo_anulacion <> ''`; en COM-07a, `solicitud` no nula (**COM-08b** la reescribe como «exactamente uno de
-  `solicitud` y `pago`» y suma `pago` no nulo ⇔ `cliente_pago_en_fecha` no nulo); `estado_anulado` no nulo si `solicitud` no nula (COM-08b:
+  `solicitud` y `pago_cliente`» y suma `pago_cliente` no nulo ⇔ `cliente_pago_en_fecha` no nulo); `estado_anulado` no nulo si `solicitud` no nula (COM-08b:
   «si y solo si»); `estado_anulado = aceptada` ⇔ `monto_indemnizacion_anulado` no
   nulo.
 - Se audita como parte del registro de COM-ANL-SRV (`anulacion_resolucion_solicitud`) o de COM-ANL-CBR (`anulacion_cobro`, COM-08b; D-36), no

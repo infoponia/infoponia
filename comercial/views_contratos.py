@@ -15,10 +15,10 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
-from comercial.models import CompraVenta
+from comercial.models import CompraVenta, PagoCliente
 from comercial.servicios import clientes as api_clientes
 from comercial.servicios import comprobantes, compra_ventas
-from comercial.servicios.compra_ventas import NO_CAMPO, DatosDeCancelacionDeVenta, DatosDeCompraVenta, FiltrosDeCompraVentas, Renglon
+from comercial.servicios.compra_ventas import NO_CAMPO, DatosDeCancelacionDeVenta, DatosDeCompraVenta, FiltrosDeCompraVentas, Renglon, texto_de_pesos
 from core.acceso import rol_requerido
 from core.models import Usuario
 
@@ -283,6 +283,8 @@ def con_parametro(request, url, **parametros):
 MOTIVOS_DE_CANCELACION = CompraVenta.MotivoCancelacion.choices
 # Códigos de los que no hay nada que corregir en el motivo: se informa y se vuelve a la ficha (la venta ya no se puede cancelar).
 SIN_SALIDA_DE_CANCELACION = {"venta_no_cancelable"}
+# Los errores que se corrigen en la misma pantalla, junto a su campo (el medio de pago es de 6a, COM-08b).
+CODIGOS_DE_CAMPO_DE_CANCELACION = {"motivo_obligatorio", "motivo_invalido", "descripcion_larga", "medio_de_pago_obligatorio", "medio_no_admitido"}
 
 
 def _codigos(error):
@@ -295,14 +297,16 @@ def _cuantos_se_cancelan(datos):
     return sum(1 for d in datos.detalles if d.se_cancela)
 
 
-def _pagina_de_cancelacion(request, venta_id, motivo="", descripcion="", errores=None):
-    """La pantalla de cancelación con los datos de ahora (paso 4) y, si los hay, los errores por campo (`motivo`, `descripcion`)."""
+def _pagina_de_cancelacion(request, venta_id, motivo="", descripcion="", errores=None, medio_pago=""):
+    """La pantalla de cancelación con los datos de ahora (paso 4) y, si los hay, los errores por campo (`motivo`, `descripcion`, `medio_pago`). Con entregas concretadas (6a, COM-08b) suma «Cobro de lo entregado»."""
     datos = compra_ventas.datos_de_cancelacion(request.user, venta_id)
     contexto = {
         "datos": datos,
         "motivos": MOTIVOS_DE_CANCELACION,
         "motivo": motivo,
         "descripcion": descripcion,
+        "medio_pago": medio_pago,
+        "medios": PagoCliente.Medio.choices,
         "errores": errores or {},
         "cuantos": _cuantos_se_cancelan(datos),
     }
@@ -320,7 +324,7 @@ def compra_venta_cancelar(request, venta_id):
         return _pagina_de_cancelacion(request, venta_id)
     datos_post = DatosDeCancelacionDeVenta.desde_post(request.POST)
     if "volver" in request.POST:
-        return _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion)
+        return _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, medio_pago=datos_post.medio_pago)
     try:
         venta = compra_ventas.cancelar_compra_venta(request.user, venta_id, datos_post, request.POST.get("huella", ""))
     except ValidationError as error:
@@ -328,9 +332,9 @@ def compra_venta_cancelar(request, venta_id):
         if codigos & SIN_SALIDA_DE_CANCELACION:
             messages.error(request, " ".join(error.messages))
             return redirect("comercial:compra_venta", venta_id)
-        if hasattr(error, "error_dict") and codigos & {"motivo_obligatorio", "motivo_invalido", "descripcion_larga"}:
-            return _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, _mensajes(error))
-        messages.error(request, " ".join(error.messages))  # 8a, 8b, 4a y 6a: se vuelve al paso 4 con lo que hay ahora
+        if hasattr(error, "error_dict") and codigos & CODIGOS_DE_CAMPO_DE_CANCELACION:
+            return _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, _mensajes(error), datos_post.medio_pago)
+        messages.error(request, " ".join(error.messages))  # 8a, 8b y 4a: se vuelve al paso 4 con lo que hay ahora
         return redirect("comercial:compra_venta_cancelar", venta_id)
     _avisar_la_cancelacion(request, venta)
     return redirect("comercial:compra_venta", venta.pk)
@@ -345,6 +349,9 @@ def _avisar_la_cancelacion(request, venta):
     if entregas_:
         partes.append(f"{entregas_} entrega" + ("" if entregas_ == 1 else "s"))
     texto = f"{venta.codigo} cancelada."
+    pago = venta.pagos.filter(estado_pago="vigente").first() if venta.estado_venta == CompraVenta.Estado.CONCRETADA else None
+    if pago is not None:  # 6a: lo entregado se cobró y la venta quedó «concretada»
+        texto = f"{venta.codigo} cancelada. Se cobró lo entregado ({texto_de_pesos(pago.monto_pagado)}, {pago.get_medio_pago_display().lower()}) y la venta quedó concretada."
     if partes:
         texto += f" Se canceló {' y '.join(partes)}"
         texto += f"; {venta.plantas_a_camara} planta{'' if venta.plantas_a_camara == 1 else 's'} entraron a la cámara." if venta.plantas_a_camara else "."
@@ -371,8 +378,8 @@ def compra_venta_cancelar_revisar(request, venta_id):
     try:
         resumen = compra_ventas.resumen_de_cancelacion_de_venta(request.user, venta_id, datos_post)
     except ValidationError as error:
-        if hasattr(error, "error_dict") and _codigos(error) & {"motivo_obligatorio", "motivo_invalido", "descripcion_larga"}:
-            respuesta = _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, _mensajes(error))
+        if hasattr(error, "error_dict") and _codigos(error) & CODIGOS_DE_CAMPO_DE_CANCELACION:
+            respuesta = _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, _mensajes(error), datos_post.medio_pago)
             if _es_htmx(request):
                 respuesta["HX-Retarget"] = "body"
                 respuesta["HX-Reswap"] = "innerHTML show:none"
@@ -381,7 +388,8 @@ def compra_venta_cancelar_revisar(request, venta_id):
         return redirect("comercial:compra_venta_cancelar", venta_id)
     contexto = {
         "resumen": resumen,
-        "datos_post": {"huella": request.POST.get("huella", ""), "motivo": datos_post.motivo, "descripcion": datos_post.descripcion},
+        "datos_post": {"huella": request.POST.get("huella", ""), "motivo": datos_post.motivo, "descripcion": datos_post.descripcion, "medio_pago": datos_post.medio_pago},
+        "medio_texto": dict(PagoCliente.Medio.choices).get(datos_post.medio_pago, ""),
         "cuantos": _cuantos_se_cancelan(resumen.datos),
     }
     return render(request, "comercial/contratos/_cancelar_resumen.html" if _es_htmx(request) else "comercial/contratos/cancelar_resumen.html", contexto)

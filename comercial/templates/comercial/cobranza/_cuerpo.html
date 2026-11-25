@@ -1,7 +1,8 @@
 {% load iconos comercial %}{% comment %}El cuerpo de «Registrar cobro» (también es lo que devuelve HTMX): «1 Cliente», «2 Entregas que paga», «3 Pago» y el resumen parcial. Nada se valida acá: marcar una entrega, los filtros y el cliente solo redibujan.
-Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se cambia. Recibe «grupos», «cliente», «cliente_fijo», «filas», «contratos», «datos», «filtros», «marcadas», «ocultas», «elegidas», «base», «indemnizacion», «total», «hay_pendientes», «medios», «errores», «error».{% endcomment %}
+Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se cambia. Recibe «grupos», «cliente», «cliente_fijo», «filas», «contratos», «datos», «filtros», «marcadas», «ocultas», «elegidas», «base», «indemnizacion», «total», «hay_pendientes», «medios», «errores», «error» y, en 7a (COM-08b), «anulacion», «usa_fecha» y «fecha_pago».{% endcomment %}
 {% if error %}<div class="alert alert-warn" role="alert" style="margin-bottom:14px">{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
 <input type="hidden" name="cliente_fijo" value="{% if cliente_fijo %}1{% else %}0{% endif %}">
+{% if anulacion %}<input type="hidden" name="anulacion" value="{{ anulacion.anulacion.pk }}">{% endif %}
 {% for id in ocultas %}<input type="hidden" name="entrega" value="{{ id }}">{% endfor %}
 <div class="stack">
   <section class="sec">
@@ -74,7 +75,13 @@ Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se 
       <div class="hint">Uno por cobro. El efectivo va a Caja; los demás, a Banco.</div>
       {% if errores.medio_pago %}<div class="err" role="alert">Elegí el medio de pago.</div>{% endif %}
     </div>
-    <div class="fld"><span class="lbl">Fecha del pago</span><div>{{ hoy|date:"d/m/Y" }}</div><div class="hint">Es la fecha de hoy: no se registran cobros con fecha anterior.</div></div>
+    {% if anulacion and anulacion.usa_fecha %}
+    <div class="fld">
+      <label class="check"><input type="checkbox" name="usar_fecha_anulada" value="1"{% if usa_fecha %} checked{% endif %} hx-post="{% url 'comercial:cobranza_registrar' %}" hx-trigger="change" hx-target="#cuerpo-cobro" hx-swap="innerHTML show:none" data-sin-envio-en-curso> Usar la fecha del cobro anulado ({{ anulacion.fecha|date:"d/m" }}): el cliente pagó ese día</label>
+      <div class="hint">{% if usa_fecha %}Es la fecha del cobro anulado: el cliente pagó ese día. La indemnización por atraso se calcula a esa fecha y solo se pueden elegir las entregas del cobro anulado.{% else %}Sin la casilla es un cobro común, con la fecha de hoy. Sin JavaScript, marcala y tocá «Calcular total».{% endif %}</div>
+    </div>
+    {% endif %}
+    <div class="fld"><span class="lbl">Fecha del pago</span><div>{{ fecha_pago|date:"d/m/Y" }}</div><div class="hint">{% if usa_fecha %}Es la fecha del cobro anulado: el cliente pagó ese día.{% else %}Es la fecha de hoy: no se registran cobros con fecha anterior.{% endif %}</div></div>
   </section>
   {% endif %}
 

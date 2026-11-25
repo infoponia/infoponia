@@ -1,4 +1,4 @@
-{% comment %}Lo que dice el resumen de la cancelación (pasos 6 y 7 de COM-CNL-CVT), en la ventana y en la página. Recibe «resumen» (ResumenDeCancelacionDeVenta) y «cuantos».{% endcomment %}
+{% load comercial %}{% comment %}Lo que dice el resumen de la cancelación (pasos 6 y 7 de COM-CNL-CVT), en la ventana y en la página. Con entregas concretadas (6a, COM-08b) suma el cobro de lo entregado y el medio; el asiento, «Fuera de esta ronda · contabilidad» (D-57). Recibe «resumen» (ResumenDeCancelacionDeVenta) y «cuantos».{% endcomment %}
 {% with d=resumen.datos %}
 <dl class="dl">
   <dt>Compra-venta</dt><dd><span class="mono">{{ d.venta.codigo }}</span> · {{ d.cliente }}</dd>
@@ -7,8 +7,10 @@
   <dt>Cosechas canceladas</dt><dd class="mono">{{ d.cosechas|length }}</dd>
   <dt>Entregas canceladas</dt><dd class="mono">{{ d.entregas|length }}</dd>
   <dt>Ingresan a la cámara</dt><dd class="mono">{% for g in d.a_camara %}{{ g.cantidad }} de {{ g.variedad }}{% if not forloop.last %}, {% endif %}{% empty %}nada{% endfor %}</dd>
+  {% if d.cobro %}<dt>Cobro de lo entregado</dt><dd><b class="mono">{{ d.cobro.total|pesos }}</b> · {{ medio_texto }}<span class="sub2">{% for f in d.cobro.entregas %}{{ f.codigo }} ({{ f.monto|pesos }}){% if not forloop.last %}, {% endif %}{% endfor %}</span></dd>{% endif %}
   <dt>Estado final</dt><dd><span class="status-badge status-neutral">{{ resumen.estado_final }}</span></dd>
   <dt>Comprobante</dt><dd>{% if d.comprobante %}Se envía a {{ d.comprobante }}.{% else %}El cliente no tiene correo: se imprime.{% endif %}</dd>
 </dl>
+{% if d.cobro %}<p class="muted">El asiento del cobro: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span></p>{% endif %}
 <div class="alert alert-warn"><div>La cancelación no se puede deshacer.</div></div>
 {% endwith %}

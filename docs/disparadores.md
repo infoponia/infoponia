@@ -148,10 +148,11 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      COM-CNL-CVT cancela solo los detalles **sin** línea en una entrega concretada (D-67, punto 4): COM-06 suma esa prueba con datos reales.
      COM-INI-RUT toma el invernadero de origen antes de cambiar el vehículo (D-66 punto 11): así COM-ASG-TRP y COM-CNL-CVT ven bien si una
      entrega está en curso.
-   - **COM-08:** con `PagoCliente` (MD-136), la extensión 6a de COM-CNL-CVT: el cobro de lo entregado en la misma operación, la venta a
+   - ~~**COM-08:**~~ con `PagoCliente` (MD-136), la extensión 6a de COM-CNL-CVT: el cobro de lo entregado en la misma operación, la venta a
      «concretada» con los datos de la cancelación y el cobro en el comprobante. El asiento del cobro queda fuera de la ronda (D-57).
      Desde el lote C6, `PagoCliente` lo crea **COM-06a** (D-68, punto 4): COM-08 suma R154 y reescribe C7.
      **Planificado (lote C8; D-94, puntos 1 y 14):** la extensión 6a, **COM-08b** (`compra_venta.md`, «La extensión 6a (COM-08b)»).
+     **Hecho el 25/11/2026 en COM-08b:** `cancelar_compra_venta` ya no rechaza `venta_con_entregas_concretadas`: cobra lo entregado con el `medio_pago` elegido (un `PagoCliente` de tipo `compra_venta`), deja la venta «concretada» con los datos de la cancelación y el cobro sale en el comprobante; las dos pruebas que esperaban el rechazo (COM-05b y COM-06a) se reemplazaron. El asiento del cobro sigue fuera de la ronda (D-57).
    **Planificado (lote C6):** lo de COM-06, **COM-06a** (`rutas.md`, «Lo que completa a otras tareas», fila COM-05b).
 
 10. **Lo que deja COM-06 (nace en el lote C6; D-68).**
@@ -177,13 +178,14 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      diario 33 lo recupera si el disparo se pierde.
    - **COM-08:** una entrega de suministro «pagada»: la extensión 6a de COM-EVL-DSC y de COM-RSV-QJA (todo se reintegra), el cobro como cambio
      de la huella (8b) y la extensión 2b de COM-ANL-SRV (`entrega_cobrada`), hoy probados con `mock.patch` de `estado_de_pago`, con datos
-     reales; `Anulacion.pago` y `cliente_pago_en_fecha` (COM-ANL-CBR, MD-135) y la restricción «exactamente uno de `solicitud` y `pago`»;
+     reales; `Anulacion.pago` y `cliente_pago_en_fecha` (COM-ANL-CBR, MD-135; el campo quedó `pago_cliente`) y la restricción «exactamente uno de `solicitud` y `pago`»;
      COM-REG-CBR cobra `monto_a_cobrar`, que ya resta lo descontado; el cobro bloquea la entrega después del suministro
      (`docs/patrones/bloqueos.md`, «Resolver o anular una solicitud»).
      **Planificado (lote C8):** la entrega pagada con datos reales y el cobro en la huella, **COM-08a** (`cobranza.md`, «Lo que completa a
      otras tareas»; el cobro bloquea el invernadero de origen y la entrega, sin el suministro: `bloqueos.md`, «Cobranza»); `Anulacion.pago`,
      `cliente_pago_en_fecha` y las restricciones de `Anulacion`, **COM-08b**.
      **Hecho en COM-08a (25/11/2026):** la entrega pagada con datos reales en 6a de COM-EVL-DSC y de COM-RSV-QJA, el cobro como cambio de la huella (8b) y 2b de COM-ANL-SRV, que ahora exige un **cobro vigente real** (una entrega saldada cuenta como «pagada» pero no tiene un cobro que anular); el cobro bloquea el invernadero de origen y la entrega. Siguen para **COM-08b**: `Anulacion.pago`, `cliente_pago_en_fecha` y las restricciones de `Anulacion`.
+     **Hecho el 25/11/2026 en COM-08b:** `Anulacion.pago_cliente` (no `pago`: choca con `compras.Pago`, error E006) y `cliente_pago_en_fecha`, `PagoCliente.anulacion_corregida` y las restricciones de `Anulacion` («exactamente uno de `solicitud` y `pago_cliente`», `pago_cliente` ⇔ `cliente_pago_en_fecha`, `solicitud` ⇔ `estado_anulado`); con el cobro anulado, 2b de COM-ANL-SRV y la regla 5 de COM-ATN-ENR dejan de rechazar (probado con un cobro real).
    - **Ronda de contabilidad:** el asiento de cada indemnización (simple o compuesto, con lo descontado y lo reintegrado que guarda la
      solicitud), el contraasiento de cada `Anulacion` y el asiento de la multa por resolución (MD-123).
 
@@ -207,9 +209,16 @@ como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porq
 ## Lo que deja COM-08a (nace el 25/11/2026)
 
 - **Ronda de contabilidad:** el asiento del cobro (precondición c y postcondición d de COM-REG-CBR: Debe Caja o Banco c/c, Haber Deudores por Ventas e Indemnizaciones por Atraso en el Pago; D-57, D-94 punto 16). Hoy el cobro guarda todo lo que el asiento necesita (el medio, lo cobrado y el atraso de cada entrega en `LineaPago`) y no crea ninguno; la ficha y el resumen dicen «Fuera de esta ronda · contabilidad».
-- **COM-08b:** anular un cobro (COM-ANL-CBR: la alerta «pago en mora» se asegura de nuevo con `reevaluar_mora`, `Anulacion.pago`, `cliente_pago_en_fecha`, la fecha del cobro anulado en `registrar_cobro`) y el cobro de 6a de COM-CNL-CVT. Mientras tanto, un cobro mal registrado no se puede anular (estado de paso, `docs/temas_abiertos.md`).
+- ~~**COM-08b:**~~ anular un cobro (COM-ANL-CBR: la alerta «pago en mora» se asegura de nuevo con `reevaluar_mora`, `Anulacion.pago`, `cliente_pago_en_fecha`, la fecha del cobro anulado en `registrar_cobro`) y el cobro de 6a de COM-CNL-CVT. Mientras tanto, un cobro mal registrado no se puede anular (estado de paso, `docs/temas_abiertos.md`). **Hecho el 25/11/2026 en COM-08b** (`Anulacion.pago_cliente`).
+
 - **Cuando se modifique `maestros.Alerta`:** `descripcion_alerta` admite 200 caracteres y el caso de uso dice 500 para la alerta «pago en mora» (la API recorta; `docs/temas_abiertos.md`, COM-08a).
 - **Cuando se arme el cron único (D-56):** el paso 30 se suma a la lista de lo que corre; hasta entonces, a mano con `python manage.py proceso_diario --solo vencer_pagos`.
+
+## Lo que deja COM-08b (nace el 25/11/2026)
+
+- **Ronda de contabilidad (CON-04d):** el contraasiento de cada `Anulacion` de un cobro (postcondición c de COM-ANL-CBR: las mismas cuentas e importes con Debe y Haber invertidos y la fecha de la anulación, con la indemnización por atraso) y el asiento del cobro de 6a de COM-CNL-CVT (Debe Caja o Banco c/c / Haber Deudores por Ventas; D-57, D-94 punto 16). Hoy se guarda todo lo que necesitan (`PagoCliente.medio_pago` y `monto_pagado`, `LineaPago`, `Anulacion.pago_cliente`) y no se crea ninguno; las pantallas dicen «Fuera de esta ronda · contabilidad».
+- **Cuando se corrija la documentación (pendientes_CU y `docs/modelo/`):** `Anulacion.pago` se llama `pago_cliente` (error E006 con `compras.Pago`); ya está corregido en D-94, `docs/modelo/comercial.md` y los extractos de `comercial`.
+- **Lo entregado en cero** (todo rechazado al recibir): la cancelación con 6a no cobra y deja la venta «cancelada»; confirmar con el estudiante o con el caso de uso (`docs/temas_abiertos.md`, «COM-08b»).
 
 ## Cuando se programen COM-05a1 y COM-06 — nace con COM-03b (24/11/2026)
 
@@ -712,7 +721,7 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 ## Lo que deja COM-05b (nace el 25/11/2026)
 
 1. **COM-06a:** una entrega «en curso» se arma hoy solo con un vehículo de fábrica (`vehiculo_en_ruta`): COM-INI-RUT toma el invernadero de origen antes de cambiar el vehículo (D-66, punto 11), y con la ruta real COM-06 confirma a mano la asignación (3a) y la cancelación (4a) que hoy cubren solo las pruebas. Con una entrega concretada real, el rechazo `venta_con_entregas_concretadas` y la prueba de la venta con detalles entregados (D-67, punto 4) se completan con datos reales.
-2. **COM-08b:** la extensión 6a de COM-CNL-CVT reemplaza el rechazo `venta_con_entregas_concretadas` (la prueba de COM-05b que lo espera se reemplaza; anotarlo en el PR) y suma `medio_pago` a `DatosDeCancelacionDeVenta`, el cobro y la venta «concretada» con los datos de la cancelación (la restricción de MD-130 ya lo admite).
+2. ~~**COM-08b:**~~ la extensión 6a de COM-CNL-CVT reemplaza el rechazo `venta_con_entregas_concretadas` (la prueba de COM-05b que lo espera se reemplaza; anotarlo en el PR) y suma `medio_pago` a `DatosDeCancelacionDeVenta`, el cobro y la venta «concretada» con los datos de la cancelación (la restricción de MD-130 ya lo admite). **Hecho el 25/11/2026 en COM-08b** (eran dos las pruebas que lo esperaban: la de COM-05b y la de COM-06a).
 3. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05b»): `sin_permiso` por `PermissionDenied`; «Ver cómo queda» como `POST`; el comprobante de cancelación después de la transacción; la restricción `compra_venta_motivo_cancelacion_valido` en `docs/modelo/comercial.md`.
 4. **Pasada manual en navegador real** (paso 19 de la «Verificación a mano» de COM-05b) para el cierre de la tanda de «Comercial 1».
 

@@ -15,14 +15,14 @@ from functools import partial
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
-from comercial.models import AlertaComercial, ClausulaSuministrado, Cliente, Contrato, Entrega, LineaPago, PagoCliente, SolicitudRevision, Suministro
+from comercial.models import AlertaComercial, Anulacion, ClausulaSuministrado, Cliente, Contrato, Entrega, LineaPago, PagoCliente, SolicitudRevision, Suministro
 from comercial.servicios import entregas
-from comercial.servicios.compra_ventas import texto_de_pesos
+from comercial.servicios.compra_ventas import FRASE_DEL_MEDIO, texto_de_pesos
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de, texto_de
@@ -277,13 +277,14 @@ VENDEDOR = Usuario.Rol.VENDEDOR
 MEDIOS = PagoCliente.Medio.values
 POR_PAGINA = 50
 TIPO_NO_RECONOCIDA = "comercial_entrega_no_reconocida"  # la alerta de COM-06b (`confirmacion.TIPO_NO_RECONOCIDA`; acá como texto para no importar `confirmacion`)
-FRASE_DEL_MEDIO = {"efectivo": "en efectivo", "transferencia": "por transferencia", "tarjeta_debito": "con tarjeta de débito", "tarjeta_credito": "con tarjeta de crédito"}
 
 SolicitudPendiente = namedtuple("SolicitudPendiente", "codigo tipo fecha")
 ListaDeCobros = namedtuple("ListaDeCobros", "pagina filas")
 FilaDeCobro = namedtuple("FilaDeCobro", "pago_id codigo fecha cliente cliente_id entregas medio monto atraso estado estado_texto")
 LineaDeLaFicha = namedtuple("LineaDeLaFicha", "entrega_id codigo contrato_codigo fecha_concrecion vencimiento monto_total monto_cobrado dias_atraso indemnizacion")
-FichaDeCobro = namedtuple("FichaDeCobro", "pago codigo cliente fecha medio estado usuario base indemnizacion total lineas aviso puede_reenviar puede_imprimir")
+FichaDeCobro = namedtuple(
+    "FichaDeCobro", "pago codigo cliente fecha medio estado usuario base indemnizacion total lineas aviso puede_reenviar puede_imprimir anulacion cobro_correcto puede_anular puede_registrar_correcto"
+)
 
 
 @dataclass
@@ -293,6 +294,8 @@ class DatosDeCobro:
     cliente_id: object = None
     entrega_ids: list = field(default_factory=list)
     medio_pago: str = ""
+    anulacion_id: object = None  # COM-08b, 7a de COM-ANL-CBR: la anulación del cobro que este cobro corrige
+    usar_fecha_anulada: bool = False  # 7a: la casilla «Usar la fecha del cobro anulado»
 
 
 @dataclass
@@ -548,10 +551,10 @@ def _leer_elegidas(actor, cliente_id, ids, hoy, fecha_pago):
     return filas
 
 
-def _huella(hoy, filas):
-    """D-94 punto 9: por cada entrega, su estado de pago, su monto a cobrar y su indemnización por atraso, más la fecha de hoy (10b: «o cambió la fecha actual»)."""
+def _huella(hoy, filas, fecha_pago=None):
+    """D-94 punto 9: por cada entrega, su estado de pago, su monto a cobrar y su indemnización por atraso, más la fecha de hoy (10b: «o cambió la fecha actual») y, en 7a, la fecha del pago."""
     return json.dumps(
-        {"hoy": hoy.isoformat(), "entregas": {str(f.entrega_id): {"estado": f.estado, "monto": str(f.monto_a_cobrar), "indemnizacion": str(f.indemnizacion), "codigo": f.codigo} for f in filas}},
+        {"hoy": hoy.isoformat(), "fecha_pago": (fecha_pago or hoy).isoformat(), "entregas": {str(f.entrega_id): {"estado": f.estado, "monto": str(f.monto_a_cobrar), "indemnizacion": str(f.indemnizacion), "codigo": f.codigo} for f in filas}},
         sort_keys=True,
     )
 
@@ -588,10 +591,30 @@ def _cobro_cambio(cambios, cambio_la_fecha):
     )
 
 
+def _fecha_de_pago(actor, datos, hoy, ids):
+    """La fecha del pago y la anulación que la justifica: `(hoy, None)` o, en 7a (D-94 punto 10), `(fecha del cobro anulado, anulación)`. Fuera de ese camino, nunca una fecha anterior. Límites de 7a, todos con
+    `fecha_no_admitida` salvo el último: solo el Gerente; la anulación existe y es la de un cobro con `cliente_pago_en_fecha`; la fecha no es posterior a hoy; todas las entregas elegidas son del cobro anulado; y la
+    anulación se usa una sola vez (`anulacion_ya_usada`). Se llama antes de bloquear y otra vez bajo bloqueo."""
+    if not datos.usar_fecha_anulada:
+        return hoy, None
+    no_admitida = _rechazar("fecha_no_admitida", "La fecha del cobro anulado solo se puede usar desde la anulación de ese cobro, si el cliente pagó ese día y con sus entregas.")
+    if rol_de(actor) != GERENTE or not str(datos.anulacion_id or "").isdigit():
+        raise no_admitida
+    anulacion = Anulacion.objects.select_related("pago_cliente").filter(pk=int(datos.anulacion_id), pago_cliente__isnull=False).first()
+    if anulacion is None or not anulacion.cliente_pago_en_fecha:
+        raise no_admitida
+    if PagoCliente.objects.filter(anulacion_corregida_id=anulacion.pk).exists():
+        raise _rechazar("anulacion_ya_usada", "El cobro correcto de esa anulación ya se registró.")
+    fecha = anulacion.pago_cliente.fecha_pago
+    if fecha > hoy or not set(ids) <= set(anulacion.pago_cliente.lineas.values_list("entrega_id", flat=True)):
+        raise no_admitida
+    return fecha, anulacion
+
+
 def resumen_de_cobro(actor, datos, hoy=None):
     """Paso 8 (solo lectura: no escribe ni bloquea; D-94 punto 9): valida lo elegido, calcula la indemnización por atraso de cada entrega y el total y arma la huella. Errores por campo en `errores`
     (`sin_entregas_elegidas` en `entregas` y `medio_de_pago_obligatorio` en `medio_pago`); una entrega que no se puede cobrar lanza `ValidationError` (`entrega_ya_pagada`, `entrega_no_cobrable`,
-    `entregas_de_otro_cliente`) o `PermissionDenied`. La fecha del pago es la actual."""
+    `entregas_de_otro_cliente`) o `PermissionDenied`. La fecha del pago es la actual (en 7a, la del cobro anulado: `fecha_no_admitida` y `anulacion_ya_usada`)."""
     _exigir_rol(actor)
     hoy = hoy or stock.hoy()
     ids = _ids_de(datos)
@@ -600,7 +623,8 @@ def resumen_de_cobro(actor, datos, hoy=None):
         errores["entregas"] = "sin_entregas_elegidas"
     if datos.medio_pago not in MEDIOS:
         errores["medio_pago"] = "medio_de_pago_obligatorio"
-    lineas = _leer_elegidas(actor, datos.cliente_id, ids, hoy, hoy) if ids else []
+    fecha_pago, _ = _fecha_de_pago(actor, datos, hoy, ids)
+    lineas = _leer_elegidas(actor, datos.cliente_id, ids, hoy, fecha_pago) if ids else []
     cliente = Cliente.objects.filter(pk=datos.cliente_id).first() if str(datos.cliente_id or "").isdigit() else None
     base = sum((l.monto_a_cobrar for l in lineas), Decimal("0.00"))
     indemnizacion = sum((l.indemnizacion for l in lineas), Decimal("0.00"))
@@ -611,10 +635,10 @@ def resumen_de_cobro(actor, datos, hoy=None):
         indemnizacion=indemnizacion,
         total=total_del_cobro(lineas),
         medio_pago=datos.medio_pago if datos.medio_pago in MEDIOS else "",
-        fecha_pago=hoy,
+        fecha_pago=fecha_pago,
         errores=errores,
         hay_pendientes=any(l.solicitudes_pendientes for l in lineas),
-        huella=_huella(hoy, lineas),
+        huella=_huella(hoy, lineas, fecha_pago),
     )
 
 
@@ -667,6 +691,7 @@ def registrar_cobro(actor, datos, huella, hoy=None):
         raise _rechazar("sin_entregas_elegidas", "Elegí al menos una entrega para cobrar.", campo="entregas")
     if datos.medio_pago not in MEDIOS:
         raise _rechazar("medio_de_pago_obligatorio", "Elegí el medio de pago.", campo="medio_pago")
+    _fecha_de_pago(actor, datos, hoy, ids)  # 7a: lo que no depende de las filas, antes de bloquear
     previas = list(Entrega.objects.filter(pk__in=ids).values_list("pk", "invernadero_id", "contrato_entrega_id"))
     if len(previas) != len(ids):
         raise _rechazar("entrega_no_cobrable", "Una de las entregas elegidas no existe.")
@@ -675,23 +700,29 @@ def registrar_cobro(actor, datos, huella, hoy=None):
         quien = _bloquear_cuentas(actor, vendedores)
         _bloquear_invernaderos([i for _, i, _ in previas])
         _bloquear_entregas(ids)
-        filas = _leer_elegidas(quien, datos.cliente_id, ids, hoy, hoy)
-        if _huella(hoy, filas) != huella:
+        fecha_pago, anulacion = _fecha_de_pago(quien, datos, hoy, ids)  # 7a otra vez, bajo bloqueo: la anulación pudo usarse mientras esperaba
+        filas = _leer_elegidas(quien, datos.cliente_id, ids, hoy, fecha_pago)
+        if _huella(hoy, filas, fecha_pago) != huella:
             cambios, cambio_la_fecha = _cambios_de_la_huella(huella, filas, hoy)
             raise _cobro_cambio(cambios, cambio_la_fecha)
-        return _registrar(quien, datos, filas, hoy)
+        return _registrar(quien, datos, filas, hoy, fecha_pago, anulacion)
 
 
-def _registrar(quien, datos, filas, hoy):
-    """Con todo bloqueado y verificado: el pago, las líneas, la mora, los avisos, la auditoría y el comprobante (`on_commit`)."""
+def _registrar(quien, datos, filas, hoy, fecha_pago=None, anulacion=None):
+    """Con todo bloqueado y verificado: el pago, las líneas, la mora, los avisos, la auditoría y el comprobante (`on_commit`). ``fecha_pago`` y ``anulacion`` son los de 7a (COM-08b; D-94 punto 10)."""
+    fecha_pago = fecha_pago or hoy
     cliente = Cliente.objects.get(pk=int(datos.cliente_id))
     base = sum((f.monto_a_cobrar for f in filas), Decimal("0.00"))
     atraso = sum((f.indemnizacion for f in filas), Decimal("0.00"))
     aviso = PagoCliente.EstadoDelAviso.PENDIENTE_ENVIO if cliente.email_cliente else PagoCliente.EstadoDelAviso.SIN_CORREO
-    pago = PagoCliente.objects.create(
-        tipo_pago=PagoCliente.Tipo.SUMINISTRO, numero=_siguiente_numero(), cliente=cliente, medio_pago=datos.medio_pago, fecha_pago=hoy, monto_pagado=base + atraso,
-        estado_pago=PagoCliente.Estado.VIGENTE, usuario=quien, estado_aviso_cliente=aviso,
-    )
+    try:
+        with transaction.atomic():  # la unicidad de `anulacion_corregida` respalda al chequeo de `_fecha_de_pago`
+            pago = PagoCliente.objects.create(
+                tipo_pago=PagoCliente.Tipo.SUMINISTRO, numero=_siguiente_numero(), cliente=cliente, medio_pago=datos.medio_pago, fecha_pago=fecha_pago, monto_pagado=base + atraso,
+                estado_pago=PagoCliente.Estado.VIGENTE, usuario=quien, estado_aviso_cliente=aviso, anulacion_corregida=anulacion,
+            )
+    except IntegrityError as error:
+        raise _rechazar("anulacion_ya_usada", "El cobro correcto de esa anulación ya se registró.") from error
     lineas = [
         LineaPago.objects.create(pago=pago, entrega_id=f.entrega_id, monto_cobrado=f.monto_a_cobrar, dias_atraso=f.dias_de_atraso, indemnizacion_atraso=f.indemnizacion, vigente=True) for f in filas
     ]
@@ -709,7 +740,7 @@ def _registrar(quien, datos, filas, hoy):
         detalle={
             "cambios": {
                 "medio_pago": {"antes": None, "despues": pago.medio_pago},
-                "fecha_pago": {"antes": None, "despues": hoy.isoformat()},
+                "fecha_pago": {"antes": None, "despues": fecha_pago.isoformat()},
                 "monto_pagado": {"antes": None, "despues": str(pago.monto_pagado)},
                 "estado_aviso_cliente": {"antes": None, "despues": aviso},
             },
@@ -719,6 +750,7 @@ def _registrar(quien, datos, filas, hoy):
                 "indemnizacion_atraso_total": str(atraso),
                 "detalle_de_entregas": [f"{f.codigo}: {f.monto_a_cobrar} + {f.indemnizacion} de atraso ({f.dias_de_atraso} días)" for f in filas],
                 "alertas_resueltas": [str(a) for a in resueltas],
+                **({"anulacion_corregida": referencia(anulacion)} if anulacion is not None else {}),
             },
         },
     )
@@ -871,6 +903,12 @@ def ficha_de_cobro(actor, pago_id):
         for l in pago.lineas.select_related("entrega__contrato_entrega").order_by("entrega__numero")
     ]
     atraso = sum((l.indemnizacion for l in lineas), Decimal("0.00"))
+    es_gerente = rol_de(actor) == GERENTE
+    anulacion = Anulacion.objects.select_related("usuario").filter(pago_cliente_id=pago.pk).first()  # COM-08b: la anulación (fecha, Gerente, motivo, si el cliente pagó) y el cobro que la corrigió
+    cobro_correcto = PagoCliente.objects.filter(anulacion_corregida_id=anulacion.pk).first() if anulacion is not None else None
+    puede_registrar_correcto = False
+    if es_gerente and anulacion is not None and cobro_correcto is None:  # paso 7: «Registrar el cobro correcto», mientras queden entregas por cobrar de ese cobro
+        puede_registrar_correcto = bool(anulacion_para_registrar(actor, anulacion.pk).entrega_ids)
     return FichaDeCobro(
         pago=pago,
         codigo=pago.codigo,
@@ -886,12 +924,22 @@ def ficha_de_cobro(actor, pago_id):
         aviso=pago.estado_aviso_cliente,
         puede_reenviar=pago.estado_aviso_cliente == PagoCliente.EstadoDelAviso.PENDIENTE_ENVIO and bool(pago.cliente.email_cliente),
         puede_imprimir=pago.estado_aviso_cliente == PagoCliente.EstadoDelAviso.SIN_CORREO,
+        anulacion=anulacion,
+        cobro_correcto=cobro_correcto,
+        puede_anular=es_gerente and pago.estado_pago == PagoCliente.Estado.VIGENTE,
+        puede_registrar_correcto=puede_registrar_correcto,
     )
 
 
 def datos_de_cobro(post):
-    """`DatosDeCobro` desde un `QueryDict` (las claves `cliente`, `entrega` —varias— y `medio_pago`)."""
-    return DatosDeCobro(cliente_id=(post.get("cliente") or "").strip(), entrega_ids=post.getlist("entrega"), medio_pago=(post.get("medio_pago") or "").strip())
+    """`DatosDeCobro` desde un `QueryDict` (las claves `cliente`, `entrega` —varias—, `medio_pago` y, en 7a, `anulacion` y `usar_fecha_anulada`)."""
+    return DatosDeCobro(
+        cliente_id=(post.get("cliente") or "").strip(),
+        entrega_ids=post.getlist("entrega"),
+        medio_pago=(post.get("medio_pago") or "").strip(),
+        anulacion_id=(post.get("anulacion") or "").strip() or None,
+        usar_fecha_anulada=bool(post.get("usar_fecha_anulada")),
+    )
 
 
 def reevaluar_mora_con_rastro(entrega_id, hoy):
@@ -925,3 +973,175 @@ def en_mora_para(actor, hoy):
     """El contador rojo de la pestaña «Cobranza»: las entregas en mora del alcance del actor (`None` si no es Gerente ni Vendedor)."""
     panel = panel_de_cobranza(actor, hoy)
     return None if panel is None else panel.en_mora_cantidad
+
+
+# ---- anular un cobro (COM-ANL-CBR; COM-08b; D-94 puntos 5, 10 y 11) ----
+# Bloqueos (docs/patrones/bloqueos.md, «Cobranza»): las cuentas (el Gerente y los Vendedores) → los invernaderos de origen → las entregas → el pago y sus líneas. Es el orden de «Registrar un cobro» más el pago.
+
+CONTRAASIENTO = "Fuera de esta ronda · contabilidad"  # postcondición c: el contraasiento no existe en esta ronda (D-57)
+LARGO_DEL_MOTIVO = 500
+EntregaDeAnulacion = namedtuple("EntregaDeAnulacion", "entrega_id codigo contrato_codigo monto_cobrado dias_atraso indemnizacion estado_despues alerta")
+DatosDeAnulacionDeCobro = namedtuple("DatosDeAnulacionDeCobro", "pago codigo cliente fecha medio monto indemnizacion entregas contraasiento huella")
+AnulacionParaRegistrar = namedtuple("AnulacionParaRegistrar", "anulacion cliente_id entrega_ids usa_fecha fecha")
+
+
+def _exigir_gerente(actor):
+    """Solo el Gerente con la cuenta activa anula un cobro (regla «Quién anula»); cualquier otro: `PermissionDenied` (`sin_permiso`)."""
+    if actor is None or not getattr(actor, "is_active", False) or rol_de(actor) != GERENTE:
+        raise PermissionDenied(MENSAJE_SIN_ACCESO)
+
+
+def _pago_para_anular(pago_id):
+    """El cobro de suministro vigente que se va a anular. `Http404` si no existe; `cobro_de_compra_venta` (1a: va dentro del asiento de la entrega y se corrige con un asiento manual) y `cobro_ya_anulado` (5a)."""
+    pago = get_object_or_404(PagoCliente.objects.select_related("cliente"), pk=pago_id)
+    if pago.tipo_pago != PagoCliente.Tipo.SUMINISTRO:
+        raise _rechazar("cobro_de_compra_venta", "Este cobro es de una compra-venta: va dentro del asiento de la entrega y se corrige con un asiento manual.")
+    if pago.estado_pago != PagoCliente.Estado.VIGENTE:
+        raise _rechazar("cobro_ya_anulado", f"{pago.codigo} ya está anulado: no hay nada más que anular.")
+    return pago
+
+
+def _lo_que_pasa(pago, hoy):
+    """Las líneas del cobro con el estado en que queda cada entrega al anularlo (`pendiente` o `en_mora`, con su vencimiento guardado, MD-132) y si hay que asegurar su alerta."""
+    filas = []
+    for linea in pago.lineas.select_related("entrega__contrato_entrega").order_by("entrega__numero"):
+        e = linea.entrega
+        estado = entregas._estado_de_pago(e.fecha_vencimiento_pago, hoy)
+        filas.append(
+            EntregaDeAnulacion(e.pk, e.codigo, e.contrato_entrega.codigo, linea.monto_cobrado, linea.dias_atraso, linea.indemnizacion_atraso, estado, estado == "en_mora")
+        )
+    return filas
+
+
+def _huella_de_anulacion(pago, filas, hoy):
+    """Lo que cuenta entre el paso 2 y el 5: el estado del pago, cada línea con su vigencia y el estado en que quedaría la entrega, y la fecha de hoy (puede cambiar el estado en que queda cada entrega)."""
+    lineas = [[l.pk, l.vigente] for l in pago.lineas.order_by("pk")]
+    return json.dumps({"hoy": hoy.isoformat(), "pago": pago.estado_pago, "lineas": lineas, "despues": {str(f.entrega_id): f.estado_despues for f in filas}}, sort_keys=True)
+
+
+def datos_de_anulacion_de_cobro(actor, pago_id, hoy=None):
+    """Pasos 1 y 2 de COM-ANL-CBR (solo lectura): el cobro (código, cliente, fecha, medio, monto y atraso total), cada entrega con lo cobrado y el estado en que queda (`pendiente` o `en_mora`, y si se le asegura la
+    alerta), el contraasiento como «Fuera de esta ronda» y la huella. Solo el Gerente (`PermissionDenied`); `Http404`; `cobro_de_compra_venta` (1a) y `cobro_ya_anulado` (5a)."""
+    _exigir_gerente(actor)
+    hoy = hoy or stock.hoy()
+    pago = _pago_para_anular(pago_id)
+    filas = _lo_que_pasa(pago, hoy)
+    return DatosDeAnulacionDeCobro(
+        pago=pago,
+        codigo=pago.codigo,
+        cliente=pago.cliente.nombre_visible,
+        fecha=pago.fecha_pago,
+        medio=pago.get_medio_pago_display(),
+        monto=pago.monto_pagado,
+        indemnizacion=sum((f.indemnizacion for f in filas), Decimal("0.00")),
+        entregas=filas,
+        contraasiento=CONTRAASIENTO,
+        huella=_huella_de_anulacion(pago, filas, hoy),
+    )
+
+
+def _validar_motivo_de_anulacion(motivo):
+    """Paso 3 (3a): el motivo es obligatorio, de 1 a 500 caracteres, sin espacios al borde (`motivo_obligatorio` y `motivo_largo`, en el campo `motivo`). Devuelve el motivo limpio."""
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise _rechazar("motivo_obligatorio", "Escribí el motivo de la anulación.", campo="motivo")
+    if len(motivo) > LARGO_DEL_MOTIVO:
+        raise _rechazar("motivo_largo", f"El motivo pasa de {LARGO_DEL_MOTIVO} caracteres.", campo="motivo")
+    return motivo
+
+
+def _bloquear_pago_y_lineas(pago_id):
+    """El pago y sus líneas, en orden de id, después de las cuentas, los invernaderos y las entregas (el último paso de los bloqueos de la anulación)."""
+    list(PagoCliente.objects.select_for_update(no_key=True, of=("self",)).filter(pk=pago_id))
+    list(LineaPago.objects.select_for_update(no_key=True).filter(pago_id=pago_id).order_by("pk"))
+
+
+def _avisar_la_anulacion(pago, filas, motivo):
+    """Paso 6 (D-42, dentro de la transacción): a cada Vendedor activo de los contratos, «COB-0032 anulado» con las entregas suyas que vuelven a estar sin pagar y el motivo."""
+    por_vendedor = {}
+    for f in filas:
+        vendedor_id = Contrato.objects.get(pk=Entrega.objects.get(pk=f.entrega_id).contrato_entrega_id).vendedor_id
+        por_vendedor.setdefault(vendedor_id, []).append(f)
+    cliente = pago.cliente.nombre_visible
+    for vendedor_id, suyas in sorted(por_vendedor.items()):
+        vendedor = entregas._usuario_activo(vendedor_id)
+        if vendedor is None:
+            continue
+        lista = _enumerar([f"{f.codigo} ({f.estado_despues.replace('_', ' ')})" for f in suyas])
+        verbo = "Vuelven" if len(suyas) > 1 else "Vuelve"
+        total = texto_de_pesos(sum((f.monto_cobrado + f.indemnizacion for f in suyas), Decimal("0.00")))
+        detalle = f"El Gerente anuló el cobro de {cliente} ({total}). {verbo} a estar sin pagar: {lista}. Motivo: {motivo}"
+        notificaciones.notificar(vendedor, entregas._acotar(f"{pago.codigo} anulado", notificaciones.LARGO_TITULO), entregas._acotar(detalle, notificaciones.LARGO_DETALLE))
+
+
+def anular_cobro(actor, pago_id, motivo, cliente_pago_en_fecha, huella, hoy=None):
+    """Paso 5 de COM-ANL-CBR (y 5a): anula el cobro en UNA transacción (garantía mínima: atómica) y devuelve la `Anulacion`.
+
+    Antes de bloquear: solo el Gerente, el cobro de suministro vigente (`cobro_de_compra_venta`, `cobro_ya_anulado`) y el motivo (`motivo_obligatorio`, `motivo_largo`). Bloqueos (D-94 punto 8): las cuentas → los
+    invernaderos de origen → las entregas → el pago y sus líneas. Relectura: sigue siendo Gerente activo, el pago sigue vigente (5a) y la huella coincide (`cambio_simultaneo`). Con todo verificado: la `Anulacion`
+    (fecha de hoy, motivo, usuario, cobro y `cliente_pago_en_fecha`), el pago a «anulado» y sus líneas a `vigente = False` (no se borra nada, MD-136), `reevaluar_mora` de cada entrega (asegura la alerta si vuelve a
+    «en mora»; el correo de mora solo si nunca había salido; sin aviso individual al Vendedor), el aviso a cada Vendedor y la auditoría `anulacion_cobro`. No le escribe al cliente ni crea el contraasiento (D-57)."""
+    _exigir_gerente(actor)
+    hoy = hoy or stock.hoy()
+    _pago_para_anular(pago_id)
+    motivo = _validar_motivo_de_anulacion(motivo)
+    previas = list(LineaPago.objects.filter(pago_id=pago_id).values_list("entrega_id", "entrega__invernadero_id", "entrega__contrato_entrega_id"))
+    vendedores = set(Contrato.objects.filter(pk__in={c for _, _, c in previas}).values_list("vendedor_id", flat=True))
+    with transaction.atomic():
+        quien = _bloquear_cuentas(actor, vendedores)
+        if rol_de(quien) != GERENTE:
+            raise PermissionDenied(MENSAJE_SIN_ACCESO)
+        _bloquear_invernaderos([i for _, i, _ in previas])
+        _bloquear_entregas([e for e, _, _ in previas])
+        _bloquear_pago_y_lineas(pago_id)
+        pago = _pago_para_anular(pago_id)  # 5a: el cobro pudo anularse mientras esperaba
+        filas = _lo_que_pasa(pago, hoy)
+        if _huella_de_anulacion(pago, filas, hoy) != huella:
+            raise _rechazar("cambio_simultaneo", "Mientras mirabas la anulación cambió el cobro o el día. Revisá lo que pasa ahora y volvé a confirmar.")
+        return _anular(quien, pago, filas, motivo, bool(cliente_pago_en_fecha), hoy)
+
+
+def _anular(quien, pago, filas, motivo, cliente_pago_en_fecha, hoy):
+    """Con todo bloqueado y verificado: la anulación, los estados, la mora, el aviso y la auditoría."""
+    try:
+        with transaction.atomic():
+            anulacion = Anulacion.objects.create(fecha_anulacion=hoy, motivo_anulacion=motivo, usuario=quien, pago_cliente=pago, cliente_pago_en_fecha=cliente_pago_en_fecha)
+    except IntegrityError as error:  # la unicidad del OneToOne respalda a la relectura: dos anulaciones del mismo pago
+        raise _rechazar("cobro_ya_anulado", f"{pago.codigo} ya está anulado: no hay nada más que anular.") from error
+    lineas = list(pago.lineas.order_by("pk"))
+    PagoCliente.objects.filter(pk=pago.pk).update(estado_pago=PagoCliente.Estado.ANULADO)
+    LineaPago.objects.filter(pago_id=pago.pk).update(vigente=False)
+    nuevas = []
+    for f in filas:
+        _, creadas = reevaluar_mora_con_rastro(f.entrega_id, hoy)  # d y e: «pendiente» o «en mora»; la alerta nueva si vuelve a estar en mora
+        nuevas += creadas
+    _avisar_la_anulacion(pago, filas, motivo)
+    RegistroAuditoria.objects.registrar(
+        usuario=quien,
+        accion=RegistroAuditoria.Accion.ANULACION_COBRO,
+        afectados=[pago, anulacion, *lineas, *nuevas],
+        detalle={
+            "cambios": {"estado_pago": {"antes": PagoCliente.Estado.VIGENTE, "despues": PagoCliente.Estado.ANULADO}},
+            "datos": {
+                "motivo_anulacion": motivo,
+                "cliente_pago_en_fecha": cliente_pago_en_fecha,
+                "cobro_anulado": referencia(pago),
+                "entregas_que_vuelven": [f"{f.codigo}: {f.estado_despues}" for f in filas],
+                "alertas_creadas": [str(a) for a in nuevas],
+            },
+        },
+    )
+    return anulacion
+
+
+def anulacion_para_registrar(actor, anulacion_id):
+    """La pantalla final de la anulación y el GET de «Registrar el cobro correcto» (paso 7 y 7a; D-94 punto 10): el cliente, las entregas del cobro anulado que siguen sin cobrar, si la anulación dice que el cliente pagó
+    ese día (`usa_fecha`) y esa fecha (la del cobro anulado). Solo el Gerente (`PermissionDenied`); `Http404` si no es la anulación de un cobro; `anulacion_ya_usada` si su cobro correcto ya se registró."""
+    _exigir_gerente(actor)
+    anulacion = get_object_or_404(Anulacion.objects.select_related("pago_cliente"), pk=anulacion_id, pago_cliente__isnull=False)
+    if PagoCliente.objects.filter(anulacion_corregida_id=anulacion.pk).exists():
+        raise _rechazar("anulacion_ya_usada", "El cobro correcto de esa anulación ya se registró.")
+    pago = anulacion.pago_cliente
+    ids = list(pago.lineas.values_list("entrega_id", flat=True))
+    cobradas = set(LineaPago.objects.filter(entrega_id__in=ids, vigente=True).values_list("entrega_id", flat=True))
+    return AnulacionParaRegistrar(anulacion, pago.cliente_id, sorted(i for i in ids if i not in cobradas), bool(anulacion.cliente_pago_en_fecha), pago.fecha_pago)

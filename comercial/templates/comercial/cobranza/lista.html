@@ -1,6 +1,6 @@
 {% extends "core/base_con_sesion.html" %}{% load estaticos comercial %}
 {% comment %}«Comercial» → «Cobranza» (COM-REG-CBR, paso 2; `tabCobranza` y `cobGroups` del prototipo, D-61): dos subpestañas, «Por cobrar» (los clientes con deuda de suministro, cada uno con sus entregas de la que vence primero a la última) y
-«Cobros registrados». Cada grupo se despliega con `<details>` (sin JavaScript); «Registrar cobro» lleva a la pantalla con el cliente ya elegido. «Anular» es de COM-08b. Recibe «vista», «grupos» o «datos» y «filtros», «es_gerente». Todo se escapa.{% endcomment %}
+«Cobros registrados». Cada grupo se despliega con `<details>` (sin JavaScript); «Registrar cobro» lleva a la pantalla con el cliente ya elegido. COM-08b suma «Anular» en «Cobros registrados» (solo el Gerente). Recibe «vista», «grupos» o «datos» y «filtros», «es_gerente». Todo se escapa.{% endcomment %}
 {% block titulo %}Cobranza · Comercial · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
@@ -34,7 +34,7 @@
           <td>{{ f.medio }}</td>
           <td class="right nowrap mono">{{ f.monto|pesos }}{% if f.atraso > 0 %}<span class="sub2">incluye {{ f.atraso|pesos }} por atraso</span>{% endif %}</td>
           <td><span class="status-badge {% if f.estado == 'vigente' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
-          <td class="right nowrap"><a class="rowlink" href="{% url 'comercial:cobro' f.pago_id %}">Ver<span class="sr"> el cobro {{ f.codigo }}</span></a></td>
+          <td class="right nowrap"><a class="rowlink" href="{% url 'comercial:cobro' f.pago_id %}">Ver<span class="sr"> el cobro {{ f.codigo }}</span></a>{% if es_gerente and f.estado == 'vigente' %} <a class="rowlink" href="{% url 'comercial:cobro_anular' f.pago_id %}">Anular<span class="sr"> el cobro {{ f.codigo }}</span></a>{% endif %}</td>
         </tr>
       {% empty %}
         <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No hay cobros registrados.</td></tr>

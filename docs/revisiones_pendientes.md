@@ -1012,6 +1012,27 @@ Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-08a-
 - [ ] 17. Opcional: en un celular.
 - [ ] 18. Después del merge, en Render: `comercial.0013_cobranza` y `core.0051_comercial_cobranza` aplicadas.
 
+## COM-08b · Tarea COM-08b (anular un cobro y cobrar lo entregado al cancelar)
+
+Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-08b-anular-cobro-y-cobro-al-cancelar.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0014: `Anulacion.pago_cliente` y `cliente_pago_en_fecha`, `PagoCliente.anulacion_corregida` y las restricciones de `Anulacion`; `core` 0052: solo `choices`; ninguna de datos). Se necesitan las entregas del cobro de COM-08a «envejecidas» (la preparación está en el archivo de la tarea) y, para el paso 11, una compra-venta con envío desde dos invernaderos con una entrega concretada.
+
+- [ ] 1. Gerente: «Registrar cobro» de `A` (en mora hace 5 días) y `B` (pendiente) con Transferencia: COB-0001 por $ 3.500,00; todavía sin alerta ni correo de mora de `A` (no corriste el paso 30). *(Lo cubre el recorrido, paso 1.)*
+- [ ] 2. El Vendedor del contrato no ve «Anular» (lista ni ficha) y por URL (`/comercial/cobranza/cobros/<id>/anular/`) recibe 403; igual otro Vendedor, el Agrónomo y el Capataz. *(Lo cubre el recorrido, paso 2.)*
+- [ ] 3. Gerente, «Anular» de COB-0001: la pantalla dice que OT-0231 «vuelve a en mora» (con su alerta) y OT-0232 «vuelve a pendiente», con «Fuera de esta ronda · contabilidad»; sin motivo, «Escribí el motivo de la anulación.» junto al campo y el cobro sigue vigente.
+- [ ] 4. Con motivo y «El cliente pagó en esa fecha»: la ficha queda «Anulado» con la tarjeta «Anulación» y «Registrar el cobro correcto»; vuelve la alerta «Pago en mora» de `A`; el Vendedor recibe un solo aviso «COB-0001 anulado» (sin «OT-0231 en mora»); en la terminal, un solo correo («Pago en mora de la entrega OT-0231»); «Auditoría»: «Anulación de cobro de suministro».
+- [ ] 5. Un cobro de compra-venta por URL (`PagoCliente.objects.filter(tipo_pago="compra_venta").first().pk` en el `shell`): vuelve a «Cobranza» con «Este cobro es de una compra-venta: va dentro del asiento de la entrega y se corrige con un asiento manual.»
+- [ ] 6. El cobro correcto con la fecha original (7a): con el cobro de `D` de hace dos días (el `shell` del archivo de la tarea) anulado «el cliente pagó», «Registrar el cobro correcto» abre con `D` elegida, la casilla «Usar la fecha del cobro anulado» marcada y 2 días · $ 600,00 de atraso; desmarcarla pasa a hoy (4 días · $ 1.200,00) sin mover la página; confirmado, el cobro lleva la fecha vieja y la ficha del anulado muestra «Cobro correcto: COB-…»; volver a la URL: «El cobro correcto de esa anulación ya se registró.»
+- [ ] 7. Sin la casilla: anular el cobro de `C` sin marcar «El cliente pagó» y abrir «Registrar el cobro correcto»: sin casilla y con «Es la fecha de hoy…».
+- [ ] 8. Una discrepancia de `C` aceptada con descuento y cobrada: «Anular resolución» dice «Primero anulá el cobro de OT-0233 (Anular cobro).»; con el cobro anulado, ya no rechaza.
+- [ ] 9. La regla 5 de «Entrega no reconocida» con el cobro anulado: difícil de preparar a mano; *lo cubre una prueba* (`test_regla_despues_de_anular_la_regla_5_de_com_atn_enr_deja_de_rechazar`).
+- [ ] 10. Opcional, dos pestañas: anular el mismo cobro en las dos; la segunda dice «COB-… ya está anulado: no hay nada más que anular.» y queda una sola anulación.
+- [ ] 11. Cancelar una compra-venta con una entrega concretada (dos invernaderos): «3 · Cobro de lo entregado» con el monto y los cuatro medios; sin medio, «Elegí el medio de pago con que el cliente paga lo entregado.»; el resumen no escribe; al confirmar, la venta queda «Concretada» con su pago, la entrega pendiente «Cancelada», el aviso «Se cobró lo entregado…» y el correo y el comprobante imprimible con «Cobro de lo entregado».
+- [ ] 12. Una compra-venta sin entregas concretadas se cancela como siempre: sin sección de cobro, sin medio, queda «Cancelada». *(Lo cubre una prueba.)*
+- [ ] 13. **Navegador real.** En una ventana privada, enviar hasta el final «Anular cobro» y la cancelación con cobro («Revisar y cancelar» → «Confirmar cancelación»); marcar o desmarcar la casilla de 7a redibuja sin mover la página. Si aparece «Prohibido (403)» o «Verificación CSRF fallida», avisá.
+- [ ] 14. Sin JavaScript: «Anular cobro» (una página), la casilla de 7a con «Calcular total» y la cancelación con el resumen como página funcionan igual.
+- [ ] 15. **Opcional, celular.** «Anular», «Registrar el cobro correcto» y la cancelación se leen y se operan.
+- [ ] 16. Después del merge, en el log de Render: `comercial.0014_anulacion_de_cobro` y `core.0052_comercial_anulacion_cobro` aplicadas.
+
 ## CMP-05 · Tarea CMP-05 (pago a proveedores)
 
 Los 24 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-05-pago-a-proveedores.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0005, `contabilidad` 0007 y `core` 0044; las dos últimas solo `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_pagos.py`; la concurrencia no se prueba a mano.

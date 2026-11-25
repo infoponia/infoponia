@@ -768,7 +768,7 @@ a. Ninguna: es una consulta.
   COM-07a; los carga COM-07b).
 - **COM-08a** (lote C8; D-94, punto 1): una entrega de suministro «pagada» (6a de COM-EVL-DSC y de COM-RSV-QJA; el cobro de sus 8b; 2b de COM-ANL-SRV). Se escriben con
   `entregas.estado_de_pago` (que hasta COM-08a nunca devuelve «pagada») y se prueban con una fábrica que simula la entrega pagada con
-  `mock.patch`; COM-08a las prueba con datos reales (`cobranza.md`, «Lo que completa a otras tareas»). `Anulacion.pago` y
+  `mock.patch`; COM-08a las prueba con datos reales (`cobranza.md`, «Lo que completa a otras tareas»). `Anulacion.pago_cliente` y
   `cliente_pago_en_fecha` (COM-ANL-CBR): **COM-08b**.
 - **Fuera de esta ronda · contabilidad** (D-57): precondición c, asientos, contraasiento. El código guarda todo lo que esos asientos necesitan
   (el monto, lo descontado, lo reintegrado y el medio) y no crea asientos.
@@ -1036,7 +1036,7 @@ Referencia visual (D-61): `docs/prototipos/comercial/` (`README.md`). Vale la ve
 ## Para más adelante
 
 - **COM-07b:** COM-RSV-SUM (lo que dispara 6b) y `solicitud_resolucion` cargado (2a con datos reales).
-- **COM-08a:** la entrega pagada (6a, el cobro de 8b, 2b) con datos reales; **COM-08b:** `Anulacion.pago` y `cliente_pago_en_fecha`; COM-REG-CBR cobra el
+- **COM-08a:** la entrega pagada (6a, el cobro de 8b, 2b) con datos reales; **COM-08b:** `Anulacion.pago_cliente` y `cliente_pago_en_fecha`; COM-REG-CBR cobra el
   monto a cobrar que deja esta tarea.
 - **Ronda de contabilidad:** los asientos de la indemnización (simple o compuesto) y el contraasiento, originados en la solicitud y en la
   `Anulacion`.

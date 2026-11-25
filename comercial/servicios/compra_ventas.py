@@ -21,9 +21,10 @@ from types import SimpleNamespace
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import connection, transaction
+from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 
-from comercial.models import Cliente, CompraVenta, DetalleReserva, DetalleVenta, DireccionCliente, ReservaStock
+from comercial.models import Cliente, CompraVenta, DetalleEntrega, DetalleReserva, DetalleVenta, DireccionCliente, PagoCliente, ReservaStock
 from comercial.servicios import clientes as api_clientes
 from comercial.servicios import comprobantes, entregas, stock_maduro
 from core import notificaciones
@@ -680,7 +681,16 @@ def datos_del_comprobante(venta):
     }
     if venta.motivo_cancelacion_venta:  # COM-CNL-CVT, paso 9: el comprobante de una venta cancelada dice el motivo, lo que se canceló y lo que no cambia
         por_detalle = {d.variedad_id: d for d in detalles}
+        pago = venta.pagos.filter(estado_pago="vigente").first()  # 6a: lo entregado que se cobró al cancelar
+        cobro = None
+        if pago is not None:
+            from comercial.models import Entrega
+
+            concretadas = list(Entrega.objects.filter(contrato_entrega_id=venta.pk, estado_orden=CONCRETADA).order_by("pk"))
+            cobro = _cobro_de_lo_entregado(concretadas)
+            cobro = SimpleNamespace(total=pago.monto_pagado, medio=pago.get_medio_pago_display(), entregas=cobro.entregas if cobro is not None else [])
         contexto["cancelacion"] = SimpleNamespace(
+            cobro=cobro,
             motivo=venta.get_motivo_cancelacion_venta_display(),
             descripcion=venta.descripcion_cancelacion,
             fecha=venta.fecha_cancelacion_venta,
@@ -807,14 +817,18 @@ def ficha_de_compra_venta(actor, venta_id):
 
 logger = logging.getLogger("infoponia.compra_ventas")
 
+MEDIOS = PagoCliente.Medio.values
+FRASE_DEL_MEDIO = {"efectivo": "en efectivo", "transferencia": "por transferencia", "tarjeta_debito": "con tarjeta de débito", "tarjeta_credito": "con tarjeta de crédito"}
+
 ESTADOS_CANCELABLES = (CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION)
 DETALLES_A_CANCELAR = (DetalleVenta.Estado.ABIERTO, DetalleVenta.Estado.PENDIENTE_DECISION, DetalleVenta.Estado.CONFIRMADO)  # D-67 punto 4: el confirmado también, si no se entregó
 LARGO_DE_LA_DESCRIPCION = 300
 A_REALIZAR, CONCRETADA = "a_realizar", "concretada"
 
-# `bloqueo` es el texto de por qué la venta no se puede cancelar (venta ya cerrada, extensión 4a, 6a) o `None`.
+# `bloqueo` es el texto de por qué la venta no se puede cancelar (venta ya cerrada, extensión 4a) o `None`. `cobro` (COM-08b, 6a) es lo que se cobra de lo entregado
+# (`total` y `entregas` con `codigo`, `fecha` y `monto`) o `None` si no hay entregas concretadas con algo para cobrar.
 DatosDeCancelacion = namedtuple(
-    "DatosDeCancelacion", "venta cliente detalles a_lotes a_partidas a_camara cosechas entregas en_curso concretadas comprobante huella bloqueo"
+    "DatosDeCancelacion", "venta cliente detalles a_lotes a_partidas a_camara cosechas entregas en_curso concretadas comprobante huella bloqueo cobro"
 )
 ResumenDeCancelacionDeVenta = namedtuple("ResumenDeCancelacionDeVenta", "datos motivo motivo_texto descripcion estado_final")
 _Alcance = namedtuple("_Alcance", "detalles reservas lineas cosechas a_realizar concretadas en_curso cuentas invernaderos variedades lotes partidas")
@@ -822,15 +836,16 @@ _Alcance = namedtuple("_Alcance", "detalles reservas lineas cosechas a_realizar 
 
 @dataclass(frozen=True)
 class DatosDeCancelacionDeVenta:
-    """Lo que elige la persona en el paso 5: el motivo (de la lista cerrada de MD-130) y la descripción opcional."""
+    """Lo que elige la persona en el paso 5: el motivo (de la lista cerrada de MD-130), la descripción opcional y, con entregas concretadas, el medio de pago con que el cliente paga lo entregado (6a.2; COM-08b)."""
 
     motivo: str = ""
     descripcion: str = ""
+    medio_pago: str = ""
 
     @classmethod
     def desde_post(cls, post):
-        """Arma los datos de un ``QueryDict``: ``motivo`` y ``descripcion``."""
-        return cls((post.get("motivo") or "").strip(), (post.get("descripcion") or "").strip())
+        """Arma los datos de un ``QueryDict``: ``motivo``, ``descripcion`` y ``medio_pago``."""
+        return cls((post.get("motivo") or "").strip(), (post.get("descripcion") or "").strip(), (post.get("medio_pago") or "").strip())
 
 
 def _validar_motivo(datos):
@@ -843,7 +858,26 @@ def _validar_motivo(datos):
         raise _error_de_campo("motivo", "Elegí uno de los motivos de la lista.", "motivo_invalido")
     if len(descripcion) > LARGO_DE_LA_DESCRIPCION:
         raise _error_de_campo("descripcion", f"La descripción pasa de {LARGO_DE_LA_DESCRIPCION} caracteres.", "descripcion_larga")
-    return DatosDeCancelacionDeVenta(motivo, descripcion)
+    return DatosDeCancelacionDeVenta(motivo, descripcion, (datos.medio_pago or "").strip())
+
+
+def _validar_medio(datos, hay_cobro):
+    """6a.2: con algo para cobrar, el medio de pago es obligatorio y de la lista (`medio_de_pago_obligatorio`); sin nada para cobrar no se admite ninguno (`medio_no_admitido`). Errores por campo (`medio_pago`)."""
+    if hay_cobro and datos.medio_pago not in MEDIOS:
+        raise _error_de_campo("medio_pago", "Elegí el medio de pago con que el cliente paga lo entregado.", "medio_de_pago_obligatorio")
+    if not hay_cobro and datos.medio_pago:
+        raise _error_de_campo("medio_pago", "Esta venta no tiene entregas concretadas: no hay nada que cobrar.", "medio_no_admitido")
+
+
+def _cobro_de_lo_entregado(concretadas):
+    """6a.1 (D-94 punto 14): Σ `monto_pagar` de las líneas de las entregas concretadas de la venta (lo que registró cada entrega, regla 32 de 8.6), con el detalle por entrega; `None` si no hay entregas concretadas
+    o si lo entregado vale cero (todo rechazado: no hay nada que cobrar y la venta queda «cancelada»)."""
+    if not concretadas:
+        return None
+    montos = dict(DetalleEntrega.objects.filter(entrega__in=concretadas).values("entrega_id").annotate(total=Sum("monto_pagar")).values_list("entrega_id", "total"))
+    filas = [SimpleNamespace(codigo=e.codigo, fecha=e.fecha_resolucion_orden, monto=montos.get(e.pk) or Decimal("0.00")) for e in concretadas]
+    total = sum((f.monto for f in filas), Decimal("0.00"))
+    return SimpleNamespace(total=total, entregas=filas) if total > 0 else None
 
 
 def _venta_para_cancelar(actor, venta_id):
@@ -869,6 +903,7 @@ def huella_de_venta(venta):
             list(ReservaStock.objects.filter(detalle_venta__compra_venta=venta).order_by("pk").values_list("pk", "estado_reserva", "cosecha__estado_orden")),
             list(DetalleReserva.objects.filter(reserva__detalle_venta__compra_venta=venta).order_by("pk").values_list("pk", "cantidad_reservada", "cantidad_cosechada")),
             list(Entrega.objects.filter(contrato_entrega_id=venta.pk).order_by("pk").values_list("pk", "estado_orden", "transportista_id", "fecha_programada_orden")),
+            list(Entrega.objects.filter(contrato_entrega_id=venta.pk, estado_orden=CONCRETADA).order_by("pk").values_list("pk", "monto_total_entrega")),  # 6a: lo que se cobra
             list(EnlaceCliente.objects.filter(compra_venta=venta, estado="vigente").order_by("pk").values_list("pk", flat=True)),
         ],
         default=str,
@@ -918,12 +953,10 @@ def _alcance_de_cancelacion(venta, hoy):
 
 
 def _por_que_no_se_cancela(venta, alcance):
-    """`(código, mensaje)` si la venta no se puede cancelar o `None`: ya cerrada (`venta_no_cancelable`), con una entrega concretada (6a: `venta_con_entregas_concretadas`, llega con COM-06 y
-    COM-08b) o con una entrega en curso (4a: `entrega_en_curso`)."""
+    """`(código, mensaje)` si la venta no se puede cancelar o `None`: ya cerrada (`venta_no_cancelable`) o con una entrega en curso (4a: `entrega_en_curso`). Con entregas concretadas (6a) sí se cancela:
+    desde COM-08b lo entregado se cobra en la misma operación."""
     if venta.estado_venta not in ESTADOS_CANCELABLES:
         return "venta_no_cancelable", f"{venta.codigo} ya está {venta.get_estado_venta_display().lower()}: solo se cancela una compra-venta abierta o pendiente de decisión del cliente."
-    if alcance.concretadas:
-        return "venta_con_entregas_concretadas", "Esta venta ya tiene entregas concretadas: su cancelación con cobro llega con la cobranza."
     if alcance.en_curso:
         e = alcance.en_curso[0]
         return "entrega_en_curso", (
@@ -936,7 +969,7 @@ def _por_que_no_se_cancela(venta, alcance):
 def datos_de_cancelacion(actor, compra_venta_id, hoy=None):
     """Pasos 2 a 4 de COM-CNL-CVT (solo lectura): cada detalle con su efecto («Se cancela» o «… no cambia»); las reservas que se liberan en tres grupos (lo que vuelve a los lotes, lo que vuelve
     a las partidas y lo ya cosechado que ingresa a la cámara, con su fecha límite); las cosechas y las entregas «a realizar» que se cancelan; las entregas en curso (4a) y las concretadas (6a); el
-    destino del comprobante (el correo o `None` si hay que imprimirlo) y la `huella`. `bloqueo` dice por qué la venta no se puede cancelar. 404 si no existe; `PermissionDenied` si no es del alcance."""
+    destino del comprobante (el correo o `None` si hay que imprimirlo) y la `huella`. `bloqueo` dice por qué la venta no se puede cancelar; `cobro`, lo que se cobra de lo entregado (6a). 404 si no existe; `PermissionDenied` si no es del alcance."""
     from produccion.models import ReservaInsumo
 
     hoy = hoy or stock.hoy()
@@ -999,18 +1032,21 @@ def datos_de_cancelacion(actor, compra_venta_id, hoy=None):
         venta.cliente.email_cliente or None,
         huella_de_venta(venta),
         razon[1] if razon is not None else None,
+        _cobro_de_lo_entregado(alcance.concretadas),
     )
 
 
 def resumen_de_cancelacion_de_venta(actor, compra_venta_id, datos, hoy=None):
-    """Pasos 6 y 7: el resumen de lo que va a pasar con el motivo elegido y el estado final («Cancelada»). Valida igual que la confirmación (motivo, venta cancelable, sin entregas en curso ni
-    concretadas) y no escribe nada. Devuelve `ResumenDeCancelacionDeVenta`."""
+    """Pasos 6 y 7: el resumen de lo que va a pasar con el motivo elegido y el estado final («Cancelada» o, con entregas concretadas, «Concretada (se cobra lo entregado)»). Valida igual que la confirmación
+    (motivo, venta cancelable, sin entregas en curso y el medio de pago de 6a) y no escribe nada. Devuelve `ResumenDeCancelacionDeVenta`."""
     datos = _validar_motivo(datos)
     previos = datos_de_cancelacion(actor, compra_venta_id, hoy)
     if previos.bloqueo is not None:
         codigo, mensaje = _por_que_no_se_cancela(previos.venta, _alcance_de_cancelacion(previos.venta, hoy or stock.hoy()))
         raise ValidationError({NO_CAMPO: [ValidationError(mensaje, code=codigo)]})
-    return ResumenDeCancelacionDeVenta(previos, datos.motivo, CompraVenta.MotivoCancelacion(datos.motivo).label, datos.descripcion, "Cancelada")
+    _validar_medio(datos, previos.cobro is not None)
+    estado_final = "Concretada (se cobra lo entregado)" if previos.cobro is not None else "Cancelada"
+    return ResumenDeCancelacionDeVenta(previos, datos.motivo, CompraVenta.MotivoCancelacion(datos.motivo).label, datos.descripcion, estado_final)
 
 
 class _AlcanceCambio(Exception):
@@ -1049,8 +1085,8 @@ def _bloquear_para_cancelar(venta, previo, actor):
         list(OrdenTrabajo.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[c.pk for c in previo.cosechas]).order_by("pk"))
     list(ReservaStock.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[r.pk for r in previo.reservas]).order_by("pk"))
     list(DetalleReserva.objects.select_for_update(no_key=True, of=("self",)).filter(reserva_id__in=[r.pk for r in previo.reservas]).order_by("pk"))
-    if previo.a_realizar:
-        list(OrdenTrabajo.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[e.pk for e in previo.a_realizar]).order_by("pk"))
+    if previo.a_realizar or previo.concretadas:  # las entregas de la venta, también las concretadas (6a: lo que se cobra no puede cambiar mientras tanto), en orden de id
+        list(OrdenTrabajo.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[e.pk for e in (*previo.a_realizar, *previo.concretadas)]).order_by("pk"))
 
 
 def _enviar_comprobante_de_cancelacion(venta_id, actor_id):
@@ -1087,6 +1123,8 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
             raise ValidationError(
                 {NO_CAMPO: [ValidationError("La compra-venta cambió mientras mirabas el resumen. Revisá lo que pasa ahora y volvé a confirmar.", code="venta_cambio")]}
             )
+        cobro = _cobro_de_lo_entregado(ahora.concretadas)  # 6a: con la huella ya verificada, así lo que cambió se informa como `venta_cambio` y no como un medio faltante
+        _validar_medio(datos, cobro is not None)
 
         motivo_texto = CompraVenta.MotivoCancelacion(datos.motivo).label
         motivo_de_las_ordenes = f"Se canceló la compra-venta {venta.codigo}: {motivo_texto.lower()}." + (f" {datos.descripcion}" if datos.descripcion else "")
@@ -1102,9 +1140,11 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
         cancelaciones = [entregas.cancelar_entrega_incluida(quien, e, motivo_de_las_ordenes) for e in ahora.a_realizar]  # d (entregas)
         anulados = enlaces.anular_enlaces_de(venta) if venta.estado_venta == CompraVenta.Estado.PENDIENTE_DECISION else []  # e
         estado_antes = venta.estado_venta
+        estado_final = CompraVenta.Estado.CONCRETADA if cobro is not None else CompraVenta.Estado.CANCELADA  # 6a: con lo entregado cobrado, la venta queda «concretada» (regla 21 de 8.6)
         DetalleVenta.objects.filter(pk__in=[d.pk for d in ahora.detalles]).update(estado_detalle_venta=DetalleVenta.Estado.CANCELADO)  # a
         CompraVenta.objects.filter(pk=venta.pk).update(  # f
-            estado_venta=CompraVenta.Estado.CANCELADA,
+            estado_venta=estado_final,
+            **({"fecha_concrecion_venta": hoy} if cobro is not None else {}),
             motivo_cancelacion_venta=datos.motivo,
             descripcion_cancelacion=datos.descripcion,
             fecha_cancelacion_venta=hoy,
@@ -1113,12 +1153,17 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
                 CompraVenta.EstadoDelComprobante.PENDIENTE_ENVIO if venta.cliente.email_cliente else CompraVenta.EstadoDelComprobante.PARA_IMPRIMIR
             ),
         )
-        if rol_de(quien) == GERENTE and venta.vendedor.is_active:  # h
-            notificaciones.notificar(
-                venta.vendedor,
-                f"{venta.codigo} cancelada",
-                f"El Gerente canceló la venta de {venta.cliente.nombre_visible}. Motivo: {motivo_texto.lower()}."[:notificaciones.LARGO_DETALLE],
+        pago = None
+        if cobro is not None:  # 6a.3 (D-94 punto 14): un pago de compra-venta por lo entregado, sin número ni líneas; el asiento, fuera de la ronda (D-57)
+            pago = PagoCliente.objects.create(
+                tipo_pago=PagoCliente.Tipo.COMPRA_VENTA, compra_venta_id=venta.pk, cliente=venta.cliente, medio_pago=datos.medio_pago, fecha_pago=hoy, monto_pagado=cobro.total,
+                estado_pago=PagoCliente.Estado.VIGENTE, usuario=quien,
             )
+        if rol_de(quien) == GERENTE and venta.vendedor.is_active:  # h
+            texto_del_aviso = f"El Gerente canceló la venta de {venta.cliente.nombre_visible}. Motivo: {motivo_texto.lower()}."
+            if pago is not None:
+                texto_del_aviso += f" Se cobró lo entregado: {texto_de_pesos(pago.monto_pagado)} {FRASE_DEL_MEDIO[pago.medio_pago]}."
+            notificaciones.notificar(venta.vendedor, f"{venta.codigo} cancelada", texto_del_aviso[:notificaciones.LARGO_DETALLE])
         movimientos = list(MovimientoStock.objects.filter(partida__in=partidas, tipo_movimiento=MovimientoStock.TipoMovimiento.INGRESO_A_CAMARA).order_by("pk")) if partidas else []
         reservas_de_envases = [r for c in cancelaciones for r in c.reservas_de_insumo]
         alertas_resueltas = [c.alerta_resuelta for c in cancelaciones if c.alerta_resuelta is not None]
@@ -1130,6 +1175,8 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
             "detalles_cancelados": [f"{d}: {d.estado_detalle_venta} → cancelado" for d in ahora.detalles],
             "reservas_liberadas": [str(r) for r in liberadas],
         }
+        if pago is not None:
+            datos_de_auditoria["pago_de_lo_entregado"] = f"{pago.codigo} · {pago.monto_pagado} · {pago.medio_pago}"
         for clave, valores in (
             ("partidas_creadas", partidas),
             ("movimientos_creados", movimientos),
@@ -1155,10 +1202,12 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
                 *reservas_de_envases,
                 *alertas_resueltas,
                 *anulados,
+                *([pago] if pago is not None else []),
             ],
             detalle={
                 "cambios": {
-                    "estado_venta": {"antes": estado_antes, "despues": CompraVenta.Estado.CANCELADA},
+                    "estado_venta": {"antes": estado_antes, "despues": estado_final},
+                    **({"fecha_concrecion_venta": {"antes": None, "despues": f"{hoy:%d/%m/%Y}"}} if pago is not None else {}),
                     "motivo_cancelacion_venta": {"antes": None, "despues": datos.motivo},
                     **({"descripcion_cancelacion": {"antes": "", "despues": datos.descripcion}} if datos.descripcion else {}),  # D-36: solo lo que cambió
                     "fecha_cancelacion_venta": {"antes": None, "despues": f"{hoy:%d/%m/%Y}"},
@@ -1175,17 +1224,17 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
         return resultado
 
 
-def cancelar_compra_venta(actor, compra_venta_id, datos, huella):
+def cancelar_compra_venta(actor, compra_venta_id, datos, huella, hoy=None):
     """COM-CNL-CVT, pasos 7 a 10: cancela la venta, en UNA transacción con los bloqueos del encabezado, y la devuelve (con `cosechas_canceladas`, `entregas_canceladas` y `plantas_a_camara`).
 
     - `PermissionDenied` si el actor no es Vendedor del contrato o Gerente activo (SEG-13); 404 si no existe. Errores por campo: `motivo_obligatorio`, `motivo_invalido` y `descripcion_larga`.
-    - Relectura bajo bloqueo: `venta_no_cancelable` (ya cerrada), `venta_con_entregas_concretadas` (6a), `entrega_en_curso` (4a) y `venta_cambio` (8a y 8b: la huella cambió).
+    - Relectura bajo bloqueo: `venta_no_cancelable` (ya cerrada), `entrega_en_curso` (4a), `venta_cambio` (8a y 8b: la huella cambió) y, con la huella al día, `medio_de_pago_obligatorio` y `medio_no_admitido` (6a.2).
     - Efectos: ver «Paso 8» del extracto (detalles «cancelado»; cosechas con `cancelar_cosecha_incluida`; partidas `cancelacion_cliente`; reservas «liberadas»; entregas con
       `cancelar_entrega_incluida`; el enlace anulado; los datos de MD-130), el aviso al Vendedor si canceló el Gerente y UN registro `cancelacion_compra_venta`. PROD-ASG-CAM sale con
       `on_commit`; el comprobante, después de la transacción (su estado queda en `estado_comprobante`)."""
     venta = _venta_para_cancelar(actor, compra_venta_id)
     datos = _validar_motivo(datos)
-    hoy = stock.hoy()
+    hoy = hoy or stock.hoy()
     for _ in range(2):  # lo que la lectura previa no vio y aparece al bloquear obliga a repetir una vez (como COM-DCD-FLT)
         try:
             resultado = _cancelar(venta.pk, datos, huella, actor, _alcance_de_cancelacion(venta, hoy), hoy)

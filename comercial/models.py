@@ -1111,7 +1111,7 @@ class DetalleEntrega(models.Model):
 class PagoCliente(OrigenDocumento):
     """El pago que hace el cliente (MD-136). Hija directa de `contabilidad.OrigenDocumento` (``TIPO_DE_ORIGEN = pago_cliente``), como `MovimientoStock` (D-52). En COM-06a solo lo crea
     la concreción de la última entrega de una **compra-venta** (R117, postcondición k de COM-CNC-ENT): COM-08a suma el de las entregas de suministro y reescribe C7 como el {xor}
-    del modelo; COM-08b, la anulación. No origina asiento propio en una compra-venta (regla 32 de 8.6). Su clave es ``origendocumento_ptr``."""
+    del modelo; COM-08b, la anulación (`Anulacion.pago_cliente`, `anulacion_corregida`) y el de una compra-venta cancelada con entregas concretadas (6a de COM-CNL-CVT). No origina asiento propio en una compra-venta (regla 32 de 8.6). Su clave es ``origendocumento_ptr``."""
 
     TIPO_DE_ORIGEN = OrigenDocumento.Tipo.PAGO_CLIENTE
 
@@ -1154,6 +1154,8 @@ class PagoCliente(OrigenDocumento):
     numero = models.PositiveIntegerField(null=True, blank=True)
     usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.PROTECT, related_name="pagos_registrados")  # quien lo registró (1a1 y 10a de COM-REG-CBR); nulo en los anteriores
     estado_aviso_cliente = models.CharField(max_length=20, choices=EstadoDelAviso.choices, null=True, blank=True)  # nulo en una compra-venta: su comprobante es el de la venta
+    # COM-08b (D-94, punto 10; del código, no está en el modelo): el cobro que se registró desde la anulación de otro (7a de COM-ANL-CBR). Una anulación se usa una sola vez (el OneToOne).
+    anulacion_corregida = models.OneToOneField("Anulacion", null=True, blank=True, on_delete=models.PROTECT, related_name="cobro_correcto")
 
     class Meta:
         verbose_name = "Pago del cliente"
@@ -1440,7 +1442,7 @@ class Queja(SolicitudRevision):
 class Anulacion(OrigenDocumento):
     """Anulación de la resolución de una solicitud (COM-ANL-SRV; MD-135). Hija directa de `OrigenDocumento` (``TIPO_DE_ORIGEN = anulacion``): origina el contraasiento (fuera de la ronda,
     D-57). Guarda una **copia de la resolución anulada** (D-69, punto 10): al anular, la solicitud vuelve a «pendiente» y sus campos de resolución se vacían; la ficha muestra el historial
-    desde esta copia, sin leer la auditoría. Hasta COM-08b ``solicitud`` no es nula (COM-08b la reescribe como «exactamente uno de `solicitud` y `pago`»). Su clave es ``origendocumento_ptr``."""
+    desde esta copia, sin leer la auditoría. Desde COM-08b también anula un **cobro de suministro** (``pago_cliente``, COM-ANL-CBR; D-94, punto 11): exactamente uno de ``solicitud`` y ``pago_cliente``, y el pago anulado conserva sus datos. Su clave es ``origendocumento_ptr``."""
 
     TIPO_DE_ORIGEN = OrigenDocumento.Tipo.ANULACION
 
@@ -1454,6 +1456,10 @@ class Anulacion(OrigenDocumento):
     motivo_anulacion = models.CharField(max_length=500)  # de 1 a 500, sin espacios al borde (lo verifica el servicio; la base, que no sea vacío)
     usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="anulaciones_hechas")  # MD-135: quien anula
     solicitud = models.ForeignKey(SolicitudRevision, null=True, blank=True, on_delete=models.PROTECT, related_name="anulaciones")  # MD-135
+    # COM-08b (D-94, punto 11): la anulación de un cobro de suministro. Un pago se anula una sola vez (OneToOne) y el pago anulado conserva sus datos: sin copia. Se llama `pago_cliente` y no `pago` (como dice
+    # D-94) porque `compras.Pago` también es hija de `OrigenDocumento` y le da a esa clase el acceso inverso `pago` (E006); el `related_name` no puede ser `anulacion`, que `PagoCliente` ya hereda de `OrigenDocumento`.
+    pago_cliente = models.OneToOneField(PagoCliente, null=True, blank=True, on_delete=models.PROTECT, related_name="anulacion_de_cobro")
+    cliente_pago_en_fecha = models.BooleanField(null=True, blank=True)  # solo en la de un cobro: si el cliente sí pagó en la fecha del cobro anulado (paso 3 de COM-ANL-CBR; habilita 7a)
     # La copia de la resolución anulada (D-69, punto 10). Los montos y el medio, nulos si estaba rechazada.
     estado_anulado = models.CharField(max_length=10, choices=EstadoAnulado.choices, null=True, blank=True)
     fecha_resolucion_anulada = models.DateField(null=True, blank=True)
@@ -1470,8 +1476,16 @@ class Anulacion(OrigenDocumento):
         indexes = [models.Index(fields=["solicitud", "fecha_anulacion"], name="anulacion_solicitud_idx")]
         constraints = [
             models.CheckConstraint(condition=~Q(motivo_anulacion=""), name="anulacion_motivo_obligatorio"),
-            models.CheckConstraint(condition=Q(solicitud__isnull=False), name="anulacion_con_solicitud"),  # COM-08b la reescribe (xor con `pago`)
-            models.CheckConstraint(condition=Q(estado_anulado__isnull=False) | Q(solicitud__isnull=True), name="anulacion_estado_con_solicitud"),
+            # COM-08b (D-94, punto 11; el campo se llama `pago_cliente`): exactamente uno de `solicitud` y `pago_cliente`; `pago_cliente` ⇔ `cliente_pago_en_fecha`; `solicitud` ⇔ `estado_anulado`.
+            models.CheckConstraint(
+                condition=(Q(solicitud__isnull=False) & Q(pago_cliente__isnull=True)) | (Q(solicitud__isnull=True) & Q(pago_cliente__isnull=False)), name="anulacion_solicitud_o_pago"
+            ),
+            models.CheckConstraint(
+                condition=(Q(pago_cliente__isnull=False) & Q(cliente_pago_en_fecha__isnull=False)) | (Q(pago_cliente__isnull=True) & Q(cliente_pago_en_fecha__isnull=True)), name="anulacion_pago_con_fecha"
+            ),
+            models.CheckConstraint(
+                condition=(Q(solicitud__isnull=False) & Q(estado_anulado__isnull=False)) | (Q(solicitud__isnull=True) & Q(estado_anulado__isnull=True)), name="anulacion_estado_con_solicitud"
+            ),
             models.CheckConstraint(condition=Q(estado_anulado__isnull=True) | Q(estado_anulado__in=["aceptada", "rechazada"]), name="anulacion_estado_valido"),
             # aceptada ⇔ monto de la indemnización anulado no nulo.
             models.CheckConstraint(
