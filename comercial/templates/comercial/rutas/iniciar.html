@@ -1,0 +1,50 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Iniciar ruta» (COM-INI-RUT, pasos 2 a 4; `MODALS.inirut`): la confirmación con el vehículo, las entregas (las demoradas primero con sus días de retraso, extensión 2b; las sin envasado señaladas,
+2c), la cantidad de entregas y de localidades y el peso frente a la capacidad. El formulario manda la huella (5c). Una página, sin JavaScript. Recibe «datos» (`RutaDelDia`) y, si las entregas cambiaron, «cambio»
+(`agregadas` y `quitadas`) y «error».{% endcomment %}
+{% block titulo %}Iniciar ruta · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "chev" 14 %} Mi ruta</a>
+  <div class="page-h"><h1>Iniciar ruta</h1></div>
+  {% if cambio %}
+  <div class="alert alert-warn" role="alert"><div>{{ error }}
+    {% if cambio.agregadas %}<br>Se sumaron: <b>{{ cambio.agregadas|join:", " }}</b>.{% endif %}
+    {% if cambio.quitadas %}<br>Se quitaron: <b>{{ cambio.quitadas|join:", " }}</b>.{% endif %}</div></div>
+  {% endif %}
+  {% if datos.situacion == "sin_vehiculo" %}
+  <div class="alert alert-warn" role="alert"><div>No tenés un vehículo activo para iniciar la ruta. Comunicate con el Gerente, que asigna los vehículos.</div></div>
+  {% elif datos.situacion == "en_ruta" %}
+  <div class="alert alert-info" role="status"><div>La ruta de hoy ya está iniciada.</div></div>
+  <a class="btn btn-primary" href="{% url 'comercial:ruta' %}" style="margin-top:12px">Ver mi ruta</a>
+  {% elif not datos.cantidad %}
+  <div class="empty"><b>No tenés entregas para iniciar la ruta</b><span>{% if datos.proxima_fecha %}La próxima es el {{ datos.proxima_fecha|date:"d/m/Y" }}.{% endif %}</span></div>
+  {% else %}
+  {% if datos.situacion == "ruta_vencida" %}<div class="alert alert-info" role="status"><div>Tu ruta del {{ datos.fecha_ruta_vencida|date:"d/m/Y" }} ya no está vigente: se reemplaza por la de hoy.</div></div>{% endif %}
+  <div class="card" style="margin-top:12px">
+    <dl class="dl">
+      <dt>Vehículo</dt><dd>{{ datos.vehiculo.get_tipo_vehiculo_display }} <span class="mono">{{ datos.vehiculo.patente }}</span> · {{ datos.vehiculo.marca }} {{ datos.vehiculo.modelo }}</dd>
+      <dt>Entregas</dt><dd class="mono">{{ datos.cantidad }}</dd>
+      <dt>Localidades distintas</dt><dd class="mono">{{ datos.localidades }}</dd>
+      <dt>Peso de la ruta</dt><dd class="mono">{{ datos.peso|floatformat:2 }} kg de {{ datos.capacidad|floatformat:0 }} kg</dd>
+    </dl>
+  </div>
+  <p class="muted" style="margin:12px 0">Confirmá que cargaste en el vehículo estas entregas. Desde que iniciás la ruta no se pueden reasignar ni cambiar su envasado.</p>
+  {% for f in datos.entregas %}
+  <div class="ocard {% if f.dias_de_retraso %}late{% endif %}"><div class="b">
+    <div><b class="mono">{{ f.codigo }}</b> · {{ f.cliente }}</div>
+    <div class="muted">{{ f.destino }}</div>
+    <div>{{ f.contenido }} · <span class="mono">{{ f.peso|floatformat:2 }} kg</span></div>
+    {% if f.dias_de_retraso %}<div class="danger-t">Atrasada · hace {{ f.dias_de_retraso }} {% if f.dias_de_retraso == 1 %}día{% else %}días{% endif %}</div>{% endif %}
+    {% if not f.con_envasado %}<div class="status-badge status-warn">Sin envasado planificado: indicá los envases que uses al concretarla</div>{% endif %}
+  </div></div>
+  {% endfor %}
+  <form method="post" action="{% url 'comercial:ruta_iniciar' %}">
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ datos.huella }}">
+    <div class="acts-fila"><button class="btn btn-primary" type="submit" data-enviando="Iniciando…">Iniciar ruta</button><a class="btn btn-ghost" href="{% url 'comercial:ruta' %}">Volver</a></div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

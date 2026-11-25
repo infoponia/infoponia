@@ -11,7 +11,7 @@
 #   - `resolver_aviso_de_partida(partida) -> Alerta | None`: resuelve la alerta «partida por vencer» activa de la partida.
 #   - Auditoría: `vencimiento_partida` por partida vencida y `aviso_partida_por_vencer` por aviso, los dos sin usuario (InfoPonia).
 #   - Se vuelve a cubrir DESPUÉS de dar de baja el stock físico (decisión del plan): así lo cubierto nunca sale de la misma partida que se pierde.
-#   - Fuera de esta tarea: quitar las líneas de su entrega «a realizar» (COM-05), 3b (COM-06), el enlace del cliente (COM-04c) y el asiento (D-57).
+#   - Fuera de esta tarea: quitar las líneas de su entrega «a realizar» (COM-05), el enlace del cliente (COM-04c) y el asiento (D-57). La extensión 3b la suma COM-06a (clase `ProdVncCam3bTests`, al final).
 
 import logging
 from datetime import timedelta
@@ -21,17 +21,20 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from comercial.models import AlertaComercial, DetalleReserva, DetalleVenta, EnlaceCliente, ReservaStock
+from comercial.models import AlertaComercial, DetalleReserva, DetalleVenta, EnlaceCliente, Entrega, ReservaStock
 from comercial.servicios import camara
 from comercial.tests.fabricas import (
     compra_venta,
     detalle,
     detalle_suministro,
+    entrega,
     escenario_comercial,
+    iniciar_ruta_de,
     partida,
     reserva,
     reserva_de_periodo,
     suministro,
+    transportista_con_vehiculo,
     verificar_invariantes_de_reservas,
     verificar_invariantes_de_suministros,
 )
@@ -405,3 +408,88 @@ class EntregasTests(Base):
         e.refresh_from_db()
         self.assertEqual(e.estado_orden, "a_realizar")
         self.assertEqual(entregas.peso_de_entregas([e.pk])[e.pk], Decimal("3.00"))
+
+
+class ProdVncCam3bTests(Base):
+    """PROD-VNC-CAM, extensión 3b (COM-06a; `rutas.md`, «PROD-VNC-CAM 3b»): una partida vencida con producto en una entrega **en curso** no se vence ese día."""
+
+    def entrega_con(self, p, *, en_ruta):
+        """Una entrega de hoy con 30 plantas de la partida ``p``, de un transportista con la ruta iniciada (o sin iniciar)."""
+        t = transportista_con_vehiculo(self.e.invernadero)
+        venta = compra_venta(self.e, dias=0)
+        det = detalle(venta, self.e.variedad, 30)
+        e = entrega(venta, [reserva(det, [(p, 30)])], transportista=t, fecha=HOY)
+        if en_ruta:
+            iniciar_ruta_de(t)
+        return t, e
+
+    def test_ext_3b_con_producto_en_una_entrega_en_curso_no_se_vence_y_se_alerta_al_gerente(self):
+        """Extensión 3b: la partida vencida sigue «disponible» con su stock; se deja para la próxima ejecución y se asegura la alerta de estado `comercial_partida_en_entrega_en_curso` (Gerente, crítica, clave `partida:<id>`) con su `AlertaComercial(partida=…)`."""
+        p = self.vencida(40)
+        _, e = self.entrega_con(p, en_ruta=True)
+        resumen = self.correr()
+        p.refresh_from_db()
+        self.assertEqual((p.estado_stock_cosechado, p.cantidad_disponible_cosechado), ("disponible", 40))
+        self.assertEqual(resumen.procesados, 0)
+        alerta = Alerta.objects.get(tipo_alerta=camara.TIPO_EN_ENTREGA_EN_CURSO, clave_estado=f"partida:{p.pk}")
+        self.assertEqual((alerta.para_gerente, alerta.nivel_severidad, alerta.estado_alerta), (True, Alerta.Severidad.CRITICA, "activa"))
+        self.assertIn(p.codigo, alerta.descripcion_alerta)
+        self.assertIn(e.codigo, alerta.descripcion_alerta)
+        self.assertEqual(AlertaComercial.objects.get(alerta=alerta).partida_id, p.pk)
+        self.assertFalse(Merma.objects.filter(causa="vencimiento_en_camara").exists())
+        self.assertEqual(ReservaStock.objects.get(lineas__partida=p).estado_reserva, "lista_para_entrega")
+        verificar_invariantes_de_reservas()
+
+    def test_ext_3b_la_alerta_no_se_repite_entre_ejecuciones(self):
+        """La alerta de estado es una por partida: una segunda ejecución con la entrega todavía en curso no crea otra."""
+        p = self.vencida(40)
+        self.entrega_con(p, en_ruta=True)
+        self.correr()
+        self.correr()
+        self.assertEqual(Alerta.objects.filter(tipo_alerta=camara.TIPO_EN_ENTREGA_EN_CURSO).count(), 1)
+
+    def test_ext_3b_cuando_la_entrega_deja_de_estar_en_curso_la_partida_se_vence_y_la_alerta_se_resuelve(self):
+        """La alerta se resuelve cuando la partida se vence: con la entrega ya fuera de la ruta (intento fallido, a mañana y sin transportista) la ejecución siguiente aplica la 3a y resuelve la alerta de 3b."""
+        from comercial.servicios import rutas
+
+        p = self.vencida(40)
+        t, e = self.entrega_con(p, en_ruta=True)
+        self.correr()
+        rutas.registrar_intento_fallido(t, e.pk, "cliente_ausente", "")
+        self.correr()
+        p.refresh_from_db()
+        self.assertEqual(p.estado_stock_cosechado, "vencido")
+        alerta = Alerta.objects.get(tipo_alerta=camara.TIPO_EN_ENTREGA_EN_CURSO)
+        self.assertEqual(alerta.estado_alerta, "resuelta")
+
+    def test_ext_3b_una_entrega_asignada_pero_con_la_ruta_sin_iniciar_no_esta_en_curso_y_se_aplica_la_3a(self):
+        """«En curso» es con la ruta iniciada: una entrega «a realizar» de un transportista sin ruta no frena el vencimiento (3a: se recorta la reserva y la entrega vacía se cancela)."""
+        p = self.vencida(40)
+        _, e = self.entrega_con(p, en_ruta=False)
+        self.correr()
+        p.refresh_from_db()
+        self.assertEqual(p.estado_stock_cosechado, "vencido")
+        self.assertFalse(Alerta.objects.filter(tipo_alerta=camara.TIPO_EN_ENTREGA_EN_CURSO).exists())
+        self.assertEqual(Entrega.objects.get(pk=e.pk).estado_orden, "cancelada")
+
+    def test_ext_3b_una_entrega_en_curso_de_otra_partida_no_frena_a_esta(self):
+        """Solo frena el producto de la misma partida: otra partida vencida sin entregas en curso se vence igual."""
+        con = self.vencida(40)
+        sin = self.vencida(10)
+        self.entrega_con(con, en_ruta=True)
+        self.correr()
+        con.refresh_from_db()
+        sin.refresh_from_db()
+        self.assertEqual((con.estado_stock_cosechado, sin.estado_stock_cosechado), ("disponible", "vencido"))
+
+    def test_ext_3b_el_enlace_de_la_alerta_lleva_a_la_pestana_camara_para_el_gerente(self):
+        """D-62: la alerta usa el enlace de la cámara (pestaña «Cámara» del invernadero) para el Gerente."""
+        from core.tests.fabricas import crear_gerente
+
+        p = self.vencida(40)
+        self.entrega_con(p, en_ruta=True)
+        self.correr()
+        gerente = crear_gerente()
+        alerta = Alerta.objects.get(tipo_alerta=camara.TIPO_EN_ENTREGA_EN_CURSO)
+        enlaces = camara.enlaces_de_alertas_de_camara(gerente, [alerta])
+        self.assertIn("?pestana=camara", enlaces[alerta.pk].url)

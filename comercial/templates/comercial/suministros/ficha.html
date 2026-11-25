@@ -80,6 +80,16 @@ solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha
       {% include "comercial/entregas/_de_contrato.html" with entregas=ficha.entregas con_confirmacion=True %}
     </div>
 
+    {% if ficha.discrepancias %}
+    <div class="card">
+      <div class="card-title">Discrepancias de entrega</div>
+      <table class="data-table"><thead><tr><th>Discrepancia</th><th>Entrega</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>
+      {% for d in ficha.discrepancias %}<tr><td class="mono">{{ d.codigo }}</td><td class="mono">{{ d.entrega.codigo }}</td><td><span class="status-badge {% if d.estado_solicitud == 'pendiente' %}status-warn{% else %}status-neutral{% endif %}">{{ d.get_estado_solicitud_display }}</span></td>
+        <td>{% for l in d.lineas.all %}{{ l.cantidad_entregada }} de {{ l.cantidad_minima_estipulada }} mínimas{% if not forloop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="card-title">Comprobante</div>
       <p>

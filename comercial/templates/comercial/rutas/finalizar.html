@@ -1,0 +1,29 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Finalizar ruta» (COM-FIN-RUT; `MODALS.finrut`, la definición de la línea 1699): con entregas «a realizar» de la ruta no se finaliza (regla 1) y cada una ofrece «Concretar» e «Intento fallido»; sin pendientes, la
+confirmación. Recibe «pendientes» (`FilaDeRuta`) y «datos» (`RutaDelDia`).{% endcomment %}
+{% block titulo %}Finalizar ruta · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "chev" 14 %} Mi ruta</a>
+  <div class="page-h"><h1>Finalizar ruta</h1></div>
+  {% if datos.situacion != "en_ruta" %}
+  <div class="alert alert-info" role="status"><div>No tenés una ruta iniciada hoy: no hay nada que finalizar.</div></div>
+  <a class="btn btn-primary" href="{% url 'comercial:ruta' %}" style="margin-top:12px">Volver a mi ruta</a>
+  {% elif pendientes %}
+  <div class="alert alert-warn" role="alert"><div>Te quedan <b>{{ pendientes|length }}</b> {% if pendientes|length == 1 %}entrega sin resolver{% else %}entregas sin resolver{% endif %}. Para cada una, concretala o registrá el intento fallido.</div></div>
+  {% for f in pendientes %}
+  <div class="ocard {% if f.dias_de_retraso %}late{% endif %}" style="margin-top:12px"><div class="b"><div><b class="mono">{{ f.codigo }}</b> · {{ f.cliente }}</div><div class="muted">{{ f.destino }}</div></div>
+    <a class="btn btn-primary" href="{% url 'comercial:entrega_concretar' f.entrega.pk %}">Concretar<span class="sr"> la entrega {{ f.codigo }}</span></a>
+    <a class="btn btn-ghost" href="{% url 'comercial:entrega_intento_fallido' f.entrega.pk %}">Intento fallido<span class="sr"> de la entrega {{ f.codigo }}</span></a></div>
+  {% endfor %}
+  <a class="btn btn-ghost btn-block" href="{% url 'comercial:ruta' %}" style="margin-top:12px">Volver a la ruta</a>
+  {% else %}
+  <div class="alert alert-info" role="status"><div>Todas las entregas del día quedaron resueltas. Al finalizar, volvés a estar disponible para nuevas entregas de hoy.</div></div>
+  <form method="post" action="{% url 'comercial:ruta_finalizar' %}" style="margin-top:12px">
+    {% csrf_token %}
+    <div class="acts-fila"><button class="btn btn-primary" type="submit" data-enviando="Finalizando…">Finalizar ruta</button><a class="btn btn-ghost" href="{% url 'comercial:ruta' %}">Volver</a></div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

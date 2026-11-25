@@ -836,19 +836,25 @@ class AlertaComercial(models.Model):
     partida = models.ForeignKey(StockCosechado, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas_comerciales")
     # COM-05a1 (MD-122, extensión 6a de COM-PNF-ENT, D-66 punto 10): «entrega sin transportista». La FK vive acá (regla A2 de D-37: `Entrega` es de `comercial`).
     entrega = models.ForeignKey("Entrega", null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")
+    # COM-06a (R054, D-68 punto 5): la alerta de una discrepancia de entrega (y, en COM-06b, de una queja). Una sola alerta por solicitud.
+    solicitud = models.ForeignKey("SolicitudRevision", null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")
 
     class Meta:
         verbose_name = "Alerta comercial"
         verbose_name_plural = "Alertas comerciales"
         constraints = [
-            # Exactamente una FK de origen cargada (D-63, punto 1). Desde COM-05a1: `suministro`, `detalle_suministro`, `partida` o `entrega` (COM-06a suma `solicitud`).
+            # Exactamente una FK de origen cargada (D-63, punto 1): `suministro`, `detalle_suministro`, `partida` (COM-04), `entrega` (COM-05a1) o `solicitud` (COM-06a).
             models.CheckConstraint(
-                condition=(Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=True))
-                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False) & Q(partida__isnull=True) & Q(entrega__isnull=True))
-                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=False) & Q(entrega__isnull=True))
-                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=False)),
+                condition=(
+                    Q(suministro__isnull=False) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=True) & Q(solicitud__isnull=True)
+                )
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=False) & Q(partida__isnull=True) & Q(entrega__isnull=True) & Q(solicitud__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=False) & Q(entrega__isnull=True) & Q(solicitud__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=False) & Q(solicitud__isnull=True))
+                | (Q(suministro__isnull=True) & Q(detalle_suministro__isnull=True) & Q(partida__isnull=True) & Q(entrega__isnull=True) & Q(solicitud__isnull=False)),
                 name="alerta_comercial_un_solo_origen",
             ),
+            models.UniqueConstraint(fields=["solicitud"], condition=Q(solicitud__isnull=False), name="alerta_comercial_una_por_solicitud"),
             # detalle_suministro no nulo <=> fecha_periodo y cantidad_sin_cubrir no nulos.
             models.CheckConstraint(
                 condition=(
@@ -922,6 +928,9 @@ class Entrega(OrdenTrabajo):
     estado_aviso_cliente = models.CharField(max_length=20, choices=EstadoDelAviso.choices, null=True, blank=True)
     recordatorio_para = models.DateField(null=True, blank=True)  # la fecha programada por la que ya salió el recordatorio único (postcondición k)
     aviso_atrasada_para = models.DateField(null=True, blank=True)  # la fecha programada por la que ya salió el aviso de atrasada (PCU, sección 8)
+    # COM-06a (D-68 punto 7): se fijan al concretar. El total es la suma de los `monto_pagar` de las líneas; el vencimiento, solo en un suministro (MD-124, MD-132).
+    monto_total_entrega = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    fecha_vencimiento_pago = models.DateField(null=True, blank=True)
 
     objects = EntregaQuerySet.as_manager()
 
@@ -954,6 +963,10 @@ class Entrega(OrdenTrabajo):
                 condition=Q(estado_aviso_cliente__isnull=True) | Q(estado_aviso_cliente__in=["enviado", "pendiente_envio", "sin_correo"]),
                 name="entrega_aviso_valido",
             ),
+            # COM-06a: el total de una entrega concretada no es negativo (que esté no nulo ⇔ «concretada» lo verifica `verificar_invariantes_de_entregas`: el estado está en otra tabla).
+            models.CheckConstraint(
+                condition=Q(monto_total_entrega__isnull=True) | Q(monto_total_entrega__gte=0), name="entrega_monto_total_no_negativo"
+            ),
         ]
 
     @property
@@ -974,7 +987,10 @@ class DetalleEntrega(models.Model):
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)  # al planificar; COM-06a lo recalcula con la fecha real en un suministro
     cant_entregada = models.PositiveIntegerField(null=True, blank=True)  # nula hasta concretar (COM-06a)
     monto_pagar = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # nulo hasta concretar (COM-06a)
-    reservas = models.ManyToManyField(ReservaStock, related_name="lineas_de_entrega")  # R150
+    # COM-06a (D-68 punto 7; no están en el modelo): después de concretar, la planificada ya no se puede recalcular de las reservas (las de un detalle rechazado quedan «liberadas»).
+    cant_perdida = models.PositiveIntegerField(null=True, blank=True)  # lo que no llegó en buen estado (la merma «daño en la entrega»)
+    cant_devuelta = models.PositiveIntegerField(null=True, blank=True)  # lo que llegó y volvió a la cámara
+    reservas =models.ManyToManyField(ReservaStock, related_name="lineas_de_entrega")  # R150
 
     class Meta:
         verbose_name = "Línea de entrega"
@@ -999,8 +1015,211 @@ class DetalleEntrega(models.Model):
             models.CheckConstraint(
                 condition=Q(cant_entregada__isnull=True) | Q(cant_entregada__gte=0), name="linea_entrega_entregada_no_negativa"
             ),
+            # COM-06a: la concreción de una línea se carga entera (entregada, perdida, devuelta y monto) o no se carga. Que entregada + perdida + devuelta sea la planificada lo
+            # verifica el servicio (la planificada sale de las reservas) y el invariante.
+            models.CheckConstraint(
+                condition=(
+                    Q(cant_entregada__isnull=True) & Q(cant_perdida__isnull=True) & Q(cant_devuelta__isnull=True) & Q(monto_pagar__isnull=True)
+                )
+                | (
+                    Q(cant_entregada__isnull=False) & Q(cant_perdida__isnull=False) & Q(cant_devuelta__isnull=False) & Q(monto_pagar__isnull=False)
+                ),
+                name="linea_entrega_concrecion_completa",
+            ),
+            models.CheckConstraint(condition=Q(cant_perdida__isnull=True) | Q(cant_perdida__gte=0), name="linea_entrega_perdida_no_negativa"),
+            models.CheckConstraint(condition=Q(cant_devuelta__isnull=True) | Q(cant_devuelta__gte=0), name="linea_entrega_devuelta_no_negativa"),
+            models.CheckConstraint(condition=Q(monto_pagar__isnull=True) | Q(monto_pagar__gte=0), name="linea_entrega_monto_no_negativo"),
         ]
 
     def __str__(self):
         """«Línea de entrega #N» (texto de la auditoría, D-36)."""
         return f"Línea de entrega #{self.pk}"
+
+
+# ---- COM-06a: PagoCliente, IntentoFallido, SolicitudRevision, DiscrepanciaEntrega y LineaDiscrepancia (docs/modelo/comercial.md; D-68 puntos 4 a 6) ----
+
+
+class PagoCliente(OrigenDocumento):
+    """El pago que hace el cliente (MD-136). Hija directa de `contabilidad.OrigenDocumento` (``TIPO_DE_ORIGEN = pago_cliente``), como `MovimientoStock` (D-52). En COM-06a solo lo crea
+    la concreción de la última entrega de una **compra-venta** (R117, postcondición k de COM-CNC-ENT): COM-08a suma el de las entregas de suministro y reescribe C7 como el {xor}
+    del modelo; COM-08b, la anulación. No origina asiento propio en una compra-venta (regla 32 de 8.6). Su clave es ``origendocumento_ptr``."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.PAGO_CLIENTE
+
+    class Medio(models.TextChoices):
+        """Regla 15 de 8.13 (11a de COM-CNC-ENT): el efectivo va a Caja y los demás a Banco c/c, en el asiento (fuera de la ronda, D-57)."""
+
+        EFECTIVO = "efectivo", "Efectivo"
+        TRANSFERENCIA = "transferencia", "Transferencia"
+        TARJETA_DEBITO = "tarjeta_debito", "Tarjeta de débito"
+        TARJETA_CREDITO = "tarjeta_credito", "Tarjeta de crédito"
+
+    class Estado(models.TextChoices):
+        """MD-136: un pago anulado (COM-08b) conserva sus datos."""
+
+        VIGENTE = "vigente", "Vigente"
+        ANULADO = "anulado", "Anulado"
+
+    medio_pago = models.CharField(max_length=20, choices=Medio.choices)
+    fecha_pago = models.DateField(default=timezone.localdate)
+    monto_pagado = models.DecimalField(max_digits=14, decimal_places=2)  # en una compra-venta, el total de la venta
+    estado_pago = models.CharField(max_length=10, choices=Estado.choices, default=Estado.VIGENTE)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="pagos")  # R116
+    # R117. C7 (COM-06a): no nula; COM-08a la reescribe con el {xor} con el cobro de suministro.
+    compra_venta = models.ForeignKey(CompraVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="pagos")
+
+    class Meta:
+        verbose_name = "Pago del cliente"
+        verbose_name_plural = "Pagos de clientes"
+        constraints = [
+            models.CheckConstraint(condition=Q(monto_pagado__gt=0), name="pago_cliente_monto_positivo"),
+            models.CheckConstraint(condition=Q(medio_pago__in=["efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"]), name="pago_cliente_medio_valido"),
+            models.CheckConstraint(condition=Q(estado_pago__in=["vigente", "anulado"]), name="pago_cliente_estado_valido"),
+            models.CheckConstraint(condition=Q(compra_venta__isnull=False), name="pago_cliente_c7_con_compra_venta"),
+            # Una venta se paga una vez: a lo sumo un pago vigente (COM-08b puede dejar uno anulado y registrar el correcto).
+            models.UniqueConstraint(fields=["compra_venta"], condition=Q(estado_pago="vigente"), name="pago_cliente_un_vigente_por_venta"),
+        ]
+
+    def __str__(self):
+        """«Pago #12» (texto de la auditoría, D-36)."""
+        return f"Pago #{self.pk}"
+
+
+class IntentoFallido(models.Model):
+    """El registro de una entrega que no se pudo realizar (COM-CNC-ENT, extensión 4a, y COM-FIN-RUT, regla 1). No es una clase del modelo (D-68, punto 6): lo leen COM-RSV-QJA,
+    la ficha de la entrega y COM-ATN-ENR. Se audita como parte del registro del caso de uso, no por su cuenta."""
+
+    class Motivo(models.TextChoices):
+        """La lista de 4a («Lista de tecnología»)."""
+
+        CLIENTE_AUSENTE = "cliente_ausente", "Cliente ausente"
+        DOMICILIO_CERRADO = "domicilio_cerrado", "Domicilio cerrado"
+        DIRECCION_INCORRECTA = "direccion_incorrecta", "Dirección incorrecta"
+        OTRO = "otro", "Otro"
+
+    entrega = models.ForeignKey(Entrega, on_delete=models.PROTECT, related_name="intentos_fallidos")
+    transportista = models.ForeignKey(Transportista, on_delete=models.PROTECT, related_name="intentos_fallidos")  # el que la tenía asignada al intentar
+    fecha_hora = models.DateTimeField(default=timezone.now)
+    fecha_programada = models.DateField()  # la que tenía la entrega al intentar (la nueva es el día siguiente)
+    motivo = models.CharField(max_length=20, choices=Motivo.choices)
+    descripcion = models.CharField(max_length=300, blank=True, default="")  # opcional, sin espacios al borde
+
+    class Meta:
+        verbose_name = "Intento fallido"
+        verbose_name_plural = "Intentos fallidos"
+        indexes = [models.Index(fields=["entrega", "fecha_hora"], name="intento_fallido_entrega_idx")]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(motivo__in=["cliente_ausente", "domicilio_cerrado", "direccion_incorrecta", "otro"]), name="intento_fallido_motivo_valido"
+            ),
+        ]
+
+    def __str__(self):
+        """«Intento fallido #3» (texto de la auditoría, D-36)."""
+        return f"Intento fallido #{self.pk}"
+
+
+class SolicitudRevision(OrigenDocumento):
+    """Solicitud de revisión: abstracta en el modelo, **padre multitabla concreto** en el código (D-68 punto 5, como `OrdenTrabajo`, D-50). Hija directa de `OrigenDocumento`
+    (``TIPO_DE_ORIGEN = solicitud_revision``: una solicitud aceptada origina el asiento de su indemnización, fuera de la ronda, D-57). Hijas: `DiscrepanciaEntrega` (COM-06a) y `Queja`
+    (COM-06b). Nace «pendiente», sin Gerente, fecha de resolución ni monto (COM-07 los carga). ``entrega`` no está en el modelo (R129 se eliminó: se deduce de los detalles): la guarda
+    el código para exigir en la base una sola discrepancia por entrega (regla 3 de 8.14); la escribe una sola función (`solicitudes.crear_solicitud`). Su clave es ``origendocumento_ptr``."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.SOLICITUD_REVISION
+
+    class Tipo(models.TextChoices):
+        """Lo fija la hija al crearse; las listas parten del padre y usan el tipo."""
+
+        DISCREPANCIA = "discrepancia", "Discrepancia"
+        QUEJA = "queja", "Queja"
+
+    class Estado(models.TextChoices):
+        """Nace «pendiente»; lo cambia COM-07."""
+
+        PENDIENTE = "pendiente", "Pendiente de revisión"
+        ACEPTADA = "aceptada", "Aceptada"
+        RECHAZADA = "rechazada", "Rechazada"
+
+    # El nombre `tipo` ya es del padre (`OrigenDocumento`): el discriminador se llama `tipo_solicitud` (como `tipo_contrato` y `tipo_orden`, D-81).
+    tipo_solicitud = models.CharField(max_length=15, choices=Tipo.choices)
+    numero = models.PositiveIntegerField(unique=True)  # de la secuencia `comercial_solicitud_numero_seq`; código visible «SR-0012»
+    fecha_solicitud = models.DateField(default=timezone.localdate)
+    estado_solicitud = models.CharField(max_length=10, choices=Estado.choices, default=Estado.PENDIENTE)
+    fecha_resolucion = models.DateField(null=True, blank=True)  # COM-07
+    observaciones_resolucion = models.TextField(blank=True, default="")  # COM-07 (obligatoria al rechazar)
+    monto_indemnizacion = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # COM-07a, al aceptar
+    gerente = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.PROTECT, related_name="solicitudes_revisadas")  # R009 (COM-07)
+    entrega = models.ForeignKey(Entrega, on_delete=models.PROTECT, related_name="solicitudes")
+
+    class Meta:
+        verbose_name = "Solicitud de revisión"
+        verbose_name_plural = "Solicitudes de revisión"
+        constraints = [
+            models.CheckConstraint(condition=Q(tipo_solicitud__in=["discrepancia", "queja"]), name="solicitud_tipo_valido"),
+            models.CheckConstraint(condition=Q(estado_solicitud__in=["pendiente", "aceptada", "rechazada"]), name="solicitud_estado_valido"),
+            # Regla 3 de 8.14: una sola discrepancia por entrega.
+            models.UniqueConstraint(fields=["entrega"], condition=Q(tipo_solicitud="discrepancia"), name="solicitud_una_discrepancia_por_entrega"),
+            # Pendiente ⇔ sin fecha de resolución ⇔ sin Gerente.
+            models.CheckConstraint(
+                condition=(Q(estado_solicitud="pendiente") & Q(fecha_resolucion__isnull=True) & Q(gerente__isnull=True))
+                | (~Q(estado_solicitud="pendiente") & Q(fecha_resolucion__isnull=False) & Q(gerente__isnull=False)),
+                name="solicitud_pendiente_sin_resolucion",
+            ),
+            # Aceptada ⇒ monto no nulo y >= 0; monto no nulo ⇒ aceptada.
+            models.CheckConstraint(
+                condition=~Q(estado_solicitud="aceptada") | (Q(monto_indemnizacion__isnull=False) & Q(monto_indemnizacion__gte=0)),
+                name="solicitud_aceptada_con_monto",
+            ),
+            models.CheckConstraint(
+                condition=Q(monto_indemnizacion__isnull=True) | Q(estado_solicitud="aceptada"), name="solicitud_monto_solo_si_aceptada"
+            ),
+        ]
+
+    @property
+    def codigo(self):
+        """``SR-0012``: el número que ven el Gerente y el cliente."""
+        return f"SR-{self.numero:04d}"
+
+    def __str__(self):
+        """El código (texto de ``referencia()`` en la auditoría, D-36)."""
+        return self.codigo
+
+
+class DiscrepanciaEntrega(SolicitudRevision):
+    """Discrepancia de entrega (``tipo_solicitud = discrepancia``), sin atributos propios (ronda 19). La crea la concreción de una entrega de suministro cuando uno o más detalles quedan
+    por debajo de la cantidad mínima de su cláusula (extensión 14c de COM-CNC-ENT; regla 12 de 8.13). Una por entrega, con una línea por detalle. Su clave es ``solicitudrevision_ptr``."""
+
+    def save(self, *args, **kwargs):
+        """Fija el discriminador: lo decide la hija y nunca cambia."""
+        self.tipo_solicitud = SolicitudRevision.Tipo.DISCREPANCIA
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = "Discrepancia de entrega"
+        verbose_name_plural = "Discrepancias de entrega"
+
+
+class LineaDiscrepancia(models.Model):
+    """Una línea de la discrepancia: un detalle de la entrega que quedó por debajo de la cantidad mínima de su cláusula (R162, R163). Las dos cantidades son copias fijas, por si
+    la cláusula cambia después. ``monto_indemnizacion_linea`` lo carga COM-07a al aceptar."""
+
+    discrepancia = models.ForeignKey(DiscrepanciaEntrega, on_delete=models.PROTECT, related_name="lineas")  # R162
+    detalle_entrega = models.OneToOneField(DetalleEntrega, on_delete=models.PROTECT, related_name="linea_de_discrepancia")  # R163
+    cantidad_entregada = models.PositiveIntegerField()  # copia fija de `cant_entregada` de la línea
+    cantidad_minima_estipulada = models.PositiveIntegerField()  # copia fija de la mínima de la cláusula del suministrante del detalle
+    monto_indemnizacion_linea = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # COM-07a
+
+    class Meta:
+        verbose_name = "Línea de discrepancia"
+        verbose_name_plural = "Líneas de discrepancia"
+        constraints = [
+            models.CheckConstraint(condition=Q(cantidad_entregada__lt=F("cantidad_minima_estipulada")), name="linea_discrepancia_bajo_el_minimo"),
+            models.CheckConstraint(condition=Q(cantidad_minima_estipulada__gte=1), name="linea_discrepancia_minima_positiva"),
+            models.CheckConstraint(
+                condition=Q(monto_indemnizacion_linea__isnull=True) | Q(monto_indemnizacion_linea__gte=0), name="linea_discrepancia_monto_no_negativo"
+            ),
+        ]
+
+    def __str__(self):
+        """«Línea de discrepancia #5» (texto de la auditoría, D-36)."""
+        return f"Línea de discrepancia #{self.pk}"
