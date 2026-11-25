@@ -722,3 +722,23 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **«Deja de aceptar asientos»** («Hecho cuando») se lee con D-102 punto 1: el ejercicio cerrado no recibe ningún asiento; un automático con fecha de su rango va al abierto con la fecha de hoy y la aclaración, y uno manual o un contraasiento se rechaza (`fecha_en_ejercicio_cerrado`).
 - **Un asiento o un ejercicio inexistente dan 404** (la documentación no lo dice; sigue D-28).
 - **«Quién registró» el asiento** se muestra con el nombre y el rol de la cuenta (la documentación dice solo «quién lo registró»).
+
+## Lo implementado distinto de lo escrito en CMP-04 (24/11/2026)
+
+- **Pruebas de CMP-03 actualizadas:** en `compras/tests/test_cmp_cns_odc.py`, «por recibir» y «con reclamo sin emitir» dejan de ser atajos ignorados (se agregaron sus pruebas) y la ficha de una orden aprobada ofrece «recibir» y «cerrar» al Gerente.
+- **«Queda para pagar» en el resumen del cierre** se calcula con la regla de la postcondición e de CMP-CRR-FLT sin la bandeja ni el aviso (CMP-05, D-91): CMP-05 tiene que usar la misma regla.
+- **Alertas del resumen de la recepción:** `reevaluar_alertas_del_insumo` no tiene modo lectura (agregarlo tocaba `inventario` fuera de «Límites»): `compras` calcula con `stock.existencias` cuáles se resolverán.
+- **La auditoría de la recepción no lista las alertas resueltas por el stock** (la función de ingreso no devuelve la reevaluación).
+- **Extensión 9a:** el servicio no recibe lo que la pantalla vio que faltaba; devuelve `linea_no_pendiente` o `supera_lo_pendiente` con lo que falta ahora, sin distinguir «cambió» de «te pasaste».
+- **Códigos de error que el caso de uso no nombra:** `linea_ajena`, `linea_repetida`, `vencimiento_no_aplica`, `inconveniente_repetido`, `orden_no_recibible`, `cantidad_invalida`, `sin_lineas`, `motivo_obligatorio` y `destino_inactivo`.
+- **`cerrar_con_faltante` acepta líneas de varias órdenes** en una sola operación (el paso 2 las presenta agrupadas por orden).
+- **Recepción contra la baja del destino:** el caso de uso la nombra, pero no hay prueba propia: la baja del insumo y del invernadero ya la impide una orden no terminada (D-87 punto 5); el bloqueo del invernadero de la recepción no lo detecta ninguna prueba (dos capas se respaldan).
+- **Archivos de pruebas:** la valorización está en `test_cmp_reg_rcp.py` y las funciones de `inventario` en `test_ingreso_por_recepcion.py` (el caso de uso nombra `test_valorizacion.py` y `test_stock_compras.py`).
+- **Correo al proveedor** de la recepción y del cierre (postcondición h y R1): lo pide el caso de uso y no figuraba en la lista de la tarea.
+
+## CON-04b (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **El libro muestra el origen de un ajuste sin enlace.** El punto de extensión `registrar_enlace_de_origen` (CON-03a) no tiene registrante para `movimiento_de_insumo`: inventario no tiene pantalla de movimientos y no registra el enlace. La ficha dice «Movimiento de insumo» sin enlace. La «Verificación a mano» original pedía «con su enlace al movimiento»; no se hizo.
+- **El valor del ajuste y los asientos pueden diferir en centavos.** El «valor del ajuste» del resumen se redondea una sola vez sobre la diferencia total (regla «Valor del ajuste»); cada asiento se redondea por movimiento (D-92 punto 5). Con varios movimientos y precios con centavos, la suma de los asientos puede diferir del valor en uno o dos centavos.
+- **No existe una referencia en cero.** La base prohíbe un precio de referencia en $ 0 (CHECK `insumo_invernadero_precio_positivo`), así que el «importe cero» de H11 solo sale de redondear (por ejemplo, 0,001 kg × $ 0,01). La documentación y el pedido de la tarea lo nombraban como caso posible.
+- **`hoy` como argumento en el servicio de ajuste.** `calcular_ajuste` y `confirmar_ajuste` aceptan `hoy=` (sin él, `stock.hoy()`): la fecha del ajuste y del asiento es esa y el servicio no lee la hora solo. La documentación no lo nombra. Un ajuste es siempre de hoy, así que su asiento nunca lleva la aclaración de H10 (D-102).

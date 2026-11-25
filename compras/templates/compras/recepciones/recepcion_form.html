@@ -1,0 +1,92 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Registrar recepción» (CMP-REG-RCP pasos 3 a 6; ``VIEWS.c_rcp`` del prototipo). Recibe «orden», «proveedor», «invernadero», «entregas» (las demás entregas de la orden), «lineas» (cada una con la
+``LineaARecibir``, sus filas de lotes y de inconvenientes), «observaciones», «errores» y «tipos» (los errores de cada línea van en su ítem). Por cada línea: lo pedido, lo ya recibido y lo que falta (paso 4), uno o más lotes (cantidad y
+vencimiento si el insumo lo controla: «una cantidad por cada fecha distinta», paso 5) y los inconvenientes (5a a 5e: un tipo por fila). Corrige el prototipo: allá cada línea tenía un solo lote y un solo inconveniente;
+el caso de uso pide varias fechas y un inconveniente de cada tipo. «Agregar otro lote» y «Agregar inconveniente» vuelven a dibujar el formulario con una fila más, sin JavaScript y sin validar mientras se escribe;
+«Ver resumen» muestra el paso 7. Una línea con el destino inactivo se lista sin campos (extensión 4a).{% endcomment %}
+{% block titulo %}Registrar recepción · {{ orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <a class="btn btn-text" href="{% url 'compras:orden_ficha' orden.pk %}">{% icono "back" 14 %} Orden {{ orden }}</a>
+  <div class="page-h"><h1>Registrar recepción · {{ orden }}</h1></div>
+
+  {% if entregas|length > 1 %}
+  <div class="chips" role="group" aria-label="Entrega que llegó" style="margin-bottom:14px">
+    {% for e in entregas %}<a class="chip" href="{% url 'compras:recepcion_nueva' orden.pk %}?proveedor={{ e.proveedor.pk }}&amp;invernadero={{ e.invernadero.pk }}" aria-pressed="{% if e.proveedor.pk == proveedor.pk and e.invernadero.pk == invernadero.pk %}true{% else %}false{% endif %}">{{ e.proveedor.nombre_para_mostrar }} · {{ e.invernadero.nombre_invernadero }}</a>{% endfor %}
+  </div>
+  {% endif %}
+  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+
+  <form method="post" action="{% url 'compras:recepcion_nueva' orden.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="proveedor" value="{{ proveedor.pk }}"><input type="hidden" name="invernadero" value="{{ invernadero.pk }}">
+    <div class="stack">
+      <div class="card">
+        <dl class="dl two">
+          <dt>Proveedor</dt><dd>{{ proveedor.nombre_para_mostrar }}</dd>
+          <dt>Destino</dt><dd>{{ invernadero.nombre_invernadero }}</dd>
+          <dt>Fecha de recepción</dt><dd>hoy <span class="muted">(siempre la del registro; si lo cargás tarde, aclaralo en las observaciones)</span></dd>
+        </dl>
+      </div>
+
+      {% for item in lineas %}
+      {% with l=item.linea unidad=item.linea.insumo.unidad_medida_insumo id=item.linea.detalle.pk %}
+      <div class="card seg">
+        <div class="card-h"><b>{{ l.insumo.nombre_insumo }}</b>
+          <span class="muted sm">pedida {{ l.pedida|cant:unidad }} · ya recibida {{ l.recibida|num:unidad }} · <b>falta {{ l.falta|cant:unidad }}</b></span><span class="spacer"></span>
+          {% if l.atraso_dias %}<span class="status-badge status-danger">{{ l.atraso_dias }} día{{ l.atraso_dias|pluralize }} de atraso</span>{% elif l.entrega_esperada %}<span class="status-badge status-neutral">Entrega esperada {{ l.entrega_esperada|date:"d/m/Y" }}</span>{% endif %}
+        </div>
+        <div style="padding:0 20px 16px">
+          {% if l.motivo_bloqueo %}
+          <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{% if l.motivo_bloqueo == "invernadero_inactivo" %}El invernadero está inactivo.{% else %}El insumo está inactivo en el invernadero.{% endif %} Para recibir esta línea, primero hay que reactivar el destino.</div></div>
+          {% else %}
+          {% if item.errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "warn" 16 %}<div>{% for m in item.errores %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+          <input type="hidden" name="lotes_{{ id }}" value="{{ item.lotes|length }}"><input type="hidden" name="incs_{{ id }}" value="{{ item.incs|length }}">
+          <h3 class="ped-sub">Qué llegó en buen estado</h3>
+          {% for fila in item.lotes %}
+          <div class="grid2" style="margin-bottom:8px">
+            <div class="fld"><label for="cant_{{ id }}_{{ forloop.counter0 }}">Cantidad recibida{% if item.lotes|length > 1 %} (lote {{ forloop.counter }}){% endif %} <span class="muted">({{ l.insumo.unidad_medida_insumo }})</span></label>
+              <input class="field-input num" id="cant_{{ id }}_{{ forloop.counter0 }}" name="cant_{{ id }}_{{ forloop.counter0 }}" inputmode="decimal" autocomplete="off" value="{{ fila.cant }}" placeholder="0"></div>
+            <div class="fld"><label for="venc_{{ id }}_{{ forloop.counter0 }}">Vencimiento del lote</label>
+              {% if l.insumo.controla_vencimiento %}<input class="field-input" type="date" id="venc_{{ id }}_{{ forloop.counter0 }}" name="venc_{{ id }}_{{ forloop.counter0 }}" value="{{ fila.venc }}">
+              {% else %}<div class="field-input ro">No vence</div>{% endif %}</div>
+          </div>
+          {% endfor %}
+          <button class="btn btn-text btn-sm" type="submit" name="accion" value="mas_lote:{{ id }}" data-sin-envio-en-curso>Agregar otro lote{% if l.insumo.controla_vencimiento %} (otra fecha de vencimiento){% endif %}</button>
+          <p class="hint">Dejá en blanco lo que no llegó: queda pendiente. Cada lote forma un lote nuevo en el invernadero (primero se cubre un faltante sin lote, si lo hay).</p>
+
+          <h3 class="ped-sub" style="margin-top:14px">Inconvenientes <span class="muted sm">(opcional)</span></h3>
+          {% for fila in item.incs %}
+          <div class="grid2" style="margin-bottom:8px">
+            <div class="fld"><label for="inc_tipo_{{ id }}_{{ forloop.counter0 }}">Tipo</label>
+              <select class="field-input" data-desplegable id="inc_tipo_{{ id }}_{{ forloop.counter0 }}" name="inc_tipo_{{ id }}_{{ forloop.counter0 }}">
+                <option value="">Elegí el tipo</option>
+                {% for valor, texto in tipos %}<option value="{{ valor }}"{% if fila.tipo == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+              </select></div>
+            <div class="fld"><label for="inc_cant_{{ id }}_{{ forloop.counter0 }}">Cantidad afectada</label>
+              <input class="field-input num" id="inc_cant_{{ id }}_{{ forloop.counter0 }}" name="inc_cant_{{ id }}_{{ forloop.counter0 }}" inputmode="decimal" autocomplete="off" value="{{ fila.cant }}"></div>
+            <div class="fld" style="grid-column:1 / -1"><label for="inc_desc_{{ id }}_{{ forloop.counter0 }}">Qué pasó <span class="muted">(obligatorio en «Otro»)</span></label>
+              <input class="field-input" id="inc_desc_{{ id }}_{{ forloop.counter0 }}" name="inc_desc_{{ id }}_{{ forloop.counter0 }}" autocomplete="off" value="{{ fila.desc }}"></div>
+          </div>
+          {% endfor %}
+          <button class="btn btn-text btn-sm" type="submit" name="accion" value="mas_inc:{{ id }}" data-sin-envio-en-curso>Agregar un inconveniente</button>
+          <p class="hint">Lo dañado, vencido, no conforme o distinto no ingresa al stock: no lo cuentes como recibido. El retraso no se declara: se calcula con la entrega esperada.</p>
+          {% endif %}
+        </div>
+      </div>
+      {% endwith %}
+      {% endfor %}
+
+      <div class="card">
+        <div class="fld"><label for="observaciones">Observaciones de la recepción <span class="muted">(opcional)</span></label>
+          <textarea class="field-input" id="observaciones" name="observaciones" rows="2" placeholder="Por ejemplo: llegó una caja de más (el excedente no se ingresa: entra por un ajuste de stock).">{{ observaciones }}</textarea></div>
+      </div>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…">Ver resumen</button>
+      <a class="btn btn-ghost" href="{% url 'compras:orden_ficha' orden.pk %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

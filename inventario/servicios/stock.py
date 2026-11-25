@@ -271,3 +271,111 @@ def sumar_transito(iin_id, cantidad):
 def restar_transito(iin_id, cantidad):
     """Resta ``cantidad`` del tránsito y devuelve el ``InsumoInvernadero`` (la usa CMP-04 al recibir y al cerrar con faltante). ``ValueError`` si quedaría negativo."""
     return _cambiar_transito(iin_id, cantidad, -1)
+
+
+# ---- escritura de compras: ingreso por recepción (D-90 punto 1; docs/api/stock.md, «Escritura de compras»; regla 4 de 8.23, regla 1 de 8.19, regla 22 de 8.16) ----
+# Es lo único que crea lotes y movimientos de «ingreso por recepción» (regla 1 de 8.19: solo `inventario` toca lotes y movimientos). Corre dentro de la transacción de quien
+# llama (`compras`), con el invernadero ya bloqueado; bloquea la existencia y sus lotes en orden de id, los vuelve a leer y NO audita (lo hace el caso de uso).
+
+
+def _partes_de_ingreso(partes, insumo, hoy_):
+    """``[(Decimal, date | None)]`` con las partes de un ingreso validadas, o ``ValueError`` (error de uso de quien llama, no de la persona): al menos una parte; cada cantidad con
+    los decimales de la unidad y mayor que cero; el vencimiento obligatorio y nunca pasado si el insumo lo controla (un lote vence desde el día siguiente a su fecha, así que hoy
+    sirve) y ausente si no lo controla."""
+    partes = list(partes)
+    if not partes:
+        raise ValueError("Un ingreso por recepción necesita al menos una parte.")
+    validadas = []
+    for cantidad, vencimiento in partes:
+        try:
+            cantidad = validar_cantidad(cantidad, insumo.unidad_medida_insumo)
+        except ValidationError as error:
+            raise ValueError(f"Cantidad inválida para el ingreso: {error.messages[0]}") from error
+        if cantidad <= 0:
+            raise ValueError("La cantidad de cada parte tiene que ser mayor que cero.")
+        if insumo.controla_vencimiento:
+            if vencimiento is None:
+                raise ValueError(f"{insumo.nombre_insumo} controla el vencimiento: cada parte necesita su fecha.")
+            if vencimiento < hoy_:
+                raise ValueError("Un lote ya vencido no ingresa al stock: es un inconveniente de la recepción.")
+        elif vencimiento is not None:
+            raise ValueError(f"{insumo.nombre_insumo} no controla el vencimiento: la parte no lleva fecha.")
+        validadas.append((cantidad, vencimiento))
+    return validadas
+
+
+def registrar_ingreso_por_recepcion(iin_id, partes, *, origen_id, fecha=None):
+    """Ingresa al stock lo recibido de una línea y devuelve los ``MovimientoInsumo`` creados, en el orden en que tocó los lotes (docs/api/stock.md).
+
+    - ``partes``: ``[(cantidad, vencimiento | None)]``; ``origen_id`` (obligatorio, D-52): el id de la ``Recepcion`` que origina cada movimiento; ``fecha`` (opcional): la del movimiento
+      y la de ingreso de los lotes nuevos, con la hora actual; sin ella, hoy.
+    - Valida todo antes de escribir y resta el tránsito por el total antes de crear nada: si algo falla (``ValueError``, también un tránsito que quedaría negativo), no cambia nada.
+    - Cubre primero el **faltante sin lote** (regla 4 de 8.23; lo deja como mucho en 0) con las primeras partes, en orden, y crea un lote nuevo por cada parte con lo que sobra, con su
+      vencimiento. Un movimiento «ingreso por recepción» por lote tocado, el faltante incluido (regla 1 de 8.19).
+    - No cambia ``referencia_precio`` (regla 6 de 8.18). Al final reevalúa las alertas del insumo: la de «bajo el mínimo» se resuelve si ya no corresponde (regla 12 de 8.15)."""
+    from inventario.servicios import alertas_de_stock  # adentro: alertas_de_stock importa este módulo
+
+    existencia = (
+        InsumoInvernadero.objects.select_for_update(no_key=True, of=("self",)).select_related("insumo").get(pk=iin_id)
+    )
+    hoy_ = hoy()
+    validadas = _partes_de_ingreso(partes, existencia.insumo, hoy_)
+    _cambiar_transito(existencia.pk, sum((cantidad for cantidad, _ in validadas), CERO), -1)  # ValueError si no hay tanto en tránsito: antes de escribir
+    lotes = list(LoteInsumo.objects.select_for_update(no_key=True).filter(insumo_invernadero=existencia).order_by("id"))
+    sin_lote = next((l for l in lotes if l.es_faltante_sin_lote), None)
+    deuda = -sin_lote.cantidad_disponible if sin_lote is not None and sin_lote.cantidad_disponible < 0 else CERO
+
+    por_cubrir, nuevos = deuda, []
+    for cantidad, vencimiento in validadas:  # el faltante absorbe las primeras partes; lo que sobra de cada una forma su lote
+        para_el_faltante = min(por_cubrir, cantidad)
+        por_cubrir -= para_el_faltante
+        if cantidad > para_el_faltante:
+            nuevos.append((cantidad - para_el_faltante, vencimiento))
+    cubierto = deuda - por_cubrir
+
+    ahora = timezone.now()
+    if fecha is not None:
+        ahora = timezone.make_aware(datetime.combine(fecha, timezone.localtime(ahora).time()))
+    movimientos = []
+
+    def ingreso(lote, cantidad):
+        movimientos.append(
+            MovimientoInsumo.objects.create(
+                lote_insumo=lote,
+                fecha=ahora,
+                cantidad=cantidad,
+                tipo_movimiento=MovimientoInsumo.TipoMovimiento.INGRESO_POR_RECEPCION,
+                origen_id=origen_id,
+            )
+        )
+
+    if cubierto > 0:
+        sin_lote.cantidad_disponible += cubierto
+        sin_lote.save(update_fields=["cantidad_disponible"])
+        ingreso(sin_lote, cubierto)
+    for cantidad, vencimiento in nuevos:
+        nuevo = LoteInsumo.objects.create(
+            insumo_invernadero=existencia,
+            cantidad_ingresada=cantidad,
+            cantidad_disponible=cantidad,
+            fecha_ingreso=fecha or hoy_,
+            fecha_vencimiento=vencimiento,
+        )
+        ingreso(nuevo, cantidad)
+    alertas_de_stock.reevaluar_alertas_del_insumo(existencia.pk)
+    return movimientos
+
+
+def lotes_de_ingreso(movimiento_ids):
+    """``[(LoteInsumo, Decimal)]``: de los movimientos de ingreso por recepción de ``movimiento_ids``, los lotes que crearon (**sin** el faltante sin lote) y lo ingresado en cada uno, en el
+    orden de los movimientos (D-90 punto 4: «el lote creado por esa recepción»; lo usa CMP-06 para «lo máximo corregible»). Lectura: no bloquea ni escribe."""
+    movimientos = (
+        MovimientoInsumo.objects.filter(
+            pk__in=list(movimiento_ids),
+            tipo_movimiento=MovimientoInsumo.TipoMovimiento.INGRESO_POR_RECEPCION,
+            lote_insumo__es_faltante_sin_lote=False,
+        )
+        .select_related("lote_insumo")
+        .order_by("id")
+    )
+    return [(m.lote_insumo, m.cantidad) for m in movimientos]

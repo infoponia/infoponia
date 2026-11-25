@@ -184,10 +184,18 @@ class FiltrosDeLaConsultaTests(ConsultaBase):
         self.assertEqual(self.ids(self.consultar(atajo="por_aprobar")), [self.orden1.pk])
 
     def test_regla_2_un_atajo_de_otra_tarea_o_desconocido_se_ignora(self):
-        """«Por recibir», «con pago pendiente» y «con reclamo sin emitir» los suman CMP-04 a CMP-06; hasta entonces, como un filtro mal formado, no filtran."""
-        for atajo in ("por_recibir", "con_pago_pendiente", "con_reclamo_sin_emitir", "otro"):
+        """«Con pago pendiente» lo suma CMP-05; hasta entonces, y un atajo desconocido, se ignoran como un filtro mal formado (no filtran). CMP-04 sumó «por recibir» y «con reclamo sin emitir»."""
+        for atajo in ("con_pago_pendiente", "otro"):
             with self.subTest(atajo=atajo):
                 self.assertEqual(len(self.consultar(atajo=atajo)), 3)
+
+    def test_regla_2_el_atajo_por_recibir_trae_las_aprobadas_con_lineas_pendientes(self):
+        """CMP-04 y regla 2: «por recibir» son las órdenes aprobadas o parcialmente recibidas con alguna línea pendiente (la aprobada de la prueba; ni la pendiente de aprobación ni la rechazada)."""
+        self.assertEqual(self.ids(self.consultar(atajo="por_recibir")), [self.orden2.pk])
+
+    def test_regla_2_el_atajo_con_reclamo_sin_emitir_no_trae_ordenes_sin_reclamos(self):
+        """CMP-04 y regla 2: «con reclamo sin emitir» trae solo las órdenes con una recepción cuyo reclamo no se emitió; sin reclamos, ninguna. (Con reclamos lo prueban las pruebas de la recepción.)"""
+        self.assertEqual(self.consultar(atajo="con_reclamo_sin_emitir"), [])
 
     def test_regla_2_los_filtros_se_combinan(self):
         self.assertEqual(self.ids(self.consultar(proveedor_id=self.b.pk, estado="rechazada")), [self.orden3.pk])
@@ -264,8 +272,9 @@ class FichaDeOrdenTests(ConsultaBase):
         self.assertEqual(self.ficha().acciones, frozenset({"resolver"}))
 
     def test_regla_8_sin_accion_si_la_orden_ya_se_resolvio_o_quien_mira_no_es_el_gerente(self):
-        """Ningún botón lleva a un 403 (D-30): una orden aprobada o rechazada, o quien mira es el Agrónomo, no tienen acción de resolver."""
-        self.assertEqual(self.ficha(self.orden2).acciones, frozenset())
+        """Ningún botón lleva a un 403 (D-30): una orden aprobada o rechazada, o quien mira es el Agrónomo, no tienen acción de resolver. La aprobada, vista por el Gerente, ofrece lo de CMP-04
+        (recibir y cerrar con faltante, regla 8); la rechazada, nada."""
+        self.assertEqual(self.ficha(self.orden2).acciones, frozenset({"recibir", "cerrar"}))
         self.assertEqual(self.ficha(self.orden3).acciones, frozenset())
         self.assertEqual(self.ficha(self.orden1, self.ana).acciones, frozenset())
 

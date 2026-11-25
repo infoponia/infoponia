@@ -1,5 +1,6 @@
 # Modelos de `compras` (nivel 6 de D-37): Proveedor (CMP-01), desde CMP-02a Pedido, DetallePedido, InvitacionPedido, EnlaceProveedor,
-# Cotizacion y DetalleCotizacion y, desde CMP-03, OrdenCompra y DetalleOrdenCompra. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88 y D-89). Nunca se borra una fila de
+# Cotizacion y DetalleCotizacion, desde CMP-03, OrdenCompra y DetalleOrdenCompra y, desde CMP-04, Recepcion, DetalleRecepcion, DetalleRecepcionMovimiento, ReclamoProveedor,
+# InconvenienteRecepcion y AlertaCompras. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88, D-89 y D-90). Nunca se borra una fila de
 # negocio: hay estados. A2 de D-37: toda FK o M2M se declara acá, en la app de nivel mayor. Ningún import de `comercial` ni de
 # `produccion` (A1).
 
@@ -12,9 +13,10 @@ from django.db.models.functions import Coalesce, Round
 from django.utils import timezone
 
 from compras.precios import precio_unitario_para_mostrar
+from contabilidad.models import OrigenDocumento
 from core.models import Agronomo, Gerente, Usuario, rol_de
 from core.validadores import validar_telefono
-from inventario.models import InsumoInvernadero, TipoInsumo
+from inventario.models import InsumoInvernadero, MovimientoInsumo, TipoInsumo
 from maestros.validadores import formatear_cuit
 
 # Roles que ven a todos los proveedores (regla 1 de CMP-CNS-PRV): el Gerente y el Agrónomo activos.
@@ -426,7 +428,7 @@ class DetalleCotizacion(models.Model):
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # Órdenes de compra (CMP-03). Fuente: docs/modelo/compras.md («OrdenCompra» y «DetalleOrdenCompra»; reglas 13, 16, 18, 23 y 24 de 8.16, D-89).
-# ``AlertaCompras`` no está acá: la crea CMP-04 junto con ``ReclamoProveedor`` (su FK).
+# ``AlertaCompras`` y ``ReclamoProveedor`` están más abajo (CMP-04).
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -592,3 +594,168 @@ class DetalleOrdenCompra(models.Model):
     def unitario_para_mostrar(self):
         """El precio unitario derivado con dos decimales (D-89 puntos 1 y 7), para pantallas y correos."""
         return precio_unitario_para_mostrar(self)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Recepciones (CMP-04). Fuente: docs/modelo/compras.md («Recepcion», «DetalleRecepcion», «DetalleRecepcionMovimiento», «InconvenienteRecepcion»,
+# «ReclamoProveedor» y «AlertaCompras»); D-87 punto 5, D-89 y D-90 (puntos 3, 6 y 7). Reglas 6 a 11 y 14 de 8.20.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+class Recepcion(OrigenDocumento):
+    """La mercadería que un proveedor entrega en un invernadero, para una orden (docs/modelo/compras.md, «Recepcion»; regla 7 de 8.20, R019). Hereda de
+    ``OrigenDocumento`` (tipo ``recepcion``, D-90 punto 3): es el ``origen`` de cada movimiento de ingreso y del asiento. NO redeclara ``save()``: el del padre
+    fija ``tipo`` desde ``TIPO_DE_ORIGEN`` (D-52). ``agronomo`` es 0..1 (R039): vacío si la registró el Gerente (quien registró queda en la auditoría).
+    **(técnico)** ``proveedor`` e ``invernadero``: «una recepción es de una orden, un proveedor y un invernadero»; los fija el servicio y una prueba verifica que
+    coincidan con sus líneas. La fecha es siempre la del registro, sin fechas retroactivas."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.RECEPCION
+
+    fecha_recepcion = models.DateField("fecha de recepción")
+    observaciones_recepcion = models.TextField("observaciones de la recepción", blank=True)
+    orden = models.ForeignKey(OrdenCompra, on_delete=models.PROTECT, related_name="recepciones")
+    agronomo = models.ForeignKey(Agronomo, null=True, blank=True, on_delete=models.PROTECT, related_name="recepciones")
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name="recepciones")
+    invernadero = models.ForeignKey("maestros.Invernadero", on_delete=models.PROTECT, related_name="recepciones")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Recepción"
+        verbose_name_plural = "Recepciones"
+
+    def __str__(self):
+        """«RCP-0001»: el identificador que ven las pantallas, los correos y la auditoría (D-36)."""
+        return f"RCP-{self.pk:04d}" if self.pk else "RCP-nueva"
+
+
+class DetalleRecepcion(models.Model):
+    """Una línea de la recepción: lo que **ingresó** al stock de una línea de la orden (modelo, «DetalleRecepcion»; R022 y R030). ``cantidad_recibida_detalle`` no
+    cuenta lo dañado ni lo vencido; vale 0 solo si todo lo que llegó tuvo un inconveniente que no sea «otro» (extensión 7c). Única por ``(recepcion, detalle_orden)``."""
+
+    recepcion = models.ForeignKey(Recepcion, on_delete=models.PROTECT, related_name="detalles")
+    detalle_orden = models.ForeignKey(DetalleOrdenCompra, on_delete=models.PROTECT, related_name="detalles_de_recepcion")
+    cantidad_recibida_detalle = models.DecimalField("cantidad recibida", max_digits=14, decimal_places=3)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Detalle de recepción"
+        verbose_name_plural = "Detalles de recepción"
+        constraints = [
+            models.UniqueConstraint(fields=["recepcion", "detalle_orden"], name="detalle_recepcion_unico_por_linea"),
+            models.CheckConstraint(condition=Q(cantidad_recibida_detalle__gte=0), name="detalle_recepcion_cantidad_no_negativa"),
+        ]
+
+    def __str__(self):
+        """«Insumo · Invernadero» de la línea (texto de la auditoría)."""
+        return str(self.detalle_orden)
+
+
+class DetalleRecepcionMovimiento(models.Model):
+    """R032 **(técnico, D-90 punto 3)**: une cada movimiento de ingreso con **su** línea de recepción. Uno por lote tocado (incluido el faltante sin lote).
+    ``inventario`` no conoce a ``compras`` (A1, A2): el vínculo vive acá. ``related_name`` elegidos para no chocar con los accesorios de la herencia (D-83)."""
+
+    detalle_recepcion = models.ForeignKey(DetalleRecepcion, on_delete=models.PROTECT, related_name="vinculos_de_movimiento")
+    movimiento = models.OneToOneField(MovimientoInsumo, on_delete=models.PROTECT, related_name="vinculo_de_recepcion")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Vínculo recepción-movimiento"
+        verbose_name_plural = "Vínculos recepción-movimiento"
+
+    def __str__(self):
+        return f"{self.detalle_recepcion} → movimiento {self.movimiento_id}"
+
+
+class ReclamoProveedor(models.Model):
+    """El reclamo a un proveedor por los inconvenientes de una recepción (modelo, «ReclamoProveedor»; R008 en 0..1, R028 y regla 10 de 8.20). CMP-04 lo crea
+    «abierto» y **sin emitir** (sin Gerente y sin fecha); emitirlo y cerrarlo es de CMP-06. Emitido ⇔ tiene Gerente, y solo entonces tiene fecha. **(técnico)**
+    ``recepcion`` es ``OneToOne``: un reclamo por recepción con inconvenientes."""
+
+    class Estado(models.TextChoices):
+        ABIERTO = "abierto", "Abierto"
+        CERRADO = "cerrado", "Cerrado"
+
+    fecha_reclamo = models.DateField("fecha de emisión", null=True, blank=True)
+    estado_reclamo = models.CharField(max_length=10, choices=Estado.choices, default=Estado.ABIERTO)
+    gerente = models.ForeignKey(Gerente, null=True, blank=True, on_delete=models.PROTECT, related_name="reclamos_emitidos")
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name="reclamos")
+    recepcion = models.OneToOneField(Recepcion, on_delete=models.PROTECT, related_name="reclamo")
+
+    class Meta:
+        ordering = ["-id"]
+        verbose_name = "Reclamo a proveedor"
+        verbose_name_plural = "Reclamos a proveedores"
+        constraints = [
+            models.CheckConstraint(condition=Q(estado_reclamo__in=["abierto", "cerrado"]), name="reclamo_estado_valido"),
+            # Modelo, «ReclamoProveedor»: sin Gerente ⇔ sin fecha de emisión.
+            models.CheckConstraint(
+                condition=(Q(gerente__isnull=True) & Q(fecha_reclamo__isnull=True)) | (Q(gerente__isnull=False) & Q(fecha_reclamo__isnull=False)),
+                name="reclamo_gerente_si_y_solo_si_fecha",
+            ),
+            # Modelo, «ReclamoProveedor»: solo se cierra un reclamo emitido.
+            models.CheckConstraint(condition=~Q(estado_reclamo="cerrado") | Q(gerente__isnull=False), name="reclamo_cerrado_esta_emitido"),
+        ]
+
+    def __str__(self):
+        """«REC-0001»: el identificador que ven las pantallas y la auditoría."""
+        return f"REC-{self.pk:04d}" if self.pk else "REC-nuevo"
+
+    @property
+    def emitido(self):
+        """True si un Gerente ya lo emitió."""
+        return self.gerente_id is not None
+
+
+class InconvenienteRecepcion(models.Model):
+    """Un problema con lo que llegó (modelo, «InconvenienteRecepcion»; R029, R030, regla 10 de 8.20 y D-90 punto 7). Cinco tipos (P4, MD-130); el retraso no se declara: se
+    calcula y se muestra. A lo sumo uno de cada tipo por línea de recepción. La descripción es obligatoria en «otro»."""
+
+    class Tipo(models.TextChoices):
+        MERCADERIA_DANADA = "mercaderia_danada", "Mercadería dañada"
+        CALIDAD_NO_CONFORME = "calidad_no_conforme", "Calidad no conforme"
+        PRODUCTO_DISTINTO = "producto_distinto", "Producto distinto al pedido"
+        VENCIDO_O_POR_VENCER = "vencido_o_por_vencer", "Vencido o próximo a vencer"
+        OTRO = "otro", "Otro"
+
+    detalle_recepcion = models.ForeignKey(DetalleRecepcion, on_delete=models.PROTECT, related_name="inconvenientes")
+    reclamo = models.ForeignKey(ReclamoProveedor, on_delete=models.PROTECT, related_name="inconvenientes")
+    tipo_inconveniente = models.CharField("tipo", max_length=25, choices=Tipo.choices)
+    cantidad_afectada = models.DecimalField("cantidad afectada", max_digits=14, decimal_places=3)
+    descripcion_inconveniente = models.TextField("descripción", blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Inconveniente de recepción"
+        verbose_name_plural = "Inconvenientes de recepción"
+        constraints = [
+            models.UniqueConstraint(fields=["detalle_recepcion", "tipo_inconveniente"], name="inconveniente_unico_por_tipo_y_linea"),
+            models.CheckConstraint(
+                condition=Q(tipo_inconveniente__in=["mercaderia_danada", "calidad_no_conforme", "producto_distinto", "vencido_o_por_vencer", "otro"]),
+                name="inconveniente_tipo_valido",
+            ),
+            models.CheckConstraint(condition=Q(cantidad_afectada__gt=0), name="inconveniente_cantidad_positiva"),
+            # Modelo, «InconvenienteRecepcion»: la descripción es obligatoria en «otro».
+            models.CheckConstraint(
+                condition=~Q(tipo_inconveniente="otro") | ~Q(descripcion_inconveniente=""), name="inconveniente_otro_con_descripcion"
+            ),
+        ]
+
+    def __str__(self):
+        """«Mercadería dañada» (texto de la auditoría)."""
+        return self.get_tipo_inconveniente_display()
+
+
+class AlertaCompras(models.Model):
+    """Tabla de vínculo entre una alerta de `maestros` y su origen en `compras` **(técnico, D-87 punto 5; patrón de `AlertaComercial`, D-63)**: `Alerta` no conoce a
+    `compras` (A2 de D-37). La crea el mismo servicio que crea la alerta (``registrar_recepcion``), en la misma transacción; la emisión del reclamo (CMP-06) la resuelve."""
+
+    alerta = models.OneToOneField("maestros.Alerta", on_delete=models.PROTECT, related_name="vinculo_de_compras")
+    reclamo = models.ForeignKey(ReclamoProveedor, on_delete=models.PROTECT, related_name="alertas")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Alerta de compras"
+        verbose_name_plural = "Alertas de compras"
+
+    def __str__(self):
+        return f"Alerta de {self.reclamo}"

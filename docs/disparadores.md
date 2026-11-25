@@ -438,9 +438,10 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
   su `PagoCliente` de compra-venta (MD-130). La precondición c de COM-REG-CBR (ejercicio y cuentas) se suma al reabrirlo. Todo lo que hace
   falta ya está guardado.
 
-0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
+0. ~~**Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
    ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
-   ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).
+   ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).~~
+   Hecho en CON-04b (24/11/2026): `confirmar_ajuste` crea el asiento de cada movimiento de ajuste; la carga inicial va contra Capital Inicial (D-92 punto 7). Las precondiciones c y d se cumplen solas (D-92 punto 2).
 
 1. **Reabrir seis casos de uso de la ronda «Producción 1».** Hasta entonces no verifican el ejercicio vigente ni las
    cuentas, ni crean `AsientoContable`: PROD-CNC-SMB y PROD-CNC-TRN (precondiciones c y d y su asiento), PROD-REG-MRM,
@@ -630,11 +631,11 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 ## Nacidos en CMP-03 (24/11/2026)
 
 1. **Hecho en CMP-03:** el Contador (USR-11) consulta las órdenes en solo lectura (`en_alcance_de`, `_exigir_consulta`, menú «Compras» → «Órdenes», una sola pestaña, sin enlaces a pedidos ni proveedores). **Queda para CMP-05:** su entrada «Pagos a proveedores» y las marcas de pago pendiente.
-2. **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
-3. **Atajos de la lista de órdenes y marcas de la fila:** «Por recibir» y «Con reclamo sin emitir» (CMP-04), «Con pago pendiente» (CMP-05). Los atajos que hoy no existen se ignoran como un filtro mal formado.
-4. **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
-5. **Estados posteriores a la aprobación** de la orden («parcialmente recibida», «recibida», «recibida con faltante») y del detalle («completo», «cerrado con faltante») los aplica CMP-04; `OrdenCompra.NO_TERMINADAS` ya los incluye para los impedimentos.
-6. **`AlertaCompras`:** la crea CMP-04 junto con `ReclamoProveedor` (su FK); el archivo de la tarea CMP-04 debe listarla.
+2. **Hecho en CMP-04 lo de recepciones; quedan pagos (CMP-05) y reclamos (CMP-06).** Texto original: **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
+3. **Hecho en CMP-04 «Por recibir» y «Con reclamo sin emitir» (y la marca de reclamo); queda «Con pago pendiente» (CMP-05).** Texto original: **Atajos de la lista de órdenes y marcas de la fila:** «Por recibir» y «Con reclamo sin emitir» (CMP-04), «Con pago pendiente» (CMP-05). Los atajos que hoy no existen se ignoran como un filtro mal formado.
+4. **Hecho en CMP-04 «Por recibir» del Agrónomo; quedan «Reclamos sin emitir» y «Pagos a proveedores pendientes».** Texto original: **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
+5. **Hecho en CMP-04.** Texto original: **Estados posteriores a la aprobación** de la orden («parcialmente recibida», «recibida», «recibida con faltante») y del detalle («completo», «cerrado con faltante») los aplica CMP-04; `OrdenCompra.NO_TERMINADAS` ya los incluye para los impedimentos.
+6. **Hecho en CMP-04** (la crea `registrar_recepcion`, junto con `ReclamoProveedor`). Texto original: **`AlertaCompras`:** la crea CMP-04 junto con `ReclamoProveedor` (su FK); el archivo de la tarea CMP-04 debe listarla.
 
 ## Lo que deja COM-04c (nace el 24/11/2026)
 1. **Render: cargar `URL_DEL_SITIO`** (sin barra final) antes de usar el enlace del cliente; sin ella el correo no sale y el enlace queda «No se pudo enviar». Pasada manual en navegador real al cerrar la tanda de «Comercial 1» (pasos 3 y 14 de la «Verificación a mano» de COM-04c).
@@ -646,7 +647,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen desde CON-02 (`docs/api/asientos.md`, D-102).
 
-1. **Cuando exista la recepción de compras (asiento de compras):** CMP-04 suma el tipo `recepcion` a `OrigenDocumento.Tipo` (una migración de `contabilidad` con solo ese cambio) y llama a `registrar_asiento_automatico` con Debe Insumos en Stock / Haber Proveedores (regla 14 de 8.20, valorizada con el precio total por línea, MD-125). Sin ingreso al stock, no hay asiento.
+1. **Hecho el 24/11/2026 en CMP-04** (tipo `recepcion` en `contabilidad` 0006 y asiento con `registrar_asiento_automatico`). Texto original: **Cuando exista la recepción de compras (asiento de compras):** CMP-04 suma el tipo `recepcion` a `OrigenDocumento.Tipo` (una migración de `contabilidad` con solo ese cambio) y llama a `registrar_asiento_automatico` con Debe Insumos en Stock / Haber Proveedores (regla 14 de 8.20, valorizada con el precio total por línea, MD-125). Sin ingreso al stock, no hay asiento.
 2. **Cuando se reabra COM-CNC-ENT (CON-04c):** los asientos de la entrega, de sus mermas y de sus consumos (postcondiciones e, g y h) usan el mismo servicio, cada uno con su documento de origen; ya está listado arriba, en «Cuando exista contabilidad con asientos».
 3. **Cuando se reabra cada caso de uso con asiento (CON-04a a CON-04d):** completar el texto de `DESCRIPCION_DE_CUENTA` (`contabilidad/cuentas.py`) con lo que ese asiento mueve (regla 3 de CON-CNS-PCT). No necesita migración.
 4. **Cuando se programe CON-03b (asiento manual y contraasiento):** validar la fecha con `ejercicios.ejercicio_para(fecha, automatico=False)`, que lanza `fecha_en_ejercicio_cerrado`, `fecha_anterior_al_primer_ejercicio` y `fecha_futura` (D-102). El automático nunca las lanza.
@@ -660,3 +661,10 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 3. **COM-06:** `transportista_en_ruta` (impedimento del invernadero y de la baja de cuenta) y PROD-VNC-CAM 3b: `quitar_lineas_liberadas` solo toca las «a realizar»; una entrega en curso con producto vencido se trata en 3b. COM-INI-RUT usa `peso_de_entregas` y bloquea el invernadero antes de cambiar el vehículo.
 4. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05a1»): el nombre `contrato_entrega`; las varias `AlertaComercial` por entrega; el «último correo» del paso 50. Agregar en `docs/patrones/bloqueos.md`, «Entregas y envasado», el orden de la baja de cuenta tal como quedó (invernaderos de las entregas y después las entregas).
 5. **Pasada manual en navegador real** (paso 9 de la «Verificación a mano» de COM-05a1) para el cierre de la tanda de «Comercial 1».
+
+## Nacidos en CMP-04 (24/11/2026)
+
+1. **Aviso «quedó para pagar» (CMP-05, D-91).** `avisar_si_quedo_para_pagar(...)` se llama desde `registrar_recepcion` y `cerrar_con_faltante` y tiene que usar la misma regla que ya calcula `resumir_cierre` (todas las líneas del proveedor en la orden completas o cerradas y algo recibido). Hoy ninguna de las dos avisa nada ni arma la bandeja.
+2. **Emitir el reclamo (CMP-06).** Resuelve la alerta del Gerente (`AlertaCompras.alerta`), completa la sección «Reclamos» de la ficha y la tarjeta «Reclamos sin emitir» del inicio del Gerente. Hoy `ReclamoProveedor` solo se crea «abierto» y sin emitir.
+3. **Corrección de una recepción (CMP-06).** Usa `stock.lotes_de_ingreso` (ya escrita) y los `DetalleRecepcionMovimiento`; hoy una recepción no se puede corregir.
+4. **Auditoría de las alertas que resuelve `inventario`.** `registrar_ingreso_por_recepcion` no devuelve la reevaluación, así que el registro de la recepción no lista `alertas_resueltas`; si se quiere, la función tiene que devolverla.

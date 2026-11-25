@@ -805,3 +805,74 @@ Los 28 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 26. (Opcional) Sin JavaScript: filtros, cambio de vista y buscador del plan.
 - [ ] 27. (Opcional) Celular: no aplica (el Contador y el Gerente usan la interfaz de escritorio).
 - [ ] 28. (Opcional) Paginación (50 y 100): la cubren pruebas; armarla a mano es mucho trabajo.
+
+## CMP-04 · Tarea CMP-04 (recepción de mercadería y cierre con faltante)
+
+Los 44 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-04-recepcion-y-cierre-con-faltante.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0004, `contabilidad` 0006 y `core` 0041; las dos últimas solo `choices`): `python manage.py migrate`; después `python manage.py runserver` (con `CORREO_CONSOLA=1` en tu `.env` para ver los correos en la terminal). Necesitás un Gerente, un Contador, a Ana (Agrónoma de «Invernadero Norte» y «Invernadero Norte 2») y a Beto (de «Invernadero Sur»). Crear a mano: los insumos Fertilizante (kg, controla vencimiento, mínimo 10), Maceta y Tomate; los proveedores «Semillas del Sur S. A.» (CUIT 30-00000013-9) y «Viveros del Este S. R. L.» (30-00000026-0); un pedido cotizado, vencido y con su orden aprobada. La concurrencia no se prueba a mano.
+
+- [ ] 1. Ana, Inicio. *(lo cubre una prueba)*
+- [ ] 2. Ana, Compras → «Por recibir». *(lo cubre una prueba)*
+- [ ] 3. Hacer que una línea llegue tarde. *(lo cubre una prueba)*
+- [ ] 4. Gerente. *(lo cubre una prueba)*
+- [ ] 5. Ficha de la orden. *(lo cubre una prueba)*
+- [ ] 6. Ana, «Registrar recepción» de A en Norte *(lo cubre una prueba)*
+- [ ] 7. Cargar: *(lo cubre una prueba)*
+- [ ] 8. «Ver resumen». *(lo cubre una prueba)*
+- [ ] 9. «Cambiar algún dato»
+- [ ] 10. «Confirmar recepción». *(lo cubre una prueba)*
+- [ ] 11. Alerta «bajo el mínimo». *(lo cubre una prueba)*
+- [ ] 12. Ficha de la orden. *(lo cubre una prueba)*
+- [ ] 13. Inventario. *(lo cubre una prueba)*
+- [ ] 14. Gerente, «Alertas». *(lo cubre una prueba)*
+- [ ] 15. Gerente, Compras → Órdenes. *(lo cubre una prueba)*
+- [ ] 16. Emitir el reclamo no se puede todavía
+- [ ] 17. Ana, «Registrar recepción» de A en Norte *(lo cubre una prueba)*
+- [ ] 18. Como Contador (o Gerente), Contabilidad → libro de gestión. *(lo cubre una prueba)*
+- [ ] 19. Sobreentrega *(lo cubre una prueba)*
+- [ ] 20. Número ilegible. *(lo cubre una prueba)*
+- [ ] 21. Decimales que la unidad no admite. *(lo cubre una prueba)*
+- [ ] 22. Sin ninguna línea *(lo cubre una prueba)*
+- [ ] 23. Falta el vencimiento *(lo cubre una prueba)*
+- [ ] 24. Línea en cero. *(lo cubre una prueba)*
+- [ ] 25. Inconveniente incompleto. *(lo cubre una prueba)*
+- [ ] 26. Varios lotes en la ficha. *(lo cubre una prueba)*
+- [ ] 27. Destino inactivo *(lo cubre una prueba)*
+- [ ] 28. Ana, ficha de la orden → «Cerrar con faltante». *(lo cubre una prueba)*
+- [ ] 29. Sin tildar nada *(lo cubre una prueba)*
+- [ ] 30. Maceta con motivo «No las fabrican más.» → «Ver resumen». *(lo cubre una prueba)*
+- [ ] 31. «Confirmar cierre». *(lo cubre una prueba)*
+- [ ] 32. Cerrar desde la recepción *(lo cubre una prueba)*
+- [ ] 33. Una línea ya cerrada no se vuelve a cerrar. *(lo cubre una prueba)*
+- [ ] 34. Bajo el mínimo por un cierre *(lo cubre una prueba)*
+- [ ] 35. Gerente registra una recepción *(lo cubre una prueba)*
+- [ ] 36. Orden recibida. *(lo cubre una prueba)*
+- [ ] 37. Gerente, «Auditoría». *(lo cubre una prueba)*
+- [ ] 38. Roles. *(lo cubre una prueba)*
+- [ ] 39. Una orden inexistente. *(lo cubre una prueba)*
+- [ ] 40. Navegador real.
+- [ ] 41. Sin JavaScript
+- [ ] 42. Celular
+- [ ] 43. Correo caído *(lo cubre una prueba)*
+- [ ] 44. Libro de gestión con el Contador. *(lo cubre una prueba)*
+
+## CON-04b · Tarea CON-04b (asientos de los ajustes de stock)
+
+Los 17 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-04b-asientos-de-inventario.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). **No tiene migraciones ni pantallas nuevas:** el ajuste de stock ya existía (INV-02) y ahora genera su asiento; el resumen del ajuste muestra el asiento que se va a registrar y el libro de gestión (CON-03a) muestra los que quedan. **Es un formulario que se envía:** el paso 16 es el de «navegador real». Los pasos 4 a 9 dejan un insumo, lotes, movimientos y asientos en tu base de desarrollo (un asiento no se borra).
+
+- [ ] 1. `python manage.py runserver` (sin migraciones de esta tarea) y abrir `http://localhost:8000/`.
+- [ ] 2. Como Contador o Gerente, «Contabilidad» → «Ejercicios»: ver si hay un ejercicio abierto o ninguno (decide si hacés el paso 14).
+- [ ] 3. Crear a mano el insumo «Fertilizante CON-04b» (kg, sin control de vencimiento) y habilitarlo en un invernadero del Agrónomo con mínimo 0 y precio de referencia $ 500,00.
+- [ ] 4. Agrónomo, «Ajustar», carga inicial de 10 kg → «Ver resumen»: stock 0 → 10 kg, + $ 5.000,00 y «Asiento contable: Debe Insumos en Stock / Haber Capital Inicial · $ 5.000,00»; no dice «no genera asiento contable»; todavía no hay asiento en el libro *(lo cubre una prueba)*.
+- [ ] 5. «Confirmar ajuste»: aviso «Ajuste registrado: Fertilizante CON-04b queda con 10 kg en …» *(lo cubre el recorrido)*.
+- [ ] 6. Rotura de 2 kg: stock 10 → 8 kg, − $ 1.000,00 y asiento «Debe Diferencias de Inventario de Insumos / Haber Insumos en Stock · $ 1.000,00»; confirmar *(lo cubre una prueba)*.
+- [ ] 7. Recuento: contar 7 en el lote (asiento de $ 500,00, Debe Diferencias); y otro recuento con un lote nuevo de 2 kg (asiento de $ 1.000,00, Debe Insumos en Stock / Haber Diferencias, no Capital Inicial); confirmar los dos *(lo cubre una prueba)*.
+- [ ] 8. Corrección entre lotes de 1 kg: «Sin valor: el stock total no cambia.» y «Sin asiento: la corrección entre lotes no cambia el valor del stock.»; confirmar *(lo cubre una prueba)*.
+- [ ] 9. (Opcional) Precio de referencia $ 0,01 y rotura de 0,001 kg: «Sin asiento: el importe redondea a $ 0,00.», se confirma y no aparece asiento; volver a $ 500,00 *(lo cubre una prueba)*.
+- [ ] 10. Contador y Gerente, «Libro de gestión»: los asientos de los pasos 5, 6 y 7 (no el de la corrección ni el del importe cero), con origen «Movimiento de insumo», Debe y Haber correctos y números correlativos *(lo cubre el recorrido)*.
+- [ ] 11. La ficha de un asiento: fecha de hoy, ejercicio, «Origen: Movimiento de insumo» **sin enlace** (inventario no registra enlace de origen) y sin «Fecha del hecho…» *(lo cubre el recorrido)*.
+- [ ] 12. Filtrar el libro por la cuenta «Capital Inicial» (solo la carga inicial, Haber 5.000,00) y por «Diferencias de Inventario de Insumos».
+- [ ] 13. Capataz o Vendedor y un Agrónomo: sin «Contabilidad» en el menú y 403 en `/contabilidad/`; un Agrónomo ajeno recibe 403 en el ajuste *(lo cubre una prueba)*.
+- [ ] 14. (Solo sin ejercicio) el primer ajuste confirmado crea el ejercicio abierto desde hoy y su asiento es el N.º 1 *(lo cubre una prueba)*.
+- [ ] 15. Gerente, «Auditoría»: el registro `ajuste_stock` nombra el asiento entre sus afectados y aparecen aparte el alta del asiento y la de sus movimientos *(lo cubre una prueba)*.
+- [ ] 16. Navegador real. Ventana privada, Agrónomo, carga inicial de 1 kg: «Ver resumen» y «Confirmar ajuste» hasta el final; el asiento aparece en el libro del Contador. También con JavaScript desactivado.
+- [ ] 17. (Opcional) El bloque «Asiento contable» del resumen en un celular de 360 px.

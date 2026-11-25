@@ -1,0 +1,18 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+{{ nombre_organizacion }} registró la recepción {{ recepcion }} de la orden de compra {{ orden }}.
+
+Fecha de la recepción: {{ fecha|date:"d/m/Y" }}
+Invernadero de destino: {{ invernadero }}
+
+Lo recibido:
+{% for linea in lineas %}
+- {{ linea.insumo }}: {{ linea.recibida }} {{ linea.unidad }} recibidas{% for i in linea.inconvenientes %}
+  Con inconveniente ({{ i.tipo }}): {{ i.cantidad }} {{ linea.unidad }}{% if i.descripcion %} · {{ i.descripcion }}{% endif %}{% endfor %}
+{% endfor %}{% if pendientes %}
+Siguen pendientes:
+{% for p in pendientes %}
+- {{ p.insumo }} ({{ p.invernadero }}): faltan {{ p.falta }} {{ p.unidad }}
+{% endfor %}{% endif %}
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

@@ -151,7 +151,12 @@
         {% if resumen.faltante_a_cero %}<dt>Faltante sin lote</dt><dd>Queda en cero: faltaban {{ resumen.faltante_a_cero|cant:unidad }}.</dd>{% endif %}
         <dt>Stock</dt><dd><span class="mono">{{ resumen.stock_antes|num:unidad }} → <b>{{ resumen.stock_despues|num:unidad }}</b></span> {{ unidad|unidad_de }}</dd>
         <dt>Valor del ajuste</dt><dd>{% if resumen.con_valor %}<b class="mono">{% if resumen.valor > 0 %}+ {% endif %}{{ resumen.valor|pesos }}</b> <span class="muted">({% if resumen.diferencia > 0 %}+{% endif %}{{ resumen.diferencia|num:unidad }} {{ unidad|unidad_de }} × {{ situacion.precio|pesos }}, precio de referencia)</span>{% else %}Sin valor: el stock total no cambia.{% endif %}
-          <span class="sub2">Solo informativo: el ajuste no genera asiento contable.</span></dd>
+</dd>
+        <dt>Asiento contable</dt><dd>{% if resumen.asientos %}<ul class="inv-lista">
+          {% for a in resumen.asientos %}<li><b class="mono">{{ a.texto }}</b>: Debe {{ a.debe.1 }} / Haber {{ a.haber.1 }} · <b class="mono">{{ a.importe|pesos }}</b></li>{% endfor %}</ul>
+          <span class="sub2">Se registra al confirmar, con la fecha de hoy.</span>
+          {% elif not resumen.con_valor %}Sin asiento: la corrección entre lotes no cambia el valor del stock.
+          {% else %}Sin asiento: el importe redondea a {{ 0|pesos }}.{% endif %}</dd>
       </dl>
       {% if resumen.advertencia %}
       <div class="alert alert-warn" role="alert" style="margin-top:14px">{% icono "info" 16 %}<div><b>Con este ajuste el stock no cubre lo reservado.</b> El stock sin lotes vencidos quedaría en {{ resumen.advertencia.stock_vigente|cant:unidad }} y las órdenes a realizar tienen reservado {{ resumen.advertencia.reservado|cant:unidad }}.

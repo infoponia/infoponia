@@ -53,8 +53,10 @@ def ordenes(request):
             "filas": filas,
             "filtros": dict(entrada.items()),
             "hay_filtros": any(entrada.get(k) for k in ("estado", "proveedor", "invernadero", "desde", "hasta", "agronomo")),
-            "atajo": filtros["atajo"] if filtros["atajo"] == api.ATAJO_POR_APROBAR else "",
+            "atajo": filtros["atajo"] if filtros["atajo"] in api.ATAJOS else "",
             "por_aprobar": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_POR_APROBAR})),
+            "por_recibir": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_POR_RECIBIR})),
+            "con_reclamo": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_CON_RECLAMO})),
             "estados": OrdenCompra.Estado.choices,
             # El Contador ve todas las órdenes: sus filtros ofrecen todos los invernaderos y proveedores (solo nombres), que su alcance de ``en_alcance_de`` no le da.
             "invernaderos": (Invernadero.objects.all() if es_contador else Invernadero.objects.en_alcance_de(request.user)).order_by(Lower("nombre_invernadero"), "id"),

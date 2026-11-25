@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from compras import views, views_ordenes, views_pedidos
+from compras import views, views_ordenes, views_pedidos, views_recepciones
 
 app_name = "compras"
 
@@ -19,6 +19,10 @@ urlpatterns = [
     path("ordenes/", views_ordenes.ordenes, name="ordenes"),
     path("ordenes/<int:orden_id>/", views_ordenes.orden_ficha, name="orden_ficha"),
     path("ordenes/<int:orden_id>/resolver/", views_ordenes.orden_resolver, name="orden_resolver"),
+    # CMP-04: «Compras» → «Por recibir», registrar la recepción de una entrega y cerrar líneas con faltante.
+    path("por-recibir/", views_recepciones.por_recibir, name="por_recibir"),
+    path("ordenes/<int:orden_id>/recibir/", views_recepciones.recepcion_nueva, name="recepcion_nueva"),
+    path("ordenes/<int:orden_id>/cerrar-con-faltante/", views_recepciones.cierre_faltante, name="cierre_faltante"),
     path("proveedores/", views.proveedores, name="proveedores"),
     path("proveedores/nuevo/", views.proveedor_nuevo, name="proveedor_nuevo"),
     path("proveedores/<int:proveedor_id>/", views.proveedor_ficha, name="proveedor_ficha"),

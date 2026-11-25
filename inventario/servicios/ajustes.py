@@ -8,8 +8,13 @@
 # La HUELLA es lo que el cálculo usó: las cantidades disponibles de los lotes que usó (el recuento, todos, incluido el faltante; los demás motivos,
 # los lotes que nombran) y las RESERVAS activas del insumo, que cambian el stock libre y la cobertura. Un cambio en otro lote no la invalida.
 #
-# Sin asientos contables (D-45): se omiten las precondiciones c y d, la postcondición e y el asiento del paso 14; el VALOR del ajuste (diferencia de
-# stock × precio de referencia, en pesos con 2 decimales) sí se calcula y se muestra. Todo cambio de un lote genera exactamente un movimiento (regla 1
+# Asientos (CON-04b, D-92 puntos 2 a 7; reabre lo que D-45 había dejado fuera): cada movimiento de AJUSTE (positivo o negativo) origina su asiento,
+# en la misma transacción, DESPUÉS de crear los movimientos, mover el stock y reevaluar las alertas, y con todos los bloqueos de inventario ya
+# tomados (el ejercicio lo bloquea contabilidad al final, D-86 punto 2). Carga inicial: Debe Insumos en Stock / Haber Capital Inicial (H3/H4); los
+# demás positivos, Haber Diferencias de Inventario; los negativos, al revés. Importe = cantidad × referencia_precio, ROUND_HALF_UP; importe 0 → sin
+# asiento y sin error (H11). La fecha del asiento es la del ajuste (``hoy``, que se recibe: nada de leer la hora acá); como es siempre hoy, el
+# asiento nunca lleva la aclaración de H10 (D-102). La corrección entre lotes no asienta. Las precondiciones c y d se cumplen solas (D-92 punto 2).
+# El VALOR del ajuste (diferencia de stock × precio de referencia, en pesos con 2 decimales) se calcula y se muestra. Todo cambio de un lote genera exactamente un movimiento (regla 1
 # de 8.19), con la fecha y la hora actuales y sin documento de origen; la corrección entre lotes son dos movimientos (salida y entrada por corrección)
 # y la entrada se origina en su salida (R016). Se audita UN registro ``ajuste_stock`` (postcondiciones k, l y m) con los ``Decimal`` como texto (D-36).
 # Se puede ajustar la existencia ACTIVA de una semilla dada de baja con su variedad (regla 3 de PROD-BAJ-VAR): no se exige que el insumo del catálogo
@@ -24,6 +29,10 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import CuentaContable
+from contabilidad.servicios import asientos
 from core.models import RegistroAuditoria, referencia
 from inventario import alertas as tipos_de_alerta
 from inventario import extensiones
@@ -71,10 +80,12 @@ CambioDeLote = namedtuple("CambioDeLote", "lote registrada contada diferencia")
 LoteNuevo = namedtuple("LoteNuevo", "cantidad vencimiento")
 Advertencia = namedtuple("Advertencia", "ordenes stock_vigente reservado")
 Resumen = namedtuple(
-    "Resumen", "lotes lotes_nuevos faltante_a_cero stock_antes stock_despues diferencia valor con_valor advertencia huella"
+    "Resumen", "lotes lotes_nuevos faltante_a_cero stock_antes stock_despues diferencia valor con_valor advertencia huella asientos"
 )
+# Un asiento que se registrará (paso 12, CON-04b): ``texto`` dice de qué lote es; ``debe`` y ``haber`` son ``(codigo_cuenta, nombre_cuenta)``.
+AsientoPrevisto = namedtuple("AsientoPrevisto", "texto debe haber importe")
 Resultado = namedtuple(
-    "Resultado", "resumen movimientos lotes_nuevos stock_actual alertas_creadas alertas_resueltas inconsistente"
+    "Resultado", "resumen movimientos lotes_nuevos stock_actual alertas_creadas alertas_resueltas inconsistente asientos"
 )
 # Lo calculado de un ajuste, listo para escribir: ``cambios`` es ``[(lote, nueva_disponible)]``; ``nuevos`` es ``[(cantidad, vencimiento)]``;
 # ``faltante`` es el lote del faltante sin lote que el recuento deja en cero (o ``None``) y ``faltante_a_cero`` lo que faltaba (positivo).
@@ -120,7 +131,7 @@ def _exigir_habilitado(iin):
         )
 
 
-def _leer(actor, invernadero_id, insumo_id):
+def _leer(actor, invernadero_id, insumo_id, hoy=None):
     """Lectura sin bloquear (``calcular_ajuste`` y ``situacion_del_insumo``): precondiciones a y b, extensión 4a y el estado."""
     _exigir_agronomo(actor)
     invernadero = get_object_or_404(Invernadero, pk=invernadero_id)
@@ -132,12 +143,12 @@ def _leer(actor, invernadero_id, insumo_id):
         .first()
     )
     _exigir_habilitado(iin)
-    return _estado(iin, LoteInsumo.objects.filter(insumo_invernadero=iin).order_by("id"))
+    return _estado(iin, LoteInsumo.objects.filter(insumo_invernadero=iin).order_by("id"), hoy)
 
 
-def _estado(iin, lotes):
-    """El ``Estado`` de la existencia con sus lotes ya leídos (bloqueados o no)."""
-    return Estado(iin, iin.insumo, {l.pk: l for l in lotes}, extensiones.reservado_de([iin.pk])[iin.pk], stock.hoy())
+def _estado(iin, lotes, hoy=None):
+    """El ``Estado`` de la existencia con sus lotes ya leídos (bloqueados o no). ``hoy`` es la fecha del ajuste (por omisión, la de hoy del sistema)."""
+    return Estado(iin, iin.insumo, {l.pk: l for l in lotes}, extensiones.reservado_de([iin.pk])[iin.pk], hoy or stock.hoy())
 
 
 def _comunes(estado):
@@ -446,7 +457,37 @@ def _resumen(plan, estado, huella):
     if vigente < estado.reservado:
         ordenes = stock.ordenes_sin_cobertura(estado.iin.pk, estado.hoy, vigente=vigente)
         advertencia = Advertencia(ordenes, vigente, estado.reservado)
-    return Resumen(cambios, nuevos, plan.faltante_a_cero, antes, antes + diferencia, diferencia, valor, con_valor, advertencia, huella)
+    return Resumen(
+        cambios, nuevos, plan.faltante_a_cero, antes, antes + diferencia, diferencia, valor, con_valor, advertencia, huella,
+        _asientos_previstos(plan, estado),
+    )
+
+
+def _asientos_previstos(plan, estado):
+    """Los asientos que ``confirmar_ajuste`` va a registrar (paso 12, CON-04b): uno por movimiento de ajuste, en el mismo orden en que ``_escribir`` los crea
+    (lotes que cambian, lotes nuevos y faltante a cero), con las MISMAS líneas que el asiento real (``lineas_del_asiento``). Sin los de importe cero (H11) ni
+    los de la corrección entre lotes, que no asienta. Solo lectura: lee los nombres de las cuentas en una consulta."""
+    if plan.motivo == CORRECCION:
+        return []
+    movimientos = [(f"Lote {lote.pk}", nueva - lote.cantidad_disponible) for lote, nueva in plan.cambios]
+    movimientos += [("Lote nuevo", cantidad) for cantidad, _ in plan.nuevos]
+    if plan.faltante is not None:
+        movimientos.append(("Faltante sin lote", plan.faltante_a_cero))
+    nombres = None
+    previstos = []
+    for texto, diferencia in movimientos:
+        tipo = Mov.AJUSTE_POSITIVO if diferencia > 0 else Mov.AJUSTE_NEGATIVO
+        importe = importe_del_movimiento(abs(diferencia), estado.iin.referencia_precio)
+        lineas = lineas_del_asiento(plan.motivo, tipo, importe)
+        if not lineas:
+            continue
+        if nombres is None:
+            nombres = dict(CuentaContable.objects.values_list("codigo_cuenta", "nombre_cuenta"))
+        (debe, _, _), (haber, _, _) = sorted(lineas, key=lambda linea: linea[1] != DEBE)
+        previstos.append(
+            AsientoPrevisto(texto, (debe, nombres.get(debe, debe)), (haber, nombres.get(haber, haber)), importe)
+        )
+    return previstos
 
 
 # ---- lectura para la pantalla (pasos 4 a 6) ----
@@ -485,13 +526,13 @@ def situacion_del_insumo(actor, invernadero_id, insumo_id):
 # ---- calcular (no escribe) ----
 
 
-def calcular_ajuste(actor, invernadero_id, insumo_id, motivo, entrada):
+def calcular_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, *, hoy=None):
     """Pasos 7 a 12 de CMP-AJT-STK: valida ``entrada`` según ``motivo`` y devuelve el ``Resumen`` con la huella del estado que usó. NO escribe, no
     bloquea y no audita. Un dato inválido es un ``ValidationError`` con un error por campo (``docs/…/ajustes_comunes``): ``motivo``, ``cantidad``,
     ``vencimiento``, ``lote``, ``lotes``, ``origen``, ``destino``, ``sentido``, ``descripcion``, ``contado_<id>``, ``nuevo_<n>_cantidad`` y
-    ``nuevo_<n>_vencimiento``, o general."""
+    ``nuevo_<n>_vencimiento``, o general. ``hoy`` es la fecha del ajuste (por omisión, la de hoy del sistema)."""
     entrada = entrada or {}
-    estado = _leer(actor, invernadero_id, insumo_id)
+    estado = _leer(actor, invernadero_id, insumo_id, hoy)
     plan = _planificar(motivo, entrada, estado)
     huella, _ = _huella(motivo, entrada, estado)
     return _resumen(plan, estado, huella)
@@ -556,6 +597,54 @@ def _escribir(actor, plan, estado, resumen):
     return movimientos, nuevos, tocados
 
 
+# ---- el asiento de cada movimiento de ajuste (CON-04b) ----
+
+
+def importe_del_movimiento(cantidad, referencia_precio):
+    """Importe de un movimiento de ajuste: cantidad × precio de referencia del insumo en el invernadero, ROUND_HALF_UP a dos decimales (D-92 punto 5)."""
+    return (cantidad * referencia_precio).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+
+
+def lineas_del_asiento(motivo, tipo_movimiento, importe):
+    """Las líneas ``[(cuenta, "D" | "H", importe)]`` del asiento de un movimiento de ajuste (D-92 punto 7; postcondición e). ``[]`` si el importe es
+    cero (H11). Ajuste positivo: Debe Insumos en Stock / Haber Capital Inicial si el motivo es «carga inicial», si no Diferencias de Inventario;
+    ajuste negativo: al revés (Debe Diferencias de Inventario / Haber Insumos en Stock)."""
+    if importe <= 0:
+        return []
+    if tipo_movimiento == Mov.AJUSTE_POSITIVO:
+        contra = cuentas.CAPITAL_INICIAL if motivo == CARGA_INICIAL else cuentas.DIFERENCIAS_DE_INVENTARIO
+        return [(cuentas.INSUMOS_EN_STOCK, DEBE, importe), (contra, HABER, importe)]
+    return [(cuentas.DIFERENCIAS_DE_INVENTARIO, DEBE, importe), (cuentas.INSUMOS_EN_STOCK, HABER, importe)]
+
+
+def _descripcion_del_asiento(motivo, insumo, lote):
+    """Descripción corta para el libro: el motivo, el insumo y el lote (o el faltante sin lote)."""
+    etiqueta = dict(MOTIVOS)[motivo].lower()
+    donde = "faltante sin lote" if lote.es_faltante_sin_lote else f"lote {lote.pk}"
+    return f"Ajuste de stock ({etiqueta}): {insumo.nombre_insumo}, {donde}"
+
+
+def _asentar(actor, movimientos, plan, estado):
+    """Un asiento por cada movimiento de AJUSTE (R012; la corrección entre lotes no asienta, postcondición f). Se llama con todo bloqueado, después de
+    crear los movimientos; devuelve los asientos creados (los de importe 0 no tienen, H11)."""
+    creados = []
+    for movimiento in movimientos:
+        if movimiento.tipo_movimiento not in (Mov.AJUSTE_POSITIVO, Mov.AJUSTE_NEGATIVO):
+            continue
+        importe = importe_del_movimiento(movimiento.cantidad, estado.iin.referencia_precio)
+        asiento = asientos.registrar_asiento_automatico(
+            actor,
+            movimiento,
+            estado.hoy,  # D-92 punto 4: la fecha del ajuste
+            lineas_del_asiento(plan.motivo, movimiento.tipo_movimiento, importe),
+            descripcion=_descripcion_del_asiento(plan.motivo, estado.insumo, movimiento.lote_insumo),
+            hoy=estado.hoy,
+        )
+        if asiento is not None:
+            creados.append(asiento)
+    return creados
+
+
 def _inconsistente_activa(iin):
     return Alerta.objects.filter(
         invernadero_id=iin.invernadero_id,
@@ -565,13 +654,14 @@ def _inconsistente_activa(iin):
     ).exists()
 
 
-def confirmar_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, huella):
+def confirmar_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, huella, *, hoy=None):
     """Pasos 13 a 15 de CMP-AJT-STK: bloquea, recalcula, compara la ``huella`` y escribe todo en una sola transacción. Devuelve el ``Resultado``.
 
     - Orden de bloqueos: invernadero (contrato de D-40) → existencia → lotes (todos, en orden de id).
     - Extensión 14a: si la huella ya no coincide (un lote que usó, el faltante o las reservas cambiaron), ``AjusteDesactualizado`` sin cambiar nada.
       Se compara ANTES de validar: un dato que dejó de ser válido porque el estado cambió es un desactualizado, no un error de la persona.
-    - Postcondiciones a a d y g; reevalúa las alertas (h, i, j, 12b) y audita un registro ``ajuste_stock`` (k, l y m).
+    - Postcondiciones a a e y g; reevalúa las alertas (h, i, j, 12b), crea los asientos (e, CON-04b: lo último que se bloquea es el ejercicio) y audita
+      un registro ``ajuste_stock`` (k, l y m) que nombra los asientos entre sus ``afectados``. ``hoy`` es la fecha del ajuste y del asiento.
     """
     entrada = entrada or {}
     _exigir_agronomo(actor)
@@ -587,7 +677,7 @@ def confirmar_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, huella):
         )
         _exigir_habilitado(iin)
         lotes = list(LoteInsumo.objects.select_for_update(no_key=True).filter(insumo_invernadero=iin).order_by("id"))
-        estado = _estado(iin, lotes)
+        estado = _estado(iin, lotes, hoy)
         actual, vigente = _huella(motivo, entrada, estado)
         if actual != huella:
             raise AjusteDesactualizado(vigente)
@@ -597,6 +687,7 @@ def confirmar_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, huella):
         movimientos, nuevos, tocados = _escribir(actor, plan, estado, resumen)
         reevaluacion = alertas_de_stock.reevaluar_alertas_del_insumo(iin.pk, estado.hoy)
         despues_inconsistente = _inconsistente_activa(iin)
+        creados = _asentar(actor, movimientos, plan, estado)  # al final de los bloqueos de inventario: el ejercicio va último (D-86 punto 2)
         unidad = estado.insumo.unidad_medida_insumo
         detalle = {}
         if resumen.diferencia != 0:  # D-36: antes igual a después se rechaza (una corrección no cambia el stock)
@@ -619,7 +710,7 @@ def confirmar_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, huella):
         RegistroAuditoria.objects.registrar(
             usuario=actor,
             accion=RegistroAuditoria.Accion.AJUSTE_STOCK,
-            afectados=[iin, invernadero],
+            afectados=[iin, invernadero, *creados],
             detalle=detalle,
         )
         stock_actual = stock.stock_actual_de([iin.pk])[iin.pk]
@@ -628,5 +719,5 @@ def confirmar_ajuste(actor, invernadero_id, insumo_id, motivo, entrada, huella):
     else:
         inconsistente = "resuelta" if antes_inconsistente else None
     return Resultado(
-        resumen, movimientos, nuevos, stock_actual, reevaluacion.creadas, reevaluacion.resueltas, inconsistente
+        resumen, movimientos, nuevos, stock_actual, reevaluacion.creadas, reevaluacion.resueltas, inconsistente, creados
     )

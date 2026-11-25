@@ -2,7 +2,7 @@
 (``show:none``). Solo dos cosas lo piden: cambiar un selector (invernadero, insumo, motivo, sentido), que redibuja los campos que dependen de él sin validar ni calcular, y los botones
 «Ver resumen» y «Agregar lote nuevo», que mandan su «accion». No hay refresco al escribir: validar y calcular es solo con «Ver resumen» y «Confirmar ajuste» (este envía el formulario completo).
 Sin JavaScript, cada botón es un POST común con su «accion»: «actualizar» (pasos 1 a 3), «agregar_lote», «calcular» y «confirmar» (paso 14). El servicio manda en las reglas: acá solo
-se muestran sus errores por campo, el resumen del paso 12, la advertencia 12b y el aviso 14a. El valor del ajuste se muestra sin asiento (D-45).{% endcomment %}
+se muestran sus errores por campo, el resumen del paso 12, la advertencia 12b y el aviso 14a. El valor del ajuste y el asiento que se registrará (CON-04b) se muestran en el resumen.{% endcomment %}
 <div id="ajuste-vivo" hx-target="#ajuste-vivo" hx-swap="innerHTML show:none">
 {% include "inventario/ajuste/_formulario.html" %}
 </div>
