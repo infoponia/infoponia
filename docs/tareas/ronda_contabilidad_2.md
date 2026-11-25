@@ -9,7 +9,7 @@ de su tarea al cerrar (M3).
 | ID | Tarea | App | Casos de uso | Depende de | Tamaño |
 |---|---|---|---|---|---|
 | CON-04b | Asientos de los ajustes de stock (carga inicial contra Capital Inicial) (**hecha**, 24/11/2026) | inventario | CMP-AJT-STK | CON-02 | chica |
-| PRD-05 | Registrar Lote Existente | produccion | PROD-REG-LTE | CON-02, PRD-03 (hecha) | mediana |
+| PRD-05 | Registrar Lote Existente (**hecha**, 25/11/2026) | produccion | PROD-REG-LTE | CON-02, PRD-03 (hecha) | mediana |
 | CON-04a | Asientos de producción | produccion | PROD-CNC-SMB, PROD-CNC-TRN, PROD-REG-MRM, PROD-REG-APL, PROD-PNR-FDS | CON-02 (PRD-04, hecha) | mediana |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | PROD-CNC-CSC, PROD-REG-MRM (cámara), PROD-VNC-CAM, COM-CNC-ENT | CON-02, COM-04a, COM-04b, COM-06a | mediana (o vacía, D-92 punto 9) |
 | CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | COM-REG-CBR, COM-ANL-CBR, COM-CNL-CVT, COM-EVL-DSC, COM-RSV-QJA, COM-ANL-SRV, COM-RSV-SUM, COM-ATN-ENR | CON-02, USR-11, COM-06b a COM-08b | mediana (o vacía) |

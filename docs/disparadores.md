@@ -512,6 +512,13 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
 4. ~~**`registro_merma`**~~ Hecho el 23/11/2026 en PRD-03 (`registrar_merma` la usa como acción propia). (acción de auditoría ya creada por PRD-02) la usa PRD-03 como acción propia; en una transición la merma va dentro de `concrecion_transicion`.
 5. ~~**PRD-04 y `cancelar_orden_incluida`:**~~ Hecho el 23/11/2026 en PRD-04: `poner_fuera_de_servicio` toma cuentas, invernadero, variedades, sectores, insumos, lotes y órdenes en ese orden.~~ ahora, con una transición, toma el lote (nivel 4 de `bloqueos.md`) antes de la orden: quien la llama ya tiene que haber bloqueado cuentas, invernadero, variedad, sectores y lotes en ese orden. `notificar_a` trae al Capataz de la hija `TransicionEtapa`.~~
 
+## Cuando exista PRD-05 (registrar lote existente) — nace con PRD-05 (25/11/2026)
+
+1. **`Siembra.capataz` puede ser nulo** (D-92 punto 12; solo en una siembra de carga inicial, concretada). Toda tarea que lea `siembra.capataz` o `capataz_id` tiene que contemplar `None`: hoy lo hacen `ordenes._fila`, `ordenes.detalle_de_orden` y `detalle.html` («Sin Capataz (carga inicial)»); `ordenes_del_capataz`, el traspaso y la cancelación solo ven órdenes «a realizar», que siempre tienen Capataz. Las estadísticas de producción (EST-01) y cualquier pantalla nueva con el Capataz de una siembra deben comprobarlo.
+2. **CON-04a no asienta la carga inicial.** `siembras._registrar_concrecion` es de las siembras normales; el asiento de un lote existente lo crea `lotes_existentes.registrar_lote_existente` (Debe Productos en Proceso / Haber Capital Inicial, fecha actual). CON-04a no lo reabre ni lo duplica.
+3. ~~**`carga_inicial` en el filtro de la bitácora.**~~ Hecho el 25/11/2026 en PRD-05 (`bitacora.TIPOS_DE_FILTRO`).
+4. **Lo que lee «la entrada a la etapa»** (`lotes.entradas_a_la_etapa` y `fecha_de_entrada_a_maduracion`) ahora también mira la entrada de bitácora `carga_inicial`: una tarea que sume otra forma de entrar a una etapa (una reubicación que cambie la etapa, por ejemplo) tiene que respetar el orden «transición concretada → carga inicial → fecha de siembra».
+
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 
 1. ~~**Estado «fuera de servicio».**~~ Hecho el 23/11/2026 en PRD-04. ~~ Ningún caso de uso de MAE-03 lo produce; `maestros` ya lo muestra y ya ofrece «Volver a activar» y «Dar de baja». PRD-04 agrega `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio` (lote 5 de `docs/api/extensiones_de_maestros.md`) y registra `registrar_efecto_de_vuelta_a_servicio` y `registrar_efecto_de_baja_de_sector`. La clave `fuera_de_servicio` ya está en `VALORES_VISIBLES["estado"]`.~~

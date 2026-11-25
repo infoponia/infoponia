@@ -15,7 +15,8 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
       <div><dt>Etapa destino</dt><dd>{{ hija.etapa_destino.tipo_etapa.nombre_etapa }}</dd></div>
       {% if hija.cant_transferido %}<div><dt>Plantas trasladadas</dt><dd>{{ hija.cant_transferido }}</dd></div>{% endif %}{% endif %}
       {% if hija %}{% if orden.tipo_orden == "siembra" %}<div><dt>Plantines planificados</dt><dd>{{ hija.cant_plantines_siembra }}</dd></div>{% endif %}
-      <div><dt>Capataz</dt><dd>{{ hija.capataz.get_full_name|default:hija.capataz.email }}</dd></div>
+      {% if hija.tipo_siembra == "carga_inicial" %}<div><dt>Tipo de siembra</dt><dd>Carga inicial (lote existente)</dd></div>{% endif %}
+      <div><dt>Capataz</dt><dd>{% if hija.capataz %}{{ hija.capataz.get_full_name|default:hija.capataz.email }}{% else %}Sin Capataz (carga inicial){% endif %}</dd></div>
       <div><dt>Planificó</dt><dd>{% if hija.agronomo %}{{ hija.agronomo.get_full_name|default:hija.agronomo.email }}{% else %}InfoPonia{% endif %}</dd></div>{% endif %}
       <div><dt>Prioridad</dt><dd>{{ orden.prioridad_orden|default:"—"|capfirst }}</dd></div>
       {% if orden.tipo_orden == "cosecha" %}<div><dt>Origen</dt><dd>{{ origen_de_cosecha|default:"—" }}</dd></div>

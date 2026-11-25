@@ -192,14 +192,15 @@ elige el ejercicio por la fecha (la actual) y se recupera solo.
   variedad, etapa, `fecha_siembra`, `fecha_ingreso_etapa`, `cantidad`, `costo_estimado`, `distribucion = {sector_id: plantas}`.
 - Validaciones: 5a (fechas: siembra ≤ hoy; siembra ≤ ingreso a la etapa ≤ hoy), 5b (entero > 0), 5c (`Decimal` ≥ 0 con dos decimales como
   mucho), 7a, 7b, 7d. Códigos de `ErrorDeProduccion`: `fecha_invalida`, `cantidad_invalida`, `costo_invalido`, `supera_agujeros`,
-  `distribucion_incompleta`, `sin_sectores`, `invernadero_con_siembras` (2a y 10a).
+  `distribucion_incompleta`, `sin_sectores`, `invernadero_con_siembras` (2a y 10a), más `etapa_invalida` (la etapa no es del ciclo de la variedad; campo `etapa`). `supera_agujeros` trae
+  `datos={"libres": {sector_id: libres}}` y `distribucion` acepta `{sector_id: plantas}` o pares `((sector_id, plantas), ...)`.
 - Orden de bloqueo (docs/patrones/bloqueos.md, «`produccion`»): cuentas → invernadero (`bloquear_invernadero_activo`) → variedad → sectores (en
   orden de id) → filas nuevas → ejercicio (lo toma el servicio de asientos, al final). Releer después de bloquear: el invernadero sigue sin
   siembras normales concretadas, los sectores siguen activos y con lugar (10a). Concretar una siembra normal toma el mismo invernadero primero,
   así que las dos no se cruzan.
 - Escritura, en una transacción: la `Siembra` (`tipo_orden = siembra`, `estado_orden = concretada`, `tipo_siembra = carga_inicial`,
-  `capataz = None`, `agronomo = actor`, `numero` de la secuencia, `fecha_creacion_orden = fecha_resolucion_orden = hoy`,
-  `fecha_programada_orden = fecha_siembra = la indicada`, `cant_plantines_siembra = cantidad`); el `Lote` (`etapa` = la elegida,
+  `capataz = None`, `agronomo = actor`, `numero` de la secuencia, `fecha_creacion_orden = fecha_programada_orden = fecha_resolucion_orden = hoy` (D-103: el CHECK
+  `orden_trabajo_programada_desde_creacion` no admite una programada anterior a la creación), `fecha_siembra` = la indicada, `cant_plantines_siembra = cantidad`); el `Lote` (`etapa` = la elegida,
   `cantidad_inicial = cantidad_actual = cantidad`, `costo_acumulado = costo_estimado`); una `OcupacionSector` por sector
   (`cant_agujeros_planificados = cant_agujeros_ocupados` = sus plantas, `lote` = el nuevo); una `Bitacora` `carga_inicial` (lote, etapa,
   `fecha_bitacora` = ingreso a la etapa, hora actual, `responsable = actor`, sectores); el asiento si el costo es mayor que 0 (Debe

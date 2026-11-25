@@ -2,6 +2,8 @@
 # sector. Solo lee: no escribe ni bloquea. Los datos de más de un lote se piden con listas de ids y una consulta por tabla.
 # Fuente: docs/api/produccion.md (sección 2) y docs/modelo/produccion.md («Lo que se calcula de un lote» y de las ocupaciones).
 #
+# PRD-05 (L3): sin transición concretada hacia la etapa actual, la entrada es la de la bitácora `carga_inicial` del lote.
+#
 # PRD-02 completa las fechas de las etapas que NO son la primera: salen de la transición concretada (`TransicionEtapa`, reglas 2 y 5
 # de 8.21 y 8.20). Un lote sin esa transición (dato inconsistente) da `None`.
 
@@ -12,7 +14,7 @@ from django.db.models import Q
 from django.db.models.functions import Coalesce
 
 from inventario.servicios import ciclos
-from produccion.models import Lote, OcupacionSector, OrdenTrabajo, TransicionEtapa
+from produccion.models import Bitacora, Lote, OcupacionSector, OrdenTrabajo, TransicionEtapa
 from produccion.servicios import costos
 
 # Una fila de «Lotes activos» (ficha del invernadero y bandeja).
@@ -28,14 +30,30 @@ def _es_primera_etapa(etapa_id, etapas_del_ciclo):
     return bool(etapas_del_ciclo) and etapas_del_ciclo[0].etapa_id == etapa_id
 
 
+def _cargas_iniciales(lote_ids):
+    """`{lote_id: (etapa_id, fecha de ingreso)}` de la entrada de bitácora `carga_inicial` de cada lote (PRD-05, L3; D-92 punto 12). Una
+    consulta. Un lote cargado tiene una sola; si hubiera más, vale la última."""
+    filas = (
+        Bitacora.objects.filter(lote_id__in=list(lote_ids), tipo_evento=Bitacora.TipoEvento.CARGA_INICIAL)
+        .order_by("fecha_bitacora", "pk")
+        .values_list("lote_id", "etapa_id", "fecha_bitacora")
+    )
+    return {lote_id: (etapa_id, fecha) for lote_id, etapa_id, fecha in filas}
+
+
 def entradas_a_la_etapa(lotes, etapas):
     """`{lote_id: fecha de entrada a su etapa actual}` (regla 5 de 8.21). `lotes` vienen con `siembra` cargada y `etapas` es
-    `ciclos.etapas_de` de sus variedades. En la primera etapa del ciclo: `siembra.fecha_siembra`; en las demás, la `fecha_transicion` de
-    la transición concretada del lote cuya etapa destino es la etapa actual (la más reciente si hubiera más de una). Una consulta."""
+    `ciclos.etapas_de` de sus variedades. La `fecha_transicion` de la transición concretada del lote cuya etapa destino es la etapa actual
+    (la más reciente si hubiera más de una); si no la hay, la fecha de ingreso de su entrada de bitácora `carga_inicial` en esa etapa (PRD-05,
+    L3: un lote cargado en cualquier etapa, también la primera); si tampoco, en la primera etapa del ciclo, `siembra.fecha_siembra`. Dos
+    consultas fijas (cargas iniciales y transiciones), no por lote."""
     lotes = list(lotes)
+    cargas = _cargas_iniciales([l.pk for l in lotes]) if lotes else {}
     entradas, pendientes = {}, []
     for lote in lotes:
-        if _es_primera_etapa(lote.etapa_id, etapas[lote.siembra.variedad_id]):
+        carga = cargas.get(lote.pk)
+        carga_en_la_etapa_actual = carga is not None and carga[0] == lote.etapa_id
+        if _es_primera_etapa(lote.etapa_id, etapas[lote.siembra.variedad_id]) and not carga_en_la_etapa_actual:
             entradas[lote.pk] = lote.siembra.fecha_siembra
         else:
             pendientes.append(lote)
@@ -49,7 +67,9 @@ def entradas_a_la_etapa(lotes, etapas):
         for lote_id, etapa_id, fecha in filas:
             concretadas[(lote_id, etapa_id)] = fecha  # la última pisa a las anteriores
         for lote in pendientes:
-            entradas[lote.pk] = concretadas.get((lote.pk, lote.etapa_id))
+            carga = cargas.get(lote.pk)
+            de_la_carga = carga[1] if carga is not None and carga[0] == lote.etapa_id else None
+            entradas[lote.pk] = concretadas.get((lote.pk, lote.etapa_id), de_la_carga)
     return entradas
 
 
@@ -72,11 +92,12 @@ def _etapa_de_maduracion(variedad_id):
 
 
 def fecha_de_entrada_a_maduracion(lote):
-    """Regla 2 de 8.20: la `fecha_transicion` de la transición concretada con destino Maduración; `None` si no entró."""
+    """Regla 2 de 8.20: la `fecha_transicion` de la transición concretada con destino Maduración; si no la hay, la fecha de ingreso de la
+    entrada `carga_inicial` del lote en Maduración (PRD-05, L3); `None` si no entró."""
     maduracion = _etapa_de_maduracion(lote.siembra.variedad_id)
     if maduracion is None:
         return None
-    return (
+    transicion = (
         TransicionEtapa.objects.filter(
             lote=lote, etapa_destino_id=maduracion.etapa_id, estado_orden=OrdenTrabajo.Estado.CONCRETADA
         )
@@ -84,6 +105,10 @@ def fecha_de_entrada_a_maduracion(lote):
         .values_list("fecha_transicion", flat=True)
         .first()
     )
+    if transicion is not None:
+        return transicion
+    etapa_cargada, fecha = _cargas_iniciales([lote.pk]).get(lote.pk, (None, None))
+    return fecha if etapa_cargada == maduracion.etapa_id else None
 
 
 def fecha_maxima_de_cosecha(lote):
