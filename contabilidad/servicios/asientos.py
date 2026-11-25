@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
+from django.http import Http404
 from django.utils import timezone
 
 from contabilidad.constantes import DEBE, HABER
@@ -13,7 +14,8 @@ from contabilidad.errores import ErrorContable, ErroresContables
 from contabilidad.models import AsientoContable, CuentaContable, EjercicioContable, MovimientoContable
 from contabilidad.servicios import ejercicios, responsables
 from contabilidad.templatetags.formato_contable import pesos
-from core.models import RegistroAuditoria, Usuario, referencia, rol_de
+from core import notificaciones
+from core.models import Gerente, RegistroAuditoria, Usuario, referencia, rol_de
 
 Accion = RegistroAuditoria.Accion
 CENTAVOS = Decimal("0.01")
@@ -144,12 +146,12 @@ def registrar_asiento_automatico(actor, origen, fecha, movimientos, *, descripci
     return asiento
 
 
-def _crear_y_auditar(actor, ejercicio, fecha, descripcion, lineas, cuentas, *, origen_id=None, anula_id=None, afectados=(), cambios_extra=None):
+def _crear_y_auditar(actor, ejercicio, fecha, descripcion, lineas, cuentas, *, origen_id=None, anula_id=None, afectados=(), cambios_extra=None, datos=None):
     """Con el ejercicio YA BLOQUEADO: toma el número siguiente, crea el asiento y sus movimientos y audita el asiento y cada movimiento (D-84 puntos 4 y 9).
 
     Lo comparten el asiento automático, el manual y el contraasiento. ``lineas``: `[(codigo, "D"|"H", Decimal)]` ya validadas y sin importes cero;
     ``cuentas``: `{codigo: CuentaContable}`. ``afectados`` suma instancias a las del registro del asiento; ``cambios_extra``, entradas a su `cambios`
-    (el origen, o el asiento que anula). Un `IntegrityError` al crear el asiento lo propaga quien llama."""
+    (el origen, o el asiento que anula); ``datos``, el contexto sin antes y después (D-36). Un `IntegrityError` al crear el asiento lo propaga quien llama."""
     numero = ejercicio.ultimo_numero_asiento + 1  # D-84 punto 4: leído DESPUÉS de bloquear
     ejercicio.ultimo_numero_asiento = numero
     ejercicio.save(update_fields=["ultimo_numero_asiento"])
@@ -176,7 +178,8 @@ def _crear_y_auditar(actor, ejercicio, fecha, descripcion, lineas, cuentas, *, o
         "ejercicio": {"antes": None, "despues": referencia(ejercicio)},
         **(cambios_extra or {}),
     }
-    RegistroAuditoria.objects.registrar(actor, Accion.ALTA_ASIENTO_CONTABLE, [asiento, *afectados], {"cambios": cambios})
+    detalle = {"cambios": cambios, **({"datos": datos} if datos else {})}
+    RegistroAuditoria.objects.registrar(actor, Accion.ALTA_ASIENTO_CONTABLE, [asiento, *afectados], detalle)
     for movimiento in creados:
         RegistroAuditoria.objects.registrar(
             actor,
@@ -328,3 +331,144 @@ def resumir_asiento_manual(actor, fecha, descripcion, movimientos, *, hoy=None):
     return ResumenDeAsiento(
         destino.numero, destino.inicio, destino.cierre, destino.estado, destino.por_abrir, filas, debe, haber, debe - haber, omitidas
     )
+
+
+# --- CON-CTR-ASI: contraasiento (CON-03b) ------------------------------------------------------------------------------------------------------------
+
+# El resumen previo del contraasiento (paso 4 de CON-CTR-ASI): el asiento a anular, el ejercicio destino (como en `ResumenDeAsiento`), las líneas ya
+# invertidas, el total y si el asiento es automático (para advertir que el contraasiento no anula la operación de origen, C5).
+ResumenDeContraasiento = namedtuple(
+    "ResumenDeContraasiento",
+    "asiento ejercicio_numero ejercicio_inicio ejercicio_cierre ejercicio_estado ejercicio_por_abrir lineas total es_automatico",
+)
+
+
+def _bloquear_asiento(asiento_id):
+    """Bloquea el asiento a anular con `FOR NO KEY UPDATE` y devuelve la fila releída. Va ANTES que `_bloquear_ejercicio` (docs/patrones/asientos.md, sección 2)."""
+    return AsientoContable.objects.select_for_update(no_key=True).get(pk=asiento_id)
+
+
+def _validar_motivo(motivo):
+    """El motivo es la descripción del contraasiento (extensión 3a, regla «Motivo»): obligatorio y de hasta 300 caracteres. Devuelve el texto recortado."""
+    motivo = (motivo or "").strip()
+    if not motivo:
+        raise ErrorContable("descripcion_obligatoria", "El motivo es obligatorio: contá por qué se anula el asiento.", campo="descripcion")
+    if len(motivo) > LARGO_MAXIMO_DE_DESCRIPCION:
+        mensaje = f"El motivo tiene {len(motivo)} caracteres y el máximo es {LARGO_MAXIMO_DE_DESCRIPCION}."
+        raise ErrorContable("descripcion_muy_larga", mensaje, campo="descripcion")
+    return motivo
+
+
+def _leer_asiento(asiento_id):
+    """El asiento sin bloquear, con su ejercicio y su origen; `Http404` si no existe."""
+    try:
+        return AsientoContable.objects.select_related("ejercicio", "origen").get(pk=asiento_id)
+    except AsientoContable.DoesNotExist:
+        raise Http404("No existe ese asiento.") from None
+
+
+def _verificar_anulable(asiento):
+    """Extensiones 1b y 6a (R161; regla 17 de 8.20): un contraasiento no se anula y un asiento se anula una sola vez. Con el asiento ya bloqueado esta
+    es la verificación que cierra la carrera entre dos usuarios; antes de bloquear sirve para rechazar sin esperar."""
+    if asiento.anula_id is not None:
+        raise ErrorContable("asiento_no_anulable", "Un contraasiento no se puede anular: un asiento se anula una sola vez y su contraasiento queda como está.")
+    existente = AsientoContable.objects.select_related("ejercicio").filter(anula_id=asiento.pk).first()
+    if existente is not None:
+        donde = f" ({existente.ejercicio})" if existente.ejercicio_id != asiento.ejercicio_id else ""
+        raise ErrorContable(
+            "asiento_no_anulable",
+            f"Ese asiento ya fue anulado: su contraasiento es el N.º {existente.numero_asiento}{donde}.",
+            datos={"contraasiento_ejercicio_id": existente.ejercicio_id, "contraasiento_numero": existente.numero_asiento},
+        )
+
+
+def _movimientos_del_asiento(asiento):
+    """Los movimientos del asiento en orden de alta, con su cuenta."""
+    return list(asiento.movimientos.select_related("cuenta").order_by("id"))
+
+
+def _invertir(tipo):
+    return HABER if tipo == DEBE else DEBE
+
+
+def contraasentar(actor, asiento_id, fecha, descripcion, *, hoy=None):
+    """CON-CTR-ASI: anula un asiento con un contraasiento y lo devuelve (docs/api/asientos.md; D-84 puntos 1, 2, 4, 5 y 9; D-42).
+
+    ``descripcion`` es el motivo. Orden: (1) permisos (`PermissionDenied`); (2) motivo; (3) lee el asiento sin bloquear (`Http404`) y rechaza uno que no se
+    puede anular; (4) en una transacción, autorrecuperación del ejercicio (H9) antes de validar la fecha (C2, C3) y de nuevo el permiso (D-30); (5) **bloquea
+    el asiento a anular** y verifica de nuevo que se pueda anular (extensiones 1b y 6a); (6) **bloquea el ejercicio destino, lo último**, y revalida su estado
+    y su rango (6b); (7) crea el contraasiento con los movimientos invertidos, vinculado al anulado, y audita; (8) avisa al Gerente dentro de la
+    transacción (D-42), salvo que él sea quien registra; sin Gerente activo no falla y la auditoría lo deja anotado (7a)."""
+    hoy = hoy or timezone.localdate()
+    _exigir_responsable(actor)
+    motivo = _validar_motivo(descripcion)
+    _verificar_anulable(_leer_asiento(asiento_id))
+    gerente = Gerente.objects.filter(is_active=True).first()
+    with transaction.atomic():
+        ejercicios.abrir_ejercicio_si_corresponde(hoy)
+        destino = ejercicios.destino_del_asiento(fecha, automatico=False, hoy=hoy)
+        _exigir_responsable(actor)
+        asiento = _bloquear_asiento(asiento_id)
+        _verificar_anulable(asiento)
+        ejercicio = _bloquear_ejercicio(destino.ejercicio.pk)
+        _exigir_que_la_fecha_siga_cayendo(ejercicio, fecha)
+        movimientos = _movimientos_del_asiento(asiento)
+        lineas = [(m.cuenta.codigo_cuenta, _invertir(m.tipo_movimiento), m.importe_movimiento) for m in movimientos]
+        cuentas = {m.cuenta.codigo_cuenta: m.cuenta for m in movimientos}
+        constancia = {"aviso_al_gerente": "no enviado: sin Gerente activo"} if gerente is None else None
+        contraasiento = _crear_y_auditar(
+            actor,
+            ejercicio,
+            fecha,
+            motivo,
+            lineas,
+            cuentas,
+            anula_id=asiento.pk,
+            afectados=[asiento],
+            cambios_extra={"anula": {"antes": None, "despues": referencia(asiento)}},
+            datos=constancia,
+        )
+        notificaciones.notificar_a_varios(
+            [gerente],
+            f"Contraasiento N.º {contraasiento.numero_asiento} del asiento N.º {asiento.numero_asiento}",
+            f"Lo registró {actor.get_full_name() or actor.email} el {fecha:%d/%m/%Y}. Motivo: {motivo}",
+            excluir=actor,
+        )
+    return contraasiento
+
+
+def resumir_contraasiento(actor, asiento_id, fecha, descripcion, *, hoy=None):
+    """Paso 4 de CON-CTR-ASI: las mismas validaciones que `contraasentar` y el resumen, SIN escribir, auditar, avisar ni bloquear. Con el abierto vencido
+    calcula en memoria el ejercicio que se abriría (`ejercicios.destino_previsto`)."""
+    hoy = hoy or timezone.localdate()
+    _exigir_responsable(actor)
+    _validar_motivo(descripcion)
+    asiento = _leer_asiento(asiento_id)
+    _verificar_anulable(asiento)
+    destino = ejercicios.destino_previsto(fecha, hoy=hoy)
+    lineas = [
+        LineaDeResumen(
+            indice, m.cuenta.codigo_cuenta, m.cuenta.nombre_cuenta, m.cuenta.tipo_cuenta, m.cuenta.get_tipo_cuenta_display(), _invertir(m.tipo_movimiento), m.importe_movimiento
+        )
+        for indice, m in enumerate(_movimientos_del_asiento(asiento))
+    ]
+    total = sum((l.importe for l in lineas if l.tipo_movimiento == DEBE), Decimal("0.00"))
+    return ResumenDeContraasiento(
+        asiento, destino.numero, destino.inicio, destino.cierre, destino.estado, destino.por_abrir, lineas, total, asiento.origen_id is not None
+    )
+
+
+def datos_para_correccion(actor, asiento_id):
+    """La precarga del asiento correcto (C4; CON-REG-ASI extensión 1b): `{"descripcion", "movimientos", "numero_anulado"}` con las líneas del asiento
+    ANULADO (no las invertidas) y «corrección del asiento N.º X». Si se pasa el contraasiento, usa el asiento que anuló. No escribe: el asiento correcto es
+    un manual común que se registra con `registrar_asiento_manual`, sin vínculo con el contraasiento."""
+    _exigir_responsable(actor)
+    asiento = _leer_asiento(asiento_id)
+    if asiento.anula_id is not None:
+        asiento = _leer_asiento(asiento.anula_id)
+    movimientos = [(m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in _movimientos_del_asiento(asiento)]
+    return {
+        "descripcion": f"corrección del asiento N.º {asiento.numero_asiento}",
+        "movimientos": movimientos,
+        "numero_anulado": asiento.numero_asiento,
+    }

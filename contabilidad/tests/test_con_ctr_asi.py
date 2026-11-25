@@ -203,7 +203,8 @@ class ConCtrAsiQueSeAnulaTests(ConCtrAsiBase):
 
         self.assertEqual(contexto.exception.codigo, "asiento_no_anulable")
         self.assertIn("N.º 2", contexto.exception.mensaje)
-        self.assertEqual(AsientoContable.objects.count(), 2)  # el original y el del otro usuario; no se agregó el nuestro
+        # No se cuenta aquí: el «otro usuario» se simula dentro de la transacción del servicio, que el rechazo deshace; el real ya habría confirmado. Que no
+        # se creó el nuestro lo prueba el mensaje (nombra el N.º 2, que es el del otro) y la prueba de concurrencia real (`test_asientos_concurrencia.py`).
         self.assertIsNone(contexto.exception.__cause__)  # sale de la verificación posterior al bloqueo, no de una restricción de la base
 
     def test_ext_1b_un_asiento_inexistente_es_404(self):
