@@ -846,6 +846,10 @@ class RegistroAuditoria(models.Model):
         # COM-06b (D-68): la respuesta del cliente al enlace de confirmación (sin cuenta, `rol_externo`) y la atención de la entrega no reconocida (Gerente).
         RESPUESTA_CLIENTE_ENTREGA = "respuesta_cliente_entrega", "Respuesta del cliente a una entrega"  # COM-CNF-ENT
         ATENCION_ENTREGA_NO_RECONOCIDA = "atencion_entrega_no_reconocida", "Atención de entrega no reconocida"  # COM-ATN-ENR
+        # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
+        CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
+        EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
+        CIERRE_RECLAMO = "cierre_reclamo", "Cierre de reclamo a proveedor"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1261,6 +1265,9 @@ class RegistroAuditoria(models.Model):
         "alerta": "Alerta",
         "resultado_averiguacion": "Resultado de la averiguación",
         "descripcion_averiguacion": "Lo averiguado",
+        # CON-03b: el contraasiento guarda el vínculo con el asiento que anula (``anula`` en ``cambios``) y, sin Gerente activo, la constancia del aviso.
+        "anula": "Asiento que anula",
+        "aviso_al_gerente": "Aviso al Gerente",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1658,6 +1665,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
         RegistroAuditoria.Accion.RESPUESTA_CLIENTE_ENTREGA,  # COM-06b
         RegistroAuditoria.Accion.ATENCION_ENTREGA_NO_RECONOCIDA,  # COM-06b
+        RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
+        RegistroAuditoria.Accion.EMISION_RECLAMO,
+        RegistroAuditoria.Accion.CIERRE_RECLAMO,
+
     }
 )
 

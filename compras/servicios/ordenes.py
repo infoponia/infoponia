@@ -13,12 +13,13 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.http import Http404
 
 from compras.errores import ErrorDeCompras
 from compras.models import (
     Cotizacion,
+    DetalleCorreccionRecepcion,
     DetalleCotizacion,
     DetalleOrdenCompra,
     DetallePedido,
@@ -33,6 +34,7 @@ from compras.models import (
 from compras.precios import precio_unitario, precio_unitario_para_mostrar
 from compras.servicios import avisos, enlaces
 from compras.servicios import cobertura as servicio_de_cobertura
+from compras.servicios import correcciones as servicio_de_correcciones
 from compras.servicios import pagos as servicio_de_pagos
 from compras.servicios import recepciones as servicio_de_recepciones
 from contabilidad.servicios import responsables
@@ -824,7 +826,8 @@ FichaDeOrden = namedtuple(
 )
 # CMP-04, regla 6: una recepción de la ficha. ``quien`` es el Agrónomo o ``None`` (la registró el Gerente); ``lotes`` son ``(LoteInsumo, cantidad ingresada)``.
 RecepcionDeFicha = namedtuple("RecepcionDeFicha", "recepcion quien proveedor invernadero lineas reclamo")
-LineaDeRecepcion = namedtuple("LineaDeRecepcion", "detalle insumo recibida lotes inconvenientes")
+# CMP-06: ``corregida`` es lo que las correcciones le descontaron a la línea (``recibida`` ya viene sin eso).
+LineaDeRecepcion = namedtuple("LineaDeRecepcion", "detalle insumo recibida lotes inconvenientes corregida", defaults=(Decimal("0"),))
 # CMP-05, regla 7: el pago de un proveedor en la ficha. ``estado`` es «pagado» (``pago`` y ``monto`` son lo pagado), «pendiente» (listo para pagar: ``monto`` es lo que se paga) o «en_curso» (todavía
 # con líneas por recibir o sin nada recibido). ``puede_registrar`` es verdadero solo para el responsable contable y un pago pendiente (D-30: si no, el botón no se muestra).
 PagoDeFicha = namedtuple("PagoDeFicha", "proveedor pago estado monto puede_registrar")
@@ -832,6 +835,7 @@ PagoDeFicha = namedtuple("PagoDeFicha", "proveedor pago estado monto puede_regis
 ACCION_RESOLVER = "resolver"
 ACCION_RECIBIR = "recibir"
 ACCION_CERRAR = "cerrar"
+ACCION_CORREGIR = "corregir"
 ATAJO_POR_APROBAR = "por_aprobar"
 ATAJO_POR_RECIBIR = "por_recibir"
 ATAJO_CON_RECLAMO = "con_reclamo_sin_emitir"
@@ -989,7 +993,7 @@ def ficha_de_orden(actor, orden_id):
         diferencia=diferencia,
         diferencia_porcentaje=porcentaje,
         lineas_atrasadas=sum(1 for g in grupos.values() for l in g.lineas if l.atraso_dias > 0),
-        acciones=frozenset({ACCION_RESOLVER}) if puede_resolver else _acciones_de_recepcion(actor, orden, detalles),
+        acciones=frozenset({ACCION_RESOLVER}) if puede_resolver else _acciones_de_recepcion(actor, orden, detalles) | _accion_de_correccion(actor, orden),
         recepciones=_recepciones_de(orden),
         pagos=_pagos_de(actor, orden, detalles),
     )
@@ -1006,10 +1010,17 @@ def _acciones_de_recepcion(actor, orden, detalles):
     return frozenset({ACCION_RECIBIR, ACCION_CERRAR}) if pendientes else frozenset()
 
 
+def _accion_de_correccion(actor, orden):
+    """Regla 8 de CMP-CNS-ODC (CMP-06): «Corregir una recepción» para el Agrónomo a cargo (o el Gerente) si la orden tiene alguna recepción corregible (el proveedor sin pago y algo recibido). D-30: si no, el botón no se muestra."""
+    if rol_de(actor) not in (Usuario.Rol.GERENTE, Usuario.Rol.AGRONOMO):
+        return frozenset()
+    return frozenset({ACCION_CORREGIR}) if servicio_de_correcciones.recepciones_corregibles(actor, orden.pk) else frozenset()
+
+
 def _recepciones_de(orden):
     """Regla 6 de CMP-CNS-ODC: cada recepción con su fecha, quién la registró (el Agrónomo o, sin Agrónomo, el Gerente), lo recibido por línea con los lotes que ingresaron y los inconvenientes, y su
     reclamo. Una consulta por tabla."""
-    lista = list(Recepcion.objects.filter(orden=orden).select_related("agronomo", "proveedor", "invernadero", "reclamo").order_by("id"))
+    lista = list(Recepcion.objects.filter(orden=orden).select_related("agronomo", "proveedor", "invernadero", "reclamo").prefetch_related("correcciones").order_by("id"))
     if not lista:
         return ()
     detalles = list(
@@ -1018,11 +1029,14 @@ def _recepciones_de(orden):
         .prefetch_related("inconvenientes", "vinculos_de_movimiento__movimiento__lote_insumo")
         .order_by("id")
     )
+    corregidas = {}
+    for fila in DetalleCorreccionRecepcion.objects.filter(detalle_recepcion__in=detalles).values("detalle_recepcion_id").annotate(total=Sum("cantidad_corregida")):
+        corregidas[fila["detalle_recepcion_id"]] = fila["total"]
     por_recepcion = {}
     for d in detalles:
         insumo = d.detalle_orden.detalle_cotizacion.detalle_pedido.insumo_invernadero.insumo
         lotes = [(v.movimiento.lote_insumo, v.movimiento.cantidad) for v in d.vinculos_de_movimiento.all()]
-        por_recepcion.setdefault(d.recepcion_id, []).append(LineaDeRecepcion(d, insumo, d.cantidad_recibida_detalle, lotes, list(d.inconvenientes.all())))
+        por_recepcion.setdefault(d.recepcion_id, []).append(LineaDeRecepcion(d, insumo, d.cantidad_recibida_detalle, lotes, list(d.inconvenientes.all()), corregidas.get(d.pk, Decimal("0"))))
     return tuple(RecepcionDeFicha(r, r.agronomo, r.proveedor, r.invernadero, por_recepcion.get(r.pk, []), getattr(r, "reclamo", None)) for r in lista)
 
 

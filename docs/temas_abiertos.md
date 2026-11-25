@@ -790,3 +790,31 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Prueba de CMP-03 actualizada** (no se debilitó): en `test_cmp_cns_odc.py`, `con_pago_pendiente` deja de ser un atajo ignorado (su prueba está en `test_pagos_vistas.py`).
 - **Pasada manual en navegador real** (paso 22 de la «Verificación a mano»): enviar el pago hasta el final. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
 
+
+## CMP-06 (corrección de recepción y reclamos; 25/11/2026)
+
+- **`CorreccionRecepcion.recepcion_corregida`, no `recepcion`:** el nombre choca con el accesorio de la herencia multitabla (error E006 de Django; lección de D-83). `Recepcion` accede con `correcciones`. Corregir `docs/modelo/compras.md` («CorreccionRecepcion») y `docs/casos_de_uso/compras/correccion_y_reclamos.md`.
+- **«Límites» de la tarea incompleto:** faltaban `contabilidad` (`OrigenDocumento.Tipo.CORRECCION_DE_RECEPCION` y su migración, hoy 0009), `inventario/tests/fabricas.py` (el tipo nuevo en `SALIDAS`) y la advertencia de que `inventario` 0004 **no es «solo de `choices`»**: el valor tiene 34 caracteres, la columna era de 30 y pasó a 40, y la restricción de tipos se reescribe. Corregir el archivo de la tarea y D-90 punto 2.
+- **Extensión 10a** de CMP-COR-RCP («el Sistema reintenta el envío») contradice D-88 punto 6 (no hay cola de reintentos). Se implementó D-88: el correo no se reintenta (lo mismo para la emisión del reclamo). Corregir la extensión.
+- **Quién ve los reclamos:** el caso de uso solo nombra al Gerente; el servicio deja al Agrónomo ver los de sus invernaderos (solo lectura), porque la ficha de la orden y la del proveedor llevan a ellos. El Contador no. Confirmar o restringir.
+- **La alerta «recepción con inconvenientes»** sigue llevando a la ficha de la orden (CMP-04), que ahora tiene la sección «Reclamos» con el enlace al reclamo; la regla 4 de CMP-EMT-RCL admite los dos caminos. Llevarla directo a la ficha del reclamo cambia una prueba de `test_recorrido_recepcion.py`: queda como mejora.
+- **Lo máximo corregible** con correcciones sucesivas: `min(lo que el lote conserva, lo que la recepción ingresó en él − lo ya corregido de ese lote)`; D-90 punto 4 no dice cómo contar lo ya corregido. Códigos de error nuevos de `ErrorDeCompras`: `pago_registrado`, `sin_lineas`, `linea_repetida`, `linea_ajena`, `linea_cerrada_con_faltante`, `cantidad_invalida`, `supera_lo_corregible` (con `datos["maxima"]`), `reclamo_ya_emitido`, `reclamo_ya_cerrado` y `reclamo_sin_emitir`.
+- **Alertas del resumen:** corregir sube el tránsito lo mismo que baja el stock, así que «bajo el mínimo» no puede reactivarse; solo «stock inconsistente». La postcondición e («se reactivan las que correspondan») lo permite pero conviene aclararlo.
+- **Emitir y cerrar** son botones de un formulario POST con la explicación al lado (el prototipo usaba ventanas): sin ventana de confirmación aparte. Si se quiere confirmar antes de emitir (sale un correo), es una pantalla más.
+- **Correos nuevos** (`correccion.txt`, `reclamo.txt`): su texto exacto no estaba especificado más allá de la lista de tecnología 10 y de la postcondición c de CMP-EMT-RCL.
+- **Pasada manual en navegador real** (paso 25 de la «Verificación a mano»): corregir, emitir y cerrar hasta el final. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+
+## CON-03b (asientos manuales y contraasientos; 25/11/2026)
+
+- **Orden de la fecha y la autorrecuperación** (decisión del estudiante del 25/11/2026): el extracto de CON-REG-ASI valida la fecha (paso 2) antes de la autorrecuperación (paso 3); se invirtió, porque D-84 punto 2 pesa más y, si no, una fecha válida se rechazaría como «ejercicio cerrado» cuando el abierto venció y nadie abrió el siguiente. Vale para `registrar_asiento_manual` y `contraasentar`. Los `resumir_*` no escriben: calculan en memoria el ejercicio que se abriría (`ejercicios.destino_previsto`). Aclarar en el extracto y en D-84.
+- **`faltan_movimientos` es un error en el manual.** D-84 punto 6 («el servicio devuelve `None`, no falla») vale para el automático; el extracto de CON-REG-ASI (5c) pide un error para el manual. Aclarar en D-84.
+- **Contraasentar un asiento de un ejercicio cerrado se permite.** `docs/disparadores.md` y el prototipo (`e.est!=='cerrado'`) dicen que no se ofrece; el caso de uso («cualquier asiento») y C3 (la fecha en cualquier ejercicio abierto o en cierre) dicen que sí. Manda el caso de uso (L7). **Confirmado por el estudiante el 25/11/2026.**
+- **La fecha del aviso al Gerente es la del contraasiento** (el extracto dice «el dd/mm/aaaa» sin aclarar cuál).
+- **Funciones que no estaban en `docs/api/asientos.md`:** `resumir_asiento_manual`, `resumir_contraasiento`, `datos_para_correccion`, `ejercicios.destino_previsto` y `ErroresContables`; se agregaron a esa API.
+- **Texto de la ficha de un asiento de un ejercicio cerrado:** se mantiene «es solo de consulta» (lo exige una prueba de CON-03a) y se suma, a quien puede contraasentar, que puede corregirlo con una fecha de un ejercicio abierto o en cierre.
+- **El motivo del contraasiento es la descripción tal cual** (el prototipo anteponía «Contraasiento del asiento N.º X: »); máximo 300 caracteres (el modelo), no 150.
+- **Una fila con cuenta y sin importe se marca como error**; una fila totalmente vacía se omite (H11). El extracto solo habla del importe cero.
+- **Los atajos precargan dos filas** (Caja/Capital Inicial y Caja/Ventas); el extracto dice «sugieren cuentas».
+- **Dos pruebas de CON-03a reemplazadas** (no debilitadas): las acciones ya no están escondidas «hasta CON-03b».
+- **Toque en `core/models.py`** (autorizado, solo el diccionario `ETIQUETAS`): `anula` y `aviso_al_gerente`. Sin migración.
+- **Pasada manual en navegador real** (paso 39 de la «Verificación a mano»): registrar y contraasentar hasta el final; el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.

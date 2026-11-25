@@ -6,7 +6,10 @@ se envían con «Filtrar»: sin JavaScript funciona igual. Sin las acciones de C
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
 <div class="page">
-  <div class="page-h"><h1>Contabilidad</h1></div>
+  <div class="page-h"><h1>Contabilidad</h1><span class="spacer"></span>
+    {% if puede_registrar %}<a class="btn btn-primary" href="{% url 'contabilidad:asiento_nuevo' %}">{% icono "plus" 15 %} Registrar asiento</a>
+    {% else %}<span class="muted"><b>Lo registra el Contador.</b> Los asientos manuales los carga él.</span>{% endif %}
+  </div>
   {% include "contabilidad/_pestanas.html" with activa="libro" %}
 
   <p class="muted" style="margin:-6px 0 14px">El libro de gestión es el registro interno de los asientos de InfoPonia, para controlar la contabilidad y saber cómo van los números. No es el libro diario ni el mayor legales y no está homologado.</p>

@@ -13,6 +13,7 @@ from django.views.decorators.vary import vary_on_headers
 from compras.errores import ErrorDeCompras
 from compras.forms import FormularioProveedor
 from compras.servicios import proveedores as api
+from compras.servicios import reclamos as servicio_de_reclamos
 from core.acceso import rol_requerido
 from core.models import Usuario
 from inventario.models import TipoInsumo
@@ -73,8 +74,10 @@ def _contexto_de_la_ficha(request, proveedor_id, **extra):
         "acciones": api.acciones_permitidas(request.user, proveedor),
         # CMP-02a, regla 4 de CMP-CNS-PRV: sus pedidos, según el alcance de quien mira (las órdenes, pagos y reclamos se suman de CMP-03 a CMP-06).
         "pedidos": api.pedidos_del_proveedor(request.user, proveedor),
-        # CMP-03, regla 4 de CMP-CNS-PRV: sus órdenes de compra, según el alcance de quien mira (los pagos y reclamos se suman en CMP-05 y CMP-06).
+        # CMP-03, regla 4 de CMP-CNS-PRV: sus órdenes de compra, según el alcance de quien mira (los pagos, en CMP-05, y los reclamos, en CMP-06).
         "ordenes": api.ordenes_del_proveedor(request.user, proveedor),
+        # CMP-06, regla 4 de CMP-CNS-PRV: sus reclamos, según el alcance de quien mira (el Agrónomo, los de sus invernaderos).
+        "reclamos": servicio_de_reclamos.reclamos(request.user, {"proveedor_id": proveedor.pk}),
         **extra,
     }
 

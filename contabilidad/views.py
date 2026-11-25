@@ -1,22 +1,34 @@
 # Pantallas de «Contabilidad» (CON-03a; prototipo: ``VIEWS.k_main``, ``tabLibro``, ``libroCron``, ``libroCta``, ``VIEWS.k_asi``, ``tabEje``, ``VIEWS.k_cierre``, ``tabPlan``).
 # Las vistas solo orquestan: leen lo que se envió, llaman a los servicios (`contabilidad/servicios/`) y renderizan; las reglas son de los servicios. Solo el
 # Contador y el Gerente entran (regla 1 de CON-CNS-LGS y de CON-CNS-PCT, X3): el Vendedor y los demás roles reciben 403. Las consultas no se auditan (SEG-14).
-# Ningún botón lleva a un 403 (D-30): «Cerrar ejercicio» se muestra solo a quien puede cerrar. Las acciones de la ficha (contraasentar, registrar) llegan con CON-03b.
+# Ningún botón lleva a un 403 (D-30): «Cerrar ejercicio», «Registrar asiento» y «Contraasentar» se muestran solo a quien puede (``responsables.puede_registrar_asientos``); al Gerente con un
+# Contador activo el libro le dice «Lo registra el Contador». CON-03b suma el formulario del asiento manual (``VIEWS.k_new``) y el del contraasiento (``VIEWS.k_contra``).
 # Todo funciona sin JavaScript: los filtros y el cierre son formularios comunes.
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_safe
+from django.views.decorators.vary import vary_on_headers
 
 from contabilidad import cuentas
 from contabilidad.errores import ErrorContable
-from contabilidad.forms import FormularioDelLibro
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.forms import (
+    FormularioDelLibro,
+    asiento_precargado,
+    asiento_vacio,
+    errores_para_pantalla,
+    etiqueta_de_cuenta,
+    fecha_desde_texto,
+    leer_asiento,
+)
 from contabilidad.models import EjercicioContable
 from contabilidad.servicios import ejercicios as servicio_de_ejercicios
-from contabilidad.servicios import libro, plan, responsables
+from contabilidad.servicios import asientos, libro, plan, responsables
 from core.acceso import rol_requerido
 from core.models import Usuario
 
@@ -127,6 +139,7 @@ def libro_de_gestion(request):
         "hay_filtros": form.hay_filtros(),
         "consulta_base": _consulta_sin_pagina(request),
         "hoy": timezone.localdate(),
+        "puede_registrar": responsables.puede_registrar_asientos(request.user),
         **_contexto_de_pestanas(numerados),
     }
     if elegido is None:  # la contabilidad todavía no se puso en marcha
@@ -164,9 +177,12 @@ def libro_de_gestion(request):
 @never_cache
 def asiento(request, ejercicio_id, numero):
     """Ficha del asiento (CON-CNS-LGS regla 5; ``VIEWS.k_asi``): movimientos, origen con su enlace, quién lo registró y el asiento que anula o que lo anuló.
-    Sin las acciones de contraasentar y registrar (CON-03b). Un asiento inexistente es 404."""
+    Con «Contraasentar» si se puede anular y quien mira puede registrar (CON-03b), y, recién hecho un contraasiento (?corregir=1), la oferta de registrar el asiento
+    correcto (paso 8). Un asiento inexistente es 404."""
     ficha = libro.ficha_de_asiento(request.user, ejercicio_id, numero)
     ejercicio = ficha.asiento.ejercicio
+    puede = responsables.puede_registrar_asientos(request.user)
+    anulable = ficha.anula is None and ficha.anulado_por is None
     return render(
         request,
         "contabilidad/asiento.html",
@@ -174,6 +190,9 @@ def asiento(request, ejercicio_id, numero):
             "ficha": ficha,
             "ejercicio": ejercicio,
             "numero_de_ejercicio": servicio_de_ejercicios.numero_de_ejercicio(ejercicio),
+            "puede_contraasentar": puede and anulable,
+            "lo_registra_el_contador": not puede and anulable,
+            "ofrecer_correccion": puede and ficha.anula is not None and request.GET.get("corregir") == "1",
             **_contexto_de_pestanas(),
         },
     )
@@ -235,3 +254,154 @@ def cierre(request, ejercicio_id):
         **_contexto_de_pestanas(),
     }
     return render(request, "contabilidad/cierre.html", contexto, status=200)
+
+
+# ---- asiento manual (CON-REG-ASI) ----
+
+ATAJOS = {
+    # Extensiones 3a y 3b: solo precargan la descripción y sugieren cuentas; no tienen código propio (el asiento se registra como cualquier manual).
+    "apertura": ("Asiento de apertura", [(cuentas.CAJA, DEBE), (cuentas.CAPITAL_INICIAL, HABER)]),
+    "venta_previa": ("Venta de producción previa a la puesta en marcha", [(cuentas.CAJA, DEBE), (cuentas.VENTAS, HABER)]),
+}
+
+
+def _errores_vacios():
+    return {"descripcion": [], "fecha": [], "general": [], "filas": {}}
+
+
+def _dibujar_formulario(request, datos, errores=None, corrige=None):
+    """El formulario del asiento: la página entera o, para un pedido de HTMX que solo agrega o quita una fila, el cuerpo del formulario (sin validar, interfaz.md)."""
+    errores = errores or _errores_vacios()
+    contexto = {
+        "puede": True,
+        "datos": datos,
+        "filas": [{**fila, "errores": errores["filas"].get(fila["i"], {})} for fila in datos.filas],
+        "puede_quitar": len(datos.filas) > 2,
+        "errores": errores,
+        "cuentas": _cuentas_del_arbol(plan.arbol()),
+        "etiqueta_de_cuenta": etiqueta_de_cuenta,
+        "corrige": corrige,
+        "hoy": timezone.localdate(),
+    }
+    plantilla = "contabilidad/_asiento_formulario.html" if request.headers.get("HX-Request") else "contabilidad/asiento_nuevo.html"
+    return render(request, plantilla, contexto)
+
+
+def _numero_corregido(texto):
+    """El número del asiento anulado que se corrige (campo oculto `corrige`), o `None`."""
+    return int(texto) if texto and texto.isdigit() else None
+
+
+@rol_requerido(GERENTE, CONTADOR)
+@require_http_methods(["GET", "POST"])
+@never_cache
+@vary_on_headers("HX-Request")
+def asiento_nuevo(request):
+    """«Registrar asiento» (CON-REG-ASI; ``VIEWS.k_new``): formulario con filas que se agregan y se quitan, buscador de cuenta, los atajos de apertura y venta previa, el
+    resumen previo y la confirmación en una pantalla aparte. Todo son botones de un formulario (``accion``): funciona sin JavaScript; con HTMX, agregar y quitar una
+    fila solo redibuja el formulario. ``?corrige=<id>`` precarga las líneas de un asiento anulado (C4; extensión 1b). Quien no puede registrar ve el motivo (no hay
+    botón que lleve acá, D-30); un POST suyo es 403."""
+    hoy = timezone.localdate()
+    if not responsables.puede_registrar_asientos(request.user):
+        if request.method == "POST":
+            raise PermissionDenied("Lo registra el Contador.")
+        return render(request, "contabilidad/asiento_nuevo.html", {"puede": False})
+    cuentas_del_plan = _cuentas_del_arbol(plan.arbol())
+    if request.method == "GET":
+        corrige = request.GET.get("corrige")
+        if corrige and corrige.isdigit():
+            precarga = asientos.datos_para_correccion(request.user, int(corrige))
+            datos = asiento_precargado(hoy, precarga["descripcion"], precarga["movimientos"], cuentas_del_plan)
+            return _dibujar_formulario(request, datos, corrige=precarga["numero_anulado"])
+        return _dibujar_formulario(request, asiento_vacio(hoy))
+
+    accion = request.POST.get("accion", "revisar")
+    datos = leer_asiento(request.POST, hoy)
+    corrige = _numero_corregido(request.POST.get("corrige"))
+    if accion == "agregar":
+        datos.agregar_fila()
+        return _dibujar_formulario(request, datos, corrige=corrige)
+    if accion.startswith("quitar:"):
+        datos.quitar_fila(int(accion.split(":", 1)[1]) if accion.split(":", 1)[1].isdigit() else -1)
+        return _dibujar_formulario(request, datos, corrige=corrige)
+    if accion.startswith("atajo:") and accion.split(":", 1)[1] in ATAJOS:
+        descripcion, lineas = ATAJOS[accion.split(":", 1)[1]]
+        precargado = asiento_precargado(hoy, descripcion, [(codigo, tipo, None) for codigo, tipo in lineas], cuentas_del_plan)
+        datos.descripcion, datos.filas = precargado.descripcion, precargado.filas
+        return _dibujar_formulario(request, datos, corrige=corrige)
+    if accion not in ("revisar", "confirmar"):  # «editar» (volver del resumen) o una acción desconocida
+        return _dibujar_formulario(request, datos, corrige=corrige)
+
+    movimientos = datos.movimientos(cuentas_del_plan)
+    if datos.fecha is None:  # sin fecha válida nunca se registra: se validan igual los demás campos, para marcarlos juntos
+        try:
+            asientos.resumir_asiento_manual(request.user, hoy, datos.descripcion, movimientos, hoy=hoy)
+            errores = _errores_vacios()
+        except ErrorContable as error:
+            errores = errores_para_pantalla(error, datos.filas)
+        errores["fecha"].insert(0, "Indicá una fecha válida.")
+        return _dibujar_formulario(request, datos, errores, corrige)
+    try:
+        if accion == "confirmar":
+            asiento = asientos.registrar_asiento_manual(request.user, datos.fecha, datos.descripcion, movimientos, hoy=hoy)
+        else:
+            resumen = asientos.resumir_asiento_manual(request.user, datos.fecha, datos.descripcion, movimientos, hoy=hoy)
+    except ErrorContable as error:
+        return _dibujar_formulario(request, datos, errores_para_pantalla(error, datos.filas), corrige)
+    if accion == "confirmar":
+        numero = servicio_de_ejercicios.numero_de_ejercicio(asiento.ejercicio)
+        messages.success(request, f"Asiento N.º {asiento.numero_asiento} registrado en el ejercicio {numero}.")
+        return redirect("contabilidad:asiento", asiento.ejercicio_id, asiento.numero_asiento)
+    return render(request, "contabilidad/asiento_resumen.html", {"datos": datos, "resumen": resumen, "corrige": corrige})
+
+
+# ---- contraasiento (CON-CTR-ASI) ----
+
+
+@rol_requerido(GERENTE, CONTADOR)
+@require_http_methods(["GET", "POST"])
+@never_cache
+def contraasiento(request, ejercicio_id, numero):
+    """«Contraasentar el asiento N.º X» (CON-CTR-ASI; ``VIEWS.k_contra``): el asiento a anular, cómo queda el contraasiento (Debe y Haber invertidos), la fecha (hoy por defecto) y
+    el motivo; el resumen y la confirmación van aparte. Un asiento que no se puede anular (un contraasiento o uno ya anulado) muestra el motivo y, si ya está anulado,
+    su contraasiento (extensión 1b). Quien no puede registrar recibe 403 (no hay botón que lleve acá, D-30). Al terminar lleva a la ficha del contraasiento, que ofrece
+    registrar el asiento correcto (paso 8)."""
+    ficha = libro.ficha_de_asiento(request.user, ejercicio_id, numero)
+    if not responsables.puede_registrar_asientos(request.user):
+        raise PermissionDenied("Lo registra el Contador.")
+    hoy = timezone.localdate()
+    asiento = ficha.asiento
+    contexto = {"ficha": ficha, "asiento": asiento, "numero_de_ejercicio": servicio_de_ejercicios.numero_de_ejercicio(asiento.ejercicio), "hoy": hoy}
+    if ficha.anula is not None or ficha.anulado_por is not None:
+        return render(request, "contabilidad/contraasiento.html", {**contexto, "no_anulable": True})
+    if request.method == "GET":
+        return render(request, "contabilidad/contraasiento.html", {**contexto, "fecha_texto": hoy.isoformat(), "motivo": "", "errores": _errores_vacios()})
+
+    accion = request.POST.get("accion", "revisar")
+    fecha_texto, motivo = request.POST.get("fecha", hoy.isoformat()), request.POST.get("motivo", "")
+    formulario = {**contexto, "fecha_texto": fecha_texto, "motivo": motivo}
+    fecha = fecha_desde_texto(fecha_texto)
+    if accion not in ("revisar", "confirmar"):  # «editar»: volver del resumen
+        return render(request, "contabilidad/contraasiento.html", {**formulario, "errores": _errores_vacios()})
+    try:
+        if fecha is None:  # sin fecha válida nunca se registra
+            asientos.resumir_contraasiento(request.user, asiento.pk, hoy, motivo, hoy=hoy)
+            errores = _errores_vacios()
+            errores["fecha"].append("Indicá una fecha válida.")
+            return render(request, "contabilidad/contraasiento.html", {**formulario, "errores": errores})
+        if accion == "confirmar":
+            nuevo = asientos.contraasentar(request.user, asiento.pk, fecha, motivo, hoy=hoy)
+        else:
+            resumen = asientos.resumir_contraasiento(request.user, asiento.pk, fecha, motivo, hoy=hoy)
+    except ErrorContable as error:
+        errores = errores_para_pantalla(error)
+        if error.codigo == "asiento_no_anulable":  # otro lo anuló mientras tanto (6a): la ficha ya lo muestra anulado
+            messages.error(request, error.mensaje)
+            return redirect("contabilidad:asiento", ejercicio_id, numero)
+        if fecha is None:
+            errores["fecha"].insert(0, "Indicá una fecha válida.")
+        return render(request, "contabilidad/contraasiento.html", {**formulario, "errores": errores})
+    if accion == "confirmar":
+        messages.success(request, f"Asiento N.º {asiento.numero_asiento} anulado con el contraasiento N.º {nuevo.numero_asiento}.")
+        return redirect(reverse("contabilidad:asiento", args=[nuevo.ejercicio_id, nuevo.numero_asiento]) + "?corregir=1")
+    return render(request, "contabilidad/contraasiento_resumen.html", {**contexto, "resumen": resumen, "fecha": fecha, "fecha_texto": fecha_texto, "motivo": motivo})

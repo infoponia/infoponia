@@ -785,7 +785,7 @@ Los 28 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 6. Libro cronológico: insignias Automático y Manual, líneas de Debe y Haber y «Totales».
 - [ ] 7. Filtros: tipo, texto, número exacto, cuenta, fechas (también al revés: aviso rojo) y anulados; «Quitar filtros».
 - [ ] 8. Vista por cuenta: saldo acumulado, «Arrastra los ejercicios anteriores» y «Empieza en cero cada ejercicio», enlace al plan.
-- [ ] 9. Ficha del asiento: «Registrado por» en el manual, origen del automático y ningún botón «Contraasentar» ni «Registrar asiento».
+- [ ] 9. Ficha del asiento: «Registrado por» en el manual y origen del automático. (Los botones «Contraasentar» y «Registrar asiento» llegaron con CON-03b: se miran en su sección.)
 - [ ] 10. Plan de cuentas: 19 cuentas, descripciones, saldos como enlaces, buscador, «Sin IVA» y enlace al libro por cuenta.
 - [ ] 11. «Ejercicios» con el ejercicio abierto: sin botón de cierre y con «Ver libro».
 - [ ] 12. Gerente con Contador activo: mismas pantallas de consulta, sin botón de cierre y sin alerta en el Panel.
@@ -985,3 +985,81 @@ Los 28 pasos son los de «Verificación a mano» de `docs/tareas/produccion/PRD-
 - [ ] 26. **Navegador real** (ventana privada, y otra vez sin JavaScript): una carga de 10 plantas en Floración, «Ver resumen» y «Confirmar registro» hasta el final; sin «Prohibido (403)» ni errores en la consola.
 - [ ] 27. **Al final, irreversible para este invernadero:** concretar una siembra normal; la acción «Registrar lote existente» desaparece y no vuelve, y la pantalla lo explica *(lo cubre una prueba)*.
 - [ ] 28. Opcional: en un celular de 360 px la pantalla, con el resumen y el asiento, se lee bien.
+
+## CMP-06 · Tarea CMP-06 (corrección de recepción y reclamos a proveedores)
+
+Los 27 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-06-correccion-de-recepcion-y-reclamos.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **cuatro migraciones nuevas** (`compras` 0006, `inventario` 0004, `contabilidad` 0009 y `core` 0047; la de `inventario` agranda una columna y reescribe una restricción, las de `contabilidad` y `core` solo cambian `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_correccion_y_reclamos.py`; la concurrencia no se prueba a mano.
+
+- [ ] 1. Gerente, Inicio. *(lo cubre una prueba)*
+- [ ] 2. Gerente, Compras → Reclamos. *(lo cubre una prueba)*
+- [ ] 3. Ficha del reclamo. *(lo cubre una prueba)*
+- [ ] 4. Emitir. *(lo cubre una prueba)*
+- [ ] 5. Alerta e Inicio. *(lo cubre una prueba)*
+- [ ] 6. Cerrar. *(lo cubre una prueba)*
+- [ ] 7. Auditoría. *(lo cubre una prueba)*
+- [ ] 8. Ana, ficha de OC. *(lo cubre una prueba)*
+- [ ] 9. Formulario. *(lo cubre una prueba)*
+- [ ] 10. Errores. *(lo cubre una prueba)*
+- [ ] 11. Resumen. *(lo cubre una prueba)*
+- [ ] 12. «Volver». *(lo cubre una prueba)*
+- [ ] 13. Confirmar. *(lo cubre una prueba)*
+- [ ] 14. Stock. *(lo cubre una prueba)*
+- [ ] 15. Libro de gestión. *(lo cubre una prueba)*
+- [ ] 16. Correo. *(lo cubre una prueba)*
+- [ ] 17. Auditoría. *(lo cubre una prueba)*
+- [ ] 18. El reclamo no cambia. *(lo cubre una prueba)*
+- [ ] 19. Bandeja de pagos. *(lo cubre una prueba)*
+- [ ] 20. Volver a recibir y pagar. *(lo cubre una prueba)*
+- [ ] 21. Con el pago hecho ya no se corrige. *(lo cubre una prueba)*
+- [ ] 22. Un lote que ya se usó. *(lo cubre una prueba)*
+- [ ] 23. Línea cerrada con faltante. *(lo cubre una prueba)*
+- [ ] 24. Roles. *(lo cubre una prueba)*
+- [ ] 25. Navegador real.
+- [ ] 26. Sin JavaScript.
+- [ ] 27. Celular.
+
+## CON-03b · Tarea CON-03b (asientos manuales y contraasientos)
+
+Los 41 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-03b-asientos-manuales-y-contraasientos.md` (con los valores concretos, qué tiene que verse y qué cubre ya una prueba), copiados acá en una línea cada uno. Los pasos 31 a 34 son opcionales e irreversibles. Sin migraciones: nada que verificar en Render salvo abrir «Registrar asiento» tras el despliegue.
+
+- [ ] 1. `python manage.py runserver` (sin migraciones de esta tarea).
+- [ ] 2. En la consola, el estado de los ejercicios (ninguno, uno abierto o uno «en cierre»).
+- [ ] 3. (Solo si no hay ejercicios) `poner_en_marcha_contabilidad --fecha-inicio` el 1/1 del año en curso.
+- [ ] 4. Elegir los valores (hoy, el día 1 de este mes) y tener claro el número que va a tener cada asiento.
+- [ ] 5. Ventana A (Contador): el menú tiene «Contabilidad».
+- [ ] 6. Libro: botón verde «Registrar asiento» arriba a la derecha.
+- [ ] 7. Formulario vacío: fecha de hoy, dos filas (Debe y Haber), «Agregar una fila», atajos y «Revisar asiento».
+- [ ] 8. Atajo «Asiento de apertura»: descripción, Caja (Debe) y Capital Inicial (Haber), sin importes, sin registrar.
+- [ ] 9. Buscador de cuenta: escribir `banc` ofrece «1.1.02 · Banco c/c».
+- [ ] 10. «Agregar una fila» y el tachito: no pierden lo escrito ni saltan; con dos filas no hay tachito.
+- [ ] 11. Cargar la apertura (Caja 1.500,00 y Banco c/c 500,00 al Debe; Capital Inicial 2.000,00 al Haber) y «Revisar asiento».
+- [ ] 12. Resumen: ejercicio con su rango, tipo de cada cuenta, totales, «Diferencia $ 0,00 · Balanceado», «Volver a editar» y sin asiento nuevo en el libro.
+- [ ] 13. «Confirmar y registrar»: ficha del N.º 1 con «Asiento N.º 1 registrado en el ejercicio 1.», «Manual», «Registrado por Cora Díaz» y «Contraasentar».
+- [ ] 14. Libro cronológico y vista por cuenta (Caja: $ 1.500,00).
+- [ ] 15. Error: sin descripción («La descripción es obligatoria…»).
+- [ ] 16. Error: Debe distinto del Haber, con la diferencia.
+- [ ] 17. Error: importe negativo o con tres decimales.
+- [ ] 18. Error: cuenta que no existe.
+- [ ] 19. Cuenta sin importe (se marca) y fila vacía (se omite, con «Se omitieron 1 fila…»).
+- [ ] 20. Error: fecha posterior a hoy.
+- [ ] 21. Error: fecha vacía y fecha anterior al primer ejercicio.
+- [ ] 22. Ficha del N.º 1 → «Contraasentar».
+- [ ] 23. Formulario del contraasiento: aviso amarillo, tabla invertida, fecha de hoy, motivo.
+- [ ] 24. Sin motivo: «El motivo es obligatorio…».
+- [ ] 25. Motivo «Se cargó el Banco de más» → resumen → «Volver a editar» → «Confirmar el contraasiento»: ficha del N.º 2 con el aviso verde y la oferta «Registrar el asiento correcto».
+- [ ] 26. Gerente (ventana B): campana con «Contraasiento N.º 2 del asiento N.º 1» y su detalle.
+- [ ] 27. El N.º 1 queda «Anulado» y sin botón; la dirección `…/contraasentar/` escrita a mano dice «no se puede contraasentar» (también la del contraasiento).
+- [ ] 28. «Registrar el asiento correcto»: precarga las líneas del anulado y «corrección del asiento N.º 1»; se registra como manual N.º 3, sin vínculo.
+- [ ] 29. Filtros del libro: Tipo «Contraasientos» y Anulados «Solo anulados».
+- [ ] 30. (Opcional) Un asiento automático: la advertencia de que el contraasiento no anula la operación.
+- [ ] 31. (Opcional, irreversible) `proceso_diario --solo abrir_ejercicio --fecha <día siguiente al fin>`: un ejercicio «en cierre».
+- [ ] 32. (Opcional) Registrar y contraasentar con fecha en el ejercicio en cierre: «Va a un ejercicio en cierre» y numeración propia.
+- [ ] 33. (Opcional, irreversible) Cerrar el ejercicio: «Registrar asiento» y «Contraasentar» con fecha de ese ejercicio se rechazan («está cerrado y ya no recibe asientos»).
+- [ ] 34. (Solo lo cubre una prueba) Contraasentar un asiento de un ejercicio cerrado; revisar la diferencia 3 del «Cierre».
+- [ ] 35. Gerente con Contador activo: sin botones, «Lo registra el Contador»; el formulario y el contraasiento escritos a mano no abren (motivo y 403).
+- [ ] 36. Vendedor: sin «Contabilidad» en el menú y 403 en las dos direcciones.
+- [ ] 37. Sin sesión: las direcciones llevan a «Iniciar sesión».
+- [ ] 38. Gerente sin Contador activo: opera, no se avisa a sí mismo; «Auditoría» (altas con rol, «Asiento que anula»); reactivar al Contador.
+- [ ] 39. **Navegador real:** ventana privada, iniciar sesión y recorrer registrar y contraasentar hasta el final; sin 403 ni «Verificación CSRF fallida»; HTMX sin recarga ni salto.
+- [ ] 40. (Opcional) Con JavaScript desactivado todo sigue funcionando.
+- [ ] 41. (Opcional) En un celular.

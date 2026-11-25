@@ -61,6 +61,10 @@ class ErrorContable(Exception):
 |---|---|
 | `asientos.registrar_asiento_manual(actor, fecha, descripcion, movimientos) -> AsientoContable` | CON-REG-ASI completo (permisos, fecha, auditoría). Las demás apps **no** la llaman |
 | `asientos.contraasentar(actor, asiento_id, fecha, descripcion) -> AsientoContable` | CON-CTR-ASI completo, con la notificación al Gerente |
+| `asientos.resumir_asiento_manual(actor, fecha, descripcion, movimientos, *, hoy=None) -> ResumenDeAsiento` | Paso 5 de CON-REG-ASI: las mismas validaciones y el resumen (ejercicio con su número, rango y estado, `ejercicio_por_abrir`, líneas con el tipo de cada cuenta, totales, diferencia y líneas omitidas). No escribe, no audita ni bloquea |
+| `asientos.resumir_contraasiento(actor, asiento_id, fecha, descripcion, *, hoy=None) -> ResumenDeContraasiento` | Paso 4 de CON-CTR-ASI: el asiento, el ejercicio destino, las líneas invertidas, el total y `es_automatico` (advertencia C5). No escribe ni bloquea |
+| `asientos.datos_para_correccion(actor, asiento_id) -> dict` | `{"descripcion", "movimientos", "numero_anulado"}`: las líneas del asiento ANULADO (también si se pasa su contraasiento) y «corrección del asiento N.º X» (C4). El asiento correcto se registra después con `registrar_asiento_manual`, sin vínculo |
+| `ejercicios.destino_previsto(fecha, *, hoy=None) -> DestinoPrevisto` | Dónde iría un asiento manual o un contraasiento, calculado **en memoria** (reproduce las vueltas de la apertura, sin crear nada): `numero`, `inicio`, `cierre`, `estado`, `por_abrir`. Lanza los mismos errores de fecha que el registro |
 | `ejercicios.cerrar_ejercicio(actor, ejercicio_id) -> EjercicioContable` | CON-CRR-EJE |
 | `ejercicios.abrir_ejercicio_si_corresponde(hoy=None) -> ResultadoApertura` | CON-ABR-EJE. La llaman el paso diario `abrir_ejercicio` y el servicio de asientos; idempotente. `ResultadoApertura` suma `cantidad_creados` y `cantidad_cerrados_solos` (varias vueltas si el sistema estuvo apagado) |
 | `ejercicios.crear_primer_ejercicio(fecha_inicio) -> EjercicioContable` | La puesta en marcha (D-84 punto 3); la llama el comando `poner_en_marcha_contabilidad` |
@@ -109,6 +113,7 @@ El primer tipo es el valor de `OrigenDocumento.Tipo`. Es idempotente; si la func
    Contador hace un contraasiento a mano. Un asiento no se edita ni se borra.
 4. Un servicio **no pregunta por el rol** del actor para decidir quién registra o paga: usa `responsables`.
 5. Todo importe es `Decimal` con dos decimales; en la auditoría, como texto (`docs/patrones/auditoria.md`).
+6. `ErrorContable.errores` es la lista de errores del rechazo (uno solo, él mismo); `ErroresContables` junta varios de campo de un asiento manual (`campo` = `"descripcion"`, `"fecha"`, `"movimientos"` o `"movimientos[i].cuenta"` / `".importe"`, con `i` la posición en la lista recibida).
 
 ## Pruebas de tu app
 

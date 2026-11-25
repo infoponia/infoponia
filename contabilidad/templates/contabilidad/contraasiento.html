@@ -1,0 +1,70 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos estaticos %}
+{% comment %}«Contraasentar el asiento N.º X» (CON-CTR-ASI pasos 2 y 3; ``VIEWS.k_contra`` del prototipo): el asiento a anular, cómo queda el contraasiento (Debe y Haber invertidos), la fecha (hoy por defecto) y el motivo, que es la descripción del contraasiento.
+Si el asiento es automático lo advierte (C5: corrige el libro de gestión pero no anula la operación que lo originó). Un asiento que no se puede anular (extensión 1b) muestra el motivo y, si ya está anulado, el enlace a su contraasiento. Es un formulario común:
+funciona sin JavaScript. Todo se escapa.{% endcomment %}
+{% block titulo %}Contraasentar el asiento N.º {{ asiento.numero_asiento }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+<div class="page narrow">
+  <a class="btn btn-text btn-sm" href="{% url 'contabilidad:asiento' asiento.ejercicio_id asiento.numero_asiento %}">{% icono "back" 14 %} Asiento N.º {{ asiento.numero_asiento }}</a>
+  <div class="page-h" style="margin-top:8px"><h1>Contraasentar el asiento N.º {{ asiento.numero_asiento }}</h1></div>
+
+  {% if no_anulable %}
+  <div class="empty"><b>Este asiento no se puede contraasentar</b>
+    <span>{% if ficha.anula %}Es un contraasiento: un contraasiento no se anula.{% else %}Ya está anulado por el <a class="link" href="{% url 'contabilidad:asiento' ficha.anulado_por.ejercicio_id ficha.anulado_por.numero_asiento %}">contraasiento N.º {{ ficha.anulado_por.numero_asiento }}</a>: un asiento se anula una sola vez.{% endif %}</span></div>
+  {% else %}
+  <form method="post" action="{% url 'contabilidad:contraasiento' asiento.ejercicio_id asiento.numero_asiento %}" novalidate>
+    {% csrf_token %}
+    <button type="submit" name="accion" value="revisar" class="sr" tabindex="-1" aria-hidden="true">Revisar contraasiento</button>
+    {% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
+    <div class="stack">
+      <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Un asiento no se modifica ni se borra: se lo anula con otro asiento que hace lo contrario. El asiento original queda anulado y no se puede volver a anular. Se avisa al Gerente.
+        {% if asiento.origen_id %}<br><b>Es un asiento automático:</b> el contraasiento corrige el libro de gestión, pero no anula la operación que lo originó.{% endif %}</div></div>
+
+      <section class="sec" aria-labelledby="sec-ctr-que">
+        <div class="sec-h" id="sec-ctr-que"><span class="sec-num">1</span>Qué se anula</div>
+        <div class="facts">
+          <div><span class="k">Asiento</span><span class="v">N.º {{ asiento.numero_asiento }}</span><span class="d">Ejercicio {{ numero_de_ejercicio }}</span></div>
+          <div><span class="k">Fecha</span><span class="v">{{ asiento.fecha_asiento|date:"d/m/Y" }}</span></div>
+          <div><span class="k">Importe</span><span class="v mono">{{ ficha.total|pesos }}</span></div>
+        </div>
+        <p style="margin:12px 0 0"><b>{% if asiento.descripcion_asiento %}{{ asiento.descripcion_asiento }}{% else %}{{ asiento.origen.get_tipo_display }}{% endif %}</b></p>
+      </section>
+
+      <section class="sec" aria-labelledby="sec-ctr-como">
+        <div class="sec-h" id="sec-ctr-como"><span class="sec-num">2</span>Cómo queda el contraasiento</div>
+        <div class="tablewrap flat">
+          <table class="data-table">
+            <thead><tr><th>Cuenta</th><th class="right">Debe</th><th class="right">Haber</th></tr></thead>
+            <tbody>
+            {% for m in ficha.movimientos %}
+              <tr><td>{{ m.cuenta.codigo_cuenta }} · {{ m.cuenta.nombre_cuenta }}</td><td class="right nowrap mono">{% if m.tipo_movimiento == 'H' %}{{ m.importe_movimiento|pesos }}{% endif %}</td><td class="right nowrap mono">{% if m.tipo_movimiento == 'D' %}{{ m.importe_movimiento|pesos }}{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="fld" style="margin-top:14px">
+          <label for="ctr-fecha">Fecha del contraasiento <span class="req">*</span></label>
+          <input type="date" class="field-input{% if errores.fecha %} bad{% endif %}" id="ctr-fecha" name="fecha" value="{{ fecha_texto }}" max="{{ hoy|date:'Y-m-d' }}" required>
+          {% for e in errores.fecha %}<div class="err">{{ e }}</div>{% endfor %}
+          <div class="hint">Por defecto, hoy. Puede ser de otro período, mientras caiga en un ejercicio abierto o en cierre y no sea posterior a hoy.</div>
+        </div>
+      </section>
+
+      <section class="sec" aria-labelledby="sec-ctr-motivo">
+        <div class="sec-h" id="sec-ctr-motivo"><span class="sec-num">3</span>Motivo</div>
+        <div class="fld">
+          <label for="ctr-motivo">Por qué se anula <span class="req">*</span></label>
+          <textarea class="field-input{% if errores.descripcion %} bad{% endif %}" id="ctr-motivo" name="motivo" rows="2" maxlength="300" placeholder="Por ejemplo: se cargó un importe de más.">{{ motivo }}</textarea>
+          {% for e in errores.descripcion %}<div class="err">{{ e }}</div>{% endfor %}
+        </div>
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…">Revisar contraasiento</button>
+      <a class="btn btn-ghost" href="{% url 'contabilidad:asiento' asiento.ejercicio_id asiento.numero_asiento %}">Cancelar</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

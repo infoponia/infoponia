@@ -11,3 +11,12 @@ a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .idlink:hover{text-decoration:underline}
 .idlink:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 a.rowlink{text-decoration:none}
+/* CON-03b: formulario del asiento manual y resumen. Los controles salen del Diseño v2; acá solo los anchos de la tabla de líneas, los atajos y la fila de balance. */
+.atajos{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+.asi-lineas td{vertical-align:top}
+.asi-cuenta{min-width:280px}
+.asi-tipo{width:150px}
+.asi-importe{width:190px}
+.balrow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;margin-top:12px;padding:10px 14px;border-radius:var(--radius);background:var(--subtle)}
+.balrow.okb{color:var(--status-ok-fg, inherit)}
+@media (max-width:760px){.asi-cuenta{min-width:200px}.asi-importe{width:140px}}
