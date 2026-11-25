@@ -7,7 +7,7 @@
 # y releído se valida de nuevo (extensiones 8a, 11a y 11b) y recién entonces se crea. La notificación al Gerente se crea dentro de la transacción (D-42);
 # los correos de descarte salen en ``on_commit``, fuera de ella. ``compras`` no importa de ``comercial`` ni de ``produccion`` (A1 de D-37).
 
-from collections import namedtuple
+from collections import Counter, namedtuple
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -24,6 +24,7 @@ from compras.models import (
     DetallePedido,
     DetalleRecepcion,
     OrdenCompra,
+    Pago,
     Pedido,
     Proveedor,
     Recepcion,
@@ -32,7 +33,9 @@ from compras.models import (
 from compras.precios import precio_unitario, precio_unitario_para_mostrar
 from compras.servicios import avisos, enlaces
 from compras.servicios import cobertura as servicio_de_cobertura
+from compras.servicios import pagos as servicio_de_pagos
 from compras.servicios import recepciones as servicio_de_recepciones
+from contabilidad.servicios import responsables
 from core import notificaciones
 from core.correo import correo_configurado, enviar_correo
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
@@ -810,18 +813,21 @@ def rechazar_orden(actor, orden_id, motivo):
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 # Regla 3: una fila del listado. ``proveedores`` son los ``Proveedor`` de la orden; ``lineas_atrasadas`` cuenta las líneas pendientes con la entrega esperada vencida.
-FilaDeOrden = namedtuple("FilaDeOrden", "orden pedido agronomo proveedores monto lineas_atrasadas reclamos_sin_emitir", defaults=(0,))
+FilaDeOrden = namedtuple("FilaDeOrden", "orden pedido agronomo proveedores monto lineas_atrasadas reclamos_sin_emitir pagos_pendientes", defaults=(0, 0))
 # Regla 5: una línea de la ficha. Hasta CMP-04, ``recibida`` es 0 y ``pendiente`` toda la cantidad. ``unitario`` es el derivado con dos decimales (D-89 punto 7).
 LineaDeOrden = namedtuple("LineaDeOrden", "detalle insumo cantidad recibida pendiente unitario total entrega atraso_dias estado motivo_cierre")
 GrupoDeLineas = namedtuple("GrupoDeLineas", "proveedor invernadero lineas")
 FichaDeOrden = namedtuple(
     "FichaDeOrden",
-    "orden pedido agronomo gerente proveedores grupos monto_total monto_estimado diferencia diferencia_porcentaje lineas_atrasadas acciones recepciones",
-    defaults=((),),
+    "orden pedido agronomo gerente proveedores grupos monto_total monto_estimado diferencia diferencia_porcentaje lineas_atrasadas acciones recepciones pagos",
+    defaults=((), ()),
 )
 # CMP-04, regla 6: una recepción de la ficha. ``quien`` es el Agrónomo o ``None`` (la registró el Gerente); ``lotes`` son ``(LoteInsumo, cantidad ingresada)``.
 RecepcionDeFicha = namedtuple("RecepcionDeFicha", "recepcion quien proveedor invernadero lineas reclamo")
 LineaDeRecepcion = namedtuple("LineaDeRecepcion", "detalle insumo recibida lotes inconvenientes")
+# CMP-05, regla 7: el pago de un proveedor en la ficha. ``estado`` es «pagado» (``pago`` y ``monto`` son lo pagado), «pendiente» (listo para pagar: ``monto`` es lo que se paga) o «en_curso» (todavía
+# con líneas por recibir o sin nada recibido). ``puede_registrar`` es verdadero solo para el responsable contable y un pago pendiente (D-30: si no, el botón no se muestra).
+PagoDeFicha = namedtuple("PagoDeFicha", "proveedor pago estado monto puede_registrar")
 
 ACCION_RESOLVER = "resolver"
 ACCION_RECIBIR = "recibir"
@@ -829,7 +835,8 @@ ACCION_CERRAR = "cerrar"
 ATAJO_POR_APROBAR = "por_aprobar"
 ATAJO_POR_RECIBIR = "por_recibir"
 ATAJO_CON_RECLAMO = "con_reclamo_sin_emitir"
-ATAJOS = (ATAJO_POR_APROBAR, ATAJO_POR_RECIBIR, ATAJO_CON_RECLAMO)
+ATAJO_CON_PAGO = "con_pago_pendiente"
+ATAJOS = (ATAJO_POR_APROBAR, ATAJO_POR_RECIBIR, ATAJO_CON_RECLAMO, ATAJO_CON_PAGO)
 
 
 def _exigir_consulta(actor):
@@ -868,9 +875,10 @@ def consultar_ordenes(actor, filtros=None):
     """CMP-CNS-ODC reglas 1 a 3: las órdenes que ``actor`` ve (el Agrónomo, las que tienen algún destino a su cargo; el Gerente, todas), de la más reciente a la más
     antigua, con sus filtros. ``filtros`` (todos opcionales; uno mal formado se ignora): ``estado``, ``proveedor_id``, ``invernadero_id`` (alguna línea va ahí), ``desde`` y
     ``hasta`` (inclusive, sobre la fecha de emisión; fechas o ``AAAA-MM-DD``), ``agronomo_id`` (solo lo usa el Gerente: el Agrónomo ya ve lo suyo) y ``atajo``
-    («por_aprobar», «por_recibir» y «con_reclamo_sin_emitir»; «con_pago_pendiente» lo suma CMP-05). Devuelve ``list[FilaDeOrden]`` con una consulta por tabla (no una por fila). No audita."""
+    («por_aprobar», «por_recibir», «con_reclamo_sin_emitir» y «con_pago_pendiente», este último de CMP-05: las órdenes con algún proveedor para pagar). Devuelve ``list[FilaDeOrden]`` con una consulta por tabla (no una por fila). No audita."""
     _exigir_consulta(actor)
     filtros = filtros or {}
+    con_pago_pendiente = Counter(p.orden.pk for p in servicio_de_pagos.pagos_pendientes())  # CMP-05: la misma consulta que la bandeja (D-91 punto 2)
     consulta = OrdenCompra.objects.en_alcance_de(actor).select_related("pedido__agronomo").con_monto()
     estado = filtros.get("estado")
     if filtros.get("atajo") == ATAJO_POR_APROBAR:
@@ -882,6 +890,8 @@ def consultar_ordenes(actor, filtros=None):
         consulta = consulta.filter(estado_orden_compra__in=servicio_de_recepciones.ESTADOS_RECIBIBLES, pk__in=pendientes.values("orden_id"))
     if filtros.get("atajo") == ATAJO_CON_RECLAMO:  # CMP-04: alguna recepción con un reclamo todavía sin emitir
         consulta = consulta.filter(pk__in=ReclamoProveedor.objects.filter(gerente__isnull=True).values("recepcion__orden_id"))
+    if filtros.get("atajo") == ATAJO_CON_PAGO:  # CMP-05: alguno de sus proveedores está para pagar
+        consulta = consulta.filter(pk__in=list(con_pago_pendiente))
     if estado in OrdenCompra.Estado.values:
         consulta = consulta.filter(estado_orden_compra=estado)
     proveedor_id = _entero_o_none(filtros.get("proveedor_id"))
@@ -921,7 +931,7 @@ def consultar_ordenes(actor, filtros=None):
     for orden_id in ReclamoProveedor.objects.filter(gerente__isnull=True, recepcion__orden_id__in=ids).values_list("recepcion__orden_id", flat=True):
         sin_emitir[orden_id] = sin_emitir.get(orden_id, 0) + 1
     return [
-        FilaDeOrden(o, o.pedido, o.pedido.agronomo, sorted((proveedores[i] for i in proveedor_de.get(o.pk, ())), key=lambda p: p.pk), o.monto_orden, atrasadas.get(o.pk, 0), sin_emitir.get(o.pk, 0))
+        FilaDeOrden(o, o.pedido, o.pedido.agronomo, sorted((proveedores[i] for i in proveedor_de.get(o.pk, ())), key=lambda p: p.pk), o.monto_orden, atrasadas.get(o.pk, 0), sin_emitir.get(o.pk, 0), con_pago_pendiente.get(o.pk, 0))
         for o in lista
     ]
 
@@ -981,6 +991,7 @@ def ficha_de_orden(actor, orden_id):
         lineas_atrasadas=sum(1 for g in grupos.values() for l in g.lineas if l.atraso_dias > 0),
         acciones=frozenset({ACCION_RESOLVER}) if puede_resolver else _acciones_de_recepcion(actor, orden, detalles),
         recepciones=_recepciones_de(orden),
+        pagos=_pagos_de(actor, orden, detalles),
     )
 
 
@@ -1013,6 +1024,27 @@ def _recepciones_de(orden):
         lotes = [(v.movimiento.lote_insumo, v.movimiento.cantidad) for v in d.vinculos_de_movimiento.all()]
         por_recepcion.setdefault(d.recepcion_id, []).append(LineaDeRecepcion(d, insumo, d.cantidad_recibida_detalle, lotes, list(d.inconvenientes.all())))
     return tuple(RecepcionDeFicha(r, r.agronomo, r.proveedor, r.invernadero, por_recepcion.get(r.pk, []), getattr(r, "reclamo", None)) for r in lista)
+
+
+def _pagos_de(actor, orden, detalles):
+    """CMP-CNS-ODC regla 7 (CMP-05): por cada proveedor de la orden, su pago (fecha, medio, monto) o que está pendiente (``PagoDeFicha``). Una orden que todavía no recibió nada (pendiente de aprobación,
+    rechazada o recién aprobada sin recepciones) no tiene sección. «Registrar pago» solo lo ve quien puede registrarlo (``responsables.puede_registrar_asientos``) y solo en un pago pendiente (D-30)."""
+    if orden.estado_orden_compra not in servicio_de_pagos.ESTADOS_DE_ORDEN_CON_RECEPCION:
+        return ()
+    proveedores = {_cotizacion_de(d).proveedor_id: _cotizacion_de(d).proveedor for d in detalles}
+    hechos = {p.proveedor_id: p for p in Pago.objects.filter(orden=orden)}
+    pendientes = {p.proveedor.pk: p for p in servicio_de_pagos.pagos_pendientes(orden=orden)}
+    puede = responsables.puede_registrar_asientos(actor)
+    filas = []
+    for proveedor_id in sorted(proveedores):
+        proveedor = proveedores[proveedor_id]
+        if proveedor_id in hechos:
+            filas.append(PagoDeFicha(proveedor, hechos[proveedor_id], "pagado", hechos[proveedor_id].monto_pago, False))
+        elif proveedor_id in pendientes:
+            filas.append(PagoDeFicha(proveedor, None, "pendiente", pendientes[proveedor_id].monto, puede))
+        else:
+            filas.append(PagoDeFicha(proveedor, None, "en_curso", None, False))
+    return tuple(filas)
 
 
 def pendientes_de_aprobacion():

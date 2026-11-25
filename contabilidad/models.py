@@ -21,6 +21,7 @@ class OrigenDocumento(models.Model):
         CONTRATO = "contrato", "Contrato"  # COM-02 (D-52, D-59): lo crea `comercial.Contrato`
         MOVIMIENTO_DE_STOCK = "movimiento_de_stock", "Movimiento de stock"  # COM-04a (D-64 punto 1): lo crea `produccion.MovimientoStock`
         RECEPCION = "recepcion", "Recepción"  # CMP-04 (D-90 punto 3): lo crea `compras.Recepcion`
+        PAGO = "pago", "Pago a proveedor"  # CMP-05 (D-91 punto 1): lo crea `compras.Pago`; no confundir con el `PagoCliente` de `comercial`
 
     # Convención de las hijas directas (D-52 puntos 1 y 2). `MovimientoInsumo` (INV-01), `OrdenTrabajo` y `Bitacora`
     # (PRD-01) la usan sin repetir lógica:

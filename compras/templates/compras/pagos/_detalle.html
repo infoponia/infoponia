@@ -1,0 +1,25 @@
+{% load formato_inventario %}{% comment %}Paso 4 de CMP-REG-PAG: qué se paga (parcial compartido por el formulario y el resumen). Recibe «detalle» (``DetalleDelPago``). Por línea: lo pedido, lo recibido, el total de la línea, el precio
+unitario calculado y el subtotal a pagar; las líneas cerradas con faltante y lo no aceptado se muestran pero no se pagan.{% endcomment %}
+<div class="card seg">
+  <div class="card-h"><b>Qué se paga</b><span class="muted sm">{{ detalle.proveedor.nombre_para_mostrar }} · orden <a class="prv-nombre" href="{% url 'compras:orden_ficha' detalle.orden.pk %}">{{ detalle.orden }}</a>{% for r in detalle.recepciones %}{% if forloop.first %} · recepciones {% endif %}{{ r }}{% if not forloop.last %}, {% endif %}{% endfor %}</span></div>
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Insumo</th><th class="right">Pedida</th><th class="right">Recibida</th><th class="right">Total de la línea</th><th class="right">Precio unitario</th><th class="right">A pagar</th></tr></thead>
+      <tbody>
+      {% for l in detalle.lineas %}
+      {% with unidad=l.insumo.unidad_medida_insumo %}
+      <tr>
+        <td>{{ l.insumo.nombre_insumo }}{% if l.estado == "cerrado_con_faltante" %}<span class="sub2">Cerrada con faltante: {{ l.motivo_cierre }}. Lo que faltó no se paga.</span>{% endif %}{% if l.no_aceptada %}<span class="sub2">No aceptado por inconvenientes: {{ l.no_aceptada|num:unidad }}. No se paga.</span>{% endif %}</td>
+        <td class="right nowrap mono">{{ l.pedida|cant:unidad }}</td>
+        <td class="right nowrap mono">{{ l.recibida|num:unidad }}</td>
+        <td class="right nowrap mono">{{ l.total|pesos }}</td>
+        <td class="right nowrap mono">{{ l.unitario|pesos }}</td>
+        <td class="right nowrap mono"><b>{{ l.a_pagar|pesos }}</b></td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="5" class="right"><b>Monto a pagar</b></td><td class="right nowrap mono"><b>{{ detalle.monto|pesos }}</b></td></tr></tfoot>
+    </table>
+  </div>
+</div>

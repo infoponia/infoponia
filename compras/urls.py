@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from compras import views, views_ordenes, views_pedidos, views_recepciones
+from compras import views, views_ordenes, views_pagos, views_pedidos, views_recepciones
 
 app_name = "compras"
 
@@ -23,6 +23,9 @@ urlpatterns = [
     path("por-recibir/", views_recepciones.por_recibir, name="por_recibir"),
     path("ordenes/<int:orden_id>/recibir/", views_recepciones.recepcion_nueva, name="recepcion_nueva"),
     path("ordenes/<int:orden_id>/cerrar-con-faltante/", views_recepciones.cierre_faltante, name="cierre_faltante"),
+    # CMP-05: «Pagos a proveedores» (bandeja y pagos registrados) y registrar el pago de un proveedor de una orden.
+    path("pagos/", views_pagos.pagos, name="pagos"),
+    path("pagos/orden/<int:orden_id>/proveedor/<int:proveedor_id>/", views_pagos.pago_nuevo, name="pago_nuevo"),
     path("proveedores/", views.proveedores, name="proveedores"),
     path("proveedores/nuevo/", views.proveedor_nuevo, name="proveedor_nuevo"),
     path("proveedores/<int:proveedor_id>/", views.proveedor_ficha, name="proveedor_ficha"),

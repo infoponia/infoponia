@@ -833,6 +833,8 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_ENTREGA = "planificacion_entrega", "Planificación de entrega"
         MODIFICACION_ENTREGA = "modificacion_entrega", "Modificación de entrega"
         ASIGNACION_TRANSPORTISTA = "asignacion_transportista", "Asignación de transportista"
+        # CMP-05 (D-91, D-87 punto 8): el pago a un proveedor. El asiento lo audita la función de asientos (D-86 punto 4).
+        REGISTRO_PAGO_PROVEEDOR = "registro_pago_proveedor", "Registro de pago a proveedor"
         PLANIFICACION_ENVASADO = "planificacion_envasado", "Planificación de envasado"  # COM-05a2 (PROD-PNF-ENV)
         CANCELACION_COMPRA_VENTA = "cancelacion_compra_venta", "Cancelación de compra-venta"  # COM-05b (COM-CNL-CVT)
 
@@ -1164,6 +1166,10 @@ class RegistroAuditoria(models.Model):
         "lineas_cerradas": "Líneas cerradas con faltante",
         "motivos_de_cierre": "Motivo de cada cierre",
         "monto_del_asiento": "Monto del asiento",
+        # CMP-05: el pago a un proveedor.
+        "medio_pago": "Medio de pago",
+        "fecha_pago": "Fecha del pago",
+        "monto_pago": "Monto pagado",
         # COM-04c: decidir un faltante y vencer un enlace del cliente.
         "decisiones": "Decisión de cada detalle",
         "partidas_creadas": "Partidas de cámara creadas",
@@ -1347,6 +1353,7 @@ class RegistroAuditoria(models.Model):
         # «estado» común, igual que «estado_venta».
         "estado_ejercicio": {"abierto": "Abierto", "en_cierre": "En cierre", "cerrado": "Cerrado"},
         "tipo_movimiento": {"D": "Debe", "H": "Haber"},
+        "medio_pago": {"efectivo": "Efectivo", "transferencia": "Transferencia", "tarjeta_debito": "Tarjeta de débito", "tarjeta_credito": "Tarjeta de crédito"},  # CMP-05
         # COM-05a1: las listas cerradas de la entrega (`core` no importa `comercial`). «modalidad_entrega» ya existe.
         "estado_confirmacion_cliente": {"no_confirmado": "No confirmada", "confirmado": "Confirmada"},
         "estado_aviso_cliente": {"enviado": "Enviado", "pendiente_envio": "Pendiente de envío", "sin_correo": "Sin correo"},
@@ -1591,6 +1598,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_ENTREGA,
         RegistroAuditoria.Accion.MODIFICACION_ENTREGA,
         RegistroAuditoria.Accion.ASIGNACION_TRANSPORTISTA,
+        RegistroAuditoria.Accion.REGISTRO_PAGO_PROVEEDOR,
         RegistroAuditoria.Accion.PLANIFICACION_ENVASADO,
         RegistroAuditoria.Accion.CANCELACION_COMPRA_VENTA,
     }
