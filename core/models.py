@@ -1030,6 +1030,7 @@ class RegistroAuditoria(models.Model):
         "dias_limite_cotizacion": "Días límite para cotizar",
         "dias_validez_cotizacion": "Validez de las cotizaciones (días)",
         "porc_tolerancia_cobertura_pedido": "Tolerancia de cobertura del pedido (%)",
+        "porc_margen_pedido_automatico": "Margen del pedido automático (%)",  # CMP-07 (D-104); permiso del estudiante, 25/11/2026
         "cant_maxima_entregas_diarias": "Máximo de entregas diarias por transportista",
         "cant_max_ciudades_distintas_diarias": "Máximo de localidades distintas por día",
         # Módulo IoT de la configuración operativa (IOT-04; docs/casos_de_uso/maestros/configuracion.md, sección «Módulo IoT»).

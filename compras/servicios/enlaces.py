@@ -135,7 +135,7 @@ def enviar_invitacion(enlace_id, url):
         return
     pedido, proveedor = enlace.invitacion.pedido, enlace.invitacion.proveedor
     enviado = False
-    if correo_configurado():
+    if correo_configurado() and url.startswith("http"):  # CMP-07 8a: sin ``URL_DEL_SITIO`` la URL es relativa y el enlace del correo no serviría: queda pendiente
         contexto = {
             "pedido": str(pedido),
             "proveedor": proveedor.nombre_para_mostrar,

@@ -281,6 +281,9 @@ GRUPOS_DE_PARAMETROS = [
         ("dias_limite_cotizacion", "días", ""),
         ("dias_validez_cotizacion", "días", ""),
         ("porc_tolerancia_cobertura_pedido", "%", ""),
+        # CMP-07 (D-104 punto 3): el pedido automático por stock bajo.
+        ("porc_margen_pedido_automatico", "%",
+         "El pedido automático por stock bajo pide el mínimo más este porcentaje, menos lo libre y lo que está en tránsito. Con 0 pide justo lo que falta."),
     ]),
     ("Entregas", [
         ("cant_maxima_entregas_diarias", "entregas", ""),

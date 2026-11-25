@@ -5,7 +5,7 @@ from django.apps import AppConfig
 class ComprasConfig(AppConfig):
     """Registra la app `compras` (nivel 6 de D-37, D-87). Importa de `core`, `contabilidad`, `maestros` e `inventario`;
     **nunca** de `comercial` ni de `produccion` (A1: `compras` y `comercial` no se importan entre sí). En ``ready()``
-    registra los pasos diarios 60 a 62 (CMP-03), la entrada «Compras» del menú del Gerente y del Agrónomo (``core.menu.registrar_entrada``) y la sección «Compras» del Inicio del
+    registra los pasos diarios 60 a 62 (CMP-03) y el 63 (CMP-07), la entrada «Compras» del menú del Gerente y del Agrónomo (``core.menu.registrar_entrada``) y la sección «Compras» del Inicio del
     Agrónomo (``core.extensiones.registrar_seccion_de_inicio``, CMP-02a). Cada tarea de la ronda «Compras 1» suma lo suyo."""
 
     default_auto_field = 'django.db.models.BigAutoField'
@@ -55,6 +55,11 @@ class ComprasConfig(AppConfig):
         registrar_paso_diario(procesos.CODIGO_VENCIDOS, "Pedidos vencidos", 60, procesos.paso_pedidos_vencidos)
         registrar_paso_diario(procesos.CODIGO_RECORDATORIO, "Recordatorio de validez de cotizaciones", 61, procesos.paso_recordatorio_de_validez)
         registrar_paso_diario(procesos.CODIGO_SIN_ELEGIBLE, "Pedidos sin cotización elegible", 62, procesos.paso_pedidos_sin_cotizacion_elegible)
+
+        # CMP-07 (D-104 punto 1): el paso 63, después de los pasos 60 a 62. Las URLs de los enlaces salen de ``URL_DEL_SITIO`` (adentro del servicio).
+        from compras.servicios import pedidos_automaticos
+
+        registrar_paso_diario(pedidos_automaticos.CODIGO, pedidos_automaticos.NOMBRE, pedidos_automaticos.ORDEN, pedidos_automaticos.generar_pedidos_automaticos)
 
         # CMP-04 (D-87 punto 5, A4): el tipo de alerta «recepción con inconvenientes» (para el Gerente) con su enlace a la ficha de la orden, y el enlace del asiento a la recepción en el libro de gestión.
         from compras.servicios import recepciones

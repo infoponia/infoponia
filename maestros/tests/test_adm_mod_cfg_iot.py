@@ -312,12 +312,12 @@ class AdmModCfgIotVistaTests(ConDatosDeMaestros, TestCase):
     # ---- (1) los 13 y el formulario aparte ----
 
     def test_regla_2b_el_formulario_de_produccion_sigue_con_catorce_campos_y_el_del_iot_trae_los_catorce(self):
-        """MAE-04 no cambia: `FormularioConfiguracion` conserva sus 14 campos (los 13 de MAE-04 y el aviso de cámara de COM-04b) (ninguno del IoT); los 14 van en el formulario aparte (`context["form_iot"]`), que la pantalla dibuja dentro del mismo `<form>`."""
-        self.assertEqual(len(FormularioConfiguracion().fields), 14)
+        """MAE-04 no cambia: `FormularioConfiguracion` conserva sus campos (los 13 de MAE-04, el aviso de cámara de COM-04b y el margen del pedido automático de CMP-07: 15) (ninguno del IoT); los 14 van en el formulario aparte (`context["form_iot"]`), que la pantalla dibuja dentro del mismo `<form>`."""
+        self.assertEqual(len(FormularioConfiguracion().fields), 15)
         self.assertFalse(set(FormularioConfiguracion().fields) & set(CAMPOS_IOT))
         respuesta = self.client.get(URL)
         self.assertEqual(list(respuesta.context["form_iot"].fields), CAMPOS_IOT)
-        self.assertEqual(len(respuesta.context["form"].fields), 14)
+        self.assertEqual(len(respuesta.context["form"].fields), 15)
 
     def test_regla_2b_un_post_con_solo_los_trece_no_modifica_ningun_parametro_del_iot(self):
         """El POST de MAE-04 (solo los 13) sigue funcionando y no toca los 14, aunque tengan valores distintos de los iniciales: la vista le pasa al servicio solo los campos IoT que vienen. Sin auditoría de ellos."""
