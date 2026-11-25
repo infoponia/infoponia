@@ -275,6 +275,48 @@ def resumir_pedido(actor, datos):
 # ---- registrar (paso 11) ----
 
 
+def _crear_pedido(agronomo_id, lineas, invitados, fecha, hoy, construir_url, *, usuario_de_auditoria, datos_extra=None):
+    """Crea el pedido «en cotización» a nombre de ``agronomo_id`` con sus detalles (precio de referencia copiado AHORA), las invitaciones y un enlace por proveedor, y
+    audita ``alta_pedido`` en una sola fila. Corre dentro de la transacción de quien llama, con todo ya bloqueado y validado. Lo comparten el pedido manual
+    (``usuario_de_auditoria`` es el Agrónomo) y el automático de CMP-AUT-PED (``None``: se audita como InfoPonia, D-22 y D-27); ``datos_extra`` suma claves al ``datos``
+    del detalle (el automático agrega su origen y el margen). ``lineas`` es ``[(iin, cantidad)]`` e ``invitados`` una lista de ``Proveedor``."""
+    pedido = Pedido.objects.create(agronomo=Agronomo.objects.get(pk=agronomo_id), fecha_pedido=hoy, fecha_limite_cotizaciones=fecha)
+    detalles = [
+        DetallePedido.objects.create(
+            pedido=pedido, insumo_invernadero=iin, cantidad_detalle=cantidad, precio_unitario_de_pedido=iin.referencia_precio
+        )
+        for iin, cantidad in lineas
+    ]
+    invitaciones = [InvitacionPedido.objects.create(pedido=pedido, proveedor=proveedor) for proveedor in invitados]
+    for invitacion in invitaciones:
+        enlaces.crear_enlace(invitacion, construir_url)
+
+    monto = sum((d.subtotal for d in detalles), Decimal("0.00"))
+    RegistroAuditoria.objects.registrar(
+        usuario=usuario_de_auditoria,
+        accion=RegistroAuditoria.Accion.ALTA_PEDIDO,
+        afectados=[pedido, *detalles, *invitaciones],
+        detalle={
+            "cambios": {
+                "estado": {"antes": None, "despues": pedido.estado_pedido},
+                "fecha_pedido": {"antes": None, "despues": hoy.isoformat()},
+                "fecha_limite_cotizaciones": {"antes": None, "despues": fecha.isoformat()},
+                "monto_estimado": {"antes": None, "despues": texto_precio(monto)},
+            },
+            "datos": {
+                **(datos_extra or {}),
+                "detalles": [
+                    f"{d}: {texto_cantidad(d.cantidad_detalle, d.insumo_invernadero.insumo.unidad_medida_insumo)} "
+                    f"a {texto_precio(d.precio_unitario_de_pedido)}"
+                    for d in detalles
+                ],
+                "invitaciones": [referencia(i) for i in invitaciones],
+            },
+        },
+    )
+    return pedido
+
+
 def registrar_pedido(actor, datos, construir_url):
     """CMP-RLZ-PED paso 11: registra el pedido «en cotización» con sus detalles (precio de referencia copiado AHORA), las invitaciones y un enlace por
     proveedor, audita ``alta_pedido`` (una sola fila: el pedido, cada detalle y cada invitación como afectados) y deja en ``on_commit`` el correo a
@@ -312,41 +354,7 @@ def registrar_pedido(actor, datos, construir_url):
         hoy = stock.hoy()
         lineas, invitados, fecha = _validar(actor, datos, iins, proveedores, hoy)
 
-        pedido = Pedido.objects.create(
-            agronomo=Agronomo.objects.get(pk=actor.pk), fecha_pedido=hoy, fecha_limite_cotizaciones=fecha
-        )
-        detalles = [
-            DetallePedido.objects.create(
-                pedido=pedido, insumo_invernadero=iin, cantidad_detalle=cantidad, precio_unitario_de_pedido=iin.referencia_precio
-            )
-            for iin, cantidad in lineas
-        ]
-        invitaciones = [InvitacionPedido.objects.create(pedido=pedido, proveedor=proveedor) for proveedor in invitados]
-        for invitacion in invitaciones:
-            enlaces.crear_enlace(invitacion, construir_url)
-
-        monto = sum((d.subtotal for d in detalles), Decimal("0.00"))
-        RegistroAuditoria.objects.registrar(
-            usuario=actor,
-            accion=RegistroAuditoria.Accion.ALTA_PEDIDO,
-            afectados=[pedido, *detalles, *invitaciones],
-            detalle={
-                "cambios": {
-                    "estado": {"antes": None, "despues": pedido.estado_pedido},
-                    "fecha_pedido": {"antes": None, "despues": hoy.isoformat()},
-                    "fecha_limite_cotizaciones": {"antes": None, "despues": fecha.isoformat()},
-                    "monto_estimado": {"antes": None, "despues": texto_precio(monto)},
-                },
-                "datos": {
-                    "detalles": [
-                        f"{d}: {texto_cantidad(d.cantidad_detalle, d.insumo_invernadero.insumo.unidad_medida_insumo)} "
-                        f"a {texto_precio(d.precio_unitario_de_pedido)}"
-                        for d in detalles
-                    ],
-                    "invitaciones": [referencia(i) for i in invitaciones],
-                },
-            },
-        )
+        pedido = _crear_pedido(actor.pk, lineas, invitados, fecha, hoy, construir_url, usuario_de_auditoria=actor)
     return pedido
 
 

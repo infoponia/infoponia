@@ -50,4 +50,23 @@ Proceso automatizado de la nota de presentación. Decisión: D-NN. Se apoya en C
 
 ## Cómo se aplica (código)
 
-(La completa Claude Code al cerrar.)
+Decisión: **D-104**. Tarea: CMP-07. Fuentes: `docs/casos_de_uso/compras/pedidos.md` (CMP-RLZ-PED), D-56, D-22, D-27, D-42, D-87 y D-88.
+
+- `compras/servicios/pedidos_automaticos.py`:
+  - `calcular_cantidad(minimo, libre, transito, margen, unidad)`: `mínimo × (1 + margen/100) − (libre + tránsito)`, `ROUND_CEILING` a los decimales de la unidad.
+  - `generar_pedidos_automaticos(hoy) -> ResumenDePaso`: por invernadero activo, en orden de id, una transacción. `procesados` = invernaderos revisados, `creados` = pedidos, `resueltos` = 0, `detalle` = cuántos quedaron sin proveedores o sin Agrónomo. Un invernadero que falla se registra y los demás siguen; al final lanza `RuntimeError` (D-56 punto 5).
+- **Lectura sin bloquear:** insumos habilitados y activos, bajo el mínimo (`stock.existencias`) y sin `ya_pedido`. Sin ninguno: nada (1a). Sin Agrónomo activo: aviso al Gerente (5a). Sin proveedores: aviso al Agrónomo y al Gerente (3a). Los avisos no se repiten el mismo día (el título lleva la fecha).
+- **Bloqueos** (el orden de `registrar_pedido`): cuenta del Agrónomo → invernadero (`bloquear_invernadero_activo`) → `InsumoInvernadero` en orden de id → proveedores en orden de id. Con todo bloqueado se releen los candidatos, los proveedores y el Agrónomo; si ya no corresponde, no se crea nada (5b).
+- **Alta:** `pedidos._crear_pedido(agronomo_id, lineas, invitados, fecha, hoy, construir_url, *, usuario_de_auditoria, datos_extra)`, que comparten `registrar_pedido` (con el actor) y el paso (con `None`: InfoPonia). `datos_extra` suma `origen` y `porc_margen_pedido_automatico` a la auditoría.
+- **Enlaces:** las URLs salen de `settings.URL_DEL_SITIO`; `enlaces.enviar_invitacion` no envía si la URL no es absoluta y deja el enlace «pendiente de envío» (8a).
+- **Paso diario:** `ComprasConfig.ready()` registra `generar_pedidos_automaticos`, orden 63, «Pedidos automáticos por stock bajo».
+- **Margen:** `ConfiguracionOperativa.porc_margen_pedido_automatico` (`maestros` 0013), en la tarjeta «Compras» de la configuración.
+
+### Pruebas (`compras/tests/`)
+
+| Qué | Archivo |
+|---|---|
+| Cantidad, flujo, postcondiciones, precondiciones, extensiones 1a, 1b, 3a, 5a y 8a, 5b determinista y paso 63 | `test_cmp_aut_ped.py` |
+| 5b con dos hilos y dos corridas a la vez (`concurrencia`) | `test_pedidos_automaticos_concurrencia.py` |
+| Recorrido por rol y estado | `test_recorrido_pedido_automatico.py` |
+| El margen en la configuración | `maestros/tests/test_adm_mod_cfg.py`, `test_configuracion_vistas.py`, `test_singletons_modelo.py` |

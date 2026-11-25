@@ -22,6 +22,7 @@
 #     60  | Pedidos vencidos                  | compras (CMP-03: avisa del vencimiento o cancela «nadie cotizó»)
 #     61  | Recordatorio de validez           | compras (CMP-03: mañana vence la primera cotización elegible)
 #     62  | Pedidos sin cotización elegible   | compras (CMP-03: cancela si ninguna cotización se puede elegir)
+#     63  | Pedidos automáticos por stock bajo | compras (CMP-07, D-104: un pedido por invernadero con los insumos bajo el mínimo; después de los pasos 60 a 62)
 #
 # ``iot`` no usa este proceso (su revisión es periódica y la decide su documentación).
 #

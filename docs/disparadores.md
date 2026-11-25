@@ -216,6 +216,11 @@ como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porq
 1. **Rescisión después de una modificación.** `periodos_conservados` (`comercial/servicios/suministros.py`) mira solo los detalles «vigentes», como dice `suministro.md`: los períodos de la ventana que quedaron en un detalle finalizado por una modificación y todavía se entregan no cuentan. Un contrato así puede quedar «rescindido» en el acto con entregas pendientes. Con «el cierre espera las entregas a realizar» (punto 6 de «Cuando exista Entrega») la fecha de la última entrega y el cierre tienen que mirar también las entregas de esos detalles.
 2. **Reenvío de la constancia de «rescisión sin efecto».** `comprobantes.reenviar_comprobante` deduce la constancia de la rescisión de `motivo_rescision`; después de dejarla sin efecto no queda marca y reenvía el comprobante común. Si hace falta reenviar esa constancia, hay que guardar qué documento quedó pendiente (decisión y migración aparte).
 
+## Lo que deja CMP-07 (nace el 25/11/2026)
+
+- **Cuando el aviso 3a o 5a necesite idempotencia más fina que el título con la fecha** (por ejemplo, avisar de nuevo si cambia la cantidad de insumos): una columna o una tabla propia de «avisos dados». Hoy no se repite una notificación con el mismo título a la misma cuenta.
+- **Cuando se arme el cron único (D-56):** el paso 63 se suma a la lista de lo que corre; hasta entonces, a mano con `python manage.py proceso_diario --solo generar_pedidos_automaticos`.
+
 ## Cuando exista Cosecha
 
 1. ~~**Pantalla de concretar cosecha.**~~ Resuelto el 21/11/2026 (lote C1 de «Comercial 1»): está en el prototipo comercial,

@@ -89,13 +89,13 @@ class ConfiguracionVistasTests(ConDatosDeMaestros, TestCase):
 
     # ---- lectura ----
 
-    def test_flujo_principal_muestra_los_catorce_parametros_y_ninguno_del_logo(self):
-        """Regla 1 y 2 de ADM-MOD-CFG: la pantalla tiene los 14 parámetros (COM-04b suma el aviso de cámara) con sus valores actuales, el de faltante dentro de
-        «Comercial», y la lectura no audita (SEG-14)."""
+    def test_flujo_principal_muestra_los_quince_parametros_y_ninguno_del_logo(self):
+        """Regla 1 y 2 de ADM-MOD-CFG: la pantalla tiene los 15 parámetros (COM-04b suma el aviso de cámara y CMP-07, el margen del pedido automático) con sus
+        valores actuales, el de faltante dentro de «Comercial», y la lectura no audita (SEG-14)."""
         respuesta = self.client.get(URL)
         self.assertEqual(respuesta.status_code, 200)
         form = respuesta.context["form"]
-        self.assertEqual(len(form.fields), 14)
+        self.assertEqual(len(form.fields), 15)
         self.assertEqual([t for t, _ in form.grupos], ["Producción", "Insumos", "Comercial", "Compras", "Entregas"])
         comercial = dict(form.grupos)["Comercial"]
         self.assertIn("dias_vigencia_enlace_faltante", [c.name for c, _ in comercial])
@@ -106,6 +106,28 @@ class ConfiguracionVistasTests(ConDatosDeMaestros, TestCase):
         self.assertContains(respuesta, 'name="porc_merma_maxima"')
         self.assertContains(respuesta, 'value="15"')
         self.assertNotRegex(respuesta.content.decode(), r'name="[^"]*logo')  # «logo» es también la clase del marco
+        self.assertEqual(auditorias().count(), 0)
+
+    def test_d104_el_margen_del_pedido_automatico_esta_en_compras_y_se_guarda_desde_la_pantalla(self):
+        """CMP-07 (D-104 punto 3): «Compras» muestra el margen con su ayuda y su valor inicial (20); guardar otro valor lo cambia y lo audita con su antes y después."""
+        respuesta = self.client.get(URL)
+        compras = dict(respuesta.context["form"].grupos)["Compras"]
+        self.assertIn("porc_margen_pedido_automatico", [c.name for c, _ in compras])
+        self.assertContains(respuesta, "Margen del pedido automático")
+        self.assertContains(respuesta, "Con 0 pide justo lo que falta")
+        self.assertEqual(respuesta.context["form"]["porc_margen_pedido_automatico"].value(), 20)
+        self.client.post(URL_PARAMETROS, parametros(porc_margen_pedido_automatico="35"))
+        self.assertEqual(ConfiguracionOperativa.objects.get().porc_margen_pedido_automatico, 35)
+        registro = RegistroAuditoria.objects.get(accion="modificacion_configuracion")
+        self.assertEqual(registro.detalle["cambios"], {"porc_margen_pedido_automatico": {"antes": 20, "despues": 35}})
+
+    def test_d104_un_margen_fuera_de_0_a_100_marca_su_campo_y_no_guarda(self):
+        """CMP-07 (D-104 punto 3): 101 da el error en el campo del margen y no se guarda nada (todo o nada, regla 6)."""
+        respuesta = self.client.post(URL_PARAMETROS, parametros(porc_margen_pedido_automatico="101", porc_merma_maxima="20"))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("porc_margen_pedido_automatico", respuesta.context["form"].errors)
+        fila = ConfiguracionOperativa.objects.get()
+        self.assertEqual((fila.porc_margen_pedido_automatico, fila.porc_merma_maxima), (20, 15))
         self.assertEqual(auditorias().count(), 0)
 
     def test_flujo_principal_la_pestana_organizacion_no_tiene_logo(self):

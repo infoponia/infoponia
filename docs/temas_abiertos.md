@@ -895,3 +895,14 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Auditoría:** los asientos van en `datos["asientos"]` (lista; siembra, aplicación y fuera de servicio) o `datos["asiento"]` (uno; merma y transición).
 - **Pendiente de CON-04c:** la cosecha, la entrega y la merma de la cámara llaman a `aplicar_merma` y todavía no asientan.
 - **Pasada manual en navegador real** (paso 16 de la «Verificación a mano»): el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript de los formularios de concreción, merma, aplicación y fuera de servicio.
+
+## CMP-07 (pedido automático por stock bajo; 25/11/2026): lo que se implementó distinto de lo escrito
+
+- **Textos de los avisos 3a y 5a** no estaban escritos: los aprobó el estudiante el 25/11/2026 (en D-104, punto 9).
+- **«Una vez por día y por invernadero» (3a)** se resuelve sin columna: no se repite el aviso a una cuenta con una notificación del mismo título (lleva la fecha de `hoy`). La 5a usa el mismo mecanismo por idempotencia.
+- **5a se evalúa antes que 3a:** sin Agrónomo activo se avisa solo al Gerente y no se revisa a los proveedores.
+- **`URL_DEL_SITIO` vacía:** `enviar_invitacion` (CMP-02a) no manda un correo con un enlace relativo; el enlace queda «pendiente de envío». El pedido manual siempre pasa una URL absoluta, así que no cambia.
+- **Extensión 5b:** si tras bloquear no queda ningún proveedor activo, o cambió el Agrónomo a cargo, o el invernadero pasó a inactivo, no se crea nada ni se avisa; la próxima corrida lo trata (con el nuevo Agrónomo, o como 3a). Si otro pedido tomó solo algunos insumos, se piden los demás.
+- **Auditoría:** el `datos` de `alta_pedido` lleva `origen` («automático») y `porc_margen_pedido_automatico`; se agregó la etiqueta de este último en `RegistroAuditoria.ETIQUETAS` (`core/models.py`, con permiso del estudiante).
+- **Refactor:** `registrar_pedido` se parte en `_crear_pedido` (privada de `pedidos.py`) para compartir el alta con el paso; el pedido manual no cambia.
+- **`D-104.md`** tenía el título «D-NN» estando ya en `main`: se corrigió a «D-104» y se agregó su fila al índice.

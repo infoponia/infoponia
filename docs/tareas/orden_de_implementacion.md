@@ -16,6 +16,7 @@ el núcleo contable primero; Estadísticas, último, porque solo lee lo que ya e
 | 9 | CMP-04 | Recepción y cierre con faltante (con asiento) | 8 y 2 | Compras 1 | 2 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
 | 10 | CMP-05 | Pago a proveedores (con asiento) | 9, 1 y 2 | Compras 1 | 2 | `compras/CMP-05-pago-a-proveedores.md` |
 | 11 | CMP-06 | Corrección de recepción y reclamos | 10 | Compras 1 | 2 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
+| 11b | CMP-07 | Pedido automático por stock bajo | 6 y 8 | Compras 1 | 2 | `compras/CMP-07-pedido-automatico-por-stock-bajo.md` |
 | 12 | CON-04b | Asientos de los ajustes (carga inicial contra Capital Inicial) | 2 | Contabilidad 2 | 3 | `contabilidad/CON-04b-asientos-de-inventario.md` |
 | 13 | PRD-05 | Registrar Lote Existente (PROD-REG-LTE) | 2 y PRD-03 (hecha) | Contabilidad 2 | 3 | `produccion/PRD-05-registrar-lote-existente.md` |
 | 14 | CON-04a | Asientos de producción (reapertura) | 2 (PRD-04 ya está) | Contabilidad 2 | 3 | `contabilidad/CON-04a-asientos-de-produccion.md` |

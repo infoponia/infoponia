@@ -451,6 +451,7 @@ auditoría registra quién modificó (D-36).
 | `dias_limite_cotizacion` | entero ≥ 1 | 3 | Compras |
 | `dias_validez_cotizacion` | entero > 0 | 7 | Compras |
 | `porc_tolerancia_cobertura_pedido` | entero de 0 a 100 | 0 | Compras |
+| `porc_margen_pedido_automatico` (CMP-07, D-104) | entero de 0 a 100 | 20 | Compras. Migración `maestros` 0013 (`AddField` con su CHECK); con 0 el pedido automático pide justo lo que falta |
 | `cant_maxima_entregas_diarias` | entero ≥ 1 | 10 | Entregas |
 | `cant_max_ciudades_distintas_diarias` | entero ≥ 1 | 3 | Entregas |
 

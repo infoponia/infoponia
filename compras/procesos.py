@@ -3,6 +3,7 @@
 #   60 ``pedidos_vencidos``                  Pedidos vencidos: avisa del vencimiento o cancela el pedido que nadie cotizó.
 #   61 ``recordatorio_de_validez``           Recordatorio de validez de cotizaciones: avisa que mañana vence la primera cotización elegible.
 #   62 ``pedidos_sin_cotizacion_elegible``   Pedidos sin cotización elegible: cancela el pedido cuyas cotizaciones ya no se pueden elegir.
+#   (63 ``generar_pedidos_automaticos`` es de CMP-07 y vive en ``compras/servicios/pedidos_automaticos.py``: pedido de cotización por stock bajo, después de estos tres.)
 #
 # Contrato de D-56 (punto 4): ``paso(hoy) -> ResumenDePaso``; idempotentes (el 60 y el 61 guardan en el pedido ``aviso_vencimiento_dado`` y
 # ``recordatorio_validez_para``; el 62 y la cancelación del 60 sacan al pedido de «en cotización»); **nunca leen la fecha por su cuenta** (``hoy`` es un parámetro,

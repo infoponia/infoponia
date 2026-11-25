@@ -95,6 +95,27 @@ class AdmModCfgServicioTests(ConDatosDeMaestros, TestCase):
         error = error_de(lambda: configuracion.modificar_configuracion(self.gerente, porc_merma_maxima=101))
         self.assertEqual(codigos_de(error, "porc_merma_maxima"), ["maximo"])
 
+    def test_d104_el_margen_del_pedido_automatico_vale_20_al_inicio_y_admite_de_0_a_100(self):
+        """CMP-07 (D-104 punto 3): `porc_margen_pedido_automatico` vale 20 al inicio, es un entero de 0 a 100; 0 y 100 se guardan, -1 y 101 no."""
+        self.assertEqual(actuales()["porc_margen_pedido_automatico"], 20)
+        for valor in (0, 100):
+            with self.subTest(valor=valor):
+                configuracion.modificar_configuracion(self.gerente, porc_margen_pedido_automatico=valor)
+                self.assertEqual(actuales()["porc_margen_pedido_automatico"], valor)
+        for valor, codigo in ((-1, "minimo"), (101, "maximo")):
+            with self.subTest(valor=valor):
+                error = error_de(lambda: configuracion.modificar_configuracion(self.gerente, porc_margen_pedido_automatico=valor))
+                self.assertEqual(list(error.error_dict), ["porc_margen_pedido_automatico"])
+                self.assertEqual(codigos_de(error, "porc_margen_pedido_automatico"), [codigo])
+        self.assertEqual(actuales()["porc_margen_pedido_automatico"], 100)
+
+    def test_d104_el_cambio_del_margen_se_audita_con_su_antes_y_despues(self):
+        """CMP-07 (D-104; D-36): cambiar el margen deja un `modificacion_configuracion` con el antes y el después, y su etiqueta legible."""
+        configuracion.modificar_configuracion(self.gerente, porc_margen_pedido_automatico=35)
+        cambios = auditorias()[-1].detalle["cambios"]["porc_margen_pedido_automatico"]
+        self.assertEqual((cambios["antes"], cambios["despues"]), (20, 35))
+        self.assertEqual(RegistroAuditoria.ETIQUETAS["porc_margen_pedido_automatico"], "Margen del pedido automático (%)")
+
     def test_regla_3_vacio_o_no_entero_se_rechaza(self):
         """Regla 3: todos los valores son enteros y obligatorios. Vacío, decimales, texto o un booleano dan error de campo."""
         casos = (("", "obligatorio"), ("  ", "obligatorio"), (None, "obligatorio"), ("abc", "no_entero"),
