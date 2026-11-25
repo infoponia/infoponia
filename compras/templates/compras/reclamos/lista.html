@@ -1,0 +1,41 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_compras %}
+{% comment %}«Compras» → «Reclamos» (``tabRcl`` del prototipo): los reclamos a proveedores, del más reciente al más antiguo, con su proveedor, la orden, los tipos de inconveniente y el estado. Recibe «filas» (``FilaDeReclamo``), «estado»
+(el filtro elegido: «sin_emitir», «emitido_abierto», «cerrado» o vacío) y «sin_emitir» (cuántos faltan emitir). Los filtros son enlaces: sin JavaScript funciona igual.{% endcomment %}
+{% block titulo %}Reclamos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Compras</h1></div>
+  {% include "compras/proveedores/_pestanas.html" with activa="reclamos" %}
+  <p class="muted" style="margin:0 0 14px">Reclamos por los inconvenientes de una recepción. Nacen sin emitir; el Gerente los emite (el proveedor recibe un correo) y después los cierra. Reclamar deja registrado lo que pasó: no se espera una devolución.</p>
+  <div class="filters"><div class="chips" role="group" aria-label="Estado del reclamo">
+    <a class="chip" href="{% url 'compras:reclamos' %}" aria-pressed="{% if not estado %}true{% else %}false{% endif %}">Todos</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}?estado=sin_emitir" aria-pressed="{% if estado == 'sin_emitir' %}true{% else %}false{% endif %}">Sin emitir{% if sin_emitir %} <b>{{ sin_emitir }}</b>{% endif %}</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}?estado=emitido_abierto" aria-pressed="{% if estado == 'emitido_abierto' %}true{% else %}false{% endif %}">Emitidos abiertos</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}?estado=cerrado" aria-pressed="{% if estado == 'cerrado' %}true{% else %}false{% endif %}">Cerrados</a>
+  </div></div>
+
+  {% if filas %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Orden</th><th>Inconvenientes</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for f in filas %}
+      <tr>
+        <td><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
+        <td>{{ f.proveedor.nombre_para_mostrar }}</td>
+        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}">{{ f.orden }}</a><span class="sub2">{{ f.invernadero.nombre_invernadero }}</span></td>
+        <td>{% for i in f.inconvenientes %}{{ i.tipo_inconveniente|tipo_de_inconveniente }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td><span class="status-badge {% if f.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ f.reclamo.get_estado_reclamo_display }}</span>
+          <span class="status-badge {% if f.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">{% if f.reclamo.emitido %}Emitido{% else %}Sin emitir{% endif %}</span></td>
+        <td class="right nowrap"><a class="btn btn-ghost btn-sm" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}">Ver<span class="sr"> el reclamo {{ f.reclamo }}</span></a></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>{% if estado %}No hay reclamos con ese estado.{% else %}No hay reclamos. Se generan cuando una recepción se registra con inconvenientes.{% endif %}</div></div>
+  {% endif %}
+</div>
+{% endblock %}

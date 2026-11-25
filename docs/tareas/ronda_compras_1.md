@@ -1,4 +1,4 @@
-# Ronda «Compras 1» — plan completo
+# Ronda «Compras 1» — plan completo (**cerrada** el 25/11/2026: CMP-01 a CMP-06 hechas)
 
 Segunda de las tres rondas nuevas (Contabilidad, Compras, Estadísticas; A0 P2). Crea la app `compras` (nivel 6, D-37) y el circuito completo:
 proveedores → pedido de cotización → cotización del proveedor por enlace → orden de compra → aprobación → recepción → pago, más la corrección de
@@ -16,7 +16,7 @@ Claude Code lo abre solo para completar la fila de su tarea al cerrar (M3).
 | CMP-03 | Orden de compra y pasos diarios (**hecha**, 24/11/2026) | CMP-GNR-ODC, CMP-APR-ODC, CMP-CNS-ODC, pasos 60 a 62 | CMP-02b (hecha) | grande |
 | CMP-04 | Recepción y cierre con faltante (**hecha**, 24/11/2026; suma `AlertaCompras` y el tipo `recepcion` de `OrigenDocumento`) | CMP-REG-RCP, CMP-CRR-FLT | CMP-03, **CON-02** | grande y delicada |
 | CMP-05 | Pago a proveedores (**hecha**, 25/11/2026; suma el tipo `pago` de `OrigenDocumento`) | CMP-REG-PAG | CMP-04, **USR-11**, CON-02 | mediana |
-| CMP-06 | Corrección de recepción y reclamos | CMP-COR-RCP, CMP-EMT-RCL, CMP-CRR-RCL | CMP-05 | mediana |
+| CMP-06 | Corrección de recepción y reclamos (**hecha**, 25/11/2026; suma el tipo `correccion_de_recepcion` de `OrigenDocumento` y el tipo de movimiento de inventario `salida_por_correccion_de_recepcion`) | CMP-COR-RCP, CMP-EMT-RCL, CMP-CRR-RCL | CMP-05 | mediana |
 
 Son 17 casos de uso. Ninguna tarea importa de `comercial` ni de `produccion` (mismo nivel 6; D-37 regla A2).
 

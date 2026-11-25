@@ -972,3 +972,128 @@ class PagosRestriccionesTests(ConDatosDeInventario, TestCase):
             self.proveedor.delete()
         with self.assertRaises(ProtectedError):
             self.orden.delete()
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Correcciones de recepción (CMP-06). Fuente: docs/modelo/compras.md («CorreccionRecepcion»), D-90 puntos 2 y 3, D-52 y CMP-COR-RCP (MD-126).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.models import CorreccionRecepcion, DetalleCorreccionRecepcion  # noqa: E402
+
+
+class CorreccionesRestriccionesTests(ConDatosDeInventario, TestCase):
+    """Las restricciones de la base de las correcciones de recepción y de sus líneas: herencia de ``OrigenDocumento``, vínculo con el movimiento y cantidad positiva."""
+
+    def setUp(self):
+        self.agronomo, self.invernadero = crear_agronomo_con_invernadero()
+        self.gerente = crear_gerente()
+        self.existencia = existencia(insumo(), self.invernadero, minimo=10, precio="12.50", transito=12)
+        self.proveedor = proveedor(n=1)
+        self.pedido = armar_pedido(self.agronomo)
+        self.detalle_de_pedido = detalle_de_pedido(self.pedido, self.existencia, cantidad="20")
+        self.cotizacion = cotizacion_de(self.pedido, self.proveedor, [(self.detalle_de_pedido, "12", "120.00", 3)])
+        self.orden = orden_de(self.pedido, [self.cotizacion], estado="aprobada", gerente=self.gerente)
+        self.detalle_orden = self.orden.detalles.get()
+        self.recepcion = Recepcion.objects.create(
+            orden=self.orden, fecha_recepcion=timezone.localdate(), agronomo=self.agronomo, proveedor=self.proveedor, invernadero=self.invernadero
+        )
+        self.linea = DetalleRecepcion.objects.create(recepcion=self.recepcion, detalle_orden=self.detalle_orden, cantidad_recibida_detalle=Decimal("5"))
+
+    def rechazo(self, crear, restriccion):
+        """Falla la prueba si la base no rechaza ``crear()`` con un ``IntegrityError`` que nombre ``restriccion``."""
+        with self.assertRaises(IntegrityError) as contexto:
+            with transaction.atomic():
+                crear()
+        self.assertIn(restriccion, str(contexto.exception))
+
+    def correccion(self, **campos):
+        """Una ``CorreccionRecepcion`` de la recepción de la prueba, hecha por el Agrónomo; ``campos`` pisa lo que se pase."""
+        datos = {"recepcion_corregida": self.recepcion, "fecha_correccion": timezone.localdate(), "agronomo": self.agronomo}
+        datos.update(campos)
+        return CorreccionRecepcion.objects.create(**datos)
+
+    def salida(self, correccion, cantidad="2"):
+        """Un movimiento «salida por corrección de recepción» sobre un lote nuevo, con la corrección como origen."""
+        return movimiento(lote(self.existencia, 5), MovimientoInsumo.TipoMovimiento.SALIDA_POR_CORRECCION_DE_RECEPCION, cantidad, origen=correccion)
+
+    def detalle(self, correccion=None, cantidad="2", movimiento_=None):
+        """Un ``DetalleCorreccionRecepcion`` de la línea de la prueba, con su movimiento de salida."""
+        correccion = correccion or self.correccion()
+        return DetalleCorreccionRecepcion.objects.create(
+            correccion=correccion, detalle_recepcion=self.linea, cantidad_corregida=Decimal(cantidad), movimiento=movimiento_ or self.salida(correccion, cantidad)
+        )
+
+    def test_d90_la_correccion_es_un_documento_de_origen_de_tipo_correccion_de_recepcion(self):
+        """D-90 punto 3 y D-52: ``CorreccionRecepcion`` hereda de ``OrigenDocumento``; su ``tipo`` lo fija la clase (``correccion_de_recepcion``) y comparte el ``id`` con el padre."""
+        correccion = self.correccion()
+        self.assertEqual(correccion.tipo, OrigenDocumento.Tipo.CORRECCION_DE_RECEPCION)
+        self.assertEqual(OrigenDocumento.objects.get(pk=correccion.pk).tipo, "correccion_de_recepcion")
+        self.assertEqual(OrigenDocumento.objects.get(pk=correccion.pk).correccionrecepcion, correccion)
+        self.assertEqual(correccion.origendocumento_ptr_id, correccion.pk)
+
+    def test_d90_la_correccion_se_muestra_como_cor_y_el_tipo_se_llama_correccion_de_recepcion(self):
+        """El identificador que ven las pantallas, los correos y la auditoría es «COR-0001»; el tipo de origen se muestra como «Corrección de recepción»."""
+        correccion = self.correccion()
+        self.assertEqual(str(correccion), f"COR-{correccion.pk:04d}")
+        self.assertEqual(str(CorreccionRecepcion()), "COR-nueva")
+        self.assertEqual(OrigenDocumento.Tipo.CORRECCION_DE_RECEPCION.label, "Corrección de recepción")
+        self.assertEqual(OrigenDocumento.objects.get(pk=correccion.pk).get_tipo_display(), "Corrección de recepción")
+
+    def test_regla_r039_el_agronomo_de_la_correccion_es_opcional(self):
+        """Modelo, «CorreccionRecepcion» (0..1, como la recepción): si corrigió el Gerente, la corrección queda sin Agrónomo; la observación es opcional."""
+        self.assertIsNone(self.correccion(agronomo=None).agronomo)
+        self.assertEqual(self.correccion().observacion, "")
+
+    def test_regla_la_recepcion_conoce_sus_correcciones(self):
+        """Modelo: una recepción puede corregirse más de una vez; se llega con ``correcciones``. (El campo se llama ``recepcion_corregida`` porque ``recepcion`` choca con el accesorio de la herencia.)"""
+        primera, segunda = self.correccion(), self.correccion()
+        self.assertEqual(list(self.recepcion.correcciones.all()), [primera, segunda])
+
+    def test_regla_la_cantidad_corregida_es_mayor_que_cero(self):
+        """Modelo, «DetalleCorreccionRecepcion» (``cantidad_corregida`` > 0): cero o negativo lo rechaza la base."""
+        correccion = self.correccion()
+        for cantidad in ("0", "-1"):
+            with self.subTest(cantidad=cantidad):
+                self.rechazo(lambda cantidad=cantidad: self.detalle(correccion, cantidad, movimiento_=self.salida(correccion)), "detalle_correccion_cantidad_positiva")
+
+    def test_d90_cada_movimiento_de_salida_se_vincula_a_una_sola_linea_de_correccion(self):
+        """D-90 punto 3: el vínculo es ``OneToOne`` con el movimiento (``vinculo_de_correccion``); la corrección tiene varias filas (``detalles``: una por lote descontado)."""
+        correccion = self.correccion()
+        primera = self.detalle(correccion)
+        self.assertEqual(primera.movimiento.vinculo_de_correccion, primera)
+        self.assertEqual(list(correccion.detalles.all()), [primera])
+        self.assertEqual(list(self.linea.correcciones.all()), [primera])
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self.detalle(self.correccion(), movimiento_=primera.movimiento)
+        segunda = self.detalle(correccion, "1")
+        self.assertEqual(correccion.detalles.count(), 2)
+        self.assertNotEqual(primera.movimiento_id, segunda.movimiento_id)
+
+    def test_d90_un_movimiento_de_salida_por_correccion_de_recepcion_acepta_la_correccion_como_origen_y_no_sin_origen(self):
+        """D-90 punto 2: la restricción de origen acepta una ``CorreccionRecepcion`` como origen del tipo nuevo, y la base lo rechaza sin origen."""
+        correccion = self.correccion()
+        salida = self.salida(correccion)
+        self.assertEqual(salida.origen_id, correccion.pk)
+        self.assertEqual(list(correccion.movimientos_de_insumo.all()), [salida])
+        self.rechazo(
+            lambda: MovimientoInsumo.objects.create(
+                lote_insumo=salida.lote_insumo, cantidad=1, tipo_movimiento="salida_por_correccion_de_recepcion", origen=None
+            ),
+            "movimiento_insumo_origen_segun_tipo",
+        )
+
+    def test_regla_el_detalle_de_correccion_se_muestra_como_su_linea_de_recepcion(self):
+        """El texto del detalle de corrección en la auditoría es el de su línea de recepción («Insumo · Invernadero»)."""
+        self.assertEqual(str(self.detalle()), str(self.linea))
+
+    def test_regla_nada_de_una_correccion_se_borra(self):
+        """D-52 («nadie borra un documento de origen»): las claves que apuntan a una corrección y a una recepción son ``PROTECT``."""
+        from django.db.models import ProtectedError
+
+        correccion = self.correccion()
+        self.detalle(correccion)
+        with self.assertRaises(ProtectedError):
+            correccion.delete()
+        with self.assertRaises(ProtectedError):
+            self.recepcion.delete()

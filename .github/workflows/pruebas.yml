@@ -63,6 +63,15 @@ jobs:
       - name: Verificar migraciones faltantes
         run: python manage.py makemigrations --check --dry-run
 
-      # Corre la suite completa de pruebas.
-      - name: Correr pruebas
-        run: python manage.py test
+      # Corre la suite en paralelo (un proceso por núcleo). Excluye las pruebas de concurrencia y de migraciones, que no pueden correr en paralelo:
+      # van en los dos pasos siguientes. Con tblib, un fallo en paralelo muestra su traza completa.
+      - name: Correr pruebas (en paralelo)
+        run: python manage.py test --parallel --exclude-tag concurrencia --exclude-tag migracion
+
+      # Pruebas de concurrencia (dos hilos con TransactionTestCase y bloqueos de filas): un solo proceso, de a una.
+      - name: Correr pruebas de concurrencia
+        run: python manage.py test --tag concurrencia
+
+      # Pruebas de migraciones (desarman y vuelven a armar el esquema de la base): un solo proceso, de a una.
+      - name: Correr pruebas de migraciones
+        run: python manage.py test --tag migracion

@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from compras import views, views_ordenes, views_pagos, views_pedidos, views_recepciones
+from compras import views, views_correcciones, views_ordenes, views_pagos, views_pedidos, views_recepciones, views_reclamos
 
 app_name = "compras"
 
@@ -26,6 +26,12 @@ urlpatterns = [
     # CMP-05: «Pagos a proveedores» (bandeja y pagos registrados) y registrar el pago de un proveedor de una orden.
     path("pagos/", views_pagos.pagos, name="pagos"),
     path("pagos/orden/<int:orden_id>/proveedor/<int:proveedor_id>/", views_pagos.pago_nuevo, name="pago_nuevo"),
+    # CMP-06: corregir una recepción (desde la ficha de la orden) y «Compras» → «Reclamos» (lista, ficha, emitir y cerrar).
+    path("ordenes/<int:orden_id>/corregir-recepcion/", views_correcciones.correccion_nueva, name="correccion_nueva"),
+    path("reclamos/", views_reclamos.reclamos, name="reclamos"),
+    path("reclamos/<int:reclamo_id>/", views_reclamos.reclamo_ficha, name="reclamo_ficha"),
+    path("reclamos/<int:reclamo_id>/emitir/", views_reclamos.reclamo_emitir, name="reclamo_emitir"),
+    path("reclamos/<int:reclamo_id>/cerrar/", views_reclamos.reclamo_cerrar, name="reclamo_cerrar"),
     path("proveedores/", views.proveedores, name="proveedores"),
     path("proveedores/nuevo/", views.proveedor_nuevo, name="proveedor_nuevo"),
     path("proveedores/<int:proveedor_id>/", views.proveedor_ficha, name="proveedor_ficha"),

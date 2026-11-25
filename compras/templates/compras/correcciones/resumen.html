@@ -1,0 +1,52 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen de la corrección (CMP-COR-RCP paso 7) antes de confirmar. Recibe «orden», «resumen» (``ResumenDeCorreccion``), «estado_texto» (el estado en que quedará la orden) y «campos» (todo lo enviado, oculto).
+Por línea: la nueva cantidad recibida y cómo cambian el stock, el tránsito y el estado; el asiento inverso y su monto; las alertas que se reactivan; y que se avisará al proveedor.{% endcomment %}
+{% block titulo %}Confirmar la corrección de {{ resumen.recepcion }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá la corrección de la recepción {{ resumen.recepcion }}</h1></div>
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div>La corrección <b>no se deshace</b>: baja el stock, vuelve a poner lo corregido como pendiente de recibir y registra el asiento inverso. Lo que se registró de menos se corrige con otra recepción parcial.</div></div>
+  <div class="stack">
+    <div class="card seg">
+      <div class="card-h"><b>Líneas que se corrigen</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th class="right">Se descuenta</th><th class="right">Recibida</th><th class="right">Stock</th><th class="right">En tránsito</th><th>Estado de la línea</th></tr></thead>
+          <tbody>
+          {% for l in resumen.lineas %}
+          {% with insumo=l.detalle_recepcion.detalle_orden.detalle_cotizacion.detalle_pedido.insumo_invernadero.insumo %}
+          <tr>
+            <td>{{ insumo.nombre_insumo }}<span class="sub2">{% for lote, cantidad in l.lotes %}Lote {{ lote.pk }}: −{{ cantidad|num:insumo.unidad_medida_insumo }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</span></td>
+            <td class="right nowrap mono"><b>{{ l.cantidad|cant:insumo.unidad_medida_insumo }}</b></td>
+            <td class="right nowrap mono">{{ l.recibida_antes|num:insumo.unidad_medida_insumo }} → {{ l.recibida_despues|num:insumo.unidad_medida_insumo }}</td>
+            <td class="right nowrap mono">{{ l.stock_antes|num:insumo.unidad_medida_insumo }} → {{ l.stock_despues|num:insumo.unidad_medida_insumo }}</td>
+            <td class="right nowrap mono">{{ l.transito_antes|num:insumo.unidad_medida_insumo }} → {{ l.transito_despues|num:insumo.unidad_medida_insumo }}</td>
+            <td>{% if l.estado_despues == "pendiente" %}Pendiente de recibir{% elif l.estado_despues == "completo" %}Completa{% else %}{{ l.estado_despues }}{% endif %}</td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <dl class="dl two">
+        <dt>La orden quedará</dt><dd><b>{{ estado_texto }}</b></dd>
+        <dt>Asiento inverso</dt><dd>{% if resumen.monto_asiento %}Debe Proveedores / Haber Insumos en Stock por <b>{{ resumen.monto_asiento|pesos }}</b>{% else %}Ninguno: el valor corregido se redondea a cero.{% endif %}</dd>
+        <dt>Pago</dt><dd>El proveedor deja de estar para pagar hasta que vuelva a tener todas sus líneas completas o cerradas.</dd>
+        {% if resumen.alertas_que_se_reactivan %}<dt>Alertas que se reactivan</dt><dd>{% for codigo, iin in resumen.alertas_que_se_reactivan %}«Stock inconsistente» de {{ iin.insumo.nombre_insumo }} ({{ iin.invernadero.nombre_invernadero }}){% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>{% endif %}
+        <dt>Correo</dt><dd>{{ resumen.recepcion.proveedor.nombre_para_mostrar }} recibe un aviso con lo que se le dejó de reconocer como recibido.</dd>
+      </dl>
+    </div>
+  </div>
+  <form method="post" action="{% url 'compras:correccion_nueva' orden.pk %}" novalidate>
+    {% csrf_token %}
+    {% for nombre, valor in campos %}<input type="hidden" name="{{ nombre }}" value="{{ valor }}">{% endfor %}
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Corrigiendo…">Confirmar corrección</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

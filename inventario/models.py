@@ -241,6 +241,8 @@ class MovimientoInsumo(OrigenDocumento):
         AJUSTE_NEGATIVO = "ajuste_negativo", "Ajuste negativo"
         SALIDA_POR_CORRECCION = "salida_por_correccion", "Salida por corrección entre lotes"
         ENTRADA_POR_CORRECCION = "entrada_por_correccion", "Entrada por corrección entre lotes"
+        # CMP-06 (D-90 punto 2, MD-126): la crea `compras` al corregir una recepción; SÍ tiene origen (la `CorreccionRecepcion`).
+        SALIDA_POR_CORRECCION_DE_RECEPCION = "salida_por_correccion_de_recepcion", "Salida por corrección de recepción"
 
     class MotivoAjuste(models.TextChoices):
         RECUENTO_FISICO = "recuento_fisico", "Recuento físico"
@@ -253,7 +255,8 @@ class MovimientoInsumo(OrigenDocumento):
     # La fecha de la operación con la hora actual; en una salida de siembra, la efectiva (D-50 punto 7).
     fecha = models.DateTimeField(default=timezone.now)
     cantidad = models.DecimalField(max_digits=14, decimal_places=3)  # siempre positiva: el sentido lo da el tipo
-    tipo_movimiento = models.CharField(max_length=30, choices=TipoMovimiento.choices)
+    # max_length 40: «salida_por_correccion_de_recepcion» tiene 34 caracteres (CMP-06, D-90 punto 2).
+    tipo_movimiento = models.CharField(max_length=40, choices=TipoMovimiento.choices)
     motivo_ajuste = models.CharField(max_length=30, choices=MotivoAjuste.choices, null=True, blank=True)
     descripcion_ajuste = models.TextField(blank=True, default="")
     # R016 (D-52 puntos 2 y 4): reemplaza a `movimiento_origen`. Salida por consumo → el Consumo (produccion); entrada por
@@ -282,6 +285,7 @@ class MovimientoInsumo(OrigenDocumento):
                         "ajuste_negativo",
                         "salida_por_correccion",
                         "entrada_por_correccion",
+                        "salida_por_correccion_de_recepcion",
                     ]
                 ),
                 name="movimiento_insumo_tipo_valido",
@@ -303,7 +307,7 @@ class MovimientoInsumo(OrigenDocumento):
                 condition=~Q(motivo_ajuste="otro") | ~Q(descripcion_ajuste=""),
                 name="movimiento_insumo_otro_con_descripcion",
             ),
-            # Regla 3 de 8.19 (D-52 punto 4): origen nulo si y solo si es ajuste o salida por corrección entre lotes.
+            # Regla 3 de 8.19 (D-52 punto 4): origen nulo si y solo si es ajuste o salida por corrección entre lotes (la salida por corrección de recepción, CMP-06, tiene origen).
             models.CheckConstraint(
                 condition=(
                     Q(tipo_movimiento__in=["ajuste_positivo", "ajuste_negativo", "salida_por_correccion"])

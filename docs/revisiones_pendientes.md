@@ -985,3 +985,35 @@ Los 28 pasos son los de «Verificación a mano» de `docs/tareas/produccion/PRD-
 - [ ] 26. **Navegador real** (ventana privada, y otra vez sin JavaScript): una carga de 10 plantas en Floración, «Ver resumen» y «Confirmar registro» hasta el final; sin «Prohibido (403)» ni errores en la consola.
 - [ ] 27. **Al final, irreversible para este invernadero:** concretar una siembra normal; la acción «Registrar lote existente» desaparece y no vuelve, y la pantalla lo explica *(lo cubre una prueba)*.
 - [ ] 28. Opcional: en un celular de 360 px la pantalla, con el resumen y el asiento, se lee bien.
+
+## CMP-06 · Tarea CMP-06 (corrección de recepción y reclamos a proveedores)
+
+Los 27 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-06-correccion-de-recepcion-y-reclamos.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **cuatro migraciones nuevas** (`compras` 0006, `inventario` 0004, `contabilidad` 0009 y `core` 0047; la de `inventario` agranda una columna y reescribe una restricción, las de `contabilidad` y `core` solo cambian `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_correccion_y_reclamos.py`; la concurrencia no se prueba a mano.
+
+- [ ] 1. Gerente, Inicio. *(lo cubre una prueba)*
+- [ ] 2. Gerente, Compras → Reclamos. *(lo cubre una prueba)*
+- [ ] 3. Ficha del reclamo. *(lo cubre una prueba)*
+- [ ] 4. Emitir. *(lo cubre una prueba)*
+- [ ] 5. Alerta e Inicio. *(lo cubre una prueba)*
+- [ ] 6. Cerrar. *(lo cubre una prueba)*
+- [ ] 7. Auditoría. *(lo cubre una prueba)*
+- [ ] 8. Ana, ficha de OC. *(lo cubre una prueba)*
+- [ ] 9. Formulario. *(lo cubre una prueba)*
+- [ ] 10. Errores. *(lo cubre una prueba)*
+- [ ] 11. Resumen. *(lo cubre una prueba)*
+- [ ] 12. «Volver». *(lo cubre una prueba)*
+- [ ] 13. Confirmar. *(lo cubre una prueba)*
+- [ ] 14. Stock. *(lo cubre una prueba)*
+- [ ] 15. Libro de gestión. *(lo cubre una prueba)*
+- [ ] 16. Correo. *(lo cubre una prueba)*
+- [ ] 17. Auditoría. *(lo cubre una prueba)*
+- [ ] 18. El reclamo no cambia. *(lo cubre una prueba)*
+- [ ] 19. Bandeja de pagos. *(lo cubre una prueba)*
+- [ ] 20. Volver a recibir y pagar. *(lo cubre una prueba)*
+- [ ] 21. Con el pago hecho ya no se corrige. *(lo cubre una prueba)*
+- [ ] 22. Un lote que ya se usó. *(lo cubre una prueba)*
+- [ ] 23. Línea cerrada con faltante. *(lo cubre una prueba)*
+- [ ] 24. Roles. *(lo cubre una prueba)*
+- [ ] 25. Navegador real.
+- [ ] 26. Sin JavaScript.
+- [ ] 27. Celular.
