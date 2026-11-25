@@ -1,8 +1,8 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
 {% comment %}Ficha del suministro (COM-CNS-SUM, reglas 4 a 6, 9 y 10, en lo que existe hoy; VIEWS.sum del prototipo, segunda definición): los datos del contrato con su cláusula del suministrado, el aviso de
 límite, los detalles (una línea por cadena «reemplaza a», con el precio vigente hoy y la cláusula del suministrante), el calendario con la situación de cada período («Fuera de la ventana», «Reservado»,
-«Sin cobertura completa», «Pasado») y el comprobante con «Ver comprobante» y «Reenviar comprobante». COM-03b suma el aviso de la rescisión, «Modificar suministro», «Rescindir suministro», «Dejar sin efecto la rescisión» y «Ver historial de cambios» (solo lo que la persona puede hacer, regla 10). Todavía NO (D-25): las entregas, las
-solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha», «s», «es_gerente» y, si hay una ventana abierta, «plantilla_de_ventana» con su contexto.{% endcomment %}
+«Sin cobertura completa», «Pasado») y el comprobante con «Ver comprobante» y «Reenviar comprobante». COM-03b suma el aviso de la rescisión, «Modificar suministro», «Rescindir suministro», «Dejar sin efecto la rescisión» y «Ver historial de cambios» (solo lo que la persona puede hacer, regla 10). COM-07b suma el aviso de la resolución por incumplimientos (con el enlace a la solicitud que la provocó y la multa) y, solo para el Gerente y mientras la alerta siga activa, «Dar por atendida»
+(un formulario POST con su botón: funciona sin JavaScript). Todavía NO (D-25): «Registrar cobro» (COM-08). Recibe «ficha», «s», «es_gerente» y, si hay una ventana abierta, «plantilla_de_ventana» con su contexto.{% endcomment %}
 {% block titulo %}{{ s.codigo }} · Contratos · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
@@ -25,6 +25,26 @@ solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha
     {% endif %}
     {% if ficha.aviso_de_limite %}
     <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{{ ficha.aviso_de_limite }}</div></div>
+    {% endif %}
+    {% if ficha.resolucion %}
+    {% with r=ficha.resolucion %}
+    <div class="alert alert-danger" role="status" id="resolucion">{% icono "warn" 16 %}<div>
+      <b>Resuelto por incumplimientos el {{ r.fecha|date:"d/m/Y" }}:</b> {{ r.incumplimientos }} de {{ r.tolerados }} <span class="muted">tolerados</span>{% if r.solicitud %}, por <a href="{% url 'comercial:solicitud' r.solicitud.pk %}">{{ r.solicitud.codigo }}</a>{% endif %}.
+      {% if r.multa %}Multa: <span class="mono">{{ r.multa|pesos }}</span> <span class="muted">· Asiento: fuera de esta ronda · contabilidad.</span>{% else %}El contrato no prevé multa.{% endif %}
+      Las entregas concretadas se siguen cobrando.
+      {% if r.entregas_canceladas %}<span class="sub2">Entregas canceladas: {% for e in r.entregas_canceladas %}<span class="mono">{{ e.codigo }}</span> ({{ e.fecha_programada_orden|date:"d/m" }}){% if not forloop.last %}, {% endif %}{% endfor %}.</span>{% endif %}
+    </div></div>
+    {% endwith %}
+    {% endif %}
+    {% if "dar_por_atendida" in ficha.acciones %}
+    <div class="card" id="atender-resolucion">
+      <div class="card-title">Resolución sin atender</div>
+      <p class="muted">Usalo cuando hayas pagado la multa y avisado al cliente. La alerta deja de figurar entre tus pendientes.</p>
+      <form method="post" action="{% url 'comercial:suministro_dar_por_atendida' s.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit" data-enviando="Guardando…">Dar por atendida</button>
+      </form>
+    </div>
     {% endif %}
 
     <div class="card">

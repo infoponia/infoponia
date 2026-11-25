@@ -850,6 +850,10 @@ class RegistroAuditoria(models.Model):
         EVALUACION_DISCREPANCIA = "evaluacion_discrepancia", "Evaluación de discrepancia"  # COM-EVL-DSC
         RESOLUCION_QUEJA = "resolucion_queja", "Resolución de queja"  # COM-RSV-QJA
         ANULACION_RESOLUCION_SOLICITUD = "anulacion_resolucion_solicitud", "Anulación de la resolución de una solicitud"  # COM-ANL-SRV
+        # COM-07b (D-69): la resolución de un suministro por incumplimientos (proceso automático), el disparo que no correspondía y «Dar por atendida» (Gerente).
+        RESOLUCION_SUMINISTRO = "resolucion_suministro", "Resolución de suministro por incumplimientos"  # COM-RSV-SUM
+        RESOLUCION_SUMINISTRO_DESCARTADA = "resolucion_suministro_descartada", "Disparo de resolución de suministro descartado"  # COM-RSV-SUM 2b
+        ATENCION_SUMINISTRO_RESUELTO = "atencion_suministro_resuelto", "Atención de suministro resuelto"  # COM-RSV-SUM, «Dar por atendida»
         # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
         CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
         EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
@@ -1283,6 +1287,12 @@ class RegistroAuditoria(models.Model):
         # CON-03b: el contraasiento guarda el vínculo con el asiento que anula (``anula`` en ``cambios``) y, sin Gerente activo, la constancia del aviso.
         "anula": "Asiento que anula",
         "aviso_al_gerente": "Aviso al Gerente",
+        # COM-07b (COM-RSV-SUM): la resolución de un suministro. Claves de `cambios` y de `datos` («suministro», «detalles», «alerta», «alertas_creadas», «alertas_resueltas»,
+        # «reservas_liberadas», «cosechas_canceladas», «entregas_canceladas», «reservas_de_envases_canceladas», «partidas_creadas», «movimientos_creados», «estado_suministro»,
+        # «cantidad_incumplimientos», «incumplimientos_tolerados» y «multa_resolucion» ya existen).
+        "fecha_resolucion_suministro": "Fecha de resolución del contrato",
+        "solicitud_resolucion": "Solicitud que provocó la resolución",
+        "detalles_resueltos": "Detalles que pasaron a «resuelto»",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {
@@ -1686,6 +1696,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.EVALUACION_DISCREPANCIA,  # COM-07a
         RegistroAuditoria.Accion.RESOLUCION_QUEJA,  # COM-07a
         RegistroAuditoria.Accion.ANULACION_RESOLUCION_SOLICITUD,  # COM-07a
+        RegistroAuditoria.Accion.RESOLUCION_SUMINISTRO,  # COM-07b
+        RegistroAuditoria.Accion.RESOLUCION_SUMINISTRO_DESCARTADA,  # COM-07b
+        RegistroAuditoria.Accion.ATENCION_SUMINISTRO_RESUELTO,  # COM-07b
         RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
         RegistroAuditoria.Accion.EMISION_RECLAMO,
         RegistroAuditoria.Accion.CIERRE_RECLAMO,

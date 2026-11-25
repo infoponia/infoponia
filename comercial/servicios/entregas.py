@@ -794,14 +794,16 @@ def _aviso_de_cancelacion_al_transportista(entrega, motivo, en_curso_):
     notificaciones.notificar(entrega.transportista, f"Se canceló la entrega {entrega.codigo}", _acotar(detalle, LARGO_DEL_DETALLE))
 
 
-def cancelar_entrega_incluida(actor, entrega, motivo):
+def cancelar_entrega_incluida(actor, entrega, motivo, *, avisar_agronomo=True):
     """La «Cancelación de una entrega» de PROD-CNL-ORD (solo desde otro caso de uso: PROD-VNC-CAM 3a, PROD-REG-MRM 10c, y después COM-CNL-CVT y COM-RSV-SUM). Como
     `cancelar_cosecha_incluida`: `actor` puede ser `None` (InfoPonia); corre en la transacción del llamador, que ya tiene el invernadero y sus filas (sin ella, `RuntimeError`);
     **no audita**: devuelve `CancelacionDeEntrega(entrega, reservas_de_insumo, alerta_resuelta, avisados)` para el registro del llamador (D-36). No toca las reservas de stock.
 
     - Motivo vacío: `motivo_obligatorio`. La entrega ya no «a realizar» (la concretó o la canceló otro): `entrega_no_a_realizar`, y el caso de uso base decide cómo sigue (8a).
     - La orden pasa a «cancelada» con `ordenes.cancelar_orden_incluida` (que también cancela sus reservas de insumo, sin consumo); se resuelve la alerta «entrega sin transportista».
-    - Avisos dentro de la transacción: al transportista (con «No la entregues…» si está en curso) y al Agrónomo activo si tenía envasado. El aviso al cliente lo manda el caso de uso base."""
+    - Avisos dentro de la transacción: al transportista (con «No la entregues…» si está en curso) y al Agrónomo activo si tenía envasado. El aviso al cliente lo manda el caso de uso base.
+    - `avisar_agronomo=False` (COM-07b, paso 4.4 de COM-RSV-SUM; situación 9) omite solo el aviso al Agrónomo: la resolución le manda UNA notificación por invernadero con los envases
+      (por eso igual devuelve las reservas de insumo). Por omisión `True`: COM-05a1, COM-05b y PROD-VNC-CAM no cambian."""
     _exigir_transaccion("cancelar_entrega_incluida")
     motivo = (motivo or "").strip()
     if not motivo:
@@ -820,7 +822,7 @@ def cancelar_entrega_incluida(actor, entrega, motivo):
         avisados.append(transportista)
     activas = list(cancelacion.reservas)
     agronomo = actual.invernadero.agronomo
-    if activas and agronomo is not None and agronomo.is_active:
+    if avisar_agronomo and activas and agronomo is not None and agronomo.is_active:
         existencias = {e.pk: e for e in InsumoInvernadero.objects.filter(pk__in=[r.insumo_invernadero_id for r in activas]).select_related("insumo")}
         reservados = ", ".join(f"{_cantidad(r.cantidad_reservada)} {existencias[r.insumo_invernadero_id].insumo.nombre_insumo}" for r in activas)
         notificaciones.notificar(

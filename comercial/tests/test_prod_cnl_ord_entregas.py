@@ -129,6 +129,25 @@ class ProdCnlOrdEntregasServicioTests(ConDatosDeInventario, TestCase):
         self.assertEqual(self.avisos(self.e.agronomo), [])
         self.assertEqual(resultado.avisados, [])
 
+    def test_regla_con_avisar_agronomo_falso_no_se_avisa_al_agronomo_pero_si_al_transportista(self):
+        """COM-RSV-SUM, paso 4.4 (COM-07b): `avisar_agronomo=False` omite el aviso de los envases (el Agrónomo recibe uno solo, armado por la resolución); el resultado igual devuelve las
+        reservas de insumo para armarlo, y el aviso al transportista no cambia."""
+        venta, r, e = self.entrega_de(transportista=self.t)
+        reservar(e, self.e.existencia_semilla, 20)
+        resultado = entregas.cancelar_entrega_incluida(None, e, "x", avisar_agronomo=False)
+        self.assertEqual(self.avisos(self.e.agronomo), [])
+        self.assertEqual(len(self.avisos(self.t)), 1)
+        self.assertEqual([x.cantidad_reservada for x in resultado.reservas_de_insumo], [20])
+        self.assertEqual(resultado.avisados, [self.t])
+
+    def test_regla_con_avisar_agronomo_por_omision_el_aviso_de_los_envases_no_cambia(self):
+        """El argumento nuevo vale `True` por omisión: COM-05a1, COM-05b y PROD-VNC-CAM siguen avisando al Agrónomo como antes (sus pruebas no se tocan)."""
+        venta, r, e = self.entrega_de()
+        reservar(e, self.e.existencia_semilla, 20)
+        resultado = entregas.cancelar_entrega_incluida(None, e, "x", avisar_agronomo=True)
+        self.assertEqual(len(self.avisos(self.e.agronomo)), 1)
+        self.assertEqual(resultado.avisados, [self.e.agronomo])
+
     # ---- el transportista (situación 11) ----
 
     def test_post_se_avisa_al_transportista_la_cancelacion(self):

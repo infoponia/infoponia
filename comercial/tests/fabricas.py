@@ -954,6 +954,27 @@ def resolucion_del_suministro(suministro_, solicitud):
     return Suministro.objects.get(pk=suministro_.pk)
 
 
+def verificar_invariantes_de_resolucion():
+    """COM-07b (COM-RSV-SUM, «Garantías mínimas»): ninguna reserva «activa» ni «lista para entrega» de un detalle «resuelto» ni de un suministro «resuelto»; ninguna orden «a realizar» (cosecha o
+    entrega) de un suministro «resuelto»; y el suministro «resuelto» con la fecha de resolución. Es un invariante APARTE de `verificar_invariantes_de_reservas` porque las pruebas de COM-07a dejan
+    contratos «resueltos» con reservas sin tocar (las arma con `update`, sin pasar por el caso de uso). Lanza `AssertionError` con lo que encuentra."""
+    from comercial.models import Entrega, ReservaStock, Suministro
+    from produccion.models import Cosecha
+
+    problemas = []
+    for r in ReservaStock.objects.filter(estado_reserva__in=["activa", "lista_para_entrega"]).filter(
+        detalle_suministro__estado_detalle_suministro="resuelto"
+    ) | ReservaStock.objects.filter(estado_reserva__in=["activa", "lista_para_entrega"], detalle_suministro__suministro__estado_suministro="resuelto"):
+        problemas.append(f"Reserva #{r.pk}: {r.estado_reserva} y de un contrato o un detalle resuelto")
+    resueltos = list(Suministro.objects.filter(estado_suministro="resuelto").values_list("pk", flat=True))
+    for e in Entrega.objects.filter(estado_orden="a_realizar", contrato_entrega_id__in=resueltos):
+        problemas.append(f"{e.codigo}: a realizar y de un suministro resuelto")
+    for c in Cosecha.objects.filter(estado_orden="a_realizar", reserva__detalle_suministro__suministro_id__in=resueltos):
+        problemas.append(f"{c.codigo}: a realizar y de un suministro resuelto")
+    if problemas:
+        raise AssertionError("Invariantes de la resolución rotos: " + "; ".join(problemas))
+
+
 def verificar_invariantes_de_solicitudes():
     """Invariantes de `docs/modelo/comercial.md`, «SolicitudRevision» y «DiscrepanciaEntrega» (COM-06a), los que la base no puede vigilar: (1) la entrega de una solicitud es de un
     suministro y está «concretada»; (2) las líneas de una discrepancia son de la entrega de la discrepancia y de un detalle de suministro; (3) una discrepancia tiene al menos una línea;

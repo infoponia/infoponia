@@ -59,6 +59,17 @@ class CancelarCosechaIncluidaTests(Base):
             {n.destinatario_id for n in Notificacion.objects.all()}, {self.e.capataz.pk, self.e.agronomo.pk}
         )
 
+    def test_regla_con_avisar_agronomo_falso_solo_se_avisa_al_capataz(self):
+        """COM-RSV-SUM, paso 4.1 (COM-07b): con `avisar=True` y `avisar_agronomo=False` solo el Capataz recibe el aviso (el Agrónomo recibe uno solo por invernadero, armado por la
+        resolución). Por omisión (`True`) el aviso a los dos no cambia."""
+        self.incluida(avisar=True, avisar_agronomo=False)
+        self.assertEqual({n.destinatario_id for n in Notificacion.objects.all()}, {self.e.capataz.pk})
+
+    def test_regla_con_avisar_falso_el_argumento_avisar_agronomo_no_avisa_a_nadie(self):
+        """`avisar=False` manda sobre `avisar_agronomo`: nadie recibe el aviso aunque el segundo valga `True`."""
+        self.incluida(avisar=False, avisar_agronomo=True)
+        self.assertFalse(Notificacion.objects.exists())
+
     def test_regla_no_abre_una_transaccion_propia(self):
         """Corre en la transacción de su llamador: sin ella, `RuntimeError` y la cosecha sigue «a realizar»."""
         from unittest import mock

@@ -15,6 +15,7 @@
 #     25  | Reasignar cámara                  | comercial (COM-04b: recupera PROD-ASG-CAM)
 #     27  | Avisar enlaces vencidos           | comercial (COM-04c: el enlace de decisión de faltante vencido sin respuesta)
 #     30  | Vencer pagos de suministro        | comercial
+#     33  | Resolver suministros con incumplimientos superados | comercial (COM-07b, D-69 punto 7: antes del 35, el 40 y el 50)
 #     35  | Cerrar rescisiones de suministros | comercial (COM-03b)
 #     40  | Pre-reservar suministros          | comercial
 #     50  | Planificar entregas               | comercial (COM-05a1: recupera COM-PNF-ENT y busca transportista)
