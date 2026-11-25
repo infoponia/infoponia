@@ -7,7 +7,9 @@ register = template.Library()
 
 # Trazos tomados de ic() de los prototipos (cuentas y seguridad; producción desde UI-01).
 _TRAZOS = {
-    "leafmark": '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    # CON-03a: «Contabilidad» del menú (``book`` del prototipo de compras y contabilidad).
+    "book": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5V22h16v-3M9 7h7M9 11h5"/>',
+    "leafmark":'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     "chev": '<polyline points="6 9 12 15 18 9"/>',
     "out": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     "dash": '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/>'

@@ -225,3 +225,68 @@ class LibroTests(PlanDeCuentasMixin, TestCase):
             libro.total_por_cuenta_en_periodo("9.9.99", datetime.date(2026, 1, 1), datetime.date(2027, 12, 31))
 
         self.assertEqual(contexto.exception.codigo, "cuenta_inexistente")
+
+
+class PaginaDeMovimientosDeCuentaTests(PlanDeCuentasMixin, TestCase):
+    """CON-03a paso 1 (regla 3 de CON-CNS-LGS y «Paginación»): la vista por cuenta pagina por movimientos; el saldo acumulado de la primera fila de cada
+    página sale del saldo inicial más lo anterior de esa cuenta, sin recorrer las páginas previas. Caja con el 2026 cerrado (saldo 1300) y cuatro
+    movimientos en el 2027 (+300, -50, +10, +20)."""
+
+    def setUp(self):
+        self.e2026 = ejercicio(Estado.CERRADO, datetime.date(2026, 1, 1))
+        self.e2027 = ejercicio(Estado.ABIERTO, datetime.date(2027, 1, 1))
+        asiento_de_prueba(self.e2026, datetime.date(2026, 3, 1), [(cuentas.CAJA, DEBE, _d("1500.00")), (cuentas.CAPITAL_INICIAL, HABER, _d("1500.00"))])
+        asiento_de_prueba(self.e2026, datetime.date(2026, 7, 1), [(cuentas.GASTOS_GENERALES, DEBE, _d("200.00")), (cuentas.CAJA, HABER, _d("200.00"))])
+        for mes, tipo, importe in ((2, DEBE, "300.00"), (3, HABER, "50.00"), (4, DEBE, "10.00"), (5, DEBE, "20.00")):
+            contra = HABER if tipo == DEBE else DEBE
+            asiento_de_prueba(self.e2027, datetime.date(2027, mes, 1), [(cuentas.CAJA, tipo, _d(importe)), (cuentas.OTROS_INGRESOS, contra, _d(importe))])
+
+    def test_regla_3_cada_pagina_arranca_con_el_saldo_que_dejo_la_anterior(self):
+        """La primera fila de la página 2 usa el saldo inicial (1300) más lo anterior (+300 −50), no cero."""
+        primera = libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, 1, por_pagina=2)
+        segunda = libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, 2, por_pagina=2)
+
+        self.assertEqual([f.saldo for f in primera.filas], [_d("1600.00"), _d("1550.00")])
+        self.assertEqual([f.saldo for f in segunda.filas], [_d("1560.00"), _d("1580.00")])
+        self.assertEqual((primera.numero, primera.total_paginas, primera.cantidad), (1, 2, 4))
+        self.assertEqual(primera.saldo_inicial, _d("1300.00"))
+        self.assertEqual(primera.saldo_final, _d("1580.00"))
+        self.assertEqual(segunda.saldo_final, _d("1580.00"))
+
+    def test_regla_3_la_paginada_coincide_con_la_lista_completa(self):
+        """Las filas de todas las páginas, juntas, son las de `movimientos_de_cuenta` (mismo orden, mismos saldos)."""
+        completa = [(f.movimiento.pk, f.saldo) for f in libro.movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk)]
+        paginadas = []
+        for pagina in (1, 2):
+            paginadas += [(f.movimiento.pk, f.saldo) for f in libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, pagina, por_pagina=2).filas]
+
+        self.assertEqual(paginadas, completa)
+
+    def test_regla_4_la_cuenta_de_resultado_arranca_en_cero_en_la_pagina(self):
+        """Regla 4: una cuenta de resultado (Otros Ingresos, acreedora) no arrastra el 2026; su saldo parte de cero también en la página 2."""
+        segunda = libro.pagina_de_movimientos_de_cuenta(cuentas.OTROS_INGRESOS, self.e2027.pk, 2, por_pagina=2)
+
+        self.assertEqual(segunda.saldo_inicial, _d("0.00"))
+        # Otros Ingresos: Haber 300, Debe 50, Haber 10, Haber 20 → saldo acreedor 300, 250, 260, 280.
+        self.assertEqual([f.saldo for f in segunda.filas], [_d("260.00"), _d("280.00")])
+
+    def test_una_pagina_fuera_de_rango_trae_la_ultima_y_una_ilegible_la_primera(self):
+        """Una página que no existe no es un error en una pantalla de consulta: se muestra la última; un texto que no es número, la primera."""
+        self.assertEqual(libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, 99, por_pagina=2).numero, 2)
+        self.assertEqual(libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, "x", por_pagina=2).numero, 1)
+
+    def test_una_cuenta_sin_movimientos_trae_una_pagina_vacia_con_su_saldo_inicial(self):
+        """Una cuenta patrimonial sin movimientos en el ejercicio: ninguna fila, una sola página y el saldo inicial como final (Capital Inicial, 1500)."""
+        pagina = libro.pagina_de_movimientos_de_cuenta(cuentas.CAPITAL_INICIAL, self.e2027.pk, 1)
+
+        self.assertEqual((pagina.filas, pagina.total_paginas, pagina.cantidad), ([], 1, 0))
+        self.assertEqual((pagina.saldo_inicial, pagina.saldo_final), (_d("1500.00"), _d("1500.00")))
+
+    def test_una_pagina_no_hace_consultas_por_movimiento(self):
+        """«Sin consultas por fila»: dos páginas de distinto tamaño hacen las mismas consultas."""
+        with CaptureQueriesContext(connection) as chica:
+            libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, 1, por_pagina=1)
+        with CaptureQueriesContext(connection) as grande:
+            libro.pagina_de_movimientos_de_cuenta(cuentas.CAJA, self.e2027.pk, 1, por_pagina=4)
+
+        self.assertEqual(len(chica), len(grande))

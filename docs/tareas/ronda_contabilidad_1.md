@@ -12,7 +12,7 @@ de las tareas: **D-44**. Este archivo lo lee la persona que planifica; Claude Co
 |---|---|---|---|---|---|
 | USR-11 | El rol Contador y quién registra los asientos — **hecha el 24/11/2026** (a la espera de la revisión a mano) | core | USR-ALT/MOD/BAJ/CNS-USR, SEG-13, SEG-15 (cambios) | — | 1 |
 | CON-02 | Núcleo contable — **hecha el 24/11/2026** (a la espera de la revisión a mano) | contabilidad | CON-ABR-EJE (paso diario 5) y `registrar_asiento_automatico` | USR-11 (hecha), CON-01 (hecha) | 1 |
-| CON-03a | Libro de gestión, plan de cuentas y ejercicios | contabilidad | CON-CNS-LGS, CON-CNS-PCT, CON-CRR-EJE | CON-02 | 1 |
+| CON-03a | Libro de gestión, plan de cuentas y ejercicios — **hecha el 24/11/2026** (a la espera de la revisión a mano) | contabilidad | CON-CNS-LGS, CON-CNS-PCT, CON-CRR-EJE | CON-02 | 1 |
 | CON-03b | Asientos manuales y contraasientos | contabilidad | CON-REG-ASI, CON-CTR-ASI | CON-03a | 1 |
 
 Son 7 casos de uso nuevos (más los cambios de cuentas por el rol). Tamaño: USR-11, chica; CON-02, grande y delicada; CON-03a y CON-03b, medianas.

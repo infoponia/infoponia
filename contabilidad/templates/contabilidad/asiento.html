@@ -1,0 +1,52 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable estaticos iconos %}
+{% comment %}Ficha del asiento (CON-CNS-LGS regla 5; ``VIEWS.k_asi`` del prototipo): fecha, ejercicio, documento de origen con su enlace (si la app que lo origina lo registró, ``contabilidad/extensiones.py``), quién lo
+registró (solo el manual y el contraasiento: sale de la auditoría), importe, movimientos y, si corresponde, el asiento que anula o que lo anuló. Sin «Contraasentar» ni «Registrar asiento»: llegan con CON-03b. Todo se escapa.{% endcomment %}
+{% block titulo %}Asiento N.º {{ ficha.asiento.numero_asiento }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+{% with a=ficha.asiento %}
+<div class="page">
+  <a class="btn btn-text btn-sm" href="{% url 'contabilidad:libro' %}?ejercicio={{ ejercicio.pk }}">{% icono "back" 14 %} Libro de gestión</a>
+  <div class="page-h" style="margin-top:8px"><h1>Asiento N.º {{ a.numero_asiento }}</h1>{% include "contabilidad/_insignias.html" with asiento=a anulado=ficha.anulado_por %}</div>
+
+  <div class="stack">
+    {% if ficha.anulado_por %}
+    <div class="alert alert-danger" role="status">{% icono "warn" 16 %}<div><b>Anulado.</b> Lo anula el asiento <a class="link" href="{% url 'contabilidad:asiento' ficha.anulado_por.ejercicio_id ficha.anulado_por.numero_asiento %}">N.º {{ ficha.anulado_por.numero_asiento }}</a> del {{ ficha.anulado_por.fecha_asiento|date:"d/m/Y" }}.</div></div>
+    {% endif %}
+    {% if ficha.anula %}
+    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este contraasiento anula el asiento <a class="link" href="{% url 'contabilidad:asiento' ficha.anula.ejercicio_id ficha.anula.numero_asiento %}">N.º {{ ficha.anula.numero_asiento }}</a>: {{ ficha.anula.descripcion_asiento|default:"asiento automático" }}.</div></div>
+    {% endif %}
+    {% if ejercicio.estado_ejercicio == 'cerrado' %}
+    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este asiento es de un ejercicio cerrado: es solo de consulta.</div></div>
+    {% endif %}
+
+    <div class="card">
+      <div class="facts">
+        <div><span class="k">Fecha</span><span class="v">{{ a.fecha_asiento|date:"d/m/Y" }}</span></div>
+        <div><span class="k">Ejercicio</span><span class="v">Ejercicio {{ numero_de_ejercicio }}</span><span class="d">{{ ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }} · {{ ejercicio.get_estado_ejercicio_display }}</span></div>
+        <div><span class="k">Origen</span>{% if ficha.origen_texto %}<span class="v">{% if ficha.origen_url %}<a class="link" href="{{ ficha.origen_url }}">{{ ficha.origen_texto }}</a>{% else %}{{ ficha.origen_texto }}{% endif %}</span>{% else %}<span class="v">Sin documento de origen</span>{% endif %}</div>
+        {% if a.tipo != 'automatico' %}<div><span class="k">Registrado por</span><span class="v">{% if ficha.registrado_por %}{{ ficha.registrado_por.get_full_name|default:ficha.registrado_por.email }}<span class="d">{{ ficha.registrado_por.get_rol_display }}</span>{% else %}—{% endif %}</span></div>{% endif %}
+        <div><span class="k">Importe</span><span class="v mono">{{ ficha.total|pesos }}</span></div>
+      </div>
+      {% if a.descripcion_asiento %}<div class="card-b"><b>{{ a.descripcion_asiento }}</b></div>{% endif %}
+    </div>
+
+    <div class="card seg">
+      <div class="card-h"><b>Movimientos</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Cuenta</th><th class="right">Debe</th><th class="right">Haber</th></tr></thead>
+          <tbody>
+          {% for m in ficha.movimientos %}
+            <tr><td>{{ m.cuenta.codigo_cuenta }} · {{ m.cuenta.nombre_cuenta }}<span class="sub2">{{ m.cuenta.get_tipo_cuenta_display }}</span></td><td class="right nowrap mono">{% if m.tipo_movimiento == 'D' %}{{ m.importe_movimiento|pesos }}{% endif %}</td><td class="right nowrap mono">{% if m.tipo_movimiento == 'H' %}{{ m.importe_movimiento|pesos }}{% endif %}</td></tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr><td class="right"><b>Totales</b></td><td class="right mono"><b>{{ ficha.total|pesos }}</b></td><td class="right mono"><b>{{ ficha.total|pesos }}</b></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+    {% if a.tipo == 'automatico' %}<p class="hint">Este asiento lo genera el sistema. Si algo está mal, se corrige la operación de origen y el asiento se ajusta solo.</p>{% endif %}
+  </div>
+</div>
+{% endwith %}
+{% endblock %}

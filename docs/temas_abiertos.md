@@ -714,3 +714,11 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **«Verificación a mano» de la tarea nombraba un cargador (`comercial/verificacion.py`)**, retirado en D-95: se ignoró; los datos los crea el estudiante.
 - **Pendiente de la tanda (no es un desvío): el paso de «navegador real»** de la «Verificación a mano» (paso 9: ventana privada, la lista de entregas con el Vendedor y con el Gerente y «Filtrar» hasta el final con JavaScript) **queda pendiente para el cierre de la tanda de «Comercial 1»**, junto con la pasada de COM-04c (`URL_DEL_SITIO` en Render). El cliente de Django no ve el JavaScript ni el redibujado con HTMX.
 - **Sigue abierto (no es de esta tarea):** `periodos_conservados` mira solo los detalles «vigentes» (`docs/disparadores.md`, «Cuando se programen COM-05a1 y COM-06», punto 1): un contrato con períodos de un detalle finalizado por una modificación puede quedar «rescindido» con entregas pendientes. COM-05a1 solo agregó que el cierre espera las entregas «a realizar».
+
+## CON-03a (24/11/2026): lo que se implementó distinto de lo escrito
+
+- **La entrada «Contabilidad» del menú no está en `core/menu.py`:** la tarea («Permitido») la ubicaba ahí; se registra desde `ContabilidadConfig.ready()` con `core.menu.registrar_entrada`, el patrón vigente (D-40, regla A4 de D-37). En `core/menu.py` solo cambió un comentario.
+- **Tres aserciones de pruebas de `core` se actualizaron** (el menú del Contador ahora es «Panel de control, Contabilidad, Compras»): dos líneas en `core/tests/test_rol_contador_vistas.py` y una en `core/tests/test_recorrido_rol_contador.py`. No estaban en «Permitido».
+- **«Deja de aceptar asientos»** («Hecho cuando») se lee con D-102 punto 1: el ejercicio cerrado no recibe ningún asiento; un automático con fecha de su rango va al abierto con la fecha de hoy y la aclaración, y uno manual o un contraasiento se rechaza (`fecha_en_ejercicio_cerrado`).
+- **Un asiento o un ejercicio inexistente dan 404** (la documentación no lo dice; sigue D-28).
+- **«Quién registró» el asiento** se muestra con el nombre y el rol de la cuenta (la documentación dice solo «quién lo registró»).

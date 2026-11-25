@@ -1,0 +1,10 @@
+{% comment %}Paginación del libro (CON-CNS-LGS, «Paginación»): «Anterior» y «Siguiente» como enlaces que conservan los filtros (``base`` es la cadena de consulta sin «pagina»). Recibe numero, total
+(páginas), cantidad (de filas), por_pagina y base. No se muestra si todo entra en una página. Funciona sin JavaScript.{% endcomment %}
+{% if total > 1 %}
+<nav class="pager" aria-label="Páginas del libro" style="display:flex;align-items:center;gap:12px;margin-top:14px">
+  <span class="muted">{{ cantidad }} en total · página {{ numero }} de {{ total }}</span>
+  <span class="spacer" style="flex:1"></span>
+  {% if numero > 1 %}<a class="btn btn-ghost btn-sm" href="?{% if base %}{{ base }}&amp;{% endif %}pagina={{ numero|add:'-1' }}">Anterior</a>{% endif %}
+  {% if numero < total %}<a class="btn btn-ghost btn-sm" href="?{% if base %}{{ base }}&amp;{% endif %}pagina={{ numero|add:'1' }}">Siguiente</a>{% endif %}
+</nav>
+{% endif %}

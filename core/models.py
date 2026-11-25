@@ -1049,7 +1049,6 @@ class RegistroAuditoria(models.Model):
         "estado_venta": "Estado de la venta",
         "monto_estimado": "Monto estimado",
         "detalles": "Detalles",
-        "reservas": "Reservas",
         "lineas": "Líneas de reserva",
         "cosechas": "Cosechas",
         # Suministros (COM-03a): las claves de `datos` del registro «pacto_suministro» (las demás ya existen).
@@ -1157,7 +1156,6 @@ class RegistroAuditoria(models.Model):
         "movimientos_creados": "Movimientos de stock creados",
         "cosechas_canceladas": "Cosechas canceladas",
         "enlace": "Enlace del cliente",
-        "enlaces_anulados": "Enlaces anulados",
         "fecha_vencimiento_enlace": "El enlace vencía el",
         # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
         "fecha_inicio_ejercicio": "Inicio del ejercicio",
@@ -1187,6 +1185,9 @@ class RegistroAuditoria(models.Model):
         "cuenta_contable": "Cuenta contable",
         "tipo_movimiento": "Debe o Haber",
         "importe_movimiento": "Importe",
+        # CON-03a: cierre manual del ejercicio (``contador`` en ``cambios``, ``cerrado_por`` en ``datos``).
+        "cerrado_por": "Cerrado por",
+        "contador": "Contador que lo cerró",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {

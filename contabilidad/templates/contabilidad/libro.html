@@ -1,0 +1,127 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable estaticos iconos %}
+{% comment %}«Contabilidad» → «Libro de gestión» (CON-CNS-LGS; ``tabLibro``, ``libroCron`` y ``libroCta`` del prototipo). Dos vistas con un interruptor: cronológica (los asientos del ejercicio con sus
+movimientos, filtros y 50 por página) y por cuenta (el plan con el saldo de cada cuenta o, con una cuenta elegida, sus movimientos con el saldo acumulado, 100 por página). El selector de ejercicio y los filtros
+se envían con «Filtrar»: sin JavaScript funciona igual. Sin las acciones de CON-03b (registrar y contraasentar). Todo se escapa.{% endcomment %}
+{% block titulo %}Libro de gestión · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Contabilidad</h1></div>
+  {% include "contabilidad/_pestanas.html" with activa="libro" %}
+
+  <p class="muted" style="margin:-6px 0 14px">El libro de gestión es el registro interno de los asientos de InfoPonia, para controlar la contabilidad y saber cómo van los números. No es el libro diario ni el mayor legales y no está homologado.</p>
+
+  {% if not elegido %}
+  <div class="empty"><b>Todavía no hay ejercicios contables</b><span>El primer ejercicio se crea al poner en marcha la contabilidad (con el comando «poner_en_marcha_contabilidad») o con la primera operación contable del sistema.</span></div>
+  {% else %}
+
+  <form class="filters" method="get" action="{% url 'contabilidad:libro' %}" aria-label="Filtros del libro">
+    <input type="hidden" name="vista" value="{{ vista }}">
+    <select class="field-input" name="ejercicio" data-desplegable aria-label="Ejercicio">
+      {% for e in numerados %}<option value="{{ e.ejercicio.pk }}"{% if e.ejercicio.pk == elegido.ejercicio.pk %} selected{% endif %}>Ejercicio {{ e.numero }} · {{ e.ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ e.ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}</option>{% endfor %}
+    </select>
+    <div class="chips" role="group" aria-label="Vista del libro">
+      <a class="chip" href="{% url 'contabilidad:libro' %}?vista=cronologica&amp;ejercicio={{ ejercicio.pk }}" aria-pressed="{% if vista == 'cronologica' %}true{% else %}false{% endif %}">Cronológica</a>
+      <a class="chip" href="{% url 'contabilidad:libro' %}?vista=cuenta&amp;ejercicio={{ ejercicio.pk }}" aria-pressed="{% if vista == 'cuenta' %}true{% else %}false{% endif %}">Por cuenta</a>
+    </div>
+    {% if vista == 'cronologica' %}
+    {{ form.q }}{{ form.tipo }}{{ form.origen }}{{ form.cuenta }}{{ form.anulados }}{{ form.desde }}{{ form.hasta }}
+    {% else %}
+    {{ form.cuenta }}
+    {% endif %}
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+    {% if hay_filtros %}<a class="btn btn-text" href="{% url 'contabilidad:libro' %}?vista={{ vista }}&amp;ejercicio={{ ejercicio.pk }}">Quitar filtros</a>{% endif %}
+  </form>
+  {% if form.errors %}
+  <div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for campo, errores in form.errors.items %}{% for error in errores %}{{ error }}{% if not forloop.last %} {% endif %}{% endfor %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
+  {% endif %}
+
+  {% if ejercicio.estado_ejercicio == 'en_cierre' %}
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>El ejercicio {{ elegido.numero }} está en cierre.</b> Terminó el {{ ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}. Todavía se pueden registrar asientos de ese período hasta que se cierre.</div></div>
+  {% elif ejercicio.estado_ejercicio == 'cerrado' %}
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>El ejercicio {{ elegido.numero }} está cerrado. Sus asientos son solo de consulta.</div></div>
+  {% endif %}
+
+  {% if vista == 'cronologica' %}
+    {% if filas %}
+    <div class="tablewrap">
+      <table class="data-table libro">
+        <thead><tr><th style="width:130px">Asiento</th><th>Cuenta</th><th></th><th class="right" style="width:150px">Debe</th><th class="right" style="width:150px">Haber</th></tr></thead>
+        <tbody>
+        {% for f in filas %}
+          <tr class="grp-a">
+            <td class="nowrap"><a class="idlink" href="{% url 'contabilidad:asiento' ejercicio.pk f.asiento.numero_asiento %}">N.º {{ f.asiento.numero_asiento }}<span class="sr"> · ver el asiento</span></a><span class="sub2">{{ f.asiento.fecha_asiento|date:"d/m/Y" }}</span></td>
+            <td colspan="2"><b>{% if f.asiento.descripcion_asiento %}{{ f.asiento.descripcion_asiento }}{% else %}{{ f.asiento.origen.get_tipo_display }}{% endif %}</b>{% if f.asiento.origen %}<span class="sub2">{{ f.asiento.origen.get_tipo_display }}</span>{% endif %}</td>
+            <td colspan="2" class="right">{% include "contabilidad/_insignias.html" with asiento=f.asiento anulado=f.anulado %}</td>
+          </tr>
+          {% for m in f.movimientos %}
+          <tr class="mv"><td></td><td class="mvc">{% if m.tipo_movimiento == 'H' %}<span class="ind">a</span>{% endif %}{{ m.cuenta.codigo_cuenta }} · {{ m.cuenta.nombre_cuenta }}</td><td></td><td class="right nowrap mono">{% if m.tipo_movimiento == 'D' %}{{ m.importe_movimiento|pesos }}{% endif %}</td><td class="right nowrap mono">{% if m.tipo_movimiento == 'H' %}{{ m.importe_movimiento|pesos }}{% endif %}</td></tr>
+          {% endfor %}
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><td colspan="3" class="right"><b>Totales ({{ pagina.paginator.count }} asiento{{ pagina.paginator.count|pluralize }})</b></td><td class="right mono"><b>{{ total_general|pesos }}</b></td><td class="right mono"><b>{{ total_general|pesos }}</b></td></tr></tfoot>
+      </table>
+    </div>
+    {% include "contabilidad/_paginacion.html" with numero=pagina.number total=pagina.paginator.num_pages cantidad=pagina.paginator.count base=consulta_base %}
+    {% else %}
+    <div class="empty"><b>{% if hay_filtros %}No hay asientos con esos filtros{% else %}Este ejercicio todavía no tiene asientos{% endif %}</b><span>{% if hay_filtros %}Probá quitar algún filtro.{% else %}Los asientos aparecen acá a medida que las operaciones del sistema los generan.{% endif %}</span></div>
+    {% endif %}
+
+  {% elif not cuenta %}
+    <p class="muted" style="margin:0 0 14px">Elegí una cuenta para ver sus movimientos.</p>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th style="width:90px">Cuenta</th><th>Nombre</th><th class="right">Saldo al inicio</th><th class="right">Saldo actual</th></tr></thead>
+        <tbody>
+        {% for rubro in rubros %}
+          <tr class="grp"><td colspan="4">{{ rubro.codigo }} · {{ rubro.nombre }}</td></tr>
+          {% for subrubro in rubro.subrubros %}{% for fila in subrubro.filas %}
+          <tr>
+            <td class="nowrap mono">{{ fila.cuenta.codigo_cuenta }}</td>
+            <td><a class="rowlink" href="{% url 'contabilidad:libro' %}?vista=cuenta&amp;cuenta={{ fila.cuenta.codigo_cuenta }}&amp;ejercicio={{ ejercicio.pk }}">{{ fila.cuenta.nombre_cuenta }}</a><span class="sub2">{{ fila.cuenta.get_tipo_cuenta_display }}</span></td>
+            <td class="right nowrap mono">{% if fila.saldo.saldo_inicial %}{{ fila.saldo.saldo_inicial|pesos }}{% else %}—{% endif %}</td>
+            <td class="right nowrap mono">{% if fila.con_movimientos %}<b>{{ fila.saldo.saldo|pesos }}</b>{% if fila.saldo.contrario %}<span class="sub2">saldo contrario a su naturaleza</span>{% endif %}{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}{% endfor %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  {% else %}
+    <div class="card">
+      <div class="facts">
+        <div><span class="k">Cuenta</span><span class="v">{{ cuenta.codigo_cuenta }} · {{ cuenta.nombre_cuenta }}</span><span class="d"><a class="link" href="{% url 'contabilidad:plan' %}#cuenta-{{ cuenta.codigo_cuenta }}">Ver en el plan de cuentas</a></span></div>
+        <div><span class="k">Tipo</span><span class="v">{{ cuenta.get_tipo_cuenta_display }}</span></div>
+        <div><span class="k">Saldo al inicio</span><span class="v mono">{% if saldo.saldo_inicial %}{{ saldo.saldo_inicial|pesos }}{% else %}—{% endif %}</span><span class="d">{% if cuenta.tipo_cuenta == 'resultado_positivo' or cuenta.tipo_cuenta == 'resultado_negativo' %}Empieza en cero cada ejercicio{% else %}Arrastra los ejercicios anteriores{% endif %}</span></div>
+        <div><span class="k">Saldo actual</span><span class="v mono">{{ saldo_actual|pesos }}</span>{% if saldo.contrario %}<span class="d">saldo contrario a su naturaleza</span>{% endif %}</div>
+      </div>
+    </div>
+    {% if pagina_de_cuenta.filas %}
+    <div class="tablewrap" style="margin-top:16px">
+      <table class="data-table">
+        <thead><tr><th>Fecha</th><th>Asiento</th><th>Descripción</th><th class="right">Debe</th><th class="right">Haber</th><th class="right">Saldo</th></tr></thead>
+        <tbody>
+        {% for fila in pagina_de_cuenta.filas %}
+          {% with m=fila.movimiento a=fila.movimiento.asiento %}
+          <tr>
+            <td class="nowrap">{{ a.fecha_asiento|date:"d/m/Y" }}</td>
+            <td><a class="idlink" href="{% url 'contabilidad:asiento' ejercicio.pk a.numero_asiento %}">N.º {{ a.numero_asiento }}<span class="sr"> · ver el asiento</span></a></td>
+            <td>{{ a.descripcion_asiento }}</td>
+            <td class="right nowrap mono">{% if m.tipo_movimiento == 'D' %}{{ m.importe_movimiento|pesos }}{% endif %}</td>
+            <td class="right nowrap mono">{% if m.tipo_movimiento == 'H' %}{{ m.importe_movimiento|pesos }}{% endif %}</td>
+            <td class="right nowrap mono"><b>{{ fila.saldo|pesos }}</b></td>
+          </tr>
+          {% endwith %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "contabilidad/_paginacion.html" with numero=pagina_de_cuenta.numero total=pagina_de_cuenta.total_paginas cantidad=pagina_de_cuenta.cantidad base=consulta_base %}
+    {% else %}
+    <div class="empty" style="margin-top:16px"><b>Esta cuenta no tiene movimientos en el ejercicio</b><span>Si es patrimonial, igual arrastra el saldo de los ejercicios anteriores.</span></div>
+    {% endif %}
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

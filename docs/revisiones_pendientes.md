@@ -772,3 +772,36 @@ Los 10 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 8. Sin JavaScript: la lista de entregas y sus filtros funcionan con «Filtrar».
 - [ ] 9. **Navegador real** (ventana privada), **pendiente para el cierre de la tanda**: Comercial › Entregas con el Vendedor y con el Gerente, y «Filtrar» hasta el final (con JavaScript la tabla se redibuja y la URL conserva los filtros).
 - [ ] 10. Después del merge, en Render: `proceso_diario --listar` con el 50 y, en el log, `comercial.0008_entregas` y `core.0040_comercial_entregas` aplicadas.
+
+## CON-03a · Tarea CON-03a (libro de gestión, plan de cuentas y ejercicios con el cierre)
+
+Los 28 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-03a-libro-plan-y-ejercicios.md` (con los comandos y el código para pegar en `python manage.py shell`, con valores concretos), copiados acá para ir tachándolos (M5). **Tiene pantallas y un formulario que se envía:** el paso 20 es el de «navegador real». Los pasos 15 y 20 en adelante dejan ejercicios y asientos en la base de desarrollo que no se pueden sacar; los pasos 25 a 28 son opcionales. Sin migraciones.
+
+- [ ] 1. `python manage.py runserver` (sin migraciones de esta tarea; `migrate` aplica `core` 0039 y `comercial` 0007 de COM-04c, que llegaron con `main`).
+- [ ] 2. En la consola, el estado de los ejercicios (ninguno, uno abierto o uno «en cierre» de los pasos opcionales de CON-02).
+- [ ] 3. (Solo si no hay ejercicios) `poner_en_marcha_contabilidad`.
+- [ ] 4. Un asiento automático y uno manual desde la consola (fragmento del archivo de la tarea).
+- [ ] 5. Menú «Contabilidad» entre «Panel de control» y «Compras», con las tres pestañas y la línea que explica el libro de gestión.
+- [ ] 6. Libro cronológico: insignias Automático y Manual, líneas de Debe y Haber y «Totales».
+- [ ] 7. Filtros: tipo, texto, número exacto, cuenta, fechas (también al revés: aviso rojo) y anulados; «Quitar filtros».
+- [ ] 8. Vista por cuenta: saldo acumulado, «Arrastra los ejercicios anteriores» y «Empieza en cero cada ejercicio», enlace al plan.
+- [ ] 9. Ficha del asiento: «Registrado por» en el manual, origen del automático y ningún botón «Contraasentar» ni «Registrar asiento».
+- [ ] 10. Plan de cuentas: 19 cuentas, descripciones, saldos como enlaces, buscador, «Sin IVA» y enlace al libro por cuenta.
+- [ ] 11. «Ejercicios» con el ejercicio abierto: sin botón de cierre y con «Ver libro».
+- [ ] 12. Gerente con Contador activo: mismas pantallas de consulta, sin botón de cierre y sin alerta en el Panel.
+- [ ] 13. Vendedor: sin «Contabilidad» en el menú y 403 en las tres direcciones escritas a mano.
+- [ ] 14. Sin sesión: lleva al inicio de sesión.
+- [ ] 15. Paso diario con fecha simulada (`proceso_diario --solo abrir_ejercicio --fecha …`): el ejercicio queda «en cierre» y se abre el siguiente.
+- [ ] 16. Contador: alerta en el Panel, marca «en cierre» en la pestaña, botón «Cerrar ejercicio» y aviso en el libro de ese ejercicio.
+- [ ] 17. El Gerente con Contador activo y el Vendedor no cierran: sin botón y 403 por la dirección escrita a mano.
+- [ ] 18. Resumen del cierre (período, asientos, Debe y Haber iguales, aviso de que no se deshace) y error al enviar sin la casilla.
+- [ ] 19. «Cancelar» vuelve a «Ejercicios» sin cambiar nada.
+- [ ] 20. **Navegador real:** enviar el cierre hasta el final con F12 abierta; aviso verde «Cerraste el ejercicio N.º 1. Ya no recibe asientos.». Si aparece «Prohibido (403)» o «Verificación CSRF fallida», avisar.
+- [ ] 21. Auditoría (Gerente): «Modificación de ejercicio contable» con «Estado del ejercicio», «Contador que lo cerró» y «Cerrado por».
+- [ ] 22. Un asiento automático con fecha del ejercicio cerrado va al abierto, con la fecha de hoy y la aclaración de la fecha del hecho.
+- [ ] 23. Ejercicio «cerrado» de solo consulta y arrastre de saldos al siguiente (Caja arrastra; Ventas en cero).
+- [ ] 24. Cerrar otra vez: vuelve a «Ejercicios» con el aviso rojo «no está en cierre».
+- [ ] 25. (Opcional) Sin Contador activo, el Gerente cierra y la asociación queda vacía («Sin Contador asociado»); reactivar al Contador al terminar.
+- [ ] 26. (Opcional) Sin JavaScript: filtros, cambio de vista y buscador del plan.
+- [ ] 27. (Opcional) Celular: no aplica (el Contador y el Gerente usan la interfaz de escritorio).
+- [ ] 28. (Opcional) Paginación (50 y 100): la cubren pruebas; armarla a mano es mucho trabajo.
