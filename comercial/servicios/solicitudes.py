@@ -26,7 +26,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from comercial.models import AlertaComercial, Anulacion, Contrato, DiscrepanciaEntrega, Entrega, LineaDiscrepancia, Queja, SolicitudRevision, Suministro
-from comercial.servicios import entregas, indemnizaciones, resoluciones
+from comercial.servicios import cobranza, entregas, indemnizaciones, resoluciones
 from comercial.servicios.compra_ventas import texto_de_pesos
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
@@ -212,6 +212,7 @@ class Lectura:
     tope: Decimal | None
     calculado: Decimal | None
     hoy: date
+    cobro: object = None  # COM-08a: el `CobroDeEntrega` de la entrega (código, fecha y quién lo registró) o `None` si no tiene un cobro vigente (una saldada no tiene cobro)
 
     @property
     def datos_de_huella(self):
@@ -306,6 +307,7 @@ def _leer(solicitud_id, hoy):
         tope=indemnizaciones.tope_manual([l.monto_a_pagar for l in lineas]) if es_manual else None,
         calculado=calculado,
         hoy=hoy,
+        cobro=getattr(estado_de_pago, "cobro", None),
     )
 
 
@@ -615,6 +617,7 @@ def _registrar(quien, invernadero, lectura, resumen):
         )
     vinculo = AlertaComercial.objects.select_related("alerta").filter(solicitud_id=s.pk).first()
     alerta_resuelta = alertas.resolver_alerta(vinculo.alerta_id) if vinculo is not None else None  # `None` si ya estaba resuelta (una solicitud reabierta, D-69 punto 4)
+    mora_resueltas, mora_nuevas = cobranza.reevaluar_mora_con_rastro(entrega.pk, hoy)  # COM-08a, MD-125: una aceptación que salda la entrega resuelve su alerta «pago en mora»
     _avisar_resolucion_al_vendedor(s, entrega, suministro, resumen, aceptar)
     cambios = _cambios(
         estado_solicitud=("pendiente", campos["estado_solicitud"]),
@@ -637,9 +640,12 @@ def _registrar(quien, invernadero, lectura, resumen):
     }
     if aceptar and resumen.reintegrado > 0:
         datos["reintegro"] = f"{_pesos(resumen.reintegrado)} por {SolicitudRevision.MedioDeReintegro(resumen.medio).label.lower()}"
-    if alerta_resuelta is not None:
-        datos["alertas_resueltas"] = [str(alerta_resuelta)]
-    afectados = [s] + ([alerta_resuelta] if alerta_resuelta is not None else []) + ([suministro, evento] if aceptar else [])
+    resueltas = ([alerta_resuelta] if alerta_resuelta is not None else []) + mora_resueltas
+    if resueltas:
+        datos["alertas_resueltas"] = [str(a) for a in resueltas]
+    if mora_nuevas:
+        datos["alertas_creadas"] = [str(a) for a in mora_nuevas]
+    afectados = [s] + resueltas + mora_nuevas + ([suministro, evento] if aceptar else [])
     RegistroAuditoria.objects.registrar(
         usuario=quien,
         accion=RegistroAuditoria.Accion.EVALUACION_DISCREPANCIA if s.tipo_solicitud == Tipo.DISCREPANCIA else RegistroAuditoria.Accion.RESOLUCION_QUEJA,
@@ -778,7 +784,7 @@ def _bloqueo_de_anulacion(lectura):
     s, suministro, entrega = lectura.solicitud, lectura.suministro, lectura.entrega
     if suministro.solicitud_resolucion_id == s.pk:
         return ("resolucion_del_contrato", f"No se puede anular: esta aceptación resolvió el contrato {suministro.codigo}.")
-    if s.estado_solicitud == Estado.ACEPTADA and (s.monto_descontado or 0) > 0 and lectura.pagada:
+    if s.estado_solicitud == Estado.ACEPTADA and (s.monto_descontado or 0) > 0 and lectura.cobro is not None:  # COM-08a: un cobro vigente de verdad; una entrega saldada cuenta como «pagada» pero no tiene cobro que anular
         return ("entrega_cobrada", f"Primero anulá el cobro de {entrega.codigo} (Anular cobro).")
     if s.estado_solicitud == Estado.ACEPTADA and (s.monto_reintegrado or 0) > 0:
         return ("indemnizacion_reintegrada", f"No se puede anular: la indemnización ya se le reintegró al cliente ({_pesos(s.monto_reintegrado)} por {s.get_medio_reintegro_display().lower()}).")
@@ -892,6 +898,7 @@ def _anular(quien, invernadero, lectura, datos, motivo):
             _acotar(f"Se anuló la aceptación de {s.codigo} ({entrega.codigo} de {suministro.codigo}): vuelve a pendiente. Motivo: {motivo}", LARGO_DEL_EVENTO),
             quien,
         )
+    mora_resueltas, mora_nuevas = cobranza.reevaluar_mora_con_rastro(entrega.pk, hoy)  # COM-08a: si la entrega deja de estar saldada y ya venció, se asegura su alerta «pago en mora» (sin correo ni aviso: su aviso ya lo dice)
     vendedor = entregas._usuario_activo(suministro.vendedor_id)
     cliente = suministro.cliente.nombre_visible
     detalle = f"El Gerente anuló la {'aceptación' if datos.aceptada else 'resolución'} de la {_texto_corto_del_tipo(s)} de {entrega.codigo} ({cliente})."
@@ -918,10 +925,14 @@ def _anular(quien, invernadero, lectura, datos, motivo):
         "incumplimientos_antes": datos.contador_antes,
         "incumplimientos_despues": datos.contador_despues,
     }
+    if mora_resueltas:
+        datos_auditoria["alertas_resueltas"] = [str(a) for a in mora_resueltas]
+    if mora_nuevas:
+        datos_auditoria["alertas_creadas"] = [str(a) for a in mora_nuevas]
     RegistroAuditoria.objects.registrar(
         usuario=quien,
         accion=RegistroAuditoria.Accion.ANULACION_RESOLUCION_SOLICITUD,
-        afectados=[s, anulacion] + ([suministro, evento] if datos.aceptada else []),
+        afectados=[s, anulacion] + mora_resueltas + mora_nuevas + ([suministro, evento] if datos.aceptada else []),
         detalle={"cambios": cambios, "datos": datos_auditoria},
     )
     return Anulacion.objects.get(pk=anulacion.pk)

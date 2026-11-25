@@ -224,7 +224,7 @@ def seccion_de_entregas(usuario):
     Dos consultas para todo el grupo."""
     from django.urls import reverse
 
-    from comercial.servicios import entregas, solicitudes
+    from comercial.servicios import cobranza, entregas, solicitudes
     from core.models import Usuario, rol_de
     from core.extensiones import SeccionDeInicio
     from inventario.servicios import stock
@@ -242,6 +242,9 @@ def seccion_de_entregas(usuario):
         # COM-07a: el grupo «Solicitudes» (solo el Gerente; `None` para el Vendedor, regla 4 de COM-CNS-SRV: las resuelve el Gerente), dentro de esta misma sección.
         "solicitudes_pendientes": solicitudes.pendientes_para(usuario),
         "url_de_solicitudes_pendientes": reverse("comercial:solicitudes") + "?estado=pendiente",
+        # COM-08a: el grupo «Cobranza» (Por cobrar, En mora y Sin confirmar por el cliente), dentro de esta misma sección y después de «Solicitudes».
+        "cobranza": cobranza.panel_de_cobranza(usuario, stock.hoy()),
+        "url_de_cobranza": reverse("comercial:cobranza"),
     }
     return SeccionDeInicio("comercial/entregas/_seccion_de_inicio.html", {"entregas": datos})
 

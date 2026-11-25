@@ -7,8 +7,6 @@
 #
 # Contrato de código que fijan estas pruebas: `cobranza._bloquear_entregas(...)` es el único lugar donde el cobro toma las filas de las entregas (después de las cuentas y los invernaderos).
 
-from types import SimpleNamespace
-
 from django.test import TransactionTestCase, override_settings, tag
 from django.utils import timezone
 
@@ -16,7 +14,6 @@ from comercial.models import Entrega, LineaPago, PagoCliente
 from comercial.servicios import cobranza, solicitudes
 from comercial.servicios.solicitudes import DatosDeResolucion
 from comercial.tests.fabricas import (
-    cobro,
     direccion_de_cliente,
     discrepancia,
     entrega_de_suministro,
@@ -142,8 +139,9 @@ class CobranzaConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
     # ---- el orden de los bloqueos ----
 
     def test_regla_el_cobro_toma_el_invernadero_antes_que_las_entregas_y_no_se_cruza_con_la_aceptacion(self):
-        """`bloqueos.md`, «Cobranza»: cuentas → invernaderos de origen → entregas. El cobro se detiene justo ANTES de tomar las entregas, ya con el invernadero; la aceptación (invernadero → suministro → entrega)
-        arranca y tiene que esperar el invernadero. Si el cobro tomara las entregas antes que el invernadero, quedarían cruzados y la base abortaría a uno con un deadlock: esta prueba falla con el orden invertido."""
+        """`bloqueos.md`, «Cobranza»: cuentas → invernaderos de origen → entregas. El cobro se detiene justo ANTES de tomar las entregas, ya con las cuentas y el invernadero; la aceptación (cuentas → invernadero →
+        suministro → entrega) arranca y espera, y no se cruzan. OJO: cobro y aceptación comparten la cuenta del Vendedor del contrato, así que ya quedan en fila ahí; esta prueba NO detecta un orden invertido de
+        invernaderos y entregas (lo detectan las dos con el paso 30, que no toma cuentas)."""
         self.armar()
         e = entrega_de_suministro(self.e, self.lote)
         solicitud = discrepancia(e, minima=12)
@@ -152,6 +150,21 @@ class CobranzaConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual((len(exitos), len(rechazos), otros), (1, 1, []))
         self.assertIn("solicitud_cambio", codigos(rechazos[0]))
         self.assertEqual(self.cobros(), 1)
+
+    def test_regla_el_cobro_no_tiene_las_entregas_tomadas_cuando_todavia_le_faltan_los_invernaderos(self):
+        """El otro extremo del orden: el cobro se detiene justo ANTES de tomar los invernaderos. Con el orden correcto solo tiene las cuentas, así que el paso 30 (invernadero → entrega, sin cuentas) corre y confirma
+        sin esperarlo; el cobro sigue, relee (la huella no cambió: solo nació la alerta) y cobra, y resuelve la alerta. Si el cobro tomara las entregas ANTES que los invernaderos, tendría la entrega en este punto, el paso 30
+        tomaría el invernadero y esperaría la entrega mientras el cobro pide ese invernadero: un deadlock que la base resuelve abortando a uno con un error que no es de negocio, y esta prueba falla."""
+        from comercial.models import AlertaComercial
+
+        self.armar()
+        e = entrega_en_mora(self.e, self.lote)
+        resultados = correr_a_la_vez(self.cobrar(self.gerente, [e]), lambda: cobranza.vencer_pagos(HOY), primera="a", detener_antes_de=(cobranza, "_bloquear_invernaderos"))
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual((len(exitos), rechazos, otros), (2, [], []))
+        self.assertEqual(self.cobros(), 1)
+        (vinculo,) = AlertaComercial.objects.filter(entrega_id=e.pk).select_related("alerta")
+        self.assertEqual(vinculo.alerta.estado_alerta, "resuelta")
 
     def test_regla_el_paso_30_toma_el_invernadero_antes_que_la_entrega_y_no_se_cruza_con_el_cobro(self):
         """El paso 30 toma, por entrega, su invernadero y después la entrega: el mismo orden que el cobro. Detenido antes de tomar la entrega, el cobro espera el invernadero y no se cruzan."""

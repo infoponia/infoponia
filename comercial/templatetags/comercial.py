@@ -17,6 +17,16 @@ def solicitudes_pendientes(context):
     return pendientes_para(solicitud.user) if solicitud is not None else None
 
 
+@register.simple_tag(takes_context=True)
+def cobranza_en_mora(context):
+    """El contador rojo de la pestaña «Cobranza» (COM-08a): las entregas de suministro en mora del alcance de quien mira (`None` para los demás roles). Pocas consultas."""
+    from comercial.servicios import cobranza
+    from inventario.servicios import stock
+
+    solicitud = context.get("request")
+    return cobranza.en_mora_para(solicitud.user, stock.hoy()) if solicitud is not None else None
+
+
 @register.filter
 def cuit(valor):
     """El CUIT como «XX-XXXXXXXX-X» (``maestros.validadores.formatear_cuit``)."""

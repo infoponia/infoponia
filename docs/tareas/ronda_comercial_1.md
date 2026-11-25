@@ -34,7 +34,7 @@ las que registran un paso diario.
 | COM-06b | Confirmación del cliente: el enlace de confirmación, las quejas y la entrega no reconocida | comercial | COM-CNF-ENT, COM-ATN-ENR (y el enlace de la postcondición l de COM-CNC-ENT) | COM-06a | C6 |
 | COM-07a | Solicitudes de revisión: evaluar, resolver, anular y consultar (crea `Anulacion`, D-69) | comercial | COM-EVL-DSC, COM-RSV-QJA, COM-ANL-SRV, COM-CNS-SRV | COM-06b (y la sección 11 de `docs/api/produccion.md`, que hace COM-04a) | C7 |
 | COM-07b | Resolución del suministro por incumplimientos — **hecha el 25/11/2026** (a la espera de la revisión a mano) | comercial | COM-RSV-SUM (paso diario 33, D-69), PROD-CNL-ORD (cosechas y entregas, incluida) | COM-07a | C7 |
-| COM-08a | Cobro de suministros y mora (crea `LineaPago`, D-94) | comercial | COM-REG-CBR, COM-VNC-PAG (paso diario 30) | COM-07b | C8 |
+| COM-08a | Cobro de suministros y mora (crea `LineaPago`, D-94) — **hecha el 25/11/2026** (a la espera de la revisión a mano) | comercial | COM-REG-CBR, COM-VNC-PAG (paso diario 30) | COM-07b | C8 |
 | COM-08b | Anular un cobro y cobrar lo entregado al cancelar una compra-venta | comercial | COM-ANL-CBR, COM-CNL-CVT (extensión 6a) | COM-08a | C8 |
 | COM-08c | Estadísticas comerciales y «Resultados del mes en curso» | comercial | COM-CNS-EST | COM-08b (puede ir en paralelo con ella: sin migraciones) | C8 |
 

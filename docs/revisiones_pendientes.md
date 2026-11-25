@@ -989,6 +989,29 @@ Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-07b-
 - [ ] 16. Opcional: en un celular la ficha y la lista se ven y se operan.
 - [ ] 17. Después del merge, en Render: `core.0050_comercial_resolucion` aplicada en el log.
 
+## COM-08a · Tarea COM-08a (cobro de suministros y mora)
+
+Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-08a-cobro-y-mora.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0013: la tabla de líneas de pago, campos nuevos de `PagoCliente` y de `Entrega` y la secuencia del número de cobro; `core` 0051: solo `choices`; ninguna de datos). Se necesita un cliente con un correo que puedas leer, un suministro con plazo de pago de 10 días y $ 300 por día de atraso y tres entregas concretadas «envejecidas» (la preparación está en el archivo de la tarea).
+
+- [ ] 1. `python manage.py proceso_diario --solo vencer_pagos`: «procesados 2 · creados 2»; alertas rojas «Pago en mora» del Gerente, aviso «OT-… en mora» al Vendedor y correo al cliente; corrido otra vez, «procesados 0».
+- [ ] 2. Vendedor, «Cobranza»: contador rojo 2; el cliente con «Total a cobrar $ 3.000,00 · $ 2.000,00 en mora»; entregas por vencimiento con «hace 5 días», «hace 4 días» y «en 5 días»; sin «Anular».
+- [ ] 3. «Registrar cobro» con la entrega de mora: «5 días de atraso · $ 1.500,00», total $ 2.500,00; sin medio, «Elegí el medio de pago.»; el resumen no escribe nada; «Confirmar cobro» → COB-0001, correo con el comprobante, alerta resuelta, ficha del suministro «Pagada · COB-0001».
+- [ ] 4. Gerente, desde la alerta de la otra entrega en mora: abre con la entrega elegida y el detalle «En mora desde el dd/mm · 4 días · $ 1.200,00 por atraso»; COB-0002 por $ 2.200,00; el Vendedor recibe «COB-0002 registrado».
+- [ ] 5. Abrir por dirección «Registrar cobro» de una entrega ya cobrada: vuelve a «Cobranza» con «… ya está pagada: COB-…, el …, registrado por …».
+- [ ] 6. Dos pestañas, la misma entrega: la segunda dice quién la cobró; queda un solo cobro.
+- [ ] 7. Cambió el monto mientras tanto (se acepta una solicitud): «Mientras armabas el cobro cambió: … monto a cobrar $ 1.000,00 → $ …», con la entrega todavía marcada.
+- [ ] 8. Aceptar la discrepancia de una entrega ya cobrada: pide el medio del reintegro; la ficha del cobro no cambia; «Anular resolución» dice «ya se le reintegró al cliente…».
+- [ ] 9. Entrega con indemnización descontada antes del cobro: muestra el descuento y cobra el monto con descuento; una saldada no aparece en «Por cobrar» y la ficha dice «Saldada».
+- [ ] 10. Roles: el otro Vendedor no ve nada y por dirección recibe 403; Agrónomo y Transportista, 403; sin sesión, ingreso.
+- [ ] 11. Comprobante: «Pendiente de envío» con «Reenviar comprobante»; «Sin correo» con «Imprimir comprobante».
+- [ ] 12. **Navegador real** (ventana privada): cobrar de punta a punta; sin 403 ni error CSRF; marcar una casilla redibuja el total sin mover la página.
+- [ ] 13. Sin JavaScript: «Calcular total», «Revisar y registrar», «Confirmar cobro» y los grupos desplegables funcionan.
+- [ ] 14. Panel de control: grupo «Cobranza» con «Por cobrar», «En mora» y «Sin confirmar por el cliente».
+- [ ] 15. Fichas del suministro y del cliente (estado de pago, «Registrar cobro») y la baja del cliente con «N en mora» (no bloquea).
+- [ ] 16. «Modificar suministro» con otra indemnización por atraso: cambia en las entregas que no vencieron; las vencidas conservan la suya.
+- [ ] 17. Opcional: en un celular.
+- [ ] 18. Después del merge, en Render: `comercial.0013_cobranza` y `core.0051_comercial_cobranza` aplicadas.
+
 ## CMP-05 · Tarea CMP-05 (pago a proveedores)
 
 Los 24 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-05-pago-a-proveedores.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0005, `contabilidad` 0007 y `core` 0044; las dos últimas solo `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_pagos.py`; la concurrencia no se prueba a mano.

@@ -4,6 +4,7 @@ y, solo para el Gerente, «Vehículos»; las demás las suma cada tarea (D-25: e
 {% load comercial %}<div class="tabs" role="tablist" aria-label="Comercial">
   <a class="tab" role="tab" href="{% url 'comercial:contratos' %}" aria-selected="{% if activa == 'contratos' %}true{% else %}false{% endif %}">Contratos</a>
   <a class="tab" role="tab" href="{% url 'comercial:entregas' %}" aria-selected="{% if activa == 'entregas' %}true{% else %}false{% endif %}">Entregas</a>
+  <a class="tab" role="tab" href="{% url 'comercial:cobranza' %}" aria-selected="{% if activa == 'cobranza' %}true{% else %}false{% endif %}">Cobranza{% cobranza_en_mora as en_mora %}{% if en_mora %} <span class="status-badge status-danger">{{ en_mora }}</span>{% endif %}</a>
   <a class="tab" role="tab" href="{% url 'comercial:solicitudes' %}" aria-selected="{% if activa == 'solicitudes' %}true{% else %}false{% endif %}">Solicitudes de revisión{% solicitudes_pendientes as pendientes %}{% if pendientes %} <span class="status-badge status-danger">{{ pendientes }}</span>{% endif %}</a>
   <a class="tab" role="tab" href="{% url 'comercial:clientes' %}" aria-selected="{% if activa == 'clientes' %}true{% else %}false{% endif %}">Clientes</a>
   {% if es_gerente %}<a class="tab" role="tab" href="{% url 'comercial:vehiculos' %}" aria-selected="{% if activa == 'vehiculos' %}true{% else %}false{% endif %}">Vehículos</a>{% endif %}

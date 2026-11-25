@@ -1,0 +1,47 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}El resumen de «Registrar cobro» (paso 8 de COM-REG-CBR; sin JavaScript es una página): el cliente, las entregas con su monto a cobrar y su indemnización por atraso, el total, el medio, la fecha del pago (la actual) y el asiento como «Fuera de esta ronda ·
+contabilidad» (D-57). «Confirmar cobro» manda lo elegido y la huella a `registrar/` con `accion=confirmar`; «Cambiar» vuelve a la pantalla con lo elegido (8a). NO escribe nada. Recibe «resumen», «datos», «medio_texto» y «cliente_fijo».{% endcomment %}
+{% block titulo %}Revisar cobro · Cobranza · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Revisá el cobro</h1><div class="sub">{{ resumen.cliente.nombre_visible }}</div></div>
+  <div class="card seg">
+    <div class="card-h"><h3>Entregas que paga</h3></div>
+    <div class="card-b">
+      <table class="data-table">
+        <thead><tr><th>Entrega</th><th>Vencimiento</th><th class="right">Monto a cobrar</th><th class="right">Atraso</th></tr></thead>
+        <tbody>
+        {% for f in resumen.lineas %}
+          <tr><td><span class="mono">{{ f.codigo }}</span><span class="sub2">{{ f.contrato_codigo }}</span></td>
+            <td>{{ f.vencimiento|date:"d/m/Y" }}</td>
+            <td class="right mono">{{ f.monto_a_cobrar|pesos }}</td>
+            <td class="right mono">{% if f.dias_de_atraso %}{{ f.dias_de_atraso }} día{{ f.dias_de_atraso|pluralize }} · {{ f.indemnizacion|pesos }}{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <dl class="dl two" style="margin-top:12px">
+        <dt>Montos a cobrar</dt><dd class="mono">{{ resumen.base|pesos }}</dd>
+        <dt>Indemnización por atraso</dt><dd class="mono">{{ resumen.indemnizacion|pesos }}<span class="sub2">Días de atraso × lo pactado por día. Se calcula sola y no se puede cambiar ni perdonar.</span></dd>
+        <dt>Total a cobrar</dt><dd class="mono"><b>{{ resumen.total|pesos }}</b></dd>
+        <dt>Medio de pago</dt><dd>{{ medio_texto }}</dd>
+        <dt>Fecha del pago</dt><dd>{{ resumen.fecha_pago|date:"d/m/Y" }}</dd>
+      </dl>
+      {% if resumen.hay_pendientes %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Una entrega elegida tiene una queja o una discrepancia pendiente. Si se acepta después del cobro, la indemnización ya no se descuenta: se reintegra al cliente.</div></div>{% endif %}
+      <p class="muted">El asiento del cobro no se programa en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+    </div>
+  </div>
+  <form method="post" action="{% url 'comercial:cobranza_registrar' %}" novalidate style="margin-top:12px">
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ resumen.huella }}">
+    <input type="hidden" name="cliente" value="{{ datos.cliente_id }}">
+    <input type="hidden" name="cliente_fijo" value="{% if cliente_fijo %}1{% else %}0{% endif %}">
+    <input type="hidden" name="medio_pago" value="{{ datos.medio_pago }}">
+    {% for f in resumen.lineas %}<input type="hidden" name="entrega" value="{{ f.entrega_id }}">{% endfor %}
+    <div class="acts-fila">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar cobro</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular">Cambiar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

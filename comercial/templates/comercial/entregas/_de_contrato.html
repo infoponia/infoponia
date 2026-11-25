@@ -12,7 +12,7 @@
         <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}{% if f.cuando %}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span>{% endif %}</td>
         <td><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span>{% if f.atrasada %} <span class="status-badge status-danger">Atrasada</span>{% endif %}</td>
         <td>{% if f.es_retiro %}Retiro{% elif f.transportista %}{{ f.transportista }}{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
-        {% if con_confirmacion %}<td>{{ f.confirmacion|default:"—" }}</td><td class="right mono">{% if f.monto is not None %}{{ f.monto|pesos }}{% else %}—{% endif %}</td><td>{% if f.vencimiento %}{{ f.vencimiento|date:"d/m/Y" }}{% else %}—{% endif %}</td><td>{% if f.estado_pago %}<span class="status-badge {% if f.estado_pago == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{{ f.estado_pago_texto }}</span>{% else %}—{% endif %}</td>{% endif %}
+        {% if con_confirmacion %}<td>{{ f.confirmacion|default:"—" }}</td><td class="right mono">{% if f.monto is not None %}{{ f.monto|pesos }}{% else %}—{% endif %}</td><td>{% if f.vencimiento %}{{ f.vencimiento|date:"d/m/Y" }}{% else %}—{% endif %}</td><td>{% if f.estado_pago %}<span class="status-badge {% if f.estado_pago == 'en_mora' %}status-danger{% elif f.estado_pago == 'pagada' %}status-ok{% else %}status-warn{% endif %}">{{ f.estado_pago_texto }}</span>{% else %}—{% endif %}</td>{% endif %}
       </tr>
     {% endfor %}
     </tbody>

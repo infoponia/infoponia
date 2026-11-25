@@ -35,6 +35,7 @@ from comercial.models import (
     DetalleVenta,
     Entrega,
     LineaPago,
+    PagoCliente,
     ReservaStock,
     SolicitudRevision,
     Suministro,
@@ -1031,6 +1032,14 @@ def planificar_entregas(hoy):
             solicitudes.enviar_aviso_de_resolucion(solicitud_id)
         except Exception:  # noqa: BLE001
             logger.exception("Falló el reintento del aviso de la solicitud %s", solicitud_id)
+    from comercial.servicios import cobranza  # adentro: `cobranza` importa este módulo
+
+    for pago_id in list(PagoCliente.objects.filter(estado_aviso_cliente=PagoCliente.EstadoDelAviso.PENDIENTE_ENVIO).order_by("pk").values_list("pk", flat=True)):  # COM-08a, 11a de COM-REG-CBR: el comprobante de cobro
+        procesados += 1
+        try:
+            cobranza.enviar_comprobante_de_cobro(pago_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Falló el reintento del comprobante del cobro %s", pago_id)
     siguen = Entrega.objects.filter(estado_orden=A_REALIZAR, modalidad_entrega=ENVIO, transportista__isnull=True).count()
     return ResumenDePaso(procesados, creados, resueltos, f"{siguen} entregas siguen sin transportista")
 
@@ -1308,11 +1317,24 @@ def _estado_de_pago(vencimiento, hoy):
     return "en_mora" if hoy > vencimiento else "pendiente"
 
 
+def _texto_del_estado_de_pago(estado, vencimiento, hoy):
+    """Regla 7 de COM-CNS-SUM: «Pagada · COB-0001» (con el cobro), «Saldada», «En mora · 5 días» (los días desde el vencimiento) o «Pendiente»; vacío si no hay estado (no es de suministro o no se concretó)."""
+    if estado is None:
+        return ""
+    if estado == "pagada":
+        return "Saldada" if estado.saldada else f"Pagada · {estado.cobro.codigo}"
+    if estado == "en_mora":
+        dias = (hoy - vencimiento).days
+        return f"En mora · {dias} {'día' if dias == 1 else 'días'}"
+    return TEXTO_DEL_PAGO.get(estado, "")
+
+
 def entregas_del_contrato(contrato_id, hoy):
     """Regla 4 de COM-CNS-CVT y regla 7 de COM-CNS-SUM: las entregas de un contrato (todas, en cualquier estado), por fecha programada e id, con el invernadero de origen, la fecha (con
     «Atrasada» si corresponde, MD-139), el estado, el transportista (o «Retiro») y, en un suministro, su confirmación («No confirmada»). Una consulta, sin consultas por entrega. El alcance
     lo garantiza la ficha que la llama."""
-    lista = Entrega.objects.filter(contrato_entrega_id=contrato_id).select_related("invernadero", "transportista").order_by("fecha_programada_orden", "pk")
+    lista = list(Entrega.objects.filter(contrato_entrega_id=contrato_id).select_related("invernadero", "transportista").order_by("fecha_programada_orden", "pk"))
+    estados = estado_de_pago([e.pk for e in lista if e.fecha_vencimiento_pago is not None], hoy)  # COM-08a: una consulta por tabla para toda la lista
     filas = []
     for e in lista:
         a_realizar = e.estado_orden == A_REALIZAR
@@ -1330,8 +1352,8 @@ def entregas_del_contrato(contrato_id, hoy):
                 confirmacion=e.get_estado_confirmacion_cliente_display() if e.estado_confirmacion_cliente else "",
                 monto=e.monto_total_entrega,
                 vencimiento=e.fecha_vencimiento_pago,
-                estado_pago=_estado_de_pago(e.fecha_vencimiento_pago, hoy),
-                estado_pago_texto=TEXTO_DEL_PAGO.get(_estado_de_pago(e.fecha_vencimiento_pago, hoy), ""),
+                estado_pago=estados.get(e.pk),
+                estado_pago_texto=_texto_del_estado_de_pago(estados.get(e.pk), e.fecha_vencimiento_pago, hoy),
             )
         )
     return filas

@@ -1,4 +1,4 @@
-{% comment %}El grupo «Entregas» del Inicio del Gerente y del Vendedor (`secComercial` del prototipo, `registrar_seccion_de_inicio`, COM-05a2): «Entregas de hoy» (a realizar con fecha ≤ hoy), «Sin transportista» (en rojo si hay) y «Próximas entregas» (las 5 primeras, con «Ver todas»). Cada indicador lleva a la lista con su filtro. Recibe «datos» con «entregas». Todo se escapa.{% endcomment %}
+{% load comercial %}{% comment %}El grupo «Entregas» del Inicio del Gerente y del Vendedor (`secComercial` del prototipo, `registrar_seccion_de_inicio`, COM-05a2): «Entregas de hoy» (a realizar con fecha ≤ hoy), «Sin transportista» (en rojo si hay) y «Próximas entregas» (las 5 primeras, con «Ver todas»). Cada indicador lleva a la lista con su filtro. Recibe «datos» con «entregas». Todo se escapa.{% endcomment %}
 <div class="page" style="margin-top:16px">
   <h2 style="margin-bottom:12px">Entregas</h2>
   {% with g=datos.entregas %}
@@ -23,6 +23,14 @@
   <h2 style="margin:18px 0 12px">Solicitudes de revisión</h2>
   <div class="kpis">
     <a class="kpi{% if g.solicitudes_pendientes %} warn{% endif %}" href="{{ g.url_de_solicitudes_pendientes }}" style="text-decoration:none;color:inherit"><span class="k">Pendientes</span><span class="v">{{ g.solicitudes_pendientes }}</span><span class="c">quejas y discrepancias a resolver</span></a>
+  </div>
+  {% endif %}
+  {% if g.cobranza %}
+  <h2 style="margin:18px 0 12px">Cobranza</h2>
+  <div class="kpis">
+    <a class="kpi" href="{{ g.url_de_cobranza }}" style="text-decoration:none;color:inherit"><span class="k">Por cobrar</span><span class="v">{{ g.cobranza.por_cobrar_total|pesos }}</span><span class="c">{{ g.cobranza.por_cobrar_cantidad }} entrega{{ g.cobranza.por_cobrar_cantidad|pluralize }} de suministro</span></a>
+    <a class="kpi{% if g.cobranza.en_mora_cantidad %} danger{% endif %}" href="{{ g.url_de_cobranza }}" style="text-decoration:none;color:inherit"><span class="k">En mora</span><span class="v">{{ g.cobranza.en_mora_total|pesos }}</span><span class="c">{{ g.cobranza.en_mora_cantidad }} entrega{{ g.cobranza.en_mora_cantidad|pluralize }}</span></a>
+    <a class="kpi" href="{{ g.url_de_cobranza }}" style="text-decoration:none;color:inherit"><span class="k">Sin confirmar por el cliente</span><span class="v">{{ g.cobranza.sin_confirmar }}</span><span class="c">no afecta el cobro</span></a>
   </div>
   {% endif %}
   {% endwith %}

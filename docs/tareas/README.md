@@ -73,8 +73,8 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 | COM-06a | Ruta y concreción de entregas: iniciar y finalizar la ruta, concretar, intento fallido y discrepancia (D-68) | comercial (y `core` y `contabilidad`: acciones y tipos) | hecha (rama `feature/com-06a-ruta-y-concrecion`, PR #__, 25/11/2026; revisión a mano pendiente) | COM-05b | `comercial/COM-06a-ruta-y-concrecion.md` |
 | COM-06b | Confirmación del cliente: el enlace, las quejas y la entrega no reconocida (D-68) | comercial (y `core`: acciones) | hecha (PR #91, 25/11/2026; revisión a mano pendiente) | COM-06a | `comercial/COM-06b-confirmacion-del-cliente.md` |
 | COM-07a | Solicitudes de revisión: evaluar, resolver, anular y consultar (D-69) | comercial (y `core` y `contabilidad`: acciones y tipo) | hecha (PR #92, 25/11/2026; revisión a mano pendiente) | COM-06b (y la sección 11 de COM-04a) | `comercial/COM-07a-solicitudes-de-revision.md` |
-| COM-07b | Resolución del suministro por incumplimientos (paso diario 33) | comercial (y `core`: acciones) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | COM-07a | `comercial/COM-07b-resolucion-del-suministro.md` |
-| COM-08a | Cobro de suministros y mora (paso diario 30) (D-94) | comercial | pendiente | COM-07b | `comercial/COM-08a-cobro-y-mora.md` |
+| COM-07b | Resolución del suministro por incumplimientos (paso diario 33) | comercial (y `core`: acciones) | hecha (PR #93, 25/11/2026; revisión a mano pendiente) | COM-07a | `comercial/COM-07b-resolucion-del-suministro.md` |
+| COM-08a | Cobro de suministros y mora (paso diario 30) (D-94) | comercial (y `core`: acciones) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | COM-07b | `comercial/COM-08a-cobro-y-mora.md` |
 | COM-08b | Anular un cobro y cobrar lo entregado al cancelar una compra-venta (D-94) | comercial | pendiente | COM-08a | `comercial/COM-08b-anular-cobro-y-cobro-al-cancelar.md` |
 | COM-08c | Estadísticas comerciales y «Resultados del mes en curso» (D-94) | comercial | pendiente | COM-08b (o en paralelo con ella) | `comercial/COM-08c-estadisticas.md` |
 

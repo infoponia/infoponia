@@ -656,8 +656,10 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
         DetalleEntrega.objects.filter(pk=lr.leida.linea.pk).update(
             cant_entregada=lr.entregada, cant_perdida=lr.perdida, cant_devuelta=lr.devuelta, monto_pagar=lr.monto, precio_unitario=lr.precio
         )
+    # COM-08a (D-94 punto 12): en un suministro, la entrega guarda la indemnización por día de la cláusula del suministrado vigente (la de «al vencer»: `modificar_suministro` la actualiza mientras no venza).
+    por_dia = None if es_venta else lectura.suministro.clausula_suministrado.indemnizacion_retraso_pago
     Entrega.objects.filter(pk=entrega.pk).update(
-        estado_orden=OrdenTrabajo.Estado.CONCRETADA, fecha_resolucion_orden=hoy, monto_total_entrega=resumen.total, fecha_vencimiento_pago=resumen.vencimiento
+        estado_orden=OrdenTrabajo.Estado.CONCRETADA, fecha_resolucion_orden=hoy, monto_total_entrega=resumen.total, fecha_vencimiento_pago=resumen.vencimiento, indemnizacion_retraso_dia=por_dia
     )
     # 5: los envases
     reservas_cerradas, consumos_creados, tocados, declarados_texto = [], [], set(), []
@@ -683,7 +685,8 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
                 afectados_extra.append(DetalleVenta.objects.get(pk=detalle_id))
         if resumen.cobra:
             pago = PagoCliente.objects.create(
-                cliente=contrato.cliente, compra_venta=lectura.venta, medio_pago=datos.medio_pago, fecha_pago=hoy, monto_pagado=resumen.total_a_cobrar
+                cliente=contrato.cliente, compra_venta=lectura.venta, medio_pago=datos.medio_pago, fecha_pago=hoy, monto_pagado=resumen.total_a_cobrar,
+                tipo_pago=PagoCliente.Tipo.COMPRA_VENTA, usuario=quien,  # COM-08a (D-94 punto 3): el {xor} de C7 y quién lo registró
             )
             CompraVenta.objects.filter(pk=lectura.venta.pk).update(estado_venta=CompraVenta.Estado.CONCRETADA, fecha_concrecion_venta=hoy)
         elif resumen.todos_rechazados:
