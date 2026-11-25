@@ -1254,6 +1254,9 @@ class RegistroAuditoria(models.Model):
         # CON-03a: cierre manual del ejercicio (``contador`` en ``cambios``, ``cerrado_por`` en ``datos``).
         "cerrado_por": "Cerrado por",
         "contador": "Contador que lo cerró",
+        # CON-03b: el contraasiento guarda el vínculo con el asiento que anula (``anula`` en ``cambios``) y, sin Gerente activo, la constancia del aviso.
+        "anula": "Asiento que anula",
+        "aviso_al_gerente": "Aviso al Gerente",
     }
     # D-36: nombre visible de los valores con lista cerrada, por campo. Lo que no figura se muestra tal cual.
     VALORES_VISIBLES = {

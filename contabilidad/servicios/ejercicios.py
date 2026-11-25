@@ -94,13 +94,86 @@ def destino_del_asiento(fecha, *, automatico, hoy=None):
         primero = EjercicioContable.objects.order_by("fecha_inicio_ejercicio", "id").first()
         motivo = "anterior" if primero is None or fecha < primero.fecha_inicio_ejercicio else "cerrado"
     if not automatico:
-        raise ErrorContable(
-            CODIGOS_DE_FECHA[motivo], f"La fecha {fecha:%d/%m/%Y} no admite un asiento: {MOTIVOS[motivo]}.", campo="fecha"
+        rangos = list(
+            EjercicioContable.objects.order_by("fecha_inicio_ejercicio", "id").values_list("fecha_inicio_ejercicio", "fecha_cierre_ejercicio")
         )
+        raise _error_de_fecha(motivo, fecha, hoy, rangos)
     abierto = ejercicio_abierto()
     if abierto is None:
         raise ErrorContable("sin_ejercicio_abierto", "No hay un ejercicio contable abierto donde asentar.")
     return Destino(abierto, motivo)
+
+
+def _error_de_fecha(motivo, fecha, hoy, rangos):
+    """El `ErrorContable` de un asiento manual o contraasiento con una fecha que no admite (C2, extensiones 5e y 3c): el mensaje explica el motivo.
+    Todos empiezan con «La fecha dd/mm/aaaa no admite un asiento:»: lo muestra tal cual la pantalla de pagos de CMP-05 y sus pruebas lo esperan.
+    ``rangos`` es la lista `[(inicio, cierre)]` de todos los ejercicios, del más viejo al más nuevo."""
+    texto = f"{fecha:%d/%m/%Y}"
+    if motivo == "futura":
+        explicacion = f"es posterior a hoy ({hoy:%d/%m/%Y}) y un asiento no puede llevar una fecha posterior a hoy"
+    elif motivo == "anterior":
+        desde = f", que empieza el {rangos[0][0]:%d/%m/%Y}" if rangos else ""
+        explicacion = f"es anterior al primer ejercicio contable{desde}"
+    else:
+        inicio, cierre = next(((i, c) for i, c in rangos if i <= fecha <= c), (None, None))
+        donde = f"al ejercicio del {inicio:%d/%m/%Y} al {cierre:%d/%m/%Y}, que está" if inicio else "a un ejercicio"
+        explicacion = f"pertenece {donde} cerrado y ya no recibe asientos"
+    return ErrorContable(CODIGOS_DE_FECHA[motivo], f"La fecha {texto} no admite un asiento: {explicacion}.", campo="fecha")
+
+
+# El ejercicio donde iría un asiento si se registrara ahora, sin haber escrito nada (`destino_previsto`).
+DestinoPrevisto = namedtuple("DestinoPrevisto", "numero inicio cierre estado por_abrir")
+
+
+def destino_previsto(fecha, *, hoy=None):
+    """Dónde iría un asiento MANUAL (o un contraasiento) con esa fecha, calculado SOLO EN MEMORIA (decisión del 25/11/2026): reproduce las vueltas de
+    `abrir_ejercicio_si_corresponde(hoy)` sobre una copia de los ejercicios, sin crear ni cambiar nada, y después aplica las reglas de
+    `destino_del_asiento` (C2, C3). Así el resumen previo no rechaza una fecha válida porque el abierto venció y falta abrir el siguiente.
+    Devuelve `DestinoPrevisto(numero, inicio, cierre, estado, por_abrir)` (``por_abrir``: el ejercicio todavía no existe); lanza los mismos
+    `ErrorContable` de fecha que el registro."""
+    hoy = hoy or timezone.localdate()
+    simulados = [
+        {"id": e.pk, "inicio": e.fecha_inicio_ejercicio, "cierre": e.fecha_cierre_ejercicio, "estado": e.estado_ejercicio}
+        for e in EjercicioContable.objects.order_by("fecha_inicio_ejercicio", "id")
+    ]
+
+    def con_estado(estado):
+        return next((e for e in simulados if e["estado"] == estado), None)
+
+    def nuevo(inicio):
+        return {"id": None, "inicio": inicio, "cierre": cierre_previsto(inicio), "estado": Estado.ABIERTO}
+
+    def necesita_apertura():
+        abierto = con_estado(Estado.ABIERTO)
+        return abierto is None or hoy > abierto["cierre"]
+
+    vueltas = 0
+    while necesita_apertura():
+        if vueltas >= MAXIMO_DE_VUELTAS:
+            raise ErrorContable(
+                "ejercicios_atrasados", f"Hay más de {MAXIMO_DE_VUELTAS} ejercicios atrasados: revisá la fecha del sistema."
+            )
+        vueltas += 1
+        abierto = con_estado(Estado.ABIERTO)
+        if not simulados:
+            simulados.append(nuevo(hoy))
+        elif abierto is None:
+            ultimo = max(simulados, key=lambda e: e["cierre"])
+            simulados.append(nuevo(ultimo["cierre"] + datetime.timedelta(days=1)))
+        else:
+            previo = con_estado(Estado.EN_CIERRE)
+            if previo is not None:
+                previo["estado"] = Estado.CERRADO
+            abierto["estado"] = Estado.EN_CIERRE
+            simulados.append(nuevo(abierto["cierre"] + datetime.timedelta(days=1)))
+
+    rangos = [(e["inicio"], e["cierre"]) for e in simulados]
+    if fecha > hoy:
+        raise _error_de_fecha("futura", fecha, hoy, rangos)
+    for numero, e in enumerate(simulados, start=1):
+        if e["estado"] in (Estado.ABIERTO, Estado.EN_CIERRE) and e["inicio"] <= fecha <= e["cierre"]:
+            return DestinoPrevisto(numero, e["inicio"], e["cierre"], e["estado"], e["id"] is None)
+    raise _error_de_fecha("anterior" if fecha < simulados[0]["inicio"] else "cerrado", fecha, hoy, rangos)
 
 
 def ejercicio_para(fecha, *, automatico, hoy=None):

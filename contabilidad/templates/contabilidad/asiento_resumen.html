@@ -1,0 +1,49 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos estaticos %}
+{% comment %}Resumen previo del asiento manual (CON-REG-ASI paso 5): el ejercicio al que irá (con su rango y estado; si todavía no existe, que se abre al registrar), el total del Debe, el del Haber, la diferencia y el tipo de cada cuenta.
+«Confirmar y registrar» registra (paso 6); «Volver a editar» vuelve al formulario con lo escrito. Lo escrito viaja en campos ocultos. Todo se escapa.{% endcomment %}
+{% block titulo %}Revisar el asiento · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Revisá el asiento</h1></div>
+  <form method="post" action="{% url 'contabilidad:asiento_nuevo' %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="fecha" value="{{ datos.fecha_texto }}"><input type="hidden" name="descripcion" value="{{ datos.descripcion }}">{% if corrige %}<input type="hidden" name="corrige" value="{{ corrige }}">{% endif %}
+    {% for f in datos.filas %}<input type="hidden" name="fila" value="{{ f.i }}"><input type="hidden" name="cuenta_{{ f.i }}" value="{{ f.cuenta }}"><input type="hidden" name="tipo_{{ f.i }}" value="{{ f.tipo }}"><input type="hidden" name="importe_{{ f.i }}" value="{{ f.importe }}">{% endfor %}
+    <div class="stack">
+      {% if resumen.ejercicio_estado == 'en_cierre' %}
+      <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>Va a un ejercicio en cierre.</b> El ejercicio {{ resumen.ejercicio_numero }} ya terminó, pero todavía recibe asientos con fecha de su período hasta que se cierre.</div></div>
+      {% endif %}
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">1</span>Qué se registra</div>
+        <div class="facts">
+          <div><span class="k">Fecha</span><span class="v">{{ datos.fecha|date:"d/m/Y" }}</span></div>
+          <div><span class="k">Ejercicio</span><span class="v">Ejercicio {{ resumen.ejercicio_numero }}</span><span class="d">{{ resumen.ejercicio_inicio|date:"d/m/Y" }} al {{ resumen.ejercicio_cierre|date:"d/m/Y" }}{% if resumen.ejercicio_estado == 'en_cierre' %} · en cierre{% else %} · abierto{% endif %}{% if resumen.ejercicio_por_abrir %} · se abre al registrar{% endif %}</span></div>
+          <div><span class="k">Descripción</span><span class="v">{{ datos.descripcion }}</span></div>
+        </div>
+      </section>
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">2</span>Movimientos</div>
+        <div class="tablewrap flat">
+          <table class="data-table">
+            <thead><tr><th>Cuenta</th><th class="right">Debe</th><th class="right">Haber</th></tr></thead>
+            <tbody>
+            {% for l in resumen.lineas %}
+              <tr><td>{{ l.codigo }} · {{ l.nombre }}<span class="sub2">{{ l.tipo_cuenta_texto }}</span></td><td class="right nowrap mono">{% if l.tipo_movimiento == 'D' %}{{ l.importe|pesos }}{% endif %}</td><td class="right nowrap mono">{% if l.tipo_movimiento == 'H' %}{{ l.importe|pesos }}{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot><tr><td class="right"><b>Totales</b></td><td class="right mono"><b>{{ resumen.total_debe|pesos }}</b></td><td class="right mono"><b>{{ resumen.total_haber|pesos }}</b></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="balrow okb"><span>Diferencia <b>{{ resumen.diferencia|pesos }}</b></span><span>Balanceado</span></div>
+        {% if resumen.omitidas %}<p class="hint">Se omitieron {{ resumen.omitidas }} fila{{ resumen.omitidas|pluralize }} con importe cero.</p>{% endif %}
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar y registrar</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a editar</button>
+      <a class="btn btn-text" href="{% url 'contabilidad:libro' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Registrar asiento» (CON-REG-ASI; ``VIEWS.k_new`` del prototipo). Un solo formulario que se vuelve a dibujar con cada botón (agregar o quitar una fila, precargar un atajo, revisar), sin JavaScript y sin validar mientras
+se escribe (interfaz.md). El primer botón es «Revisar asiento» (oculto): es el que dispara Enter. Quien no puede registrar (el Gerente con un Contador activo) ve el motivo en vez del formulario. El cuerpo está en ``_asiento_formulario.html``.{% endcomment %}
+{% block titulo %}Registrar asiento · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+<div class="page narrow">
+  <a class="btn btn-text btn-sm" href="{% url 'contabilidad:libro' %}">{% icono "back" 14 %} Libro de gestión</a>
+  <div class="page-h" style="margin-top:8px"><h1>Registrar asiento</h1></div>
+  {% if not puede %}
+  <div class="empty"><b>Lo registra el Contador</b><span>Mientras haya un Contador activo, el Gerente consulta el libro de gestión pero no registra asientos.</span></div>
+  {% else %}
+  <form method="post" action="{% url 'contabilidad:asiento_nuevo' %}" novalidate>
+    {% csrf_token %}
+    <button type="submit" name="accion" value="revisar" class="sr" tabindex="-1" aria-hidden="true">Revisar asiento</button>
+    <div class="atajos" role="group" aria-label="Precargar un asiento habitual">
+      <span class="muted">Precargar:</span>
+      <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="atajo:apertura" data-sin-envio-en-curso>Asiento de apertura</button>
+      <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="atajo:venta_previa" data-sin-envio-en-curso>Venta de producción previa</button>
+    </div>
+    <div id="cuerpo-asiento">{% include "contabilidad/_asiento_formulario.html" %}</div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…">Revisar asiento</button>
+      <a class="btn btn-ghost" href="{% url 'contabilidad:libro' %}">Cancelar</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -85,10 +85,10 @@ class RecorridoDeLibroYCierreTests(PlanDeCuentasMixin, TestCase):
         self.assertIn("$ 950,00", caja)
         self.assertIn(reverse("contabilidad:asiento", args=[primero.pk, 2]), caja)
 
-        # 5. Ficha del asiento manual: quién lo registró sale de la auditoría; la del automático no lo muestra. No hay acciones de CON-03b.
+        # 5. Ficha del asiento manual: quién lo registró sale de la auditoría; la del automático no lo muestra. El Contador ve «Contraasentar» (CON-03b).
         ficha = self.ir(self.contador, reverse("contabilidad:asiento", args=[primero.pk, 2])).content.decode()
         self.assertIn("Registrado por", ficha)
-        self.assertNotIn("Contraasentar", ficha)
+        self.assertIn("Contraasentar", ficha)
         self.assertNotIn("Registrado por", self.ir(self.contador, reverse("contabilidad:asiento", args=[primero.pk, 1])).content.decode())
 
         # 6. CON-CNS-PCT regla 4: el plan muestra el saldo de Caja y el enlace al libro por cuenta.

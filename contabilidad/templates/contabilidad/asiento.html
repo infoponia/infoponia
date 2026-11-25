@@ -7,9 +7,14 @@ registró (solo el manual y el contraasiento: sale de la auditoría), importe, m
 {% with a=ficha.asiento %}
 <div class="page">
   <a class="btn btn-text btn-sm" href="{% url 'contabilidad:libro' %}?ejercicio={{ ejercicio.pk }}">{% icono "back" 14 %} Libro de gestión</a>
-  <div class="page-h" style="margin-top:8px"><h1>Asiento N.º {{ a.numero_asiento }}</h1>{% include "contabilidad/_insignias.html" with asiento=a anulado=ficha.anulado_por %}</div>
+  <div class="page-h" style="margin-top:8px"><h1>Asiento N.º {{ a.numero_asiento }}</h1>{% include "contabilidad/_insignias.html" with asiento=a anulado=ficha.anulado_por %}
+    {% if puede_contraasentar %}<span class="spacer"></span><a class="btn btn-ghost" href="{% url 'contabilidad:contraasiento' a.ejercicio_id a.numero_asiento %}">Contraasentar</a>{% endif %}
+  </div>
 
   <div class="stack">
+    {% if ofrecer_correccion %}
+    <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Quedó registrado el contraasiento. ¿Registrás ahora el asiento correcto? <a class="link" href="{% url 'contabilidad:asiento_nuevo' %}?corrige={{ a.pk }}">Registrar el asiento correcto</a></div></div>
+    {% endif %}
     {% if ficha.anulado_por %}
     <div class="alert alert-danger" role="status">{% icono "warn" 16 %}<div><b>Anulado.</b> Lo anula el asiento <a class="link" href="{% url 'contabilidad:asiento' ficha.anulado_por.ejercicio_id ficha.anulado_por.numero_asiento %}">N.º {{ ficha.anulado_por.numero_asiento }}</a> del {{ ficha.anulado_por.fecha_asiento|date:"d/m/Y" }}.</div></div>
     {% endif %}
@@ -17,7 +22,7 @@ registró (solo el manual y el contraasiento: sale de la auditoría), importe, m
     <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este contraasiento anula el asiento <a class="link" href="{% url 'contabilidad:asiento' ficha.anula.ejercicio_id ficha.anula.numero_asiento %}">N.º {{ ficha.anula.numero_asiento }}</a>: {{ ficha.anula.descripcion_asiento|default:"asiento automático" }}.</div></div>
     {% endif %}
     {% if ejercicio.estado_ejercicio == 'cerrado' %}
-    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este asiento es de un ejercicio cerrado: es solo de consulta.</div></div>
+    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este asiento es de un ejercicio cerrado: es solo de consulta.{% if puede_contraasentar %} Si algo está mal, podés contraasentarlo con una fecha de un ejercicio abierto o en cierre.{% endif %}</div></div>
     {% endif %}
 
     <div class="card">
@@ -45,7 +50,8 @@ registró (solo el manual y el contraasiento: sale de la auditoría), importe, m
         </table>
       </div>
     </div>
-    {% if a.tipo == 'automatico' %}<p class="hint">Este asiento lo genera el sistema. Si algo está mal, se corrige la operación de origen y el asiento se ajusta solo.</p>{% endif %}
+    {% if a.tipo == 'automatico' %}<p class="hint">Este asiento lo genera el sistema. Si algo está mal, corregí la operación de origen.{% if puede_contraasentar %} Contraasentarlo corrige el libro de gestión, pero no anula la operación que lo originó.{% endif %}</p>{% endif %}
+    {% if lo_registra_el_contador %}<p class="hint">Lo registra el Contador: contraasentar un asiento es de él.</p>{% endif %}
   </div>
 </div>
 {% endwith %}

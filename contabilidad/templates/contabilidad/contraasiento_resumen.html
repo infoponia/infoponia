@@ -1,0 +1,50 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos estaticos %}
+{% comment %}Resumen previo del contraasiento (CON-CTR-ASI paso 4): el ejercicio al que irá (con su rango y estado), los movimientos resultantes (invertidos) y que el asiento quedará anulado. «Confirmar» registra (paso 6) y avisa al Gerente; «Volver a editar»
+vuelve al formulario con lo escrito. La fecha y el motivo viajan en campos ocultos. Todo se escapa.{% endcomment %}
+{% block titulo %}Revisar el contraasiento · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Revisá el contraasiento del asiento N.º {{ asiento.numero_asiento }}</h1></div>
+  <form method="post" action="{% url 'contabilidad:contraasiento' asiento.ejercicio_id asiento.numero_asiento %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="fecha" value="{{ fecha_texto }}"><input type="hidden" name="motivo" value="{{ motivo }}">
+    <div class="stack">
+      {% if resumen.ejercicio_estado == 'en_cierre' %}
+      <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>Va a un ejercicio en cierre.</b> El ejercicio {{ resumen.ejercicio_numero }} ya terminó, pero todavía recibe asientos con fecha de su período hasta que se cierre.</div></div>
+      {% endif %}
+      {% if resumen.es_automatico %}
+      <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Es un asiento automático: el contraasiento corrige el libro de gestión, pero no anula la operación que lo originó.</div></div>
+      {% endif %}
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">1</span>Qué se registra</div>
+        <div class="facts">
+          <div><span class="k">Se anula</span><span class="v">Asiento N.º {{ asiento.numero_asiento }}</span><span class="d">quedará marcado como anulado</span></div>
+          <div><span class="k">Fecha del contraasiento</span><span class="v">{{ fecha|date:"d/m/Y" }}</span></div>
+          <div><span class="k">Ejercicio</span><span class="v">Ejercicio {{ resumen.ejercicio_numero }}</span><span class="d">{{ resumen.ejercicio_inicio|date:"d/m/Y" }} al {{ resumen.ejercicio_cierre|date:"d/m/Y" }}{% if resumen.ejercicio_estado == 'en_cierre' %} · en cierre{% else %} · abierto{% endif %}{% if resumen.ejercicio_por_abrir %} · se abre al registrar{% endif %}</span></div>
+          <div><span class="k">Motivo</span><span class="v">{{ motivo }}</span></div>
+        </div>
+      </section>
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">2</span>Movimientos del contraasiento</div>
+        <div class="tablewrap flat">
+          <table class="data-table">
+            <thead><tr><th>Cuenta</th><th class="right">Debe</th><th class="right">Haber</th></tr></thead>
+            <tbody>
+            {% for l in resumen.lineas %}
+              <tr><td>{{ l.codigo }} · {{ l.nombre }}<span class="sub2">{{ l.tipo_cuenta_texto }}</span></td><td class="right nowrap mono">{% if l.tipo_movimiento == 'D' %}{{ l.importe|pesos }}{% endif %}</td><td class="right nowrap mono">{% if l.tipo_movimiento == 'H' %}{{ l.importe|pesos }}{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot><tr><td class="right"><b>Totales</b></td><td class="right mono"><b>{{ resumen.total|pesos }}</b></td><td class="right mono"><b>{{ resumen.total|pesos }}</b></td></tr></tfoot>
+          </table>
+        </div>
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-danger" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar el contraasiento</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a editar</button>
+      <a class="btn btn-text" href="{% url 'contabilidad:asiento' asiento.ejercicio_id asiento.numero_asiento %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

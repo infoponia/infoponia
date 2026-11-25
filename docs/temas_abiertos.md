@@ -803,3 +803,18 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Emitir y cerrar** son botones de un formulario POST con la explicación al lado (el prototipo usaba ventanas): sin ventana de confirmación aparte. Si se quiere confirmar antes de emitir (sale un correo), es una pantalla más.
 - **Correos nuevos** (`correccion.txt`, `reclamo.txt`): su texto exacto no estaba especificado más allá de la lista de tecnología 10 y de la postcondición c de CMP-EMT-RCL.
 - **Pasada manual en navegador real** (paso 25 de la «Verificación a mano»): corregir, emitir y cerrar hasta el final. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+
+## CON-03b (asientos manuales y contraasientos; 25/11/2026)
+
+- **Orden de la fecha y la autorrecuperación** (decisión del estudiante del 25/11/2026): el extracto de CON-REG-ASI valida la fecha (paso 2) antes de la autorrecuperación (paso 3); se invirtió, porque D-84 punto 2 pesa más y, si no, una fecha válida se rechazaría como «ejercicio cerrado» cuando el abierto venció y nadie abrió el siguiente. Vale para `registrar_asiento_manual` y `contraasentar`. Los `resumir_*` no escriben: calculan en memoria el ejercicio que se abriría (`ejercicios.destino_previsto`). Aclarar en el extracto y en D-84.
+- **`faltan_movimientos` es un error en el manual.** D-84 punto 6 («el servicio devuelve `None`, no falla») vale para el automático; el extracto de CON-REG-ASI (5c) pide un error para el manual. Aclarar en D-84.
+- **Contraasentar un asiento de un ejercicio cerrado se permite.** `docs/disparadores.md` y el prototipo (`e.est!=='cerrado'`) dicen que no se ofrece; el caso de uso («cualquier asiento») y C3 (la fecha en cualquier ejercicio abierto o en cierre) dicen que sí. Manda el caso de uso (L7). **Confirmado por el estudiante el 25/11/2026.**
+- **La fecha del aviso al Gerente es la del contraasiento** (el extracto dice «el dd/mm/aaaa» sin aclarar cuál).
+- **Funciones que no estaban en `docs/api/asientos.md`:** `resumir_asiento_manual`, `resumir_contraasiento`, `datos_para_correccion`, `ejercicios.destino_previsto` y `ErroresContables`; se agregaron a esa API.
+- **Texto de la ficha de un asiento de un ejercicio cerrado:** se mantiene «es solo de consulta» (lo exige una prueba de CON-03a) y se suma, a quien puede contraasentar, que puede corregirlo con una fecha de un ejercicio abierto o en cierre.
+- **El motivo del contraasiento es la descripción tal cual** (el prototipo anteponía «Contraasiento del asiento N.º X: »); máximo 300 caracteres (el modelo), no 150.
+- **Una fila con cuenta y sin importe se marca como error**; una fila totalmente vacía se omite (H11). El extracto solo habla del importe cero.
+- **Los atajos precargan dos filas** (Caja/Capital Inicial y Caja/Ventas); el extracto dice «sugieren cuentas».
+- **Dos pruebas de CON-03a reemplazadas** (no debilitadas): las acciones ya no están escondidas «hasta CON-03b».
+- **Toque en `core/models.py`** (autorizado, solo el diccionario `ETIQUETAS`): `anula` y `aviso_al_gerente`. Sin migración.
+- **Pasada manual en navegador real** (paso 39 de la «Verificación a mano»): registrar y contraasentar hasta el final; el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
