@@ -672,6 +672,8 @@ PARAMETROS_DE_CONFIGURACION = [
     ("dias_limite_cotizacion", "Días límite para cotizar", 3, 1, None),
     ("dias_validez_cotizacion", "Validez de las cotizaciones", 7, 1, None),
     ("porc_tolerancia_cobertura_pedido", "Tolerancia de cobertura del pedido", 0, 0, 100),
+    # CMP-07 (D-104 punto 3): el margen que el pedido automático por stock bajo suma al mínimo (0 pide justo lo que falta).
+    ("porc_margen_pedido_automatico", "Margen del pedido automático", 20, 0, 100),
     ("cant_maxima_entregas_diarias", "Máximo de entregas diarias por transportista", 10, 1, None),
     ("cant_max_ciudades_distintas_diarias", "Máximo de localidades distintas por día", 3, 1, None),
 ]
@@ -749,6 +751,7 @@ class ConfiguracionOperativa(models.Model):
     dias_limite_cotizacion = models.IntegerField("días límite para cotizar", default=3)
     dias_validez_cotizacion = models.IntegerField("validez de las cotizaciones (días)", default=7)
     porc_tolerancia_cobertura_pedido = models.IntegerField("tolerancia de cobertura del pedido (%)", default=0)
+    porc_margen_pedido_automatico = models.IntegerField("margen del pedido automático (%)", default=20)  # CMP-07, D-104 punto 3
     cant_maxima_entregas_diarias = models.IntegerField("máximo de entregas diarias por transportista", default=10)
     cant_max_ciudades_distintas_diarias = models.IntegerField("máximo de localidades distintas por día", default=3)
     # IOT-01 (MD-112): los 14 parámetros del módulo IoT. Dominios y valores iniciales: ``PARAMETROS_IOT``.

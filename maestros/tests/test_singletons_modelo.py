@@ -14,9 +14,12 @@ from maestros.tests.fabricas import ConDatosDeMaestros, asegurar_datos_de_maestr
 MIGRACION = importlib.import_module("maestros.migrations.0007_cargar_configuracion_y_perfil")
 # Parámetros agregados después de la 0007 (COM-04b, MD-134): su valor inicial vive en la migración que agrega la columna.
 MIGRACION_PARAMETROS_POSTERIORES = importlib.import_module("maestros.migrations.0011_dias_aviso_vencimiento_camara")
+# CMP-07 (D-104 punto 3): el margen del pedido automático lo agrega la 0013.
+MIGRACION_DEL_MARGEN = importlib.import_module("maestros.migrations.0013_porc_margen_pedido_automatico")
 VALORES_INICIALES_DE_LAS_MIGRACIONES = {
     **MIGRACION.VALORES_INICIALES_CONFIGURACION,
     **MIGRACION_PARAMETROS_POSTERIORES.VALORES_INICIALES_CONFIGURACION,
+    **MIGRACION_DEL_MARGEN.VALORES_INICIALES_CONFIGURACION,
 }
 
 
@@ -48,6 +51,7 @@ class SingletonsModeloTests(ConDatosDeMaestros, TestCase):
             "dias_vigencia_enlace_faltante": 2, "dias_limite_cotizacion": 3, "dias_validez_cotizacion": 7,
             "porc_tolerancia_cobertura_pedido": 0, "cant_maxima_entregas_diarias": 10,
             "cant_max_ciudades_distintas_diarias": 3, "dias_aviso_vencimiento_camara": 3,
+            "porc_margen_pedido_automatico": 20,  # CMP-07, D-104 punto 3
         }
         for campo, valor in esperados.items():
             with self.subTest(campo=campo):
@@ -64,7 +68,8 @@ class SingletonsModeloTests(ConDatosDeMaestros, TestCase):
 
     def test_regla_3_los_dominios_los_garantiza_la_base(self):
         """ADM-MOD-CFG regla 3: un valor fuera de dominio se rechaza en la base, aunque se salte el servicio."""
-        fuera = {"porc_merma_maxima": (0, 101), "porc_tolerancia_cobertura_pedido": (-1, 101)}
+        fuera = {"porc_merma_maxima": (0, 101), "porc_tolerancia_cobertura_pedido": (-1, 101),
+                 "porc_margen_pedido_automatico": (-1, 101)}  # CMP-07: el margen también tiene tope en la base
         for campo, _, _, minimo, maximo in PARAMETROS_DE_CONFIGURACION:
             valores = list(fuera.get(campo, (minimo - 1,)))
             for valor in valores:
