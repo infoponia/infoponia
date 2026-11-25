@@ -11,7 +11,9 @@ Reglas de lectura:
 - **Secretos fuera del repo** (el repo es público):
   - La contraseña de todas las cuentas sale de la variable de entorno `INFOPONIA_DEMO_CONTRASENA`.
   - La base de los correos sale de `INFOPONIA_DEMO_CORREO` (la parte antes de `@gmail.com`).
-  - Ninguna de las dos se escribe en ningún archivo, prueba ni mensaje de salida.
+  - La contraseña no se escribe en ningún archivo, prueba ni mensaje de salida. La base de los correos tampoco va en un archivo ni en una
+    prueba, pero **sí aparece en la salida** de `cargar_demo` y de `estado_demo`: las dos listan cada cuenta con su correo completo (paso 3 de
+    DAT-01), que es lo que el estudiante necesita para entrar.
 - **Correos**: `<base>+<rol><número>@gmail.com`. Por ejemplo, con la base `ejemplo`, el Gerente es `ejemplo+gerente1@gmail.com`. Gmail
   entrega todos esos alias a la misma casilla, así que el estudiante ve todos los avisos en un solo buzón.
 - **Si una sección depende de algo que no existe en el repo** (marcado «Depende de»), se saltea entera y el comando lo informa en su salida.
@@ -96,10 +98,9 @@ Transportistas por invernadero (`TransportistaInvernadero`, `desde` = ahora): tr
 | Lechuga | Morada | hoja_verde | 15–28 | 55–85 | 20000–45000 | 10–16 | 6 | 220 |
 | Albahaca | Genovesa | hierbas | 18–30 | 50–80 | 20000–45000 | 12–16 | 5 | 80 |
 
-**Aviso sobre la luz (contradicción para revisar).** El campo `intensidad_luz_min/max` de `Variedad` dice «µmol», pero el simulador de
-Node-RED manda lux (base 30000) y `iot/servicios/lecturas.py` compara la lectura directo contra ese rango. Para que la demo no dispare
-alertas de luz falsas, el rango va en los números que manda el simulador (20000–45000). Queda anotado para corregir la unidad después de
-la defensa. No se toca en estas tareas.
+**Sobre la luz.** El campo `intensidad_luz_min/max` de `Variedad` se medía en lux aunque decía «µmol»; D-105 corrigió la unidad. El
+simulador de Node-RED manda lux (base 30000) y `iot/servicios/lecturas.py` compara la lectura directo contra ese rango: por eso el rango va
+en 20000–45000 y la demo no dispara alertas de luz falsas.
 
 Con esto, el umbral efectivo de Norte (Criolla y Morada) queda en 16–27 °C y 60–85 %. El simulador manda 24 ± 1,5 °C y 70 ± 4 %: todo
 adentro. El botón «Temperatura alta (35 °C)» queda afuera.
@@ -127,9 +128,9 @@ Insumos (catálogo):
 
 | Insumo | Categoría | Unidad | Controla vencimiento |
 |---|---|---|---|
-| Semilla de Lechuga Criolla | semillas (del sistema) | unidad | sí |
-| Semilla de Lechuga Morada | semillas | unidad | sí |
-| Semilla de Albahaca Genovesa | semillas | unidad | sí |
+| Semilla Lechuga Criolla | semillas (del sistema) | unidad | sí |
+| Semilla Lechuga Morada | semillas | unidad | sí |
+| Semilla Albahaca Genovesa | semillas | unidad | sí |
 | Bandeja de cartón x 12 | envases (del sistema) | unidad | no |
 | Bolsa compostable 30x40 | envases | unidad | no |
 | Solución nutritiva A | Nutrientes | l | no |
@@ -142,20 +143,20 @@ Insumos (catálogo):
 | Ventilador 12 V | repuestos_de_hardware | unidad | no |
 | Motor de ventana | repuestos_de_hardware | unidad | no |
 
-(Los nombres de las semillas los arma el sistema: si difieren de esta tabla, vale el del sistema.)
+(Los nombres de las semillas los arma el sistema como «Semilla {cultivo} {variedad}», sin «de»; la tabla ya los trae así.)
 
 Existencias por invernadero (habilitación con mínimo y precio de referencia, y la carga inicial con el motivo `carga_inicial`):
 
 | Invernadero | Insumo | Mínimo | Precio ref. | Lote: cantidad | Vence |
 |---|---|---|---|---|---|
-| Norte | Semilla de Lechuga Criolla | 200 | 15,00 | 2000 | HOY+90 |
-| Norte | Semilla de Lechuga Morada | 200 | 18,00 | 1500 | HOY+90 |
+| Norte | Semilla Lechuga Criolla | 200 | 15,00 | 2000 | HOY+90 |
+| Norte | Semilla Lechuga Morada | 200 | 18,00 | 1500 | HOY+90 |
 | Norte | Bandeja de cartón x 12 | 20 | 350,00 | 150 | — |
 | Norte | Bolsa compostable 30x40 | 50 | 80,00 | 400 | — |
 | Norte | **Solución nutritiva A** | **20** | 4200,00 | **12** | — |
 | Norte | **Fungicida biológico** | 2 | 9800,00 | **3** (vence pronto) y 5 | **HOY+3** y HOY+120 |
 | Norte | Cada uno de los 7 repuestos de hardware | 0 | (ver abajo) | 2 | — |
-| Sur | Semilla de Albahaca Genovesa | 150 | 22,00 | 1000 | HOY+90 |
+| Sur | Semilla Albahaca Genovesa | 150 | 22,00 | 1000 | HOY+90 |
 | Sur | Bandeja de cartón x 12 | 20 | 350,00 | 100 | — |
 | Sur | Solución nutritiva A | 15 | 4200,00 | 40 | — |
 
@@ -255,24 +256,29 @@ la cosecha sola. Si LN-2 todavía no pasó, aparece la alerta de período sin cu
 
 ## 14. Sistema IoT de Norte (actor = agronomo1)
 
-Sistema: invernadero Norte; rango de la solución 18,0 a 24,0 °C. **El token no se genera en la carga**: el estudiante lo regenera en la
-pantalla (IoT · Sistema IoT · Regenerar token), lo copia y lo usa en Node-RED. Así nunca pasa por la salida de un comando.
+Sistema: invernadero Norte; rango de la solución 18,0 a 24,0 °C; modelo «ESP32». El registro del sistema (`registrar_sistema_iot`) crea
+también el **nodo** («Nodo Norte», insumo Nodo ESP32): no se da de alta con `alta_hardware`.
 
-Equipos (`alta_hardware`, fecha de instalación HOY):
+**El token.** El servicio lo genera siempre al registrar el sistema y lo devuelve en claro; la carga lo descarta sin guardarlo ni
+imprimirlo (en la base queda solo su resumen y la fecha). El estudiante lo **regenera** en la pantalla (IoT · Sistema IoT · Regenerar
+token), lo copia y lo usa en Node-RED. Así nunca pasa por la salida de un comando; `estado_demo` dice si fue generado y cuándo, no su valor.
 
-| Clase | Identificador | Nombre | Sector | Insumo | Variable / tipo |
-|---|---|---|---|---|---|
-| nodo | — | Nodo Norte | — | Nodo ESP32 | — |
-| sensor | norte/sectorA/temperatura | Temperatura sector A | Maduración N1 | Sensor DHT22 | temperatura ambiente |
-| sensor | norte/sectorA/humedad | Humedad sector A | Maduración N1 | Sensor DHT22 | humedad |
-| sensor | norte/sectorA/luz | Luz sector A | Maduración N1 | Sensor de luz BH1750 | intensidad lumínica |
-| sensor | norte/tanque1/temp-solucion | Temperatura de la solución | — | Sonda DS18B20 | temperatura de la solución |
-| sensor | norte/tanque1/nivel | Nivel del tanque | — | Sensor de nivel flotante | nivel de solución |
-| actuador | norte/sectorA/ventilador | Ventilador sector A | Maduración N1 | Ventilador 12 V | Ventilador (tipo de la migración 0003) |
-| actuador | norte/sectorA/ventana | Ventana sector A | Maduración N1 | Motor de ventana | Ventana (tipo de la migración 0003) |
+Equipos (`alta_hardware`, solo sensores y actuadores; fecha de instalación HOY). El `modelo` es obligatorio en el servicio y sale del
+insumo. El actuador no tiene campo de nombre: «Ventilador sector A» y «Ventana sector A» van en su descripción:
 
-(Los identificadores son los del flujo de Node-RED, `docs/api/nodo/node-red/README.md`, sección 4. Calibración de los sensores: la que
-pida el servicio; si es obligatoria, temperatura −10 a 60, humedad 0 a 100, luz 0 a 100000, solución 0 a 50.)
+| Clase | Identificador | Nombre | Sector | Insumo | Modelo | Variable / tipo |
+|---|---|---|---|---|---|---|
+| sensor | norte/sectorA/temperatura | Temperatura sector A | Maduración N1 | Sensor DHT22 | DHT22 | temperatura ambiente |
+| sensor | norte/sectorA/humedad | Humedad sector A | Maduración N1 | Sensor DHT22 | DHT22 | humedad |
+| sensor | norte/sectorA/luz | Luz sector A | Maduración N1 | Sensor de luz BH1750 | BH1750 | intensidad lumínica |
+| sensor | norte/tanque1/temp-solucion | Temperatura de la solución | — | Sonda DS18B20 | DS18B20 | temperatura de la solución |
+| sensor | norte/tanque1/nivel | Nivel del tanque | — | Sensor de nivel flotante | Sensor de nivel flotante | nivel de solución |
+| actuador | norte/sectorA/ventilador | Ventilador sector A (descripción) | Maduración N1 | Ventilador 12 V | Ventilador 12 V | Ventilador (tipo de la migración 0003) |
+| actuador | norte/sectorA/ventana | Ventana sector A (descripción) | Maduración N1 | Motor de ventana | Motor de ventana | Ventana (tipo de la migración 0003) |
+
+(Los identificadores son los del flujo de Node-RED, `docs/api/nodo/node-red/README.md`, sección 4. Calibración de los sensores, obligatoria en
+todos menos en el nivel (que la ignora): temperatura −10 a 60, humedad 0 a 100, luz 0 a 100000, solución 0 a 50. Cargar los equipos no
+consume el stock de los repuestos: las 2 unidades de cada uno quedan como están.)
 
 Reglas de actuación (`alta_regla`):
 

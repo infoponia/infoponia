@@ -68,6 +68,11 @@ INSTALLED_APPS = [
     'iot',           # nivel 7
 ]
 
+# Decisión de la demo de la defensa (hoy docs/decisiones/D-01-demo.md, punto 5; DAT-01): la app ``demo`` (nivel 9, solo el comando
+# ``cargar_demo``) se instala únicamente con INFOPONIA_DEMO=1 o durante las pruebas. En producción el comando ni siquiera existe.
+if os.environ.get("INFOPONIA_DEMO") == "1" or "test" in sys.argv:
+    INSTALLED_APPS.append('demo')
+
 # D-01 a D-03: modelo de usuario propio (email en vez de username, roles con herencia
 # multi-tabla). Ver docs/decisiones/ (D-01 a D-03).
 AUTH_USER_MODEL = "core.Usuario"
