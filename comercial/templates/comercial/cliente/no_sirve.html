@@ -2,7 +2,7 @@
 {% comment %}«Este enlace no se puede usar» (extensiones 2a y 6a de COM-DCD-FLT): el motivo y los datos de contacto del Vendedor del contrato. Nunca muestra datos de la venta.{% endcomment %}
 {% block contenido %}
 <div class="portal-h"><h1>Este enlace no se puede usar</h1></div>
-<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>{{ motivo }}</b> Si necesita decidir sobre su compra, comuníquese con quien lo atiende en {{ nombre_organizacion }}.</div></div>
+<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>{{ motivo }}</b> {% if es_confirmacion %}Si tiene algo que informar sobre su entrega, comuníquese con quien lo atiende en {{ nombre_organizacion }}.{% else %}Si necesita decidir sobre su compra, comuníquese con quien lo atiende en {{ nombre_organizacion }}.{% endif %}</div></div>
 {% if contacto %}
 <section class="sec" aria-label="Contacto del Vendedor">
   <dl class="dl two">

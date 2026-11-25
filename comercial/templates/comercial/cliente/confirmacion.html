@@ -1,0 +1,86 @@
+{% extends "comercial/cliente/base.html" %}{% load iconos comercial %}
+{% comment %}Confirmar la recepción de una entrega, para el cliente (COM-CNF-ENT pasos 2 a 6; `VIEWS.portal` y `VIEWS.cnf` del prototipo; D-61): la entrega con sus cantidades, precio, monto, total y vencimiento (nunca las plantas perdidas ni los
+costos), el aviso de revisión de un faltante (2b) y de retraso, y la respuesta: «recibí y estoy conforme», «recibí pero tengo quejas» o «no recibí». `paso == "resumen"` es el paso 4 (o 3b.2) con la advertencia de que el enlace
+no podrá volver a usarse. Sin JavaScript: una página, el resumen y un POST. Recibe «datos», «url», «respuesta», «quejas», «errores», «generales», «paso», «resumen» y «ocultas».{% endcomment %}
+{% block titulo %}Confirmar la entrega {{ datos.entrega.codigo }} · {{ nombre_organizacion }}{% endblock %}
+{% block subtitulo %}Su entrega{% endblock %}
+{% block contenido %}
+{% if generales %}<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{% for g in generales %}{{ g }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+
+{% if paso == "resumen" %}
+<div class="portal-h">
+  <h1>Revise su respuesta</h1>
+  <p class="muted">Entrega {{ datos.entrega.codigo }} · contrato {{ datos.contrato.codigo }}</p>
+</div>
+<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div><b>{{ resumen.advertencia }}</b></div></div>
+<section class="sec portal-resumen" aria-label="Resumen de su respuesta">
+  {% if resumen.respuesta == "conforme" %}
+  <p>Confirma que <b>recibió la entrega y que está conforme</b>. No presenta quejas.</p>
+  {% elif resumen.respuesta == "no_recibi" %}
+  <p>Indica que <b>no recibió</b> la entrega. No quedará confirmada y avisaremos a su vendedor y a la gerencia.</p>
+  <p class="muted">Motivo: {{ resumen.motivo_no_recibi }}</p>
+  {% else %}
+  <p>Confirma que <b>recibió la entrega</b> y presenta {{ resumen.quejas|length }} queja{{ resumen.quejas|length|pluralize }}:</p>
+  <ul class="portal-lista">
+    {% for q in resumen.quejas %}<li><b>{{ q.texto }}</b> · {{ q.productos|join:", " }}{% if q.motivo %} · {{ q.motivo }}{% endif %}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+<form method="post" action="{{ url }}" novalidate class="portal-form">
+  {% csrf_token %}
+  {% for nombre, valor in ocultas %}<input type="hidden" name="{{ nombre }}" value="{{ valor }}">{% endfor %}
+  <div class="footbar">
+    <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Enviando…">Enviar respuesta</button>
+    <button class="btn btn-ghost" type="submit" name="accion" value="cambiar" data-sin-envio-en-curso>Cambiar la respuesta</button>
+  </div>
+</form>
+
+{% else %}
+<div class="portal-h">
+  <h1>Confirme la recepción de su entrega</h1>
+  <p class="muted">Entrega {{ datos.entrega.codigo }} · contrato {{ datos.contrato.codigo }} · entregada el {{ datos.fecha_real|date:"d/m/Y" }}</p>
+</div>
+<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Puede responder hasta el <b>{{ datos.vence_el_enlace|date:"d/m/Y" }}</b> inclusive. La respuesta se envía una sola vez.</div></div>
+
+<section class="sec portal-resumen" aria-label="Su entrega">
+  <div class="tabla-responsive">
+  <table class="data-table">
+    <thead><tr><th>Producto</th><th class="right">Plantas</th><th class="right">Precio</th><th class="right">Monto</th></tr></thead>
+    <tbody>
+    {% for l in datos.lineas %}
+      <tr>
+        <td data-etiqueta="Producto"><b>{{ l.variedad }}</b>
+          <span class="sub2">Prometida para el {{ l.fecha_prometida|date:"d/m/Y" }}{% if l.dias_de_retraso %} · <span class="warn-t">llegó con {{ l.dias_de_retraso }} día{{ l.dias_de_retraso|pluralize }} de retraso</span>{% endif %}</span>
+          {% if l.en_revision %}<span class="sub2 warn-t">La cantidad entregada de este producto está por debajo del mínimo pactado y está siendo revisada.</span>{% endif %}</td>
+        <td class="right mono" data-etiqueta="Plantas"><b>{{ l.entregada }} entregadas</b><span class="sub2">{{ l.planificada }} planificadas{% if l.devuelta %} · {{ l.devuelta }} devueltas{% endif %}</span></td>
+        <td class="right mono" data-etiqueta="Precio">{{ l.precio|pesos }}</td>
+        <td class="right mono" data-etiqueta="Monto"><b>{{ l.monto|pesos }}</b></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <dl class="dl two portal-condiciones">
+    <dt>Total de la entrega</dt><dd><b>{{ datos.total|pesos }}</b></dd>
+    {% if datos.hay_descuento %}<dt>Queda a pagar</dt><dd><b>{{ datos.a_pagar|pesos }}</b> <span class="muted">(con las indemnizaciones ya descontadas)</span></dd>{% endif %}
+    <dt>Vencimiento del pago</dt><dd>{{ datos.vencimiento_del_pago|date:"d/m/Y" }}</dd>
+  </dl>
+</section>
+
+<form method="post" action="{{ url }}" novalidate class="portal-form">
+  {% csrf_token %}
+  <input type="hidden" name="accion" value="revisar">
+  <fieldset class="rline">
+    <legend class="lbl">¿Recibió la entrega?</legend>
+    <label class="portal-radio"><input type="radio" name="respuesta" value="conforme"{% if respuesta.respuesta == "conforme" %} checked{% endif %} hx-post="{{ url }}" hx-trigger="change" hx-target="#bloque-respuesta" hx-swap="innerHTML show:none" hx-include="closest form" hx-vals='{"accion": "redibujar"}' data-sin-envio-en-curso> Sí, la recibí y estoy conforme</label>
+    <label class="portal-radio"><input type="radio" name="respuesta" value="con_quejas"{% if respuesta.respuesta == "con_quejas" %} checked{% endif %} hx-post="{{ url }}" hx-trigger="change" hx-target="#bloque-respuesta" hx-swap="innerHTML show:none" hx-include="closest form" hx-vals='{"accion": "redibujar"}' data-sin-envio-en-curso> Sí, la recibí pero tengo quejas</label>
+    <label class="portal-radio"><input type="radio" name="respuesta" value="no_recibi"{% if respuesta.respuesta == "no_recibi" %} checked{% endif %} hx-post="{{ url }}" hx-trigger="change" hx-target="#bloque-respuesta" hx-swap="innerHTML show:none" hx-include="closest form" hx-vals='{"accion": "redibujar"}' data-sin-envio-en-curso> No recibí la entrega</label>
+    {% for e in error_respuesta %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+  </fieldset>
+  <div id="bloque-respuesta" class="stack">{% include "comercial/cliente/_confirmacion_bloques.html" %}</div>
+  <div class="footbar">
+    <button class="btn btn-primary" type="submit" data-enviando="Revisando…">Revisar y enviar</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

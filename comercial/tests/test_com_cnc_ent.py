@@ -23,6 +23,7 @@ from comercial.models import (
     DetalleSuministro,
     DetalleVenta,
     DiscrepanciaEntrega,
+    EnlaceCliente,
     Entrega,
     IntentoFallido,
     PagoCliente,
@@ -515,16 +516,82 @@ class ComCncEntServicioTests(Base):
         self.assertEqual((e.monto_total_entrega, e.fecha_vencimiento_pago, e.estado_confirmacion_cliente), (esperado * 80, HOY + timedelta(days=20), "no_confirmado"))
         self.assertFalse(PagoCliente.objects.exists())
 
-    @override_settings(CORREO_CONFIGURADO=True)
-    def test_ext_3a_el_correo_de_un_suministro_lleva_el_comprobante_de_entrega_sin_enlace(self):
-        """Extensión 3a.5 (estado de paso hasta COM-06b): el correo trae cantidades, monto y vencimiento, y **no** un enlace de confirmación."""
+    @override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test")
+    def test_post_l_el_correo_de_un_suministro_es_uno_solo_con_el_comprobante_y_el_enlace_de_confirmacion(self):
+        """Postcondición l (COM-06b; D-68 punto 1): un solo correo con las cantidades, el monto y el vencimiento **y** el enlace de confirmación (la URL con el token, hasta cuándo sirve). El enlace nace vigente,
+        sin vencimiento guardado (se calcula) y con el envío registrado. (Cambiada en COM-06b: hasta COM-06a el comprobante salía sin enlace.)"""
         x = self.concretable(tipo="suministro", cantidad=100, minima=50)
         with self.captureOnCommitCallbacks(execute=True):
             self.concretar(x)
         (correo,) = mail.outbox
         self.assertIn("Vence el pago", correo.body)
-        self.assertNotIn("http", correo.body)
+        self.assertRegex(correo.body, r"https://sitio\.test/cliente/[\w-]{20,}/")
+        enlace = EnlaceCliente.objects.get(entrega=x.entrega.pk)
+        self.assertEqual((enlace.tipo, enlace.estado, enlace.estado_envio, enlace.fecha_vencimiento, enlace.cliente_id), ("confirmacion_entrega", "vigente", "enviado", None, self.e.cliente.pk))
         self.assertEqual(self.refrescar(x).estado_aviso_cliente, "enviado")
+        self.assertIn(f"{HOY + timedelta(days=3):%d/%m/%Y}", correo.body)  # la vigencia de fábrica: 3 días desde la fecha de resolución
+
+    def test_post_l_un_cliente_sin_correo_no_tiene_enlace_y_la_entrega_queda_no_confirmada(self):
+        """Regla «Enlace de confirmación» y «Sin confirmación tácita»: sin correo no hay enlace; el aviso queda «sin correo» y la confirmación, «no confirmado»."""
+        from comercial.models import Cliente
+
+        Cliente.objects.filter(pk=self.e.cliente.pk).update(email_cliente="")
+        x = self.concretable(tipo="suministro", cantidad=100, minima=50)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.concretar(x)
+        e = self.refrescar(x)
+        self.assertEqual((e.estado_aviso_cliente, e.estado_confirmacion_cliente, mail.outbox), ("sin_correo", "no_confirmado", []))
+        self.assertFalse(EnlaceCliente.objects.exists())
+
+    def test_post_l_una_compra_venta_no_crea_enlace_de_confirmacion(self):
+        """Postcondición l es solo de las entregas de suministro: una compra-venta (confirmación nula) no recibe enlace."""
+        x = self.concretable()
+        self.concretar(x)
+        self.assertFalse(EnlaceCliente.objects.exists())
+
+    def test_post_l_la_concrecion_que_falla_no_deja_enlace(self):
+        """Todo en una transacción: si la concreción se revierte, el enlace tampoco queda (y no sale ningún correo)."""
+        x = self.concretable(tipo="suministro", cantidad=100, minima=50)
+        with mock.patch("comercial.servicios.concrecion.RegistroAuditoria.objects.registrar", side_effect=RuntimeError("falla")), self.assertRaises(RuntimeError):
+            self.concretar(x)
+        self.assertFalse(EnlaceCliente.objects.exists())
+        self.assertEqual(self.refrescar(x).estado_orden, "a_realizar")
+
+    def test_ext_15a_el_paso_50_reemite_el_enlace_con_un_token_nuevo_si_el_correo_no_salio(self):
+        """Extensión 15a (COM-06b): el token no se guarda, así que el reintento le pone un token nuevo a la misma fila (el viejo, que nunca llegó, deja de servir) y manda un solo correo con el enlace."""
+        x = self.concretable(tipo="suministro", cantidad=100, minima=50)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.concretar(x)  # sin el correo del sistema: queda «pendiente de envío»
+        enlace = EnlaceCliente.objects.get(entrega=x.entrega.pk)
+        viejo = enlace.token_resumen
+        self.assertEqual((enlace.estado_envio, self.refrescar(x).estado_aviso_cliente, mail.outbox), ("pendiente_envio", "pendiente_envio", []))
+        with override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test"), self.captureOnCommitCallbacks(execute=True):
+            entregas.planificar_entregas(HOY)
+        comprobantes = [m for m in mail.outbox if m.subject.startswith("Comprobante de tu entrega")]
+        self.assertEqual(len(comprobantes), 1)
+        self.assertIn("https://sitio.test/cliente/", comprobantes[0].body)
+        enlace.refresh_from_db()
+        self.assertNotEqual(enlace.token_resumen, viejo)
+        self.assertEqual((enlace.estado, enlace.estado_envio, self.refrescar(x).estado_aviso_cliente), ("vigente", "enviado", "enviado"))
+        self.assertEqual(EnlaceCliente.objects.filter(entrega=x.entrega.pk).count(), 1)  # la misma fila: no es un reemplazo
+        with override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test"), self.captureOnCommitCallbacks(execute=True):
+            entregas.planificar_entregas(HOY)
+        self.assertEqual(len([m for m in mail.outbox if m.subject.startswith("Comprobante de tu entrega")]), 1)  # idempotente
+
+    def test_ext_15a_un_enlace_usado_o_vencido_no_se_reemite_y_una_concretada_sin_enlace_recibe_el_comprobante_sin_enlace(self):
+        """15a: un enlace ya usado o vencido no se reintenta; una entrega concretada antes de COM-06b (sin enlace; estado de paso, D-68 punto 1) sigue recibiendo el comprobante sin enlace."""
+        x = self.concretable(tipo="suministro", cantidad=100, minima=50)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.concretar(x)
+        EnlaceCliente.objects.filter(entrega=x.entrega.pk).update(estado="usado", fecha_uso=timezone.now())
+        with override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test"), self.captureOnCommitCallbacks(execute=True):
+            entregas.planificar_entregas(HOY)
+        self.assertEqual(mail.outbox, [])
+        EnlaceCliente.objects.filter(entrega=x.entrega.pk).delete()  # una concretada antes de COM-06b
+        with override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test"), self.captureOnCommitCallbacks(execute=True):
+            entregas.planificar_entregas(HOY)
+        (correo,) = [m for m in mail.outbox if m.subject.startswith("Comprobante de tu entrega")]
+        self.assertNotIn("http", correo.body)
 
     def test_post_m_y_ext_14c_por_debajo_del_minimo_se_crea_una_sola_discrepancia_con_su_alerta(self):
         """Postcondición m y 14c: una `DiscrepanciaEntrega` «pendiente» con una línea (entregada y mínima copiadas) y una alerta de evento para el Gerente, vinculada por `AlertaComercial.solicitud`; se avisa al Vendedor."""

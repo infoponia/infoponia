@@ -1,0 +1,13 @@
+{% autoescape off %}Hola, {{ cliente }}:
+
+Recibimos tu respuesta sobre la entrega {{ codigo }} de tu suministro {{ contrato }} el {{ cuando|date:"d/m/Y" }} a las {{ cuando|time:"H:i" }}.
+
+{% if respuesta == "no_recibi" %}Dejamos constancia de que no reconocés la entrega. Avisamos a tu vendedor y a la gerencia: se van a comunicar con vos.{% else %}Confirmaste que recibiste la entrega.{% if quejas %} Registramos {{ quejas|length }} queja{{ quejas|length|pluralize }}:
+{% for q in quejas %}- {{ q.codigo }}: {{ q.tipo }}
+{% endfor %}{% else %} No presentaste quejas.{% endif %}{% endif %}
+
+Si tenés dudas, escribile a tu vendedor: {{ vendedor.get_full_name }}{% if vendedor.email %} ({{ vendedor.email }}){% endif %}{% if vendedor.telefono %}, teléfono {{ vendedor.telefono }}{% endif %}.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

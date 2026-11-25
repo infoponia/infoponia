@@ -843,6 +843,9 @@ class RegistroAuditoria(models.Model):
         CONCRECION_ENTREGA = "concrecion_entrega", "Concreción de entrega"  # COM-CNC-ENT
         INTENTO_FALLIDO_ENTREGA = "intento_fallido_entrega", "Intento fallido de entrega"  # COM-CNC-ENT 4a y COM-FIN-RUT
         REGISTRO_LOTE_EXISTENTE = "registro_lote_existente", "Registro de lote existente"  # PRD-05 (PROD-REG-LTE, D-92 punto 12)
+        # COM-06b (D-68): la respuesta del cliente al enlace de confirmación (sin cuenta, `rol_externo`) y la atención de la entrega no reconocida (Gerente).
+        RESPUESTA_CLIENTE_ENTREGA = "respuesta_cliente_entrega", "Respuesta del cliente a una entrega"  # COM-CNF-ENT
+        ATENCION_ENTREGA_NO_RECONOCIDA = "atencion_entrega_no_reconocida", "Atención de entrega no reconocida"  # COM-ATN-ENR
         # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
         CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
         EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
@@ -1254,6 +1257,14 @@ class RegistroAuditoria(models.Model):
         # CON-03a: cierre manual del ejercicio (``contador`` en ``cambios``, ``cerrado_por`` en ``datos``).
         "cerrado_por": "Cerrado por",
         "contador": "Contador que lo cerró",
+        # COM-06b (COM-CNF-ENT y COM-ATN-ENR): claves de `datos` de la respuesta del cliente y de la atención de una entrega no reconocida («entrega», «cliente», «enlace», «alertas_creadas»
+        # y «estado_confirmacion_cliente» ya existen).
+        "respuesta_cliente": "Respuesta del cliente",
+        "quejas_creadas": "Quejas creadas",
+        "motivo_no_reconocida": "Motivo de que no la reconoce",
+        "alerta": "Alerta",
+        "resultado_averiguacion": "Resultado de la averiguación",
+        "descripcion_averiguacion": "Lo averiguado",
         # CON-03b: el contraasiento guarda el vínculo con el asiento que anula (``anula`` en ``cambios``) y, sin Gerente activo, la constancia del aviso.
         "anula": "Asiento que anula",
         "aviso_al_gerente": "Aviso al Gerente",
@@ -1400,6 +1411,9 @@ class RegistroAuditoria(models.Model):
         # COM-05a1: las listas cerradas de la entrega (`core` no importa `comercial`). «modalidad_entrega» ya existe.
         "estado_confirmacion_cliente": {"no_confirmado": "No confirmada", "confirmado": "Confirmada"},
         "estado_aviso_cliente": {"enviado": "Enviado", "pendiente_envio": "Pendiente de envío", "sin_correo": "Sin correo"},
+        # COM-06b: la respuesta del cliente y el resultado de la averiguación (`core` no importa `comercial`).
+        "respuesta_cliente": {"conforme": "Recibió la entrega y está conforme", "con_quejas": "Recibió la entrega y presentó quejas", "no_recibi": "No reconoce la entrega"},
+        "resultado_averiguacion": {"llego": "La entrega llegó", "no_llego_perdido": "No llegó, producto perdido", "no_llego_devuelto": "No llegó, producto devuelto"},
     }
     SIN_VALOR = "—"
 
@@ -1649,9 +1663,12 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.CONCRECION_ENTREGA,
         RegistroAuditoria.Accion.INTENTO_FALLIDO_ENTREGA,
         RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
+        RegistroAuditoria.Accion.RESPUESTA_CLIENTE_ENTREGA,  # COM-06b
+        RegistroAuditoria.Accion.ATENCION_ENTREGA_NO_RECONOCIDA,  # COM-06b
         RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
         RegistroAuditoria.Accion.EMISION_RECLAMO,
         RegistroAuditoria.Accion.CIERRE_RECLAMO,
+
     }
 )
 

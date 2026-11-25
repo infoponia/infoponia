@@ -24,7 +24,7 @@ from django.db.models.functions import Coalesce, Concat, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
-from comercial.models import Cliente, CompraVenta, DetalleSuministro, DireccionCliente, DiscrepanciaEntrega, Entrega, Suministro
+from comercial.models import Cliente, CompraVenta, DetalleSuministro, DireccionCliente, DiscrepanciaEntrega, Entrega, Queja, Suministro
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
@@ -112,6 +112,7 @@ class FichaDelCliente:
     direcciones_inactivas: list
     entregas_sin_cobrar: list = field(default_factory=list)  # COM-06a: las entregas de suministro concretadas (código, contrato, monto a cobrar, vencimiento y estado de pago)
     discrepancias: list = field(default_factory=list)  # COM-06a: las discrepancias pendientes de revisión de sus entregas (código, entrega, fecha)
+    quejas: list = field(default_factory=list)  # COM-06b: las quejas pendientes de revisión de sus entregas (código, entrega, tipo, fecha)
 
 
 def entregas_sin_cobrar(actor, cliente):
@@ -155,6 +156,14 @@ def discrepancias_pendientes(actor, cliente):
         )
         .select_related("entrega")
         .order_by("numero")
+    ]
+
+
+def quejas_pendientes(actor, cliente):
+    """COM-06b: las quejas «pendiente de revisión» del cliente sobre las entregas dentro del alcance de ``actor``: `[{codigo, entrega, contrato_id, tipo, fecha}]`, por número. Una consulta."""
+    return [
+        {"codigo": q.codigo, "entrega": q.entrega.codigo, "contrato_id": q.entrega.contrato_entrega_id, "tipo": q.get_tipo_queja_display(), "fecha": q.fecha_solicitud}
+        for q in Queja.objects.filter(entrega__in=Entrega.objects.en_alcance_de(actor), cliente=cliente, estado_solicitud="pendiente").select_related("entrega").order_by("numero")
     ]
 
 
@@ -206,6 +215,9 @@ def pendientes_del_cliente(cliente, actor):
     discrepancias = discrepancias_pendientes(actor, cliente)
     if discrepancias:
         pendientes.append(f"Discrepancias pendientes: {len(discrepancias)} ({', '.join(d['codigo'] for d in discrepancias)}).")
+    quejas = quejas_pendientes(actor, cliente)  # COM-06b
+    if quejas:
+        pendientes.append(f"Quejas pendientes: {len(quejas)} ({', '.join(q['codigo'] for q in quejas)}).")
     return pendientes
 
 
@@ -807,6 +819,7 @@ def ficha_del_cliente(actor, cliente_id):
         direcciones_inactivas=[h for h in ordenadas if h.estado_direccion != Direccion.Estado.ACTIVO],
         entregas_sin_cobrar=entregas_sin_cobrar(actor, cliente),
         discrepancias=discrepancias_pendientes(actor, cliente),
+        quejas=quejas_pendientes(actor, cliente),
     )
 
 

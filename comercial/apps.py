@@ -13,7 +13,7 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import camara, concrecion, enlaces, entregas, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import atencion, camara, concrecion, confirmacion, enlaces, entregas, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -149,6 +149,30 @@ class ComercialConfig(AppConfig):
             )
         )
         extensiones_de_maestros.registrar_enlace_de_alerta((concrecion.TIPO_DISCREPANCIA,), concrecion.enlaces_de_alertas)
+        # COM-06b (D-68, D-62): la queja del cliente (alerta de evento para el Gerente; hasta COM-07 lleva a la ficha del suministro, como la discrepancia) y la entrega no reconocida (crítica; lleva a la
+        # pantalla de COM-ATN-ENR). Solo la reciben los Gerentes. Idempotentes (``ready()`` puede correr más de una vez).
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=confirmacion.TIPO_QUEJA,
+                nombre="Queja de un cliente",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.EVENTO,
+                origen=Origen.SOLICITUD_REVISION,
+            )
+        )
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=confirmacion.TIPO_NO_RECONOCIDA,
+                nombre="Entrega no reconocida por el cliente",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.CRITICA,
+                clase=Clase.EVENTO,
+                origen=Origen.ENTREGA,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta((confirmacion.TIPO_QUEJA,), concrecion.enlaces_de_alertas)
+        extensiones_de_maestros.registrar_enlace_de_alerta((confirmacion.TIPO_NO_RECONOCIDA,), atencion.enlaces_de_alertas)
         extensiones_de_core.registrar_impedimento_de_baja_de_cuenta(entregas.impedimentos_de_baja_de_cuenta)
         # COM-06a: la entrada «Mi ruta» (solo para el Transportista; es de campo, sin menú lateral, así que su acceso real es la sección «Ruta de hoy» de su Panel de control).
         registrar_entrada(("Mi ruta", "comercial:ruta", "truck"), (Usuario.Rol.TRANSPORTISTA,))

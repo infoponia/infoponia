@@ -1006,12 +1006,17 @@ def planificar_entregas(hoy):
             enviar_correo_de_entrega(entrega.pk, _fue_movida(entrega))
         except Exception:  # noqa: BLE001
             logger.exception("Falló el reintento del correo de la entrega %s", entrega.pk)
-    from comercial.servicios import concrecion  # adentro: `concrecion` importa este módulo
+    from comercial.models import EnlaceCliente
+    from comercial.servicios import concrecion, enlaces  # adentro: `concrecion` importa este módulo
 
     for entrega in list(Entrega.objects.filter(estado_orden=OrdenTrabajo.Estado.CONCRETADA, estado_aviso_cliente=AVISO.PENDIENTE_ENVIO).order_by("pk")):  # COM-06a, 15a: el comprobante de venta o de entrega
         procesados += 1
         try:
-            concrecion.enviar_comprobante_de_concrecion(entrega.pk)
+            confirmacion = EnlaceCliente.objects.filter(entrega_id=entrega.pk, tipo=EnlaceCliente.Tipo.CONFIRMACION_ENTREGA).first()  # COM-06b: el enlace de confirmación del suministro
+            if confirmacion is None:
+                concrecion.enviar_comprobante_de_concrecion(entrega.pk)
+            else:
+                enlaces.reemitir_enlace(confirmacion)  # token nuevo en la misma fila si sigue vigente; usado o vencido, no se reintenta
         except Exception:  # noqa: BLE001
             logger.exception("Falló el reintento del comprobante de la entrega %s", entrega.pk)
     siguen = Entrega.objects.filter(estado_orden=A_REALIZAR, modalidad_entrega=ENVIO, transportista__isnull=True).count()

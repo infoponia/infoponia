@@ -72,6 +72,8 @@ urlpatterns = [
     path("entregas/<int:entrega_id>/concretar/", views_rutas.concretar, name="entrega_concretar"),
     path("entregas/<int:entrega_id>/concretar/calcular/", views_rutas.concretar_calcular, name="entrega_concretar_calcular"),
     path("entregas/<int:entrega_id>/comprobante/", views_rutas.comprobante, name="entrega_comprobante"),
+    # COM-06b (COM-ATN-ENR): el Gerente atiende la entrega que el cliente dice no haber recibido.
+    path("entregas/<int:entrega_id>/no-reconocida/", views_entregas.no_reconocida, name="entrega_no_reconocida"),
     # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
     path("envasado/", views_envasado.lista, name="envasado"),
     path("envasado/<int:entrega_id>/", views_envasado.entrega, name="envasado_entrega"),

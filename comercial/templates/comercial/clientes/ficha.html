@@ -88,6 +88,15 @@ del alta con los datos guardados.{% endcomment %}
     </div>
     {% endif %}
 
+    {% if ficha.quejas %}
+    <div class="card seg">
+      <div class="card-h"><h3>Quejas pendientes</h3></div>
+      <div class="card-b flush"><table class="data-table">
+        <thead><tr><th>Queja</th><th>Entrega</th><th>Tipo</th><th>Desde</th></tr></thead>
+        <tbody>{% for q in ficha.quejas %}<tr><td class="mono"><a href="{% url 'comercial:suministro' q.contrato_id %}">{{ q.codigo }}</a></td><td class="mono">{{ q.entrega }}</td><td>{{ q.tipo }}</td><td>{{ q.fecha|date:"d/m/Y" }}</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    {% endif %}
+
     <div class="card seg">
       <div class="card-h"><h3>{% icono "pin" 14 %} Direcciones</h3></div>
       {% if ficha.direcciones_activas or ficha.direcciones_inactivas %}

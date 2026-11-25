@@ -6,12 +6,13 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
-from comercial.servicios import entregas
+from comercial.models import Entrega
+from comercial.servicios import atencion, entregas
 from core.acceso import rol_requerido
 from core.models import Usuario
 from inventario.servicios import stock
@@ -111,3 +112,46 @@ def asignar_calcular(request, entrega_id):
         except ValidationError as problema:
             error = " ".join(problema.messages)
     return render(request, "comercial/entregas/_como_queda.html", {"como": como, "error_transportista": error})
+
+
+# ---- COM-ATN-ENR · Atender entrega no reconocida (COM-06b) ----
+# El Gerente abre la alerta crítica que crea la respuesta «no recibí» del cliente (la campana lo trae acá), ve todo lo que generó la entrega y registra qué averiguó. La vista solo orquesta: arma la ficha,
+# llama al servicio y renderiza; las reglas son del servicio. Sin JavaScript funciona igual (una página y un POST).
+
+
+def _pagina_de_atencion(request, alerta_id, errores=None, resultado="", descripcion=""):
+    ficha = atencion.ficha_de_no_reconocida(request.user, alerta_id)
+    errores = errores or {}
+    return render(
+        request, "comercial/entregas/no_reconocida.html", {"ficha": ficha, "errores": errores, "generales": errores.get("__all__", []), "resultado": resultado, "descripcion": descripcion}
+    )
+
+
+@rol_requerido(GERENTE)
+@never_cache
+@require_http_methods(["GET", "HEAD", "POST"])
+def no_reconocida(request, entrega_id):
+    """`/comercial/entregas/<id>/no-reconocida/` (COM-ATN-ENR): GET muestra la entrega con todo lo que generó (regla 1) y el formulario del resultado; POST resuelve la alerta (regla 2) y vuelve a la ficha
+    del suministro con el aviso. Solo el Gerente (los demás roles, 403). Una entrega sin alerta activa (ya se resolvió, o nunca la hubo) vuelve a la ficha del suministro con el mensaje."""
+    entrega = get_object_or_404(Entrega, pk=entrega_id)
+    volver = redirect("comercial:suministro", entrega.contrato_entrega_id)
+    alerta_id = atencion.alerta_activa_de(entrega.pk)
+    if alerta_id is None:
+        messages.info(request, f"{entrega.codigo} no tiene una alerta de entrega no reconocida para atender.")
+        return volver
+    try:
+        if request.method != "POST":
+            return _pagina_de_atencion(request, alerta_id)
+        resultado, descripcion = request.POST.get("resultado", ""), request.POST.get("descripcion", "")
+        try:
+            atencion.atender_entrega_no_reconocida(request.user, alerta_id, resultado, descripcion)
+        except ValidationError as error:
+            if "alerta_resuelta" in _codigos(error):
+                raise
+            errores = {campo: [e.messages[0] for e in lista] for campo, lista in error.error_dict.items()}
+            return _pagina_de_atencion(request, alerta_id, errores, resultado, descripcion.strip())
+    except ValidationError as error:  # la alerta se resolvió mientras tanto
+        messages.error(request, " ".join(error.messages))
+        return volver
+    messages.success(request, f"La alerta de {entrega.codigo} quedó resuelta.")
+    return volver

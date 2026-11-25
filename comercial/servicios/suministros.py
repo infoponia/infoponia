@@ -36,6 +36,7 @@ from comercial.models import (
     DireccionCliente,
     DiscrepanciaEntrega,
     Entrega,
+    Queja,
     Suministro,
 )
 from comercial.servicios import calendario, comprobantes, entregas, stock_maduro
@@ -1003,6 +1004,8 @@ class FichaDeSuministro:
     entregas: list = field(default_factory=list)  # COM-05a2 (regla 7): las entregas del contrato (`entregas.entregas_del_contrato`)
     hay_historial: bool = False  # COM-03b: alguna cadena «reemplaza a» con más de una versión («Ver historial de cambios»)
     discrepancias: list = field(default_factory=list)  # COM-06a (regla 8 de COM-CNS-SUM): las discrepancias de entrega del contrato
+    quejas: list = field(default_factory=list)  # COM-06b: las quejas de los clientes sobre las entregas del contrato
+    por_atender: list = field(default_factory=list)  # COM-06b: las entregas que el cliente dice no haber recibido y esperan al Gerente (`[{entrega_id, codigo}]`; solo para el Gerente)
 
 
 def suministro_del_alcance(actor, suministro_id):
@@ -1218,6 +1221,18 @@ def ficha_de_suministro(actor, suministro_id):
     hay_historial = any(d.reemplaza_a_id for d in detalles)
     if hay_historial:
         acciones.add("ver_historial")
+    por_atender = []
+    if es_gerente:  # COM-ATN-ENR: solo el Gerente atiende (ningún botón lleva a un 403, D-30)
+        from comercial.servicios.confirmacion import TIPO_NO_RECONOCIDA
+
+        por_atender = [
+            {"entrega_id": v.entrega_id, "codigo": v.entrega.codigo}
+            for v in AlertaComercial.objects.filter(
+                entrega__contrato_entrega_id=suministro.pk, alerta__tipo_alerta=TIPO_NO_RECONOCIDA, alerta__estado_alerta="activa"
+            )
+            .select_related("entrega")
+            .order_by("pk")
+        ]
     return FichaDeSuministro(
         suministro=suministro,
         clausula=suministro.clausula_suministrado,
@@ -1235,6 +1250,8 @@ def ficha_de_suministro(actor, suministro_id):
         discrepancias=list(
             DiscrepanciaEntrega.objects.filter(entrega__contrato_entrega_id=suministro.pk).select_related("entrega").prefetch_related("lineas").order_by("numero")
         ),
+        por_atender=por_atender,
+        quejas=list(Queja.objects.filter(entrega__contrato_entrega_id=suministro.pk).select_related("entrega").prefetch_related("detalles__detalle_suministro__variedad").order_by("numero")),
     )
 
 

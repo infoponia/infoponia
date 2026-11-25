@@ -90,6 +90,26 @@ solicitudes de revisión y «Registrar cobro» (COM-05 a COM-08). Recibe «ficha
     </div>
     {% endif %}
 
+    {% if ficha.por_atender %}
+    <div class="card">
+      <div class="card-title">Entregas que el cliente no reconoce</div>
+      <table class="data-table"><thead><tr><th>Entrega</th><th>Situación</th><th></th></tr></thead><tbody>
+      {% for p in ficha.por_atender %}<tr><td class="mono">{{ p.codigo }}</td><td>El cliente dice que no la recibió.</td><td class="right"><a class="btn btn-primary btn-sm" href="{% url 'comercial:entrega_no_reconocida' p.entrega_id %}">Atender</a></td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    {% endif %}
+
+    {% if ficha.quejas %}
+    <div class="card">
+      <div class="card-title">Quejas de entrega</div>
+      <table class="data-table"><thead><tr><th>Queja</th><th>Entrega</th><th>Tipo</th><th>Estado</th><th>Productos</th></tr></thead><tbody>
+      {% for q in ficha.quejas %}<tr><td class="mono">{{ q.codigo }}</td><td class="mono">{{ q.entrega.codigo }}</td><td>{{ q.get_tipo_queja_display }}</td>
+        <td><span class="status-badge {% if q.estado_solicitud == 'pendiente' %}status-warn{% else %}status-neutral{% endif %}">{{ q.get_estado_solicitud_display }}</span></td>
+        <td>{% for d in q.detalles.all %}{{ d.detalle_suministro.variedad }}{% if not forloop.last %}, {% endif %}{% endfor %}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="card-title">Comprobante</div>
       <p>

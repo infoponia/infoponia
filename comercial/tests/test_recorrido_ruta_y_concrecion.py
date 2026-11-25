@@ -56,7 +56,7 @@ def huella_de(respuesta):
     return unescape(html[i : html.index('"', i)])
 
 
-@override_settings(CORREO_CONFIGURADO=True)
+@override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test")
 class RecorridoDeRutaYConcrecionTests(ConDatosDeInventario, TestCase):
     def setUp(self):
         self.e = escenario_comercial()
@@ -141,7 +141,7 @@ class RecorridoDeRutaYConcrecionTests(ConDatosDeInventario, TestCase):
         self.assertIn("Imprimir comprobante", comprobante)
         self.assertIn("Total cobrado", comprobante)
 
-        # ---- 3. concretar el suministro con 80 recibidas: discrepancia para el Gerente, su alerta y el comprobante sin enlace ----
+        # ---- 3. concretar el suministro con 80 recibidas: discrepancia para el Gerente, su alerta y el comprobante con el enlace de confirmación (COM-06b; hasta COM-06a salía sin enlace) ----
         linea = e_sum.lineas.get().pk
         datos = {f"llego_{linea}": "100", f"recibio_{linea}": "80", "sin_envases": "1"}
         self.concretar(e_sum, datos, **HTMX)  # con HTMX el resumen es solo un fragmento
@@ -154,7 +154,7 @@ class RecorridoDeRutaYConcrecionTests(ConDatosDeInventario, TestCase):
         # por eso se busca el comprobante por su asunto y no por la cantidad de correos.
         comprobantes = [m for m in mail.outbox if m.subject.startswith("Comprobante de tu entrega")]
         self.assertEqual(len(comprobantes), 1)
-        self.assertNotIn("http", comprobantes[0].body)
+        self.assertIn("https://sitio.test/cliente/", comprobantes[0].body)
         self.assertIn("Vence el pago", comprobantes[0].body)
         self.entrar(self.e.vendedor)
         ficha = texto(self.client.get(reverse("comercial:suministro", args=[sum_.pk])))

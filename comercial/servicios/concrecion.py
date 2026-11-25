@@ -34,12 +34,13 @@ from comercial.models import (
     Entrega,
     IntentoFallido,
     LineaDiscrepancia,
+    EnlaceCliente,
     PagoCliente,
     ReservaStock,
     Suministro,
     Vehiculo,
 )
-from comercial.servicios import calendario, entregas, rutas, solicitudes
+from comercial.servicios import calendario, enlaces, entregas, rutas, solicitudes
 from comercial.servicios import camara as camara_comercial
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
@@ -870,7 +871,9 @@ def _avisar(quien, entrega, lectura, resumen, discrepancia):
 
 def _programar_comprobante(entrega, lectura, resumen):
     """Paso 15: el comprobante de venta (la última entrega con cobro) o el de entrega (un suministro) sale después de confirmar. Su resultado queda en `Entrega.estado_aviso_cliente` (D-66, punto 12):
-    «pendiente de envío» o «sin correo». Una entrega que no manda comprobante deja el campo vacío (para que el paso 50 no reenvíe un correo viejo de la planificación)."""
+    «pendiente de envío» o «sin correo». Una entrega que no manda comprobante deja el campo vacío (para que el paso 50 no reenvíe un correo viejo de la planificación). **Un suministro de un cliente con
+    correo manda un solo correo: el comprobante con el enlace de confirmación** (postcondición l, COM-06b): `crear_enlace` lo crea dentro de la transacción y lo envía con `on_commit`; sin correo no hay enlace
+    y la entrega queda «no confirmado» (regla «Sin confirmación tácita»)."""
     manda = lectura.venta is None or resumen.cobra
     if not manda:
         estado = None
@@ -878,7 +881,10 @@ def _programar_comprobante(entrega, lectura, resumen):
         estado = AVISO.SIN_CORREO if not lectura.contrato.cliente.email_cliente else AVISO.PENDIENTE_ENVIO
     Entrega.objects.filter(pk=entrega.pk).update(estado_aviso_cliente=estado)
     if estado == AVISO.PENDIENTE_ENVIO:
-        transaction.on_commit(partial(entregas._correr, enviar_comprobante_de_concrecion, entrega.pk))
+        if lectura.venta is None:
+            enlaces.crear_enlace(EnlaceCliente.Tipo.CONFIRMACION_ENTREGA, lectura.contrato.cliente, entrega=entrega)  # postcondición l; D-68 punto 1
+        else:
+            transaction.on_commit(partial(entregas._correr, enviar_comprobante_de_concrecion, entrega.pk))
 
 
 def contexto_del_comprobante(entrega):
@@ -908,7 +914,8 @@ def contexto_del_comprobante(entrega):
 
 
 def enviar_comprobante_de_concrecion(entrega_id):
-    """El correo al cliente con el comprobante de venta (compra-venta) o de entrega (suministro; **sin enlace** hasta COM-06b). Se llama SIEMPRE fuera de una transacción (D-14). Solo sale desde
+    """El correo al cliente con el comprobante de venta (compra-venta) o de entrega (suministro **sin enlace**: solo las concretadas antes de COM-06b, que no lo reciben; las demás mandan el comprobante con el
+    enlace, `enlaces.enviar_enlace`). Se llama SIEMPRE fuera de una transacción (D-14). Solo sale desde
     «pendiente de envío»: sin el correo del sistema configurado o si el envío falla, queda «pendiente» (lo reintenta el paso 50, 15a); si sale, «enviado». Devuelve `True` si salió."""
     entrega = Entrega.objects.select_related("contrato_entrega__cliente", "contrato_entrega__vendedor").filter(pk=entrega_id).first()
     if entrega is None or entrega.estado_orden != OrdenTrabajo.Estado.CONCRETADA or entrega.estado_aviso_cliente != AVISO.PENDIENTE_ENVIO:

@@ -10,5 +10,6 @@ app_name = "cliente"
 urlpatterns = [
     path("enlace/", views_cliente.decision, name="decision"),
     path("enlace/listo/", views_cliente.listo, name="listo"),
+    path("enlace/listo/reenviar/", views_cliente.reenviar_acuse, name="reenviar_acuse"),  # COM-06b, extensión 8a de COM-CNF-ENT
     path("<str:token>/", views_cliente.entrada, name="entrada"),
 ]
