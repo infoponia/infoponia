@@ -374,17 +374,27 @@ def liberar_reservas_de_detalle(detalle, venta, vendedor, hoy, *, motivo_de_la_c
     (con el aviso al Capataz y al Agrónomo); por cada línea de lote ya cosechada con cubierto > 0, una partida de `motivo_de_la_partida` (por omisión `rechazo_cantidad_reducida`) con su
     movimiento. `motivo_de_la_cosecha` es el texto que reciben las cosechas canceladas (por omisión, «El cliente rechazó el faltante de CV-…»). Una sola lógica para los dos casos de uso: ninguna
     función nueva duplica la liberación (`cancelar_orden.md`). Devuelve `(partidas, cosechas_canceladas, reservas_liberadas, partidas_para_reasignar)`."""
+    reservas = ReservaStock.objects.filter(detalle_venta=detalle).exclude(estado_reserva=ReservaStock.Estado.LIBERADA).select_related("cosecha").order_by("pk")
+    return liberar_reservas(
+        reservas, vendedor, hoy, origen=venta, motivo_de_la_cosecha=motivo_de_la_cosecha or f"El cliente rechazó el faltante de {venta.codigo}", motivo_de_la_partida=motivo_de_la_partida
+    )
+
+
+def liberar_reservas(reservas, actor, hoy, *, origen, motivo_de_la_cosecha, motivo_de_la_partida, avisar_agronomo=True):
+    """La liberación de una lista de reservas (`ReservaStock` con su `cosecha` ya leída), sin importar si son de una compra-venta o de un suministro: la lógica de
+    `liberar_reservas_de_detalle`, que la usa para un detalle de venta, y de COM-RSV-SUM (COM-07b, paso 4), que la usa para los detalles de un suministro. `origen` es el documento
+    que origina las partidas (la venta o el suministro); `avisar_agronomo=False` deja sin aviso al Agrónomo en las cosechas canceladas (la resolución le manda uno solo por
+    invernadero). Devuelve `(partidas, cosechas_canceladas, reservas_liberadas, partidas_para_reasignar)`. Corre en la transacción del llamador, con todo bloqueado."""
     from comercial.servicios import cosechas as cosechas_comercial
     from produccion.models import OrdenTrabajo
     from produccion.servicios import camara as fisico_camara
     from produccion.servicios import cosechas as fisico_cosechas
 
     partidas, canceladas, liberadas, reasignar = [], [], [], set()
-    reservas = ReservaStock.objects.filter(detalle_venta=detalle).exclude(estado_reserva=ReservaStock.Estado.LIBERADA).select_related("cosecha").order_by("pk")
     for reserva in reservas:
         cosecha = reserva.cosecha
         if cosecha is not None and cosecha.estado_orden == OrdenTrabajo.Estado.A_REALIZAR:
-            cosechas_comercial.cancelar_cosecha_incluida(vendedor, cosecha, motivo_de_la_cosecha or f"El cliente rechazó el faltante de {venta.codigo}", recubrir=False)
+            cosechas_comercial.cancelar_cosecha_incluida(actor, cosecha, motivo_de_la_cosecha, recubrir=False, avisar_agronomo=avisar_agronomo)
             canceladas.append(cosecha)
             liberadas.append(reserva)
             continue
@@ -400,7 +410,7 @@ def liberar_reservas_de_detalle(detalle, venta, vendedor, hoy, *, motivo_de_la_c
                     partidas.append(
                         fisico_camara.crear_partida(
                             linea.lote, cantidad, motivo_de_la_partida,
-                            fecha_cosecha=cosecha.fecha_cosecha, fecha_ingreso=hoy, costo_unitario=costo, origen=venta,
+                            fecha_cosecha=cosecha.fecha_cosecha, fecha_ingreso=hoy, costo_unitario=costo, origen=origen,
                         )
                     )
         ReservaStock.objects.filter(pk=reserva.pk).update(estado_reserva=ReservaStock.Estado.LIBERADA)

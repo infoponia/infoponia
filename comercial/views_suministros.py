@@ -109,6 +109,20 @@ def suministro_reenviar_comprobante(request, suministro_id):
     return redirect("comercial:suministro", suministro_id)
 
 
+@rol_requerido(GERENTE)
+@require_POST
+def suministro_dar_por_atendida(request, suministro_id):
+    """«Dar por atendida» (COM-RSV-SUM, regla «Alerta “suministro resuelto”»; D-69 punto 14): un POST del Gerente, con su botón en la ficha (sin JavaScript también). Resuelve la alerta del contrato y vuelve a
+    la ficha con el aviso; si ya estaba atendida, vuelve con el mensaje (no es un error 500). Solo el Gerente: ningún otro rol ve el botón (D-30)."""
+    try:
+        suministros.dar_por_atendida_la_resolucion(request.user, suministro_id)
+    except ValidationError as error:
+        messages.error(request, " ".join(error.messages))
+    else:
+        messages.success(request, "La alerta de la resolución quedó atendida.")
+    return redirect("comercial:suministro", suministro_id)
+
+
 # ---- el formulario «Pactar suministro» (COM-PCT-SUM) ----
 
 

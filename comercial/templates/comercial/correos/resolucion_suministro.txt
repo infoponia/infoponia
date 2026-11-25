@@ -1,0 +1,16 @@
+{% load comercial %}{% autoescape off %}Hola {{ cliente }},
+
+Resolvimos tu suministro {{ suministro.codigo }} en {{ nombre_organizacion }} el {{ resolucion.fecha|date:"d/m/Y" }}: se superó la cantidad de incumplimientos tolerados ({{ resolucion.incumplimientos }} de {{ resolucion.tolerados }}){% if resolucion.solicitud %}, con la solicitud {{ resolucion.solicitud.codigo }} de la entrega {{ resolucion.solicitud.entrega.codigo }}{% endif %}.
+
+{% if resolucion.multa %}Multa por resolución que te corresponde: {{ resolucion.multa|pesos }}.{% else %}El contrato no prevé multa por resolución.{% endif %}
+
+{% if resolucion.entregas_canceladas %}Entregas canceladas:
+{% for e in resolucion.entregas_canceladas %}- {{ e.codigo }}, programada para el {{ e.fecha_programada_orden|date:"d/m/Y" }}
+{% endfor %}{% else %}No quedaban entregas por cancelar.
+{% endif %}
+Las entregas que ya recibiste se siguen cobrando según su vencimiento, y podés confirmarlas o presentar tus reclamos como siempre.
+
+Este es un comprobante interno, sin validez fiscal.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

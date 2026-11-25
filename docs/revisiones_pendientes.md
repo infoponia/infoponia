@@ -967,6 +967,28 @@ Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-07a-
 - [ ] 18. Opcional: en un celular la lista y la ficha se ven y se operan.
 - [ ] 19. Después del merge, en Render: `comercial.0012_solicitudes`, `contabilidad.0010_anulacion` y `core.0049_comercial_solicitudes` aplicadas en el log.
 
+## COM-07b · Tarea COM-07b (resolución del suministro por incumplimientos)
+
+Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-07b-resolucion-del-suministro.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **una migración nueva** (`core` 0050: solo `choices`, `sqlmigrate` es un no-op; ninguna de datos). Se necesita un cliente con un correo que puedas leer y un suministro con 0 incumplimientos tolerados y multa de $ 50.000,00, con una entrega «a realizar» con 5 envases, otra cosecha «a realizar» y una discrepancia pendiente (los valores y los comandos de preparación están en el archivo de la tarea).
+
+- [ ] 1. Gerente: con el contrato vigente, la ficha del suministro no tiene aviso de resolución ni «Dar por atendida».
+- [ ] 2. Gerente: evaluar la discrepancia («Hubo incumplimiento» + «Ver resumen») advierte que se superan los tolerados, que el contrato «se resolverá» y la multa $ 50.000,00.
+- [ ] 3. «Confirmar la decisión»: la ficha pasa a «Resuelto» con «Resuelto por incumplimientos el dd/mm/aaaa: 1 de 0 tolerados, por SR-…. Multa: $ 50.000,00…»; las entregas «a realizar» y las cosechas del contrato quedan canceladas con el motivo «Resolución del suministro SUM-… por incumplimientos.»; la entrega concretada no cambia; sin «Modificar» ni «Rescindir».
+- [ ] 4. Cámara: si había producto ya cosechado, partida nueva con motivo «Resolución del contrato» y fecha límite desde la cosecha (si no había, no hay partida).
+- [ ] 5. Avisos: el Vendedor, el Transportista, el Capataz y el Agrónomo (uno solo, con los envases) en «Notificaciones»; el cliente recibe «Resolución de tu suministro SUM-…» con la multa y las entregas canceladas.
+- [ ] 6. Campana del Gerente: alerta crítica «SUM-… … resuelto por incumplimientos…» con el detalle «SUM-… · resuelto · multa $ 50.000,00»; el clic abre la ficha del suministro.
+- [ ] 7. Lista de suministros (Gerente): el contrato «Resuelto» con la marca roja «Resolución sin atender».
+- [ ] 8. «Anular resolución» de la solicitud: «No se puede anular… esta aceptación resolvió el contrato SUM-…» y solo «Volver».
+- [ ] 9. Vendedor: ve el aviso de resolución y la lista sin la marca, sin «Dar por atendida»; el Transportista escribiendo la dirección a mano recibe «Prohibido (403)».
+- [ ] 10. **Navegador real** (ventana privada): «Dar por atendida» → vuelve a la ficha con «La alerta de la resolución quedó atendida.», sin el botón; la alerta sale de la campana y la marca de la lista desaparece; en «Auditoría», `atencion_suministro_resuelto` y `resolucion_suministro` (sin usuario).
+- [ ] 11. Entrega en viaje: con la ruta iniciada, la resolución cancela la entrega y el Transportista recibe «No la entregues: devolvé el producto y los envases a …».
+- [ ] 12. Disparo perdido: un suministro vigente con más incumplimientos que los tolerados; `python manage.py proceso_diario --solo resolver_suministros` lo resuelve («1 suministros resueltos, 0 descartados, 0 con error»); corrido otra vez no hace nada; `--listar` muestra el paso 33 antes del 35, el 40 y el 50.
+- [ ] 13. Un contrato sin entregas ni reservas se resuelve igual, con su alerta.
+- [ ] 14. Opcional: cliente sin correo («Para imprimir») y «Reenviar comprobante» con el aviso pendiente (manda el de resolución).
+- [ ] 15. Opcional: sin JavaScript, «Dar por atendida» funciona.
+- [ ] 16. Opcional: en un celular la ficha y la lista se ven y se operan.
+- [ ] 17. Después del merge, en Render: `core.0050_comercial_resolucion` aplicada en el log.
+
 ## CMP-05 · Tarea CMP-05 (pago a proveedores)
 
 Los 24 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-05-pago-a-proveedores.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0005, `contabilidad` 0007 y `core` 0044; las dos últimas solo `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_pagos.py`; la concurrencia no se prueba a mano.

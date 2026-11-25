@@ -1379,7 +1379,7 @@ def cancelar_cosecha(actor, cosecha_id, motivo, huella):
     return resultado._replace(notificar_a=avisados)
 
 
-def cancelar_cosecha_incluida(actor, cosecha, motivo, *, recubrir=True, avisar=True):
+def cancelar_cosecha_incluida(actor, cosecha, motivo, *, recubrir=True, avisar=True, avisar_agronomo=True):
     """PROD-CNL-ORD como parte de otro caso de uso (COM-DCD-FLT, COM-04c; COM-CNL-CVT y la cancelación de entregas, desde COM-05), igual que
     `produccion.ordenes.cancelar_orden_incluida`: `actor` puede ser `None` (InfoPonia); corre en la transacción del llamador, que ya tiene los bloqueos del
     encabezado (sin ella, `RuntimeError`); **no audita**: devuelve la cosecha, la reserva y lo creado para el registro del llamador.
@@ -1388,6 +1388,8 @@ def cancelar_cosecha_incluida(actor, cosecha, motivo, *, recubrir=True, avisar=T
     - Cancela solo cosechas «a realizar» (`orden_no_a_realizar`).
     - Con `recubrir=False` no llama a `asignar` ni al camino de faltante (COM-DCD-FLT: el detalle se rechazó).
     - Con `avisar=True`, el aviso al Capataz y al Agrónomo del invernadero (postcondición j de COM-DCD-FLT). El aviso al Vendedor lo arma el llamador.
+    - `avisar_agronomo=False` (COM-07b, paso 4.1 de COM-RSV-SUM; situación 9) omite solo el aviso al Agrónomo: la resolución le manda UNA notificación por invernadero. Por omisión
+      `True`, para que COM-DCD-FLT y COM-CNL-CVT no cambien. Con `avisar=False` no se avisa a nadie.
     """
     if transaction.get_autocommit():
         raise RuntimeError("`cancelar_cosecha_incluida` corre dentro de la transacción del caso de uso que la llama.")
@@ -1400,5 +1402,6 @@ def cancelar_cosecha_incluida(actor, cosecha, motivo, *, recubrir=True, avisar=T
     cosecha = Cosecha.objects.select_related("invernadero", "capataz", "variedad").get(pk=cosecha.pk)
     _exigir_a_realizar(cosecha)
     resultado = _cancelar_en_transaccion(actor, cosecha, motivo, recubrir=recubrir)
-    avisados = _aviso_de_cancelacion(cosecha, motivo, actor, [cosecha.capataz, cosecha.invernadero.agronomo]) if avisar else []
+    cuentas = [cosecha.capataz, cosecha.invernadero.agronomo] if avisar_agronomo else [cosecha.capataz]
+    avisados = _aviso_de_cancelacion(cosecha, motivo, actor, cuentas) if avisar else []
     return resultado._replace(notificar_a=avisados)

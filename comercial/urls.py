@@ -43,6 +43,7 @@ urlpatterns = [
     path(
         "contratos/suministros/<int:suministro_id>/dejar-sin-efecto-rescision/", views_suministros.suministro_dejar_sin_efecto, name="suministro_dejar_sin_efecto"
     ),
+    path("contratos/suministros/<int:suministro_id>/dar-por-atendida/", views_suministros.suministro_dar_por_atendida, name="suministro_dar_por_atendida"),
     path("contratos/suministros/<int:suministro_id>/historial/", views_suministros.suministro_historial, name="suministro_historial"),
     # Cosechas (COM-04a): planificar y modificar (Agrónomo), concretar (Capataz, para celular) y cancelar (Agrónomo). Cada pantalla tiene su `calcular/` (redibuja
     # sin validar) y su `revisar/` (el resumen): ninguna de las dos escribe. Se llega desde las pantallas de `produccion` (lista de órdenes y bandeja).

@@ -84,8 +84,9 @@ class RecorridoDeSolicitudesDeRevisionTests(BaseDeSolicitudes):
             g.post(reverse("comercial:solicitud_resolver", args=[q.solicitud.pk]), {"decision": "aceptar", "monto": "500", "huella": huella_q})
         sq = SolicitudRevision.objects.get(pk=q.solicitud.pk)
         self.assertEqual((sq.estado_solicitud, sq.monto_indemnizacion, sq.monto_descontado, sq.monto_reintegrado), ("aceptada", D("500.00"), D("500.00"), D("0.00")))
-        self.assertEqual(Suministro.objects.get(pk=d.contrato.pk).cantidad_incumplimientos, 2)  # más que los tolerados: COM-07b lo resuelve (estado de paso)
-        self.assertEqual(Suministro.objects.get(pk=d.contrato.pk).estado_suministro, "vigente")
+        # Más que los tolerados: desde COM-07b (reemplaza la prueba de COM-07a, que dejaba el contrato «vigente» como estado de paso) la aceptación lo resuelve después del commit, con esta solicitud.
+        resuelto = Suministro.objects.get(pk=d.contrato.pk)
+        self.assertEqual((resuelto.cantidad_incumplimientos, resuelto.estado_suministro, resuelto.solicitud_resolucion_id), (2, "resuelto", q.solicitud.pk))
 
         # 4. La queja por retraso: la indemnización es de la cláusula; rechazarla sin observaciones se rechaza; con observaciones, el cliente recibe el aviso.
         ficha_r = texto(g.get(reverse("comercial:solicitud", args=[r.solicitud.pk])))

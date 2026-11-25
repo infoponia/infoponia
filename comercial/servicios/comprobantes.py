@@ -28,9 +28,10 @@ ASUNTOS_POR_TIPO = {
     "rescision": "Rescisión de tu suministro {codigo}",
     "anulacion_rescision": "Rescisión sin efecto de tu suministro {codigo}",
     "cancelacion": "Cancelación de tu compra {codigo}",  # COM-CNL-CVT (COM-05b), paso 9
+    "resolucion": "Resolución de tu suministro {codigo}",  # COM-RSV-SUM (COM-07b), postcondición k
 }
-# El comprobante de cancelación de una compra-venta tiene su propio texto (no es el de registro con otro asunto).
-PLANTILLAS_POR_TIPO = {"cancelacion": "comercial/correos/cancelacion_compra_venta.txt"}
+# El comprobante de cancelación de una compra-venta y el aviso de resolución de un suministro tienen su propio texto (no son los de registro con otro asunto).
+PLANTILLAS_POR_TIPO = {"cancelacion": "comercial/correos/cancelacion_compra_venta.txt", "resolucion": "comercial/correos/resolucion_suministro.txt"}
 
 
 def contexto_del_comprobante(contrato):
@@ -104,6 +105,9 @@ def reenviar_comprobante(actor, contrato_id):
     # COM-RSC-SUM 7a: con una rescisión acordada (o rescindido), lo que se reenvía es la constancia de la rescisión.
     suministro = Suministro.objects.filter(pk=contrato.pk).first()
     tipo = "rescision" if suministro is not None and suministro.motivo_rescision is not None else None
+    # COM-RSV-SUM 8a: un suministro resuelto (aun con una rescisión acordada, que la resolución deja como estaba) reenvía el aviso de resolución.
+    if suministro is not None and suministro.estado_suministro == Suministro.Estado.RESUELTO:
+        tipo = "resolucion"
     # COM-CNL-CVT: con una compra-venta cancelada con motivo (MD-130), lo que se reenvía es el comprobante de cancelación.
     if CompraVenta.objects.filter(pk=contrato.pk, motivo_cancelacion_venta__isnull=False).exists():
         tipo = "cancelacion"

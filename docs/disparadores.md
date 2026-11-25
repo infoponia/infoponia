@@ -162,7 +162,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      las indemnizaciones de las solicitudes aceptadas.
      **Planificado (lote C7; D-69, punto 1):** las solicitudes, **COM-07a** (`solicitudes.md`, «Lo que completa a otras tareas»: el
      registrante del enlace de las dos alertas, `monto_a_cobrar` con lo **descontado**, D-69 punto 9); COM-RSV-SUM, **COM-07b**
-     (`resolucion.md`).~~ **Cumplido por COM-07a (25/11/2026):** el registrante del enlace de las dos alertas lleva a la ficha de la solicitud, `monto_a_cobrar` resta lo descontado y COM-RSV-QJA usa `intentos_fallidos`. Lo que queda: COM-RSV-SUM, de COM-07b (punto 11).
+     (`resolucion.md`).~~ **Cumplido por COM-07a (25/11/2026):** el registrante del enlace de las dos alertas lleva a la ficha de la solicitud, `monto_a_cobrar` resta lo descontado y COM-RSV-QJA usa `intentos_fallidos`. Lo que quedaba, COM-RSV-SUM, **lo cumple COM-07b (25/11/2026)**: ver el punto 11.
    - **COM-08:** `Entrega.pago` (R154) y C7 de `PagoCliente` como {xor}; `estado_de_pago` con «pagada» (MD-125, MD-136) y la alerta «pago en
      mora» (COM-VNC-PAG); el cobro en COM-ATN-ENR (regla 1) y su regla 5.
      **Planificado (lote C8):** todo en **COM-08a** (`cobranza.md`). R154 no es `Entrega.pago`: es la tabla `LineaPago` (D-94, punto 2).
@@ -170,9 +170,11 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      a quien registra los asientos manuales (postcondición b de COM-ATN-ENR).
 
 11. **Lo que deja COM-07 (nace en el lote C7; D-69).**
-   - **COM-07b:** `resoluciones.resolver_si_corresponde` deja de ser neutra (COM-07a la llama con `on_commit` en cada aceptación) y carga
+   - ~~**COM-07b:** `resoluciones.resolver_si_corresponde` deja de ser neutra (COM-07a la llama con `on_commit` en cada aceptación) y carga
      `Suministro.solicitud_resolucion`, con lo que la extensión 2a de COM-ANL-SRV se da con datos reales. **Planificado (lote C7):** COM-07b
-     (`resolucion.md`, «Lo que completa a otras tareas»).
+     (`resolucion.md`, «Lo que completa a otras tareas»).~~ **Hecho en COM-07b (25/11/2026):** `resolver_si_corresponde` resuelve el contrato (en su
+     propia transacción y sin dejar pasar una falla), carga `solicitud_resolucion` (la 2a de COM-ANL-SRV se prueba con datos reales) y el paso
+     diario 33 lo recupera si el disparo se pierde.
    - **COM-08:** una entrega de suministro «pagada»: la extensión 6a de COM-EVL-DSC y de COM-RSV-QJA (todo se reintegra), el cobro como cambio
      de la huella (8b) y la extensión 2b de COM-ANL-SRV (`entrega_cobrada`), hoy probados con `mock.patch` de `estado_de_pago`, con datos
      reales; `Anulacion.pago` y `cliente_pago_en_fecha` (COM-ANL-CBR, MD-135) y la restricción «exactamente uno de `solicitud` y `pago`»;
@@ -184,12 +186,22 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    - **Ronda de contabilidad:** el asiento de cada indemnización (simple o compuesto, con lo descontado y lo reintegrado que guarda la
      solicitud), el contraasiento de cada `Anulacion` y el asiento de la multa por resolución (MD-123).
 
-## Resolución de un contrato con rescisión acordada (COM-03, lote C3)
+## ~~Resolución de un contrato con rescisión acordada (COM-03, lote C3)~~
 
-COM-07 (COM-RSV-SUM): si un suministro con rescisión acordada supera sus incumplimientos tolerados antes de la última entrega, se resuelve
+~~COM-07 (COM-RSV-SUM): si un suministro con rescisión acordada supera sus incumplimientos tolerados antes de la última entrega, se resuelve
 igual, con su multa (la resolución prevalece, regla «Mientras se entregan…» de COM-RSC-SUM). La resolución deja los datos de la rescisión
 como estaban (quedan en la ficha como historia) y el paso 35 ya no lo toma, porque no está «vigente».
-**Planificado (lote C7):** COM-07b (`docs/casos_de_uso/comercial/resolucion.md`, paso 4.5; el paso 33 corre antes del 35, D-69 punto 7).
+**Planificado (lote C7):** COM-07b (`docs/casos_de_uso/comercial/resolucion.md`, paso 4.5; el paso 33 corre antes del 35, D-69 punto 7).~~
+**Hecho en COM-07b (25/11/2026):** la resolución deja los datos de la rescisión como estaban y el contrato queda «resuelto»; el paso 33 corre antes del 35 (probado en
+`test_com_rsv_sum.py`: `test_regla_la_resolucion_prevalece_sobre_una_rescision_acordada` y `test_regla_con_rescision_acordada_el_paso_33_resuelve_antes_de_que_el_35_lo_rescinda`).
+
+## Lo que deja COM-07b (nace el 25/11/2026)
+
+- **Ronda de contabilidad:** el asiento de la multa por resolución (Debe «Indemnizaciones por Resolución de Contratos» / Haber «Indemnizaciones a Pagar», MD-123), su pago con un asiento manual
+  (CU-17), la precondición c y la extensión 5b de COM-RSV-SUM (D-57, D-69 punto 8). Hoy la multa se informa en la alerta, en el aviso al cliente y en la ficha («fuera de esta ronda»).
+- **COM-08a:** COM-REG-CBR cobra las entregas concretadas de un contrato «resuelto» (la resolución las conserva y lo prueba `test_regla_que_no_cambia_lo_ya_ocurrido`, sin cobros reales); con
+  `LineaPago` hay que probarlo con datos reales.
+- **Cuando se modifique `maestros.Alerta`:** `descripcion_alerta` admite 200 caracteres y el caso de uso pide 500 para la alerta «suministro resuelto» (`docs/temas_abiertos.md`, COM-07b).
 
 ## Cuando se programen COM-05a1 y COM-06 — nace con COM-03b (24/11/2026)
 

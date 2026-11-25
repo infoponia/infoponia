@@ -51,7 +51,7 @@ contrato al que le queda un solo incumplimiento tolerado (o ya usó todos). «Pa
           <td class="nowrap">{{ s.fecha_realizacion|date:"d/m/Y" }} al {{ s.fecha_fin|date:"d/m/Y" }}<span class="sub2">{{ s.duracion_meses }} meses</span></td>
           <td class="right mono">{{ s.detalles_vigentes }}</td>
           <td class="nowrap">{{ s.cantidad_incumplimientos }} de {{ s.incumplimientos_tolerados }}{% if s.al_limite %} <span class="status-badge status-warn">Al límite</span>{% endif %}</td>
-          <td>{% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}</td>
+          <td>{% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}{% if s.resolucion_sin_atender %}<span class="sub2"><span class="status-badge status-danger">Resolución sin atender</span></span>{% endif %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:suministro' s.pk %}">Ver<span class="sr"> el suministro {{ s.codigo }}</span></a></td>
         </tr>
       {% empty %}

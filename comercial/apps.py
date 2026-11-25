@@ -13,7 +13,7 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import atencion, camara, concrecion, confirmacion, enlaces, entregas, pre_reserva, registrantes, solicitudes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import atencion, camara, concrecion, confirmacion, enlaces, entregas, pre_reserva, registrantes, resoluciones, solicitudes, stock_maduro, suministros, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -173,6 +173,21 @@ class ComercialConfig(AppConfig):
             )
         )
         extensiones_de_maestros.registrar_enlace_de_alerta((confirmacion.TIPO_NO_RECONOCIDA,), atencion.enlaces_de_alertas)
+        # COM-07b (D-69 punto 14, D-63 punto 2): la alerta «suministro resuelto» (de evento, para el Gerente; el caso de uso dice severidad «alto» y la API tiene tres niveles: crítica).
+        # La crea COM-RSV-SUM con su `AlertaComercial(suministro=…)`; el Gerente la da por atendida desde la ficha. Idempotente (`ready()` puede correr más de una vez).
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=resoluciones.TIPO_DE_ALERTA,
+                nombre="Suministro resuelto por incumplimientos",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.CRITICA,
+                clase=Clase.EVENTO,
+                origen=Origen.SUMINISTRO,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta((resoluciones.TIPO_DE_ALERTA,), resoluciones.enlaces_de_alertas)  # la campana del Gerente lleva a la ficha del suministro (MAE-02d)
+        # COM-07b (D-56 punto 6, enmendado por D-69 punto 7): el paso 33 recupera la resolución que falló o no llegó a ejecutarse; va antes del 35, el 40 y el 50.
+        registrar_paso_diario("resolver_suministros", "Resolver suministros con incumplimientos superados", 33, resoluciones.resolver_suministros_pendientes)
         extensiones_de_core.registrar_impedimento_de_baja_de_cuenta(entregas.impedimentos_de_baja_de_cuenta)
         # COM-06a: la entrada «Mi ruta» (solo para el Transportista; es de campo, sin menú lateral, así que su acceso real es la sección «Ruta de hoy» de su Panel de control).
         registrar_entrada(("Mi ruta", "comercial:ruta", "truck"), (Usuario.Rol.TRANSPORTISTA,))
