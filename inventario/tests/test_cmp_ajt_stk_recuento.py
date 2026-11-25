@@ -12,6 +12,8 @@ from decimal import Decimal
 
 from django.test import TestCase
 
+from contabilidad import cuentas
+from contabilidad.models import AsientoContable, EjercicioContable
 from core.models import RegistroAuditoria
 from inventario.models import InsumoInvernadero, LoteInsumo, MovimientoInsumo
 from inventario.tests.ajustes_comunes import RECUENTO, BaseDeAjustes, ajustes
@@ -264,13 +266,72 @@ class CmpAjtStkRecuentoTests(BaseDeAjustes, TestCase):
         self.assertEqual(cambios, {"stock": {"antes": "30.000", "despues": "28.000"}})
 
     def test_post_l_los_movimientos_no_se_auditan_uno_por_uno(self):
-        """docs/patrones/stock.md, sección 6: los movimientos van como referencias en el registro del caso de uso."""
+        """docs/patrones/stock.md, sección 6: los movimientos van como referencias en el registro del caso de uso. Desde CON-04b el ajuste además
+        crea asientos (que audita ``contabilidad``: un alta por asiento y una por movimiento contable, D-84 punto 9): lo que NO es contable sigue
+        siendo UN solo registro (el del ajuste), y los contables son los esperados."""
         self.confirmar(RECUENTO, {"contados": {self.l1.pk: "8", self.l2.pk: "25"}})
+        acciones = RegistroAuditoria.Accion
+        contables = [acciones.ALTA_ASIENTO_CONTABLE, acciones.ALTA_MOVIMIENTO_CONTABLE, acciones.ALTA_EJERCICIO_CONTABLE]
         self.assertEqual(RegistroAuditoria.objects.filter(accion=AJUSTE).count(), 1)
-        self.assertEqual(RegistroAuditoria.objects.count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.exclude(accion__in=contables).count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=acciones.ALTA_ASIENTO_CONTABLE).count(), 2)  # uno por lote que cambió
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=acciones.ALTA_MOVIMIENTO_CONTABLE).count(), 4)  # dos líneas por asiento
 
-    def test_d45_sin_ejercicio_contable_ni_cuentas_el_ajuste_se_registra_y_muestra_el_valor(self):
-        """D-45: las precondiciones c y d (ejercicio vigente y cuentas) no se implementan ni se verifican; no existe ninguno en esta base
-        y el ajuste se registra igual. El valor sí se muestra en el resumen."""
+    def test_d92_sin_ejercicio_el_ajuste_se_registra_abre_el_primero_y_muestra_el_valor(self):
+        """D-92 punto 2: las precondiciones c y d (ejercicio vigente y cuentas) se cumplen solas: sin ejercicio en la base, el asiento abre el primero
+        (autorrecuperación, H9) y el ajuste se registra. El valor sigue mostrándose en el resumen."""
+        self.assertEqual(EjercicioContable.objects.count(), 0)
         resultado = self.confirmar(RECUENTO, {"contados": {self.l1.pk: "8"}})
         self.assertEqual(resultado.resumen.valor, D("-200.00"))
+        [ejercicio] = EjercicioContable.objects.all()
+        self.assertEqual((ejercicio.estado_ejercicio, ejercicio.fecha_inicio_ejercicio), (EjercicioContable.Estado.ABIERTO, self.hoy))
+        self.assertEqual([a.ejercicio_id for a in resultado.asientos], [ejercicio.pk])
+        self.invariantes()
+
+    # ---- CON-04b: un asiento por cada movimiento de ajuste del recuento (postcondición e, R012) ----
+
+    def test_post_e_un_recuento_que_toca_tres_lotes_genera_tres_asientos(self):
+        """Postcondición e, paso 14.4 y R012: l1 baja 2 (÷ $ 100 = 200), l2 sube 5 (500) y el faltante sin lote (3) queda en cero (300): tres movimientos,
+        tres asientos, cada uno con su lado (positivo: Debe Insumos en Stock / Haber Diferencias; negativo, al revés), con números consecutivos."""
+        falta = faltante(self.iin, 3)
+        resultado = self.confirmar(RECUENTO, {"contados": {self.l1.pk: "8", self.l2.pk: "25"}})
+        self.assertEqual(len(resultado.movimientos), 3)
+        por_lote = {m.lote_insumo_id: self.lineas_de(m) for m in resultado.movimientos}
+
+        def sube(importe):
+            return [(cuentas.INSUMOS_EN_STOCK, "D", D(importe)), (cuentas.DIFERENCIAS_DE_INVENTARIO, "H", D(importe))]
+
+        self.assertEqual(
+            por_lote,
+            {
+                self.l1.pk: [(cuentas.INSUMOS_EN_STOCK, "H", D("200.00")), (cuentas.DIFERENCIAS_DE_INVENTARIO, "D", D("200.00"))],
+                self.l2.pk: sube("500.00"),
+                falta.pk: sube("300.00"),
+            },
+        )
+        self.assertEqual(sorted(a.numero_asiento for a in resultado.asientos), [1, 2, 3])
+        self.assertEqual(AsientoContable.objects.count(), 3)
+        self.invariantes()
+
+    def test_post_c_y_e_el_faltante_que_queda_en_cero_asienta_insumos_contra_diferencias(self):
+        """Postcondiciones c y e: el movimiento que deja en cero el faltante sin lote (ajuste positivo de 3 × $ 100) también origina su asiento."""
+        falta = faltante(self.iin, 3)
+        resultado = self.confirmar(RECUENTO, {})
+        [movimiento] = resultado.movimientos
+        self.assertEqual(movimiento.lote_insumo_id, falta.pk)
+        self.assertEqual(
+            self.lineas_de(movimiento),
+            [(cuentas.INSUMOS_EN_STOCK, "D", D("300.00")), (cuentas.DIFERENCIAS_DE_INVENTARIO, "H", D("300.00"))],
+        )
+        self.invariantes()
+
+    def test_post_b_y_e_el_lote_nuevo_del_recuento_asienta_como_diferencia_y_no_como_capital_inicial(self):
+        """Postcondiciones b y e: la mercadería encontrada en un recuento (lote nuevo de 2 × $ 100) es un ajuste positivo «recuento físico»: va contra
+        Diferencias de Inventario; solo el motivo «carga inicial» va contra Capital Inicial (D-92 punto 7)."""
+        resultado = self.confirmar(RECUENTO, {"nuevos": [{"cantidad": "2", "vencimiento": self.vence}]})
+        [movimiento] = resultado.movimientos
+        self.assertEqual(
+            self.lineas_de(movimiento),
+            [(cuentas.INSUMOS_EN_STOCK, "D", D("200.00")), (cuentas.DIFERENCIAS_DE_INVENTARIO, "H", D("200.00"))],
+        )
+        self.invariantes()

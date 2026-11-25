@@ -438,9 +438,10 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
   su `PagoCliente` de compra-venta (MD-130). La precondición c de COM-REG-CBR (ejercicio y cuentas) se suma al reabrirlo. Todo lo que hace
   falta ya está guardado.
 
-0. **Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
+0. ~~**Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
    ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
-   ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).
+   ronda (D-45)»; el asiento de cada ajuste referencia al movimiento como su `OrigenDocumento`). Decidir antes la cuenta del haber de la carga inicial (MD-90, tema abierto del CU).~~
+   Hecho en CON-04b (24/11/2026): `confirmar_ajuste` crea el asiento de cada movimiento de ajuste; la carga inicial va contra Capital Inicial (D-92 punto 7). Las precondiciones c y d se cumplen solas (D-92 punto 2).
 
 1. **Reabrir seis casos de uso de la ronda «Producción 1».** Hasta entonces no verifican el ejercicio vigente ni las
    cuentas, ni crean `AsientoContable`: PROD-CNC-SMB y PROD-CNC-TRN (precondiciones c y d y su asiento), PROD-REG-MRM,
