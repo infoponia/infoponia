@@ -611,7 +611,7 @@ class ComRegCbrFechaDelCobroAnuladoTests(BaseDeCobranza):
         self.assertEqual(codigos(self.rechazo(cobranza.resumen_de_cobro, self.gerente, datos, HOY)), ["fecha_no_admitida"])
         huella = cobranza.resumen_de_cobro(self.gerente, self.datos([e]), HOY).huella
         self.assertEqual(codigos(self.rechazo(cobranza.registrar_cobro, self.gerente, datos, huella, HOY)), ["fecha_no_admitida"])
-        self.assertEqual(self.cuantos_cobros(), 0)
+        self.assertEqual(PagoCliente.objects.filter(tipo_pago="suministro").count(), 0)
 
     def test_regla_fecha_del_pago_sin_7a_es_siempre_la_de_hoy(self):
         """Sin el camino de 7a, la fecha del cobro es la de hoy aunque exista una anulación con `cliente_pago_en_fecha`: `fecha_pago = hoy`, `anulacion_corregida` nula."""

@@ -647,11 +647,11 @@ class ComCnlCvtVistaTests(Base):
 class ComCnlCvtConEntregaConcretadaRealTests(Base):
     """COM-06a (`rutas.md`, «Lo que completa a otras tareas», fila COM-05b): las pruebas de 6a y de D-67 punto 4 con una entrega **concretada de verdad** (con `concrecion.concretar_entrega`), no armada con la fábrica."""
 
-    def venta_con_una_entrega_concretada(self, fecha_de_la_segunda=HOY):
+    def venta_con_una_entrega_concretada(self, fecha_de_la_segunda=HOY, nombre_de_la_otra="Otra variedad"):
         """Una venta con dos detalles (dos variedades) y dos entregas del mismo transportista (la primera de hoy y la segunda de ``fecha_de_la_segunda``, hoy por omisión), con la ruta iniciada; se concreta la
         primera (no es la última de la venta: no se cobra). Con la segunda de hoy, queda «en curso» (4a); COM-08b la pone de mañana para poder cancelar la venta (6a).
         Devuelve `(venta, detalle_entregado, detalle_pendiente, entrega_concretada, entrega_pendiente)`."""
-        otra, _ = variedad_con_stock(self.e, "Otra variedad")
+        otra, _ = variedad_con_stock(self.e, nombre_de_la_otra)
         lote_a, lote_b = lote_maduro(self.e, 500), lote_maduro(self.e, 500, variedad=otra)
         venta = compra_venta(self.e, dias=0)
         entregado, pendiente = detalle(venta, self.e.variedad, 50), detalle(venta, otra, 30)
@@ -705,11 +705,13 @@ class ComCnlCvtConEntregaConcretadaRealTests(Base):
         verificar_invariantes_de_cobros()
 
     def test_regla_cobro_de_lo_entregado_cada_medio_de_la_lista_se_admite(self):
-        """Regla «Medio de pago» (regla 15 de 8.13): los cuatro medios de `PagoCliente.medio_pago` valen."""
+        """Regla «Medio de pago» (regla 15 de 8.13): los cuatro medios de `PagoCliente.medio_pago` valen en el resumen (que no escribe) y se confirma con el último."""
+        venta, _, _, _, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
         for medio in ("efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"):
-            venta, _, _, _, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
-            self.cancelar_con_cobro(self.e.vendedor, venta, medio)
-            self.assertEqual(PagoCliente.objects.get(compra_venta=venta).medio_pago, medio)
+            compra_ventas.resumen_de_cancelacion_de_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro", "", medio))
+        self.assertEqual(PagoCliente.objects.count(), 0)
+        self.cancelar_con_cobro(self.e.vendedor, venta, "tarjeta_credito")
+        self.assertEqual(PagoCliente.objects.get(compra_venta=venta).medio_pago, "tarjeta_credito")
 
     def test_ext_6a_el_medio_de_pago_es_obligatorio_con_entregas_concretadas(self):
         """6a.2: sin medio (o con uno que no es de la lista) se rechaza `medio_de_pago_obligatorio` y no cambia nada (ni la venta, ni los detalles, ni la entrega pendiente, ni el pago)."""

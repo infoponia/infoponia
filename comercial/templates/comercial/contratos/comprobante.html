@@ -15,7 +15,9 @@ venta del alcance y se abre desde la ficha. Dice «Comprobante interno, sin vali
     <p class="muted">Registrada el {{ venta.fecha_realizacion|date:"d/m/Y" }}{% if cancelacion %} · cancelada el {{ cancelacion.fecha|date:"d/m/Y" }}{% endif %}</p>
     {% if cancelacion %}<p><b>Motivo:</b> {{ cancelacion.motivo }}{% if cancelacion.descripcion %}. {{ cancelacion.descripcion }}{% endif %}</p>
     <p><b>Lo que se canceló:</b> {% for f in cancelacion.cancelados %}{{ f.variedad }} ({{ f.cantidad }}){% if not forloop.last %}, {% endif %}{% endfor %}.
-      {% if cancelacion.sin_cambios %}<br><b>Lo que no cambia:</b> {% for f in cancelacion.sin_cambios %}{{ f.variedad }} ({{ f.cantidad }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</p>{% endif %}
+      {% if cancelacion.sin_cambios %}<br><b>Lo que no cambia:</b> {% for f in cancelacion.sin_cambios %}{{ f.variedad }} ({{ f.cantidad }}){% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}</p>
+    {% if cancelacion.cobro %}<p><b>Cobro de lo entregado:</b> {% for e in cancelacion.cobro.entregas %}{{ e.codigo }} ({{ e.monto|pesos }}){% if not forloop.last %}, {% endif %}{% endfor %}.
+      <br><b>Total cobrado:</b> {{ cancelacion.cobro.total|pesos }} · {{ cancelacion.cobro.medio }}</p>{% endif %}{% endif %}
     <dl class="dl">
       <dt>Cliente</dt><dd>{{ cliente }} · CUIT {{ cliente.cuit_cliente|cuit }}</dd>
       <dt>Fecha pactada</dt><dd>{{ venta.fecha_pactada_venta|date:"d/m/Y" }}</dd>

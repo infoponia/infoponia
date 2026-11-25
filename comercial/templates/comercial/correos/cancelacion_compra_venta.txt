@@ -10,7 +10,11 @@ Lo que se canceló:
 {% endfor %}{% if cancelacion.sin_cambios %}
 Lo que no cambia:
 {% for fila in cancelacion.sin_cambios %}- {{ fila.variedad }}: {{ fila.cantidad }} plantas
-{% endfor %}{% endif %}
+{% endfor %}{% endif %}{% if cancelacion.cobro %}
+Cobro de lo entregado:
+{% for e in cancelacion.cobro.entregas %}- {{ e.codigo }}: {{ e.monto|pesos }}
+{% endfor %}Total cobrado: {{ cancelacion.cobro.total|pesos }} ({{ cancelacion.cobro.medio }})
+{% endif %}
 Si la entrega ya estaba programada, también quedó cancelada.
 
 Este es un comprobante interno, sin validez fiscal.

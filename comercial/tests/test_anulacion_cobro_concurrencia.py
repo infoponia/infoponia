@@ -150,3 +150,44 @@ class AnulacionDeCobroConcurrenciaTests(ConDatosDeInventario, TransactionTestCas
         self.assertEqual((len(exitos), rechazos, otros), (2, [], []))
         self.esperado_de_las_dos()
         self.assertEqual(AlertaComercial.objects.filter(entrega_id=self.cobrada.pk).count(), 1)
+
+    # ---- el orden de los bloqueos, sondeado fila por fila ----
+
+    def tomada(self, modelo, pk):
+        """¿Otra transacción ya tiene tomada esa fila? Se la pide con `NOWAIT` en un savepoint y con el mismo modo que usa la anulación (`FOR NO KEY UPDATE`): si no puede, está tomada."""
+        from django.db import OperationalError, transaction
+
+        try:
+            with transaction.atomic():
+                list(modelo.objects.select_for_update(no_key=True, nowait=True, of=("self",)).filter(pk=pk))
+            return False
+        except OperationalError:
+            return True
+
+    def sondear(self, entrega_, pago):
+        """Qué filas tiene tomadas la operación que está detenida: `(invernadero, entrega, pago)`. Se corre como la segunda operación de `correr_a_la_vez`, con la primera detenida."""
+        from comercial.models import PagoCliente
+        from maestros.models import Invernadero
+        from produccion.models import OrdenTrabajo
+
+        def operacion():
+            return (self.tomada(Invernadero, entrega_.invernadero_id), self.tomada(OrdenTrabajo, entrega_.pk), self.tomada(PagoCliente, pago.pk))
+
+        return operacion
+
+    def test_regla_la_anulacion_toma_el_invernadero_y_todavia_no_las_entregas_antes_de_tomarlas(self):
+        """`bloqueos.md`, «Cobranza»: cuentas → invernaderos de origen → entregas → pago y líneas. Detenida justo ANTES de tomar las entregas, la anulación ya tiene el invernadero y todavía no tiene ni la entrega ni el pago.
+        Si tomara las entregas antes que el invernadero (o el pago antes que las entregas), esta prueba falla: el orden no se puede invertir sin que la sonda lo vea."""
+        self.preparar_anulable_y_candidata()
+        resultados = correr_a_la_vez(self.anular(self.pago), self.sondear(self.cobrada, self.pago), primera="a", detener_antes_de=(cobranza, "_bloquear_entregas"))
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual((rechazos, otros), ([], []))
+        self.assertIn((True, False, False), exitos)
+
+    def test_regla_la_anulacion_toma_el_pago_y_las_lineas_al_final_despues_de_las_entregas(self):
+        """Detenida justo ANTES de tomar el pago y sus líneas, la anulación ya tiene el invernadero y la entrega y todavía no el pago."""
+        self.preparar_anulable_y_candidata()
+        resultados = correr_a_la_vez(self.anular(self.pago), self.sondear(self.cobrada, self.pago), primera="a", detener_antes_de=(cobranza, "_bloquear_pago_y_lineas"))
+        exitos, rechazos, otros = separar(resultados)
+        self.assertEqual((rechazos, otros), ([], []))
+        self.assertIn((True, True, False), exitos)
