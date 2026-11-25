@@ -22,7 +22,7 @@ registró (solo el manual y el contraasiento: sale de la auditoría), importe, m
     <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este contraasiento anula el asiento <a class="link" href="{% url 'contabilidad:asiento' ficha.anula.ejercicio_id ficha.anula.numero_asiento %}">N.º {{ ficha.anula.numero_asiento }}</a>: {{ ficha.anula.descripcion_asiento|default:"asiento automático" }}.</div></div>
     {% endif %}
     {% if ejercicio.estado_ejercicio == 'cerrado' %}
-    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este asiento es de un ejercicio cerrado: es solo de consulta.</div></div>
+    <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este asiento es de un ejercicio cerrado: es solo de consulta.{% if puede_contraasentar %} Si algo está mal, podés contraasentarlo con una fecha de un ejercicio abierto o en cierre.{% endif %}</div></div>
     {% endif %}
 
     <div class="card">
