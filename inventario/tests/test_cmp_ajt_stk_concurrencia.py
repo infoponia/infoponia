@@ -7,24 +7,33 @@
 # (``{"lotes": {lote_id: disponible}, "reservado": Decimal}``) para que la pantalla vuelva al paso con los valores de ahora. Los bloqueos impiden que
 # un ajuste y un consumo simultáneos dejen un lote común negativo o descuenten dos veces lo mismo.
 
+import datetime
 from datetime import timedelta
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase, tag
 
-from core.models import RegistroAuditoria
+from contabilidad.errores import ErrorContable
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos, ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto
+from core.models import Contador, RegistroAuditoria
 from core.tests.concurrencia import correr_a_la_vez, separar
+from core.tests.fabricas import crear_cuenta
 from inventario.models import LoteInsumo, MovimientoInsumo
 from inventario.tests.ajustes_comunes import RECUENTO, ROTURA, BaseDeAjustes, ajustes
 from inventario.tests.fabricas import (
     asegurar_datos_de_inventario,
+    existencia,
     lote,
     origen_falso,
     perezoso,
     reservas_de_prueba,
+    verificar_invariantes,
 )
 from inventario.tests.test_salida_por_consumo import consumo_simulado
-from maestros.tests.fabricas import asegurar_datos_de_maestros
+from maestros.tests.fabricas import asegurar_datos_de_maestros, crear_invernadero_con_geografia_propia
 
 stock = perezoso("inventario.servicios.stock")
 D = Decimal
@@ -140,6 +149,7 @@ class CmpAjtStkConcurrenciaTests(BaseDeAjustes, TransactionTestCase):
     def setUp(self):
         asegurar_datos_de_inventario()
         asegurar_datos_de_maestros()
+        asegurar_plan_de_cuentas()  # CON-04b: el ajuste asienta y el ``flush`` de la prueba anterior vació el plan
         self.preparar(geografia_propia=True)
         self.l1 = lote(self.iin, 10, vence=self.vence)
         self.origen = origen_falso()
@@ -195,3 +205,134 @@ class CmpAjtStkConcurrenciaTests(BaseDeAjustes, TransactionTestCase):
         huella = self.huella("7")
         resultados = correr_a_la_vez(self.ajuste(huella, "7"), self.ajuste(huella, "7"), primera="a")
         self.assertEqual(resultados["b"].vigente["lotes"][self.l1.pk], D("3"))
+
+
+# ---- CON-04b · el asiento del ajuste contra el cierre del ejercicio y entre ajustes (docs/patrones/asientos.md, secciones 2 y 4; D-86 punto 2; D-102) ----
+
+VENCE_LEJOS = datetime.date(2030, 1, 1)
+
+
+@tag("concurrencia")
+class CmpAjtStkAsientoConcurrenciaTests(BaseDeAjustes, TransactionTestCase):
+    """El asiento de un ajuste bloquea el ejercicio AL FINAL (D-86 punto 2) y NUNCA rechaza por la fecha (D-102): un ajuste que se cruza con el cierre del
+    ejercicio no falla; su asiento queda en el ejercicio que corresponde y nunca en uno cerrado. «Hoy» es siempre un argumento (el servicio no lee la hora).
+
+    Escenario A: el ejercicio de 2026 «en cierre» (id menor) y el de 2027 abierto; hoy = 10/03/2027. Escenario B (autorrecuperación): hoy = 10/01/2028,
+    cuando el abierto de 2027 ya venció. Se usan dos hilos con ``correr_a_la_vez``; las pruebas no desactivan ningún bloqueo."""
+
+    HOY = datetime.date(2027, 3, 10)
+    HOY_VENCIDO = datetime.date(2028, 1, 10)
+
+    def setUp(self):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_inventario()
+        asegurar_datos_de_maestros()
+        asegurar_plan_de_cuentas()  # el ``flush`` de este TransactionTestCase vacía el plan en cada prueba
+        self.preparar(geografia_propia=True)
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        self.l1 = lote(self.iin, 10, vence=VENCE_LEJOS)
+
+    def con_ejercicios(self):
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, datetime.date(2026, 1, 1))
+        self.abierto = ejercicio_abierto(datetime.date(2027, 1, 1))
+
+    def ajuste(self, hoy, iin=None, actor=None, lote_a_romper=None):
+        """Un ajuste por rotura de 2 L, ya calculado con ``hoy``: devuelve la operación para ``correr_a_la_vez``."""
+        iin = iin or self.iin
+        entrada = {"lote_id": (lote_a_romper or self.l1).pk, "cantidad": "2"}
+        huella = self.calcular(ROTURA, entrada, actor=actor, iin=iin, hoy=hoy).huella
+        return lambda: self.confirmar(ROTURA, entrada, huella=huella, actor=actor, iin=iin, hoy=hoy)
+
+    def cierre(self):
+        return lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def test_d102_el_cierre_primero_y_el_ajuste_a_la_vez_el_ajuste_termina_y_su_asiento_va_al_abierto(self):
+        """El cierre del 2026 ya tomó su fila (sin confirmar); el ajuste de hoy (2027) no la necesita: termina bien y su asiento, de fecha hoy y sin la
+        aclaración de H10, es el N.º 1 del 2027. El 2026 queda cerrado y sin asientos. Ninguno de los dos falla (D-102)."""
+        self.con_ejercicios()
+        resultados = correr_a_la_vez(self.cierre(), self.ajuste(self.HOY), primera="a")
+        self.sin_errores(resultados)
+        [asiento] = resultados["b"].asientos
+        self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento, asiento.numero_asiento), (self.abierto.pk, self.HOY, 1))
+        self.assertNotIn("Fecha del hecho", asiento.descripcion_asiento)
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        self.assertEqual(AsientoContable.objects.filter(ejercicio=self.en_cierre).count(), 0)
+        self.assertEqual(self.disponible(self.l1), D("8"))
+        self.invariantes()
+
+    def test_d102_el_ajuste_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_queda_en_el_abierto(self):
+        """El ajuste ya creó su asiento y tiene el ejercicio abierto bloqueado (sin confirmar); el cierre del 2026 toca solo su fila y termina: los dos
+        terminan bien y el asiento está en el 2027."""
+        self.con_ejercicios()
+        resultados = correr_a_la_vez(self.ajuste(self.HOY), self.cierre(), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual([a.ejercicio_id for a in resultados["a"].asientos], [self.abierto.pk])
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        self.invariantes()
+
+    def test_d102_el_cierre_primero_y_un_ajuste_con_el_abierto_vencido_espera_y_va_al_nuevo_ejercicio(self):
+        """Hoy = 10/01/2028: el abierto de 2027 venció. El cierre del 2026 tiene su fila tomada; el ajuste, al autorrecuperar (H9), espera esa fila, la relee
+        ya «cerrada», pasa el 2027 a «en cierre», abre el 2028 y su asiento es el N.º 1 del 2028, con fecha hoy. No hay *deadlock* ni error."""
+        self.con_ejercicios()
+        resultados = correr_a_la_vez(self.cierre(), self.ajuste(self.HOY_VENCIDO), primera="a")
+        self.sin_errores(resultados)
+        nuevo = EjercicioContable.objects.get(estado_ejercicio=EjercicioContable.Estado.ABIERTO)
+        self.assertEqual(nuevo.fecha_inicio_ejercicio, datetime.date(2028, 1, 1))
+        [asiento] = resultados["b"].asientos
+        self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento, asiento.numero_asiento), (nuevo.pk, self.HOY_VENCIDO, 1))
+        estados = {e.pk: e.estado_ejercicio for e in EjercicioContable.objects.all()}
+        self.assertEqual(estados[self.en_cierre.pk], EjercicioContable.Estado.CERRADO)
+        self.assertEqual(estados[self.abierto.pk], EjercicioContable.Estado.EN_CIERRE)
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).contador_id, self.contador.pk)  # lo cerró el Contador, no «cierre automático»
+        self.invariantes()
+
+    def test_d102_la_autorrecuperacion_del_ajuste_primero_y_el_cierre_manual_recibe_que_ya_no_esta_en_cierre(self):
+        """Hoy = 10/01/2028: el ajuste autorrecupera primero: cierra solo el 2026 (C1) y todavía no confirmó. El cierre manual espera esa fila, la relee
+        «cerrada» y recibe ``ejercicio_no_esta_en_cierre``; el ajuste termina con su asiento en el 2028."""
+        self.con_ejercicios()
+        resultados = correr_a_la_vez(self.ajuste(self.HOY_VENCIDO), self.cierre(), primera="a")
+        self.assertNotIsInstance(resultados["a"], Exception)
+        self.assertIsInstance(resultados["b"], ErrorContable)
+        self.assertEqual(resultados["b"].codigo, "ejercicio_no_esta_en_cierre")
+        nuevo = EjercicioContable.objects.get(estado_ejercicio=EjercicioContable.Estado.ABIERTO)
+        self.assertEqual([a.ejercicio_id for a in resultados["a"].asientos], [nuevo.pk])
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        self.invariantes()
+
+    # ---- docs/patrones/asientos.md, sección 4: numeración sin huecos y el ejercicio se bloquea último ----
+
+    def preparar_segundo_invernadero(self):
+        """Otro Agrónomo con otro invernadero y el mismo insumo, para que los dos ajustes no se esperen en el invernadero (solo en el ejercicio)."""
+        self.invernadero_b = crear_invernadero_con_geografia_propia("Invernadero Sur", agronomo=self.otro)
+        self.iin_b = existencia(self.insumo, self.invernadero_b, minimo=0, precio="100")
+        self.lote_b = lote(self.iin_b, 10, vence=VENCE_LEJOS)
+
+    def test_regla_h8_dos_ajustes_a_la_vez_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos ajustes (invernaderos distintos) a la vez asientan con los números 1 y 2: el segundo espera el bloqueo del ejercicio, relee el número."""
+        ejercicio_abierto(datetime.date(2027, 1, 1))
+        self.preparar_segundo_invernadero()
+        a = self.ajuste(self.HOY)
+        b = self.ajuste(self.HOY, iin=self.iin_b, actor=self.otro, lote_a_romper=self.lote_b)
+        resultados = correr_a_la_vez(a, b, primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(resultados["a"].asientos[0].numero_asiento, 1)  # la primera tomó el bloqueo del ejercicio antes
+        self.assertEqual(resultados["b"].asientos[0].numero_asiento, 2)
+        self.assertEqual(EjercicioContable.objects.get().ultimo_numero_asiento, 2)
+        self.invariantes()
+        verificar_invariantes(self.iin_b)
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_el_ajuste_bloquea(self):
+        """D-86 punto 2: el ajuste A se detiene justo ANTES de bloquear el ejercicio, con sus bloqueos de inventario ya tomados; el ajuste B (otro
+        invernadero) asienta completo y toma el N.º 1. Si A hubiera bloqueado el ejercicio antes que sus filas, B esperaría y el orden sería el inverso."""
+        ejercicio_abierto(datetime.date(2027, 1, 1))
+        self.preparar_segundo_invernadero()
+        a = self.ajuste(self.HOY)
+        b = self.ajuste(self.HOY, iin=self.iin_b, actor=self.otro, lote_a_romper=self.lote_b)
+        resultados = correr_a_la_vez(a, b, primera="a", detener_antes_de=(asientos, "_bloquear_ejercicio"))
+        self.sin_errores(resultados)
+        self.assertEqual(resultados["b"].asientos[0].numero_asiento, 1)
+        self.assertEqual(resultados["a"].asientos[0].numero_asiento, 2)
+        self.invariantes()

@@ -131,7 +131,6 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CON-04b | Asientos de los ajustes de stock | inventario | pendiente | CON-02 | `contabilidad/CON-04b-asientos-de-inventario.md` |
 | PRD-05 | Registrar Lote Existente | produccion | pendiente | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
 | CON-04a | Asientos de producción (reapertura) | produccion | pendiente | CON-02 (PRD-04, hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | pendiente | CON-02, COM-04a, COM-04b, COM-06a | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |

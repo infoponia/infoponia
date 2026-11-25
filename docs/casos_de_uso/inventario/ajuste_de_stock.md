@@ -12,7 +12,7 @@ Si este archivo y el documento de Drive no coinciden, avisá: no elijas en silen
 
 Para nombrar las pruebas: las reglas de cada caso de uso están numeradas, así que se usa `test_regla_<numero>_<que_espera>`, y para las postcondiciones, `test_post_<letra>_<que_espera>`.
 
-> **Marcas de esta ronda.** Lo marcado «Fuera de la ronda (D-45)» no se implementa; el resto sí. Las decisiones de aplicación están al final, en «Cómo se aplica en la ronda».
+> **Marcas de esta ronda.** Los asientos que D-45 dejó fuera de la ronda «Producción 1» los recupera CON-04b (D-92, puntos 2 a 7). Las decisiones de aplicación están al final, en «Cómo se aplica en la ronda».
 
 ## Índice
 
@@ -49,8 +49,8 @@ Relaciones con otros casos de uso
 Precondiciones
 a. El Agrónomo está autenticado en el Sistema.
 b. El Agrónomo tiene a su cargo al menos un invernadero en estado «activo».
-c. Existe un ejercicio contable vigente. **[Fuera de la ronda (D-45)]**
-d. Existen las cuentas contables «Insumos en Stock» y «Diferencias de Inventario de Insumos». **[Fuera de la ronda (D-45)]**
+c. Existe un ejercicio contable vigente. (Se cumple solo, no se verifica aparte: D-92, punto 2.)
+d. Existen las cuentas contables «Insumos en Stock», «Diferencias de Inventario de Insumos» y «Capital Inicial». (Las carga una migración: D-92, punto 2.)
 Garantías mínimas
 - La operación es atómica. Si el caso de uso se cancela o falla, no se registra ningún cambio en los lotes de insumo,
    ningún movimiento, ningún asiento contable, ningún cambio de estado de una alerta ni ningún log de auditoría
@@ -75,9 +75,10 @@ d. Por cada lote cuya cantidad cambió por un ajuste (incluidos los lotes nuevos
 - la fecha y la hora actuales;
 - el motivo del ajuste y la descripción, si se indicó.
 El movimiento está asociado al insumo del invernadero y al lote, y no tiene documento de origen.
-e. **[Fuera de la ronda (D-45)]** Cada movimiento de ajuste originó un asiento contable en el libro diario del ejercicio vigente, valorizado con la
+e. Cada movimiento de ajuste originó un asiento contable en el libro diario del ejercicio vigente, valorizado con la
    cantidad × el precio de referencia del insumo en el invernadero:
-- ajuste positivo: Debe «Insumos en Stock» / Haber «Diferencias de Inventario de Insumos»;
+- ajuste positivo: Debe «Insumos en Stock» / Haber «Diferencias de Inventario de Insumos»; si el motivo es «carga inicial», el Haber es «Capital Inicial»
+  (D-92, punto 7);
 - ajuste negativo: al revés.
 f. En una corrección entre lotes, se registraron dos movimientos de insumo, de tipo «salida por corrección entre
    lotes» en el lote de origen y «entrada por corrección entre lotes» en el de destino, por la misma cantidad. No se
@@ -130,7 +131,7 @@ Escenario principal de éxito (o Flujo Básico): recuento físico
 1.  actualiza la cantidad disponible de cada lote que cambia;
 2.  crea los lotes nuevos;
 3.  deja en cero el faltante sin lote;
-4.  registra un movimiento de ajuste por cada lote que cambió, con su asiento **[Fuera de la ronda (D-45)]**;
+4.  registra un movimiento de ajuste por cada lote que cambió, con su asiento;
 5.  reevalúa las alertas del insumo;
 6.  registra la auditoría correspondiente.
 15. **El Sistema informa al Agrónomo lo registrado, el stock actual del insumo y si se resolvió o sigue activa la
@@ -277,9 +278,9 @@ Requisitos especiales
 - Rotura o pérdida: no puede superar lo disponible del lote. (Extensión 7b)
 - Valor del ajuste: la cantidad × el precio de referencia del insumo en el invernadero, en el momento del ajuste.
    (Paso 12)
-- Asiento de un ajuste **[Fuera de la ronda (D-45)]**: cada movimiento de ajuste es su propio documento de origen y origina su asiento (regla 2 de
-   8.19). Ajuste positivo: Debe «Insumos en Stock» / Haber «Diferencias de Inventario de Insumos». Ajuste negativo: al
-   revés. (Paso 14)
+- Asiento de un ajuste: cada movimiento de ajuste es su propio documento de origen y origina su asiento (regla 2 de
+   8.19). Ajuste positivo: Debe «Insumos en Stock» / Haber «Diferencias de Inventario de Insumos» (si el motivo es «carga inicial», Haber «Capital Inicial»,
+   D-92 punto 7). Ajuste negativo: al revés. (Paso 14)
 - Corrección entre lotes: genera un movimiento «salida por corrección entre lotes» en el origen y uno «entrada por
    corrección entre lotes» en el destino. No son movimientos de ajuste y no originan asiento, porque el stock total y
    su valor no cambian. (Extensión 7d)
@@ -301,9 +302,8 @@ El recuento, cada vez que el Agrónomo cuenta el depósito o regulariza una aler
    e invernadero al empezar a usar el sistema. La baja por vencimiento, cada vez que InfoPonia alerta un lote vencido.
    A confirmar con el Jardín Botánico.
 Temas abiertos
-- Cuenta de la carga inicial: hoy va contra «Diferencias de Inventario de Insumos», como cualquier ajuste positivo. En
-   contabilidad, el stock con el que empieza la operación no es una ganancia: debería ir a una cuenta de capital o de
-   apertura. A definir con el bloque contable.
+- Cuenta de la carga inicial: resuelto por D-92 (punto 7), va contra «Capital Inicial» (el stock con el que empieza la operación
+   no es una ganancia).
 - Recepción pendiente: cuando el stock negativo se debe a una compra sin cargar, la regularización es Registrar
    Recepción. Hay que verificar que ese caso de uso resuelva la alerta «stock inconsistente» igual que este.
 
@@ -316,11 +316,12 @@ Tarea: **INV-02**. Es el caso de uso más largo de la ronda. Todo se implementa,
 - **Semilla de una variedad dada de baja (lote 3).** El paso 4 ofrece las existencias **activas** del invernadero, aunque su insumo del
   catálogo esté inactivo: PROD-BAJ-VAR (regla 3) deja activa la existencia de la semilla para que su stock, si queda, se descarte con un
   ajuste. Solo las semillas pueden estar en esa situación (la baja de cualquier otro insumo deshabilita sus existencias).
-- **Asientos contables: fuera de la ronda (D-45).** Se omiten las precondiciones c y d (ejercicio vigente y cuentas), la
-  postcondición e y el asiento del paso 14, la regla «Asiento de un ajuste» y la mención del asiento en el resumen. Se
-  implementa todo lo demás, incluido el **valor del ajuste** (cantidad × precio de referencia, en pesos con dos decimales), que
-  el resumen del paso 12 sigue mostrando. Lo recupera el disparador «Cuando exista contabilidad con asientos»
-  (`docs/disparadores.md`). El tema abierto «Cuenta de la carga inicial» (MD-90) queda para entonces.
+- **Asientos contables: fuera de la ronda «Producción 1» (D-45); los recupera CON-04b.** INV-02 omitió las precondiciones c y d
+  (ejercicio vigente y cuentas), la postcondición e y el asiento del paso 14, la regla «Asiento de un ajuste» y la mención del asiento
+  en el resumen. Implementó todo lo demás, incluido el **valor del ajuste** (cantidad × precio de referencia, en pesos con dos
+  decimales), que el resumen del paso 12 muestra. **CON-04b (D-92, puntos 2 a 7) lo recuperó:** cada movimiento de ajuste genera su
+  asiento (la carga inicial, contra «Capital Inicial»), las precondiciones c y d se cumplen solas y el resumen muestra el asiento que
+  se registrará. La corrección entre lotes no asienta. El tema abierto «Cuenta de la carga inicial» (MD-90) quedó resuelto.
 - **Dos puntos donde el CU y el modelo no coinciden. Manda el CU (L7)**, y la diferencia está en `docs/temas_abiertos.md`:
   1. *Ajuste «otro» que suma.* El modelo (regla 3 de 8.23) dice que suma a un lote existente que elige quien lo registra. El CU
      (extensión 7e) lo manda por 7a: **crea un lote nuevo**. Se hace lo del CU.

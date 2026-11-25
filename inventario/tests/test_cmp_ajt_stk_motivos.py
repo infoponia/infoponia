@@ -10,11 +10,16 @@
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.test import TestCase
 
+from contabilidad import cuentas
+from contabilidad.errores import ErrorContable
+from contabilidad.models import AsientoContable
+from contabilidad.tests.fabricas import ejercicio_abierto, verificar_invariantes_contables
 from core.models import RegistroAuditoria
-from inventario.models import LoteInsumo, MovimientoInsumo
+from inventario.models import InsumoInvernadero, LoteInsumo, MovimientoInsumo
 from inventario.tests.ajustes_comunes import (
     CARGA_INICIAL,
     CORRECCION,
@@ -269,3 +274,196 @@ class CmpAjtStkMotivosTests(BaseDeAjustes, TestCase):
         self.assertEqual(MovimientoInsumo.objects.count() - antes, 2)
         self.assertEqual(LoteInsumo.objects.filter(insumo_invernadero=self.iin, es_faltante_sin_lote=True).count(), 0)
         self.invariantes()
+
+
+class CmpAjtStkAsientoTests(BaseDeAjustes, TestCase):
+    """CON-04b · el asiento de cada movimiento de ajuste (postcondición e, paso 14.4 y regla «Asiento de un ajuste» de CMP-AJT-STK; D-92 puntos 2 a 7;
+    R012: un movimiento de ajuste, un asiento). Insumo con precio de referencia $ 500 y dos lotes (10 y 20 L). Ejercicio abierto desde hace 30 días.
+
+    - Positivo: Debe Insumos en Stock / Haber Capital Inicial si el motivo es «carga inicial» (H3/H4) o Diferencias de Inventario si no.
+    - Negativo: Debe Diferencias de Inventario / Haber Insumos en Stock. La corrección entre lotes no asienta (postcondición f).
+    - Importe: cantidad × referencia_precio, ROUND_HALF_UP a dos decimales; importe 0 → sin asiento y sin error (H11)."""
+
+    def setUp(self):
+        self.preparar()
+        InsumoInvernadero.objects.filter(pk=self.iin.pk).update(referencia_precio=D("500.00"))
+        self.ejercicio = ejercicio_abierto(self.hoy - timedelta(days=30))
+        self.l1 = lote(self.iin, 10, vence=self.vence)
+        self.l2 = lote(self.iin, 20, vence=self.vence + timedelta(days=30))
+
+    def precio(self, valor):
+        InsumoInvernadero.objects.filter(pk=self.iin.pk).update(referencia_precio=D(valor))
+
+    def solo(self, resultado):
+        [movimiento] = resultado.movimientos
+        return movimiento
+
+    # ---- los asientos por motivo y sentido ----
+
+    def test_post_e_la_carga_inicial_asienta_insumos_en_stock_contra_capital_inicial(self):
+        """Postcondición e y D-92 punto 7: 10 L × $ 500 → Debe Insumos en Stock 5.000,00 / Haber Capital Inicial 5.000,00 (no Diferencias de Inventario)."""
+        resultado = self.confirmar(CARGA_INICIAL, {"cantidad": "10", "vencimiento": self.vence})
+        movimiento = self.solo(resultado)
+        self.assertEqual(
+            self.lineas_de(movimiento),
+            [(cuentas.INSUMOS_EN_STOCK, "D", D("5000.00")), (cuentas.CAPITAL_INICIAL, "H", D("5000.00"))],
+        )
+        asiento = self.asiento_de(movimiento)
+        self.assertEqual(
+            (asiento.origen_id, asiento.ejercicio_id, asiento.fecha_asiento, asiento.numero_asiento),
+            (movimiento.pk, self.ejercicio.pk, self.hoy, 1),
+        )
+        self.assertNotIn("Fecha del hecho", asiento.descripcion_asiento)  # D-102: la fecha del ajuste es hoy, nunca lleva la aclaración de H10
+        self.assertEqual(resultado.asientos, [asiento])
+        self.invariantes()
+
+    def test_post_e_la_rotura_asienta_diferencias_de_inventario_contra_insumos_en_stock(self):
+        """Postcondición e (ajuste negativo, al revés): una rotura de 2 L × $ 500 → Debe Diferencias de Inventario 1.000,00 / Haber Insumos en Stock 1.000,00."""
+        movimiento = self.solo(self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2"}))
+        self.assertEqual(
+            self.lineas_de(movimiento),
+            [(cuentas.INSUMOS_EN_STOCK, "H", D("1000.00")), (cuentas.DIFERENCIAS_DE_INVENTARIO, "D", D("1000.00"))],
+        )
+        self.invariantes()
+
+    def test_post_e_el_vencimiento_asienta_un_asiento_por_cada_lote_dado_de_baja(self):
+        """R012 y D-92 punto 6: un asiento por movimiento de ajuste. Dos lotes vencidos (5 y 7 L) dan dos asientos de 2.500,00 y 3.500,00."""
+        v1 = lote(self.iin, 5, vence=self.vencido)
+        v2 = lote(self.iin, 7, vence=self.vencido - timedelta(days=4))
+        resultado = self.confirmar(VENCIMIENTO, {"lotes": [v1.pk, v2.pk]})
+        por_lote = {m.lote_insumo_id: self.lineas_de(m) for m in resultado.movimientos}
+
+        def baja(importe):
+            return [(cuentas.INSUMOS_EN_STOCK, "H", D(importe)), (cuentas.DIFERENCIAS_DE_INVENTARIO, "D", D(importe))]
+
+        self.assertEqual(por_lote, {v1.pk: baja("2500.00"), v2.pk: baja("3500.00")})
+        self.assertEqual(sorted(a.numero_asiento for a in resultado.asientos), [1, 2])
+        self.invariantes()
+
+    def test_post_e_otro_que_suma_va_contra_diferencias_de_inventario_y_no_contra_capital_inicial(self):
+        """D-92 punto 7: solo el motivo «carga inicial» va contra Capital Inicial; un «otro» que suma (6 L × $ 500) es un ajuste positivo común."""
+        movimiento = self.solo(
+            self.confirmar(OTRO, {"sentido": "suma", "descripcion": "Donación", "cantidad": "6", "vencimiento": self.vence})
+        )
+        self.assertEqual(
+            self.lineas_de(movimiento),
+            [(cuentas.INSUMOS_EN_STOCK, "D", D("3000.00")), (cuentas.DIFERENCIAS_DE_INVENTARIO, "H", D("3000.00"))],
+        )
+        self.invariantes()
+
+    def test_post_e_otro_que_resta_asienta_al_reves(self):
+        """Ajuste negativo con motivo «otro»: Debe Diferencias de Inventario / Haber Insumos en Stock."""
+        movimiento = self.solo(
+            self.confirmar(OTRO, {"sentido": "resta", "descripcion": "Derrame", "lote_id": self.l1.pk, "cantidad": "1"})
+        )
+        self.assertEqual(
+            self.lineas_de(movimiento),
+            [(cuentas.INSUMOS_EN_STOCK, "H", D("500.00")), (cuentas.DIFERENCIAS_DE_INVENTARIO, "D", D("500.00"))],
+        )
+        self.invariantes()
+
+    def test_paso_12_el_resumen_trae_el_asiento_que_se_va_a_registrar_con_los_nombres_de_las_cuentas(self):
+        """Paso 12 (CON-04b): el resumen anticipa el asiento del movimiento, con las mismas cuentas e importe que el real, sin crearlo."""
+        r = self.calcular(CARGA_INICIAL, {"cantidad": "10", "vencimiento": self.vence})
+        [previsto] = r.asientos
+        self.assertEqual(
+            (previsto.texto, previsto.debe, previsto.haber, previsto.importe),
+            ("Lote nuevo", (cuentas.INSUMOS_EN_STOCK, "Insumos en Stock"), (cuentas.CAPITAL_INICIAL, "Capital Inicial"), D("5000.00")),
+        )
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        confirmado = self.confirmar(CARGA_INICIAL, {"cantidad": "10", "vencimiento": self.vence})
+        self.assertEqual([c.importe_movimiento for c in confirmado.asientos[0].movimientos.all()], [D("5000.00")] * 2)
+
+    def test_paso_12_el_resumen_de_la_correccion_y_del_importe_cero_no_trae_asiento(self):
+        """La corrección entre lotes no asienta y un importe que redondea a $ 0,00 tampoco (H11): ``asientos`` queda vacío."""
+        corr = self.calcular(CORRECCION, {"origen_id": self.l1.pk, "destino_id": self.l2.pk, "cantidad": "4"})
+        self.assertEqual(corr.asientos, [])
+        self.precio("0.50")
+        cero = self.calcular(ROTURA, {"lote_id": self.l1.pk, "cantidad": "0.001"})
+        self.assertEqual(cero.asientos, [])
+
+    def test_post_e_la_descripcion_del_asiento_nombra_el_ajuste_el_insumo_y_el_lote(self):
+        """El asiento automático lleva una descripción corta para el libro: el motivo, el insumo y el lote."""
+        movimiento = self.solo(self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2"}))
+        descripcion = self.asiento_de(movimiento).descripcion_asiento
+        self.assertEqual(descripcion, f"Ajuste de stock (rotura o pérdida): Nutriente A, lote {self.l1.pk}")
+
+    # ---- lo que no asienta ----
+
+    def test_post_f_la_correccion_entre_lotes_no_asienta(self):
+        """Postcondición f y regla «Corrección entre lotes»: no son movimientos de ajuste y el stock total y su valor no cambian: ningún asiento."""
+        resultado = self.confirmar(CORRECCION, {"origen_id": self.l1.pk, "destino_id": self.l2.pk, "cantidad": "4"})
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.assertEqual(resultado.asientos, [])
+        self.invariantes()
+
+    def test_regla_h11_un_ajuste_que_redondea_a_cero_no_asienta_ni_falla(self):
+        """H11 y D-92 punto 5: 0,001 L × $ 0,50 = $ 0,0005 → $ 0,00: sin asiento y sin error; el movimiento y el ajuste sí se registran."""
+        self.precio("0.50")
+        resultado = self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "0.001"})
+        self.assertEqual(self.disponible(self.l1), D("9.999"))
+        self.assertEqual(len(resultado.movimientos), 1)
+        self.assertEqual((AsientoContable.objects.count(), resultado.asientos), (0, []))
+        self.invariantes()
+
+    def test_regla_h11_con_el_precio_minimo_y_una_carga_chica_el_ajuste_se_registra_sin_asiento(self):
+        """H11: la base no admite una referencia en $ 0 (CHECK ``insumo_invernadero_precio_positivo``); el importe cero sale de redondear: una carga
+        inicial de 0,001 L × $ 0,01 se registra, con su auditoría, sin asiento y sin error."""
+        self.precio("0.01")
+        resultado = self.confirmar(CARGA_INICIAL, {"cantidad": "0.001", "vencimiento": self.vence})
+        self.assertEqual(len(resultado.lotes_nuevos), 1)
+        self.assertEqual((AsientoContable.objects.count(), resultado.asientos), (0, []))
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=AJUSTE).count(), 1)
+        self.invariantes()
+
+    def test_regla_d92_5_el_importe_se_redondea_half_up_a_dos_decimales(self):
+        """D-92 punto 5: 2,5 L × $ 33,33 = $ 83,325 → $ 83,33 (ROUND_HALF_UP)."""
+        self.precio("33.33")
+        movimiento = self.solo(self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2.5"}))
+        self.assertEqual([importe for _, _, importe in self.lineas_de(movimiento)], [D("83.33"), D("83.33")])
+
+    # ---- fecha, auditoría y todo o nada ----
+
+    def test_regla_d92_4_la_fecha_del_asiento_es_la_del_ajuste_que_se_recibe(self):
+        """D-92 punto 4: la fecha del asiento es la del ajuste, y el servicio recibe «hoy»: no lee la hora solo. Hoy = hace 5 días, dentro del ejercicio."""
+        hace_cinco = self.hoy - timedelta(days=5)
+        movimiento = self.solo(self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2"}, hoy=hace_cinco))
+        asiento = self.asiento_de(movimiento)
+        self.assertEqual((asiento.fecha_asiento, asiento.ejercicio_id), (hace_cinco, self.ejercicio.pk))
+        self.assertNotIn("Fecha del hecho", asiento.descripcion_asiento)
+
+    def test_post_l_el_asiento_entra_en_los_afectados_del_ajuste_y_su_alta_la_audita_contabilidad(self):
+        """D-92 punto 3 y docs/patrones/asientos.md: el asiento va en los ``afectados`` del registro ``ajuste_stock``; el alta del asiento y de sus dos
+        movimientos la audita ``contabilidad`` (un registro por cada uno), no el ajuste."""
+        movimiento = self.solo(self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2"}))
+        asiento = self.asiento_de(movimiento)
+        registro = RegistroAuditoria.objects.get(accion=AJUSTE)
+        self.assertIn(("contabilidad.asientocontable", asiento.pk), {(a["modelo"], a["id"]) for a in registro.afectados})
+        acciones = RegistroAuditoria.Accion
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=acciones.ALTA_ASIENTO_CONTABLE).count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=acciones.ALTA_MOVIMIENTO_CONTABLE).count(), 2)
+
+    def test_garantia_minima_si_el_asiento_falla_no_queda_ningun_cambio(self):
+        """Garantías mínimas: la operación es atómica. Si el asiento falla (error de programación, p. ej. cuenta inexistente) se revierte todo:
+        lotes, movimientos, auditoría y número de asiento."""
+        antes = (MovimientoInsumo.objects.count(), RegistroAuditoria.objects.count())
+        error = ErrorContable("cuenta_inexistente", "La cuenta contable 1.1.04 no existe en el plan de cuentas.")
+        with mock.patch("contabilidad.servicios.asientos.registrar_asiento_automatico", side_effect=error):
+            with self.assertRaises(ErrorContable):
+                self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2"})
+        self.assertEqual(self.disponible(self.l1), D("10"))
+        self.assertEqual((MovimientoInsumo.objects.count(), RegistroAuditoria.objects.count()), antes)
+        self.assertEqual(AsientoContable.objects.count(), 0)
+
+    def test_garantia_minima_si_el_ajuste_falla_despues_del_asiento_no_queda_el_asiento(self):
+        """Garantías mínimas: un fallo DESPUÉS de crear el asiento (acá, al leer el stock final) deshace también el asiento, su auditoría y el número tomado."""
+        antes = (MovimientoInsumo.objects.count(), RegistroAuditoria.objects.count())
+        with mock.patch("inventario.servicios.stock.stock_actual_de", side_effect=RuntimeError("falla forzada")):
+            with self.assertRaises(RuntimeError):
+                self.confirmar(ROTURA, {"lote_id": self.l1.pk, "cantidad": "2"})
+        self.assertEqual(self.disponible(self.l1), D("10"))
+        self.assertEqual((MovimientoInsumo.objects.count(), RegistroAuditoria.objects.count()), antes)
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.ejercicio.refresh_from_db()
+        self.assertEqual(self.ejercicio.ultimo_numero_asiento, 0)
+        verificar_invariantes_contables()

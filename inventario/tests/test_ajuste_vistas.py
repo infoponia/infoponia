@@ -1,7 +1,7 @@
 # Pruebas de la pantalla «Ajustar stock de insumo» (INV-02, paso 8; CMP-AJT-STK; integración con el cliente de prueba de Django). Los selectores
 # redibujan el formulario con HTMX (``HX-Request``: devuelve solo el formulario y NUNCA escribe); validar y calcular es solo con «Ver resumen» y, sin JavaScript, cada envío es un POST completo con su
 # ``accion`` («actualizar», «agregar_lote», «calcular» y «confirmar»). Las reglas, los cálculos y la «huella» son del servicio (sus pruebas están en
-# test_cmp_ajt_stk_*.py): acá se prueban permisos, errores por campo, el resumen, la advertencia 12b, el aviso 14a (extensión), el valor sin asiento (D-45)
+# test_cmp_ajt_stk_*.py): acá se prueban permisos, errores por campo, el resumen, la advertencia 12b, el aviso 14a (extensión), el valor y el asiento (CON-04b)
 # y los flujos principales de cada motivo. Solo el Agrónomo a cargo: otros roles y un Agrónomo ajeno reciben 403 (D-28).
 
 from datetime import timedelta
@@ -11,6 +11,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from contabilidad.models import AsientoContable
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from core.models import RegistroAuditoria
 from inventario.extensiones import OrdenQueReserva
 from inventario.models import LoteInsumo, MovimientoInsumo
@@ -38,7 +40,7 @@ def en(dias):
     return HOY + timedelta(days=dias)
 
 
-class AjusteVistaBase(ConDatosDeInventario, TestCase):
+class AjusteVistaBase(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un Agrónomo con sesión y «Nutriente A» (L, controla vencimiento; precio 1500) y «Bolsas» (unidad) habilitados en su invernadero."""
 
     def setUp(self):
@@ -131,18 +133,24 @@ class AccesoAlAjusteVistaTests(AjusteVistaBase):
 class CargaInicialVistaTests(AjusteVistaBase):
     """Carga inicial (7a) con vencimiento: el flujo principal de punta a punta y sus errores por campo."""
 
-    def test_flujo_principal_calcula_el_resumen_con_valor_sin_asiento_y_confirma(self):
-        """Verificación a mano 2 y 3: 30 L con vencimiento a 40 días: el resumen muestra stock antes y después y el valor sin asiento; confirmar crea el lote."""
+    def test_flujo_principal_calcula_el_resumen_con_valor_y_asiento_y_confirma(self):
+        """Verificación a mano 2 y 3 y CON-04b: 30 L con vencimiento a 40 días: el resumen muestra stock antes y después, el valor y el asiento que se
+        registrará (Debe Insumos en Stock / Haber Capital Inicial, $ 45.000,00); calcular no lo crea y confirmar sí."""
         calculo = self.calcular("carga_inicial", cantidad="30", vencimiento=en(40).isoformat())
         self.assertContains(calculo, "Qué se va a registrar")
         self.assertContains(calculo, "+ $ 45.000,00")
-        self.assertContains(calculo, "no genera asiento contable")
+        self.assertContains(calculo, "Asiento contable")
+        self.assertContains(calculo, "Debe Insumos en Stock / Haber Capital Inicial")
+        self.assertContains(calculo, "Lote nuevo")
+        self.assertNotContains(calculo, "no genera asiento contable")
         self.assertContains(calculo, "Confirmar ajuste")
         self.assertEqual(self.stock(), 0)  # calcular no escribe
+        self.assertEqual(AsientoContable.objects.count(), 0)
         respuesta = self.confirmar_con(calculo, "carga_inicial", cantidad="30", vencimiento=en(40).isoformat())
         self.assertRedirects(respuesta, self.lista)
         self.assertContains(respuesta, "Ajuste registrado: Nutriente A queda con 30 L en Invernadero Uno.")
         self.assertEqual(self.stock(), 30)
+        self.assertEqual(AsientoContable.objects.get().movimientos.get(tipo_movimiento="D").importe_movimiento, D("45000.00"))
         verificar_invariantes(self.iin)
         self.assertEqual(RegistroAuditoria.objects.filter(accion="ajuste_stock").count(), 1)
 
@@ -222,7 +230,16 @@ class RecuentoVistaTests(AjusteVistaBase):
         self.assertEqual((resumen.stock_antes, resumen.stock_despues, resumen.diferencia), (D("40"), D("40"), D("0")))
         self.assertContains(calculo, "Lotes que cambian")
         self.assertContains(calculo, "Lotes nuevos")
+        # CON-04b: un asiento por cada movimiento (el lote que baja 2 × $ 1.500 y el lote nuevo de 2 × $ 1.500), cada uno con su sentido.
+        self.assertEqual(
+            [(a.texto, a.debe[1], a.haber[1], a.importe) for a in resumen.asientos],
+            [
+                (f"Lote {self.chico.pk}", "Diferencias de Inventario de Insumos", "Insumos en Stock", D("3000.00")),
+                ("Lote nuevo", "Insumos en Stock", "Diferencias de Inventario de Insumos", D("3000.00")),
+            ],
+        )
         respuesta = self.confirmar_con(calculo, "recuento_fisico", **campos)
+        self.assertEqual(AsientoContable.objects.count(), 2)
         self.assertRedirects(respuesta, self.lista)
         self.chico.refresh_from_db()
         self.assertEqual(self.chico.cantidad_disponible, D("8"))
@@ -305,10 +322,13 @@ class OtrosMotivosVistaTests(AjusteVistaBase):
         self.assertEqual(respuesta.context["errores"]["lote"], "Elegí el lote afectado.")
 
     def test_flujo_principal_una_rotura_descuenta_del_lote_y_el_resumen_muestra_el_valor_negativo(self):
-        """Rotura de 4 L del lote de 10: valor − $ 6.000,00 (sin asiento) y el lote queda en 6."""
+        """Rotura de 4 L del lote de 10: valor − $ 6.000,00, con su asiento (Debe Diferencias de Inventario de Insumos / Haber Insumos en Stock por
+        $ 6.000,00), y el lote queda en 6."""
         campos = {"lote_id": str(self.b.pk), "cantidad": "4", "descripcion": "Se cayó el bidón"}
         calculo = self.calcular("rotura_o_perdida", **campos)
         self.assertContains(calculo, "−$ 6.000,00")
+        self.assertContains(calculo, "Debe Diferencias de Inventario de Insumos / Haber Insumos en Stock")
+        self.assertContains(calculo, "$ 6.000,00</b></li>")  # el importe del asiento, sin signo
         self.confirmar_con(calculo, "rotura_o_perdida", **campos)
         self.b.refresh_from_db()
         self.assertEqual(self.b.cantidad_disponible, D("6"))
@@ -319,7 +339,9 @@ class OtrosMotivosVistaTests(AjusteVistaBase):
         campos = {"origen_id": str(self.a.pk), "destino_id": str(self.b.pk), "cantidad": "5"}
         calculo = self.calcular("correccion_entre_lotes", **campos)
         self.assertContains(calculo, "Sin valor: el stock total no cambia.")
+        self.assertContains(calculo, "Sin asiento: la corrección entre lotes no cambia el valor del stock.")
         resumen = calculo.context["resumen"]
+        self.assertEqual(resumen.asientos, [])
         self.assertEqual((resumen.stock_antes, resumen.stock_despues, resumen.con_valor), (D("40"), D("40"), False))
         self.confirmar_con(calculo, "correccion_entre_lotes", **campos)
         self.assertEqual((LoteInsumo.objects.get(pk=self.a.pk).cantidad_disponible, LoteInsumo.objects.get(pk=self.b.pk).cantidad_disponible), (D("25"), D("15")))
