@@ -794,11 +794,14 @@ def pago_de_compra_venta(venta, medio="efectivo", *, monto=None, estado="vigente
 def discrepancia(entrega_, *, minima=None, con_alerta=True):
     """COM-06a: la `DiscrepanciaEntrega` de una entrega de suministro concretada, con una línea por cada línea de la entrega (la entregada que tiene y ``minima``, por omisión, una
     más) y su alerta para el Gerente con su `AlertaComercial`, creadas directo. La concreción real la crea `concrecion.crear_discrepancia`."""
+    from django.db import transaction
+
     from comercial.models import AlertaComercial, DiscrepanciaEntrega, LineaDiscrepancia
     from comercial.servicios import solicitudes
     from maestros.tests.fabricas import crear_alerta
 
-    creada = solicitudes.crear_solicitud(DiscrepanciaEntrega, entrega_)
+    with transaction.atomic():  # `crear_solicitud` exige la transacción del caso de uso (también en los `TransactionTestCase`)
+        creada = solicitudes.crear_solicitud(DiscrepanciaEntrega, entrega_)
     for linea in entrega_.lineas.filter(detalle_suministro__isnull=False).order_by("pk"):
         entregada = linea.cant_entregada or 0
         LineaDiscrepancia.objects.create(discrepancia=creada, detalle_entrega=linea, cantidad_entregada=entregada, cantidad_minima_estipulada=minima or entregada + 1)
@@ -845,6 +848,110 @@ def alerta_no_reconocida(entrega_, motivo="No llegó nada.", *, resuelta=False):
     )
     AlertaComercial.objects.create(alerta=alerta, entrega=entrega_)
     return alerta
+
+
+def _aceptar(solicitud, *, monto, descontado, reintegrado, medio, gerente, observaciones, contar):
+    """COM-07a: deja ``solicitud`` «aceptada» **directo en la base** (sin pasar por `resolver_solicitud`), con la aplicación pedida: ``monto`` (la indemnización), ``reintegrado`` y
+    ``descontado`` (por omisión, ``monto − reintegrado``); ``medio`` solo con reintegro. Con ``contar`` suma 1 al contador del suministro (el invariante «contador = aceptadas»). En una
+    discrepancia reparte el monto en sus líneas (todo en la primera, el resto en 0). Devuelve la solicitud refrescada."""
+    from django.db.models import F
+
+    from comercial.models import LineaDiscrepancia, SolicitudRevision, Suministro
+    from core.models import Gerente
+    from core.tests.fabricas import crear_gerente
+
+    monto = Decimal(monto)
+    reintegrado = Decimal(reintegrado)
+    descontado = monto - reintegrado if descontado is None else Decimal(descontado)
+    gerente = gerente or Gerente.objects.filter(is_active=True).first() or crear_gerente()
+    if reintegrado > 0 and medio is None:
+        medio = "efectivo"
+    SolicitudRevision.objects.filter(pk=solicitud.pk).update(
+        estado_solicitud="aceptada",
+        fecha_resolucion=timezone.localdate(),
+        gerente=gerente,
+        observaciones_resolucion=observaciones,
+        monto_indemnizacion=monto,
+        monto_descontado=descontado,
+        monto_reintegrado=reintegrado,
+        medio_reintegro=medio if reintegrado > 0 else None,
+        estado_aviso_cliente="enviado",
+    )
+    for i, linea in enumerate(LineaDiscrepancia.objects.filter(discrepancia_id=solicitud.pk).order_by("pk")):
+        LineaDiscrepancia.objects.filter(pk=linea.pk).update(monto_indemnizacion_linea=monto if i == 0 else Decimal("0.00"))
+    if contar:
+        Suministro.objects.filter(pk=solicitud.entrega.contrato_entrega_id).update(cantidad_incumplimientos=F("cantidad_incumplimientos") + 1)
+    return SolicitudRevision.objects.get(pk=solicitud.pk)
+
+
+def discrepancia_aceptada(entrega_, *, monto="100.00", descontado=None, reintegrado="0.00", medio=None, gerente=None, observaciones="", contar=True, minima=None, con_alerta=True):
+    """COM-07a: una `DiscrepanciaEntrega` de ``entrega_`` ya «aceptada», creada directo en la base (ver `_aceptar`). La resolución real la registra `solicitudes.resolver_solicitud`."""
+    return _aceptar(
+        discrepancia(entrega_, minima=minima, con_alerta=con_alerta), monto=monto, descontado=descontado, reintegrado=reintegrado, medio=medio, gerente=gerente, observaciones=observaciones, contar=contar
+    )
+
+
+def queja_aceptada(entrega_, tipo="estado_mercaderia", *, monto="100.00", descontado=None, reintegrado="0.00", medio=None, gerente=None, observaciones="", contar=True, lineas=None, motivo=None, con_alerta=True):
+    """COM-07a: una `Queja` de ``entrega_`` ya «aceptada», creada directo en la base (ver `_aceptar`)."""
+    return _aceptar(
+        queja(entrega_, tipo, lineas, motivo, con_alerta=con_alerta), monto=monto, descontado=descontado, reintegrado=reintegrado, medio=medio, gerente=gerente, observaciones=observaciones, contar=contar
+    )
+
+
+def solicitud_rechazada(solicitud, *, gerente=None, observaciones="No corresponde."):
+    """COM-07a: deja ``solicitud`` «rechazada» directo en la base (sin montos, sin contador). Devuelve la solicitud refrescada."""
+    from comercial.models import SolicitudRevision
+    from core.models import Gerente
+    from core.tests.fabricas import crear_gerente
+
+    gerente = gerente or Gerente.objects.filter(is_active=True).first() or crear_gerente()
+    SolicitudRevision.objects.filter(pk=solicitud.pk).update(
+        estado_solicitud="rechazada", fecha_resolucion=timezone.localdate(), gerente=gerente, observaciones_resolucion=observaciones, estado_aviso_cliente="enviado"
+    )
+    return SolicitudRevision.objects.get(pk=solicitud.pk)
+
+
+def anulacion(solicitud, *, usuario=None, motivo="Error de carga.", reabrir=True):
+    """COM-07a: una `Anulacion` de ``solicitud`` creada directo en la base, con la copia de la resolución que ésta tiene hoy (la solicitud tiene que estar resuelta). Con ``reabrir`` (por
+    omisión) además la deja «pendiente» como lo hace `solicitudes.anular_resolucion` (campos de resolución y montos de las líneas vacíos y, si estaba aceptada, el contador −1)."""
+    from django.db.models import F
+
+    from comercial.models import Anulacion, LineaDiscrepancia, SolicitudRevision, Suministro
+    from core.models import Gerente
+    from core.tests.fabricas import crear_gerente
+
+    solicitud = SolicitudRevision.objects.select_related("entrega").get(pk=solicitud.pk)
+    usuario = usuario or Gerente.objects.filter(is_active=True).first() or crear_gerente()
+    creada = Anulacion.objects.create(
+        usuario=usuario,
+        solicitud=solicitud,
+        motivo_anulacion=motivo,
+        estado_anulado=solicitud.estado_solicitud,
+        fecha_resolucion_anulada=solicitud.fecha_resolucion,
+        gerente_anulado=solicitud.gerente,
+        observaciones_anuladas=solicitud.observaciones_resolucion,
+        monto_indemnizacion_anulado=solicitud.monto_indemnizacion,
+        monto_descontado_anulado=solicitud.monto_descontado,
+        monto_reintegrado_anulado=solicitud.monto_reintegrado,
+        medio_reintegro_anulado=solicitud.medio_reintegro,
+    )
+    if reabrir:
+        SolicitudRevision.objects.filter(pk=solicitud.pk).update(
+            estado_solicitud="pendiente", fecha_resolucion=None, gerente=None, observaciones_resolucion="", monto_indemnizacion=None, monto_descontado=None, monto_reintegrado=None,
+            medio_reintegro=None, estado_aviso_cliente=None,
+        )
+        LineaDiscrepancia.objects.filter(discrepancia_id=solicitud.pk).update(monto_indemnizacion_linea=None)
+        if solicitud.estado_solicitud == "aceptada":
+            Suministro.objects.filter(pk=solicitud.entrega.contrato_entrega_id).update(cantidad_incumplimientos=F("cantidad_incumplimientos") - 1)
+    return creada
+
+
+def resolucion_del_suministro(suministro_, solicitud):
+    """COM-07a (D-69, punto 5): deja ``suministro_`` «resuelto» por ``solicitud`` (carga `solicitud_resolucion` y la fecha), como lo hará COM-RSV-SUM en COM-07b; sirve para probar la extensión 2a de COM-ANL-SRV."""
+    from comercial.models import Suministro
+
+    Suministro.objects.filter(pk=suministro_.pk).update(estado_suministro="resuelto", fecha_resolucion_suministro=timezone.localdate(), solicitud_resolucion_id=solicitud.pk)
+    return Suministro.objects.get(pk=suministro_.pk)
 
 
 def verificar_invariantes_de_solicitudes():
@@ -894,6 +1001,29 @@ def verificar_invariantes_de_solicitudes():
                 limite = detalle_.fecha_periodo + timedelta(days=detalle_.detalle_suministro.clausula_suministrante.plazo_entrega_dias)
                 if q.entrega.fecha_resolucion_orden <= limite:
                     problemas.append(f"{q.codigo}: queja por retraso con el detalle #{detalle_.pk}, que no llegó con retraso")
+    # COM-07a (docs/modelo/comercial.md, «SolicitudRevision»): (9) el monto a cobrar de una entrega nunca es negativo; (10) la cantidad de incumplimientos de un suministro con solicitudes es
+    # la de sus solicitudes aceptadas; (11) en una discrepancia aceptada, el monto es la suma de sus líneas; (12) una pendiente o rechazada no tiene montos en sus líneas.
+    from django.db.models import Count, Sum
+
+    from comercial.models import Entrega, LineaDiscrepancia, Suministro
+
+    aceptadas = SolicitudRevision.objects.filter(estado_solicitud="aceptada")
+    descontado = {i: total for i, total in aceptadas.values("entrega_id").annotate(total=Sum("monto_descontado")).values_list("entrega_id", "total")}
+    for entrega_id, total in Entrega.objects.filter(pk__in=descontado).values_list("pk", "monto_total_entrega"):
+        if total is None or total - descontado[entrega_id] < 0:
+            problemas.append(f"entrega #{entrega_id}: el monto a cobrar queda negativo ({total} − {descontado[entrega_id]})")
+    por_contrato = dict(aceptadas.values("entrega__contrato_entrega_id").annotate(n=Count("pk")).values_list("entrega__contrato_entrega_id", "n"))
+    con_solicitudes = set(SolicitudRevision.objects.values_list("entrega__contrato_entrega_id", flat=True))
+    for suministro_id, cantidad in Suministro.objects.filter(pk__in=con_solicitudes).values_list("pk", "cantidad_incumplimientos"):
+        if cantidad != por_contrato.get(suministro_id, 0):
+            problemas.append(f"suministro #{suministro_id}: {cantidad} incumplimientos y {por_contrato.get(suministro_id, 0)} solicitudes aceptadas")
+    for d in DiscrepanciaEntrega.objects.order_by("pk"):
+        montos = list(LineaDiscrepancia.objects.filter(discrepancia_id=d.pk).values_list("monto_indemnizacion_linea", flat=True))
+        if d.estado_solicitud == "aceptada":
+            if any(m is None for m in montos) or sum(montos) != d.monto_indemnizacion:
+                problemas.append(f"{d.codigo}: el monto de la indemnización no es la suma de sus líneas")
+        elif any(m is not None for m in montos):
+            problemas.append(f"{d.codigo}: {d.estado_solicitud} con montos en sus líneas")
     if problemas:
         raise AssertionError("Invariantes de solicitudes rotos: " + "; ".join(problemas))
 

@@ -441,8 +441,10 @@ class FichasTests(Base):
         self.assertIn(f"{HOY + timedelta(days=10):%d/%m/%Y}", html)
         self.assertIn("Pendiente", html)
         self.assertIn("8.000", html)
-        self.assertIn("Discrepancias de entrega", html)
-        self.assertIn("80 de 100 mínimas", html)
+        # COM-07a (regla 8 de COM-CNS-SUM): la sección es «Solicitudes de revisión» (antes «Discrepancias de entrega»); las cantidades («80 de 100 mínimas») están en la ficha de la solicitud.
+        self.assertIn("Solicitudes de revisión", html)
+        self.assertIn("Discrepancia de cantidad", html)
+        self.assertIn("Pendiente de revisión", html)
 
     def test_regla_la_ficha_del_cliente_y_su_baja_informan_las_entregas_sin_cobrar_y_las_discrepancias(self):
         """`clientes.md`, «Se completa en»: la ficha suma las entregas sin cobrar (monto a cobrar y vencimiento) y las discrepancias pendientes, y la baja las informa (sin bloquearse)."""

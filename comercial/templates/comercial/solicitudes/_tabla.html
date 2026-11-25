@@ -1,0 +1,31 @@
+{% load comercial %}{% comment %}La tabla de «Solicitudes de revisión» y su paginación (también es lo que devuelve HTMX). Columnas del prototipo (`tabSolicitudes`): solicitud, tipo, entrega y contrato con el cliente, presentada, indemnización
+(solo si está aceptada) y estado; el paso 2 de COM-EVL-DSC y COM-RSV-QJA suma la fecha de la entrega y la cantidad de líneas o de detalles. «Ver» abre la ficha. Recibe «datos» (`PaginaDeSolicitudes`), «filtros» y «consulta».{% endcomment %}
+<div class="tablewrap">
+  <table class="data-table">
+    <thead><tr><th>Solicitud</th><th>Tipo</th><th>Entrega y cliente</th><th>Presentada</th><th class="right">Detalles</th><th class="right">Indemnización</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+    {% for f in datos.filas %}
+      <tr{% if f.pendiente %} class="r-warn"{% endif %}>
+        <td class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b></td>
+        <td>{{ f.tipo_texto }}</td>
+        <td><span class="mono">{{ f.entrega_codigo }}</span> · <span class="mono">{{ f.contrato_codigo }}</span><span class="sub2">{{ f.cliente }} · entrega del {{ f.fecha_entrega|date:"d/m/Y" }}</span></td>
+        <td class="nowrap">{{ f.fecha_solicitud|date:"d/m/Y" }}</td>
+        <td class="right mono">{{ f.cantidad }}</td>
+        <td class="right nowrap mono">{% if f.indemnizacion is not None %}{{ f.indemnizacion|pesos }}{% else %}—{% endif %}</td>
+        <td><span class="status-badge {% if f.estado == 'pendiente' %}status-warn{% elif f.estado == 'aceptada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
+        <td class="right nowrap"><a class="rowlink" href="{% url 'comercial:solicitud' f.id %}">Ver<span class="sr"> la solicitud {{ f.codigo }}</span></a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8" class="muted" style="text-align:center;padding:24px">{% if filtros.hay_filtros %}No hay solicitudes con estos filtros.{% else %}Todavía no hay solicitudes de revisión.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if datos.pagina.paginator.num_pages > 1 %}
+<nav class="pager" aria-label="Páginas">
+  {% if datos.pagina.has_previous %}<a class="rowlink" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}pagina={{ datos.pagina.previous_page_number }}">‹ Anterior</a>{% endif %}
+  <span class="muted">Página {{ datos.pagina.number }} de {{ datos.pagina.paginator.num_pages }} · {{ datos.pagina.paginator.count }} solicitudes</span>
+  {% if datos.pagina.has_next %}<a class="rowlink" href="?{% if consulta %}{{ consulta }}&amp;{% endif %}pagina={{ datos.pagina.next_page_number }}">Siguiente ›</a>{% endif %}
+</nav>
+{% endif %}

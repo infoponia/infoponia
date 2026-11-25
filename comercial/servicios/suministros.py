@@ -1003,6 +1003,7 @@ class FichaDeSuministro:
     aviso_de_rescision: str | None = None  # COM-03b: la rescisión acordada o el contrato rescindido
     entregas: list = field(default_factory=list)  # COM-05a2 (regla 7): las entregas del contrato (`entregas.entregas_del_contrato`)
     hay_historial: bool = False  # COM-03b: alguna cadena «reemplaza a» con más de una versión («Ver historial de cambios»)
+    solicitudes: list = field(default_factory=list)  # COM-07a (regla 8 de COM-CNS-SUM): las solicitudes de revisión del contrato, de la más reciente a la más antigua
     discrepancias: list = field(default_factory=list)  # COM-06a (regla 8 de COM-CNS-SUM): las discrepancias de entrega del contrato
     quejas: list = field(default_factory=list)  # COM-06b: las quejas de los clientes sobre las entregas del contrato
     por_atender: list = field(default_factory=list)  # COM-06b: las entregas que el cliente dice no haber recibido y esperan al Gerente (`[{entrega_id, codigo}]`; solo para el Gerente)
@@ -1233,6 +1234,8 @@ def ficha_de_suministro(actor, suministro_id):
             .select_related("entrega")
             .order_by("pk")
         ]
+    from comercial.servicios import solicitudes as api_solicitudes  # adentro: `solicitudes` importa módulos que importan este
+
     return FichaDeSuministro(
         suministro=suministro,
         clausula=suministro.clausula_suministrado,
@@ -1251,6 +1254,7 @@ def ficha_de_suministro(actor, suministro_id):
             DiscrepanciaEntrega.objects.filter(entrega__contrato_entrega_id=suministro.pk).select_related("entrega").prefetch_related("lineas").order_by("numero")
         ),
         por_atender=por_atender,
+        solicitudes=api_solicitudes.solicitudes_del_suministro(suministro.pk),
         quejas=list(Queja.objects.filter(entrega__contrato_entrega_id=suministro.pk).select_related("entrega").prefetch_related("detalles__detalle_suministro__variedad").order_by("numero")),
     )
 

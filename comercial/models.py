@@ -548,6 +548,8 @@ class Suministro(Contrato):
     multa_resolucion = models.DecimalField(max_digits=10, decimal_places=2)
     cantidad_incumplimientos = models.PositiveIntegerField(default=0)  # regla 6 de 8.11
     fecha_resolucion_suministro = models.DateField(null=True, blank=True)  # MD-120: la carga COM-07b
+    # D-69, punto 5 (no está en el modelo): la solicitud aceptada cuya aceptación provocó la resolución. La crea COM-07a (extensión 2a de COM-ANL-SRV); la carga COM-07b.
+    solicitud_resolucion = models.ForeignKey("SolicitudRevision", null=True, blank=True, on_delete=models.PROTECT, related_name="+")
     # MD-140 (los carga COM-03b): rescisión por mutuo acuerdo.
     motivo_rescision = models.CharField(max_length=25, choices=MotivoDeRescision.choices, null=True, blank=True)
     descripcion_rescision = models.CharField(max_length=500, blank=True, default="")
@@ -577,6 +579,10 @@ class Suministro(Contrato):
                 condition=(Q(estado_suministro="resuelto") & Q(fecha_resolucion_suministro__isnull=False))
                 | (~Q(estado_suministro="resuelto") & Q(fecha_resolucion_suministro__isnull=True)),
                 name="suministro_resuelto_con_fecha",
+            ),
+            # COM-07a (D-69, punto 5): una solicitud que provocó la resolución implica un contrato resuelto.
+            models.CheckConstraint(
+                condition=Q(solicitud_resolucion__isnull=True) | Q(estado_suministro="resuelto"), name="suministro_solicitud_resolucion_solo_resuelto"
             ),
             # rescindido <=> fecha de rescisión.
             models.CheckConstraint(
@@ -1186,6 +1192,12 @@ class SolicitudRevision(OrigenDocumento):
         ACEPTADA = "aceptada", "Aceptada"
         RECHAZADA = "rechazada", "Rechazada"
 
+    class MedioDeReintegro(models.TextChoices):
+        """Lista de 6a de COM-EVL-DSC y COM-RSV-QJA: efectivo (Caja) o transferencia (Banco c/c)."""
+
+        EFECTIVO = "efectivo", "Efectivo"
+        TRANSFERENCIA = "transferencia", "Transferencia"
+
     # El nombre `tipo` ya es del padre (`OrigenDocumento`): el discriminador se llama `tipo_solicitud` (como `tipo_contrato` y `tipo_orden`, D-81).
     tipo_solicitud = models.CharField(max_length=15, choices=Tipo.choices)
     numero = models.PositiveIntegerField(unique=True)  # de la secuencia `comercial_solicitud_numero_seq`; código visible «SR-0012»
@@ -1194,6 +1206,12 @@ class SolicitudRevision(OrigenDocumento):
     fecha_resolucion = models.DateField(null=True, blank=True)  # COM-07
     observaciones_resolucion = models.TextField(blank=True, default="")  # COM-07 (obligatoria al rechazar)
     monto_indemnizacion = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)  # COM-07a, al aceptar
+    # D-69, punto 9 (no están en el modelo): cómo se aplicó la indemnización al aceptar (MD-115). Nulos hasta aceptar.
+    monto_descontado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    monto_reintegrado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    medio_reintegro = models.CharField(max_length=15, choices=MedioDeReintegro.choices, null=True, blank=True)
+    # D-69, punto 17: el resultado del correo al cliente de la resolución. Nulo mientras está pendiente.
+    estado_aviso_cliente = models.CharField(max_length=15, choices=Entrega.EstadoDelAviso.choices, null=True, blank=True)
     gerente = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.PROTECT, related_name="solicitudes_revisadas")  # R009 (COM-07)
     entrega = models.ForeignKey(Entrega, on_delete=models.PROTECT, related_name="solicitudes")
 
@@ -1219,6 +1237,33 @@ class SolicitudRevision(OrigenDocumento):
             models.CheckConstraint(
                 condition=Q(monto_indemnizacion__isnull=True) | Q(estado_solicitud="aceptada"), name="solicitud_monto_solo_si_aceptada"
             ),
+            # COM-07a (D-69, puntos 9 y 17). Aceptada ⇔ descontado y reintegrado no nulos.
+            models.CheckConstraint(
+                condition=(Q(estado_solicitud="aceptada") & Q(monto_descontado__isnull=False) & Q(monto_reintegrado__isnull=False))
+                | (~Q(estado_solicitud="aceptada") & Q(monto_descontado__isnull=True) & Q(monto_reintegrado__isnull=True)),
+                name="solicitud_aceptada_con_aplicacion",
+            ),
+            models.CheckConstraint(
+                condition=(Q(monto_descontado__isnull=True) | Q(monto_descontado__gte=0)) & (Q(monto_reintegrado__isnull=True) | Q(monto_reintegrado__gte=0)),
+                name="solicitud_montos_no_negativos",
+            ),
+            # Aceptada ⇒ descontado + reintegrado = monto de la indemnización.
+            models.CheckConstraint(
+                condition=~Q(estado_solicitud="aceptada") | Q(monto_indemnizacion=F("monto_descontado") + F("monto_reintegrado")),
+                name="solicitud_aplicacion_suma_indemnizacion",
+            ),
+            # Medio de reintegro no nulo ⇔ reintegrado > 0.
+            models.CheckConstraint(
+                condition=(Q(medio_reintegro__isnull=True) & (Q(monto_reintegrado__isnull=True) | Q(monto_reintegrado=0)))
+                | (Q(medio_reintegro__isnull=False) & Q(monto_reintegrado__gt=0)),
+                name="solicitud_medio_con_reintegro",
+            ),
+            models.CheckConstraint(condition=Q(medio_reintegro__isnull=True) | Q(medio_reintegro__in=["efectivo", "transferencia"]), name="solicitud_medio_valido"),
+            models.CheckConstraint(
+                condition=Q(estado_aviso_cliente__isnull=True) | Q(estado_aviso_cliente__in=["enviado", "pendiente_envio", "sin_correo"]),
+                name="solicitud_aviso_valido",
+            ),
+            models.CheckConstraint(condition=~Q(estado_solicitud="pendiente") | Q(estado_aviso_cliente__isnull=True), name="solicitud_pendiente_sin_aviso"),
         ]
 
     @property
@@ -1304,3 +1349,58 @@ class Queja(SolicitudRevision):
             # El motivo de «estado de la mercadería» y «otro» es obligatorio; el de «retraso» es opcional (lo calcula el Sistema).
             models.CheckConstraint(condition=Q(tipo_queja="retraso") | ~Q(motivo_queja=""), name="queja_motivo_obligatorio_salvo_retraso"),
         ]
+
+
+# ---- COM-07a: Anulacion (docs/modelo/comercial.md, «Anulacion»; MD-135, D-69 punto 10) ----
+
+
+class Anulacion(OrigenDocumento):
+    """Anulación de la resolución de una solicitud (COM-ANL-SRV; MD-135). Hija directa de `OrigenDocumento` (``TIPO_DE_ORIGEN = anulacion``): origina el contraasiento (fuera de la ronda,
+    D-57). Guarda una **copia de la resolución anulada** (D-69, punto 10): al anular, la solicitud vuelve a «pendiente» y sus campos de resolución se vacían; la ficha muestra el historial
+    desde esta copia, sin leer la auditoría. Hasta COM-08b ``solicitud`` no es nula (COM-08b la reescribe como «exactamente uno de `solicitud` y `pago`»). Su clave es ``origendocumento_ptr``."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.ANULACION
+
+    class EstadoAnulado(models.TextChoices):
+        """El estado que tenía la solicitud antes de anularla."""
+
+        ACEPTADA = "aceptada", "Aceptada"
+        RECHAZADA = "rechazada", "Rechazada"
+
+    fecha_anulacion = models.DateField(default=timezone.localdate)
+    motivo_anulacion = models.CharField(max_length=500)  # de 1 a 500, sin espacios al borde (lo verifica el servicio; la base, que no sea vacío)
+    usuario = models.ForeignKey(Usuario, on_delete=models.PROTECT, related_name="anulaciones_hechas")  # MD-135: quien anula
+    solicitud = models.ForeignKey(SolicitudRevision, null=True, blank=True, on_delete=models.PROTECT, related_name="anulaciones")  # MD-135
+    # La copia de la resolución anulada (D-69, punto 10). Los montos y el medio, nulos si estaba rechazada.
+    estado_anulado = models.CharField(max_length=10, choices=EstadoAnulado.choices, null=True, blank=True)
+    fecha_resolucion_anulada = models.DateField(null=True, blank=True)
+    gerente_anulado = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
+    observaciones_anuladas = models.TextField(blank=True, default="")
+    monto_indemnizacion_anulado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    monto_descontado_anulado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    monto_reintegrado_anulado = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    medio_reintegro_anulado = models.CharField(max_length=15, choices=SolicitudRevision.MedioDeReintegro.choices, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Anulación"
+        verbose_name_plural = "Anulaciones"
+        indexes = [models.Index(fields=["solicitud", "fecha_anulacion"], name="anulacion_solicitud_idx")]
+        constraints = [
+            models.CheckConstraint(condition=~Q(motivo_anulacion=""), name="anulacion_motivo_obligatorio"),
+            models.CheckConstraint(condition=Q(solicitud__isnull=False), name="anulacion_con_solicitud"),  # COM-08b la reescribe (xor con `pago`)
+            models.CheckConstraint(condition=Q(estado_anulado__isnull=False) | Q(solicitud__isnull=True), name="anulacion_estado_con_solicitud"),
+            models.CheckConstraint(condition=Q(estado_anulado__isnull=True) | Q(estado_anulado__in=["aceptada", "rechazada"]), name="anulacion_estado_valido"),
+            # aceptada ⇔ monto de la indemnización anulado no nulo.
+            models.CheckConstraint(
+                condition=(Q(estado_anulado="aceptada") & Q(monto_indemnizacion_anulado__isnull=False))
+                | (~Q(estado_anulado="aceptada") & Q(monto_indemnizacion_anulado__isnull=True)),
+                name="anulacion_aceptada_con_monto",
+            ),
+            models.CheckConstraint(
+                condition=Q(medio_reintegro_anulado__isnull=True) | Q(medio_reintegro_anulado__in=["efectivo", "transferencia"]), name="anulacion_medio_valido"
+            ),
+        ]
+
+    def __str__(self):
+        """«Anulación #12» (texto de la auditoría, D-36)."""
+        return f"Anulación #{self.pk}"

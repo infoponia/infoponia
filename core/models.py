@@ -846,6 +846,10 @@ class RegistroAuditoria(models.Model):
         # COM-06b (D-68): la respuesta del cliente al enlace de confirmación (sin cuenta, `rol_externo`) y la atención de la entrega no reconocida (Gerente).
         RESPUESTA_CLIENTE_ENTREGA = "respuesta_cliente_entrega", "Respuesta del cliente a una entrega"  # COM-CNF-ENT
         ATENCION_ENTREGA_NO_RECONOCIDA = "atencion_entrega_no_reconocida", "Atención de entrega no reconocida"  # COM-ATN-ENR
+        # COM-07a (D-69): evaluar una discrepancia, resolver una queja y anular la resolución de una solicitud (Gerente).
+        EVALUACION_DISCREPANCIA = "evaluacion_discrepancia", "Evaluación de discrepancia"  # COM-EVL-DSC
+        RESOLUCION_QUEJA = "resolucion_queja", "Resolución de queja"  # COM-RSV-QJA
+        ANULACION_RESOLUCION_SOLICITUD = "anulacion_resolucion_solicitud", "Anulación de la resolución de una solicitud"  # COM-ANL-SRV
         # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
         CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
         EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
@@ -1096,6 +1100,17 @@ class RegistroAuditoria(models.Model):
         "cantidad_sin_cubrir": "Cantidad sin cubrir",
         "plazo_pago_dias": "Plazo de pago (días)",
         "motivo_anulacion": "Motivo de la anulación",
+        # COM-07a (D-69): solicitudes de revisión y su anulación («fecha_resolucion», «gerente», «motivo_anulacion» y «estado_aviso_cliente» ya existen).
+        "estado_solicitud": "Estado de la solicitud",
+        "monto_indemnizacion": "Monto de la indemnización",
+        "monto_indemnizacion_linea": "Monto de la indemnización de la línea",
+        "monto_descontado": "Monto descontado",
+        "monto_reintegrado": "Monto reintegrado",
+        "medio_reintegro": "Medio del reintegro",
+        "observaciones_resolucion": "Observaciones de la resolución",
+        "cantidad_incumplimientos": "Incumplimientos del contrato",
+        "monto_a_cobrar": "Monto a cobrar",
+        "fecha_anulacion": "Fecha de la anulación",
         "indemnizacion_retraso_pago": "Indemnización por atraso en el pago",
         # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
@@ -1414,6 +1429,9 @@ class RegistroAuditoria(models.Model):
         # COM-06b: la respuesta del cliente y el resultado de la averiguación (`core` no importa `comercial`).
         "respuesta_cliente": {"conforme": "Recibió la entrega y está conforme", "con_quejas": "Recibió la entrega y presentó quejas", "no_recibi": "No reconoce la entrega"},
         "resultado_averiguacion": {"llego": "La entrega llegó", "no_llego_perdido": "No llegó, producto perdido", "no_llego_devuelto": "No llegó, producto devuelto"},
+        # COM-07a: las listas cerradas de las solicitudes (`core` no importa `comercial`). Claves propias, no la «estado» común.
+        "estado_solicitud": {"pendiente": "Pendiente de revisión", "aceptada": "Aceptada", "rechazada": "Rechazada"},
+        "medio_reintegro": {"efectivo": "Efectivo", "transferencia": "Transferencia"},
     }
     SIN_VALOR = "—"
 
@@ -1665,6 +1683,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
         RegistroAuditoria.Accion.RESPUESTA_CLIENTE_ENTREGA,  # COM-06b
         RegistroAuditoria.Accion.ATENCION_ENTREGA_NO_RECONOCIDA,  # COM-06b
+        RegistroAuditoria.Accion.EVALUACION_DISCREPANCIA,  # COM-07a
+        RegistroAuditoria.Accion.RESOLUCION_QUEJA,  # COM-07a
+        RegistroAuditoria.Accion.ANULACION_RESOLUCION_SOLICITUD,  # COM-07a
         RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
         RegistroAuditoria.Accion.EMISION_RECLAMO,
         RegistroAuditoria.Accion.CIERRE_RECLAMO,

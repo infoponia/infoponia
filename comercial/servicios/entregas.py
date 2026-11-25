@@ -20,7 +20,7 @@ from functools import partial
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, Value, When
+from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, Sum, Value, When
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
@@ -35,6 +35,7 @@ from comercial.models import (
     DetalleVenta,
     Entrega,
     ReservaStock,
+    SolicitudRevision,
     Suministro,
     Vehiculo,
 )
@@ -963,7 +964,7 @@ def planificar_entregas(hoy):
     1. recuperación: lo listo sin entrega (postcondición l; también con la fecha pasada, 3a);
     2. búsqueda de transportista de las entregas con envío «a realizar» sin transportista, de invernaderos activos y **creadas antes de hoy** (postcondiciones j y k);
     3. aviso único de las atrasadas con transportista (postcondición n de PCU 8);
-    4. reintento de los correos al cliente «pendientes de envío» (extensión 9-11a).
+    4. reintento de los correos al cliente «pendientes de envío» (extensión 9-11a): los de las entregas, los comprobantes de las concretadas y, desde COM-07a, los avisos de resolución de las solicitudes.
     Idempotente: dos corridas el mismo día no crean ni avisan nada nuevo. `ResumenDePaso(procesados, creados=entregas creadas, resueltos=alertas resueltas, detalle)`."""
     procesados = creados = resueltos = 0
     tocadas = set()  # las que esta corrida planificó o reasignó: su correo ya está programado con `on_commit` y la parte 4 no lo repite
@@ -1019,6 +1020,14 @@ def planificar_entregas(hoy):
                 enlaces.reemitir_enlace(confirmacion)  # token nuevo en la misma fila si sigue vigente; usado o vencido, no se reintenta
         except Exception:  # noqa: BLE001
             logger.exception("Falló el reintento del comprobante de la entrega %s", entrega.pk)
+    from comercial.servicios import solicitudes  # adentro: `solicitudes` importa este módulo
+
+    for solicitud_id in list(SolicitudRevision.objects.filter(estado_aviso_cliente=AVISO.PENDIENTE_ENVIO).order_by("pk").values_list("pk", flat=True)):  # COM-07a, 9a de COM-EVL-DSC y COM-RSV-QJA
+        procesados += 1
+        try:
+            solicitudes.enviar_aviso_de_resolucion(solicitud_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("Falló el reintento del aviso de la solicitud %s", solicitud_id)
     siguen = Entrega.objects.filter(estado_orden=A_REALIZAR, modalidad_entrega=ENVIO, transportista__isnull=True).count()
     return ResumenDePaso(procesados, creados, resueltos, f"{siguen} entregas siguen sin transportista")
 
@@ -1137,13 +1146,19 @@ def enlaces_de_alertas(usuario, alertas_de_entregas):
 
 
 def monto_a_cobrar(entrega_ids):
-    """``{id de entrega: monto a cobrar}``: el total de una entrega concretada menos lo descontado por las solicitudes aceptadas (MD-115; D-69, punto 9), nunca negativo. Hasta COM-07a no hay
-    nada que descontar. ``None`` si la entrega no está concretada. Una consulta."""
+    """``{id de entrega: monto a cobrar}``: el total de una entrega concretada menos lo **descontado** por las solicitudes aceptadas (MD-115; D-69, punto 9: no la indemnización entera, porque con el
+    tope una parte se reintegra), nunca negativo. ``None`` si la entrega no está concretada. Dos consultas para todas las entregas."""
     entrega_ids = list(entrega_ids)
     resultado = {i: None for i in entrega_ids}
+    descontado = dict(
+        SolicitudRevision.objects.filter(entrega_id__in=entrega_ids, estado_solicitud=SolicitudRevision.Estado.ACEPTADA)
+        .values("entrega_id")
+        .annotate(total=Sum("monto_descontado"))
+        .values_list("entrega_id", "total")
+    )
     for entrega_id, total in Entrega.objects.filter(pk__in=entrega_ids).values_list("pk", "monto_total_entrega"):
         if total is not None:
-            resultado[entrega_id] = max(Decimal("0.00"), total)
+            resultado[entrega_id] = max(Decimal("0.00"), total - (descontado.get(entrega_id) or Decimal("0.00")))
     return resultado
 
 

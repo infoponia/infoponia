@@ -19,5 +19,11 @@
   {% else %}
   <div class="empty"><b>No hay entregas a realizar</b><span>InfoPonia las planifica solas cuando todo el producto de una venta o de un período está listo.</span></div>
   {% endif %}
+  {% if g.solicitudes_pendientes is not None %}
+  <h2 style="margin:18px 0 12px">Solicitudes de revisión</h2>
+  <div class="kpis">
+    <a class="kpi{% if g.solicitudes_pendientes %} warn{% endif %}" href="{{ g.url_de_solicitudes_pendientes }}" style="text-decoration:none;color:inherit"><span class="k">Pendientes</span><span class="v">{{ g.solicitudes_pendientes }}</span><span class="c">quejas y discrepancias a resolver</span></a>
+  </div>
+  {% endif %}
   {% endwith %}
 </div>

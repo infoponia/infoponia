@@ -1,0 +1,38 @@
+{% extends "core/base_con_sesion.html" %}{% load estaticos %}
+{% comment %}«Comercial» → «Solicitudes de revisión» (COM-CNS-SRV; `tabSolicitudes` del prototipo, D-61): la lista de quejas y discrepancias del Gerente (todas) y del Vendedor (las de sus contratos, en lectura), con los filtros en la URL
+(formulario GET común: sin JavaScript funciona con «Filtrar», con HTMX solo se redibuja la tabla; nunca se filtra al tipear). Primero las pendientes, de la más antigua a la más reciente. Recibe «datos» (`PaginaDeSolicitudes`),
+«filtros», «consulta», «es_gerente» y «vendedores» (solo el Gerente).{% endcomment %}
+{% block titulo %}Solicitudes de revisión · Comercial · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Comercial</h1></div>
+  {% include "comercial/_pestanas.html" with activa="solicitudes" %}
+
+  <p class="muted" style="margin:0 0 12px">Las quejas las presenta el cliente al confirmar la entrega; las discrepancias se generan solas cuando una entrega queda por debajo del mínimo pactado. Las resuelve el Gerente.{% if not es_gerente %} Acá las ves en lectura: recibís una notificación con cada decisión.{% endif %}</p>
+
+  <form class="filters" method="get" action="{% url 'comercial:solicitudes' %}" role="search"
+        hx-get="{% url 'comercial:solicitudes' %}" hx-target="#tabla-de-solicitudes" hx-push-url="true">
+    <select class="field-input" name="tipo" data-desplegable aria-label="Tipo">
+      {% for valor, texto in datos.tipos %}<option value="{{ valor }}"{% if filtros.tipo == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+    </select>
+    <select class="field-input" name="estado" data-desplegable aria-label="Estado">
+      {% for valor, texto in datos.estados %}<option value="{{ valor }}"{% if filtros.estado == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+    </select>
+    {% if es_gerente %}
+    <select class="field-input" name="vendedor" data-desplegable aria-label="Vendedor">
+      <option value="">Todos los vendedores</option>
+      {% for id, nombre in vendedores %}<option value="{{ id }}"{% if filtros.vendedor == id|stringformat:"s" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <input class="field-input" type="search" name="cliente" value="{{ filtros.cliente }}" placeholder="Cliente o CUIT" aria-label="Cliente">
+    <input class="field-input" type="search" name="contrato" value="{{ filtros.contrato }}" placeholder="Contrato (SUM-0001)" aria-label="Contrato">
+    <input class="field-input" type="search" name="numero" value="{{ filtros.numero }}" placeholder="Solicitud (SR-0012)" aria-label="Número de la solicitud">
+    <input class="field-input" type="date" name="desde" value="{{ filtros.desde|date:'Y-m-d' }}" aria-label="Presentada desde">
+    <input class="field-input" type="date" name="hasta" value="{{ filtros.hasta|date:'Y-m-d' }}" aria-label="Presentada hasta">
+    <button class="btn btn-ghost" type="submit">Filtrar</button>
+  </form>
+
+  <div id="tabla-de-solicitudes">{% include "comercial/solicitudes/_tabla.html" %}</div>
+</div>
+{% endblock %}

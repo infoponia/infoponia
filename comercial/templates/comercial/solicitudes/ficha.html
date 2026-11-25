@@ -1,0 +1,152 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}La ficha de una solicitud de revisión (COM-CNS-SRV, reglas 3 a 5 y 7; `VIEWS.srv` del prototipo, D-61) con el panel del Gerente (paso 4 y 5 de COM-EVL-DSC y COM-RSV-QJA): el encabezado, lo que indicó el cliente, las líneas con sus
+cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4b), la decisión tomada, el aviso al cliente y el historial de resoluciones anuladas. El Vendedor la ve en lectura. «Ver resumen» manda el panel a
+`resolver/revisar/` (no escribe): con HTMX se redibuja solo el resumen; sin JavaScript vuelve esta misma página. Nada se valida ni se recalcula al tipear. Recibe «ficha», «s», «datos», «resumen», «mostrar_resumen», «errores»,
+«bloqueantes», «error», «confirmando» y «medios». Todo se escapa.{% endcomment %}
+{% block titulo %}{{ ficha.codigo }} · Solicitudes de revisión · InfoPonia{% endblock %}
+{% block contenido %}
+{% with l=ficha.lectura %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:solicitudes' %}">{% icono "chev" 14 %} Volver a las solicitudes</a>
+  <div class="page-h">
+    <h1><span class="mono">{{ ficha.codigo }}</span> · {{ ficha.tipo_texto }}</h1>
+    <div class="sub"><span class="status-badge {% if s.estado_solicitud == 'pendiente' %}status-warn{% elif s.estado_solicitud == 'aceptada' %}status-ok{% else %}status-neutral{% endif %}">{{ s.get_estado_solicitud_display }}</span></div>
+  </div>
+  {% if error %}<div class="alert alert-warn" role="alert">{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
+
+  <div class="card seg">
+    <div class="card-h"><h3>La entrega</h3></div>
+    <div class="card-b">
+      <dl class="dl two">
+        <dt>Cliente</dt><dd>{{ l.suministro.cliente.nombre_visible }}</dd>
+        <dt>Contrato</dt><dd><a class="rowlink" href="{% url 'comercial:suministro' l.suministro.pk %}">{{ l.suministro.codigo }}</a><span class="sub2">{{ l.suministro.cantidad_incumplimientos }} de {{ l.suministro.incumplimientos_tolerados }} incumplimientos tolerados · {{ l.suministro.get_estado_suministro_display }}</span></dd>
+        <dt>Entrega</dt><dd><span class="mono">{{ l.entrega.codigo }}</span><span class="sub2">Concretada el {{ l.entrega.fecha_resolucion_orden|date:"d/m/Y" }}</span></dd>
+        <dt>Transportista</dt><dd>{% if l.entrega.transportista %}{{ l.entrega.transportista.get_full_name }}{% else %}<span class="muted">Retiro en invernadero</span>{% endif %}</dd>
+        <dt>Presentada</dt><dd>{{ s.fecha_solicitud|date:"d/m/Y" }}</dd>
+        <dt>Pago de la entrega</dt><dd>{% if l.estado_de_pago == "pagada" %}<span class="status-badge status-ok">Pagada</span>{% elif l.estado_de_pago == "en_mora" %}<span class="status-badge status-danger">En mora</span>{% else %}<span class="status-badge status-warn">Pendiente</span>{% endif %}<span class="sub2">{{ l.monto_a_cobrar|pesos }} a cobrar</span></dd>
+      </dl>
+    </div>
+  </div>
+
+  {% if s.tipo_solicitud == "queja" %}
+  <div class="card seg">
+    <div class="card-h"><h3>Lo que indicó el cliente</h3></div>
+    <div class="card-b">{% if s.motivo_queja %}{{ s.motivo_queja }}{% else %}<span class="muted">El cliente reclama el retraso de la entrega.</span>{% endif %}</div>
+  </div>
+  {% endif %}
+
+  <div class="card seg">
+    <div class="card-h"><h3>Detalles afectados</h3></div>
+    <div class="card-b flush"><table class="data-table">
+      {% if s.tipo_solicitud == "discrepancia" %}
+      <thead><tr><th>Producto</th><th class="right">Mínimo pactado</th><th class="right">Planif. / entreg. / perd. / dev.</th><th class="right">Por planta faltante</th><th class="right">Monto</th></tr></thead>
+      <tbody>{% for x in l.lineas %}<tr><td><b style="font-weight:600">{{ x.variedad }}</b></td><td class="right mono">{{ x.minima }}</td><td class="right mono">{{ x.planificada }} / {{ x.entregada }} / {{ x.perdida }} / {{ x.devuelta }}</td><td class="right mono">{{ x.por_planta|pesos }}</td><td class="right mono">{{ x.monto|pesos }}</td></tr>{% endfor %}
+        <tr class="totrow"><td colspan="4"><b>Indemnización según la cláusula</b></td><td class="right mono"><b>{{ l.calculado|pesos }}</b></td></tr></tbody>
+      {% elif not l.es_manual %}
+      <thead><tr><th>Producto</th><th>Fecha del período</th><th class="right">Plazo de entrega</th><th class="right">Días de retraso</th><th class="right">Por día</th><th class="right">Planif. / entreg. / perd. / dev.</th><th class="right">Monto</th></tr></thead>
+      <tbody>{% for x in l.lineas %}<tr><td><b style="font-weight:600">{{ x.variedad }}</b></td><td>{{ x.fecha_periodo|date:"d/m/Y" }}</td><td class="right mono">{{ x.plazo }} día{{ x.plazo|pluralize }}</td><td class="right mono">{{ x.dias }}</td><td class="right mono">{{ x.por_dia|pesos }}</td><td class="right mono">{{ x.planificada }} / {{ x.entregada }} / {{ x.perdida }} / {{ x.devuelta }}</td><td class="right mono">{{ x.monto|pesos }}</td></tr>{% endfor %}
+        <tr class="totrow"><td colspan="6"><b>Indemnización según la cláusula</b></td><td class="right mono"><b>{{ l.calculado|pesos }}</b></td></tr></tbody>
+      {% else %}
+      <thead><tr><th>Producto</th><th class="right">Planificadas</th><th class="right">Entregadas</th><th class="right">Perdidas</th><th class="right">Devueltas</th><th class="right">Lo que paga el cliente</th></tr></thead>
+      <tbody>{% for x in l.lineas %}<tr><td><b style="font-weight:600">{{ x.variedad }}</b></td><td class="right mono">{{ x.planificada }}</td><td class="right mono">{{ x.entregada }}</td><td class="right mono">{{ x.perdida }}</td><td class="right mono">{{ x.devuelta }}</td><td class="right mono">{{ x.monto_a_pagar|pesos }}</td></tr>{% endfor %}</tbody>
+      {% endif %}
+    </table></div>
+  </div>
+
+  <div class="card seg">
+    <div class="card-h"><h3>Pérdidas e intentos de entrega</h3></div>
+    <div class="card-b">
+      <dl class="dl two">
+        <dt>Pérdidas</dt><dd>{% if ficha.perdidas %}<ul class="portal-lista">{% for cantidad, causa, descripcion in ficha.perdidas %}<li>{{ cantidad }} planta{{ cantidad|pluralize }} · {{ causa }}{% if descripcion %} · {{ descripcion }}{% endif %}</li>{% endfor %}</ul>{% else %}<span class="muted">Sin pérdidas registradas</span>{% endif %}</dd>
+        <dt>Intentos fallidos</dt><dd>{% if ficha.intentos %}<ul class="portal-lista">{% for i in ficha.intentos %}<li>{{ i.fecha_hora|date:"d/m/Y H:i" }} · {{ i.get_motivo_display }}{% if i.descripcion %} · {{ i.descripcion }}{% endif %}</li>{% endfor %}</ul>{% else %}<span class="muted">No hay intentos de entrega fallidos registrados.</span>{% endif %}</dd>
+      </dl>
+      {% if ficha.intento_en_plazo %}<div class="alert alert-warn" role="status" style="margin-top:12px">{% icono "warn" 16 %}<div>Hubo un intento de entrega dentro del plazo. Si el retraso se debió a la ausencia del cliente, no es de la empresa y corresponde rechazar.</div></div>{% endif %}
+    </div>
+  </div>
+
+  {% if s.estado_solicitud != "pendiente" %}
+  <div class="card seg">
+    <div class="card-h"><h3>Decisión</h3></div>
+    <div class="card-b">
+      <dl class="dl two">
+        <dt>Decisión</dt><dd>{{ s.get_estado_solicitud_display }}{% if ficha.cuenta_como_incumplimiento %}<span class="sub2">Cuenta como incumplimiento</span>{% endif %}</dd>
+        <dt>Gerente</dt><dd>{{ ficha.gerente_que_resolvio }}<span class="sub2">{{ s.fecha_resolucion|date:"d/m/Y" }}</span></dd>
+        {% if s.estado_solicitud == "aceptada" %}
+        <dt>Indemnización</dt><dd class="mono">{{ s.monto_indemnizacion|pesos }}</dd>
+        {% if s.monto_descontado %}<dt>Descontado</dt><dd class="mono">{{ s.monto_descontado|pesos }}<span class="sub2">Monto a cobrar de la entrega: {{ l.monto_a_cobrar|pesos }}</span></dd>{% endif %}
+        {% if s.monto_reintegrado %}<dt>Reintegrado</dt><dd class="mono">{{ s.monto_reintegrado|pesos }}<span class="sub2">{{ s.get_medio_reintegro_display }}</span></dd>{% endif %}
+        {% endif %}
+        <dt>Observaciones</dt><dd>{% if s.observaciones_resolucion %}{{ s.observaciones_resolucion }}{% else %}<span class="muted">Sin observaciones</span>{% endif %}</dd>
+        <dt>Aviso al cliente</dt><dd>{% if s.estado_aviso_cliente == "enviado" %}<span class="status-badge status-ok">Enviado</span>{% elif s.estado_aviso_cliente == "pendiente_envio" %}<span class="status-badge status-warn">Pendiente de envío</span>{% elif s.estado_aviso_cliente == "sin_correo" %}<span class="status-badge status-neutral">El cliente no tiene correo</span>{% else %}—{% endif %}</dd>
+      </dl>
+      <div class="acts-fila" style="margin-top:12px">
+        {% if ficha.puede_reenviar %}<form method="post" action="{% url 'comercial:solicitud_reenviar_aviso' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn btn-ghost" type="submit" data-enviando="Reenviando…">Reenviar aviso</button></form>{% endif %}
+        {% if ficha.puede_imprimir %}<a class="btn btn-ghost" href="{% url 'comercial:solicitud_comprobante' s.pk %}">Imprimir comprobante</a>{% endif %}
+        {% if ficha.puede_anular %}<a class="btn btn-ghost" href="{% url 'comercial:solicitud_anular' s.pk %}">Anular resolución</a>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if ficha.historial %}
+  <div class="card seg">
+    <div class="card-h"><h3>Historial de resoluciones anuladas</h3></div>
+    <div class="card-b flush"><table class="data-table">
+      <thead><tr><th>Resolución anulada</th><th>Anulada</th><th>Motivo</th></tr></thead>
+      <tbody>{% for a in ficha.historial %}<tr>
+        <td>{{ a.get_estado_anulado_display }}{% if a.monto_indemnizacion_anulado is not None %} · {{ a.monto_indemnizacion_anulado|pesos }}{% endif %}<span class="sub2">{{ a.gerente_anulado.get_full_name }} · {{ a.fecha_resolucion_anulada|date:"d/m/Y" }}</span></td>
+        <td class="nowrap">{{ a.fecha_anulacion|date:"d/m/Y" }}<span class="sub2">{{ a.usuario.get_full_name }}</span></td>
+        <td>{{ a.motivo_anulacion }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  {% endif %}
+
+  {% if s.estado_solicitud == "pendiente" and not ficha.puede_evaluar %}
+  <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>La evalúa el Gerente. Vas a recibir una notificación con la decisión.</div></div>
+  {% endif %}
+
+  {% if ficha.puede_evaluar %}
+  {% with previa=ficha.vista_previa %}
+  <form method="post" action="{% url 'comercial:solicitud_resolver_revisar' s.pk %}" novalidate>
+    {% csrf_token %}
+    <div class="card seg">
+      <div class="card-h"><h3>{% if s.tipo_solicitud == "queja" %}Resolver la queja{% else %}Evaluar la discrepancia{% endif %}</h3></div>
+      <div class="card-b">
+        <fieldset class="rline">
+          <legend class="lbl">Decisión <span class="req">*</span></legend>
+          <label class="portal-radio"><input type="radio" name="decision" value="aceptar"{% if datos.decision == "aceptar" %} checked{% endif %}> {% if s.tipo_solicitud == "queja" %}Es procedente (aceptar){% else %}Hubo incumplimiento (aceptar){% endif %}</label>
+          <label class="portal-radio"><input type="radio" name="decision" value="rechazar"{% if datos.decision == "rechazar" %} checked{% endif %}> {% if s.tipo_solicitud == "queja" %}No es procedente (rechazar){% else %}No hubo incumplimiento (rechazar){% endif %}</label>
+          <div class="hint">Aceptar significa que hubo un incumplimiento de la empresa: suma uno al contrato y, si corresponde, indemniza al cliente. Rechazar no cambia nada del contrato; el cliente recibe tus observaciones.</div>
+        </fieldset>
+
+        <dl class="dl two" style="margin-top:12px">
+          {% if l.es_manual %}
+          <dt><label for="monto">Indemnización</label></dt>
+          <dd><input class="field-input num" id="monto" name="monto" type="text" inputmode="decimal" autocomplete="off" value="{{ datos.monto }}" placeholder="0,00">
+            <div class="hint">Entre {{ 0|pesos }} y {{ l.tope|pesos }}: lo que el cliente paga por los productos de la queja. Vacío o cero: se acepta sin indemnización.</div></dd>
+          {% else %}
+          <dt>Indemnización</dt><dd class="mono">{{ l.calculado|pesos }}<div class="hint">Sale de la cláusula; no se puede modificar.</div></dd>
+          {% endif %}
+          <dt>Incumplimientos del contrato</dt><dd class="mono">{{ previa.incumplimientos_antes }} → {{ previa.incumplimientos_despues }} de {{ previa.tolerados }} tolerados</dd>
+        </dl>
+        {% if previa.resolveria %}<div class="alert alert-danger" role="status" style="margin-top:8px">{% icono "warn" 16 %}<div>Con esta aceptación se superan los {{ previa.tolerados }} incumplimientos tolerados: {{ l.suministro.codigo }} se resolverá y se aplicará la multa de {{ previa.multa|pesos }}. Hasta que se complete COM-07b, el contrato queda «vigente».</div></div>
+        {% elif previa.historial %}<div class="alert alert-info" role="status" style="margin-top:8px">{% icono "info" 16 %}<div>{{ l.suministro.codigo }} está {{ l.suministro.get_estado_suministro_display|lower }}: el incumplimiento se registra como historial, sin resolución.</div></div>{% endif %}
+
+        <div class="fld" style="margin-top:12px">
+          <label class="lbl" for="observaciones">Observaciones <span class="muted">(obligatorias al rechazar: el cliente las recibe)</span></label>
+          <textarea class="field-input" id="observaciones" name="observaciones" rows="2" maxlength="500">{{ datos.observaciones }}</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="acts-fila" style="margin:12px 0">
+      <button class="btn btn-primary" type="submit" data-sin-envio-en-curso data-enviando="Calculando…"
+              hx-post="{% url 'comercial:solicitud_resolver_revisar' s.pk %}" hx-target="#resumen-de-resolucion" hx-swap="innerHTML show:none" hx-include="closest form">Ver resumen</button>
+    </div>
+  </form>
+  {% endwith %}
+  <div id="resumen-de-resolucion" aria-live="polite">{% if mostrar_resumen %}{% include "comercial/solicitudes/_resumen.html" %}{% endif %}</div>
+  {% endif %}
+</div>
+{% endwith %}
+{% endblock %}

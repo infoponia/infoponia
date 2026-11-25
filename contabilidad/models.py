@@ -24,6 +24,7 @@ class OrigenDocumento(models.Model):
         PAGO_CLIENTE = "pago_cliente", "Pago del cliente"  # COM-06a (D-68 punto 4): lo crea `comercial.PagoCliente`
         SOLICITUD_REVISION = "solicitud_revision", "Solicitud de revisión"  # COM-06a (D-68 punto 5): lo crea `comercial.SolicitudRevision`
         CORRECCION_DE_RECEPCION = "correccion_de_recepcion", "Corrección de recepción"  # CMP-06 (D-90 punto 3): lo crea `compras.CorreccionRecepcion`
+        ANULACION = "anulacion", "Anulación"  # COM-07a (D-69 punto 10, MD-135): lo crea `comercial.Anulacion`
         PAGO = "pago", "Pago a proveedor"  # CMP-05 (D-91 punto 1): lo crea `compras.Pago`; no confundir con el `PagoCliente` de `comercial`
 
     # Convención de las hijas directas (D-52 puntos 1 y 2). `MovimientoInsumo` (INV-01), `OrdenTrabajo` y `Bitacora`

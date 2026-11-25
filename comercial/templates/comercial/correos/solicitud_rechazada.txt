@@ -1,0 +1,11 @@
+{% autoescape off %}Hola, {{ cliente }}:
+
+Revisamos tu {{ tipo }}{% if es_queja %} por {{ tipo_queja }}{% endif %} {{ codigo }} sobre la entrega {{ entrega }} de tu suministro {{ contrato }} y no fue reconocida.
+
+Observaciones del Gerente: {{ observaciones }}
+
+Si tenés dudas, escribile a tu vendedor: {{ vendedor.get_full_name }}{% if vendedor.email %} ({{ vendedor.email }}){% endif %}{% if vendedor.telefono %}, teléfono {{ vendedor.telefono }}{% endif %}.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

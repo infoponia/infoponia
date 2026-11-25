@@ -242,7 +242,8 @@ class RestriccionesDeSolicitudTests(Base):
         viola(self, lambda: self.solicitud(estado_solicitud="aceptada", monto_indemnizacion=Decimal("-1.00"), **resuelta))
         viola(self, lambda: self.solicitud(estado_solicitud="rechazada", monto_indemnizacion=Decimal("10.00"), **resuelta))
         viola(self, lambda: self.solicitud(monto_indemnizacion=Decimal("10.00")))
-        aceptada = self.solicitud(estado_solicitud="aceptada", monto_indemnizacion=Decimal("0.00"), **resuelta)
+        # COM-07a (D-69 punto 9): una aceptada también lleva lo descontado y lo reintegrado (antes de COM-07a bastaba el monto).
+        aceptada = self.solicitud(estado_solicitud="aceptada", monto_indemnizacion=Decimal("0.00"), monto_descontado=Decimal("0.00"), monto_reintegrado=Decimal("0.00"), **resuelta)
         self.assertEqual(aceptada.monto_indemnizacion, Decimal("0.00"))
 
 

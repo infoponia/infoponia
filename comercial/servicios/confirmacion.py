@@ -16,7 +16,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from comercial.models import AlertaComercial, Contrato, EnlaceCliente, Entrega, LineaDiscrepancia, Queja
-from comercial.servicios import enlaces, entregas, solicitudes
+from comercial.servicios import enlaces, entregas, indemnizaciones, solicitudes
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia
@@ -133,8 +133,7 @@ def _armar(enlace, entrega, hoy):
         planificada = (l.cant_entregada or 0) + (l.cant_perdida or 0) + (l.cant_devuelta or 0)
         if planificada == 0:  # una línea quitada (D-66 punto 4): el cliente no la ve
             continue
-        limite = l.fecha_periodo + timedelta(days=l.detalle_suministro.clausula_suministrante.plazo_entrega_dias)
-        retraso = max(0, (entrega.fecha_resolucion_orden - limite).days)  # regla «Queja por retraso»
+        retraso = indemnizaciones.dias_de_retraso(entrega.fecha_resolucion_orden, l.fecha_periodo, l.detalle_suministro.clausula_suministrante.plazo_entrega_dias)  # regla «Queja por retraso» (COM-07a la sacó a `indemnizaciones`)
         filas.append(
             LineaDeLaEntrega(
                 l.pk, str(l.detalle_suministro.variedad), l.fecha_periodo, planificada, l.cant_entregada or 0, l.cant_devuelta or 0, l.precio_unitario, l.monto_pagar, retraso, l.pk in en_revision

@@ -1,0 +1,50 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Anular la resolución» (COM-ANL-SRV, pasos 2 a 4; `MODALS.anlsrv` del prototipo, que acá es una página: sin JavaScript todo funciona, D-61): qué va a pasar (el estado nuevo, el contador de incumplimientos y el monto a cobrar antes y
+después; el contraasiento figura «Fuera de esta ronda · contabilidad», D-57) y el motivo obligatorio. Con un bloqueo (2a a 2c) solo el mensaje y «Volver». Solo el Gerente. Recibe «datos» (`DatosDeAnulacion`), «s», «motivo»,
+«errores» y «generales».{% endcomment %}
+{% block titulo %}Anular la resolución de {{ s.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:solicitud' s.pk %}">{% icono "chev" 14 %} Volver a la solicitud</a>
+  <div class="page-h"><h1>Anular la resolución de <span class="mono">{{ s.codigo }}</span></h1><div class="sub">{{ datos.entrega.codigo }} · {{ datos.suministro.codigo }}</div></div>
+
+  {% if generales %}<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{% for e in generales %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+
+  {% if datos.bloqueo %}
+  <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div><b>No se puede anular.</b> {{ datos.texto_del_bloqueo }}</div></div>
+  <div class="acts-fila" style="margin-top:12px"><a class="btn btn-ghost" href="{% url 'comercial:solicitud' s.pk %}">Volver</a></div>
+  {% else %}
+  <div class="card seg">
+    <div class="card-h"><h3>Qué va a pasar</h3></div>
+    <div class="card-b">
+      <p style="margin-top:0">La solicitud vuelve a pendiente para resolverla de nuevo. La resolución anulada queda en el historial.</p>
+      <ul class="clist">
+        <li>{{ s.codigo }} pasa a «{{ datos.estado_nuevo }}».</li>
+        {% if datos.aceptada %}
+        <li>Incumplimientos de {{ datos.suministro.codigo }}: <span class="mono">{{ datos.contador_antes }} → {{ datos.contador_despues }}</span>.</li>
+        <li>Monto a cobrar de {{ datos.entrega.codigo }}: <span class="mono">{{ datos.monto_a_cobrar_antes|pesos }} → {{ datos.monto_a_cobrar_despues|pesos }}</span>.</li>
+        <li>Se registra el evento en la bitácora del invernadero y se avisa al Vendedor.</li>
+        {% else %}
+        <li>Sin cambios en los incumplimientos ni en el monto a cobrar: la rechazada no los tocó.</li>
+        {% endif %}
+      </ul>
+      <p class="muted">{% if datos.aceptada %}El contraasiento de la indemnización: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span>{% else %}Sin contraasiento: la rechazada no generó asiento.{% endif %}</p>
+    </div>
+  </div>
+  <form method="post" action="{% url 'comercial:solicitud_anular' s.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ datos.huella }}">
+    <div class="fld">
+      <label class="lbl" for="motivo">Motivo <span class="req">*</span></label>
+      <textarea class="field-input" id="motivo" name="motivo" rows="3" maxlength="500">{{ motivo }}</textarea>
+      {% for e in errores.motivo %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+    </div>
+    <div class="footbar">
+      <button class="btn btn-danger" type="submit" data-enviando="Anulando…">Anular resolución</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:solicitud' s.pk %}">Cancelar</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
