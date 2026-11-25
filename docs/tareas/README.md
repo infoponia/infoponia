@@ -120,7 +120,7 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario) | pendiente | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
+| CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario; `contabilidad` y `core`: un tipo de origen y las acciones de auditoría) | hecha (PR #__, 24/11/2026; revisión a mano pendiente) | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
 | CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11 (hecha), CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
 | CMP-06 | Corrección de recepción y reclamos | compras (y un tipo en inventario) | pendiente | CMP-05 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
 

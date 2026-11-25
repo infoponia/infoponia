@@ -1,0 +1,10 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+Le avisamos que {{ nombre_organizacion }} dio por cerradas las siguientes líneas de la orden de compra {{ orden }}: no se espera recibir el resto de lo pedido.
+{% for linea in lineas %}
+- {{ linea.insumo }} ({{ linea.invernadero }}): no se espera el faltante de {{ linea.faltante }} {{ linea.unidad }}
+{% endfor %}
+Lo ya recibido de esas líneas se paga por lo efectivamente entregado.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

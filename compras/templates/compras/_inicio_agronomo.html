@@ -7,8 +7,29 @@ con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. T
   <div class="kpis">
     <a class="kpi{% if i.cantidad_bajo_el_minimo %} warn{% endif %}" href="{% url 'compras:pedido_nuevo' %}" style="text-decoration:none;color:inherit"><span class="k">Insumos bajo el mínimo</span><span class="v" data-kpi="bajo-el-minimo">{{ i.cantidad_bajo_el_minimo }}</span><span class="c">{% if i.cantidad_bajo_el_minimo %}conviene hacer un pedido{% else %}todos al día{% endif %}</span></a>
     <a class="kpi{% if i.pedidos_por_resolver %} warn{% endif %}" href="{% url 'compras:pedidos' %}" style="text-decoration:none;color:inherit"><span class="k">Pedidos por resolver</span><span class="v" data-kpi="por-resolver">{{ i.pedidos_por_resolver|length }}</span><span class="c">{% if i.pedidos_por_resolver %}venció su fecha límite{% else %}ninguno vencido{% endif %}</span></a>
+    <a class="kpi{% if i.cantidad_por_recibir %} warn{% endif %}" href="{% url 'compras:por_recibir' %}" style="text-decoration:none;color:inherit"><span class="k">Por recibir</span><span class="v" data-kpi="por-recibir">{{ i.cantidad_por_recibir }}</span><span class="c">{% if i.cantidad_por_recibir %}mercadería en camino{% else %}nada pendiente{% endif %}</span></a>
     <a class="kpi" href="{% url 'compras:pedidos' %}" style="text-decoration:none;color:inherit"><span class="k">Esperando cotizaciones</span><span class="v" data-kpi="esperando">{{ i.esperando_cotizaciones }}</span><span class="c">pedido{{ i.esperando_cotizaciones|pluralize }} abierto{{ i.esperando_cotizaciones|pluralize }}</span></a>
   </div>
+  {% if i.por_recibir %}
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Por recibir</b><span class="muted sm">{{ i.cantidad_por_recibir }} entrega{{ i.cantidad_por_recibir|pluralize }} pendiente{{ i.cantidad_por_recibir|pluralize }}</span><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:por_recibir' %}">Ver todo</a></div>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Orden</th><th>Proveedor</th><th>Entrega esperada</th><th></th></tr></thead>
+        <tbody>
+        {% for e in i.por_recibir %}
+        <tr>
+          <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' e.orden.pk %}"><b>{{ e.orden }}</b></a><span class="sub2">{{ e.invernadero.nombre_invernadero }}</span></td>
+          <td>{{ e.proveedor.nombre_para_mostrar }}</td>
+          <td class="nowrap">{% if e.entrega_esperada %}{{ e.entrega_esperada|date:"d/m/Y" }}{% endif %}{% if e.atraso_dias %}<span class="sub2 warn-t">{{ e.atraso_dias }} día{{ e.atraso_dias|pluralize }} de atraso</span>{% endif %}</td>
+          <td class="right">{% if not e.bloqueada %}<a class="btn btn-primary btn-sm" href="{% url 'compras:recepcion_nueva' e.orden.pk %}?proveedor={{ e.proveedor.pk }}&amp;invernadero={{ e.invernadero.pk }}">Recibir<span class="sr"> la entrega de {{ e.proveedor.nombre_para_mostrar }}</span></a>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
   {% if i.pedidos_por_resolver %}
   <div class="card seg" style="margin-top:16px">
     <div class="card-h"><b>Pedidos que vencieron</b></div>

@@ -805,3 +805,52 @@ Los 28 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 26. (Opcional) Sin JavaScript: filtros, cambio de vista y buscador del plan.
 - [ ] 27. (Opcional) Celular: no aplica (el Contador y el Gerente usan la interfaz de escritorio).
 - [ ] 28. (Opcional) Paginación (50 y 100): la cubren pruebas; armarla a mano es mucho trabajo.
+
+## CMP-04 · Tarea CMP-04 (recepción de mercadería y cierre con faltante)
+
+Los 44 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-04-recepcion-y-cierre-con-faltante.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0004, `contabilidad` 0006 y `core` 0041; las dos últimas solo `choices`): `python manage.py migrate`; después `python manage.py runserver` (con `CORREO_CONSOLA=1` en tu `.env` para ver los correos en la terminal). Necesitás un Gerente, un Contador, a Ana (Agrónoma de «Invernadero Norte» y «Invernadero Norte 2») y a Beto (de «Invernadero Sur»). Crear a mano: los insumos Fertilizante (kg, controla vencimiento, mínimo 10), Maceta y Tomate; los proveedores «Semillas del Sur S. A.» (CUIT 30-00000013-9) y «Viveros del Este S. R. L.» (30-00000026-0); un pedido cotizado, vencido y con su orden aprobada. La concurrencia no se prueba a mano.
+
+- [ ] 1. Ana, Inicio. *(lo cubre una prueba)*
+- [ ] 2. Ana, Compras → «Por recibir». *(lo cubre una prueba)*
+- [ ] 3. Hacer que una línea llegue tarde. *(lo cubre una prueba)*
+- [ ] 4. Gerente. *(lo cubre una prueba)*
+- [ ] 5. Ficha de la orden. *(lo cubre una prueba)*
+- [ ] 6. Ana, «Registrar recepción» de A en Norte *(lo cubre una prueba)*
+- [ ] 7. Cargar: *(lo cubre una prueba)*
+- [ ] 8. «Ver resumen». *(lo cubre una prueba)*
+- [ ] 9. «Cambiar algún dato»
+- [ ] 10. «Confirmar recepción». *(lo cubre una prueba)*
+- [ ] 11. Alerta «bajo el mínimo». *(lo cubre una prueba)*
+- [ ] 12. Ficha de la orden. *(lo cubre una prueba)*
+- [ ] 13. Inventario. *(lo cubre una prueba)*
+- [ ] 14. Gerente, «Alertas». *(lo cubre una prueba)*
+- [ ] 15. Gerente, Compras → Órdenes. *(lo cubre una prueba)*
+- [ ] 16. Emitir el reclamo no se puede todavía
+- [ ] 17. Ana, «Registrar recepción» de A en Norte *(lo cubre una prueba)*
+- [ ] 18. Como Contador (o Gerente), Contabilidad → libro de gestión. *(lo cubre una prueba)*
+- [ ] 19. Sobreentrega *(lo cubre una prueba)*
+- [ ] 20. Número ilegible. *(lo cubre una prueba)*
+- [ ] 21. Decimales que la unidad no admite. *(lo cubre una prueba)*
+- [ ] 22. Sin ninguna línea *(lo cubre una prueba)*
+- [ ] 23. Falta el vencimiento *(lo cubre una prueba)*
+- [ ] 24. Línea en cero. *(lo cubre una prueba)*
+- [ ] 25. Inconveniente incompleto. *(lo cubre una prueba)*
+- [ ] 26. Varios lotes en la ficha. *(lo cubre una prueba)*
+- [ ] 27. Destino inactivo *(lo cubre una prueba)*
+- [ ] 28. Ana, ficha de la orden → «Cerrar con faltante». *(lo cubre una prueba)*
+- [ ] 29. Sin tildar nada *(lo cubre una prueba)*
+- [ ] 30. Maceta con motivo «No las fabrican más.» → «Ver resumen». *(lo cubre una prueba)*
+- [ ] 31. «Confirmar cierre». *(lo cubre una prueba)*
+- [ ] 32. Cerrar desde la recepción *(lo cubre una prueba)*
+- [ ] 33. Una línea ya cerrada no se vuelve a cerrar. *(lo cubre una prueba)*
+- [ ] 34. Bajo el mínimo por un cierre *(lo cubre una prueba)*
+- [ ] 35. Gerente registra una recepción *(lo cubre una prueba)*
+- [ ] 36. Orden recibida. *(lo cubre una prueba)*
+- [ ] 37. Gerente, «Auditoría». *(lo cubre una prueba)*
+- [ ] 38. Roles. *(lo cubre una prueba)*
+- [ ] 39. Una orden inexistente. *(lo cubre una prueba)*
+- [ ] 40. Navegador real.
+- [ ] 41. Sin JavaScript
+- [ ] 42. Celular
+- [ ] 43. Correo caído *(lo cubre una prueba)*
+- [ ] 44. Libro de gestión con el Contador. *(lo cubre una prueba)*

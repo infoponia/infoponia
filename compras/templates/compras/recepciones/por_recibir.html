@@ -1,0 +1,39 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Compras» → «Por recibir» (CMP-REG-RCP paso 2; ``tabRec`` del prototipo): la mercadería aprobada que todavía no llegó, por proveedor e invernadero, de la entrega esperada más próxima a la más lejana. Recibe
+«entregas» (``EntregaPendiente``). «Registrar recepción» lleva al formulario de esa entrega; una entrega con todo el destino inactivo se muestra sin el botón y dice por qué (extensión 4a1: primero hay que reactivar el
+destino). El Agrónomo ve solo sus invernaderos; el Gerente, todos (extensión 1a).{% endcomment %}
+{% block titulo %}Por recibir · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Compras</h1></div>
+  {% include "compras/proveedores/_pestanas.html" with activa="por_recibir" %}
+  <p class="muted" style="margin:0 0 14px">Mercadería aprobada que todavía no llegó, por proveedor e invernadero. Registrá lo que llega cuando llega.</p>
+
+  {% if entregas %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Orden</th><th>Proveedor</th><th>Invernadero</th><th class="right">Líneas pendientes</th><th>Entrega esperada</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for e in entregas %}
+      <tr>
+        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' e.orden.pk %}"><b>{{ e.orden }}</b></a></td>
+        <td>{{ e.proveedor.nombre_para_mostrar }}</td>
+        <td>{{ e.invernadero.nombre_invernadero }}</td>
+        <td class="right">{{ e.lineas|length }}</td>
+        <td class="nowrap">{% if e.entrega_esperada %}{{ e.entrega_esperada|date:"d/m/Y" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if e.atraso_dias %}<span class="status-badge status-danger">{{ e.atraso_dias }} día{{ e.atraso_dias|pluralize }} de atraso</span>{% else %}<span class="status-badge status-neutral">En fecha</span>{% endif %}{% if e.bloqueada %} <span class="status-badge status-warn">Destino inactivo</span>{% endif %}</td>
+        <td class="right nowrap">
+          {% if e.bloqueada %}<span class="sub2">Reactivá el destino para recibirla.</span>
+          {% else %}<a class="btn btn-primary btn-sm" href="{% url 'compras:recepcion_nueva' e.orden.pk %}?proveedor={{ e.proveedor.pk }}&amp;invernadero={{ e.invernadero.pk }}">Registrar recepción<span class="sr"> de {{ e.proveedor.nombre_para_mostrar }} en {{ e.invernadero.nombre_invernadero }}</span></a>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay mercadería pendiente de recibir</b><span>Cuando se apruebe una orden de compra, lo que falta llegar aparece acá.</span></div>
+  {% endif %}
+</div>
+{% endblock %}

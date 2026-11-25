@@ -616,3 +616,264 @@ class OrdenesRestriccionesTests(ConDatosDeInventario, TestCase):
         """El alcance del Agrónomo no duplica la orden aunque tenga varios detalles a su cargo."""
         orden = orden_de(self.pedido, [self.cotizacion, self.otra])
         self.assertEqual(list(OrdenCompra.objects.en_alcance_de(self.agronomo)), [orden])
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CMP-04, paso 1: Recepcion, DetalleRecepcion, DetalleRecepcionMovimiento, InconvenienteRecepcion, ReclamoProveedor y AlertaCompras.
+# Fuente: docs/modelo/compras.md (esas fichas), D-90 (puntos 3, 6 y 7), D-87 punto 5, D-52 (herencia de OrigenDocumento) y regla 10 de 8.20.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from contabilidad.models import OrigenDocumento  # noqa: E402
+from compras.models import (  # noqa: E402
+    AlertaCompras,
+    DetalleRecepcion,
+    DetalleRecepcionMovimiento,
+    InconvenienteRecepcion,
+    Recepcion,
+    ReclamoProveedor,
+)
+from inventario.models import MovimientoInsumo  # noqa: E402
+from inventario.tests.fabricas import lote, movimiento  # noqa: E402
+from maestros.tests.fabricas import crear_alerta  # noqa: E402
+
+
+class RecepcionesRestriccionesTests(ConDatosDeInventario, TestCase):
+    """Las restricciones de la base de las recepciones, sus líneas, sus inconvenientes, el reclamo sin emitir y el vínculo con las alertas."""
+
+    def setUp(self):
+        self.agronomo, self.invernadero = crear_agronomo_con_invernadero()
+        self.gerente = crear_gerente()
+        self.existencia = existencia(insumo(), self.invernadero, minimo=10, precio="12.50", transito=12)
+        self.proveedor = proveedor(n=1)
+        self.pedido = armar_pedido(self.agronomo)
+        self.detalle_de_pedido = detalle_de_pedido(self.pedido, self.existencia, cantidad="20")
+        self.cotizacion = cotizacion_de(self.pedido, self.proveedor, [(self.detalle_de_pedido, "12", "120.00", 3)])
+        self.orden = orden_de(self.pedido, [self.cotizacion], estado="aprobada", gerente=self.gerente)
+        self.detalle_orden = self.orden.detalles.get()
+
+    def rechazo(self, crear, restriccion):
+        """Falla la prueba si la base no rechaza ``crear()`` con un ``IntegrityError`` que nombre ``restriccion``."""
+        with self.assertRaises(IntegrityError) as contexto:
+            with transaction.atomic():
+                crear()
+        self.assertIn(restriccion, str(contexto.exception))
+
+    def recepcion(self, **campos):
+        """Una ``Recepcion`` de la orden, del proveedor y del invernadero de la prueba, registrada por el Agrónomo; ``campos`` pisa lo que se pase."""
+        datos = {
+            "orden": self.orden,
+            "fecha_recepcion": timezone.localdate(),
+            "agronomo": self.agronomo,
+            "proveedor": self.proveedor,
+            "invernadero": self.invernadero,
+        }
+        datos.update(campos)
+        return Recepcion.objects.create(**datos)
+
+    def linea(self, recepcion=None, cantidad="5"):
+        """Un ``DetalleRecepcion`` de la línea de la orden."""
+        return DetalleRecepcion.objects.create(
+            recepcion=recepcion or self.recepcion(), detalle_orden=self.detalle_orden, cantidad_recibida_detalle=Decimal(cantidad)
+        )
+
+    def reclamo(self, recepcion=None, **campos):
+        """Un ``ReclamoProveedor`` abierto y sin emitir de la recepción."""
+        recepcion = recepcion or self.recepcion()
+        return ReclamoProveedor.objects.create(recepcion=recepcion, proveedor=self.proveedor, **campos)
+
+    # --- Recepcion (D-52, D-90 punto 3) ---
+
+    def test_d90_la_recepcion_es_un_documento_de_origen_de_tipo_recepcion(self):
+        """D-90 punto 3 y D-52: ``Recepcion`` hereda de ``OrigenDocumento``; su ``tipo`` lo fija la clase (``recepcion``) y comparte el ``id`` con el padre."""
+        recepcion = self.recepcion()
+        self.assertEqual(recepcion.tipo, OrigenDocumento.Tipo.RECEPCION)
+        self.assertEqual(OrigenDocumento.objects.get(pk=recepcion.pk).tipo, "recepcion")
+        self.assertEqual(OrigenDocumento.objects.get(pk=recepcion.pk).recepcion, recepcion)
+        self.assertEqual(recepcion.origendocumento_ptr_id, recepcion.pk)
+
+    def test_d90_la_recepcion_se_muestra_como_rcp_y_el_tipo_se_llama_recepcion(self):
+        """El identificador que ven las pantallas, los correos y la auditoría es «RCP-0001»; el tipo de origen se muestra como «Recepción»."""
+        recepcion = self.recepcion()
+        self.assertEqual(str(recepcion), f"RCP-{recepcion.pk:04d}")
+        self.assertEqual(str(Recepcion()), "RCP-nueva")
+        self.assertEqual(OrigenDocumento.Tipo.RECEPCION.label, "Recepción")
+        self.assertEqual(OrigenDocumento.objects.get(pk=recepcion.pk).get_tipo_display(), "Recepción")
+
+    def test_regla_r039_el_agronomo_de_la_recepcion_es_opcional(self):
+        """Modelo, «Recepcion» (R039, 0..1): si la registró el Gerente, la recepción queda sin Agrónomo."""
+        self.assertIsNone(self.recepcion(agronomo=None).agronomo)
+        self.assertEqual(self.recepcion().agronomo.pk, self.agronomo.pk)
+
+    def test_regla_la_recepcion_es_de_una_orden_un_proveedor_y_un_invernadero(self):
+        """Regla 7 de 8.20: la recepción apunta a su orden, a su proveedor y a su invernadero; se llega desde cada uno."""
+        recepcion = self.recepcion()
+        self.assertEqual(list(self.orden.recepciones.all()), [recepcion])
+        self.assertEqual(list(self.proveedor.recepciones.all()), [recepcion])
+        self.assertEqual(list(self.invernadero.recepciones.all()), [recepcion])
+
+    # --- DetalleRecepcion ---
+
+    def test_regla_9_de_8_20_la_cantidad_recibida_no_es_negativa_y_puede_ser_cero(self):
+        """Regla 9 de 8.20 y extensión 7c: ``cantidad_recibida_detalle`` ≥ 0 (0 solo si todo lo que llegó tuvo un inconveniente); un negativo lo rechaza la base."""
+        recepcion = self.recepcion()
+        self.rechazo(lambda: self.linea(recepcion, cantidad="-1"), "detalle_recepcion_cantidad_no_negativa")
+        self.assertEqual(self.linea(recepcion, cantidad="0").cantidad_recibida_detalle, Decimal("0"))
+
+    def test_regla_7_de_8_20_una_linea_de_la_orden_aparece_una_sola_vez_por_recepcion(self):
+        """Modelo, «DetalleRecepcion»: único ``(recepcion, detalle_orden)``; en otra recepción la misma línea sí puede aparecer."""
+        recepcion = self.recepcion()
+        self.linea(recepcion)
+        self.rechazo(lambda: self.linea(recepcion), "detalle_recepcion_unico_por_linea")
+        self.linea(self.recepcion())
+        self.assertEqual(self.detalle_orden.detalles_de_recepcion.count(), 2)
+
+    def test_regla_el_detalle_de_recepcion_se_muestra_como_su_linea_de_la_orden(self):
+        """El texto del detalle de recepción en la auditoría es el de su línea de la orden («Insumo · Invernadero»)."""
+        self.assertEqual(str(self.linea()), str(self.detalle_orden))
+
+    # --- DetalleRecepcionMovimiento (R032, D-90 punto 3) ---
+
+    def test_r032_cada_movimiento_se_vincula_a_una_sola_linea_de_recepcion(self):
+        """R032 y D-90 punto 3: el vínculo es ``OneToOne`` con el movimiento (``vinculo_de_recepcion``); una línea tiene varios vínculos (``vinculos_de_movimiento``)."""
+        recepcion = self.recepcion()
+        linea = self.linea(recepcion)
+        lote_ = lote(self.existencia, 5)
+        ingreso = movimiento(lote_, MovimientoInsumo.TipoMovimiento.INGRESO_POR_RECEPCION, 5, origen=recepcion)
+        vinculo = DetalleRecepcionMovimiento.objects.create(detalle_recepcion=linea, movimiento=ingreso)
+        self.assertEqual(ingreso.vinculo_de_recepcion, vinculo)
+        self.assertEqual(list(linea.vinculos_de_movimiento.all()), [vinculo])
+        otra = self.linea(self.recepcion())
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                DetalleRecepcionMovimiento.objects.create(detalle_recepcion=otra, movimiento=ingreso)
+        segundo = movimiento(lote(self.existencia, 3), MovimientoInsumo.TipoMovimiento.INGRESO_POR_RECEPCION, 3, origen=recepcion)
+        DetalleRecepcionMovimiento.objects.create(detalle_recepcion=linea, movimiento=segundo)
+        self.assertEqual(linea.vinculos_de_movimiento.count(), 2)
+
+    def test_d90_un_ingreso_por_recepcion_acepta_la_recepcion_como_origen(self):
+        """D-90 punto 3 (control previo): la restricción de origen de ``MovimientoInsumo`` acepta una ``Recepcion`` como origen de un ingreso, y la rechaza sin origen."""
+        recepcion = self.recepcion()
+        ingreso = movimiento(lote(self.existencia, 5), MovimientoInsumo.TipoMovimiento.INGRESO_POR_RECEPCION, 5, origen=recepcion)
+        self.assertEqual(ingreso.origen_id, recepcion.pk)
+        self.assertEqual(list(recepcion.movimientos_de_insumo.all()), [ingreso])
+        self.rechazo(
+            lambda: MovimientoInsumo.objects.create(
+                lote_insumo=ingreso.lote_insumo, cantidad=1, tipo_movimiento="ingreso_por_recepcion", origen=None
+            ),
+            "movimiento_insumo_origen_segun_tipo",
+        )
+
+    # --- ReclamoProveedor (R008 en 0..1, regla 10 de 8.20) ---
+
+    def test_regla_10_de_8_20_el_reclamo_nace_abierto_y_sin_emitir(self):
+        """Regla 10 de 8.20 y R008 en 0..1: el reclamo de CMP-04 nace «abierto», sin Gerente y sin fecha de emisión; se muestra como «REC-0001»."""
+        reclamo = self.reclamo()
+        self.assertEqual(reclamo.estado_reclamo, "abierto")
+        self.assertIsNone(reclamo.gerente)
+        self.assertIsNone(reclamo.fecha_reclamo)
+        self.assertFalse(reclamo.emitido)
+        self.assertEqual(str(reclamo), f"REC-{reclamo.pk:04d}")
+        self.assertEqual(str(ReclamoProveedor()), "REC-nuevo")
+
+    def test_regla_10_de_8_20_emitido_si_y_solo_si_tiene_gerente_y_fecha(self):
+        """Modelo, «ReclamoProveedor»: un reclamo está emitido si y solo si tiene Gerente, y solo entonces tiene fecha de emisión."""
+        coherente = "reclamo_gerente_si_y_solo_si_fecha"
+        self.rechazo(lambda: self.reclamo(gerente=self.gerente), coherente)
+        self.rechazo(lambda: self.reclamo(fecha_reclamo=timezone.localdate()), coherente)
+        emitido = self.reclamo(gerente=self.gerente, fecha_reclamo=timezone.localdate())
+        self.assertTrue(emitido.emitido)
+
+    def test_regla_10_de_8_20_solo_se_cierra_un_reclamo_emitido(self):
+        """Modelo, «ReclamoProveedor»: ``cerrado`` exige Gerente; un reclamo sin emitir no puede estar cerrado. El estado es de lista cerrada."""
+        self.rechazo(lambda: self.reclamo(estado_reclamo="cerrado"), "reclamo_cerrado_esta_emitido")
+        self.rechazo(lambda: self.reclamo(estado_reclamo="archivado"), "reclamo_estado_valido")
+        cerrado = self.reclamo(estado_reclamo="cerrado", gerente=self.gerente, fecha_reclamo=timezone.localdate())
+        self.assertEqual(cerrado.estado_reclamo, "cerrado")
+
+    def test_regla_10_de_8_20_una_recepcion_tiene_a_lo_sumo_un_reclamo(self):
+        """Regla 10 de 8.20 (técnico): ``recepcion`` es ``OneToOne`` (``recepcion.reclamo``): un reclamo por recepción con inconvenientes."""
+        recepcion = self.recepcion()
+        reclamo = self.reclamo(recepcion)
+        self.assertEqual(recepcion.reclamo, reclamo)
+        self.rechazo(lambda: self.reclamo(recepcion), "recepcion_id")
+
+    # --- InconvenienteRecepcion (D-90 punto 7, P4, MD-130) ---
+
+    def inconveniente(self, linea, reclamo, tipo="mercaderia_danada", cantidad="2", descripcion=""):
+        """Un ``InconvenienteRecepcion`` de la línea, agrupado en el reclamo."""
+        return InconvenienteRecepcion.objects.create(
+            detalle_recepcion=linea,
+            reclamo=reclamo,
+            tipo_inconveniente=tipo,
+            cantidad_afectada=Decimal(cantidad),
+            descripcion_inconveniente=descripcion,
+        )
+
+    def test_d90_los_tipos_de_inconveniente_son_los_de_p4(self):
+        """D-90 punto 7 (P4, MD-130): cinco tipos; el retraso no se declara (no es un tipo)."""
+        self.assertEqual(
+            [valor for valor, _ in InconvenienteRecepcion.Tipo.choices],
+            ["mercaderia_danada", "calidad_no_conforme", "producto_distinto", "vencido_o_por_vencer", "otro"],
+        )
+        linea = self.linea()
+        reclamo = self.reclamo(linea.recepcion)
+        self.rechazo(lambda: self.inconveniente(linea, reclamo, tipo="retraso"), "inconveniente_tipo_valido")
+
+    def test_regla_10_de_8_20_una_linea_tiene_a_lo_sumo_un_inconveniente_de_cada_tipo(self):
+        """Modelo, «InconvenienteRecepcion»: único ``(detalle_recepcion, tipo)``; otro tipo en la misma línea sí puede."""
+        linea = self.linea()
+        reclamo = self.reclamo(linea.recepcion)
+        self.inconveniente(linea, reclamo, "mercaderia_danada")
+        self.rechazo(lambda: self.inconveniente(linea, reclamo, "mercaderia_danada", cantidad="1"), "inconveniente_unico_por_tipo_y_linea")
+        self.inconveniente(linea, reclamo, "calidad_no_conforme")
+        self.assertEqual(reclamo.inconvenientes.count(), 2)
+
+    def test_regla_extension_7e_la_cantidad_afectada_es_mayor_que_cero(self):
+        """Extensión 7e y modelo, «InconvenienteRecepcion»: la cantidad afectada es mayor que cero."""
+        linea = self.linea()
+        reclamo = self.reclamo(linea.recepcion)
+        self.rechazo(lambda: self.inconveniente(linea, reclamo, cantidad="0"), "inconveniente_cantidad_positiva")
+
+    def test_regla_extension_7e_el_tipo_otro_exige_descripcion(self):
+        """Extensión 7e y modelo, «InconvenienteRecepcion»: la descripción es obligatoria en «otro» y opcional en los demás tipos."""
+        linea = self.linea()
+        reclamo = self.reclamo(linea.recepcion)
+        self.rechazo(lambda: self.inconveniente(linea, reclamo, tipo="otro"), "inconveniente_otro_con_descripcion")
+        self.inconveniente(linea, reclamo, tipo="otro", descripcion="Llegó otro producto")
+        self.inconveniente(linea, reclamo, tipo="producto_distinto", descripcion="")
+
+    def test_regla_el_inconveniente_se_muestra_con_el_nombre_de_su_tipo(self):
+        """El texto del inconveniente en la auditoría es el nombre de su tipo («Mercadería dañada»)."""
+        linea = self.linea()
+        reclamo = self.reclamo(linea.recepcion)
+        self.assertEqual(str(self.inconveniente(linea, reclamo)), "Mercadería dañada")
+
+    # --- AlertaCompras (D-87 punto 5, patrón de AlertaComercial, D-63) ---
+
+    def test_d87_la_alerta_de_compras_vincula_una_alerta_con_su_reclamo(self):
+        """D-87 punto 5 y D-63: ``AlertaCompras`` une una alerta de ``maestros`` con el reclamo sin emitir (``alerta.vinculo_de_compras``, ``reclamo.alertas``)."""
+        reclamo = self.reclamo()
+        alerta = crear_alerta(self.invernadero, "compras_recepcion_con_inconvenientes")
+        vinculo = AlertaCompras.objects.create(alerta=alerta, reclamo=reclamo)
+        self.assertEqual(alerta.vinculo_de_compras, vinculo)
+        self.assertEqual(list(reclamo.alertas.all()), [vinculo])
+
+    def test_d87_una_alerta_tiene_un_solo_vinculo_de_compras(self):
+        """D-87 punto 5: ``alerta`` es ``OneToOne``; la misma alerta no se vincula a dos reclamos."""
+        alerta = crear_alerta(self.invernadero, "compras_recepcion_con_inconvenientes")
+        AlertaCompras.objects.create(alerta=alerta, reclamo=self.reclamo())
+        otro = self.reclamo(self.recepcion())
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                AlertaCompras.objects.create(alerta=alerta, reclamo=otro)
+
+    # --- Lo que no se borra ---
+
+    def test_regla_nada_de_una_recepcion_se_borra(self):
+        """Las claves que apuntan a una recepción son ``PROTECT`` (D-52, «nadie borra un documento de origen»): una recepción con líneas no se puede borrar."""
+        from django.db.models import ProtectedError
+
+        recepcion = self.recepcion()
+        self.linea(recepcion)
+        with self.assertRaises(ProtectedError):
+            recepcion.delete()

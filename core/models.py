@@ -815,6 +815,10 @@ class RegistroAuditoria(models.Model):
         GENERACION_ORDEN_COMPRA = "generacion_orden_compra", "Generación de orden de compra"
         APROBACION_ORDEN_COMPRA = "aprobacion_orden_compra", "Aprobación de orden de compra"
         RECHAZO_ORDEN_COMPRA = "rechazo_orden_compra", "Rechazo de orden de compra"
+        # CMP-04: recepción de mercadería y cierre de líneas con faltante (D-87 punto 8: verbo del dominio). El tránsito y el stock de cada existencia van en la
+        # ``modificacion_insumo_invernadero`` que ya existe; el asiento lo audita la función de asientos (D-86 punto 4).
+        RECEPCION_MERCADERIA = "recepcion_mercaderia", "Recepción de mercadería"
+        CIERRE_CON_FALTANTE = "cierre_con_faltante", "Cierre de líneas con faltante"
         # COM-04c (D-65): decidir un faltante (el cliente por su enlace, o el Vendedor por él) y el vencimiento del enlace sin respuesta (paso diario 27).
         DECISION_FALTANTE = "decision_faltante", "Decisión de faltante"
         VENCIMIENTO_ENLACE = "vencimiento_enlace", "Vencimiento del enlace del cliente"
@@ -1150,6 +1154,14 @@ class RegistroAuditoria(models.Model):
         "gerente": "Gerente que resolvió",
         "transito": "Cantidad en tránsito",
         "cotizaciones_afectadas": "Cotizaciones afectadas",
+        # CMP-04: recepción de mercadería y cierre con faltante («estado», «orden», «lotes», «movimientos», «asiento», «alertas_creadas», «alertas_resueltas» y «monto_total» ya existen).
+        "recepcion": "Recepción",
+        "lineas_completas": "Líneas que quedaron completas",
+        "inconvenientes": "Inconvenientes declarados",
+        "reclamo": "Reclamo sin emitir",
+        "lineas_cerradas": "Líneas cerradas con faltante",
+        "motivos_de_cierre": "Motivo de cada cierre",
+        "monto_del_asiento": "Monto del asiento",
         # COM-04c: decidir un faltante y vencer un enlace del cliente.
         "decisiones": "Decisión de cada detalle",
         "partidas_creadas": "Partidas de cámara creadas",
@@ -1217,6 +1229,10 @@ class RegistroAuditoria(models.Model):
             "pendiente_aprobacion": "Pendiente de aprobación",
             "aprobada": "Aprobada",
             "rechazada": "Rechazada",
+            # CMP-04: estados de la orden que fija la recepción y el cierre con faltante.
+            "parcialmente_recibida": "Parcialmente recibida",
+            "recibida": "Recibida",
+            "recibida_con_faltante": "Recibida con faltante",
         },
         "acceso": {"invitacion": "Invitación por correo", "temporal": "Contraseña temporal"},
         # CMP-02b: causas de la cancelación de un pedido (`core` no importa `compras`, A1 de D-37).
@@ -1549,6 +1565,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.GENERACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.APROBACION_ORDEN_COMPRA,
         RegistroAuditoria.Accion.RECHAZO_ORDEN_COMPRA,
+        RegistroAuditoria.Accion.RECEPCION_MERCADERIA,
+        RegistroAuditoria.Accion.CIERRE_CON_FALTANTE,
         RegistroAuditoria.Accion.DECISION_FALTANTE,
         RegistroAuditoria.Accion.VENCIMIENTO_ENLACE,
         RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE,

@@ -215,3 +215,70 @@ def orden_de(pedido, cotizaciones, estado="pendiente_aprobacion", gerente=None, 
                 orden=orden, detalle_cotizacion=linea, cantidad_detalle_orden=linea.cantidad_cotizada, total_linea=linea.total_linea
             )
     return orden
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Recepciones (CMP-04). El escenario compartido por las pruebas de la recepción, del cierre con faltante y de la concurrencia.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+def orden_aprobada(gerente, pedido, cotizaciones):
+    """Una ``OrdenCompra`` «aprobada» por el servicio real (``ordenes.aprobar_orden``): la fecha de entrega esperada de cada línea (hoy + su plazo) y el tránsito de cada
+    ``InsumoInvernadero`` quedan como en producción. Devuelve la orden releída."""
+    from compras.servicios import ordenes  # adentro: los servicios importan estas fábricas en sus pruebas
+
+    orden = orden_de(pedido, cotizaciones)
+    return ordenes.aprobar_orden(gerente, orden.pk)
+
+
+class EscenarioDeRecepcion:
+    """Mixin de pruebas: ``self.armar()`` deja armado el escenario de CMP-04 (se llama desde ``setUp``).
+
+    Ana (invernaderos Norte y Norte 2) y Beto (Sur), un Gerente, los proveedores A y B y una orden **aprobada** de Ana con tres líneas:
+    - ``l_fert`` (A, Norte): 10 kg de Fertilizante (controla vencimiento), total $100,00 ($10,00 el kg), entrega en 3 días;
+    - ``l_maceta`` (A, Norte): 20 unidades de Maceta (no vence), total $200,00 ($10,00 la unidad), entrega en 5 días;
+    - ``l_tomate`` (B, Norte 2): 8 unidades de Tomate (no vence), total $80,00, entrega en 2 días.
+    El tránsito de cada existencia ya es la cantidad pedida y no hay stock. ``hoy`` y ``vence`` (hoy + 90 días) son los de la prueba.
+    """
+
+    def armar(self):
+        from datetime import timedelta
+
+        from core.tests.fabricas import crear_gerente
+        from inventario.tests.fabricas import existencia, insumo
+        from maestros.tests.fabricas import crear_agronomo_con_invernadero, crear_invernadero
+
+        self.hoy = timezone.localdate()
+        self.vence = self.hoy + timedelta(days=90)
+        self.ana, self.norte = crear_agronomo_con_invernadero("Norte", email="ana@infoponia.com")
+        self.beto, self.sur = crear_agronomo_con_invernadero("Sur", email="beto@infoponia.com")
+        self.gerente = crear_gerente()
+        self.fertilizante = existencia(insumo("Fertilizante", unidad="kg", controla_vencimiento=True), self.norte, minimo=0, precio="10.00")
+        self.maceta = existencia(insumo("Maceta", unidad="unidad"), self.norte, minimo=0, precio="10.00")
+        self.norte2 = crear_invernadero("Norte 2", agronomo=self.ana)
+        self.tomate = existencia(insumo("Tomate", unidad="unidad"), self.norte2, minimo=0, precio="10.00")
+        self.proveedor = proveedor("Semillas del Sur S. A.", n=1, email="ventas@sur.com")
+        self.proveedor_b = proveedor("Viveros del Este S. R. L.", n=2, email="info@este.com")
+        self.pedido = pedido(self.ana)
+        self.d_fert = detalle_de_pedido(self.pedido, self.fertilizante, cantidad="10")
+        self.d_maceta = detalle_de_pedido(self.pedido, self.maceta, cantidad="20")
+        self.d_tomate = detalle_de_pedido(self.pedido, self.tomate, cantidad="8")
+        self.cotizacion = cotizacion_de(self.pedido, self.proveedor, [(self.d_fert, 10, "100.00", 3), (self.d_maceta, 20, "200.00", 5)])
+        self.cotizacion_b = cotizacion_de(self.pedido, self.proveedor_b, [(self.d_tomate, 8, "80.00", 2)])
+        self.orden = orden_aprobada(self.gerente, self.pedido, [self.cotizacion, self.cotizacion_b])
+        self.l_fert = self.orden.detalles.get(detalle_cotizacion__detalle_pedido=self.d_fert)
+        self.l_maceta = self.orden.detalles.get(detalle_cotizacion__detalle_pedido=self.d_maceta)
+        self.l_tomate = self.orden.detalles.get(detalle_cotizacion__detalle_pedido=self.d_tomate)
+
+    def otra_orden(self, agronomo, invernadero, nombre_de_insumo="Sustrato", cantidad=6, total="60.00", n=5, plazo=2):
+        """Una segunda orden **aprobada** de ``agronomo`` con una línea de ``cantidad`` unidades de un insumo nuevo en ``invernadero`` (otro proveedor, ``n``).
+        Devuelve ``(orden, linea, existencia)``."""
+        from inventario.tests.fabricas import existencia, insumo
+
+        iin = existencia(insumo(nombre_de_insumo, unidad="unidad"), invernadero, minimo=0, precio="10.00")
+        otro_pedido = pedido(agronomo)
+        detalle = detalle_de_pedido(otro_pedido, iin, cantidad=str(cantidad))
+        proveedor_b = proveedor(f"Proveedor {n} S. R. L.", n=n, email=f"p{n}@proveedor.com")
+        cotizacion = cotizacion_de(otro_pedido, proveedor_b, [(detalle, cantidad, total, plazo)])
+        orden = orden_aprobada(self.gerente, otro_pedido, [cotizacion])
+        return orden, orden.detalles.get(), iin
