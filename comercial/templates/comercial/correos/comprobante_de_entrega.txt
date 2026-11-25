@@ -1,0 +1,16 @@
+{% autoescape off %}Hola, {{ cliente }}:
+
+Entregamos {{ codigo }} de tu suministro {{ contrato }} el {{ fecha|date:"d/m/Y" }}. Este es el comprobante de entrega.
+
+Qué recibiste:
+{% for l in lineas %}- {{ l.variedad }}: {{ l.cantidad }} plantas a ${{ l.precio }} = ${{ l.monto }}
+{% endfor %}
+Monto de la entrega: ${{ total }}. Vence el pago: {{ vencimiento|date:"d/m/Y" }}.
+
+Este comprobante es de uso interno y no tiene validez fiscal.
+
+Si tenés dudas, escribile a tu vendedor: {{ vendedor.get_full_name }}{% if vendedor.email %} ({{ vendedor.email }}){% endif %}{% if vendedor.telefono %}, teléfono {{ vendedor.telefono }}{% endif %}.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

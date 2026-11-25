@@ -585,7 +585,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 ## Cuando una app tenga un origen de asiento con pantalla propia — nace con el lote 1 de Contabilidad
 
 1. Registrar su `registrar_enlace_de_origen(tipo, funcion)` en `ready()` (punto de extensión de `contabilidad/extensiones.py`, creado por CON-03a el 24/11/2026; solo falta registrar los enlaces),
-   para que el libro de gestión enlace el asiento con su documento. Compras: CMP-04 (recepción), CMP-05 (pago), CMP-06 (corrección). **Hecho el 25/11/2026 el del pago, en CMP-05** (`pagos.enlace_de_origen`); queda CMP-06 (corrección).
+   para que el libro de gestión enlace el asiento con su documento. Compras: CMP-04 (recepción), CMP-05 (pago), CMP-06 (corrección). **Hecho el 25/11/2026 el del pago, en CMP-05** (`pagos.enlace_de_origen`) **y el de la corrección, en CMP-06** (`correcciones.enlace_de_origen`, registrado en `ComprasConfig.ready()`).
 
 ## Cuando se programe COM-04c o CMP-02a (lo que llegue primero) — nace con el lote 2 de Compras
 
@@ -638,9 +638,9 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 ## Nacidos en CMP-03 (24/11/2026)
 
 1. **Hecho en CMP-03:** el Contador (USR-11) consulta las órdenes en solo lectura (`en_alcance_de`, `_exigir_consulta`, menú «Compras» → «Órdenes», una sola pestaña, sin enlaces a pedidos ni proveedores). **Hecho en CMP-05 (25/11/2026):** su entrada «Pagos a proveedores» (junto a «Contabilidad») y las marcas de pago pendiente.
-2. **Hecho en CMP-04 lo de recepciones y en CMP-05 lo de pagos (sección «Pagos»); queda reclamos (CMP-06).** Texto original: **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
+2. **Hecho en CMP-04 lo de recepciones, en CMP-05 lo de pagos (sección «Pagos») y en CMP-06 lo de reclamos (sección «Reclamos» de la ficha de la orden y tarjeta de la ficha del proveedor, y lo corregido por línea).** Texto original: **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
 3. **Hecho en CMP-04 «Por recibir» y «Con reclamo sin emitir» (y la marca de reclamo) y en CMP-05 «Con pago pendiente» (y su marca).** Texto original: **Atajos de la lista de órdenes y marcas de la fila:** «Por recibir» y «Con reclamo sin emitir» (CMP-04), «Con pago pendiente» (CMP-05). Los atajos que hoy no existen se ignoran como un filtro mal formado.
-4. **Hecho en CMP-04 «Por recibir» del Agrónomo y en CMP-05 «Pagos a proveedores pendientes» (Contador y, sin Contador activo, Gerente); queda «Reclamos sin emitir» (CMP-06).** Texto original: **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
+4. **Hecho en CMP-04 «Por recibir» del Agrónomo y en CMP-05 «Pagos a proveedores pendientes» (Contador y, sin Contador activo, Gerente); **Hecho el 25/11/2026 en CMP-06 «Reclamos sin emitir» (tarjeta y lista del Inicio del Gerente).** Texto original: **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
 5. **Hecho en CMP-04.** Texto original: **Estados posteriores a la aprobación** de la orden («parcialmente recibida», «recibida», «recibida con faltante») y del detalle («completo», «cerrado con faltante») los aplica CMP-04; `OrdenCompra.NO_TERMINADAS` ya los incluye para los impedimentos.
 6. **Hecho en CMP-04** (la crea `registrar_recepcion`, junto con `ReclamoProveedor`). Texto original: **`AlertaCompras`:** la crea CMP-04 junto con `ReclamoProveedor` (su FK); el archivo de la tarea CMP-04 debe listarla.
 
@@ -672,8 +672,8 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 ## Nacidos en CMP-04 (24/11/2026)
 
 1. **Hecho el 25/11/2026 en CMP-05** (`pagos.avisar_si_quedo_para_pagar`, llamada desde `registrar_recepcion` y `cerrar_con_faltante`; usa la misma regla que la bandeja). Texto original: **Aviso «quedó para pagar» (CMP-05, D-91).** `avisar_si_quedo_para_pagar(...)` se llama desde `registrar_recepcion` y `cerrar_con_faltante` y tiene que usar la misma regla que ya calcula `resumir_cierre` (todas las líneas del proveedor en la orden completas o cerradas y algo recibido). Hoy ninguna de las dos avisa nada ni arma la bandeja.
-2. **Emitir el reclamo (CMP-06).** Resuelve la alerta del Gerente (`AlertaCompras.alerta`), completa la sección «Reclamos» de la ficha y la tarjeta «Reclamos sin emitir» del inicio del Gerente. Hoy `ReclamoProveedor` solo se crea «abierto» y sin emitir.
-3. **Corrección de una recepción (CMP-06).** Usa `stock.lotes_de_ingreso` (ya escrita) y los `DetalleRecepcionMovimiento`; hoy una recepción no se puede corregir.
+2. **Hecho el 25/11/2026 en CMP-06: emitir el reclamo** (`reclamos.emitir_reclamo`: resuelve la alerta por su `AlertaCompras`, completa la sección «Reclamos» y la tarjeta del Inicio del Gerente). Texto original: **Emitir el reclamo (CMP-06).** Resuelve la alerta del Gerente (`AlertaCompras.alerta`), completa la sección «Reclamos» de la ficha y la tarjeta «Reclamos sin emitir» del inicio del Gerente. Hoy `ReclamoProveedor` solo se crea «abierto» y sin emitir.
+3. **Hecho el 25/11/2026 en CMP-06: la corrección de una recepción** (`correcciones.py`, con `stock.lotes_de_ingreso` y los `DetalleRecepcionMovimiento`). Texto original: **Corrección de una recepción (CMP-06).** Usa `stock.lotes_de_ingreso` (ya escrita) y los `DetalleRecepcionMovimiento`; hoy una recepción no se puede corregir.
 4. **Auditoría de las alertas que resuelve `inventario`.** `registrar_ingreso_por_recepcion` no devuelve la reevaluación, así que el registro de la recepción no lista `alertas_resueltas`; si se quiere, la función tiene que devolverla.
 
 ## Lo que deja COM-05a2 (nace el 24/11/2026)
@@ -693,7 +693,7 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 
 ## Lo que deja CMP-05 (nace el 25/11/2026)
 
-1. **CMP-06 (corrección de una recepción):** tiene que impedirla si el par (orden, proveedor) ya tiene `Pago` (`Pago.objects.filter(orden=…, proveedor=…)`; D-89 punto 6: «la corrección exige que no haya pago») y, al corregir, sacar al proveedor de la bandeja si deja de estar listo: la bandeja se calcula, así que no hay nada que reasignar. La corrección **nunca avisa** (D-91 punto 3). La prueba «pago contra corrección de recepción» de `test_pagos_concurrencia.py` se escribe con CMP-06.
-2. **CMP-06 (reclamos):** la columna «Pago» de la ficha del proveedor ya existe; falta la de reclamos. «Reclamos sin emitir» del Inicio del Gerente sigue pendiente.
+1. **Hecho el 25/11/2026 en CMP-06** (`pago_registrado`, con la prueba «corrección contra pago» en `test_correcciones_concurrencia.py`). Texto original: **CMP-06 (corrección de una recepción):** tiene que impedirla si el par (orden, proveedor) ya tiene `Pago` (`Pago.objects.filter(orden=…, proveedor=…)`; D-89 punto 6: «la corrección exige que no haya pago») y, al corregir, sacar al proveedor de la bandeja si deja de estar listo: la bandeja se calcula, así que no hay nada que reasignar. La corrección **nunca avisa** (D-91 punto 3). La prueba «pago contra corrección de recepción» de `test_pagos_concurrencia.py` se escribe con CMP-06.
+2. **Hecho el 25/11/2026 en CMP-06** (la tarjeta de reclamos de la ficha del proveedor y «Reclamos sin emitir» del Inicio). Texto original: **CMP-06 (reclamos):** la columna «Pago» de la ficha del proveedor ya existe; falta la de reclamos. «Reclamos sin emitir» del Inicio del Gerente sigue pendiente.
 3. **Mejora futura:** «comprobante del pago» (número de operación o de recibo): necesita una columna en `Pago` y una decisión nueva.
 

@@ -14,14 +14,15 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
-from comercial.models import AlertaComercial, Entrega
-from comercial.servicios import entregas, vehiculos
+from comercial.models import AlertaComercial, Entrega, Vehiculo
+from comercial.servicios import entregas, rutas, vehiculos
 from comercial.tests.fabricas import (
     compra_venta,
     datos_de_vehiculo_de,
     detalle,
     entrega,
     escenario_comercial,
+    iniciar_ruta_de,
     reserva_lista,
     transportista_con_vehiculo,
     verificar_invariantes_de_entregas,
@@ -247,3 +248,110 @@ class EnlaceDeLaAlertaTests(Base):
         """Registrado con `registrar_enlace_de_alerta` para `comercial_entrega_sin_transportista` (un solo registrante por código)."""
         codigos = {c for codigos_, _ in extensiones_de_maestros.enlaces_registrados() for c in codigos_}
         self.assertIn(entregas.TIPO_SIN_TRANSPORTISTA, codigos)
+
+class TransportistaEnRutaTests(Base):
+    """COM-06a: `transportista_en_ruta` en los dos registrantes (el de `maestros` y el de la baja de cuenta de `core`). Las tres mínimas de cada uno: con datos, neutro, sin consultas por fila."""
+
+    def en_ruta(self, cantidad=1):
+        """Un transportista con `cantidad` entregas de hoy y la ruta iniciada de verdad."""
+        for _ in range(cantidad):
+            self.entrega_de(transportista=self.t, dias=0, fecha=HOY)
+        iniciar_ruta_de(self.t)
+
+    def test_ext_en_ruta_con_datos_dice_desde_hoy_con_cuantas_entregas_y_como_resolverlo(self):
+        """Reglas 9 y 10 de PROD-MOD-INV: «Está en ruta desde hoy con N entregas.» y «Esperá a que finalice la ruta.» (primero, antes del de las entregas a realizar)."""
+        self.en_ruta(2)
+        impedimentos = entregas.impedimentos_de_transportista(self.t)
+        self.assertEqual([i.codigo for i in impedimentos], ["transportista_en_ruta", "transportista_con_entregas"])
+        self.assertEqual((impedimentos[0].texto, impedimentos[0].como_resolver), ("Está en ruta desde hoy con 2 entregas.", "Esperá a que finalice la ruta."))
+
+    def test_ext_en_ruta_con_una_sola_entrega_va_en_singular(self):
+        """«Está en ruta desde hoy con 1 entrega.»"""
+        self.en_ruta(1)
+        self.assertEqual(entregas.impedimentos_de_transportista(self.t)[0].texto, "Está en ruta desde hoy con 1 entrega.")
+
+    def test_ext_en_ruta_neutro_sin_ruta_iniciada_o_con_una_ruta_de_ayer_no_hay_impedimento_de_ruta(self):
+        """Neutro: sin ruta, o con una ruta que no se finalizó ayer (vencida, MD-118), no hay `transportista_en_ruta`; finalizar la ruta lo levanta."""
+        self.entrega_de(transportista=self.t, dias=0, fecha=HOY)
+        self.assertNotIn("transportista_en_ruta", [i.codigo for i in entregas.impedimentos_de_transportista(self.t)])
+        Vehiculo.objects.filter(transportista=self.t).update(en_ruta=True, fecha_inicio_ruta=HOY - timedelta(days=1))
+        self.assertNotIn("transportista_en_ruta", [i.codigo for i in entregas.impedimentos_de_transportista(self.t)])
+
+    def test_ext_en_ruta_esta_registrado_y_quitar_o_trasladar_al_transportista_se_rechaza_con_su_codigo(self):
+        """Está registrado en `registrar_impedimento_de_transportista` y quitar al transportista en ruta se rechaza con `transportista_en_ruta`."""
+        self.en_ruta(1)
+        with self.assertRaises(ValidationError) as c:
+            servicio_de_transportistas.quitar_transportista(self.gerente, self.e.invernadero.pk, self.t.pk)
+        self.assertTrue(any("Está en ruta desde hoy" in m for m in c.exception.messages))
+        self.assertTrue(TransportistaInvernadero.objects.filter(transportista=self.t).exists())
+
+    def test_ext_en_ruta_sin_consultas_por_fila(self):
+        """Las mismas consultas con una entrega que con varias."""
+        self.en_ruta(1)
+        with CaptureQueriesContext(connection) as pocas:
+            entregas.impedimentos_de_transportista(self.t)
+        for _ in range(3):
+            self.entrega_de(transportista=self.t, dias=0, fecha=HOY)
+        with CaptureQueriesContext(connection) as muchas:
+            entregas.impedimentos_de_transportista(self.t)
+        self.assertEqual(len(pocas), len(muchas))
+
+    def test_ext_baja_con_datos_el_transportista_en_ruta_no_se_da_de_baja(self):
+        """Precondición d de USR-BAJ-USR: la baja de la cuenta de un Transportista en ruta se rechaza con `transportista_en_ruta` y no cambia nada."""
+        self.en_ruta(1)
+        (impedimento,) = entregas.impedimentos_de_baja_de_cuenta(self.t)
+        self.assertEqual((impedimento.codigo, impedimento.texto, impedimento.como_resolver), ("transportista_en_ruta", "Está en ruta desde hoy con 1 entrega.", "Esperá a que finalice la ruta."))
+        with self.assertRaises(ValidationError) as c:
+            baja_usuario(self.gerente, self.t.pk)
+        self.assertEqual([e.code for e in c.exception.error_list], ["transportista_en_ruta"])
+        self.t.refresh_from_db()
+        self.assertTrue(self.t.is_active)
+
+    def test_ext_baja_neutro_con_otro_rol_o_sin_ruta_no_impide(self):
+        """Neutro: un Vendedor, o un Transportista sin ruta iniciada, no tiene impedimento."""
+        self.entrega_de(transportista=self.t, dias=0, fecha=HOY)
+        self.assertEqual(entregas.impedimentos_de_baja_de_cuenta(self.t), [])
+        self.assertEqual(entregas.impedimentos_de_baja_de_cuenta(self.e.vendedor), [])
+
+    def test_ext_baja_esta_registrado_en_core_y_se_levanta_al_finalizar_la_ruta(self):
+        """Está registrado en `registrar_impedimento_de_baja_de_cuenta`; con la ruta finalizada, la baja se hace (y sus entregas «a realizar» quedan sin transportista)."""
+        self.en_ruta(1)
+        self.assertEqual([i.codigo for i in extensiones_de_core.impedimentos_de_baja_de_cuenta(self.t)], ["transportista_en_ruta"])
+        (e,) = Entrega.objects.filter(transportista=self.t)
+        rutas.registrar_intento_fallido(self.t, e.pk, "cliente_ausente", "")
+        rutas.finalizar_ruta(self.t)
+        self.assertEqual(extensiones_de_core.impedimentos_de_baja_de_cuenta(self.t), [])
+
+    def test_ext_baja_sin_consultas_por_fila(self):
+        """Las mismas consultas con una entrega que con varias."""
+        self.en_ruta(1)
+        with CaptureQueriesContext(connection) as pocas:
+            entregas.impedimentos_de_baja_de_cuenta(self.t)
+        for _ in range(3):
+            self.entrega_de(transportista=self.t, dias=0, fecha=HOY)
+        with CaptureQueriesContext(connection) as muchas:
+            entregas.impedimentos_de_baja_de_cuenta(self.t)
+        self.assertEqual(len(pocas), len(muchas))
+
+
+class MontoYEstadoDePagoTests(Base):
+    """D-68 punto 7: `monto_a_cobrar` y `estado_de_pago` son derivados (no se guardan); «pagada» llega con COM-08a."""
+
+    def test_regla_el_monto_a_cobrar_es_el_total_de_la_entrega_concretada_y_nulo_si_no_lo_esta(self):
+        """Hasta COM-07a no hay nada que descontar: el monto a cobrar es el total; una entrega «a realizar» no tiene monto."""
+        _, pendiente = self.entrega_de()
+        _, concretada = self.entrega_de(estado="concretada", precio="10.00")
+        self.assertEqual(entregas.monto_a_cobrar([pendiente.pk, concretada.pk]), {pendiente.pk: None, concretada.pk: Decimal("1000.00")})
+
+    def test_regla_el_estado_de_pago_de_un_suministro_es_pendiente_o_en_mora_segun_el_vencimiento(self):
+        """MD-136 y MD-139: «pendiente» hasta el vencimiento y «en mora» después; una compra-venta no tiene estado de pago de entrega."""
+        from comercial.tests.fabricas import detalle_suministro, marcar_concretada, suministro
+
+        s = suministro(self.e, plazo_pago=10)
+        d = detalle_suministro(s, self.e.variedad, cantidad=10, primera_en_dias=0)
+        r = reserva_lista(None, self.lote, 10, fecha_entrega=d.fecha_primer_entrega, detalle_suministro=d)
+        e = marcar_concretada(entrega(s, [r], fecha=HOY))
+        _, de_venta = self.entrega_de(estado="concretada")
+        self.assertEqual(entregas.estado_de_pago([e.pk, de_venta.pk], HOY), {e.pk: "pendiente", de_venta.pk: None})
+        self.assertEqual(entregas.estado_de_pago([e.pk], HOY + timedelta(days=10))[e.pk], "pendiente")
+        self.assertEqual(entregas.estado_de_pago([e.pk], HOY + timedelta(days=11))[e.pk], "en_mora")

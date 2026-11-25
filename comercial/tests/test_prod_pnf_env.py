@@ -21,6 +21,8 @@ from comercial.tests.fabricas import (
     entrega,
     envase,
     escenario_comercial,
+    iniciar_ruta_de,
+    marcar_concretada,
     reserva_lista,
     segundo_invernadero,
     transportista_con_vehiculo,
@@ -471,8 +473,9 @@ class ProdPnfEnvServicioTests(Base):
 
     def test_ext_3b_una_entrega_en_curso_no_se_modifica(self):
         """Extensión 3b y regla «Entrega en curso»: con envío, fecha de hoy o anterior y el vehículo del transportista en ruta: se informa y no se puede cambiar."""
-        t = transportista_con_vehiculo(self.e.invernadero, en_ruta=True)
+        t = transportista_con_vehiculo(self.e.invernadero)
         e, b = self.entrega_nueva(transportista=t, fecha=HOY), envase(self.e.invernadero)
+        iniciar_ruta_de(t)  # COM-06a: la ruta se inicia de verdad (antes, la fábrica la dejaba en ruta)
         (fila,) = envasado.entregas_para_envasar(self.agronomo)
         self.assertTrue(fila.en_curso)
         datos = envasado.datos_de_envasado(self.agronomo, e.pk)
@@ -492,7 +495,10 @@ class ProdPnfEnvServicioTests(Base):
         for estado in ("concretada", "cancelada"):
             e = self.entrega_nueva()
             carga = self.carga(e, (b, 5))
-            OrdenTrabajo.objects.filter(pk=e.pk).update(estado_orden=estado, fecha_resolucion_orden=HOY, **({"motivo_cancelacion": "x"} if estado == "cancelada" else {}))
+            if estado == "concretada":
+                marcar_concretada(e)  # COM-06a: una concretada trae sus cantidades y su monto (invariantes de entregas)
+            else:
+                OrdenTrabajo.objects.filter(pk=e.pk).update(estado_orden=estado, fecha_resolucion_orden=HOY, motivo_cancelacion="x")
             error = self.rechazo(lambda: envasado.planificar_envasado(self.agronomo, carga))
             self.assertEqual(codigos(error), ["entrega_no_a_realizar"], estado)
             self.assertIn(estado, str(error))

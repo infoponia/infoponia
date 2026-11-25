@@ -1,0 +1,15 @@
+{% comment %}La sección «Ruta de hoy» del Panel de control del Transportista (COM-06a, `registrar_seccion_de_inicio`): cuántas entregas lleva hoy y su peso, y el acceso a «Mi ruta» (que es donde inicia la ruta, concreta y finaliza). Recibe «datos» con «ruta». Todo se escapa.{% endcomment %}
+<div class="page narrow" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Ruta de hoy</h2>
+  {% with r=datos.ruta %}
+  {% if r.situacion == "sin_vehiculo" %}
+  <div class="alert alert-warn" role="alert"><div>No tenés un vehículo activo. Comunicate con el Gerente, que asigna los vehículos.</div></div>
+  {% elif r.cantidad %}
+  <div class="kpis"><div class="kpi{% if r.situacion == 'en_ruta' %} ok{% endif %}"><span class="k">{% if r.situacion == "en_ruta" %}En ruta{% else %}Entregas de hoy{% endif %}</span><span class="v">{{ r.cantidad }}</span><span class="c">{{ r.peso|floatformat:2 }} kg</span></div></div>
+  <div class="acts-fila" style="margin-top:12px"><a class="btn btn-primary" href="{% url 'comercial:ruta' %}">Mi ruta</a></div>
+  {% else %}
+  <div class="empty"><b>No tenés entregas para hoy</b><span>{% if r.proxima_fecha %}La próxima es el {{ r.proxima_fecha|date:"d/m/Y" }}.{% else %}Cuando te asignen una, la vas a ver acá.{% endif %}</span></div>
+  <div class="acts-fila" style="margin-top:12px"><a class="btn btn-ghost" href="{% url 'comercial:ruta' %}">Mi ruta</a></div>
+  {% endif %}
+  {% endwith %}
+</div>

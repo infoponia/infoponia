@@ -1,0 +1,15 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+{{ nombre_organizacion }} emitió el reclamo {{ reclamo }} por la recepción {{ recepcion }} de la orden de compra {{ orden }}.
+
+Fecha de la recepción: {{ fecha|date:"d/m/Y" }}
+Invernadero de destino: {{ invernadero }}
+
+Lo que tuvo inconvenientes:
+{% for i in inconvenientes %}
+- {{ i.insumo }}: {{ i.tipo }}, {{ i.cantidad }} {{ i.unidad }}{% if i.descripcion %} · {{ i.descripcion }}{% endif %}
+{% endfor %}
+Este reclamo deja registrado lo que pasó con la mercadería.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

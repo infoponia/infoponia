@@ -1,6 +1,6 @@
 {% autoescape off %}Hola, {{ cliente }}:
 
-Cambió la fecha de tu entrega {{ codigo }} en {{ nombre_organizacion }}: ahora es el {{ fecha|date:"d/m/Y" }}.
+{% if motivo %}No pudimos entregar tu pedido {{ codigo }} en {{ nombre_organizacion }} ({{ motivo }}). Lo intentamos de nuevo el {{ fecha|date:"d/m/Y" }}.{% else %}Cambió la fecha de tu entrega {{ codigo }} en {{ nombre_organizacion }}: ahora es el {{ fecha|date:"d/m/Y" }}.{% endif %}
 
 {% if retiro %}{{ destino }}{% else %}Destino: {{ destino }}{% endif %}
 

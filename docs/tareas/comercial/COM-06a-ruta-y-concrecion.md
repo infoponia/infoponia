@@ -137,33 +137,106 @@ concurrencia.
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
-al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
-`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
-cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
-siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
+Claude Code no cargó datos ni abrió un navegador (D-95, D-96): los datos los creás vos, con los valores de abajo. Esta tarea tiene **formularios que se envían y JavaScript propio** (HTMX): por eso el paso 14 es de «navegador real».
 
-Hay migraciones nuevas (`comercial`, `contabilidad`, `core`): `python manage.py migrate`. Datos: los de COM-05b (un invernadero con Agrónomo,
-Capataz, Vendedor y un Transportista con vehículo; un cliente con correo); una compra-venta con envío lista para entregar, con su envasado; un
-suministro con una entrega planificada para hoy y cantidad mínima 100.
+**Antes de empezar**
 
-1. Con el Transportista (en el celular o con el navegador angosto): «Mi ruta» muestra las dos entregas, el peso y la capacidad. «Iniciar
-   ruta». Con el Vendedor, intentá cambiarle el transportista a una: no deja («en curso»).
-2. Concretá la compra-venta: 5 perdidas, el resto aceptado, un envase de más. El resumen muestra la merma, el exceso y el total a cobrar; elegí
-   «Efectivo» y confirmá. La venta queda «concretada» con su pago; el Agrónomo tiene el aviso del exceso; en «Inventario», el consumo del
-   envase incluye el exceso.
-3. Concretá el suministro con 80 recibidas: queda la discrepancia `SR-…` y la alerta para el Gerente; la ficha del suministro muestra la
-   entrega con su monto y su vencimiento. El correo al cliente trae el comprobante (sin enlace todavía).
-4. Con otra entrega: «Intento fallido» por «Cliente ausente»: pasa a mañana sin transportista; el Vendedor tiene el aviso.
-5. «Finalizar ruta» con una pendiente: no deja y ofrece concretar o registrar el intento; sin pendientes, finaliza.
-6. Con el Vendedor, un retiro: «Concretar retiro» desde «Comercial» › «Entregas», con cobro por transferencia.
-7. Con el Gerente, con el Transportista en ruta: quitarlo del invernadero y darle de baja la cuenta muestran el impedimento.
-8. Sin JavaScript: iniciar, concretar (con «Actualizar»), intento fallido y finalizar funcionan.
-9. Después del merge: revisar en el log de Render que se aplicaron las migraciones nuevas.
+- `python manage.py migrate` (hay tres migraciones nuevas: `comercial` 0010, `contabilidad` 0007 y `core` 0044) y `python manage.py runserver`; entrá a `http://localhost:8000`. Las cuentas las creás o reutilizás con la contraseña que ya usás en las de prueba (nunca en un archivo del repo).
+- Cuentas: un **Gerente**, un **Vendedor**, un **Agrónomo** del invernadero y un **Transportista** (con un vehículo activo de 800 kg, asignado desde «Comercial › Vehículos» por el Gerente, y asignado al invernadero desde su ficha › «Logística»).
+- Crear a mano, en este orden (todo con el invernadero de arriba, con un lote en Maduración con 500 plantas de una variedad «Lechuga» y su cliente):
+  1. Un **cliente con correo** y una dirección activa en su ficha (por ejemplo «Panadería Sol», CUIT `30-71234567-8`).
+  2. **Cámara con stock**: una partida de cámara de 200 plantas de Lechuga (cosechá un lote de 200 con «Cosechas»).
+  3. **Envase**: en «Inventario» habilitá «Bandeja PET» en el invernadero con 30 de stock.
+  4. **Compra-venta 1** (envío a domicilio, fecha pactada de hoy): 50 plantas de Lechuga a $100. Esperá a que InfoPonia planifique la entrega (aparece en «Comercial › Entregas» a nombre del Transportista, o asignala con «Asignar transportista») y, con el Agrónomo, **planificá su envasado** («Producción › Envasado»: 10 Bandeja PET).
+  5. **Suministro** (un detalle de Lechuga, 100 plantas por período, cantidad mínima 100, plazo de pago 15 días, primera entrega hoy) y esperá su entrega para hoy con el mismo Transportista.
+  6. **Compra-venta 2** (envío, hoy, 10 plantas): será la del intento fallido.
+  7. **Compra-venta 3** con **retiro en invernadero** (fecha de hoy, 20 plantas), para el paso 9.
+
+**Pasos**
+
+1. **Mi ruta (Transportista, en el celular o con la ventana angosta).** «Panel de control» › sección «Ruta de hoy» › «Mi ruta». Tenés que ver las tres entregas de hoy con cliente, destino, contenido y peso, el vehículo («En el invernadero»), la carga de la ruta y la capacidad (800 kg). Las que no tienen envasado dicen «Sin envasado». **No** hay botones «Concretar» ni «Intento fallido» todavía. Abajo, «Iniciar ruta». *(Lo cubre `test_rutas_vistas`.)*
+2. **Iniciar ruta.** «Iniciar ruta»: la página con la lista, el peso y las localidades. Tocá «Iniciar ruta». Volvés a «Mi ruta» con el aviso «Ruta iniciada…», el vehículo dice «En ruta» y cada entrega muestra «Concretar» e «Intento fallido»; ahora hay «Finalizar ruta» y ya no «Iniciar ruta». En «Auditoría» (Gerente) hay un registro «Inicio de ruta».
+3. **Una entrega en curso no se cambia.** Con el Vendedor o el Gerente: «Comercial › Entregas» › la entrega de la compra-venta 1: la fila dice «En curso» y no ofrece cambiar el transportista; abrir la URL de asignar a mano muestra «ya inició la ruta…».
+4. **Concretar la compra-venta 1.** Con el Transportista: «Concretar». Tenés tres pasos en una página. Escribí «Llegaron en buen estado»: **45** (se pierden 5), dejá «Acepta lo que llegó», en «Utilizados» escribí **11** (uno más de lo reservado), tildá «Confirmo la cantidad utilizada», elegí «Efectivo» y tocá «Ver resumen». Tiene que decir: perdidas 5, «1 de más», total **$ 4.500,00** y «efectivo». Tocá «Confirmar entrega»: aparece la pantalla «concretada» con el total cobrado y «Imprimir comprobante».
+   - **Efectos para mirar:** la venta queda «Concretada» con su pago en su ficha (Efectivo, hoy, $ 4.500,00); el Agrónomo tiene un aviso del envase de más; el Vendedor, «Se concretó con diferencias»; en «Inventario», el consumo de la bandeja es 11; en «Producción › Mermas», una merma «Daño en la entrega» de 5; el cliente recibe el comprobante de venta por correo (si el correo está configurado) y «Auditoría» tiene un registro «Concreción de entrega». *(Lo cubre el recorrido.)*
+5. **Errores del formulario.** En otra entrega: «Llegaron» **99** (más de lo planificado) → «Ver resumen» muestra el error con lo planificado y **no** hay «Confirmar entrega». Dejá «Medio de pago» vacío en una venta → «Elegí el medio de pago…». En una entrega sin envasado, ni declarar envases ni tildar «No se usaron envases» → «Declará los envases usados…».
+6. **Concretar el suministro con 80 recibidas.** «Concretar» sobre la entrega del suministro: «Llegaron» 100, «Recibió el cliente» **80**, «No se usaron envases» tildado. El resumen muestra el vencimiento (hoy + 15 días). Confirmá. Resultado: el Gerente ve la alerta «Discrepancia de entrega» (campana) que lleva a la ficha del suministro, con la discrepancia `SR-…` (80 de 100 mínimas); la ficha muestra la entrega con monto, vencimiento y «Pendiente»; el calendario dice «Entregado» en ese período; el Vendedor tiene el aviso; el cliente recibe el comprobante de entrega **sin enlace** (el enlace llega con COM-06b); en la ficha del cliente aparecen «Entregas sin cobrar» y «Discrepancias pendientes».
+7. **Finalizar con una pendiente.** «Finalizar ruta» con la compra-venta 2 sin resolver: la pantalla lista la entrega con «Concretar» e «Intento fallido» y no deja finalizar.
+8. **Intento fallido.** «Intento fallido» sobre la compra-venta 2: motivo «Cliente ausente» (sin motivo, «Elegí el motivo»). Vuelve a «Mi ruta»: la entrega ya no está, pasó a mañana sin transportista. El Vendedor tiene el aviso «No se pudo entregar…» con la fecha nueva y el cliente, un correo con el motivo. «Comercial › Entregas» la muestra «Sin transportista» para mañana. Ahora «Finalizar ruta» → confirmación → «Ruta finalizada.»; el vehículo vuelve a «En el invernadero».
+9. **Concretar retiro (Vendedor).** Con el Vendedor: «Comercial › Entregas»: la compra-venta 3 tiene «Concretar retiro». Escribí 20, «Acepta», «Transferencia» → «Ver resumen» → «Confirmar entrega»: la venta queda «Concretada» con el pago por transferencia. El Gerente **no** ve «Concretar retiro».
+10. **Un transportista en ruta no se quita ni se da de baja.** Antes del paso 8, con el Gerente: en la ficha del invernadero quitar al Transportista, o «Usuarios» › dar de baja su cuenta, muestran el impedimento «Está en ruta desde hoy con N entregas. Esperá a que finalice la ruta.» *(Lo cubren las pruebas de `test_extensiones_entregas`.)*
+11. **Roles.** El Gerente, el Agrónomo y el Capataz escribiendo a mano `/comercial/ruta/` o `/comercial/entregas/<id>/concretar/` ven un 403 y ninguna pantalla les ofrece el enlace. Un Vendedor tampoco puede concretar una entrega con envío ni el retiro de otro Vendedor.
+12. **Una ruta de ayer no vale.** (Opcional, con la base de desarrollo) dejá una ruta iniciada sin finalizar y, al otro día, «Mi ruta» dice que ya no está vigente y se inicia otra.
+13. **Sin JavaScript** (opcional, desactivalo en el navegador): iniciar, concretar (con «Ver resumen», que vuelve la misma página con el resumen), intento fallido y finalizar funcionan igual.
+14. **Navegador real.** Abrí «Concretar» en una **ventana privada** (entrando con la cuenta del Transportista), completá el formulario, tocá «Ver resumen» y **enviá «Confirmar entrega» hasta el final**; después volvé a abrir «Mi ruta». Tiene que mostrar el resultado esperado. Hacelo también en un celular real o con la ventana angosta (F12 › vista móvil). Si aparece «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola del navegador (F12), avisá: lo más probable es un encabezado que el cliente de Django no ve. Con JavaScript, «Ver resumen» redibuja solo el resumen (sin recargar la página ni mover el scroll).
+15. **Después del merge:** revisar en el log de Render que se aplicaron las tres migraciones nuevas.
 
 ## Cierre (la completa Claude Code al cerrar)
 
-<!-- Al cerrar, Claude Code suma, si corrigió o completó pantallas (D-61):
+### Qué se hizo
+
+- **Modelos y migraciones** (`comercial/0010_concrecion`, `contabilidad/0008_pago_y_solicitud`, `core/0046_comercial_rutas`, ninguna de datos): `PagoCliente`, `IntentoFallido`, `SolicitudRevision`, `DiscrepanciaEntrega` y `LineaDiscrepancia`; `Entrega.monto_total_entrega` y `fecha_vencimiento_pago`; `DetalleEntrega.cant_perdida` y `cant_devuelta`; `AlertaComercial.solicitud` (restricción de un solo origen con cinco); la secuencia `comercial_solicitud_numero_seq`; las cuatro acciones de auditoría (`inicio_ruta`, `fin_ruta`, `concrecion_entrega`, `intento_fallido_entrega`) con sus etiquetas; los dos tipos de `OrigenDocumento`.
+- **Servicios**: `rutas.py` (`ruta_del_dia`, `iniciar_ruta`, `finalizar_ruta`, `registrar_intento_fallido`, `pendientes_de_la_ruta`, `entrega_de_la_ruta`), `concrecion.py` (`entregas_concretables`, `datos_de_concrecion`, `resumen_de_concrecion`, `repartir`, `concretar_entrega`, `crear_discrepancia`, `intentos_fallidos`, el comprobante y su correo) y `solicitudes.py` (`crear_solicitud`); `entregas.py` suma `monto_a_cobrar`, `estado_de_pago`, `periodos_entregados`, los impedimentos `transportista_en_ruta` (de `maestros` y de la baja de cuenta de `core`) y la parte 4 del paso 50 con las concretadas; `camara.py`, PROD-VNC-CAM 3b.
+- **Pantallas** (`views_rutas.py`, `templates/comercial/rutas/`): «Mi ruta», iniciar, finalizar, intento fallido, concretar (con `calcular/`), comprobante, «Concretar retiro» en la lista de entregas, la sección «Ruta de hoy» y la entrada «Mi ruta»; las fichas de la compra-venta (pago), del suministro (entregas con monto, vencimiento y estado de pago, «Entregado» y discrepancias) y del cliente (entregas sin cobrar y discrepancias, también en la baja).
+- **Códigos de error** (todos `ValidationError` con `code`): `sin_vehiculo`, `vehiculo_inactivo`, `ruta_ya_iniciada`, `sin_entregas_de_ruta`, `ruta_cambio` (con `agregadas` y `quitadas` en `params`), `ruta_no_iniciada`, `ruta_con_entregas_pendientes` (con `pendientes`), `entrega_no_concretable`, `cantidad_invalida`, `envase_invalido`, `medio_de_pago_obligatorio`, `motivo_obligatorio`, `descripcion_larga` y `cambio_simultaneo`; `PermissionDenied` para `sin_permiso`.
+
+### Pruebas (M1)
+
+- `python manage.py test comercial produccion maestros core inventario contabilidad --keepdb --exclude-tag concurrencia --exclude-tag migracion` (serie): **6618 pruebas**, 1 falla (`test_com_reg_cvt…test_regla_la_venta_no_genera_pago_ni_asiento`, ver «Pruebas existentes cambiadas»), corregida y vuelta a correr: 57 de `test_com_reg_cvt` en verde.
+- `python manage.py test comercial --keepdb --tag concurrencia`: **102 pruebas, OK** (incluye las 6 nuevas de `test_concrecion_concurrencia`).
+- `makemigrations --check --dry-run`: sin cambios. `manage.py check`: sin problemas.
+- Migraciones: `sqlmigrate comercial 0010` crea las cinco tablas, la secuencia y las restricciones (solo `CREATE`/`ALTER`, ningún `DROP` ni reescritura de filas); `contabilidad 0007` y `core 0044` son `no-op` en SQL (solo `choices`). Se aplicaron en las bases de prueba.
+
+### Verifiqué
+
+- El recorrido `test_recorrido_ruta_y_concrecion` (pasos 1 a 9 y 11 de la «Verificación a mano», por rol y estado, con correos y avisos reales): verde.
+- Las tres migraciones: SQL leído, sin pérdida de datos, aplicadas en la base de pruebas.
+- La suite completa de las apps tocadas y la concurrencia de `comercial`.
+
+### Lo cubre una prueba
+
+- Cada postcondición y extensión de COM-INI-RUT, COM-CNC-ENT y COM-FIN-RUT: `test_com_ini_rut`, `test_com_cnc_ent`, `test_com_fin_rut`.
+- El reparto entre orígenes (desempates): `RepartoTests`.
+- Los cinco cruces de concurrencia: `test_concrecion_concurrencia`.
+- Permisos, botones sin 403, HTMX y sin JavaScript, `calcular/` sin escrituras y las fichas: `test_rutas_vistas`.
+- PROD-VNC-CAM 3b: `ProdVncCam3bTests`; `transportista_en_ruta`: `TransportistaEnRutaTests`; COM-CNL-CVT con una entrega concretada real: `ComCnlCvtConEntregaConcretadaRealTests`.
+
+### No pude verificar
+
+- Lo que ve un navegador: CSRF y `Origin`, JavaScript de HTMX, el aspecto en un celular (paso 14).
+- El envío real de correo (las pruebas usan el servicio simulado) y el despliegue en Render (paso 15).
+- La suite en paralelo (`--parallel`) corrió en mi entorno con `TypeError: cannot pickle 'traceback' object` aun con los clones recreados; en serie corre completa y en verde. No pude aislar la causa (no es una prueba concreta: ninguna falló), y vos la corriste en paralelo sin problema.
+
+### Pruebas existentes cambiadas (anotar en el PR)
+
+- Reemplazadas por `iniciar_ruta_de` (la ruta se inicia de verdad, en vez de la fábrica `vehiculo_en_ruta` o `en_ruta=True`; mismos nombres y mismas verificaciones): `test_com_asg_trp::test_ext_3a_una_entrega_en_curso_no_se_reasigna`, `test_prod_pnf_env::test_ext_3b_una_entrega_en_curso_no_se_modifica`, `test_com_cnl_cvt::test_ext_4a_con_una_entrega_en_curso_no_se_puede_cancelar` y `test_entregas_calculos::test_motivo_3_en_ruta_solo_si_la_fecha_es_hoy`.
+- Una entrega «concretada» armada solo con el estado rompía los invariantes nuevos: ahora usan `marcar_concretada` `test_com_cnl_cvt::test_ext_6a_…`, `test_envasado_vistas` (extensión 10a) y `test_prod_pnf_env::test_ext_10a_la_entrega_concretada_o_cancelada_…`.
+- `test_modelos_entregas::test_regla_la_cantidad_entregada_es_nula_o_no_negativa`: la concreción de una línea se carga entera (`linea_entrega_concrecion_completa`), así que prueba los cuatro campos juntos.
+- `test_com_reg_cvt::test_regla_la_venta_no_genera_pago_ni_asiento`: preguntaba si existía el modelo `PagoCliente`; ahora pregunta que registrar la venta no deja ningún pago.
+- Se agregaron al conjunto de invariantes de `verificar_invariantes_de_entregas` (concretadas con monto, pago de la venta) y `verificar_invariantes_de_solicitudes` (nuevo).
+
+### Decisiones tomadas dentro de la tarea (a revisar; van a `docs/temas_abiertos.md`)
+
+1. **Con una rescisión acordada, la concreción no finaliza el detalle ni el contrato** (decisión tuya del 25/11/2026): `rutas.md` (postcondición n) los finalizaba y `suministro.md` / D-64 dicen que terminan «rescindido» por el paso 35.
+2. **Errores**: `rutas.md` habla de `ErrorComercial`, que no existe; se usó `ValidationError` con código estable (patrón de COM-05b) y `PermissionDenied` para `sin_permiso`.
+3. **Una línea de compra-venta donde no llegó nada** cuenta como **rechazada** (evita una venta «confirmada» con total 0 y un pago de 0).
+4. **Exceso de envases**: se confirma con una casilla («Confirmo la cantidad utilizada»); sin ella, `envase_invalido`.
+5. **Correos**: el comprobante de venta y el de entrega van en `Entrega.estado_aviso_cliente` (no en `Contrato.estado_comprobante`); el correo del intento fallido reutiliza el del cambio de fecha con el motivo; el paso 50 reintenta también las concretadas pendientes. Una entrega de compra-venta que no es la última no manda correo.
+6. **La devolución de la concreción dispara PROD-ASG-CAM** (`on_commit`) y eso puede planificar una entrega del período siguiente de un suministro (con su propio correo): es el encadenamiento de la postcondición f, no un correo duplicado.
+7. **Precios**: el Transportista ve el precio y el total (cobra; paso 4 de COM-CNC-ENT). No se ocultan.
+8. **Desempate del reparto**: mayor parte decimal, después el que más aporta, la fecha límite más próxima y la menor clave. Con 20, 10 y 10 y 3 perdidas el resultado es 1, 1, 1 (mi prueba inicial esperaba 2, 1, 0 y estaba mal).
+9. **`fin_ruta.datos.intentos_fallidos`** son los intentos de ese transportista de hoy: el modelo no guarda desde qué pantalla se registró cada uno y no se agregó una columna.
+10. **La entrada «Mi ruta»** se registró en el menú, pero el Transportista es de campo (sin menú lateral): su acceso real es la sección «Ruta de hoy» del Panel de control.
+
 ### Pantallas: lo que se corrigió del prototipo
+
 | Pantalla (función del prototipo) | Qué tenía | Qué se hizo | Por qué (paso o regla) |
--->
+|---|---|---|---|
+| Concretar entrega (`VIEWS.cncent`, `cncentCalc`) | Recalculaba y deshabilitaba el botón mientras se tipeaba | «Ver resumen» (botón) calcula; el resumen es un bloque aparte con «Confirmar entrega»; sin JavaScript, la misma página | `.claude/rules/interfaz.md` (nada de validar al tipear) y paso 12 |
+| Concretar: envases | Un número «usa» por entrega | Por cada envase reservado: utilizados, devueltos (con propuesta) y casilla para confirmar el exceso; sin envasado, una fila por envase habilitado y «No se usaron envases» (sin filas que aparecen solas) | Pasos 9 y 10, extensiones 9a, 10a y 10b |
+| Concretar: suministro | Monto con el precio de la venta; sin vencimiento | Precio recalculado con la fecha real y el vencimiento del pago en el resumen | Extensión 3a.2 y 3a.3 |
+| Intento fallido (`MODALS.fallo`) | Dejaba la entrega en la lista del día | Pasa a mañana sin transportista y sale de la ruta; el motivo es obligatorio (error bajo el campo) | Extensión 4a.2 |
+| Finalizar ruta (`MODALS.finrut`) | Bloqueaba solo con las no marcadas con fallo | Bloquea con toda entrega «a realizar» de la ruta, con «Concretar» e «Intento fallido» de cada una | Regla 1 de COM-FIN-RUT |
+| Iniciar ruta (`MODALS.inirut`) | Solo la lista y el peso | Vehículo con capacidad, demoradas primero con sus días, sin envasado señaladas, cantidad de entregas y localidades, y la huella (5c con lo agregado y lo quitado) | Pasos 2 y 3, extensiones 2b, 2c y 5c |
+| Mi ruta (`VIEWS.ruta`) | Sin estados vacíos ni de «sin vehículo» o «ruta vencida» | Los tres estados con su aviso; «Concretar» e «Intento fallido» solo con la ruta iniciada (ningún botón lleva a un rechazo) | Extensiones 1a, 1c y 2a; D-30 |
+| Pantalla final | Solo un aviso | Total cobrado, estado del correo y «Imprimir comprobante» para el cliente sin correo | Paso 16 y variación 15a |

@@ -70,7 +70,7 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 | COM-05a1 | Entregas: modelo, planificación automática (paso diario 50) y cancelación incluida | comercial (y `core`: acciones de auditoría) | hecha (PR #__, 24/11/2026; revisión a mano pendiente) | COM-04c, MAE-02d (INV-02, hecha) | `comercial/COM-05a1-planificacion-de-entregas.md` |
 | COM-05a2 | Envasado y las entregas en el panel, las fichas y los vehículos | comercial (y la restricción de `ReservaInsumo` y el núcleo de reservas en produccion, D-66) | hecha (PR #__, 24/11/2026; revisión a mano pendiente) | COM-05a1 | `comercial/COM-05a2-envasado-y-pantallas-de-entregas.md` |
 | COM-05b | Asignar transportista y cancelar la compra-venta | comercial (y `core`: acción de auditoría) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | COM-05a2 | `comercial/COM-05b-asignar-transportista-y-cancelar-compra-venta.md` |
-| COM-06a | Ruta y concreción de entregas: iniciar y finalizar la ruta, concretar, intento fallido y discrepancia (D-68) | comercial | pendiente | COM-05b | `comercial/COM-06a-ruta-y-concrecion.md` |
+| COM-06a | Ruta y concreción de entregas: iniciar y finalizar la ruta, concretar, intento fallido y discrepancia (D-68) | comercial (y `core` y `contabilidad`: acciones y tipos) | hecha (rama `feature/com-06a-ruta-y-concrecion`, PR #__, 25/11/2026; revisión a mano pendiente) | COM-05b | `comercial/COM-06a-ruta-y-concrecion.md` |
 | COM-06b | Confirmación del cliente: el enlace, las quejas y la entrega no reconocida (D-68) | comercial | pendiente | COM-06a | `comercial/COM-06b-confirmacion-del-cliente.md` |
 | COM-07a | Solicitudes de revisión: evaluar, resolver, anular y consultar (D-69) | comercial | pendiente | COM-06b (y la sección 11 de COM-04a) | `comercial/COM-07a-solicitudes-de-revision.md` |
 | COM-07b | Resolución del suministro por incumplimientos (paso diario 33) | comercial | pendiente | COM-07a | `comercial/COM-07b-resolucion-del-suministro.md` |
@@ -122,7 +122,7 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 |---|---|---|---|---|---|
 | CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario; `contabilidad` y `core`: un tipo de origen y las acciones de auditoría) | hecha (PR #__, 24/11/2026; revisión a mano pendiente) | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
 | CMP-05 | Pago a proveedores (con asiento) | compras (y `contabilidad` y `core`: un tipo de origen y las acciones de auditoría) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CMP-04, USR-11 (hecha), CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
-| CMP-06 | Corrección de recepción y reclamos | compras (y un tipo en inventario) | pendiente | CMP-05 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
+| CMP-06 | Corrección de recepción y reclamos | compras (y un tipo en inventario, y `contabilidad` y `core`: un tipo de origen y las acciones de auditoría) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CMP-05 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
 
 ### Ronda «Contabilidad 2» (D-92; reaperturas y lote existente)
 

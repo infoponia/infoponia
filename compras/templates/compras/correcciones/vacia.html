@@ -1,0 +1,12 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Corregir una recepción» sin nada para corregir (CMP-COR-RCP extensión 2a): todas las recepciones de la orden tienen su proveedor pagado o no recibieron nada. Recibe «orden».{% endcomment %}
+{% block titulo %}Corregir una recepción · {{ orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <a class="btn btn-text" href="{% url 'compras:orden_ficha' orden.pk %}">{% icono "back" 14 %} Orden {{ orden }}</a>
+  <div class="page-h"><h1>Corregir una recepción · {{ orden }}</h1></div>
+  <div class="alert alert-info" role="status">{% icono "info" 16 %}<div><b>No hay recepciones para corregir.</b> Una recepción deja de poder corregirse cuando el proveedor ya fue pagado, y solo se corrige lo que se recibió. Lo que se registró de menos se corrige con otra recepción parcial.</div></div>
+  <div class="footbar"><a class="btn btn-ghost" href="{% url 'compras:orden_ficha' orden.pk %}">Volver a la orden</a></div>
+</div>
+{% endblock %}

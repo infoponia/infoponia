@@ -80,3 +80,8 @@ class ComprasConfig(AppConfig):
 
         registrar_entrada(("Pagos a proveedores", "compras:pagos", "cart"), (Usuario.Rol.CONTADOR, Usuario.Rol.GERENTE), despues_de="Contabilidad")
         extensiones_de_contabilidad.registrar_enlace_de_origen("pago", pagos.enlace_de_origen)
+
+        # CMP-06 (D-90 punto 3): el asiento inverso de una corrección enlaza con la ficha de su orden.
+        from compras.servicios import correcciones
+
+        extensiones_de_contabilidad.registrar_enlace_de_origen("correccion_de_recepcion", correcciones.enlace_de_origen)

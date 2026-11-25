@@ -1,0 +1,23 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}La pantalla final de una entrega concretada (paso 16 de COM-CNC-ENT) y el comprobante para imprimir (variación 15a: de uso interno, sin validez fiscal): lo entregado por variedad con precio y monto, el total, y el
+medio de pago y lo cobrado (compra-venta) o el vencimiento (suministro). Si el cliente no tiene correo, es lo que se le entrega impreso; si el envío falló, queda pendiente y lo reintenta el sistema. Recibe lo de
+`concrecion.contexto_del_comprobante` más «entrega», «volver» y «estado_aviso».{% endcomment %}
+{% block titulo %}Entrega {{ codigo }} concretada · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>{{ codigo }} concretada</h1><div class="sub">{{ cliente }} · {{ contrato }} · {{ fecha|date:"d/m/Y" }}</div></div>
+  <div class="alert alert-ok" role="status"><div>La entrega quedó registrada.{% if total_cobrado %} Total cobrado: <b class="mono">{{ total_cobrado|pesos }}</b>.{% endif %}
+    {% if estado_aviso == "pendiente_envio" %} El comprobante al cliente quedó pendiente de envío.{% elif estado_aviso == "enviado" %} Se envió el comprobante al cliente.{% elif estado_aviso == "sin_correo" %} El cliente no tiene correo: entregale el comprobante impreso.{% endif %}</div></div>
+  <div class="card" style="margin-top:12px"><div class="card-title">Comprobante</div>
+    <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Cant.</th><th class="right">Precio</th><th class="right">Monto</th></tr></thead><tbody>
+    {% for l in lineas %}<tr><td>{{ l.variedad }}</td><td class="right mono">{{ l.cantidad }}</td><td class="right mono">{{ l.precio|pesos }}</td><td class="right mono">{{ l.monto|pesos }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="muted">No se entregó nada.</td></tr>{% endfor %}
+    </tbody></table>
+    <dl class="dl" style="margin-top:10px"><dt>Monto de la entrega</dt><dd class="mono">{{ total|pesos }}</dd>
+      {% if medio_pago %}<dt>Medio de pago</dt><dd>{{ medio_pago }}</dd>{% endif %}
+      {% if vencimiento %}<dt>Vencimiento del pago</dt><dd class="mono">{{ vencimiento|date:"d/m/Y" }}</dd>{% endif %}</dl>
+    <p class="muted">Comprobante de uso interno, sin validez fiscal.</p></div>
+  <div class="acts-fila" style="margin-top:12px"><button class="btn btn-ghost" type="button" onclick="window.print()">Imprimir comprobante</button><a class="btn btn-primary" href="{{ volver }}">Volver</a></div>
+</div>
+{% endblock %}

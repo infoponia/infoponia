@@ -41,7 +41,7 @@ from comercial.models import (
 from comercial.servicios import calendario, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
-from core.extensiones import Asignacion, Efecto
+from core.extensiones import Asignacion, Efecto, ImpedimentoDeCuenta
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.procesos import ResumenDePaso
 from inventario.models import InsumoInvernadero
@@ -563,8 +563,14 @@ def enviar_correo_de_entrega(entrega_id, cambio_de_fecha=False):
         destino = str(Direccion.objects.get(pk=entrega.direccion_destino_id))
     else:
         destino = f"Retirala en {entrega.invernadero}, {entrega.invernadero.direccion}"
+    # COM-06a: si la fecha cambió por un intento fallido (la última vez que se intentó fue la víspera de la fecha nueva), el correo dice el motivo.
+    intento = entrega.intentos_fallidos.order_by("-fecha_hora", "-pk").first() if cambio_de_fecha else None
+    if intento is not None and intento.fecha_programada + timedelta(days=1) != entrega.fecha_programada_orden:
+        intento = None
     asunto = (
-        f"Cambió la fecha de tu entrega {entrega.codigo}: ahora es el {entrega.fecha_programada_orden:%d/%m}"
+        f"No pudimos entregar tu pedido {entrega.codigo}: lo intentamos de nuevo el {entrega.fecha_programada_orden:%d/%m}"
+        if intento is not None
+        else f"Cambió la fecha de tu entrega {entrega.codigo}: ahora es el {entrega.fecha_programada_orden:%d/%m}"
         if cambio_de_fecha
         else f"Tu entrega del {entrega.fecha_programada_orden:%d/%m} ({entrega.codigo})"
     )
@@ -580,6 +586,7 @@ def enviar_correo_de_entrega(entrega_id, cambio_de_fecha=False):
             "retiro": entrega.modalidad_entrega == RETIRO,
             "partes": partes,
             "vendedor": contrato.vendedor,
+            "motivo": intento.get_motivo_display().lower() if intento is not None else None,
         },
     )
     if salio:
@@ -999,6 +1006,14 @@ def planificar_entregas(hoy):
             enviar_correo_de_entrega(entrega.pk, _fue_movida(entrega))
         except Exception:  # noqa: BLE001
             logger.exception("Falló el reintento del correo de la entrega %s", entrega.pk)
+    from comercial.servicios import concrecion  # adentro: `concrecion` importa este módulo
+
+    for entrega in list(Entrega.objects.filter(estado_orden=OrdenTrabajo.Estado.CONCRETADA, estado_aviso_cliente=AVISO.PENDIENTE_ENVIO).order_by("pk")):  # COM-06a, 15a: el comprobante de venta o de entrega
+        procesados += 1
+        try:
+            concrecion.enviar_comprobante_de_concrecion(entrega.pk)
+        except Exception:  # noqa: BLE001
+            logger.exception("Falló el reintento del comprobante de la entrega %s", entrega.pk)
     siguen = Entrega.objects.filter(estado_orden=A_REALIZAR, modalidad_entrega=ENVIO, transportista__isnull=True).count()
     return ResumenDePaso(procesados, creados, resueltos, f"{siguen} entregas siguen sin transportista")
 
@@ -1021,14 +1036,16 @@ def url_de_entregas(**filtros):
 
 
 def impedimentos_de_transportista(transportista):
-    """`registrar_impedimento_de_transportista` (reglas 9 y 10 de PROD-MOD-INV; punto 2 de «Cuando exista Entrega»): `transportista_con_entregas` si tiene entregas «a realizar»:
-    «Tiene N entregas a realizar (la próxima, OT-0231 del 26/11).». `transportista_en_ruta` es de COM-06. Solo lectura."""
+    """`registrar_impedimento_de_transportista` (reglas 9 y 10 de PROD-MOD-INV; punto 2 de «Cuando exista Entrega»): `transportista_en_ruta` si está en ruta hoy (COM-06a): «Está en ruta desde hoy
+    con N entregas.», cómo resolverlo «Esperá a que finalice la ruta.»; y `transportista_con_entregas` si tiene entregas «a realizar»: «Tiene N entregas a realizar (la próxima, OT-0231 del
+    26/11).». Solo lectura."""
+    impedimentos = _impedimento_en_ruta(transportista.pk, Impedimento)
     propias = a_realizar_de([transportista.pk]).get(transportista.pk, [])
     if not propias:
-        return []
+        return impedimentos
     proxima = propias[0]
     cuantas = f"{len(propias)} entregas a realizar" if len(propias) != 1 else "1 entrega a realizar"
-    return [
+    return impedimentos + [
         Impedimento(
             "transportista_con_entregas",
             f"Tiene {cuantas} (la próxima, {proxima.codigo} del {proxima.fecha_programada_orden:%d/%m}).",
@@ -1036,6 +1053,25 @@ def impedimentos_de_transportista(transportista):
             url_de_entregas(transportista=transportista.pk),
         )
     ]
+
+
+def _impedimento_en_ruta(transportista_id, clase):
+    """Si el Transportista está en ruta hoy (MD-118), el impedimento `transportista_en_ruta` con la cantidad de entregas que lleva («a realizar», con fecha de hoy o anterior); si no, `[]`.
+    `clase` es `Impedimento` (de `maestros`) o `ImpedimentoDeCuenta` (de `core`): los dos llevan `codigo`, `texto` y `como_resolver`."""
+    hoy = stock.hoy()
+    vehiculo = Vehiculo.objects.filter(transportista_id=transportista_id).first()
+    if vehiculo is None or not vehiculo.esta_en_ruta(hoy):
+        return []
+    cantidad = Entrega.objects.filter(transportista_id=transportista_id, estado_orden=A_REALIZAR, modalidad_entrega=ENVIO, fecha_programada_orden__lte=hoy).count()
+    cuantas = "1 entrega" if cantidad == 1 else f"{cantidad} entregas"
+    return [clase("transportista_en_ruta", f"Está en ruta desde hoy con {cuantas}.", "Esperá a que finalice la ruta.")]
+
+
+def impedimentos_de_baja_de_cuenta(cuenta):
+    """`registrar_impedimento_de_baja_de_cuenta` (precondición d de USR-BAJ-USR; COM-06a): un Transportista en ruta hoy no se da de baja. Los demás roles, nada. Solo lectura."""
+    if cuenta.rol != TRANSPORTISTA:
+        return []
+    return _impedimento_en_ruta(cuenta.pk, ImpedimentoDeCuenta)
 
 
 def asignaciones_de_cuenta(cuenta):
@@ -1090,6 +1126,30 @@ def enlaces_de_alertas(usuario, alertas_de_entregas):
             reverse("comercial:entrega_asignar", args=[entrega.pk]), f"{entrega.codigo} · {entrega.fecha_programada_orden:%d/%m} · {entrega.contrato_entrega.cliente.nombre_visible}"
         )
     return enlaces
+
+
+# ---- COM-06a: lo que se cobra de una entrega (D-68, punto 7; derivados, no se guardan) ----
+
+
+def monto_a_cobrar(entrega_ids):
+    """``{id de entrega: monto a cobrar}``: el total de una entrega concretada menos lo descontado por las solicitudes aceptadas (MD-115; D-69, punto 9), nunca negativo. Hasta COM-07a no hay
+    nada que descontar. ``None`` si la entrega no está concretada. Una consulta."""
+    entrega_ids = list(entrega_ids)
+    resultado = {i: None for i in entrega_ids}
+    for entrega_id, total in Entrega.objects.filter(pk__in=entrega_ids).values_list("pk", "monto_total_entrega"):
+        if total is not None:
+            resultado[entrega_id] = max(Decimal("0.00"), total)
+    return resultado
+
+
+def estado_de_pago(entrega_ids, hoy):
+    """``{id de entrega: «pendiente» | «en_mora» | None}`` de las entregas de suministro concretadas: «en mora» si ``hoy`` pasó su vencimiento y «pendiente» si no (MD-136, MD-139). ``None``
+    si no es de suministro o no está concretada. «Pagada» llega con COM-08a. Una consulta."""
+    entrega_ids = list(entrega_ids)
+    resultado = {i: None for i in entrega_ids}
+    for entrega_id, vencimiento in Entrega.objects.filter(pk__in=entrega_ids, fecha_vencimiento_pago__isnull=False).values_list("pk", "fecha_vencimiento_pago"):
+        resultado[entrega_id] = _estado_de_pago(vencimiento, hoy)
+    return resultado
 
 
 # ---- la lista de entregas de Comercial (el paso 2 de COM-ASG-TRP, sin la asignación; docs/casos_de_uso/comercial/entregas.md, «Pantallas») ----
@@ -1173,10 +1233,20 @@ def _destino_de_la_fila(entrega):
 # ---- COM-05a2: las entregas en el panel de control y en las fichas de los contratos (entregas.md, «Pantallas» y «Lo que completa a otras tareas») ----
 
 FilaDeEntregaDeContrato = namedtuple(
-    "FilaDeEntregaDeContrato", "codigo invernadero fecha cuando atrasada estado estado_texto transportista es_retiro confirmacion"
+    "FilaDeEntregaDeContrato",
+    "codigo invernadero fecha cuando atrasada estado estado_texto transportista es_retiro confirmacion monto vencimiento estado_pago estado_pago_texto",
+    defaults=(None, None, None, ""),  # COM-06a: lo que se fija al concretar (el estado de pago, solo en un suministro; «pagada» llega con COM-08a)
 )
+TEXTO_DEL_PAGO = {"pendiente": "Pendiente", "en_mora": "En mora"}
 EntregasDelPanel = namedtuple("EntregasDelPanel", "a_realizar de_hoy sin_transportista proximas")
 ProximaEntrega = namedtuple("ProximaEntrega", "codigo cliente fecha cuando atrasada")
+
+
+def _estado_de_pago(vencimiento, hoy):
+    """«pendiente» o «en_mora» (MD-139) según el vencimiento de una entrega de suministro concretada; `None` sin vencimiento («pagada» llega con COM-08a)."""
+    if vencimiento is None:
+        return None
+    return "en_mora" if hoy > vencimiento else "pendiente"
 
 
 def entregas_del_contrato(contrato_id, hoy):
@@ -1199,6 +1269,10 @@ def entregas_del_contrato(contrato_id, hoy):
                 transportista=e.transportista.get_full_name() if e.transportista_id else "",
                 es_retiro=e.modalidad_entrega == RETIRO,
                 confirmacion=e.get_estado_confirmacion_cliente_display() if e.estado_confirmacion_cliente else "",
+                monto=e.monto_total_entrega,
+                vencimiento=e.fecha_vencimiento_pago,
+                estado_pago=_estado_de_pago(e.fecha_vencimiento_pago, hoy),
+                estado_pago_texto=TEXTO_DEL_PAGO.get(_estado_de_pago(e.fecha_vencimiento_pago, hoy), ""),
             )
         )
     return filas
@@ -1237,9 +1311,29 @@ def periodos_con_entrega(periodos):
     return {(d, f) for pk, d, f in lineas if (d, f) in periodos and planificadas[pk] > 0}
 
 
-def _accion_de_la_fila(entrega, vehiculo, hoy):
+def periodos_entregados(periodos):
+    """Regla 6 de COM-CNS-SUM (COM-06a): de los ``periodos`` (``[(id del detalle de suministro, fecha)]``), el conjunto de los que tienen una línea en una entrega **concretada** con algo entregado
+    («Entregado» en el calendario). Una consulta para todos los períodos de la página."""
+    periodos = set(periodos)
+    if not periodos:
+        return set()
+    filas = DetalleEntrega.objects.filter(
+        entrega__estado_orden=OrdenTrabajo.Estado.CONCRETADA,
+        detalle_suministro_id__in={d for d, _ in periodos},
+        fecha_periodo__in={f for _, f in periodos},
+        cant_entregada__gt=0,
+    ).values_list("detalle_suministro_id", "fecha_periodo")
+    return {(d, f) for d, f in filas if (d, f) in periodos}
+
+
+def _accion_de_la_fila(entrega, vehiculo, hoy, actor=None):
     """COM-ASG-TRP, paso 2: la acción de una entrega con envío «a realizar»: «asignar» (sin transportista), «cambiar» (con transportista y no en curso) o «en_curso» (MD-118: con la fecha de
     hoy o anterior y el vehículo de su transportista en ruta; sin acción). Un retiro y las concretadas o canceladas no tienen. Sin consultas por fila: el vehículo viene de la página."""
+    if entrega.estado_orden == A_REALIZAR and entrega.modalidad_entrega == RETIRO:
+        # COM-06a, «Concretar retiro»: solo el Vendedor del contrato, con la fecha programada de hoy o anterior (extensión 1a de COM-CNC-ENT). El Gerente no concreta.
+        if actor is not None and rol_de(actor) == VENDEDOR and entrega.contrato_entrega.vendedor_id == actor.pk and entrega.fecha_programada_orden <= hoy:
+            return "concretar_retiro"
+        return None
     if entrega.estado_orden != A_REALIZAR or entrega.modalidad_entrega != ENVIO:
         return None
     if entrega.transportista_id is None:
@@ -1309,7 +1403,7 @@ def lista_de_entregas(actor, filtros, hoy):
                 es_retiro=e.modalidad_entrega == RETIRO,
                 estado=e.estado_orden,
                 estado_texto=TEXTO_DEL_ESTADO[e.estado_orden],
-                accion=_accion_de_la_fila(e, vehiculos.get(e.transportista_id), hoy),
+                accion=_accion_de_la_fila(e, vehiculos.get(e.transportista_id), hoy, actor),
             )
         )
     invernaderos = list(del_alcance.values_list("invernadero_id", "invernadero__nombre_invernadero").distinct().order_by("invernadero__nombre_invernadero"))

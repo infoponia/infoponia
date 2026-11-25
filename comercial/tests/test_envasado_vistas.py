@@ -19,6 +19,7 @@ from comercial.tests.fabricas import (
     entrega,
     envase,
     escenario_comercial,
+    marcar_concretada,
     reserva_lista,
     transportista_con_vehiculo,
     verificar_invariantes_de_entregas,
@@ -396,9 +397,7 @@ class ResumenYConfirmacionTests(Base):
         """Extensión 10a: la entrega ya no está «a realizar»: no se registra nada, se informa su estado y se vuelve a la lista."""
         e1 = self.nueva()
         datos = self.datos(e1, (self.bandeja, 12), confirmar="1")
-        from produccion.models import OrdenTrabajo
-
-        OrdenTrabajo.objects.filter(pk=e1.pk).update(estado_orden="concretada", fecha_resolucion_orden=HOY)
+        marcar_concretada(e1)  # COM-06a: una concretada con sus cantidades y su monto (antes, solo el estado)
         respuesta = self.confirmar(e1, datos)
         self.assertEqual(respuesta.status_code, 302)
         self.assertTrue(any("ya no está a realizar" in m for m in self.mensajes(respuesta)))

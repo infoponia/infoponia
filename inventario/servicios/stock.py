@@ -379,3 +379,47 @@ def lotes_de_ingreso(movimiento_ids):
         .order_by("id")
     )
     return [(m.lote_insumo, m.cantidad) for m in movimientos]
+
+
+# ---- escritura de compras: salida por corrección de recepción (CMP-06; D-90 puntos 1 y 2; docs/api/stock.md, «Escritura de compras»; regla 1 de 8.19, regla 22 de 8.16) ----
+# La única función que crea movimientos «salida por corrección de recepción»: baja un lote creado por una recepción y devuelve esa cantidad al tránsito (lo corregido vuelve a estar pendiente de
+# recibir). Corre dentro de la transacción de quien llama (`compras`), con el invernadero ya bloqueado; bloquea la existencia y sus lotes en orden de id, los vuelve a leer y NO audita.
+
+
+def registrar_salida_por_correccion_de_recepcion(lote_id, cantidad, *, origen_id):
+    """Descuenta ``cantidad`` de un lote creado por una recepción y devuelve el ``MovimientoInsumo`` «salida por corrección de recepción» (docs/api/stock.md).
+
+    - ``lote_id``: un lote común (no el faltante sin lote); ``cantidad``: con los decimales de la unidad, mayor que cero y **no mayor que lo que el lote conserva** (el lote nunca queda en
+      negativo); ``origen_id`` (obligatorio, D-90 punto 2): el id de la ``CorreccionRecepcion`` que origina el movimiento. Todo error es ``ValueError`` (error de uso de quien llama: ``compras``
+      ya verificó con todo bloqueado) y se valida **antes** de escribir, así que no cambia nada.
+    - Crea UN movimiento (regla 1 de 8.19), suma ``cantidad`` al tránsito de la existencia (``cant_transito_insumo``, regla 22 de 8.16: esa mercadería vuelve a estar pendiente) y reevalúa las
+      alertas del insumo (reglas 11 y 12 de 8.15: pueden reactivarse «bajo el mínimo» o «stock inconsistente»). No cambia ``referencia_precio`` (regla 6 de 8.18)."""
+    from inventario.servicios import alertas_de_stock  # adentro: alertas_de_stock importa este módulo
+
+    previo = LoteInsumo.objects.filter(pk=lote_id).values_list("insumo_invernadero_id", flat=True).first()
+    if previo is None:
+        raise ValueError(f"El lote {lote_id} no existe.")
+    existencia = InsumoInvernadero.objects.select_for_update(no_key=True, of=("self",)).select_related("insumo").get(pk=previo)
+    lotes = {l.pk: l for l in LoteInsumo.objects.select_for_update(no_key=True).filter(insumo_invernadero=existencia).order_by("id")}  # todos, en orden de id, y releídos
+    lote = lotes.get(lote_id)
+    if lote is None or lote.es_faltante_sin_lote:
+        raise ValueError(f"El lote {lote_id} no es un lote común de esta existencia.")
+    try:
+        cantidad = validar_cantidad(cantidad, existencia.insumo.unidad_medida_insumo)
+    except ValidationError as error:
+        raise ValueError(f"Cantidad inválida para la corrección: {error.messages[0]}") from error
+    if cantidad <= 0:
+        raise ValueError("La cantidad de la corrección tiene que ser mayor que cero.")
+    if cantidad > lote.cantidad_disponible:
+        raise ValueError(f"El lote {lote_id} solo conserva {lote.cantidad_disponible}: no se pueden descontar {cantidad}.")
+    lote.cantidad_disponible -= cantidad
+    lote.save(update_fields=["cantidad_disponible"])
+    movimiento = MovimientoInsumo.objects.create(
+        lote_insumo=lote,
+        cantidad=cantidad,
+        tipo_movimiento=MovimientoInsumo.TipoMovimiento.SALIDA_POR_CORRECCION_DE_RECEPCION,
+        origen_id=origen_id,
+    )
+    _cambiar_transito(existencia.pk, cantidad, 1)
+    alertas_de_stock.reevaluar_alertas_del_insumo(existencia.pk)
+    return movimiento

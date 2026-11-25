@@ -1,7 +1,6 @@
 # Inicio de «Compras» (CMP-02a y CMP-03; D-87 punto 5, D-43): la sección que ``compras`` registra con ``registrar_seccion_de_inicio`` en ``AppConfig.ready()`` (``panelAgr`` y ``panelGer``
 # del prototipo). El Agrónomo ve «Insumos bajo el mínimo» con «Pedir», «Esperando cotizaciones» y, desde CMP-03, «Pedidos que vencieron» (con «Resolver») y «Órdenes rechazadas» (las de los
-# últimos 7 días, como el prototipo); el Gerente ve «Órdenes pendientes de aprobación». «Por recibir» (Agrónomo) y «Reclamos sin emitir» se suma en
-# CMP-06; «Pagos a proveedores pendientes» (CMP-05) es ``seccion_de_pagos``, del responsable contable.
+# últimos 7 días, como el prototipo); el Gerente ve «Órdenes pendientes de aprobación». «Por recibir» (Agrónomo) y «Reclamos sin emitir» (Gerente, CMP-06); «Pagos a proveedores pendientes» (CMP-05) es ``seccion_de_pagos``, del responsable contable.
 
 from collections import namedtuple
 from datetime import timedelta
@@ -12,6 +11,7 @@ from compras.servicios import ordenes as servicio_de_ordenes
 from compras.servicios import pagos as servicio_de_pagos
 from compras.servicios import pedidos as servicio_de_pedidos
 from compras.servicios import recepciones as servicio_de_recepciones
+from compras.servicios import reclamos as servicio_de_reclamos
 from contabilidad.servicios import responsables
 from core.extensiones import SeccionDeInicio
 from core.models import Usuario, rol_de
@@ -28,7 +28,8 @@ IndicadoresDeCompras = namedtuple(
     defaults=([], [], [], 0),
 )
 # El Gerente: las órdenes «pendiente de aprobación» (la más antigua primero) y cuántas son en total.
-IndicadoresDelGerente = namedtuple("IndicadoresDelGerente", "ordenes_por_aprobar cantidad_por_aprobar")
+# CMP-06: los reclamos sin emitir (los primeros, con su proveedor y su recepción) y cuántos son en total.
+IndicadoresDelGerente = namedtuple("IndicadoresDelGerente", "ordenes_por_aprobar cantidad_por_aprobar reclamos_sin_emitir cantidad_reclamos_sin_emitir", defaults=([], 0))
 
 
 def indicadores_del_agronomo(actor):
@@ -52,7 +53,8 @@ def indicadores_del_agronomo(actor):
 def indicadores_del_gerente(actor):
     """Las órdenes de compra pendientes de aprobación, de la más antigua a la más reciente (``ordenes_por_aprobar``)."""
     filas = servicio_de_ordenes.ordenes_por_aprobar(actor)
-    return IndicadoresDelGerente(filas[:MAXIMO_EN_EL_INICIO], len(filas))
+    sin_emitir = servicio_de_reclamos.reclamos(actor, {"estado": "sin_emitir"})
+    return IndicadoresDelGerente(filas[:MAXIMO_EN_EL_INICIO], len(filas), sin_emitir[:MAXIMO_EN_EL_INICIO], len(sin_emitir))
 
 
 def seccion_de_inicio(usuario):

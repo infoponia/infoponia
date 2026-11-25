@@ -75,7 +75,7 @@ def orden_ficha(request, orden_id):
     """Ficha de la orden (CMP-CNS-ODC reglas 4, 5 y 8, ``VIEWS.c_odc``): el pedido de origen, el monto, el estado, la resolución y las líneas por proveedor e invernadero. El Gerente ve
     «Revisar y decidir» si está pendiente. Una orden fuera del alcance es 403 y una inexistente, 404 (D-28)."""
     ficha = api.ficha_de_orden(request.user, orden_id)
-    return render(request, "compras/ordenes/ficha.html", {"ficha": ficha, "orden": ficha.orden, "es_gerente": request.user.rol == GERENTE, "es_contador": request.user.rol == CONTADOR})
+    return render(request, "compras/ordenes/ficha.html", {"ficha": ficha, "orden": ficha.orden, "es_gerente": request.user.rol == GERENTE, "es_contador": request.user.rol == CONTADOR, "hay_reclamos": any(r.reclamo for r in ficha.recepciones)})
 
 
 # ---- generar (CMP-GNR-ODC) ----

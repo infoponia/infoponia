@@ -26,7 +26,7 @@ from django.db.models.functions import Coalesce
 from django.template.loader import render_to_string
 from django.urls import reverse
 
-from comercial.models import AlertaComercial, CompraVenta, DetalleEntrega, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
+from comercial.models import AlertaComercial, CompraVenta, DetalleEntrega, DetalleReserva, DetalleSuministro, DetalleVenta, Entrega, ReservaStock, Suministro
 from comercial.servicios import calendario, enlaces, entregas, faltantes, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import Periodo, _cubierto
@@ -47,6 +47,7 @@ from produccion.servicios import camara as fisico
 logger = logging.getLogger("infoponia.camara")
 
 TIPO_POR_VENCER = "comercial_partida_por_vencer"  # ESTADO, AGRONOMO_O_GERENTE, ADVERTENCIA, origen STOCK_COSECHADO (D-64 punto 10)
+TIPO_EN_ENTREGA_EN_CURSO = "comercial_partida_en_entrega_en_curso"  # ESTADO, GERENTE, CRITICA, origen STOCK_COSECHADO (PROD-VNC-CAM 3b, COM-06a)
 TIPO_MERMA_RESERVADA = "comercial_merma_camara_reservada"  # EVENTO, AGRONOMO_O_GERENTE, ADVERTENCIA, origen MERMA (regla 8 de 8.9)
 OCUPAN = (ReservaStock.Estado.ACTIVA, ReservaStock.Estado.LISTA_PARA_ENTREGA)  # las reservas que ocupan una partida (regla 10 de 8.6)
 LARGO_DE_LA_ALERTA = 200  # `Alerta.descripcion_alerta`
@@ -312,6 +313,7 @@ def _avisar_merma_reservada(partida, merma, recubierto, afectados, motivo):
 def resolver_aviso_de_partida(partida):
     """Pasa a «resuelta» la alerta «partida por vencer» de la partida (postcondición e de PROD-VNC-CAM: cuando se agota por una merma o vence; COM-06 la llama al entregar lo
     último). Devuelve la alerta o `None` si no había una activa. Corre dentro de la transacción del llamador."""
+    alertas.resolver_alerta_de_estado(partida.lote.invernadero_id, TIPO_EN_ENTREGA_EN_CURSO, _clave_del_aviso(partida.pk))  # 3b (COM-06a): ya se venció o se agotó
     return alertas.resolver_alerta_de_estado(partida.lote.invernadero_id, TIPO_POR_VENCER, _clave_del_aviso(partida.pk))
 
 
@@ -601,6 +603,30 @@ def _vencer_en_transaccion(partida_id, hoy, previo):
         return (p, sum(n for _, n in recorte.lineas), aviso is not None)
 
 
+def _entregas_en_curso_de(partida_id, hoy):
+    """Los códigos de las entregas «a realizar» **en curso** (MD-118) con producto de esta partida en alguna de sus reservas no liberadas. Lectura sin bloquear."""
+    reservas = DetalleReserva.objects.filter(partida_id=partida_id, cantidad_reservada__gt=0).exclude(reserva__estado_reserva=ReservaStock.Estado.LIBERADA).values("reserva_id")
+    candidatas = Entrega.objects.filter(estado_orden=entregas.A_REALIZAR, lineas__reservas__in=reservas).distinct().order_by("pk")
+    return [e.codigo for e in candidatas if entregas.en_curso(e, hoy)]
+
+
+def _posponer_por_entrega_en_curso(partida_id, hoy):
+    """PROD-VNC-CAM, extensión 3b (COM-06a): si la partida vencida tiene producto en una entrega **en curso** (el producto ya salió en el vehículo), hoy no se vence: se deja para la próxima
+    ejecución y se asegura la alerta de estado `comercial_partida_en_entrega_en_curso` para el Gerente (crítica, clave `partida:<id>`), que se resuelve cuando la partida se vence o se agota.
+    «No debería ocurrir» (este paso corre antes de las rutas). Devuelve `True` si pospuso."""
+    codigos = _entregas_en_curso_de(partida_id, hoy)
+    if not codigos:
+        return False
+    with transaction.atomic():
+        partida = StockCosechado.objects.select_related("lote").get(pk=partida_id)
+        bloquear_invernadero_para_alertas(partida.lote.invernadero_id)
+        descripcion = _acotar(f"{partida.codigo} está vencida y tiene producto en {', '.join(codigos)}, que ya salió en ruta: se vence cuando termine.", LARGO_DE_LA_ALERTA)
+        alerta = alertas.asegurar_alerta_de_estado(partida.lote.invernadero_id, TIPO_EN_ENTREGA_EN_CURSO, _clave_del_aviso(partida_id), descripcion)
+        if alerta is not None:
+            AlertaComercial.objects.get_or_create(alerta=alerta, defaults={"partida": partida})
+    return True
+
+
 def _vencer_partida(partida_id, hoy):
     """Pasos 2 y 3 y extensión 3a de PROD-VNC-CAM para una partida. Lee sin bloquear qué contratos tienen líneas en ella, bloquea y relee; si aparecieron contratos nuevos,
     repite la lectura una vez y, si vuelven a cambiar, la deja para la próxima ejecución. Devuelve `(partida, plantas reservadas que perdió, si resolvió el aviso)` o `None`."""
@@ -689,6 +715,8 @@ def vencer_partidas_en_camara(hoy):
     )
     for partida_id in ids:
         try:
+            if _posponer_por_entrega_en_curso(partida_id, hoy):  # 3b
+                continue
             resultado = _vencer_partida(partida_id, hoy)
         except Exception:  # noqa: BLE001 - una partida que falla no puede dejar a las demás sin vencer (extensión *a)
             logger.exception("Falló el vencimiento de la partida %s", partida_id)

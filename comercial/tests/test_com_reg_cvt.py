@@ -13,7 +13,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from contabilidad.models import AsientoContable
-from comercial.models import Cliente, CompraVenta, DetalleReserva, DetalleVenta, ReservaStock
+from comercial.models import Cliente, CompraVenta, DetalleReserva, DetalleVenta, PagoCliente, ReservaStock
 from comercial.servicios import comprobantes, compra_ventas
 from comercial.servicios.compra_ventas import DatosDeCompraVenta, Renglon
 from comercial.tests.fabricas import (
@@ -130,7 +130,8 @@ class FlujoPrincipalTests(BaseDeRegistro):
     def test_regla_la_venta_no_genera_pago_ni_asiento(self):
         """Garantía mínima 4: al registrar no se genera ningún pago ni asiento contable (D-57)."""
         self.registrar()
-        self.assertFalse(any(m.__name__ == "PagoCliente" for m in __import__("django.apps").apps.apps.get_models()))
+        # COM-06a creó el modelo `PagoCliente` (D-68 punto 4): ya no se puede preguntar si existe, se pregunta si registrar la venta dejó algún pago (lo crea la concreción de su última entrega).
+        self.assertFalse(PagoCliente.objects.exists())
         # CON-02 creó el modelo `AsientoContable`: ya no se puede preguntar si existe, se pregunta si la venta dejó alguno (D-57, D-86).
         self.assertFalse(AsientoContable.objects.exists())
 

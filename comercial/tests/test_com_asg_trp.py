@@ -23,6 +23,7 @@ from comercial.tests.fabricas import (
     detalle,
     entrega,
     escenario_comercial,
+    iniciar_ruta_de,
     reserva_lista,
     segundo_invernadero,
     transportista_con_vehiculo,
@@ -239,7 +240,7 @@ class ComAsgTrpServicioTests(Base):
     def test_ext_3a_una_entrega_en_curso_no_se_reasigna(self):
         """Extensión 3a: con el vehículo de su transportista en ruta y fecha de hoy o anterior, la pantalla no ofrece candidatos y el servicio rechaza con `entrega_en_curso`."""
         _, _, e = self.nueva(transportista=self.t1, dias=0)
-        vehiculo_en_ruta(self.t1)
+        iniciar_ruta_de(self.t1)  # COM-06a: la ruta se inicia de verdad (antes, `vehiculo_en_ruta`)
         datos = entregas.datos_de_asignacion(self.e.vendedor, e.pk)
         self.assertTrue(datos.en_curso)
         self.assertIn(f"{self.t1.get_full_name()} ya inició la ruta", datos.bloqueo)

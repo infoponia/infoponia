@@ -1,11 +1,12 @@
 {% load iconos formato_inventario %}
 {% comment %}Sección «Compras» del Inicio del Gerente (`registrar_seccion_de_inicio`, D-43; CMP-03, ``panelGer`` del prototipo): las órdenes de compra pendientes de aprobación, de la más antigua a la más reciente, con
-«Revisar». Recibe «datos» con «indicadores» (IndicadoresDelGerente). «Reclamos sin emitir» y «Pagos a proveedores pendientes» se suman en CMP-05 y CMP-06. Todo se escapa.{% endcomment %}
+«Revisar». Recibe «datos» con «indicadores» (IndicadoresDelGerente). «Reclamos sin emitir» (CMP-06) sale al lado de las órdenes; «Pagos a proveedores pendientes» es otra sección (CMP-05). Todo se escapa.{% endcomment %}
 <div class="page" style="margin-top:16px">
   <h2 style="margin-bottom:12px">Compras</h2>
   {% with i=datos.indicadores %}
   <div class="kpis">
     <a class="kpi{% if i.cantidad_por_aprobar %} warn{% endif %}" href="{% url 'compras:ordenes' %}?atajo=por_aprobar" style="text-decoration:none;color:inherit"><span class="k">Órdenes por aprobar</span><span class="v" data-kpi="por-aprobar">{{ i.cantidad_por_aprobar }}</span><span class="c">{% if i.cantidad_por_aprobar %}esperan tu decisión{% else %}nada por decidir{% endif %}</span></a>
+    <a class="kpi{% if i.cantidad_reclamos_sin_emitir %} warn{% endif %}" href="{% url 'compras:reclamos' %}?estado=sin_emitir" style="text-decoration:none;color:inherit"><span class="k">Reclamos sin emitir</span><span class="v" data-kpi="reclamos-sin-emitir">{{ i.cantidad_reclamos_sin_emitir }}</span><span class="c">{% if i.cantidad_reclamos_sin_emitir %}con inconvenientes de recepción{% else %}al día{% endif %}</span></a>
   </div>
   {% if i.ordenes_por_aprobar %}
   <div class="card seg" style="margin-top:16px">
@@ -21,6 +22,25 @@
           <td class="right">{{ f.proveedores }}</td>
           <td class="right nowrap mono">{{ f.monto|pesos }}</td>
           <td class="right"><a class="btn btn-primary btn-sm" href="{% url 'compras:orden_resolver' f.orden.pk %}">Revisar<span class="sr"> la orden {{ f.orden }}</span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+  {% if i.reclamos_sin_emitir %}
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Recepciones con reclamo</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:reclamos' %}?estado=sin_emitir">Ver todos</a></div>
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Reclamo</th><th>Proveedor</th><th></th></tr></thead>
+        <tbody>
+        {% for f in i.reclamos_sin_emitir %}
+        <tr>
+          <td><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
+          <td>{{ f.proveedor.nombre_para_mostrar }}</td>
+          <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}">Emitir<span class="sr"> el reclamo {{ f.reclamo }}</span></a></td>
         </tr>
         {% endfor %}
         </tbody>
