@@ -112,7 +112,7 @@ compras y estadísticas dependen de ella. Las tareas están en orden de implemen
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| CON-03b | Asientos manuales y contraasientos | contabilidad | pendiente | CON-03a | `contabilidad/CON-03b-asientos-manuales-y-contraasientos.md` |
+| CON-03b | Asientos manuales y contraasientos | contabilidad | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-03a (hecha) | `contabilidad/CON-03b-asientos-manuales-y-contraasientos.md` |
 
 ### Ronda «Compras 1» (D-87 a D-91)
 

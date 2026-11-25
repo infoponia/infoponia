@@ -106,18 +106,19 @@ def destino_del_asiento(fecha, *, automatico, hoy=None):
 
 def _error_de_fecha(motivo, fecha, hoy, rangos):
     """El `ErrorContable` de un asiento manual o contraasiento con una fecha que no admite (C2, extensiones 5e y 3c): el mensaje explica el motivo.
+    Todos empiezan con «La fecha dd/mm/aaaa no admite un asiento:»: lo muestra tal cual la pantalla de pagos de CMP-05 y sus pruebas lo esperan.
     ``rangos`` es la lista `[(inicio, cierre)]` de todos los ejercicios, del más viejo al más nuevo."""
     texto = f"{fecha:%d/%m/%Y}"
     if motivo == "futura":
-        mensaje = f"La fecha {texto} es posterior a hoy ({hoy:%d/%m/%Y}): un asiento no puede llevar una fecha posterior a hoy."
+        explicacion = f"es posterior a hoy ({hoy:%d/%m/%Y}) y un asiento no puede llevar una fecha posterior a hoy"
     elif motivo == "anterior":
         desde = f", que empieza el {rangos[0][0]:%d/%m/%Y}" if rangos else ""
-        mensaje = f"La fecha {texto} es anterior al primer ejercicio contable{desde}."
+        explicacion = f"es anterior al primer ejercicio contable{desde}"
     else:
         inicio, cierre = next(((i, c) for i, c in rangos if i <= fecha <= c), (None, None))
         donde = f"al ejercicio del {inicio:%d/%m/%Y} al {cierre:%d/%m/%Y}, que está" if inicio else "a un ejercicio"
-        mensaje = f"La fecha {texto} pertenece {donde} cerrado y ya no recibe asientos."
-    return ErrorContable(CODIGOS_DE_FECHA[motivo], mensaje, campo="fecha")
+        explicacion = f"pertenece {donde} cerrado y ya no recibe asientos"
+    return ErrorContable(CODIGOS_DE_FECHA[motivo], f"La fecha {texto} no admite un asiento: {explicacion}.", campo="fecha")
 
 
 # El ejercicio donde iría un asiento si se registrara ahora, sin haber escrito nada (`destino_previsto`).
