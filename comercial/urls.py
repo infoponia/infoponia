@@ -16,6 +16,9 @@ urlpatterns = [
     path("contratos/compra-ventas/nueva/revisar/", views_contratos.compra_venta_revisar, name="compra_venta_revisar"),
     path("contratos/compra-ventas/<int:venta_id>/", views_contratos.compra_venta, name="compra_venta"),
     path("contratos/compra-ventas/<int:venta_id>/comprobante/", views_contratos.compra_venta_comprobante, name="compra_venta_comprobante"),
+    # COM-05b (COM-CNL-CVT): cancelar la compra-venta, con su `revisar/` (el resumen; no escribe).
+    path("contratos/compra-ventas/<int:venta_id>/cancelar/", views_contratos.compra_venta_cancelar, name="compra_venta_cancelar"),
+    path("contratos/compra-ventas/<int:venta_id>/cancelar/revisar/", views_contratos.compra_venta_cancelar_revisar, name="compra_venta_cancelar_revisar"),
     path(
         "contratos/compra-ventas/<int:venta_id>/reenviar-comprobante/",
         views_contratos.compra_venta_reenviar_comprobante,
@@ -58,6 +61,9 @@ urlpatterns = [
     path("contratos/compra-ventas/<int:venta_id>/decidir-faltante/", views_faltantes.decidir, name="faltante_decidir"),
     # Entregas (COM-05a1): la lista de entregas de Comercial, con `?entrega=<id>` (la alerta) y `?transportista=<id>` (la ficha del invernadero › «Logística»).
     path("entregas/", views_entregas.lista, name="entregas"),
+    # COM-05b (COM-ASG-TRP): asignar o cambiar el transportista de una entrega, con su `calcular/` («Cómo queda»; no escribe).
+    path("entregas/<int:entrega_id>/asignar/", views_entregas.asignar, name="entrega_asignar"),
+    path("entregas/<int:entrega_id>/asignar/calcular/", views_entregas.asignar_calcular, name="entrega_asignar_calcular"),
     # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
     path("envasado/", views_envasado.lista, name="envasado"),
     path("envasado/<int:entrega_id>/", views_envasado.entrega, name="envasado_entrega"),

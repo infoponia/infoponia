@@ -1,0 +1,76 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}«Cancelar compra-venta» (COM-CNL-CVT, COM-05b; `INIT.cvcancel`, `VIEWS.cvcancel` del prototipo): «Qué se cancela» (cada detalle con su efecto), «Qué pasa con el producto» (lo que vuelve a los
+lotes, a las partidas y lo ya cosechado que ingresa a la cámara; las cosechas y las entregas que se cancelan) y «Motivo» (botones de opción, descripción opcional), con el resumen al costado. Con una
+entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja seguir. «Revisar y cancelar» muestra el resumen (ventana con HTMX o página sin JavaScript) y no escribe. La sección «Cobro de
+lo entregado» del prototipo es de la extensión 6a (COM-06 y COM-08b). Recibe «datos», «motivos», «motivo», «descripcion» y «errores». Correcciones al prototipo: «Cierre» de la tarea (D-61).{% endcomment %}
+{% block titulo %}Cancelar {{ datos.venta.codigo }} · Contratos · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <a class="back" href="{% url 'comercial:compra_venta' datos.venta.pk %}">{% icono "back" 15 %} Volver a la compra-venta</a>
+  <div class="page-h"><h1>Cancelar <span class="mono">{{ datos.venta.codigo }}</span></h1>
+    <div class="sub">{{ datos.cliente }} · {% if datos.venta.modalidad_entrega == "envio" %}envío{% else %}retiro{% endif %} del {{ datos.venta.fecha_pactada_venta|date:"d/m/Y" }}</div></div>
+
+  {% if datos.bloqueo %}
+  <div class="alert alert-warn" role="alert"><div>{{ datos.bloqueo }}</div></div>
+  <div class="acts-fila" style="margin-top:12px"><a class="btn btn-ghost" href="{% url 'comercial:compra_venta' datos.venta.pk %}">Volver a la compra-venta</a></div>
+  {% else %}
+  <p class="muted" style="margin:0 0 12px">Cancelar libera todo lo reservado para esta venta: lo ya cosechado entra a la cámara y queda disponible para otros contratos. Las cosechas y las entregas pendientes se cancelan y se avisa a quienes las tenían.</p>
+  <div id="ventana-confirmar"></div>
+  <form method="post" action="{% url 'comercial:compra_venta_cancelar_revisar' datos.venta.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ datos.huella }}">
+    <div class="with-aside">
+      <div class="stack">
+        <section class="card">
+          <div class="card-title">1 · Qué se cancela</div>
+          <div class="tablewrap"><table class="data-table plain">
+            <thead><tr><th>Variedad</th><th class="right">Cantidad</th><th>Estado</th><th>Efecto</th></tr></thead>
+            <tbody>{% for d in datos.detalles %}<tr><td><b style="font-weight:600">{{ d.variedad }}</b></td><td class="right mono">{{ d.cantidad }}</td><td>{{ d.estado_texto }}</td>
+              <td>{% if d.se_cancela %}<span class="status-badge status-warn">{{ d.efecto }}</span>{% else %}<span class="status-badge status-neutral">{{ d.efecto }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
+          </table></div>
+        </section>
+        <section class="card">
+          <div class="card-title">2 · Qué pasa con el producto</div>
+          <ul class="portal-lista">
+            {% for g in datos.a_lotes %}<li>Vuelve al lote {{ g.origen }}: {{ g.cantidad }} planta{{ g.cantidad|pluralize }} de {{ g.variedad }}.</li>{% endfor %}
+            {% for g in datos.a_partidas %}<li>Vuelve a la partida {{ g.origen }}: {{ g.cantidad }} planta{{ g.cantidad|pluralize }} de {{ g.variedad }}.</li>{% endfor %}
+            {% for g in datos.a_camara %}<li>Entra a la cámara: {{ g.cantidad }} planta{{ g.cantidad|pluralize }} de {{ g.variedad }} (cosechadas){% if g.fecha_limite %}, con fecha límite {{ g.fecha_limite|date:"d/m/Y" }}{% endif %}.</li>{% endfor %}
+            {% for c in datos.cosechas %}<li>Se cancela la cosecha {{ c.codigo }} del {{ c.fecha|date:"d/m/Y" }} en {{ c.invernadero }}.</li>{% endfor %}
+            {% for e in datos.entregas %}<li>Se cancela la entrega {{ e.codigo }} del {{ e.fecha|date:"d/m/Y" }}{% if e.es_retiro %} (retiro en invernadero){% elif e.transportista %} (con {{ e.transportista }}, que recibe un aviso){% endif %}{% if e.con_envases %}; se cancelan sus envases reservados{% endif %}.</li>{% endfor %}
+            {% if not datos.a_lotes and not datos.a_partidas and not datos.a_camara and not datos.cosechas and not datos.entregas %}<li class="muted">No hay stock reservado, cosechas ni entregas pendientes: solo se cancela la venta.</li>{% endif %}
+            {% if datos.venta.estado_venta == "pendiente_decision" %}<li>El enlace con el que el cliente decide el faltante queda sin efecto.</li>{% endif %}
+          </ul>
+        </section>
+        <section class="card">
+          <div class="card-title">3 · Motivo</div>
+          <fieldset class="modalidad" aria-describedby="motivo-ayuda">
+            <legend>Motivo de la cancelación</legend>
+            {% for valor, texto in motivos %}<label><input type="radio" name="motivo" value="{{ valor }}"{% if motivo == valor %} checked{% endif %}{% if errores.motivo %} aria-invalid="true"{% endif %}> {{ texto }}</label>{% endfor %}
+          </fieldset>
+          {% for m in errores.motivo %}<div class="err" role="alert">{{ m }}</div>{% empty %}<div class="hint" id="motivo-ayuda">Obligatorio.</div>{% endfor %}
+          <div class="fld"><label for="descripcion">Descripción</label>
+            <input class="field-input" id="descripcion" name="descripcion" maxlength="300" value="{{ descripcion }}" placeholder="Opcional"{% if errores.descripcion %} aria-invalid="true"{% endif %}>
+            {% for m in errores.descripcion %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+        </section>
+      </div>
+      <aside class="stack">
+        <div class="card"><div class="card-title">Resumen</div>
+          <dl class="dl">
+            <dt>Detalles cancelados</dt><dd class="mono">{{ cuantos }}</dd>
+            <dt>Cosechas canceladas</dt><dd class="mono">{{ datos.cosechas|length }}</dd>
+            <dt>Entregas canceladas</dt><dd class="mono">{{ datos.entregas|length }}</dd>
+            <dt>Estado final</dt><dd><span class="status-badge status-neutral">Cancelada</span></dd>
+          </dl>
+        </div>
+        <div class="alert alert-info"><div>{% if datos.comprobante %}Se enviará el comprobante a {{ datos.comprobante }}.{% else %}El cliente no tiene correo: vas a tener que imprimir el comprobante.{% endif %}</div></div>
+      </aside>
+    </div>
+    <div class="acts-fila" style="margin-top:12px">
+      <button class="btn btn-danger" type="submit" hx-post="{% url 'comercial:compra_venta_cancelar_revisar' datos.venta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" data-sin-envio-en-curso>Revisar y cancelar</button>
+      <a class="btn btn-ghost" href="{% url 'comercial:compra_venta' datos.venta.pk %}">Volver</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

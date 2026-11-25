@@ -834,6 +834,7 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_ENTREGA = "modificacion_entrega", "Modificación de entrega"
         ASIGNACION_TRANSPORTISTA = "asignacion_transportista", "Asignación de transportista"
         PLANIFICACION_ENVASADO = "planificacion_envasado", "Planificación de envasado"  # COM-05a2 (PROD-PNF-ENV)
+        CANCELACION_COMPRA_VENTA = "cancelacion_compra_venta", "Cancelación de compra-venta"  # COM-05b (COM-CNL-CVT)
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1170,6 +1171,13 @@ class RegistroAuditoria(models.Model):
         "cosechas_canceladas": "Cosechas canceladas",
         "enlace": "Enlace del cliente",
         "fecha_vencimiento_enlace": "El enlace vencía el",
+        # COM-05b (MD-130, COM-CNL-CVT): los datos de la cancelación de una compra-venta y las claves de `datos` de su auditoría («entregas_canceladas», «cosechas_canceladas»,
+        # «partidas_creadas», «movimientos_creados», «enlaces_anulados» y «alertas_resueltas» ya existen).
+        "motivo_cancelacion_venta": "Motivo de la cancelación",
+        "descripcion_cancelacion": "Descripción de la cancelación",
+        "fecha_cancelacion_venta": "Fecha de la cancelación",
+        "detalles_cancelados": "Detalles cancelados",
+        "reservas_de_envases_canceladas": "Reservas de envases canceladas",
         # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
         "fecha_inicio_ejercicio": "Inicio del ejercicio",
         "fecha_cierre_ejercicio": "Cierre previsto del ejercicio",
@@ -1317,6 +1325,8 @@ class RegistroAuditoria(models.Model):
         "estado_detalle_suministro": {"vigente": "Vigente", "finalizado": "Finalizado", "resuelto": "Resuelto"},
         # COM-03b: el motivo de la rescisión (`core` no importa `comercial`).
         "motivo_rescision": {"a_pedido_del_cliente": "A pedido del cliente", "a_pedido_de_la_empresa": "A pedido de la empresa", "otro": "Otro"},
+        # COM-05b: el motivo de la cancelación de una compra-venta (`core` no importa `comercial`).
+        "motivo_cancelacion_venta": {"cliente_desistio": "El cliente desistió", "cliente_no_retiro": "El cliente no retiró", "otro": "Otro"},
         "estado_stock_cosechado": {"disponible": "Disponible", "agotado": "Agotada", "vencido": "Vencida"},  # COM-04b
         "estado_reserva": {
             "activa": "Activa",
@@ -1582,6 +1592,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_ENTREGA,
         RegistroAuditoria.Accion.ASIGNACION_TRANSPORTISTA,
         RegistroAuditoria.Accion.PLANIFICACION_ENVASADO,
+        RegistroAuditoria.Accion.CANCELACION_COMPRA_VENTA,
     }
 )
 

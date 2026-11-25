@@ -80,3 +80,22 @@ class CancelarCosechaIncluidaTests(Base):
             cosechas.cancelar_cosecha_incluida(None, self.releer(Cosecha, self.cosecha.pk), "m" * 400, recubrir=False, avisar=False)
         motivo = self.releer(Cosecha, self.cosecha.pk).motivo_cancelacion
         self.assertEqual((len(motivo), motivo[-1]), (300, "…"))
+
+
+class CancelarCosechaIncluidaDesdeCompraVentaTests(Base):
+    """Desde COM-CNL-CVT (COM-05b): la cosecha de una venta que se cancela se cancela con `recubrir=False` y el aviso al Capataz y al Agrónomo, con el motivo de la venta."""
+
+    def test_regla_la_cancelacion_de_la_venta_cancela_la_cosecha_sin_recubrir_y_avisa(self):
+        """El detalle se cancela con la venta: no hay nada que volver a cubrir (aunque haya stock) y el Capataz y el Agrónomo reciben el aviso con el motivo."""
+        from comercial.servicios import compra_ventas
+        from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+
+        lote_maduro(self.e, 100)
+        venta = self.detalle.compra_venta
+        datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk)
+        compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("cliente_no_retiro"), datos.huella)
+        cosecha = self.releer(Cosecha, self.cosecha.pk)
+        self.assertEqual((cosecha.estado_orden, cosecha.motivo_cancelacion), ("cancelada", f"Se canceló la compra-venta {venta.codigo}: el cliente no retiró."))
+        self.assertEqual(Cosecha.objects.count(), 1)  # sin cosecha nueva
+        self.assertEqual({n.destinatario_id for n in Notificacion.objects.all()}, {self.e.capataz.pk, self.e.agronomo.pk})
+        self.assertEqual(self.releer(DetalleVenta, self.detalle.pk).estado_detalle_venta, "cancelado")

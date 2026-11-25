@@ -150,14 +150,15 @@ class ParametrosTests(Base):
         _, cancelada = self.nueva(transportista=self.t, estado="cancelada")
         self.assertEqual(self.codigos_en(self.ver(self.gerente, f"?entrega={cancelada.pk}")), [cancelada.codigo])
 
-    def test_ext_d62_el_enlace_de_la_alerta_lleva_a_la_fila_y_no_a_un_403(self):
-        """El enlace de la campana del Gerente abre la lista en esa entrega."""
+    def test_ext_d62_el_enlace_de_la_alerta_lleva_a_la_asignacion_y_no_a_un_403(self):
+        """El enlace de la campana del Gerente abre la pantalla de asignación de esa entrega (COM-05b, extensión 1b)."""
         venta, e = self.nueva()
         alerta = entregas._alerta_sin_transportista(e, venta, "capacidad de carga insuficiente")
         url = entregas.enlaces_de_alertas(self.gerente, [alerta])[alerta.pk].url
         self.client.force_login(self.gerente)
         respuesta = self.client.get(url)
-        self.assertEqual((respuesta.status_code, self.codigos_en(respuesta)), (200, [e.codigo]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn(f"Asignar transportista · {e.codigo}", texto(respuesta))
 
     def test_regla_logistica_su_columna_lleva_a_la_lista_filtrada_por_transportista(self):
         """`url_entregas` de «Logística» (`?transportista=<id>`) abre la lista con las «a realizar» de ese transportista."""
@@ -171,13 +172,13 @@ class ParametrosTests(Base):
 
 class ContenidoTests(Base):
     def test_regla_las_columnas_dicen_destino_contenido_peso_fecha_y_estado(self):
-        """Columnas: entrega y contrato, cliente y destino con el contenido, fecha («mañana»), peso, transportista y estado; solo «Ver contrato»."""
+        """Columnas: entrega y contrato, cliente y destino con el contenido, fecha («mañana»), peso, transportista y estado; «Ver contrato» y, con transportista, «Cambiar transportista» (COM-05b)."""
         venta, e = self.nueva(100, dias=1, transportista=self.t)
         html = texto(self.ver(self.gerente))
-        for esperado in (e.codigo, venta.codigo, venta.cliente.nombre_visible, "100 ", "mañana", "15,00 kg", self.t.get_full_name(), "A realizar", "Ver contrato"):
+        for esperado in (e.codigo, venta.codigo, venta.cliente.nombre_visible, "100 ", "mañana", "15,00 kg", self.t.get_full_name(), "A realizar", "Ver contrato", "Cambiar transportista"):
             self.assertIn(esperado, html)
         self.assertIn(reverse("comercial:compra_venta", args=[venta.pk]), html)
-        for ausente in ("Asignar transportista", "Cambiar transportista", "Concretar retiro", "Vencida"):
+        for ausente in ("Asignar transportista", "Concretar retiro", "Vencida"):
             self.assertNotIn(ausente, html)
 
     def test_regla_una_entrega_atrasada_se_marca_atrasada_en_rojo(self):

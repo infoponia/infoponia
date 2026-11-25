@@ -1,0 +1,71 @@
+{% extends "core/base_con_sesion.html" %}{% load estaticos %}
+{% comment %}«Asignar / Cambiar transportista» (COM-ASG-TRP, COM-05b; `INIT.asg`, `VIEWS.asg` y `candidatos` del prototipo): la entrega con su origen, su destino, su fecha y su peso; el aviso de 3a (en curso),
+de 4a (la fecha ya pasó: se reprograma para hoy) o de 4b (ningún candidato cumple); los candidatos con su capacidad libre, sus entregas y sus localidades del día (los que no cumplen, deshabilitados con
+su motivo); y la tarjeta «Cómo queda» (paso 6), que con HTMX se redibuja al elegir (`calcular/`, sin escribir) y sin JavaScript sale con «Ver cómo queda» (la misma página). «Asignar transportista» es la
+confirmación (paso 7). Recibe «datos», «seleccionado», «como», «error_transportista» y «es_gerente». Las correcciones al prototipo están en el «Cierre» de la tarea (D-61).{% endcomment %}
+{% block titulo %}{% if datos.transportista_actual %}Cambiar{% else %}Asignar{% endif %} transportista · {{ datos.entrega.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:entregas' %}">‹ Volver a entregas</a>
+  <div class="page-h"><h1>{% if datos.transportista_actual %}Cambiar{% else %}Asignar{% endif %} transportista · <span class="mono">{{ datos.entrega.codigo }}</span></h1>
+    <div class="sub">{{ datos.cliente }} · {{ datos.contrato.codigo }}</div></div>
+
+  <div class="card">
+    <dl class="dl">
+      <dt>Punto de partida</dt><dd>{{ datos.invernadero }}</dd>
+      <dt>Destino</dt><dd>{{ datos.destino }}</dd>
+      <dt>Fecha programada</dt><dd>{{ datos.entrega.fecha_programada_orden|date:"d/m/Y" }}{% if datos.reprograma %} <span class="danger-t">Atrasada</span>{% endif %}</dd>
+      <dt>Peso</dt><dd class="mono">{{ datos.peso|floatformat:2 }} kg</dd>
+      <dt>Transportista actual</dt><dd>{% if datos.transportista_actual %}{{ datos.transportista_actual.get_full_name }}{% else %}<span class="muted">Sin asignar</span>{% endif %}</dd>
+    </dl>
+  </div>
+
+  {% if datos.bloqueo %}
+  <div class="alert alert-warn" role="alert" style="margin-top:12px"><div>{{ datos.bloqueo }}</div></div>
+  <div class="acts-fila" style="margin-top:12px"><a class="btn btn-ghost" href="{% url 'comercial:entregas' %}">Ver la lista de entregas</a></div>
+  {% else %}
+  <p class="muted" style="margin:12px 0">Elegí quién lleva la entrega. Solo se pueden elegir los transportistas del invernadero de origen que pueden llevarla ese día: el resto muestra por qué no.</p>
+  {% if datos.reprograma %}<div class="alert alert-warn" role="status"><div>La fecha ya pasó: la entrega se reprogramará para hoy, {{ datos.fecha_de_busqueda|date:"d/m" }}. Se avisará el retraso al cliente y al Vendedor.</div></div>{% endif %}
+
+  <form method="post" action="{% url 'comercial:entrega_asignar' datos.entrega.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="huella" value="{{ datos.huella }}">
+    <div class="card" style="margin-top:12px">
+      <div class="card-title">Transportistas candidatos para el {{ datos.fecha_de_busqueda|date:"d/m/Y" }}</div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th style="width:52px"></th><th>Transportista y vehículo</th><th class="right">Capacidad libre</th><th class="right">Entregas del día</th><th class="right">Localidades</th><th>Situación</th></tr></thead>
+          <tbody>
+          {% for c in datos.candidatos %}
+            <tr{% if c.motivo %} class="r-off"{% endif %}>
+              <td><input type="radio" name="transportista" id="t-{{ c.transportista.pk }}" value="{{ c.transportista.pk }}"{% if c.motivo %} disabled{% endif %}{% if seleccionado == c.transportista.pk|stringformat:"s" %} checked{% endif %}
+                  hx-post="{% url 'comercial:entrega_asignar_calcular' datos.entrega.pk %}" hx-trigger="change" hx-target="#como-queda" hx-swap="innerHTML show:none" hx-include="closest form" data-sin-envio-en-curso
+                  aria-label="Elegir a {{ c.transportista.get_full_name }}"></td>
+              <td><label for="t-{{ c.transportista.pk }}"><b style="font-weight:600">{{ c.transportista.get_full_name }}</b></label>{% if c.vehiculo %}<span class="sub2">{{ c.vehiculo.get_tipo_vehiculo_display }} {{ c.vehiculo.patente }} · {{ c.vehiculo.capacidad_carga|floatformat:0 }} kg</span>{% endif %}</td>
+              <td class="right mono">{{ c.capacidad_libre|floatformat:2 }} kg</td>
+              <td class="right mono">{{ c.entregas_del_dia }}</td>
+              <td class="right mono">{{ c.localidades_del_dia|length }}</td>
+              <td>{% if c.motivo %}<span class="status-badge status-neutral">{{ c.motivo }}</span>{% else %}<span class="status-badge status-ok">Disponible</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="muted">{{ datos.aviso_sin_candidatos }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if error_transportista %}<div class="err" role="alert">{{ error_transportista }}</div>{% endif %}
+    </div>
+    {% if datos.candidatos and datos.aviso_sin_candidatos %}<div class="alert alert-danger" role="alert" style="margin-top:12px"><div>{{ datos.aviso_sin_candidatos }}</div></div>{% endif %}
+
+    <div id="como-queda" aria-live="polite">{% include "comercial/entregas/_como_queda.html" %}</div>
+
+    <div class="acts-fila" style="margin-top:12px">
+      <button class="btn btn-primary" type="submit" data-enviando="Asignando…"{% if datos.aviso_sin_candidatos %} disabled title="Ningún transportista puede tomar la entrega"{% endif %}>Asignar transportista</button>
+      <noscript><button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:entrega_asignar_calcular' datos.entrega.pk %}">Ver cómo queda</button></noscript>
+      <a class="btn btn-ghost" href="{% url 'comercial:entregas' %}">Cancelar</a>
+    </div>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

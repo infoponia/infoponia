@@ -9,6 +9,7 @@
 # vuelve a leer ya bloqueado (extensión 8b). Las notificaciones y la alerta se crean dentro de la transacción (D-42); el correo al cliente sale después de confirmar (D-14, D-54).
 # Una planificación que falla se registra con `logger.exception` y la retoma el paso 50 (garantía mínima 2).
 
+import json
 import logging
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass
@@ -16,10 +17,11 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from functools import partial
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, Value, When
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
 from comercial.models import (
@@ -1076,8 +1078,8 @@ def efecto_de_baja_de_cuenta(actor, cuenta):
 
 
 def enlaces_de_alertas(usuario, alertas_de_entregas):
-    """`registrar_enlace_de_alerta` para `comercial_entrega_sin_transportista` (D-62, puntos 2 y 4; extensión 6a): solo el Gerente la recibe; lleva a la lista de entregas con
-    `?entrega=<id>` (COM-05b lo cambia a la pantalla de asignación), con el texto «OT-0231 · 26/11 · Pérez SA». Una consulta para toda la lista."""
+    """`registrar_enlace_de_alerta` para `comercial_entrega_sin_transportista` (D-62, puntos 2 y 4; extensión 6a de COM-PNF-ENT y 1b de COM-ASG-TRP, COM-05b): solo el Gerente la recibe; lleva
+    a la pantalla de asignación de esa entrega, con el texto «OT-0231 · 26/11 · Pérez SA». Una consulta para toda la lista."""
     alertas_de_entregas = list(alertas_de_entregas)
     if not alertas_de_entregas or rol_de(usuario) != GERENTE:
         return {}
@@ -1085,7 +1087,7 @@ def enlaces_de_alertas(usuario, alertas_de_entregas):
     for vinculo in AlertaComercial.objects.filter(alerta_id__in=[a.pk for a in alertas_de_entregas], entrega__isnull=False).select_related("entrega__contrato_entrega__cliente"):
         entrega = vinculo.entrega
         enlaces[vinculo.alerta_id] = Enlace(
-            url_de_entregas(entrega=entrega.pk), f"{entrega.codigo} · {entrega.fecha_programada_orden:%d/%m} · {entrega.contrato_entrega.cliente.nombre_visible}"
+            reverse("comercial:entrega_asignar", args=[entrega.pk]), f"{entrega.codigo} · {entrega.fecha_programada_orden:%d/%m} · {entrega.contrato_entrega.cliente.nombre_visible}"
         )
     return enlaces
 
@@ -1104,7 +1106,7 @@ SIN_TRANSPORTISTA = "_"  # el valor del filtro «Sin transportista»
 
 FilaDeEntrega = namedtuple(
     "FilaDeEntrega",
-    "entrega codigo contrato_codigo url_del_contrato cliente destino contenido fecha cuando atrasada peso transportista sin_transportista es_retiro estado estado_texto",
+    "entrega codigo contrato_codigo url_del_contrato cliente destino contenido fecha cuando atrasada peso transportista sin_transportista es_retiro estado estado_texto accion",
 )
 ListaDeEntregas = namedtuple("ListaDeEntregas", "pagina filas invernaderos transportistas hay_filtros")
 
@@ -1235,6 +1237,18 @@ def periodos_con_entrega(periodos):
     return {(d, f) for pk, d, f in lineas if (d, f) in periodos and planificadas[pk] > 0}
 
 
+def _accion_de_la_fila(entrega, vehiculo, hoy):
+    """COM-ASG-TRP, paso 2: la acción de una entrega con envío «a realizar»: «asignar» (sin transportista), «cambiar» (con transportista y no en curso) o «en_curso» (MD-118: con la fecha de
+    hoy o anterior y el vehículo de su transportista en ruta; sin acción). Un retiro y las concretadas o canceladas no tienen. Sin consultas por fila: el vehículo viene de la página."""
+    if entrega.estado_orden != A_REALIZAR or entrega.modalidad_entrega != ENVIO:
+        return None
+    if entrega.transportista_id is None:
+        return "asignar"
+    if entrega.fecha_programada_orden <= hoy and vehiculo is not None and vehiculo.esta_en_ruta(hoy):
+        return "en_curso"
+    return "cambiar"
+
+
 def lista_de_entregas(actor, filtros, hoy):
     """La pestaña «Entregas» de Comercial: las entregas del alcance de `actor` (el Gerente, todas; el Vendedor, las de sus contratos; cualquier otro, ninguna) con los filtros, primero las
     de envío «a realizar» sin transportista, después por fecha programada y por id, de a 50. Devuelve `ListaDeEntregas(pagina, filas, invernaderos, transportistas, hay_filtros)`.
@@ -1267,6 +1281,7 @@ def lista_de_entregas(actor, filtros, hoy):
     pesos = peso_de_entregas(ids)
     lineas = list(DetalleEntrega.objects.filter(entrega_id__in=ids).select_related("detalle_venta__variedad__cultivo", "detalle_suministro__variedad__cultivo").order_by("pk"))
     planificadas = cantidades_planificadas([l.pk for l in lineas])
+    vehiculos = {v.transportista_id: v for v in Vehiculo.objects.filter(transportista_id__in={e.transportista_id for e in entregas_de_la_pagina if e.transportista_id})}
     contenidos = defaultdict(list)
     for linea in lineas:
         if planificadas[linea.pk] > 0:
@@ -1294,6 +1309,7 @@ def lista_de_entregas(actor, filtros, hoy):
                 es_retiro=e.modalidad_entrega == RETIRO,
                 estado=e.estado_orden,
                 estado_texto=TEXTO_DEL_ESTADO[e.estado_orden],
+                accion=_accion_de_la_fila(e, vehiculos.get(e.transportista_id), hoy),
             )
         )
     invernaderos = list(del_alcance.values_list("invernadero_id", "invernadero__nombre_invernadero").distinct().order_by("invernadero__nombre_invernadero"))
@@ -1303,3 +1319,227 @@ def lista_de_entregas(actor, filtros, hoy):
         for a in TransportistaInvernadero.objects.filter(invernadero_id__in=ids_de_invernaderos).select_related("transportista").order_by("transportista__last_name", "transportista__first_name", "pk")
     ]
     return ListaDeEntregas(pagina, filas, invernaderos if len(invernaderos) > 1 else [], transportistas, filtros.con_filtros)
+
+
+# ---- COM-ASG-TRP · Asignar Transportista a Entrega (COM-05b; docs/casos_de_uso/comercial/entregas.md, «COM-ASG-TRP»; D-66 y D-67 punto 3) ----
+# Bloqueos (`FOR NO KEY UPDATE`, docs/patrones/bloqueos.md, «Asignar un transportista»): las cuentas (el actor, el Vendedor, el transportista nuevo y el actual; una consulta y por id) → el
+# invernadero de origen (el semáforo, D-66 punto 11) → la entrega. Con el invernadero tomado nadie más cambia ese día del transportista: se vuelven a calcular los candidatos (8b).
+# No toma reservas ni insumos: el contenido de la entrega no cambia.
+
+MENSAJE_SIN_ACCESO = "Tu cuenta no tiene acceso a esta acción."
+AVISO_SIN_TRANSPORTISTAS = "El invernadero de origen no tiene transportistas."
+AYUDA_PARA_EL_GERENTE = "Podés dar de alta un transportista en la ficha del invernadero («Logística»), un vehículo, o ajustar los límites en «Configuración»."
+AYUDA_PARA_EL_VENDEDOR = "Avisale al Gerente: puede sumar un transportista o un vehículo, o ajustar los límites."
+
+# `bloqueo` es el texto de por qué la entrega no se puede asignar (3a, un retiro, ya concretada o cancelada) o `None`; `candidatos` son todos los del invernadero sin el actual, con su motivo;
+# `aviso_sin_candidatos` es el de 4b (o `None` si alguno cumple).
+DatosDeAsignacion = namedtuple(
+    "DatosDeAsignacion",
+    "entrega contrato cliente destino peso invernadero transportista_actual en_curso fecha_de_busqueda reprograma candidatos aviso_sin_candidatos bloqueo huella",
+)
+ComoQueda = namedtuple("ComoQueda", "transportista vehiculo peso_del_dia peso_entrega peso_total capacidad entregas maximo_entregas localidades maximo_localidades fecha deja")
+
+
+def huella_de_entrega(entrega, peso=None):
+    """Lo que cuenta para detectar que la entrega cambió entre que se abrió la pantalla y se confirmó (8a): su estado, su transportista, su fecha programada y su peso."""
+    peso = peso if peso is not None else peso_de_entregas([entrega.pk])[entrega.pk]
+    return json.dumps([entrega.estado_orden, entrega.transportista_id, f"{entrega.fecha_programada_orden:%Y-%m-%d}", f"{peso:.2f}"])
+
+
+def _exigir_asignador(actor):
+    """Precondición a: Vendedor o Gerente con la cuenta activa (SEG-13). Lee la cuenta de la base: el objeto del pedido pudo quedar viejo (la cuenta se dio de baja mientras tanto). Devuelve
+    la cuenta vigente."""
+    vigente = Usuario.objects.filter(pk=actor.pk).first() if actor is not None else None
+    if vigente is None or not vigente.is_active or rol_de(vigente) not in (GERENTE, VENDEDOR):
+        raise PermissionDenied(MENSAJE_SIN_ACCESO)
+    return vigente
+
+
+def _entrega_para_asignar(actor, entrega_id):
+    """La entrega con lo que necesita la pantalla; 404 si no existe, `PermissionDenied` (403 con mensaje) si no es del alcance del actor (D-28; regla «Quién asigna»)."""
+    actor = _exigir_asignador(actor)
+    entrega = get_object_or_404(
+        Entrega.objects.select_related("contrato_entrega__cliente", "invernadero", "transportista", "direccion_destino__localidad"), pk=entrega_id
+    )
+    if not Entrega.objects.en_alcance_de(actor).filter(pk=entrega.pk).exists():
+        raise PermissionDenied(MENSAJE_SIN_ACCESO)
+    return entrega
+
+
+def _por_que_no_se_asigna(entrega, hoy):
+    """`(código, mensaje)` si la entrega no es asignable (regla «Entrega asignable»: con envío, «a realizar» y no en curso) o `None`."""
+    if entrega.modalidad_entrega != ENVIO:
+        return "entrega_sin_envio", "Un retiro en invernadero no tiene transportista: no hay nada que asignar."
+    if entrega.estado_orden != A_REALIZAR:
+        return "entrega_no_a_realizar", f"La entrega {entrega.codigo} ya no está a realizar."
+    if en_curso(entrega, hoy):
+        return "entrega_en_curso", (
+            f"{entrega.transportista.get_full_name()} ya inició la ruta: el producto está cargado en su vehículo y la entrega no se puede reasignar. "
+            "Si no puede entregarla, el transportista registra el intento fallido."
+        )
+    return None
+
+
+def _aviso_sin_candidatos(candidatos, actor):
+    """Extensión 4b: sin transportistas en el invernadero, o con el motivo de cada uno y a quién acudir según el rol del actor; `None` si alguno cumple."""
+    if not candidatos:
+        return AVISO_SIN_TRANSPORTISTAS
+    if any(c.motivo is None for c in candidatos):
+        return None
+    motivos = "; ".join(f"{c.transportista.get_full_name()}: {c.motivo.lower()}" for c in candidatos)
+    return f"Ningún transportista puede llevar la entrega ({motivos}). " + (AYUDA_PARA_EL_GERENTE if rol_de(actor) == GERENTE else AYUDA_PARA_EL_VENDEDOR)
+
+
+def _localidad_de(entrega):
+    return entrega.direccion_destino.localidad_id if entrega.direccion_destino_id else None
+
+
+def datos_de_asignacion(actor, entrega_id, hoy=None):
+    """Pasos 2 a 4 de COM-ASG-TRP (solo lectura, sin consultas por transportista): la entrega con su contrato, cliente, destino, peso, invernadero y transportista actual; `en_curso` (3a);
+    la fecha de búsqueda (la programada, u hoy si ya pasó: `reprograma`, 4a); los candidatos de `candidatos_para` sin el actual, **todos** con su motivo (solo cumplen los de `motivo=None`);
+    el aviso de 4b y la `huella` (8a). Una entrega que no se puede asignar (3a, un retiro, concretada o cancelada) no trae candidatos y dice por qué en `bloqueo`.
+    Errores: 404 si no existe; `PermissionDenied` si no es del alcance del actor."""
+    hoy = hoy or stock.hoy()
+    entrega = _entrega_para_asignar(actor, entrega_id)
+    peso = peso_de_entregas([entrega.pk])[entrega.pk]
+    razon = _por_que_no_se_asigna(entrega, hoy)
+    fecha = max(entrega.fecha_programada_orden, hoy)
+    candidatos = []
+    if razon is None:
+        candidatos = candidatos_para(entrega.invernadero_id, fecha, peso, _localidad_de(entrega), excluir=entrega.transportista_id, hoy=hoy)
+    contrato = entrega.contrato_entrega
+    return DatosDeAsignacion(
+        entrega,
+        contrato,
+        _cliente_de(contrato),
+        _destino_de_la_fila(entrega),
+        peso,
+        entrega.invernadero,
+        entrega.transportista,
+        razon is not None and razon[0] == "entrega_en_curso",
+        fecha,
+        entrega.estado_orden == A_REALIZAR and entrega.fecha_programada_orden < hoy,
+        candidatos,
+        None if razon is not None else _aviso_sin_candidatos(candidatos, actor),
+        razon[1] if razon is not None else None,
+        huella_de_entrega(entrega, peso),
+    )
+
+
+def _error_de_transportista(codigo, mensaje, motivo=None):
+    """Un `ValidationError` del campo `transportista` (con el motivo en `params` si lo hay)."""
+    return ValidationError({"transportista": [ValidationError(mensaje, code=codigo, params={"motivo": motivo} if motivo else None)]})
+
+
+def _candidato_elegido(candidatos, transportista_id):
+    """El candidato `transportista_id` o un `ValidationError`: `transportista_obligatorio` si no se eligió ninguno (decisión D: no se quita el transportista) y `transportista_no_cumple`
+    si no es de los del invernadero (o es el actual) o no cumple las verificaciones (con su motivo)."""
+    if transportista_id in (None, ""):
+        raise _error_de_transportista("transportista_obligatorio", "Elegí el transportista que lleva la entrega.")
+    try:
+        transportista_id = int(transportista_id)
+    except (TypeError, ValueError):
+        raise _error_de_transportista("transportista_no_cumple", "Elegí un transportista de la lista.") from None
+    elegido = next((c for c in candidatos if c.transportista.pk == transportista_id), None)
+    if elegido is None:
+        raise _error_de_transportista("transportista_no_cumple", "Ese transportista no puede llevar esta entrega: elegí uno de la lista.")
+    if elegido.motivo is not None:
+        raise _error_de_transportista(
+            "transportista_no_cumple", f"{elegido.transportista.get_full_name()} ya no puede llevar la entrega: {elegido.motivo.lower()}.", elegido.motivo
+        )
+    return elegido
+
+
+def resumen_de_asignacion(actor, entrega_id, transportista_id, hoy=None):
+    """Paso 6 (y 5a): cómo queda el transportista elegido ese día: la carga con la entrega, las entregas «N + 1 de M», las localidades, la fecha y el transportista que la deja. Valida igual
+    que la confirmación y no escribe nada. Errores: los de `datos_de_asignacion`; `entrega_sin_envio`, `entrega_no_a_realizar`, `entrega_en_curso`, `transportista_obligatorio` y
+    `transportista_no_cumple`."""
+    datos = datos_de_asignacion(actor, entrega_id, hoy)
+    if datos.bloqueo is not None:
+        codigo, mensaje = _por_que_no_se_asigna(datos.entrega, hoy or stock.hoy())
+        raise _rechazar(codigo, mensaje)
+    elegido = _candidato_elegido(datos.candidatos, transportista_id)
+    ajustes = configuracion.obtener()
+    localidad = _localidad_de(datos.entrega)
+    localidades = len(elegido.localidades_del_dia | ({localidad} if localidad is not None else set()))
+    return ComoQueda(
+        elegido.transportista,
+        elegido.vehiculo,
+        elegido.peso_del_dia,
+        datos.peso,
+        elegido.peso_del_dia + datos.peso,
+        elegido.vehiculo.capacidad_carga,
+        elegido.entregas_del_dia + 1,
+        ajustes.cant_maxima_entregas_diarias,
+        localidades,
+        ajustes.cant_max_ciudades_distintas_diarias,
+        datos.fecha_de_busqueda,
+        datos.transportista_actual,
+    )
+
+
+def asignar_transportista(actor, entrega_id, transportista_id, huella):
+    """COM-ASG-TRP, pasos 7 a 10: asigna `transportista_id` a la entrega, en UNA transacción con los bloqueos del encabezado, y devuelve la `Entrega`.
+
+    - Después de bloquear, vuelve a leer: 8a (`entrega_cambio` si la `huella` no coincide; `entrega_no_a_realizar`, `entrega_en_curso` o `entrega_sin_envio`) y 8b (`transportista_no_cumple`,
+      con el motivo en `params`, si el elegido ya no cumple para la fecha de búsqueda recalculada con la «hoy» de ahora: 4a).
+    - Efectos: el transportista nuevo; si la fecha programada ya pasó, pasa a hoy con el aviso de retraso al Vendedor y el correo al cliente (después de confirmar, `estado_aviso_cliente`); la
+      alerta «entrega sin transportista» resuelta; los avisos (al nuevo; al anterior si está activo; al Vendedor si asignó el Gerente) y la auditoría `asignacion_transportista`.
+    - `PermissionDenied` si el actor no es Vendedor del contrato o Gerente activo (SEG-13); 404 si la entrega no existe."""
+    previa = _entrega_para_asignar(actor, entrega_id)
+    if transportista_id in (None, ""):
+        raise _error_de_transportista("transportista_obligatorio", "Elegí el transportista que lleva la entrega.")
+    with transaction.atomic():
+        nuevo_id = int(transportista_id) if str(transportista_id).isdigit() else None
+        cuentas = {c for c in (actor.pk, previa.contrato_entrega.vendedor_id, nuevo_id, previa.transportista_id) if c}
+        por_id = {u.pk: u for u in Usuario.objects.select_for_update(no_key=True).filter(pk__in=cuentas).order_by("pk")}
+        quien = por_id.get(actor.pk)
+        if quien is None or not quien.is_active or rol_de(quien) not in (GERENTE, VENDEDOR):
+            raise PermissionDenied(MENSAJE_SIN_ACCESO)
+        invernadero = bloquear_invernadero_activo(previa.invernadero_id)
+        list(OrdenTrabajo.objects.select_for_update(no_key=True, of=("self",)).filter(pk=previa.pk))
+        entrega = Entrega.objects.select_related("contrato_entrega__cliente", "contrato_entrega__vendedor", "invernadero", "transportista", "direccion_destino__localidad").get(pk=previa.pk)
+        hoy = stock.hoy()
+        razon = _por_que_no_se_asigna(entrega, hoy)
+        if razon is not None:
+            raise _rechazar(*razon)
+        peso = peso_de_entregas([entrega.pk])[entrega.pk]
+        if huella_de_entrega(entrega, peso) != huella:
+            raise _rechazar("entrega_cambio", "La entrega cambió mientras la mirabas (se asignó, se canceló o salió en ruta). Volvé a la lista.")
+        programada = entrega.fecha_programada_orden
+        fecha = max(programada, hoy)  # 4a también si «hoy» cambió entre la lectura y la confirmación
+        candidatos = candidatos_para(invernadero, fecha, peso, _localidad_de(entrega), excluir=entrega.transportista_id, hoy=hoy)
+        elegido = _candidato_elegido(candidatos, transportista_id)  # 8b: con el invernadero tomado, nadie más cambió el día de este transportista
+        nuevo, anterior, contrato = elegido.transportista, entrega.transportista, entrega.contrato_entrega
+        movida = programada < hoy
+        campos = {"transportista": nuevo}
+        cambios = {"transportista": {"antes": referencia(anterior) if anterior is not None else None, "despues": referencia(nuevo)}}
+        if movida:
+            campos.update(fecha_programada_orden=hoy, aviso_atrasada_para=None)
+            cambios["fecha_programada_orden"] = {"antes": f"{programada:%d/%m/%Y}", "despues": f"{hoy:%d/%m/%Y}"}
+        Entrega.objects.filter(pk=entrega.pk).update(**campos)
+        entrega.transportista, entrega.fecha_programada_orden = nuevo, fecha
+        _avisar_nueva_entrega_al_transportista(entrega, contrato, peso)
+        if anterior is not None and anterior.is_active:
+            notificaciones.notificar(
+                anterior,
+                _acotar(f"Ya no tenés la entrega {entrega.codigo}", LARGO_DEL_TITULO),
+                _acotar(f"{quien.get_full_name()} se la asignó a otro transportista. Era para el {programada:%d/%m} a {_cliente_de(contrato)}.", LARGO_DEL_DETALLE),
+            )
+        if movida:
+            _aviso_de_retraso(entrega, contrato, programada)
+            _marcar_aviso_pendiente(entrega, contrato, cambio_de_fecha=True)
+        if rol_de(quien) == GERENTE:
+            _avisar_al_vendedor(contrato, f"{entrega.codigo} ya tiene transportista", f"El Gerente se la asignó a {nuevo.get_full_name()} para el {fecha:%d/%m}.")
+        resuelta = alertas.resolver_alerta_de_estado(entrega.invernadero_id, TIPO_SIN_TRANSPORTISTA, _clave_de_la_alerta(entrega.pk))
+        datos = {"entrega": referencia(entrega), "contrato": contrato.codigo}
+        if resuelta is not None:
+            datos["alertas_resueltas"] = [referencia(resuelta)]
+        RegistroAuditoria.objects.registrar(
+            usuario=quien,
+            accion=RegistroAuditoria.Accion.ASIGNACION_TRANSPORTISTA,
+            afectados=[entrega, nuevo, *([anterior] if anterior is not None else []), *([resuelta] if resuelta is not None else [])],
+            detalle={"cambios": cambios, "datos": datos},
+        )
+        entrega.se_reprogramo = movida
+        return entrega

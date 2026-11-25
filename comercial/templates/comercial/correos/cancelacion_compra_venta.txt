@@ -1,0 +1,19 @@
+{% load comercial %}{% autoescape off %}Hola {{ cliente }},
+
+Se canceló tu compra {{ venta.codigo }} en {{ nombre_organizacion }} el {{ cancelacion.fecha|date:"d/m/Y" }}.
+
+Motivo: {{ cancelacion.motivo }}{% if cancelacion.descripcion %}
+{{ cancelacion.descripcion }}{% endif %}
+
+Lo que se canceló:
+{% for fila in cancelacion.cancelados %}- {{ fila.variedad }}: {{ fila.cantidad }} plantas
+{% endfor %}{% if cancelacion.sin_cambios %}
+Lo que no cambia:
+{% for fila in cancelacion.sin_cambios %}- {{ fila.variedad }}: {{ fila.cantidad }} plantas
+{% endfor %}{% endif %}
+Si la entrega ya estaba programada, también quedó cancelada.
+
+Este es un comprobante interno, sin validez fiscal.
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

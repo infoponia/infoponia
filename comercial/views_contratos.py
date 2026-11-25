@@ -12,13 +12,13 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_POST, require_safe
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
 from comercial.models import CompraVenta
 from comercial.servicios import clientes as api_clientes
 from comercial.servicios import comprobantes, compra_ventas
-from comercial.servicios.compra_ventas import NO_CAMPO, DatosDeCompraVenta, FiltrosDeCompraVentas, Renglon
+from comercial.servicios.compra_ventas import NO_CAMPO, DatosDeCancelacionDeVenta, DatosDeCompraVenta, FiltrosDeCompraVentas, Renglon
 from core.acceso import rol_requerido
 from core.models import Usuario
 
@@ -274,3 +274,114 @@ def con_parametro(request, url, **parametros):
     nueva = urlunsplit((partes.scheme, partes.netloc, partes.path, urlencode(consulta), partes.fragment))
     permitido = url_has_allowed_host_and_scheme(nueva, allowed_hosts={request.get_host()}, require_https=request.is_secure())
     return nueva if permitido else url
+
+
+# ---- COM-CNL-CVT · Cancelar compra-venta (COM-05b) ----
+# Las vistas solo orquestan: arman los datos del pedido, llaman al servicio y renderizan. «Revisar y cancelar» muestra el resumen (ventana con HTMX, página sin JavaScript) y no escribe; «Confirmar
+# cancelación» escribe (paso 8): vuelve a verificar todo bajo bloqueo. Si la venta cambió (8a, 8b) se vuelve al paso 4 con los datos nuevos.
+
+MOTIVOS_DE_CANCELACION = CompraVenta.MotivoCancelacion.choices
+# Códigos de los que no hay nada que corregir en el motivo: se informa y se vuelve a la ficha (la venta ya no se puede cancelar).
+SIN_SALIDA_DE_CANCELACION = {"venta_no_cancelable"}
+
+
+def _codigos(error):
+    if hasattr(error, "error_dict"):
+        return {e.code for lista in error.error_dict.values() for e in lista}
+    return {e.code for e in error.error_list}
+
+
+def _cuantos_se_cancelan(datos):
+    return sum(1 for d in datos.detalles if d.se_cancela)
+
+
+def _pagina_de_cancelacion(request, venta_id, motivo="", descripcion="", errores=None):
+    """La pantalla de cancelación con los datos de ahora (paso 4) y, si los hay, los errores por campo (`motivo`, `descripcion`)."""
+    datos = compra_ventas.datos_de_cancelacion(request.user, venta_id)
+    contexto = {
+        "datos": datos,
+        "motivos": MOTIVOS_DE_CANCELACION,
+        "motivo": motivo,
+        "descripcion": descripcion,
+        "errores": errores or {},
+        "cuantos": _cuantos_se_cancelan(datos),
+    }
+    return render(request, "comercial/contratos/cancelar.html", contexto)
+
+
+@rol_requerido(GERENTE, VENDEDOR)
+@never_cache
+@vary_on_headers("HX-Request")
+@require_http_methods(["GET", "HEAD", "POST"])
+def compra_venta_cancelar(request, venta_id):
+    """«Cancelar compra-venta» (`VIEWS.cvcancel`). El GET muestra lo que va a pasar (paso 4). El POST confirma (paso 8). Con «volver» (el resumen sin JavaScript) deja la pantalla con lo elegido.
+    8a y 8b (`venta_cambio`, `entrega_en_curso`…) vuelven al paso 4 con los datos nuevos; `venta_no_cancelable`, a la ficha."""
+    if request.method != "POST":
+        return _pagina_de_cancelacion(request, venta_id)
+    datos_post = DatosDeCancelacionDeVenta.desde_post(request.POST)
+    if "volver" in request.POST:
+        return _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion)
+    try:
+        venta = compra_ventas.cancelar_compra_venta(request.user, venta_id, datos_post, request.POST.get("huella", ""))
+    except ValidationError as error:
+        codigos = _codigos(error)
+        if codigos & SIN_SALIDA_DE_CANCELACION:
+            messages.error(request, " ".join(error.messages))
+            return redirect("comercial:compra_venta", venta_id)
+        if hasattr(error, "error_dict") and codigos & {"motivo_obligatorio", "motivo_invalido", "descripcion_larga"}:
+            return _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, _mensajes(error))
+        messages.error(request, " ".join(error.messages))  # 8a, 8b, 4a y 6a: se vuelve al paso 4 con lo que hay ahora
+        return redirect("comercial:compra_venta_cancelar", venta_id)
+    _avisar_la_cancelacion(request, venta)
+    return redirect("comercial:compra_venta", venta.pk)
+
+
+def _avisar_la_cancelacion(request, venta):
+    """El aviso breve del paso 10 (D-29): «CV-0044 cancelada. Se canceló 1 cosecha y 1 entrega; 40 plantas entraron a la cámara.» más lo del comprobante (postcondición g y extensión 9a)."""
+    partes = []
+    cosechas, entregas_ = len(venta.cosechas_canceladas), len(venta.entregas_canceladas)
+    if cosechas:
+        partes.append(f"{cosechas} cosecha" + ("" if cosechas == 1 else "s"))
+    if entregas_:
+        partes.append(f"{entregas_} entrega" + ("" if entregas_ == 1 else "s"))
+    texto = f"{venta.codigo} cancelada."
+    if partes:
+        texto += f" Se canceló {' y '.join(partes)}"
+        texto += f"; {venta.plantas_a_camara} planta{'' if venta.plantas_a_camara == 1 else 's'} entraron a la cámara." if venta.plantas_a_camara else "."
+    elif venta.plantas_a_camara:
+        texto += f" {venta.plantas_a_camara} planta{'' if venta.plantas_a_camara == 1 else 's'} entraron a la cámara."
+    estado = CompraVenta.objects.filter(pk=venta.pk).values_list("estado_comprobante", flat=True).get()  # el envío salió después de confirmar
+    if estado == CompraVenta.EstadoDelComprobante.ENVIADO:
+        messages.success(request, f"{texto} Se envió el comprobante a {venta.cliente.email_cliente}.")
+    elif estado == CompraVenta.EstadoDelComprobante.PARA_IMPRIMIR:
+        messages.success(request, f"{texto} El cliente no tiene correo: imprimí el comprobante.")
+    else:
+        messages.success(request, texto)
+        messages.error(request, f"No se pudo enviar el comprobante a {venta.cliente.email_cliente}. Podés reenviarlo desde la ficha.")
+
+
+@rol_requerido(GERENTE, VENDEDOR)
+@never_cache
+@vary_on_headers("HX-Request")
+@require_POST
+def compra_venta_cancelar_revisar(request, venta_id):
+    """«Revisar y cancelar» (pasos 6 y 7): valida el motivo y que la venta se pueda cancelar, y muestra el resumen. Con HTMX llega solo la ventana; sin JavaScript, el resumen es una página. Si algo
+    falta vuelve a la pantalla con los errores por campo. **No escribe nada.**"""
+    datos_post = DatosDeCancelacionDeVenta.desde_post(request.POST)
+    try:
+        resumen = compra_ventas.resumen_de_cancelacion_de_venta(request.user, venta_id, datos_post)
+    except ValidationError as error:
+        if hasattr(error, "error_dict") and _codigos(error) & {"motivo_obligatorio", "motivo_invalido", "descripcion_larga"}:
+            respuesta = _pagina_de_cancelacion(request, venta_id, datos_post.motivo, datos_post.descripcion, _mensajes(error))
+            if _es_htmx(request):
+                respuesta["HX-Retarget"] = "body"
+                respuesta["HX-Reswap"] = "innerHTML show:none"
+            return respuesta
+        messages.error(request, " ".join(error.messages))
+        return redirect("comercial:compra_venta_cancelar", venta_id)
+    contexto = {
+        "resumen": resumen,
+        "datos_post": {"huella": request.POST.get("huella", ""), "motivo": datos_post.motivo, "descripcion": datos_post.descripcion},
+        "cuantos": _cuantos_se_cancelan(resumen.datos),
+    }
+    return render(request, "comercial/contratos/_cancelar_resumen.html" if _es_htmx(request) else "comercial/contratos/cancelar_resumen.html", contexto)

@@ -7,7 +7,7 @@ from collections import namedtuple
 
 from django.core.exceptions import PermissionDenied, ValidationError
 
-from comercial.models import Contrato, Suministro
+from comercial.models import CompraVenta, Contrato, Suministro
 from core import correo, notificaciones
 from core.models import Usuario, rol_de
 
@@ -27,7 +27,10 @@ ASUNTOS_POR_TIPO = {
     "modificacion": "Modificación de tu suministro {codigo}",
     "rescision": "Rescisión de tu suministro {codigo}",
     "anulacion_rescision": "Rescisión sin efecto de tu suministro {codigo}",
+    "cancelacion": "Cancelación de tu compra {codigo}",  # COM-CNL-CVT (COM-05b), paso 9
 }
+# El comprobante de cancelación de una compra-venta tiene su propio texto (no es el de registro con otro asunto).
+PLANTILLAS_POR_TIPO = {"cancelacion": "comercial/correos/cancelacion_compra_venta.txt"}
 
 
 def contexto_del_comprobante(contrato):
@@ -62,7 +65,7 @@ def enviar_comprobante(contrato, tipo=None, cambios=None):
     salio = correo.enviar_correo(
         Destinatario(cliente.pk, cliente.email_cliente),
         (ASUNTOS_POR_TIPO[tipo] if tipo else ASUNTOS[contrato.tipo_contrato]).format(codigo=contrato.codigo),
-        PLANTILLAS[contrato.tipo_contrato],
+        PLANTILLAS_POR_TIPO.get(tipo, PLANTILLAS[contrato.tipo_contrato]),
         {**contexto_del_comprobante(contrato), "tipo": tipo, "cambios": list(cambios or [])},
     )
     nuevo = Estado.ENVIADO if salio else Estado.PENDIENTE_ENVIO
@@ -101,4 +104,7 @@ def reenviar_comprobante(actor, contrato_id):
     # COM-RSC-SUM 7a: con una rescisión acordada (o rescindido), lo que se reenvía es la constancia de la rescisión.
     suministro = Suministro.objects.filter(pk=contrato.pk).first()
     tipo = "rescision" if suministro is not None and suministro.motivo_rescision is not None else None
+    # COM-CNL-CVT: con una compra-venta cancelada con motivo (MD-130), lo que se reenvía es el comprobante de cancelación.
+    if CompraVenta.objects.filter(pk=contrato.pk, motivo_cancelacion_venta__isnull=False).exists():
+        tipo = "cancelacion"
     return enviar_comprobante(contrato, tipo=tipo)

@@ -9,9 +9,12 @@
 # id) → los lotes y las partidas candidatos (por id) → las filas nuevas. Con todo bloqueado, el resultado de `asignar` ES la verificación del
 # paso 14: si algún detalle no se cubre entero, `stock_insuficiente` y se revierte todo (extensión 14a). El correo sale DESPUÉS de confirmar.
 
+import json
+import logging
 import re
+from collections import namedtuple
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -23,10 +26,12 @@ from django.shortcuts import get_object_or_404
 from comercial.models import Cliente, CompraVenta, DetalleReserva, DetalleVenta, DireccionCliente, ReservaStock
 from comercial.servicios import clientes as api_clientes
 from comercial.servicios import comprobantes, entregas, stock_maduro
+from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.servicios import stock
 from inventario.servicios.variedades import bloquear_variedad
 from maestros.models import Direccion, Invernadero, Variedad
+from maestros.servicios.alertas import bloquear_invernadero_para_alertas
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 
 GERENTE = Usuario.Rol.GERENTE
@@ -665,13 +670,24 @@ def datos_del_comprobante(venta):
         )
         for d in detalles
     ]
-    return {
+    contexto = {
         "venta": venta,
         "cliente": venta.cliente,
         "destino": destino,
         "filas": filas,
         "monto": sum((f.subtotal for f in filas), Decimal("0.00")),
+        "cancelacion": None,
     }
+    if venta.motivo_cancelacion_venta:  # COM-CNL-CVT, paso 9: el comprobante de una venta cancelada dice el motivo, lo que se canceló y lo que no cambia
+        por_detalle = {d.variedad_id: d for d in detalles}
+        contexto["cancelacion"] = SimpleNamespace(
+            motivo=venta.get_motivo_cancelacion_venta_display(),
+            descripcion=venta.descripcion_cancelacion,
+            fecha=venta.fecha_cancelacion_venta,
+            cancelados=[f for f in filas if por_detalle[f.variedad.pk].estado_detalle_venta == DetalleVenta.Estado.CANCELADO],
+            sin_cambios=[f for f in filas if por_detalle[f.variedad.pk].estado_detalle_venta != DetalleVenta.Estado.CANCELADO],
+        )
+    return contexto
 
 
 # ---- consulta (COM-CNS-CVT) ----
@@ -764,6 +780,8 @@ def ficha_de_compra_venta(actor, venta_id):
         hija = api_clientes.direccion_hija(venta.invernadero_retiro.direccion_id)
         destino = f"{venta.invernadero_retiro.nombre_invernadero} ({hija.texto()})" if hija else venta.invernadero_retiro.nombre_invernadero
     acciones = {"ver_cliente"}
+    if venta.estado_venta in ESTADOS_CANCELABLES:  # COM-CNL-CVT, regla 5 de COM-CNS-CVT: el Vendedor del contrato y el Gerente (el alcance ya lo garantiza), con la venta abierta o pendiente
+        acciones.add("cancelar")
     if venta.estado_comprobante == CompraVenta.EstadoDelComprobante.PENDIENTE_ENVIO and venta.cliente.email_cliente:
         acciones.add("reenviar_comprobante")
     from comercial.servicios import entregas, faltantes  # `faltantes` importa de `cosechas`, que importa de este módulo: se importa acá para no cruzarlos
@@ -777,3 +795,402 @@ def ficha_de_compra_venta(actor, venta_id):
         faltantes.estado_del_faltante(venta, actor),
         entregas.entregas_del_contrato(venta.pk, stock.hoy()),
     )
+
+
+# ---- COM-CNL-CVT · Cancelar Compra-venta (COM-05b; docs/casos_de_uso/comercial/compra_venta.md, «COM-CNL-CVT»; D-64, D-65, D-66 y D-67 punto 4) ----
+# Bloqueos (`FOR NO KEY UPDATE`; docs/patrones/bloqueos.md, «Cancelar una compra-venta»): las cuentas (el actor, el Vendedor, los Capataces y Agrónomos de las cosechas y los transportistas y
+# Agrónomos de las entregas) → los invernaderos de las reservas y de las entregas (`bloquear_invernadero_para_alertas`: activo o no, D-64 punto 12) → el cliente → las variedades → los
+# sectores → los lotes y las partidas → la venta → sus detalles → las cosechas → las reservas y sus líneas → las entregas → el enlace (siempre al final, D-65). Todo se vuelve a leer ya
+# bloqueado (8a y 8b). Las notificaciones van dentro de la transacción (D-42); PROD-ASG-CAM (`on_commit`) y el comprobante (después de la transacción), tras confirmar (D-14, D-54).
+
+logger = logging.getLogger("infoponia.compra_ventas")
+
+ESTADOS_CANCELABLES = (CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION)
+DETALLES_A_CANCELAR = (DetalleVenta.Estado.ABIERTO, DetalleVenta.Estado.PENDIENTE_DECISION, DetalleVenta.Estado.CONFIRMADO)  # D-67 punto 4: el confirmado también, si no se entregó
+LARGO_DE_LA_DESCRIPCION = 300
+A_REALIZAR, CONCRETADA = "a_realizar", "concretada"
+
+# `bloqueo` es el texto de por qué la venta no se puede cancelar (venta ya cerrada, extensión 4a, 6a) o `None`.
+DatosDeCancelacion = namedtuple(
+    "DatosDeCancelacion", "venta cliente detalles a_lotes a_partidas a_camara cosechas entregas en_curso concretadas comprobante huella bloqueo"
+)
+ResumenDeCancelacionDeVenta = namedtuple("ResumenDeCancelacionDeVenta", "datos motivo motivo_texto descripcion estado_final")
+_Alcance = namedtuple("_Alcance", "detalles reservas lineas cosechas a_realizar concretadas en_curso cuentas invernaderos variedades lotes partidas")
+
+
+@dataclass(frozen=True)
+class DatosDeCancelacionDeVenta:
+    """Lo que elige la persona en el paso 5: el motivo (de la lista cerrada de MD-130) y la descripción opcional."""
+
+    motivo: str = ""
+    descripcion: str = ""
+
+    @classmethod
+    def desde_post(cls, post):
+        """Arma los datos de un ``QueryDict``: ``motivo`` y ``descripcion``."""
+        return cls((post.get("motivo") or "").strip(), (post.get("descripcion") or "").strip())
+
+
+def _validar_motivo(datos):
+    """Paso 5: el motivo es obligatorio y de su lista (`motivo_obligatorio`, `motivo_invalido`); la descripción, de hasta 300 sin espacios al borde (`descripcion_larga`). Devuelve los datos
+    normalizados. Errores por campo (`motivo`, `descripcion`)."""
+    motivo, descripcion = (datos.motivo or "").strip(), (datos.descripcion or "").strip()
+    if not motivo:
+        raise _error_de_campo("motivo", "Elegí el motivo de la cancelación.", "motivo_obligatorio")
+    if motivo not in CompraVenta.MotivoCancelacion.values:
+        raise _error_de_campo("motivo", "Elegí uno de los motivos de la lista.", "motivo_invalido")
+    if len(descripcion) > LARGO_DE_LA_DESCRIPCION:
+        raise _error_de_campo("descripcion", f"La descripción pasa de {LARGO_DE_LA_DESCRIPCION} caracteres.", "descripcion_larga")
+    return DatosDeCancelacionDeVenta(motivo, descripcion)
+
+
+def _venta_para_cancelar(actor, venta_id):
+    """La venta con su cliente y su Vendedor; 404 si no existe y `PermissionDenied` si no es del alcance de `actor` (D-28; regla «Quién cancela»)."""
+    # Lee la cuenta de la base: el objeto del pedido pudo quedar viejo (la cuenta se dio de baja mientras tanto).
+    actor = Usuario.objects.filter(pk=actor.pk).first() if actor is not None else None
+    _exigir_actor(actor)
+    venta = get_object_or_404(CompraVenta.objects.select_related("cliente", "vendedor"), pk=venta_id)
+    if not CompraVenta.objects.en_alcance_de(actor).filter(pk=venta.pk).exists():
+        raise PermissionDenied(MENSAJE_SIN_ACCESO)
+    return venta
+
+
+def huella_de_venta(venta):
+    """Lo que cuenta para detectar que algo cambió entre el resumen y la confirmación (8a y 8b): el estado de la venta y de cada detalle, de cada reserva (y de su cosecha), de cada línea (lo
+    reservado y lo cosechado), de cada entrega (estado, transportista y fecha) y los enlaces vigentes."""
+    from comercial.models import Entrega, EnlaceCliente
+
+    return json.dumps(
+        [
+            venta.estado_venta,
+            list(DetalleVenta.objects.filter(compra_venta=venta).order_by("pk").values_list("pk", "estado_detalle_venta")),
+            list(ReservaStock.objects.filter(detalle_venta__compra_venta=venta).order_by("pk").values_list("pk", "estado_reserva", "cosecha__estado_orden")),
+            list(DetalleReserva.objects.filter(reserva__detalle_venta__compra_venta=venta).order_by("pk").values_list("pk", "cantidad_reservada", "cantidad_cosechada")),
+            list(Entrega.objects.filter(contrato_entrega_id=venta.pk).order_by("pk").values_list("pk", "estado_orden", "transportista_id", "fecha_programada_orden")),
+            list(EnlaceCliente.objects.filter(compra_venta=venta, estado="vigente").order_by("pk").values_list("pk", flat=True)),
+        ],
+        default=str,
+    )
+
+
+def _alcance_de_cancelacion(venta, hoy):
+    """Lo que la cancelación puede tocar, leído sin bloquear (después se vuelve a leer con todo bloqueado): los detalles que se cancelan (D-67 punto 4), sus reservas no liberadas con sus líneas,
+    las cosechas «a realizar», las entregas «a realizar» (y cuáles están en curso, 4a) y las concretadas (6a), y de ahí las cuentas, invernaderos, variedades, lotes y partidas a bloquear."""
+    from comercial.models import Entrega
+
+    detalles = list(
+        DetalleVenta.objects.filter(compra_venta=venta, estado_detalle_venta__in=DETALLES_A_CANCELAR)
+        .exclude(lineas_de_entrega__entrega__estado_orden=CONCRETADA)
+        .select_related("variedad__cultivo")
+        .order_by("pk")
+    )
+    reservas = list(
+        ReservaStock.objects.filter(detalle_venta__in=detalles)
+        .exclude(estado_reserva=ReservaStock.Estado.LIBERADA)
+        .select_related("cosecha__invernadero", "invernadero")
+        .order_by("pk")
+    )
+    lineas = list(DetalleReserva.objects.filter(reserva__in=reservas).select_related("lote__siembra__variedad", "partida__lote__siembra__variedad").order_by("pk"))
+    cosechas = [r.cosecha for r in reservas if r.cosecha_id and r.cosecha.estado_orden == A_REALIZAR]
+    todas = list(Entrega.objects.filter(contrato_entrega_id=venta.pk).select_related("invernadero__agronomo", "transportista").order_by("pk"))
+    a_realizar = [e for e in todas if e.estado_orden == A_REALIZAR]
+    concretadas = [e for e in todas if e.estado_orden == CONCRETADA]
+    en_curso = [e for e in a_realizar if entregas.en_curso(e, hoy)]
+    cuentas = {venta.vendedor_id}
+    cuentas |= {c.capataz_id for c in cosechas} | {c.invernadero.agronomo_id for c in cosechas}
+    cuentas |= {e.transportista_id for e in a_realizar} | {e.invernadero.agronomo_id for e in a_realizar}
+    return _Alcance(
+        detalles,
+        reservas,
+        lineas,
+        cosechas,
+        a_realizar,
+        concretadas,
+        en_curso,
+        {c for c in cuentas if c},
+        {r.invernadero_id for r in reservas} | {e.invernadero_id for e in a_realizar},
+        {d.variedad_id for d in detalles},
+        {l.lote_id for l in lineas if l.lote_id},
+        {l.partida_id for l in lineas if l.partida_id},
+    )
+
+
+def _por_que_no_se_cancela(venta, alcance):
+    """`(código, mensaje)` si la venta no se puede cancelar o `None`: ya cerrada (`venta_no_cancelable`), con una entrega concretada (6a: `venta_con_entregas_concretadas`, llega con COM-06 y
+    COM-08b) o con una entrega en curso (4a: `entrega_en_curso`)."""
+    if venta.estado_venta not in ESTADOS_CANCELABLES:
+        return "venta_no_cancelable", f"{venta.codigo} ya está {venta.get_estado_venta_display().lower()}: solo se cancela una compra-venta abierta o pendiente de decisión del cliente."
+    if alcance.concretadas:
+        return "venta_con_entregas_concretadas", "Esta venta ya tiene entregas concretadas: su cancelación con cobro llega con la cobranza."
+    if alcance.en_curso:
+        e = alcance.en_curso[0]
+        return "entrega_en_curso", (
+            f"No se puede cancelar mientras el producto está en viaje: {e.codigo} salió hoy con {e.transportista.get_full_name()}. Si el cliente no lo quiere, puede rechazarlo al "
+            "recibir, o el transportista registra el intento fallido. Después vas a poder cancelar."
+        )
+    return None
+
+
+def datos_de_cancelacion(actor, compra_venta_id, hoy=None):
+    """Pasos 2 a 4 de COM-CNL-CVT (solo lectura): cada detalle con su efecto («Se cancela» o «… no cambia»); las reservas que se liberan en tres grupos (lo que vuelve a los lotes, lo que vuelve
+    a las partidas y lo ya cosechado que ingresa a la cámara, con su fecha límite); las cosechas y las entregas «a realizar» que se cancelan; las entregas en curso (4a) y las concretadas (6a); el
+    destino del comprobante (el correo o `None` si hay que imprimirlo) y la `huella`. `bloqueo` dice por qué la venta no se puede cancelar. 404 si no existe; `PermissionDenied` si no es del alcance."""
+    from produccion.models import ReservaInsumo
+
+    hoy = hoy or stock.hoy()
+    venta = _venta_para_cancelar(actor, compra_venta_id)
+    alcance = _alcance_de_cancelacion(venta, hoy)
+    razon = _por_que_no_se_cancela(venta, alcance)
+    a_cancelar = {d.pk for d in alcance.detalles}
+    detalles = []
+    for d in venta.detalles.select_related("variedad__cultivo").order_by("variedad_id", "pk"):
+        if d.pk in a_cancelar:
+            efecto = "Se cancela"
+        elif d.estado_detalle_venta == DetalleVenta.Estado.RECHAZADO:
+            efecto = "Rechazado: no cambia"
+        elif d.estado_detalle_venta == DetalleVenta.Estado.CANCELADO:
+            efecto = "Cancelado: no cambia"
+        else:
+            efecto = "Ya entregado: no cambia"
+        cantidad = d.cant_entregada_venta if d.estado_detalle_venta == DetalleVenta.Estado.CONFIRMADO and d.cant_entregada_venta is not None else d.cant_solicitada_venta
+        detalles.append(SimpleNamespace(detalle=d, variedad=str(d.variedad), cantidad=cantidad, estado_texto=d.get_estado_detalle_venta_display(), efecto=efecto, se_cancela=d.pk in a_cancelar))
+    cosecha_de = {r.pk: r.cosecha for r in alcance.reservas}
+    a_lotes, a_partidas, a_camara = [], [], []
+    for linea in alcance.lineas:
+        cosecha = cosecha_de[linea.reserva_id]
+        if linea.partida_id:
+            a_partidas.append(SimpleNamespace(variedad=str(linea.partida.lote.siembra.variedad), origen=f"{linea.partida.lote.codigo} (cámara)", cantidad=linea.cantidad_reservada))
+        elif linea.cantidad_cosechada is None:
+            a_lotes.append(SimpleNamespace(variedad=str(linea.lote.siembra.variedad), origen=linea.lote.codigo, cantidad=linea.cantidad_reservada))
+        elif cosecha is not None and min(linea.cantidad_cosechada, linea.cantidad_reservada) > 0:
+            variedad = linea.lote.siembra.variedad
+            a_camara.append(
+                SimpleNamespace(
+                    variedad=str(variedad),
+                    origen=linea.lote.codigo,
+                    cantidad=min(linea.cantidad_cosechada, linea.cantidad_reservada),
+                    fecha_limite=cosecha.fecha_cosecha + timedelta(days=variedad.duracion_post_cosecha) if cosecha.fecha_cosecha else None,
+                )
+            )
+    con_envases = set(ReservaInsumo.objects.filter(orden_id__in=[e.pk for e in alcance.a_realizar], estado="activa").values_list("orden_id", flat=True))
+
+    def fila_de(e):
+        return SimpleNamespace(
+            codigo=e.codigo,
+            fecha=e.fecha_programada_orden,
+            transportista=e.transportista.get_full_name() if e.transportista_id else "",
+            con_envases=e.pk in con_envases,
+            es_retiro=e.modalidad_entrega == "retiro",
+        )
+
+    return DatosDeCancelacion(
+        venta,
+        venta.cliente,
+        detalles,
+        a_lotes,
+        a_partidas,
+        a_camara,
+        [SimpleNamespace(codigo=c.codigo, fecha=c.fecha_programada_orden, invernadero=str(c.invernadero)) for c in alcance.cosechas],
+        [fila_de(e) for e in alcance.a_realizar],
+        [fila_de(e) for e in alcance.en_curso],
+        [fila_de(e) for e in alcance.concretadas],
+        venta.cliente.email_cliente or None,
+        huella_de_venta(venta),
+        razon[1] if razon is not None else None,
+    )
+
+
+def resumen_de_cancelacion_de_venta(actor, compra_venta_id, datos, hoy=None):
+    """Pasos 6 y 7: el resumen de lo que va a pasar con el motivo elegido y el estado final («Cancelada»). Valida igual que la confirmación (motivo, venta cancelable, sin entregas en curso ni
+    concretadas) y no escribe nada. Devuelve `ResumenDeCancelacionDeVenta`."""
+    datos = _validar_motivo(datos)
+    previos = datos_de_cancelacion(actor, compra_venta_id, hoy)
+    if previos.bloqueo is not None:
+        codigo, mensaje = _por_que_no_se_cancela(previos.venta, _alcance_de_cancelacion(previos.venta, hoy or stock.hoy()))
+        raise ValidationError({NO_CAMPO: [ValidationError(mensaje, code=codigo)]})
+    return ResumenDeCancelacionDeVenta(previos, datos.motivo, CompraVenta.MotivoCancelacion(datos.motivo).label, datos.descripcion, "Cancelada")
+
+
+class _AlcanceCambio(Exception):
+    """Al bloquear apareció algo (reservas, cosechas, entregas, cuentas…) que la lectura previa no vio: hay que volver a leer (una vez)."""
+
+
+def _contenido_en(ahora, previo):
+    """Verdadero si todo lo que hay ahora ya estaba en la lectura previa (y, por lo tanto, bloqueado)."""
+    return all(getattr(ahora, c) <= getattr(previo, c) for c in ("cuentas", "invernaderos", "variedades", "lotes", "partidas")) and all(
+        {x.pk for x in getattr(ahora, c)} <= {x.pk for x in getattr(previo, c)} for c in ("reservas", "cosechas", "a_realizar")
+    )
+
+
+def _bloquear_para_cancelar(venta, previo, actor):
+    """El orden de bloqueo del encabezado (hasta las entregas inclusive; el enlace lo toma `anular_enlaces_de` al final). Dentro de `transaction.atomic()`."""
+    from comercial.servicios import cosechas as cosechas_comercial
+    from maestros.models import SectorProduccion
+    from produccion.models import Lote, OcupacionSector, OrdenTrabajo, StockCosechado
+
+    cosechas_comercial._bloquear_cuentas({actor.pk, *previo.cuentas})
+    for pk in sorted(previo.invernaderos):
+        bloquear_invernadero_para_alertas(pk)
+    list(Cliente.objects.select_for_update(no_key=True).filter(pk=venta.cliente_id))
+    list(Variedad.objects.select_for_update(no_key=True).filter(pk__in=previo.variedades).order_by("pk"))
+    sectores = sorted(set(OcupacionSector.objects.filter(lote_id__in=previo.lotes).values_list("sector_id", flat=True)))
+    if sectores:
+        list(SectorProduccion.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=sectores).order_by("pk"))
+    stock_maduro.bloquear_candidatos(sorted(previo.variedades), sorted(previo.invernaderos))
+    if previo.lotes:
+        list(Lote.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=previo.lotes).order_by("pk"))
+    if previo.partidas:
+        list(StockCosechado.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=previo.partidas).order_by("pk"))
+    list(CompraVenta.objects.select_for_update(no_key=True, of=("self",)).filter(pk=venta.pk))
+    list(DetalleVenta.objects.select_for_update(no_key=True, of=("self",)).filter(compra_venta=venta).order_by("pk"))
+    if previo.cosechas:
+        list(OrdenTrabajo.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[c.pk for c in previo.cosechas]).order_by("pk"))
+    list(ReservaStock.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[r.pk for r in previo.reservas]).order_by("pk"))
+    list(DetalleReserva.objects.select_for_update(no_key=True, of=("self",)).filter(reserva_id__in=[r.pk for r in previo.reservas]).order_by("pk"))
+    if previo.a_realizar:
+        list(OrdenTrabajo.objects.select_for_update(no_key=True, of=("self",)).filter(pk__in=[e.pk for e in previo.a_realizar]).order_by("pk"))
+
+
+def _enviar_comprobante_de_cancelacion(venta_id, actor_id):
+    """Postcondición g, DESPUÉS de confirmar (D-14, D-54): el comprobante de cancelación al cliente; si no sale, el Vendedor se entera si canceló el Gerente (extensión 9a). Una falla se
+    registra y no vuelve a quien canceló: la cancelación ya quedó registrada."""
+    try:
+        venta = CompraVenta.objects.get(pk=venta_id)
+        if comprobantes.enviar_comprobante(venta, tipo="cancelacion") == CompraVenta.EstadoDelComprobante.PENDIENTE_ENVIO:
+            comprobantes.avisar_comprobante_pendiente(Usuario.objects.get(pk=actor_id), venta)
+    except Exception:  # noqa: BLE001 - un correo que falla no puede deshacer ni romper una cancelación ya confirmada
+        logger.exception("Falló el comprobante de cancelación de la venta %s", venta_id)
+
+
+def _cancelar(venta_id, datos, huella, actor, previo, hoy):
+    """Un intento de cancelar, todo en una transacción. Si al bloquear aparece algo que la lectura previa no vio, `_AlcanceCambio`."""
+    from comercial.servicios import camara as camara_comercial
+    from comercial.servicios import enlaces, faltantes
+    from produccion.models import MovimientoStock, StockCosechado
+
+    with transaction.atomic():
+        venta = CompraVenta.objects.select_related("cliente", "vendedor").get(pk=venta_id)
+        _bloquear_para_cancelar(venta, previo, actor)
+        quien = Usuario.objects.get(pk=actor.pk)
+        if not quien.is_active or rol_de(quien) not in (GERENTE, VENDEDOR):
+            raise PermissionDenied(MENSAJE_SIN_ACCESO)
+        venta = CompraVenta.objects.select_related("cliente", "vendedor").get(pk=venta_id)
+        ahora = _alcance_de_cancelacion(venta, hoy)
+        razon = _por_que_no_se_cancela(venta, ahora)
+        if razon is not None:
+            raise ValidationError({NO_CAMPO: [ValidationError(razon[1], code=razon[0])]})
+        if not _contenido_en(ahora, previo):
+            raise _AlcanceCambio()
+        if huella_de_venta(venta) != huella:
+            raise ValidationError(
+                {NO_CAMPO: [ValidationError("La compra-venta cambió mientras mirabas el resumen. Revisá lo que pasa ahora y volvé a confirmar.", code="venta_cambio")]}
+            )
+
+        motivo_texto = CompraVenta.MotivoCancelacion(datos.motivo).label
+        motivo_de_las_ordenes = f"Se canceló la compra-venta {venta.codigo}: {motivo_texto.lower()}." + (f" {datos.descripcion}" if datos.descripcion else "")
+        partidas, cosechas_canceladas, liberadas, reasignar = [], [], [], set()
+        for d in ahora.detalles:  # a, b, c y d (cosechas): una partida por cada línea ya cosechada y las reservas, «liberadas»
+            p, c, r, a = faltantes.liberar_reservas_de_detalle(
+                d, venta, quien, hoy, motivo_de_la_cosecha=motivo_de_las_ordenes, motivo_de_la_partida=StockCosechado.Motivo.CANCELACION_CLIENTE
+            )
+            partidas += p
+            cosechas_canceladas += c
+            liberadas += r
+            reasignar |= a
+        cancelaciones = [entregas.cancelar_entrega_incluida(quien, e, motivo_de_las_ordenes) for e in ahora.a_realizar]  # d (entregas)
+        anulados = enlaces.anular_enlaces_de(venta) if venta.estado_venta == CompraVenta.Estado.PENDIENTE_DECISION else []  # e
+        estado_antes = venta.estado_venta
+        DetalleVenta.objects.filter(pk__in=[d.pk for d in ahora.detalles]).update(estado_detalle_venta=DetalleVenta.Estado.CANCELADO)  # a
+        CompraVenta.objects.filter(pk=venta.pk).update(  # f
+            estado_venta=CompraVenta.Estado.CANCELADA,
+            motivo_cancelacion_venta=datos.motivo,
+            descripcion_cancelacion=datos.descripcion,
+            fecha_cancelacion_venta=hoy,
+            # El comprobante de cancelación es uno nuevo: nace «para imprimir» (cliente sin correo) o «pendiente de envío» y el envío lo pasa a «enviado» (como COM-REG-CVT).
+            estado_comprobante=(
+                CompraVenta.EstadoDelComprobante.PENDIENTE_ENVIO if venta.cliente.email_cliente else CompraVenta.EstadoDelComprobante.PARA_IMPRIMIR
+            ),
+        )
+        if rol_de(quien) == GERENTE and venta.vendedor.is_active:  # h
+            notificaciones.notificar(
+                venta.vendedor,
+                f"{venta.codigo} cancelada",
+                f"El Gerente canceló la venta de {venta.cliente.nombre_visible}. Motivo: {motivo_texto.lower()}."[:notificaciones.LARGO_DETALLE],
+            )
+        movimientos = list(MovimientoStock.objects.filter(partida__in=partidas, tipo_movimiento=MovimientoStock.TipoMovimiento.INGRESO_A_CAMARA).order_by("pk")) if partidas else []
+        reservas_de_envases = [r for c in cancelaciones for r in c.reservas_de_insumo]
+        alertas_resueltas = [c.alerta_resuelta for c in cancelaciones if c.alerta_resuelta is not None]
+        entregas_canceladas = [c.entrega for c in cancelaciones]
+        # i: UN registro de auditoría (D-36)
+        datos_de_auditoria = {
+            "compra_venta": referencia(venta),
+            "cliente": referencia(venta.cliente),
+            "detalles_cancelados": [f"{d}: {d.estado_detalle_venta} → cancelado" for d in ahora.detalles],
+            "reservas_liberadas": [str(r) for r in liberadas],
+        }
+        for clave, valores in (
+            ("partidas_creadas", partidas),
+            ("movimientos_creados", movimientos),
+            ("cosechas_canceladas", cosechas_canceladas),
+            ("entregas_canceladas", entregas_canceladas),
+            ("reservas_de_envases_canceladas", reservas_de_envases),
+            ("alertas_resueltas", alertas_resueltas),
+            ("enlaces_anulados", anulados),
+        ):
+            if valores:
+                datos_de_auditoria[clave] = [str(v) for v in valores]
+        RegistroAuditoria.objects.registrar(
+            usuario=quien,
+            accion=RegistroAuditoria.Accion.CANCELACION_COMPRA_VENTA,
+            afectados=[
+                venta,
+                *ahora.detalles,
+                *liberadas,
+                *partidas,
+                *movimientos,
+                *cosechas_canceladas,
+                *entregas_canceladas,
+                *reservas_de_envases,
+                *alertas_resueltas,
+                *anulados,
+            ],
+            detalle={
+                "cambios": {
+                    "estado_venta": {"antes": estado_antes, "despues": CompraVenta.Estado.CANCELADA},
+                    "motivo_cancelacion_venta": {"antes": None, "despues": datos.motivo},
+                    **({"descripcion_cancelacion": {"antes": "", "despues": datos.descripcion}} if datos.descripcion else {}),  # D-36: solo lo que cambió
+                    "fecha_cancelacion_venta": {"antes": None, "despues": f"{hoy:%d/%m/%Y}"},
+                },
+                "datos": datos_de_auditoria,
+            },
+        )
+        # d, después de confirmar: PROD-ASG-CAM con lo que ingresó y con lo que se liberó de la cámara. El comprobante (g) sale después de la transacción, en `cancelar_compra_venta`.
+        camara_comercial.programar_asignacion_de_camara([p.pk for p in partidas] + sorted(reasignar))
+        resultado = CompraVenta.objects.select_related("cliente").get(pk=venta.pk)
+        resultado.cosechas_canceladas = cosechas_canceladas
+        resultado.entregas_canceladas = entregas_canceladas
+        resultado.plantas_a_camara = sum(p.cantidad_ingreso_cosechado for p in partidas)
+        return resultado
+
+
+def cancelar_compra_venta(actor, compra_venta_id, datos, huella):
+    """COM-CNL-CVT, pasos 7 a 10: cancela la venta, en UNA transacción con los bloqueos del encabezado, y la devuelve (con `cosechas_canceladas`, `entregas_canceladas` y `plantas_a_camara`).
+
+    - `PermissionDenied` si el actor no es Vendedor del contrato o Gerente activo (SEG-13); 404 si no existe. Errores por campo: `motivo_obligatorio`, `motivo_invalido` y `descripcion_larga`.
+    - Relectura bajo bloqueo: `venta_no_cancelable` (ya cerrada), `venta_con_entregas_concretadas` (6a), `entrega_en_curso` (4a) y `venta_cambio` (8a y 8b: la huella cambió).
+    - Efectos: ver «Paso 8» del extracto (detalles «cancelado»; cosechas con `cancelar_cosecha_incluida`; partidas `cancelacion_cliente`; reservas «liberadas»; entregas con
+      `cancelar_entrega_incluida`; el enlace anulado; los datos de MD-130), el aviso al Vendedor si canceló el Gerente y UN registro `cancelacion_compra_venta`. PROD-ASG-CAM sale con
+      `on_commit`; el comprobante, después de la transacción (su estado queda en `estado_comprobante`)."""
+    venta = _venta_para_cancelar(actor, compra_venta_id)
+    datos = _validar_motivo(datos)
+    hoy = stock.hoy()
+    for _ in range(2):  # lo que la lectura previa no vio y aparece al bloquear obliga a repetir una vez (como COM-DCD-FLT)
+        try:
+            resultado = _cancelar(venta.pk, datos, huella, actor, _alcance_de_cancelacion(venta, hoy), hoy)
+            # Postcondición g y paso 9, DESPUÉS de confirmar y fuera de la transacción (D-14, D-54; como COM-REG-CVT, paso 16): el comprobante al cliente.
+            _enviar_comprobante_de_cancelacion(resultado.pk, actor.pk)
+            resultado.estado_comprobante = CompraVenta.objects.filter(pk=resultado.pk).values_list("estado_comprobante", flat=True).get()
+            return resultado
+        except _AlcanceCambio:
+            continue
+    raise ValidationError({NO_CAMPO: [ValidationError("La compra-venta cambió mientras se cancelaba. Volvé a abrirla.", code="venta_cambio")]})
