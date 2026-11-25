@@ -114,7 +114,7 @@ una contraseña en un archivo del repo: usá la de tus cuentas de prueba.
 
 **Antes de empezar**
 
-1. En PowerShell, con el entorno virtual activo: `python manage.py migrate` (aplica `produccion 0009_reserva_insumo_una_activa` y `core 0041_comercial_envasado`; no tocan datos) y `python manage.py runserver`. Abrí `http://localhost:8000`.
+1. En PowerShell, con el entorno virtual activo: `python manage.py migrate` (aplica `produccion 0009_reserva_insumo_una_activa` y `core 0042_comercial_envasado`; no tocan datos) y `python manage.py runserver`. Abrí `http://localhost:8000`.
 2. Cuentas: necesitás un **Gerente**, un **Vendedor**, un **Agrónomo**, un **Capataz** y un **Transportista**, todos activos. El Agrónomo, el Capataz y el Vendedor tienen que estar a cargo del mismo invernadero (lo llamo «Sur»).
 3. Datos que tenés que crear a mano, en este orden (si ya tenés los de COM-05a1, reusalos y salteá lo que ya está):
    a. El invernadero «Sur» activo, con su Agrónomo, su Capataz y su Vendedor; una variedad «Lechuga Crespa» con su ciclo y un lote en maduración (para que haya producto).
@@ -143,7 +143,7 @@ una contraseña en un archivo del repo: usá la de tus cuentas de prueba.
 11. **Permisos.** Con el Gerente, el Vendedor, el Capataz y el Transportista, escribí `/comercial/envasado/` en la barra: 403. Con **otro Agrónomo** (de otro invernadero), `/comercial/envasado/<id de la entrega>/`: 403 («no está a tu cargo») y la lista no muestra esa entrega. (`PermisosTests`.)
 12. **Navegador real (obligatorio: hay formularios que se envían).** Abrí «Envasado» en una **ventana privada**, entrá con el Agrónomo, abrí una entrega, agregá un envase, «Revisar» y **«Confirmar envasado» hasta el final**; volvé a abrirla: tiene que mostrar lo reservado. Si aparece «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola (F12), avisá: lo más probable es un encabezado que el cliente de Django no ve. Con JavaScript, comprobá que «Agregar», «Quitar», «Buscar» y «Actualizar» solo redibujan la carga (sin saltar el scroll) y que el botón «Confirmar envasado» no queda deshabilitado por ellos.
 13. **Opcional: sin JavaScript** (desactivalo en el navegador): todo el envasado funciona con «Actualizar», «Agregar», «Quitar», «Buscar», «Revisar» y «Confirmar envasado» (cada uno recarga la página). **Opcional: celular**: la lista y la carga se leen en pantalla angosta.
-14. **Después del merge:** revisar en el log de Render que se aplicaron `produccion.0009_reserva_insumo_una_activa` y `core.0041_comercial_envasado`.
+14. **Después del merge:** revisar en el log de Render que se aplicaron `produccion.0009_reserva_insumo_una_activa` y `core.0042_comercial_envasado`.
 
 ## Cierre (la completa Claude Code al cerrar)
 
@@ -158,7 +158,7 @@ la columna «Entregas a realizar» de la lista de vehículos y «Carga de los pr
 - Pruebas nuevas del bloque 3: `comercial/tests/test_envasado_vistas.py`, las clases `PanelDeControlTests`, `FichasDeContratoTests` y `VehiculosTests` de `test_entregas_vistas.py` y `test_recorrido_envasado_y_entregas.py` (3 recorridos).
 
 **Verifiqué** (recorrido y migraciones): el recorrido `RecorridoDeEnvasadoYEntregasTests` (aviso → panel → lista → carga con error de lo disponible → resumen → confirmación → modificación con antes y después → «sin cambios» → quitar y volver a agregar → panel, ficha de compra-venta,
-vehículos y suministro por rol → cancelación de la entrega que libera los envases → 403 de los otros roles); `makemigrations --check` sin cambios; `sqlmigrate produccion 0009` (quita la restricción única y crea el índice único parcial `WHERE estado = 'activa'`: no toca filas) y `sqlmigrate core 0041` (no-op, solo `choices`); las dos migraciones aplicadas en la base de pruebas.
+vehículos y suministro por rol → cancelación de la entrega que libera los envases → 403 de los otros roles); `makemigrations --check` sin cambios; `sqlmigrate produccion 0009` (quita la restricción única y crea el índice único parcial `WHERE estado = 'activa'`: no toca filas) y `sqlmigrate core 0042` (no-op, solo `choices`); las dos migraciones aplicadas en la base de pruebas.
 
 **Lo cubre una prueba**: permisos, lista, carga, resumen y confirmación (`test_envasado_vistas.py`); 3a, 3b, 4a, 4b, 6a a 6c, 8a a 8c, 10a a 10c (`test_prod_pnf_env.py`, `test_envasado_vistas.py`); concurrencia (`test_envasado_concurrencia.py`, `test_entregas_concurrencia.py`); el aviso de envasado (`test_com_pnf_ent.py`); el panel, las fichas y los vehículos
 (`PanelDeControlTests`, `FichasDeContratoTests`, `VehiculosTests`); sin consultas por fila en la lista de envasado, el panel, la ficha del contrato y la lista de vehículos.

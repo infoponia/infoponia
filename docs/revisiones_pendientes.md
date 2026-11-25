@@ -876,3 +876,22 @@ Los 17 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 15. Gerente, «Auditoría»: el registro `ajuste_stock` nombra el asiento entre sus afectados y aparecen aparte el alta del asiento y la de sus movimientos *(lo cubre una prueba)*.
 - [ ] 16. Navegador real. Ventana privada, Agrónomo, carga inicial de 1 kg: «Ver resumen» y «Confirmar ajuste» hasta el final; el asiento aparece en el libro del Contador. También con JavaScript desactivado.
 - [ ] 17. (Opcional) El bloque «Asiento contable» del resumen en un celular de 360 px.
+
+## COM-05a2 · Tarea COM-05a2 (envasado y las entregas en el panel, las fichas y los vehículos)
+
+Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-05a2-envasado-y-pantallas-de-entregas.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`produccion` 0009, que cambia una restricción sin tocar filas, y `core` 0042, solo `choices`): `python manage.py migrate`; después `python manage.py runserver`. Necesitás un Gerente, un Vendedor, un Agrónomo, un Capataz y un Transportista, el invernadero «Sur» con un vehículo, un cliente, una compra-venta con envío de 100 «Lechuga Crespa» con todo el producto listo y el envase «Bandeja PET 1 kg» (categoría Envases, unidad «unidad») con 30 unidades.
+
+- [ ] 1. El Agrónomo tiene «Planificá el envasado de OT-…» y, en el panel, «Entregas sin envasado» (1, en ámbar), que lleva a «Envasado».
+- [ ] 2. «Producción › Envasado»: la entrega dice «Sin planificar» con «Planificar envasado»; el filtro de fecha funciona.
+- [ ] 3. En la carga: 40 bandejas dan «Supera lo disponible: quedan 30 unidades…» con la ayuda y «Revisar» deshabilitado; `0`, `-3`, `2,5` y vacío dan «Ingresá una cantidad mayor que 0, un número entero (unidad).»; el buscador filtra por nombre; agregar otra vez reemplaza la cantidad con el aviso.
+- [ ] 4. Con 20 bandejas, «Revisar» muestra el resumen; «Confirmar envasado» avisa «Envasado de OT-… planificado.» y la lista dice «Planificado».
+- [ ] 5. Modificar: a 25 (el resumen muestra 20 → 25); sin cambios dice «No hay cambios para registrar.»; quitar todo avisa «La entrega va a quedar sin envasado planificado…» y deja confirmar; volver a agregar funciona; sin envases en una entrega nueva dice «Indicá al menos un envase.».
+- [ ] 6. Dos ventanas con la misma entrega: la segunda confirmación vuelve a la carga con «Mientras cargabas, el envasado de esta entrega cambió…» (10c); con lo disponible agotado por otra entrega, «Mientras cargabas, cambió lo disponible…» (10b).
+- [ ] 7. Gerente y Vendedor: el grupo «Entregas» del panel (el Vendedor, solo las suyas) y la sección «Entregas» de las fichas de compra-venta y de suministro, con «Entrega planificada» en el calendario.
+- [ ] 8. Vehículos (Gerente): la columna «Entregas a realizar» y, en la ficha, «Carga de los próximos días».
+- [ ] 9. Vencer en cámara la partida de la entrega con envasado: la entrega se cancela, el Agrónomo tiene el aviso y las bandejas vuelven a estar libres (disponible 30).
+- [ ] 10. Entrega en curso (3b): solo la cubren las pruebas hasta COM-06 (no se puede probar a mano).
+- [ ] 11. Permisos: Gerente, Vendedor, Capataz y Transportista reciben 403 en `/comercial/envasado/`; otro Agrónomo recibe 403 en la carga de una entrega ajena.
+- [ ] 12. **Navegador real** (ventana privada), **pendiente para el cierre de la tanda**: «Envasado» con el Agrónomo, agregar un envase, «Revisar» y «Confirmar envasado» hasta el final; con JavaScript, «Agregar», «Quitar», «Buscar» y «Actualizar» solo redibujan la carga.
+- [ ] 13. Opcional: sin JavaScript todo el envasado funciona con los botones (cada uno recarga la página); en el celular, la lista y la carga se leen.
+- [ ] 14. Después del merge, en Render: `produccion.0009_reserva_insumo_una_activa` y `core.0042_comercial_envasado` aplicadas en el log.
