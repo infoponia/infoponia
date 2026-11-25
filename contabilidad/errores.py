@@ -16,3 +16,22 @@ class ErrorContable(Exception):
         self.mensaje = mensaje
         self.campo = campo
         self.datos = dict(datos or {})
+
+    @property
+    def errores(self):
+        """La lista de errores que lleva este rechazo: uno solo (él mismo). `ErroresContables` lleva varios (CON-03b, patrón ABM sección 2)."""
+        return [self]
+
+
+class ErroresContables(ErrorContable):
+    """Varios errores de campo juntos (descripción y líneas de un asiento manual, CON-03b): la pantalla los marca todos a la vez. Su `codigo`,
+    `mensaje` y `campo` son los del primero; `errores` los trae a todos, en el orden en que se encontraron."""
+
+    def __init__(self, errores):
+        primero = errores[0]
+        super().__init__(primero.codigo, primero.mensaje, primero.campo, primero.datos)
+        self._errores = list(errores)
+
+    @property
+    def errores(self):
+        return self._errores

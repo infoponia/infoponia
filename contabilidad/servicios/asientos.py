@@ -1,16 +1,19 @@
 # Asientos automáticos (D-86, D-84 puntos 4, 5, 6 y 9): `registrar_asiento_automatico`, la única puerta por la que las demás apps asientan.
 # Corre dentro de la transacción de quien llama, con sus bloqueos ya tomados. EL EJERCICIO SE BLOQUEA AL FINAL (`_bloquear_ejercicio`, D-86
 # punto 2, docs/patrones/asientos.md sección 2): es lo último que cualquier servicio bloquea, para no cruzar el orden de D-30 y D-32.
+from collections import namedtuple
 from decimal import Decimal
 
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from contabilidad.constantes import DEBE, HABER
-from contabilidad.errores import ErrorContable
+from contabilidad.errores import ErrorContable, ErroresContables
 from contabilidad.models import AsientoContable, CuentaContable, EjercicioContable, MovimientoContable
-from contabilidad.servicios import ejercicios
-from core.models import RegistroAuditoria, referencia
+from contabilidad.servicios import ejercicios, responsables
+from contabilidad.templatetags.formato_contable import pesos
+from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 
 Accion = RegistroAuditoria.Accion
 CENTAVOS = Decimal("0.01")
@@ -122,55 +125,206 @@ def registrar_asiento_automatico(actor, origen, fecha, movimientos, *, descripci
             )
             descripcion = _descripcion_con_aclaracion(descripcion, aclaracion)
 
-        numero = ejercicio.ultimo_numero_asiento + 1  # D-84 punto 4: leído DESPUÉS de bloquear
-        ejercicio.ultimo_numero_asiento = numero
-        ejercicio.save(update_fields=["ultimo_numero_asiento"])
         try:
-            with transaction.atomic():
-                asiento = AsientoContable.objects.create(
-                    ejercicio=ejercicio,
-                    numero_asiento=numero,
-                    fecha_asiento=fecha_asiento,
-                    descripcion_asiento=descripcion,
-                    origen_id=origen.pk,
-                )
+            asiento = _crear_y_auditar(
+                actor,
+                ejercicio,
+                fecha_asiento,
+                descripcion,
+                lineas,
+                cuentas,
+                origen_id=origen.pk,
+                afectados=[origen],
+                cambios_extra={"origen": {"antes": None, "despues": referencia(origen)}},
+            )
         except IntegrityError as error:
             if AsientoContable.objects.filter(origen_id=origen.pk).exists():
                 raise ErrorContable("origen_con_asiento", f"El documento de origen ({origen}) ya tiene su asiento contable.") from error
             raise
-        creados = MovimientoContable.objects.bulk_create(
-            [
-                MovimientoContable(asiento=asiento, cuenta=cuentas[codigo], tipo_movimiento=tipo, importe_movimiento=importe)
-                for codigo, tipo, importe in lineas
-            ]
-        )
+    return asiento
 
-        # D-84 punto 9 y D-36: un registro por el asiento y uno por cada movimiento; fechas en ISO e importes como texto.
+
+def _crear_y_auditar(actor, ejercicio, fecha, descripcion, lineas, cuentas, *, origen_id=None, anula_id=None, afectados=(), cambios_extra=None):
+    """Con el ejercicio YA BLOQUEADO: toma el número siguiente, crea el asiento y sus movimientos y audita el asiento y cada movimiento (D-84 puntos 4 y 9).
+
+    Lo comparten el asiento automático, el manual y el contraasiento. ``lineas``: `[(codigo, "D"|"H", Decimal)]` ya validadas y sin importes cero;
+    ``cuentas``: `{codigo: CuentaContable}`. ``afectados`` suma instancias a las del registro del asiento; ``cambios_extra``, entradas a su `cambios`
+    (el origen, o el asiento que anula). Un `IntegrityError` al crear el asiento lo propaga quien llama."""
+    numero = ejercicio.ultimo_numero_asiento + 1  # D-84 punto 4: leído DESPUÉS de bloquear
+    ejercicio.ultimo_numero_asiento = numero
+    ejercicio.save(update_fields=["ultimo_numero_asiento"])
+    with transaction.atomic():
+        asiento = AsientoContable.objects.create(
+            ejercicio=ejercicio,
+            numero_asiento=numero,
+            fecha_asiento=fecha,
+            descripcion_asiento=descripcion,
+            origen_id=origen_id,
+            anula_id=anula_id,
+        )
+    creados = MovimientoContable.objects.bulk_create(
+        [
+            MovimientoContable(asiento=asiento, cuenta=cuentas[codigo], tipo_movimiento=tipo, importe_movimiento=importe)
+            for codigo, tipo, importe in lineas
+        ]
+    )
+    # D-84 punto 9 y D-36: un registro por el asiento y uno por cada movimiento; fechas en ISO e importes como texto.
+    cambios = {
+        "numero_asiento": {"antes": None, "despues": numero},
+        "fecha_asiento": {"antes": None, "despues": fecha.isoformat()},
+        "descripcion_asiento": {"antes": None, "despues": descripcion},
+        "ejercicio": {"antes": None, "despues": referencia(ejercicio)},
+        **(cambios_extra or {}),
+    }
+    RegistroAuditoria.objects.registrar(actor, Accion.ALTA_ASIENTO_CONTABLE, [asiento, *afectados], {"cambios": cambios})
+    for movimiento in creados:
         RegistroAuditoria.objects.registrar(
             actor,
-            Accion.ALTA_ASIENTO_CONTABLE,
-            [asiento, origen],
+            Accion.ALTA_MOVIMIENTO_CONTABLE,
+            [movimiento, asiento],
             {
                 "cambios": {
-                    "numero_asiento": {"antes": None, "despues": numero},
-                    "fecha_asiento": {"antes": None, "despues": fecha_asiento.isoformat()},
-                    "descripcion_asiento": {"antes": None, "despues": descripcion},
-                    "ejercicio": {"antes": None, "despues": referencia(ejercicio)},
-                    "origen": {"antes": None, "despues": referencia(origen)},
+                    "cuenta_contable": {"antes": None, "despues": referencia(movimiento.cuenta)},
+                    "tipo_movimiento": {"antes": None, "despues": movimiento.tipo_movimiento},
+                    "importe_movimiento": {"antes": None, "despues": str(movimiento.importe_movimiento)},
                 }
             },
         )
-        for movimiento in creados:
-            RegistroAuditoria.objects.registrar(
-                actor,
-                Accion.ALTA_MOVIMIENTO_CONTABLE,
-                [movimiento, asiento],
-                {
-                    "cambios": {
-                        "cuenta_contable": {"antes": None, "despues": referencia(movimiento.cuenta)},
-                        "tipo_movimiento": {"antes": None, "despues": movimiento.tipo_movimiento},
-                        "importe_movimiento": {"antes": None, "despues": str(movimiento.importe_movimiento)},
-                    }
-                },
-            )
     return asiento
+
+
+# --- CON-REG-ASI: asiento manual (CON-03b) -----------------------------------------------------------------------------------------------------------
+
+# Una línea del resumen previo y el resumen completo (paso 5 de CON-REG-ASI). El ejercicio se describe con sus datos y no con la instancia, porque
+# puede no existir todavía (``ejercicio_por_abrir``: el registro lo abriría, H9).
+LineaDeResumen = namedtuple("LineaDeResumen", "indice codigo nombre tipo_cuenta tipo_cuenta_texto tipo_movimiento importe")
+ResumenDeAsiento = namedtuple(
+    "ResumenDeAsiento",
+    "ejercicio_numero ejercicio_inicio ejercicio_cierre ejercicio_estado ejercicio_por_abrir lineas total_debe total_haber diferencia omitidas",
+)
+
+
+def _exigir_responsable(actor):
+    """Regla «Quién registra» (D-85 punto 5): el Contador activo o, sin Contador activo, el Gerente. Si no, `PermissionDenied`; al Gerente con un
+    Contador activo le dice que lo registra el Contador (extensión 1a, punto 3)."""
+    if responsables.puede_registrar_asientos(actor):
+        return
+    es_gerente = actor is not None and getattr(actor, "is_active", False) and rol_de(actor) == Usuario.Rol.GERENTE
+    if es_gerente and responsables.contador_activo() is not None:
+        raise PermissionDenied("Lo registra el Contador: mientras haya un Contador activo, el Gerente no registra asientos.")
+    raise PermissionDenied("Solo el Contador, o el Gerente si no hay un Contador activo, registra asientos.")
+
+
+def _importe_valido(importe):
+    """True si es un `Decimal` finito, mayor que cero, con a lo sumo dos decimales y que entra en la columna."""
+    return (
+        isinstance(importe, Decimal)
+        and importe.is_finite()
+        and 0 < importe < LIMITE_DEL_IMPORTE
+        and importe == importe.quantize(CENTAVOS)
+    )
+
+
+def _errores_de_linea(indice, codigo, tipo, importe, cuentas):
+    """Los errores de una línea (no nula): tipo, cuenta e importe, cada uno con su campo `movimientos[i].…` (extensiones 5c y 7a)."""
+    errores = []
+    if tipo not in (DEBE, HABER):
+        errores.append(ErrorContable("tipo_de_movimiento_invalido", f"El tipo de movimiento {tipo!r} no es válido.", campo=f"movimientos[{indice}].tipo"))
+    if not codigo or codigo not in cuentas:
+        mensaje = f"La cuenta contable {codigo} no existe en el plan de cuentas." if codigo else "Elegí la cuenta."
+        errores.append(ErrorContable("cuenta_inexistente", mensaje, campo=f"movimientos[{indice}].cuenta"))
+    if not _importe_valido(importe):
+        errores.append(
+            ErrorContable("importe_invalido", "El importe tiene que ser un número mayor que cero, con hasta dos decimales.", campo=f"movimientos[{indice}].importe")
+        )
+    return errores
+
+
+def _validar_manual(descripcion, movimientos):
+    """Valida sin tocar la base más que para leer cuentas (CON-REG-ASI, pasos 2 y 5; extensiones 5a, 5b, 5c y 7a). Devuelve
+    `(descripcion, lineas, cuentas, omitidas)` con `lineas = [(indice, codigo, tipo, importe)]` (``indice``: posición en la lista recibida, para marcar la
+    fila). Junta TODOS los errores de campo y los lanza a la vez (patrón ABM): descripción, líneas y, si las líneas están bien, el balance."""
+    errores = []
+    descripcion = (descripcion or "").strip()
+    if not descripcion:
+        errores.append(ErrorContable("descripcion_obligatoria", "La descripción es obligatoria: explicá el motivo del asiento.", campo="descripcion"))
+    elif len(descripcion) > LARGO_MAXIMO_DE_DESCRIPCION:
+        mensaje = f"La descripción tiene {len(descripcion)} caracteres y el máximo es {LARGO_MAXIMO_DE_DESCRIPCION}."
+        errores.append(ErrorContable("descripcion_muy_larga", mensaje, campo="descripcion"))
+    cuentas = {c.codigo_cuenta: c for c in CuentaContable.objects.filter(codigo_cuenta__in={m[0] for m in movimientos if m[0]})}
+    lineas, omitidas, errores_de_lineas = [], 0, []
+    for indice, (codigo, tipo, importe) in enumerate(movimientos):
+        if isinstance(importe, Decimal) and importe.is_finite() and importe == 0:
+            omitidas += 1  # H11: se omite antes de validar nada más de la línea
+            continue
+        de_la_linea = _errores_de_linea(indice, codigo, tipo, importe, cuentas)
+        errores_de_lineas.extend(de_la_linea)
+        if not de_la_linea:
+            lineas.append((indice, codigo, tipo, importe.quantize(CENTAVOS)))
+    errores.extend(errores_de_lineas)
+    if not errores_de_lineas:  # con una línea inválida no se puede calcular el balance
+        debe = sum((i for _, _, t, i in lineas if t == DEBE), Decimal("0.00"))
+        haber = sum((i for _, _, t, i in lineas if t == HABER), Decimal("0.00"))
+        if len(lineas) < 2:
+            errores.append(
+                ErrorContable("faltan_movimientos", "Un asiento necesita al menos dos movimientos con importe mayor que cero.", campo="movimientos")
+            )
+        elif debe != haber:
+            mensaje = f"El Debe ({pesos(debe)}) y el Haber ({pesos(haber)}) no coinciden: la diferencia es de {pesos(abs(debe - haber))}."
+            errores.append(ErrorContable("asiento_desbalanceado", mensaje, campo="movimientos"))
+    if errores:
+        raise errores[0] if len(errores) == 1 else ErroresContables(errores)
+    return descripcion, lineas, cuentas, omitidas
+
+
+def registrar_asiento_manual(actor, fecha, descripcion, movimientos, *, hoy=None):
+    """CON-REG-ASI: registra un asiento manual y lo devuelve (docs/api/asientos.md, «Escritura»; D-84 puntos 2, 4, 5 y 9).
+
+    ``movimientos``: `[(codigo_cuenta, "D"|"H", Decimal)]`. Orden: (1) permisos (`PermissionDenied`); (2) valida sin bloquear (`ErrorContable`, errores
+    por línea); (3) dentro de una transacción, autorrecuperación del ejercicio (H9) ANTES de validar la fecha (D-84 punto 2, decisión del 25/11/2026: sin ella
+    se rechazaría como «cerrado» una fecha válida cuando el abierto venció); (4) la fecha con `destino_del_asiento(automatico=False)` (C2); (5) verifica
+    de nuevo que el actor siga siendo el responsable (D-30); (6) **bloquea el ejercicio, lo último**, y revalida su estado y su rango (`cambio_simultaneo`,
+    extensión 7b); (7) crea el asiento y sus movimientos y audita. Todo o nada."""
+    hoy = hoy or timezone.localdate()
+    _exigir_responsable(actor)
+    descripcion, lineas, cuentas, _ = _validar_manual(descripcion, movimientos)
+    lineas = [(codigo, tipo, importe) for _, codigo, tipo, importe in lineas]
+    with transaction.atomic():
+        ejercicios.abrir_ejercicio_si_corresponde(hoy)
+        destino = ejercicios.destino_del_asiento(fecha, automatico=False, hoy=hoy)
+        _exigir_responsable(actor)
+        ejercicio = _bloquear_ejercicio(destino.ejercicio.pk)
+        _exigir_que_la_fecha_siga_cayendo(ejercicio, fecha)
+        return _crear_y_auditar(actor, ejercicio, fecha, descripcion, lineas, cuentas, afectados=[ejercicio])
+
+
+def _exigir_que_la_fecha_siga_cayendo(ejercicio, fecha):
+    """Con el ejercicio bloqueado y releído: sigue abierto o en cierre y su rango contiene la fecha; si no, `cambio_simultaneo` (extensiones 7b y 6b)."""
+    Estado = EjercicioContable.Estado
+    cae = ejercicio.fecha_inicio_ejercicio <= fecha <= ejercicio.fecha_cierre_ejercicio
+    if ejercicio.estado_ejercicio not in (Estado.ABIERTO, Estado.EN_CIERRE) or not cae:
+        raise ErrorContable(
+            "cambio_simultaneo",
+            f"El ejercicio pasó a «{ejercicio.get_estado_ejercicio_display().lower()}» mientras registrabas: revisá la fecha y volvé a confirmar.",
+            campo="fecha",
+        )
+
+
+def resumir_asiento_manual(actor, fecha, descripcion, movimientos, *, hoy=None):
+    """Paso 5 de CON-REG-ASI: las mismas validaciones que `registrar_asiento_manual` y el resumen, SIN escribir, auditar ni bloquear. Si el abierto
+    venció y falta abrir el siguiente, no lo abre: calcula en memoria el ejercicio que se abriría (`ejercicios.destino_previsto`)."""
+    hoy = hoy or timezone.localdate()
+    _exigir_responsable(actor)
+    descripcion, lineas, cuentas, omitidas = _validar_manual(descripcion, movimientos)
+    destino = ejercicios.destino_previsto(fecha, hoy=hoy)
+    filas = [
+        LineaDeResumen(
+            indice, codigo, cuentas[codigo].nombre_cuenta, cuentas[codigo].tipo_cuenta, cuentas[codigo].get_tipo_cuenta_display(), tipo, importe
+        )
+        for indice, codigo, tipo, importe in lineas
+    ]
+    debe = sum((f.importe for f in filas if f.tipo_movimiento == DEBE), Decimal("0.00"))
+    haber = sum((f.importe for f in filas if f.tipo_movimiento == HABER), Decimal("0.00"))
+    return ResumenDeAsiento(
+        destino.numero, destino.inicio, destino.cierre, destino.estado, destino.por_abrir, filas, debe, haber, debe - haber, omitidas
+    )
