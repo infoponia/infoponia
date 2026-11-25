@@ -54,3 +54,21 @@ class ComprasConfig(AppConfig):
         registrar_paso_diario(procesos.CODIGO_VENCIDOS, "Pedidos vencidos", 60, procesos.paso_pedidos_vencidos)
         registrar_paso_diario(procesos.CODIGO_RECORDATORIO, "Recordatorio de validez de cotizaciones", 61, procesos.paso_recordatorio_de_validez)
         registrar_paso_diario(procesos.CODIGO_SIN_ELEGIBLE, "Pedidos sin cotización elegible", 62, procesos.paso_pedidos_sin_cotizacion_elegible)
+
+        # CMP-04 (D-87 punto 5, A4): el tipo de alerta «recepción con inconvenientes» (para el Gerente) con su enlace a la ficha de la orden, y el enlace del asiento a la recepción en el libro de gestión.
+        from compras.servicios import recepciones
+        from contabilidad import extensiones as extensiones_de_contabilidad
+        from maestros.alertas import Clase, Destinatario, TipoAlerta, registrar_tipo_de_alerta
+        from maestros.models import Alerta
+
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=recepciones.TIPO_DE_ALERTA,
+                nombre="Recepción con inconvenientes",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.EVENTO,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta((recepciones.TIPO_DE_ALERTA,), recepciones.enlaces_de_alertas)
+        extensiones_de_contabilidad.registrar_enlace_de_origen("recepcion", recepciones.enlace_de_origen)

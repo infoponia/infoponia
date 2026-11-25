@@ -722,3 +722,16 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **«Deja de aceptar asientos»** («Hecho cuando») se lee con D-102 punto 1: el ejercicio cerrado no recibe ningún asiento; un automático con fecha de su rango va al abierto con la fecha de hoy y la aclaración, y uno manual o un contraasiento se rechaza (`fecha_en_ejercicio_cerrado`).
 - **Un asiento o un ejercicio inexistente dan 404** (la documentación no lo dice; sigue D-28).
 - **«Quién registró» el asiento** se muestra con el nombre y el rol de la cuenta (la documentación dice solo «quién lo registró»).
+
+## Lo implementado distinto de lo escrito en CMP-04 (24/11/2026)
+
+- **Pruebas de CMP-03 actualizadas:** en `compras/tests/test_cmp_cns_odc.py`, «por recibir» y «con reclamo sin emitir» dejan de ser atajos ignorados (se agregaron sus pruebas) y la ficha de una orden aprobada ofrece «recibir» y «cerrar» al Gerente.
+- **«Queda para pagar» en el resumen del cierre** se calcula con la regla de la postcondición e de CMP-CRR-FLT sin la bandeja ni el aviso (CMP-05, D-91): CMP-05 tiene que usar la misma regla.
+- **Alertas del resumen de la recepción:** `reevaluar_alertas_del_insumo` no tiene modo lectura (agregarlo tocaba `inventario` fuera de «Límites»): `compras` calcula con `stock.existencias` cuáles se resolverán.
+- **La auditoría de la recepción no lista las alertas resueltas por el stock** (la función de ingreso no devuelve la reevaluación).
+- **Extensión 9a:** el servicio no recibe lo que la pantalla vio que faltaba; devuelve `linea_no_pendiente` o `supera_lo_pendiente` con lo que falta ahora, sin distinguir «cambió» de «te pasaste».
+- **Códigos de error que el caso de uso no nombra:** `linea_ajena`, `linea_repetida`, `vencimiento_no_aplica`, `inconveniente_repetido`, `orden_no_recibible`, `cantidad_invalida`, `sin_lineas`, `motivo_obligatorio` y `destino_inactivo`.
+- **`cerrar_con_faltante` acepta líneas de varias órdenes** en una sola operación (el paso 2 las presenta agrupadas por orden).
+- **Recepción contra la baja del destino:** el caso de uso la nombra, pero no hay prueba propia: la baja del insumo y del invernadero ya la impide una orden no terminada (D-87 punto 5); el bloqueo del invernadero de la recepción no lo detecta ninguna prueba (dos capas se respaldan).
+- **Archivos de pruebas:** la valorización está en `test_cmp_reg_rcp.py` y las funciones de `inventario` en `test_ingreso_por_recepcion.py` (el caso de uso nombra `test_valorizacion.py` y `test_stock_compras.py`).
+- **Correo al proveedor** de la recepción y del cierre (postcondición h y R1): lo pide el caso de uso y no figuraba en la lista de la tarea.

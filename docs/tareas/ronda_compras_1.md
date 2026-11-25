@@ -14,7 +14,7 @@ Claude Code lo abre solo para completar la fila de su tarea al cerrar (M3).
 | CMP-02a | Pedido de cotización y portal del proveedor (**hecha**, 23/11/2026) | CMP-RLZ-PED, CMP-ENV-COT, CMP-CNS-PED | CMP-01 (hecha), USR-10 (hecha) | grande |
 | CMP-02b | Cancelar pedido, reenviar invitación y lo que cancela solo (**hecha**, 24/11/2026) | CMP-CNL-PED, reenvío, MD-62, H20 | CMP-02a (hecha) | mediana |
 | CMP-03 | Orden de compra y pasos diarios (**hecha**, 24/11/2026) | CMP-GNR-ODC, CMP-APR-ODC, CMP-CNS-ODC, pasos 60 a 62 | CMP-02b (hecha) | grande |
-| CMP-04 | Recepción y cierre con faltante | CMP-REG-RCP, CMP-CRR-FLT | CMP-03, **CON-02** | grande y delicada |
+| CMP-04 | Recepción y cierre con faltante (**hecha**, 24/11/2026; suma `AlertaCompras` y el tipo `recepcion` de `OrigenDocumento`) | CMP-REG-RCP, CMP-CRR-FLT | CMP-03, **CON-02** | grande y delicada |
 | CMP-05 | Pago a proveedores | CMP-REG-PAG | CMP-04, **USR-11**, CON-02 | mediana |
 | CMP-06 | Corrección de recepción y reclamos | CMP-COR-RCP, CMP-EMT-RCL, CMP-CRR-RCL | CMP-05 | mediana |
 

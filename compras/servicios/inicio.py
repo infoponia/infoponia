@@ -9,6 +9,7 @@ from datetime import timedelta
 from compras.models import OrdenCompra, Pedido
 from compras.servicios import ordenes as servicio_de_ordenes
 from compras.servicios import pedidos as servicio_de_pedidos
+from compras.servicios import recepciones as servicio_de_recepciones
 from core.extensiones import SeccionDeInicio
 from core.models import Usuario, rol_de
 from inventario.servicios import stock
@@ -20,8 +21,8 @@ DIAS_DE_ORDENES_RECHAZADAS = 7
 
 IndicadoresDeCompras = namedtuple(
     "IndicadoresDeCompras",
-    "bajo_el_minimo cantidad_bajo_el_minimo esperando_cotizaciones pedidos_por_resolver ordenes_rechazadas",
-    defaults=([], []),
+    "bajo_el_minimo cantidad_bajo_el_minimo esperando_cotizaciones pedidos_por_resolver ordenes_rechazadas por_recibir cantidad_por_recibir",
+    defaults=([], [], [], 0),
 )
 # El Gerente: las órdenes «pendiente de aprobación» (la más antigua primero) y cuántas son en total.
 IndicadoresDelGerente = namedtuple("IndicadoresDelGerente", "ordenes_por_aprobar cantidad_por_aprobar")
@@ -39,7 +40,10 @@ def indicadores_del_agronomo(actor):
         .select_related("pedido")
         .order_by("-fecha_resolucion", "-id")
     )
-    return IndicadoresDeCompras(bajos[:MAXIMO_EN_EL_INICIO], len(bajos), esperando, servicio_de_ordenes.pedidos_resolubles(actor), rechazadas)
+    entregas = servicio_de_recepciones.entregas_pendientes(actor)  # CMP-04: «mercadería por recibir» (``panelAgr``)
+    return IndicadoresDeCompras(
+        bajos[:MAXIMO_EN_EL_INICIO], len(bajos), esperando, servicio_de_ordenes.pedidos_resolubles(actor), rechazadas, entregas[:MAXIMO_EN_EL_INICIO], len(entregas)
+    )
 
 
 def indicadores_del_gerente(actor):

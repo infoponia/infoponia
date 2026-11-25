@@ -1,0 +1,50 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen del cierre con faltante (CMP-CRR-FLT paso 5) antes de confirmar. Recibe «orden», «resumen» (``ResumenDeCierre``), «estado_texto» (el estado en que quedará la orden) y «campos» (todo lo enviado, oculto).
+Por línea: la cantidad faltante y cómo cambia el tránsito; el estado de la orden; si cada proveedor queda para pagar o sin pago (la bandeja de pagos la agrega CMP-05); las existencias que pasarán a estar bajo el mínimo.{% endcomment %}
+{% block titulo %}Confirmar el cierre con faltante de {{ orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá el cierre con faltante de la orden {{ orden }}</h1></div>
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div>Un cierre <b>no se deshace</b>. No mueve dinero (la deuda nació al recibir) ni toca el stock: baja la cantidad en tránsito de lo que ya no va a llegar.</div></div>
+  <div class="stack">
+    <div class="card seg">
+      <div class="card-h"><b>Líneas que se cierran</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th>Proveedor</th><th class="right">Faltante</th><th class="right">En tránsito</th><th>Motivo</th></tr></thead>
+          <tbody>
+          {% for l in resumen.lineas %}
+          {% with insumo=l.detalle.detalle_cotizacion.detalle_pedido.insumo_invernadero.insumo %}
+          <tr>
+            <td>{{ insumo.nombre_insumo }}<span class="sub2">{{ l.detalle.detalle_cotizacion.detalle_pedido.insumo_invernadero.invernadero.nombre_invernadero }}</span></td>
+            <td>{{ l.detalle.detalle_cotizacion.cotizacion.proveedor.nombre_para_mostrar }}</td>
+            <td class="right nowrap mono"><b>{{ l.falta|cant:insumo.unidad_medida_insumo }}</b></td>
+            <td class="right nowrap mono">{{ l.transito_antes|num:insumo.unidad_medida_insumo }} → {{ l.transito_despues|num:insumo.unidad_medida_insumo }}</td>
+            <td>{{ l.motivo }}</td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <dl class="dl two">
+        <dt>La orden quedará</dt><dd><b>{{ estado_texto }}</b></dd>
+        <dt>Pagos</dt><dd>{% for proveedor, queda in resumen.proveedores %}{{ proveedor.nombre_para_mostrar }}: {% if queda %}<b>queda listo para pagar</b> (todas sus líneas completas o cerradas y algo recibido){% else %}sin pago (todavía tiene líneas pendientes o no se le recibió nada){% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>
+        {% if resumen.alertas_que_se_activan %}<dt>Alertas que se activan</dt><dd>{% for iin in resumen.alertas_que_se_activan %}{{ iin.insumo.nombre_insumo }} ({{ iin.invernadero.nombre_invernadero }}) pasa a estar bajo el mínimo{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>{% endif %}
+        <dt>Correo</dt><dd>Cada proveedor recibe un aviso de que no se espera el resto de sus líneas cerradas.</dd>
+      </dl>
+    </div>
+  </div>
+  <form method="post" action="{% url 'compras:cierre_faltante' orden.pk %}" novalidate>
+    {% csrf_token %}
+    {% for nombre, valor in campos %}<input type="hidden" name="{{ nombre }}" value="{{ valor }}">{% endfor %}
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Cerrando…">Confirmar cierre</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

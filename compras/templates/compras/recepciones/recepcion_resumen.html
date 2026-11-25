@@ -1,0 +1,56 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario formato_compras %}
+{% comment %}Resumen de la recepción (CMP-REG-RCP paso 7) antes de confirmar. Recibe «orden», «proveedor», «invernadero», «resumen» (``ResumenDeRecepcion``), «estado_texto» (el estado en que quedará la orden) y «campos»
+(todo lo que se envió, repetido oculto para que «Confirmar» registre exactamente lo mismo). Por línea: lo que ingresa al stock, los lotes (primero el faltante sin lote, si lo hay), cómo cambian el stock y el tránsito y el
+estado en que queda; el monto del asiento, las alertas de bajo el mínimo que se resolverán, los inconvenientes con el reclamo sin emitir que se generará, y que la recepción no registra ningún pago.{% endcomment %}
+{% block titulo %}Confirmar la recepción de {{ orden }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá la recepción de la orden {{ orden }}</h1></div>
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>{{ proveedor.nombre_para_mostrar }} en {{ invernadero.nombre_invernadero }}. La recepción <b>no registra ningún pago</b>: nace la deuda con el proveedor por lo recibido (asiento) y el pago se registra después.</div></div>
+
+  <div class="stack">
+    <div class="card seg">
+      <div class="card-h"><b>Lo que ingresa al stock</b></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th class="right">Ingresa</th><th>Lotes</th><th class="right">Stock</th><th class="right">En tránsito</th><th>La línea queda</th></tr></thead>
+          <tbody>
+          {% for l in resumen.lineas %}
+          {% with insumo=l.detalle.detalle_cotizacion.detalle_pedido.insumo_invernadero.insumo %}
+          <tr>
+            <td>{{ insumo.nombre_insumo }}</td>
+            <td class="right nowrap mono"><b>{{ l.ingresa|cant:insumo.unidad_medida_insumo }}</b></td>
+            <td>{% if l.cubre_faltante %}<span class="sub2">{{ l.cubre_faltante|num:insumo.unidad_medida_insumo }} cubren el faltante sin lote</span>{% endif %}{% for cantidad, vence in l.lotes %}<span class="sub2">Lote nuevo de {{ cantidad|num:insumo.unidad_medida_insumo }}{% if vence %} · vence el {{ vence|date:"d/m/Y" }}{% endif %}</span>{% endfor %}{% if not l.ingresa %}<span class="muted">No ingresa nada</span>{% endif %}</td>
+            <td class="right nowrap mono">{{ l.stock_antes|num:insumo.unidad_medida_insumo }} → {{ l.stock_despues|num:insumo.unidad_medida_insumo }}</td>
+            <td class="right nowrap mono">{{ l.transito_antes|num:insumo.unidad_medida_insumo }} → {{ l.transito_despues|num:insumo.unidad_medida_insumo }}</td>
+            <td><span class="status-badge {% if l.estado_despues == 'completo' %}status-ok{% else %}status-neutral{% endif %}">{% if l.estado_despues == "completo" %}Completa{% else %}Sigue pendiente{% endif %}</span></td>
+          </tr>
+          {% if l.inconvenientes %}<tr><td colspan="6" class="sub2">{% for tipo, cantidad, descripcion in l.inconvenientes %}<span class="status-badge status-warn">{{ tipo|tipo_de_inconveniente }}</span> {{ cantidad|num:insumo.unidad_medida_insumo }}{% if descripcion %} · {{ descripcion }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>{% endif %}
+          {% endwith %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <dl class="dl two">
+        <dt>La orden quedará</dt><dd><b>{{ estado_texto }}</b></dd>
+        <dt>Asiento contable</dt><dd>{% if resumen.monto_asiento %}Debe Insumos en Stock / Haber Proveedores por <b>{{ resumen.monto_asiento|pesos }}</b>{% else %}<span class="muted">No se registra: no ingresa nada al stock.</span>{% endif %}</dd>
+        {% if resumen.alertas_que_se_resuelven %}<dt>Alertas que se resuelven</dt><dd>{% for a in resumen.alertas_que_se_resuelven %}{{ a.descripcion_alerta }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd>{% endif %}
+        {% if resumen.crea_reclamo %}<dt>Reclamo</dt><dd>Se genera un <b>reclamo sin emitir</b> con estos inconvenientes y se avisa al Gerente para que lo emita.</dd>{% endif %}
+        <dt>Correo</dt><dd>El proveedor recibe por correo lo recibido y lo que sigue pendiente.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'compras:recepcion_nueva' orden.pk %}" novalidate>
+    {% csrf_token %}
+    {% for nombre, valor in campos %}<input type="hidden" name="{{ nombre }}" value="{{ valor }}">{% endfor %}
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar recepción</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Cambiar algún dato</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

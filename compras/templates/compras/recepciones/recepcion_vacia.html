@@ -1,0 +1,11 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Registrar recepción» de una orden sin mercadería pendiente (``VIEWS.c_rcp`` del prototipo, estado vacío): todo lo pedido ya llegó, se cerró con faltante o la orden todavía no está aprobada. Recibe «orden».{% endcomment %}
+{% block titulo %}Registrar recepción · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <a class="btn btn-text" href="{% url 'compras:orden_ficha' orden.pk %}">{% icono "back" 14 %} Orden {{ orden }}</a>
+  <div class="page-h"><h1>Registrar recepción · {{ orden }}</h1></div>
+  <div class="empty"><b>No hay mercadería pendiente en esta orden</b><span>Todo lo que se pidió ya llegó o se cerró, o la orden todavía no está aprobada.</span></div>
+</div>
+{% endblock %}
