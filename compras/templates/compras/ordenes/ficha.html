@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario formato_compras %}
 {% comment %}Ficha de la orden de compra (CMP-CNS-ODC reglas 4, 5 y 8; ``VIEWS.c_odc`` del prototipo): el pedido de origen y su Agrónomo, el monto frente al estimado, el estado; si se resolvió, el Gerente, la fecha y, si
 se rechazó, el motivo; y las líneas por proveedor e invernadero de destino con lo pedido, lo recibido y lo que falta, el precio, la entrega esperada (con los días de atraso) y el estado de cada una.
-Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si ``"resolver" in ficha.acciones`` (D-30). Las recepciones (CMP-04) se muestran abajo; los pagos y los reclamos los suman CMP-05 y CMP-06. «Registrar recepción» y «Cerrar con faltante» solo si están en ``ficha.acciones`` (D-30).{% endcomment %}
+Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si ``"resolver" in ficha.acciones`` (D-30). Las recepciones (CMP-04, con lo corregido de CMP-06), los pagos (CMP-05) y los reclamos (CMP-06) se muestran abajo. «Registrar recepción» y «Cerrar con faltante» solo si están en ``ficha.acciones`` (D-30).{% endcomment %}
 {% block titulo %}Orden {{ orden }} · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
@@ -15,6 +15,7 @@ Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si `
     {% if "resolver" in ficha.acciones %}<a class="btn btn-primary" href="{% url 'compras:orden_resolver' orden.pk %}">Revisar y decidir</a>{% endif %}
     {% if "recibir" in ficha.acciones %}<a class="btn btn-primary" href="{% url 'compras:recepcion_nueva' orden.pk %}">Registrar recepción</a>{% endif %}
     {% if "cerrar" in ficha.acciones %}<a class="btn btn-ghost" href="{% url 'compras:cierre_faltante' orden.pk %}">Cerrar con faltante</a>{% endif %}
+    {% if "corregir" in ficha.acciones %}<a class="btn btn-ghost" href="{% url 'compras:correccion_nueva' orden.pk %}">Corregir una recepción</a>{% endif %}
   </div>
 
   {% if orden.estado_orden_compra == "rechazada" %}
@@ -90,12 +91,13 @@ Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si `
         <div class="rcp" style="padding:12px 0">
           <div><b>{{ r.recepcion }}</b> · {{ r.recepcion.fecha_recepcion|date:"d/m/Y" }} · {{ r.proveedor.nombre_para_mostrar }} · {{ r.invernadero.nombre_invernadero }}
             <span class="muted sm">· la registró {% if r.quien %}{{ r.quien.get_full_name|default:r.quien.email }}{% else %}el Gerente{% endif %}</span>
-            {% if r.reclamo %}<span class="status-badge {% if r.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">Reclamo {{ r.reclamo }} {% if r.reclamo.emitido %}emitido{% else %}sin emitir{% endif %}</span>{% endif %}</div>
+            {% if r.reclamo %}<span class="status-badge {% if r.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">Reclamo {{ r.reclamo }} {% if r.reclamo.emitido %}emitido{% else %}sin emitir{% endif %}</span>{% endif %}
+            {% for c in r.recepcion.correcciones.all %}<span class="status-badge status-neutral">Corregida {{ c.fecha_correccion|date:"d/m/Y" }} ({{ c }})</span>{% endfor %}</div>
           <table class="data-table"><tbody>
             {% for l in r.lineas %}
             <tr>
               <td>{{ l.insumo.nombre_insumo }}</td>
-              <td class="right nowrap mono">{{ l.recibida|cant:l.insumo.unidad_medida_insumo }}</td>
+              <td class="right nowrap mono">{{ l.recibida|cant:l.insumo.unidad_medida_insumo }}{% if l.corregida %}<span class="sub2">se corrigieron {{ l.corregida|num:l.insumo.unidad_medida_insumo }}</span>{% endif %}</td>
               <td class="muted sm">{% for lote, cantidad in l.lotes %}{% if lote.es_faltante_sin_lote %}{{ cantidad|num:l.insumo.unidad_medida_insumo }} cubrieron el faltante sin lote{% else %}Lote {{ lote.pk }}: {{ cantidad|num:l.insumo.unidad_medida_insumo }}{% if lote.fecha_vencimiento %} · vence el {{ lote.fecha_vencimiento|date:"d/m/Y" }}{% endif %}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}No ingresó nada{% endfor %}</td>
             </tr>
             {% if l.inconvenientes %}<tr><td colspan="3">{% for i in l.inconvenientes %}<span class="status-badge status-warn">{{ i.get_tipo_inconveniente_display }}</span> <span class="sm">{{ i.cantidad_afectada|num:l.insumo.unidad_medida_insumo }}{% if i.descripcion_inconveniente %} · {{ i.descripcion_inconveniente }}{% endif %}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>{% endif %}
@@ -104,6 +106,28 @@ Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si `
           {% if r.recepcion.observaciones_recepcion %}<p class="muted sm" style="margin:6px 0 0">Observaciones: {{ r.recepcion.observaciones_recepcion }}</p>{% endif %}
         </div>
         {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if hay_reclamos %}
+    <div class="card seg" id="reclamos">
+      <div class="card-h"><b>Reclamos</b><span class="muted sm">por los inconvenientes de las recepciones</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead>
+          <tbody>
+          {% for r in ficha.recepciones %}{% if r.reclamo %}
+          <tr>
+            <td><b>{{ r.reclamo }}</b><span class="sub2">{{ r.recepcion }} · {{ r.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
+            <td>{{ r.proveedor.nombre_para_mostrar }}</td>
+            <td><span class="status-badge {% if r.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ r.reclamo.get_estado_reclamo_display }}</span>
+              <span class="status-badge {% if r.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">{% if r.reclamo.emitido %}Emitido el {{ r.reclamo.fecha_reclamo|date:"d/m/Y" }}{% else %}Sin emitir{% endif %}</span></td>
+            <td class="right nowrap">{% if not es_contador %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:reclamo_ficha' r.reclamo.pk %}">Ver<span class="sr"> el reclamo {{ r.reclamo }}</span></a>{% endif %}</td>
+          </tr>
+          {% endif %}{% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
     {% endif %}

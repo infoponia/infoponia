@@ -1,0 +1,18 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+{{ nombre_organizacion }} corrigió la recepción {{ recepcion }} de la orden de compra {{ orden }} (corrección {{ correccion }}): se había registrado de más.
+
+Fecha de la recepción: {{ fecha|date:"d/m/Y" }}
+Invernadero de destino: {{ invernadero }}
+{% if observacion %}Observación: {{ observacion }}
+{% endif %}
+Lo que se dejó de reconocer como recibido:
+{% for linea in lineas %}
+- {{ linea.insumo }}: {{ linea.corregida }} {{ linea.unidad }}
+{% endfor %}{% if pendientes %}
+Sigue pendiente:
+{% for p in pendientes %}
+- {{ p.insumo }} ({{ p.invernadero }}): faltan {{ p.falta }} {{ p.unidad }}
+{% endfor %}{% endif %}
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

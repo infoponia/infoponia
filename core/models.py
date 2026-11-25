@@ -843,6 +843,10 @@ class RegistroAuditoria(models.Model):
         CONCRECION_ENTREGA = "concrecion_entrega", "Concreción de entrega"  # COM-CNC-ENT
         INTENTO_FALLIDO_ENTREGA = "intento_fallido_entrega", "Intento fallido de entrega"  # COM-CNC-ENT 4a y COM-FIN-RUT
         REGISTRO_LOTE_EXISTENTE = "registro_lote_existente", "Registro de lote existente"  # PRD-05 (PROD-REG-LTE, D-92 punto 12)
+        # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
+        CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
+        EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
+        CIERRE_RECLAMO = "cierre_reclamo", "Cierre de reclamo a proveedor"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1642,6 +1646,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.CONCRECION_ENTREGA,
         RegistroAuditoria.Accion.INTENTO_FALLIDO_ENTREGA,
         RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
+        RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
+        RegistroAuditoria.Accion.EMISION_RECLAMO,
+        RegistroAuditoria.Accion.CIERRE_RECLAMO,
     }
 )
 

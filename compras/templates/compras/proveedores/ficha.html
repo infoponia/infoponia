@@ -1,6 +1,6 @@
 {% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
 {% comment %}Ficha del proveedor (CMP-CNS-PRV regla 4, VIEWS.c_prv del prototipo): sus datos y los botones que le corresponden a quien mira («acciones», D-30). Solo el
-Gerente modifica, da de baja y reactiva; el Agrónomo solo consulta (regla 5). Los pedidos, órdenes, pagos y reclamos se suman de CMP-02a a CMP-06.
+Gerente modifica, da de baja y reactiva; el Agrónomo solo consulta (regla 5). Los pedidos, órdenes, pagos y reclamos se suman de CMP-02a a CMP-06 (todos hechos).
 La baja abre una ventana con HTMX; sin JavaScript, su enlace lleva a esta página con la ventana abierta («plantilla_de_ventana»).{% endcomment %}
 {% block titulo %}{{ proveedor.nombre_para_mostrar }} · InfoPonia{% endblock %}
 {% block contenido %}
@@ -69,6 +69,29 @@ La baja abre una ventana con HTMX; sin JavaScript, su enlace lleva a esta págin
       </div>
       {% else %}
       <p class="muted" style="margin:0;padding:16px 20px">Todavía no se le compró. Cuando una orden incluya sus cotizaciones, se ve acá.</p>
+      {% endif %}
+    </div>
+    <div class="card seg">
+      <div class="card-h"><b>Reclamos</b></div>
+      {% if reclamos %}
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Reclamo</th><th>Orden</th><th>Inconvenientes</th><th>Estado</th></tr></thead>
+          <tbody>
+          {% for f in reclamos %}
+          <tr>
+            <td><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
+            <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}">{{ f.orden }}</a></td>
+            <td>{% for i in f.inconvenientes %}{{ i.get_tipo_inconveniente_display }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td><span class="status-badge {% if f.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ f.reclamo.get_estado_reclamo_display }}</span>
+              <span class="status-badge {% if f.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">{% if f.reclamo.emitido %}Emitido{% else %}Sin emitir{% endif %}</span></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted" style="margin:0;padding:16px 20px">No tiene reclamos. Se generan cuando una recepción suya se registra con inconvenientes.</p>
       {% endif %}
     </div>
   </div>

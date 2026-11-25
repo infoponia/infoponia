@@ -1,0 +1,55 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario formato_compras %}
+{% comment %}Ficha del reclamo (CMP-EMT-RCL regla 2; ``VIEWS.c_rcl`` del prototipo): el proveedor, la orden, la recepción, el invernadero, la emisión y cada inconveniente (insumo, tipo, cantidad afectada y descripción). Recibe «ficha»
+(``FichaDeReclamo``) y «correo_configurado». «Emitir reclamo» y «Cerrar reclamo» solo si están en ``ficha.acciones`` (D-30); cada uno es un formulario POST con la explicación de lo que hace al lado.{% endcomment %}
+{% block titulo %}Reclamo {{ ficha.reclamo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <a class="btn btn-text" href="{% if user.rol == 'gerente' %}{% url 'compras:reclamos' %}{% else %}{% url 'compras:orden_ficha' ficha.orden.pk %}{% endif %}">{% icono "back" 14 %} {% if user.rol == 'gerente' %}Reclamos{% else %}Orden {{ ficha.orden }}{% endif %}</a>
+  <div class="page-h">
+    <h1>Reclamo {{ ficha.reclamo }}</h1>
+    <span class="status-badge {% if ficha.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ ficha.reclamo.get_estado_reclamo_display }}</span>
+    <span class="status-badge {% if ficha.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">{% if ficha.reclamo.emitido %}Emitido{% else %}Sin emitir{% endif %}</span>
+  </div>
+
+  {% if "emitir" in ficha.acciones %}
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>Al emitir el reclamo, {% if correo_configurado %}le enviamos un correo al proveedor{% else %}el correo no está configurado, así que no se le envía nada al proveedor{% endif %} con la recepción, la orden y cada inconveniente. Reclamar deja registrado lo que pasó: no se espera una devolución.
+    <form method="post" action="{% url 'compras:reclamo_emitir' ficha.reclamo.pk %}" style="margin-top:10px">{% csrf_token %}<button class="btn btn-primary" type="submit" data-enviando="Emitiendo…">{% icono "send" 15 %} Emitir reclamo</button></form></div></div>
+  {% elif "cerrar" in ficha.acciones %}
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>Cerrá el reclamo cuando la situación ya esté resuelta con el proveedor, por fuera del Sistema. Un reclamo cerrado <b>no se reabre</b> y cerrarlo no cambia el stock, las líneas de la orden ni el pago.
+    <form method="post" action="{% url 'compras:reclamo_cerrar' ficha.reclamo.pk %}" style="margin-top:10px">{% csrf_token %}<button class="btn btn-primary" type="submit" data-enviando="Cerrando…">Cerrar reclamo</button></form></div></div>
+  {% endif %}
+
+  <div class="stack">
+    <div class="card">
+      <div class="card-title">Datos</div>
+      <dl class="dl two">
+        <dt>Proveedor</dt><dd>{{ ficha.proveedor.nombre_para_mostrar }}</dd>
+        <dt>Orden</dt><dd><a class="prv-nombre" href="{% url 'compras:orden_ficha' ficha.orden.pk %}"><b>{{ ficha.orden }}</b></a></dd>
+        <dt>Recepción</dt><dd>{{ ficha.recepcion }} · {{ ficha.recepcion.fecha_recepcion|date:"d/m/Y" }} <span class="muted">· {{ ficha.invernadero.nombre_invernadero }}</span></dd>
+        <dt>Emisión</dt><dd>{% if ficha.reclamo.emitido %}{{ ficha.reclamo.fecha_reclamo|date:"d/m/Y" }} <span class="muted">por {{ ficha.reclamo.gerente.get_full_name|default:ficha.reclamo.gerente.email }}</span>{% else %}Sin emitir{% endif %}</dd>
+      </dl>
+    </div>
+    <div class="card seg">
+      <div class="card-h"><b>Inconvenientes</b><span class="muted sm">los declaró quien registró la recepción</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Insumo</th><th>Tipo</th><th class="right">Cantidad afectada</th><th>Descripción</th></tr></thead>
+          <tbody>
+          {% for i in ficha.inconvenientes %}
+          {% with insumo=i.detalle_recepcion.detalle_orden.detalle_cotizacion.detalle_pedido.insumo_invernadero.insumo %}
+          <tr>
+            <td>{{ insumo.nombre_insumo }}</td>
+            <td><span class="status-badge status-warn">{{ i.get_tipo_inconveniente_display }}</span></td>
+            <td class="right nowrap mono">{{ i.cantidad_afectada|cant:insumo.unidad_medida_insumo }}</td>
+            <td>{{ i.descripcion_inconveniente|default:"—" }}</td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

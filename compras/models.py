@@ -1,6 +1,6 @@
 # Modelos de `compras` (nivel 6 de D-37): Proveedor (CMP-01), desde CMP-02a Pedido, DetallePedido, InvitacionPedido, EnlaceProveedor,
 # Cotizacion y DetalleCotizacion, desde CMP-03, OrdenCompra y DetalleOrdenCompra, desde CMP-04, Recepcion, DetalleRecepcion, DetalleRecepcionMovimiento, ReclamoProveedor,
-# InconvenienteRecepcion y AlertaCompras y, desde CMP-05, Pago. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88, D-89, D-90 y D-91). Nunca se borra una fila de
+# InconvenienteRecepcion y AlertaCompras, desde CMP-05, Pago y, desde CMP-06, CorreccionRecepcion y DetalleCorreccionRecepcion. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88, D-89, D-90 y D-91). Nunca se borra una fila de
 # negocio: hay estados. A2 de D-37: toda FK o M2M se declara acá, en la app de nivel mayor. Ningún import de `comercial` ni de
 # `produccion` (A1).
 
@@ -804,3 +804,52 @@ class Pago(OrigenDocumento):
     def __str__(self):
         """«PAG-0001»: el identificador que ven las pantallas, los correos y la auditoría (D-36)."""
         return f"PAG-{self.pk:04d}" if self.pk else "PAG-nuevo"
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Correcciones de recepción (CMP-06). Fuente: docs/modelo/compras.md («CorreccionRecepcion»); D-90 puntos 1 a 4 y D-89 punto 4; CMP-COR-RCP (MD-126).
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+class CorreccionRecepcion(OrigenDocumento):
+    """Lo que el Agrónomo (o el Gerente) le baja a una recepción cargada de más (docs/modelo/compras.md, «CorreccionRecepcion»; MD-126). Hereda de ``OrigenDocumento`` (tipo
+    ``correccion_de_recepcion``, D-90 punto 3): es el ``origen`` de cada movimiento de salida y del asiento inverso (Debe Proveedores / Haber Insumos en Stock). NO redeclara ``save()``: el del padre
+    fija ``tipo`` desde ``TIPO_DE_ORIGEN``. ``agronomo`` es 0..1, como en la recepción: vacío si corrigió el Gerente (quien corrigió queda en la auditoría). La fecha es la del registro."""
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.CORRECCION_DE_RECEPCION
+
+    # Se llama ``recepcion_corregida`` y no ``recepcion`` (como dice el extracto del modelo): ``recepcion`` choca con el accesorio de la herencia multitabla
+    # (``OrigenDocumento.recepcion`` es el hijo ``Recepcion``; error E006, lección de D-83). Queda anotado en temas abiertos.
+    recepcion_corregida = models.ForeignKey(Recepcion, on_delete=models.PROTECT, related_name="correcciones")
+    fecha_correccion = models.DateField("fecha de la corrección")
+    observacion = models.TextField("observación", blank=True)
+    agronomo = models.ForeignKey(Agronomo, null=True, blank=True, on_delete=models.PROTECT, related_name="correcciones_de_recepcion")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Corrección de recepción"
+        verbose_name_plural = "Correcciones de recepción"
+
+    def __str__(self):
+        """«COR-0001»: el identificador que ven las pantallas, los correos y la auditoría (D-36)."""
+        return f"COR-{self.pk:04d}" if self.pk else "COR-nueva"
+
+
+class DetalleCorreccionRecepcion(models.Model):
+    """Una línea de la corrección **(técnico, D-90 punto 3)**: lo descontado de una línea de la recepción en **un** lote, con su movimiento de salida. Si la corrección toca dos lotes de la misma línea, son
+    dos filas. ``movimiento`` es ``OneToOne`` (R032 análoga): ``inventario`` no conoce a ``compras`` (A1, A2) y los ``related_name`` no chocan con los accesorios de la herencia (D-83)."""
+
+    correccion = models.ForeignKey(CorreccionRecepcion, on_delete=models.PROTECT, related_name="detalles")
+    detalle_recepcion = models.ForeignKey(DetalleRecepcion, on_delete=models.PROTECT, related_name="correcciones")
+    cantidad_corregida = models.DecimalField("cantidad corregida", max_digits=14, decimal_places=3)
+    movimiento = models.OneToOneField(MovimientoInsumo, on_delete=models.PROTECT, related_name="vinculo_de_correccion")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Detalle de corrección de recepción"
+        verbose_name_plural = "Detalles de corrección de recepción"
+        constraints = [models.CheckConstraint(condition=Q(cantidad_corregida__gt=0), name="detalle_correccion_cantidad_positiva")]
+
+    def __str__(self):
+        """«Insumo · Invernadero» de la línea (texto de la auditoría)."""
+        return str(self.detalle_recepcion)

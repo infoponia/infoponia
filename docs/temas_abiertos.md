@@ -790,3 +790,16 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Prueba de CMP-03 actualizada** (no se debilitó): en `test_cmp_cns_odc.py`, `con_pago_pendiente` deja de ser un atajo ignorado (su prueba está en `test_pagos_vistas.py`).
 - **Pasada manual en navegador real** (paso 22 de la «Verificación a mano»): enviar el pago hasta el final. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
 
+
+## CMP-06 (corrección de recepción y reclamos; 25/11/2026)
+
+- **`CorreccionRecepcion.recepcion_corregida`, no `recepcion`:** el nombre choca con el accesorio de la herencia multitabla (error E006 de Django; lección de D-83). `Recepcion` accede con `correcciones`. Corregir `docs/modelo/compras.md` («CorreccionRecepcion») y `docs/casos_de_uso/compras/correccion_y_reclamos.md`.
+- **«Límites» de la tarea incompleto:** faltaban `contabilidad` (`OrigenDocumento.Tipo.CORRECCION_DE_RECEPCION` y su migración, hoy 0009), `inventario/tests/fabricas.py` (el tipo nuevo en `SALIDAS`) y la advertencia de que `inventario` 0004 **no es «solo de `choices`»**: el valor tiene 34 caracteres, la columna era de 30 y pasó a 40, y la restricción de tipos se reescribe. Corregir el archivo de la tarea y D-90 punto 2.
+- **Extensión 10a** de CMP-COR-RCP («el Sistema reintenta el envío») contradice D-88 punto 6 (no hay cola de reintentos). Se implementó D-88: el correo no se reintenta (lo mismo para la emisión del reclamo). Corregir la extensión.
+- **Quién ve los reclamos:** el caso de uso solo nombra al Gerente; el servicio deja al Agrónomo ver los de sus invernaderos (solo lectura), porque la ficha de la orden y la del proveedor llevan a ellos. El Contador no. Confirmar o restringir.
+- **La alerta «recepción con inconvenientes»** sigue llevando a la ficha de la orden (CMP-04), que ahora tiene la sección «Reclamos» con el enlace al reclamo; la regla 4 de CMP-EMT-RCL admite los dos caminos. Llevarla directo a la ficha del reclamo cambia una prueba de `test_recorrido_recepcion.py`: queda como mejora.
+- **Lo máximo corregible** con correcciones sucesivas: `min(lo que el lote conserva, lo que la recepción ingresó en él − lo ya corregido de ese lote)`; D-90 punto 4 no dice cómo contar lo ya corregido. Códigos de error nuevos de `ErrorDeCompras`: `pago_registrado`, `sin_lineas`, `linea_repetida`, `linea_ajena`, `linea_cerrada_con_faltante`, `cantidad_invalida`, `supera_lo_corregible` (con `datos["maxima"]`), `reclamo_ya_emitido`, `reclamo_ya_cerrado` y `reclamo_sin_emitir`.
+- **Alertas del resumen:** corregir sube el tránsito lo mismo que baja el stock, así que «bajo el mínimo» no puede reactivarse; solo «stock inconsistente». La postcondición e («se reactivan las que correspondan») lo permite pero conviene aclararlo.
+- **Emitir y cerrar** son botones de un formulario POST con la explicación al lado (el prototipo usaba ventanas): sin ventana de confirmación aparte. Si se quiere confirmar antes de emitir (sale un correo), es una pantalla más.
+- **Correos nuevos** (`correccion.txt`, `reclamo.txt`): su texto exacto no estaba especificado más allá de la lista de tecnología 10 y de la postcondición c de CMP-EMT-RCL.
+- **Pasada manual en navegador real** (paso 25 de la «Verificación a mano»): corregir, emitir y cerrar hasta el final. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
