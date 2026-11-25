@@ -1,0 +1,26 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% comment %}El comprobante de indemnización (variación 9a de COM-EVL-DSC y COM-RSV-QJA) o el aviso al cliente, para imprimir (el cliente sin correo): la entrega y su fecha, cada línea, el total, cuánto se descontó y cuánto se reintegró y con
+qué medio. De uso interno, sin validez fiscal. Recibe lo de `solicitudes.contexto_del_aviso`.{% endcomment %}
+{% block titulo %}Comprobante {{ codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>{% if aceptada and monto %}Comprobante de indemnización{% elif aceptada %}Aviso de aceptación{% else %}Aviso de rechazo{% endif %} · <span class="mono">{{ codigo }}</span></h1>
+    <div class="sub">{{ cliente }} · {{ contrato }} · entrega {{ entrega }}{% if fecha_entrega %} del {{ fecha_entrega|date:"d/m/Y" }}{% endif %}</div></div>
+  <div class="card" style="margin-top:12px"><div class="card-title">{{ decision|capfirst }}: {{ tipo }}{% if es_queja %} por {{ tipo_queja }}{% endif %}</div>
+    {% if aceptada and monto %}
+    <table class="data-table"><thead><tr><th>Producto</th><th class="right">{% if es_queja %}Detalle{% else %}Entregadas / mínimas{% endif %}</th><th class="right">Monto</th></tr></thead><tbody>
+    {% for l in lineas %}<tr><td>{{ l.variedad }}</td>
+      <td class="right mono">{% if es_queja %}{% if es_retraso %}{{ l.dias }} día{{ l.dias|pluralize }} × {{ l.por_dia|pesos }}{% else %}—{% endif %}{% else %}{{ l.entregada }} de {{ l.minima }} · {{ l.por_planta|pesos }} por planta{% endif %}</td>
+      <td class="right mono">{% if l.monto is not None %}{{ l.monto|pesos }}{% else %}—{% endif %}</td></tr>{% endfor %}
+    </tbody></table>
+    <dl class="dl" style="margin-top:10px"><dt>Total de la indemnización</dt><dd class="mono">{{ monto|pesos }}</dd>
+      {% if descontado %}<dt>Descontado de lo que se debe por la entrega</dt><dd class="mono">{{ descontado|pesos }}</dd>{% endif %}
+      {% if reintegrado %}<dt>Reintegrado</dt><dd class="mono">{{ reintegrado|pesos }} ({{ medio|lower }})</dd>{% endif %}</dl>
+    {% elif aceptada %}<p style="padding:0 16px">La {{ tipo }} fue aceptada. No corresponde una indemnización: no cambia lo que se debe por la entrega.</p>
+    {% else %}<p style="padding:0 16px">La {{ tipo }} no fue reconocida.</p>{% endif %}
+    {% if observaciones %}<p style="padding:0 16px"><b>Observaciones del Gerente:</b> {{ observaciones }}</p>{% endif %}
+    <p class="muted" style="padding:0 16px">Comprobante interno, sin validez fiscal.</p></div>
+  <div class="acts-fila" style="margin-top:12px"><button class="btn btn-ghost" type="button" onclick="window.print()">Imprimir comprobante</button><a class="btn btn-primary" href="{% url 'comercial:solicitudes' %}">Volver a las solicitudes</a></div>
+</div>
+{% endblock %}

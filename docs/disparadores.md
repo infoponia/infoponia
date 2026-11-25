@@ -157,12 +157,12 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 10. **Lo que deja COM-06 (nace en el lote C6; D-68).**
    - **COM-06b:** el enlace `confirmacion_entrega` en el correo de la concreción de un suministro (postcondición l de COM-CNC-ENT; COM-06a
      manda el comprobante sin enlace). **Planificado (lote C6):** COM-06b (`confirmacion.md`, «El enlace de confirmación»).
-   - **COM-07:** COM-EVL-DSC resuelve la `DiscrepanciaEntrega` y COM-RSV-QJA las quejas; las dos cambian el enlace de su alerta (hoy, la
+   - ~~**COM-07:** COM-EVL-DSC resuelve la `DiscrepanciaEntrega` y COM-RSV-QJA las quejas; las dos cambian el enlace de su alerta (hoy, la
      ficha del suministro) por la pantalla de la solicitud; COM-RSV-QJA usa `intentos_fallidos` (D-68, punto 6); `monto_a_cobrar` ya resta
      las indemnizaciones de las solicitudes aceptadas.
      **Planificado (lote C7; D-69, punto 1):** las solicitudes, **COM-07a** (`solicitudes.md`, «Lo que completa a otras tareas»: el
      registrante del enlace de las dos alertas, `monto_a_cobrar` con lo **descontado**, D-69 punto 9); COM-RSV-SUM, **COM-07b**
-     (`resolucion.md`).
+     (`resolucion.md`).~~ **Cumplido por COM-07a (25/11/2026):** el registrante del enlace de las dos alertas lleva a la ficha de la solicitud, `monto_a_cobrar` resta lo descontado y COM-RSV-QJA usa `intentos_fallidos`. Lo que queda: COM-RSV-SUM, de COM-07b (punto 11).
    - **COM-08:** `Entrega.pago` (R154) y C7 de `PagoCliente` como {xor}; `estado_de_pago` con «pagada» (MD-125, MD-136) y la alerta «pago en
      mora» (COM-VNC-PAG); el cobro en COM-ATN-ENR (regla 1) y su regla 5.
      **Planificado (lote C8):** todo en **COM-08a** (`cobranza.md`). R154 no es `Entrega.pago`: es la tabla `LineaPago` (D-94, punto 2).

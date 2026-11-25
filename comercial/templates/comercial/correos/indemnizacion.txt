@@ -1,0 +1,22 @@
+{% load comercial %}{% autoescape off %}Hola, {{ cliente }}:
+
+El Gerente aceptó tu {{ tipo }} {{ codigo }} sobre la entrega {{ entrega }} de tu suministro {{ contrato }}{% if fecha_entrega %} ({{ fecha_entrega|date:"d/m/Y" }}){% endif %}. Te corresponde una indemnización. Este es el comprobante de indemnización.
+
+Detalle:
+{% for l in lineas %}{% if es_queja %}{% if es_retraso %}{% if l.dias > 0 %}- {{ l.variedad }}: {{ l.dias }} día{{ l.dias|pluralize }} de retraso a {{ l.por_dia|pesos }} por día = {{ l.monto|pesos }}
+{% endif %}{% else %}- {{ l.variedad }}
+{% endif %}{% else %}- {{ l.variedad }}: recibiste {{ l.entregada }} y el mínimo pactado es {{ l.minima }}; {{ l.por_planta|pesos }} por planta faltante = {{ l.monto|pesos }}
+{% endif %}{% endfor %}
+Total de la indemnización: {{ monto|pesos }}.
+{% if descontado > 0 %}Descontado de lo que debés por la entrega: {{ descontado|pesos }}.
+{% endif %}{% if reintegrado > 0 %}Reintegrado a vos: {{ reintegrado|pesos }} ({{ medio|lower }}).
+{% endif %}{% if observaciones %}
+Observaciones del Gerente: {{ observaciones }}
+{% endif %}
+Comprobante interno, sin validez fiscal.
+
+Si tenés dudas, escribile a tu vendedor: {{ vendedor.get_full_name }}{% if vendedor.email %} ({{ vendedor.email }}){% endif %}{% if vendedor.telefono %}, teléfono {{ vendedor.telefono }}{% endif %}.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

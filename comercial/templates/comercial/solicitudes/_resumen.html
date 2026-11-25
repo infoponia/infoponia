@@ -1,0 +1,36 @@
+{% load iconos comercial %}{% comment %}El resumen del paso 6 de COM-EVL-DSC y COM-RSV-QJA (también es lo que devuelve HTMX): los errores que bloquean (decisión, observaciones y monto) o, si no hay, la decisión, el monto, cómo se aplica, los incumplimientos
+y la advertencia de resolución del contrato (6b) o de historial (6c), y el formulario de confirmación con la huella y lo cargado. El medio del reintegro (6a y 6d) se elige acá, en el mismo resumen. Con errores no hay botón de confirmar.
+Recibe «resumen», «datos», «bloqueantes», «errores», «confirmando», «medios» y «s». Todo se escapa.{% endcomment %}
+<div class="card seg" style="margin-top:12px">
+  <div class="card-h"><h3>Resumen</h3></div>
+  <div class="card-b">
+  {% if bloqueantes %}
+    <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{% for campo, mensajes in bloqueantes.items %}{% for m in mensajes %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
+  {% else %}
+    <ul class="clist">{% for t in resumen.textos %}<li>{{ t }}</li>{% endfor %}</ul>
+    {% if resumen.decision == "aceptar" and resumen.monto > 0 %}<p class="muted" style="margin-top:8px">El asiento de la indemnización (Indemnizaciones por Incumplimiento a Cliente contra Deudores por Ventas, o Caja / Banco si se reintegra) no se programa en esta ronda: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span></p>{% endif %}
+    {% if resumen.resolveria %}<div class="alert alert-danger" role="status" style="margin-top:8px">{% icono "warn" 16 %}<div>Confirmar no pide una confirmación adicional: el contrato se resolverá por incumplimientos.</div></div>{% endif %}
+  {% endif %}
+  </div>
+</div>
+{% if not bloqueantes %}
+<form method="post" action="{% url 'comercial:solicitud_resolver' s.pk %}" novalidate style="margin-top:12px">
+  {% csrf_token %}
+  <input type="hidden" name="huella" value="{{ resumen.huella }}">
+  <input type="hidden" name="decision" value="{{ datos.decision }}">
+  <input type="hidden" name="monto" value="{{ datos.monto }}">
+  <input type="hidden" name="observaciones" value="{{ datos.observaciones }}">
+  {% if resumen.necesita_medio %}
+  <div class="fld">
+    <label class="lbl" for="medio_reintegro">Medio del reintegro <span class="req">*</span></label>
+    <select class="field-input" id="medio_reintegro" name="medio_reintegro" data-desplegable>
+      <option value="">Elegí el medio…</option>
+      {% for valor, texto in medios %}<option value="{{ valor }}"{% if datos.medio_reintegro == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+    </select>
+    <div class="hint">La entrega ya no debe lo suficiente: el resto se le devuelve al cliente. Efectivo sale de Caja y transferencia, de Banco.</div>
+    {% if confirmando %}{% for m in errores.medio_reintegro %}<div class="err" role="alert">{{ m }}</div>{% endfor %}{% endif %}
+  </div>
+  {% endif %}
+  <div class="acts-fila"><button class="btn btn-primary" type="submit" data-enviando="Registrando…">Confirmar la decisión</button></div>
+</form>
+{% endif %}

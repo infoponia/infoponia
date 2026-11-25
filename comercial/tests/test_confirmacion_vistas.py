@@ -417,14 +417,14 @@ class AtenderEntregaNoReconocidaVistaTests(Base):
         self.assertNotIn(self.url, texto(self.client.get(self.ficha)))
 
     def test_regla_los_enlaces_de_las_alertas_llevan_al_gerente_a_donde_se_atienden(self):
-        """D-62: la alerta «entrega no reconocida» lleva al Gerente a la pantalla de COM-ATN-ENR; la de una queja, a la ficha del suministro (hasta COM-07); a cualquier otro rol no le devuelve enlace."""
+        """D-62: la alerta «entrega no reconocida» lleva al Gerente a la pantalla de COM-ATN-ENR; la de una queja, a la ficha de la solicitud (desde COM-07a; antes, a la del suministro); a cualquier otro rol no le devuelve enlace."""
         e2, enlace2, _ = self.nueva()
         confirmacion.registrar_respuesta(enlace2.pk, DatosDeRespuesta("con_quejas", [confirmacion.QuejaPedida("otro", self.lineas(e2)[:1], "Falta algo.")]))
         todas = list(Alerta.objects.select_related("invernadero").order_by("pk"))
         enlaces = alertas.enlaces_de_alertas(self.gerente, todas)
         por_tipo = {a.tipo_alerta: enlaces[a.pk] for a in todas}
         self.assertEqual(por_tipo["comercial_entrega_no_reconocida"].url, self.url)
-        self.assertEqual(por_tipo["comercial_queja"].url, self.ficha)
+        self.assertEqual(por_tipo["comercial_queja"].url, reverse("comercial:solicitud", args=[Queja.objects.get().pk]))  # COM-07a: antes, `self.ficha`
         self.assertIn(self.entrega.codigo, por_tipo["comercial_entrega_no_reconocida"].detalle)
         self.assertEqual(atencion.enlaces_de_alertas(self.e.vendedor, todas), {})
 
@@ -442,10 +442,10 @@ class FichasConQuejasTests(Base):
         self.queja = Queja.objects.get()
 
     def test_regla_la_ficha_del_suministro_muestra_la_confirmacion_y_las_quejas(self):
-        """Lo que completa COM-03a: la entrega figura «Confirmada» y la sección «Quejas de entrega» trae el número, la entrega, el tipo, el estado y los productos."""
+        """Lo que completa COM-03a: la entrega figura «Confirmada» y la sección «Solicitudes de revisión» (desde COM-07a; antes «Quejas de entrega») trae el número, la entrega, el tipo y el estado."""
         self.client.force_login(self.e.vendedor)
         html = texto(self.client.get(reverse("comercial:suministro", args=[self.contrato.pk])))
-        for esperado in ("Confirmada", "Quejas de entrega", self.queja.codigo, self.entrega.codigo, "Otro", "Pendiente de revisión", str(self.e.variedad)):
+        for esperado in ("Confirmada", "Solicitudes de revisión", self.queja.codigo, self.entrega.codigo, "Queja · otro", "Pendiente de revisión"):
             self.assertIn(esperado, html)
 
     def test_regla_la_ficha_del_cliente_y_su_baja_informan_las_quejas_pendientes(self):

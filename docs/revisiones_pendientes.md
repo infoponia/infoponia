@@ -924,6 +924,49 @@ Los 22 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 21. Opcional: en un celular las pantallas se leen (son para computadora).
 - [ ] 22. Después del merge, en Render: `comercial.0009_cancelacion_compra_venta` y `core.0043_comercial_cancelacion_compra_venta` aplicadas en el log.
 
+## COM-06b · Tarea COM-06b (confirmación del cliente)
+
+Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-06b-confirmacion-del-cliente.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0011 y `core` 0048; ninguna de datos). Hace falta un correo que puedas leer (`CORREO_CONSOLA=1` o uno real).
+
+- [ ] 1. Transportista: concretar la entrega de SUM-A; llega **un solo correo** con el comprobante y el enlace de confirmación («Sirve hasta el» hoy + 3 días).
+- [ ] 2. Abrir el enlace (celular o ventana privada): la dirección pasa a `/cliente/enlace/` (el token no queda en la barra); la entrega con sus cantidades, el precio, el total y el vencimiento; ninguna cantidad perdida ni costo.
+- [ ] 3. Retraso (si podés): con una entrega demorada, el enlace ofrece «Retraso» con los días y solo con ese producto.
+- [ ] 4. Errores del formulario: sin elegir nada, sin quejas, queja sin producto y sin motivo.
+- [ ] 5. Dos quejas («Estado de la mercadería» y «Otro»): el resumen «presenta 2 quejas» y la advertencia de que el enlace no podrá volver a usarse; enviar.
+- [ ] 6. El enlace no sirve dos veces («Este enlace ya se usó») y «Reenviar acuse» manda otro acuse.
+- [ ] 7. «No recibí la entrega» con SUM-B: el Gerente tiene la alerta crítica «Entrega no reconocida por el cliente» y el Vendedor su aviso.
+- [ ] 8. El Gerente atiende la alerta: lo que dijo el cliente, todo lo que generó la entrega y el resultado de la averiguación con su descripción.
+- [ ] 9. La vigencia sigue al parámetro de «Configuración» («Vigencia del enlace de confirmación»).
+- [ ] 10. Por rol: el Vendedor no ve «Atender» y recibe 403 en `/comercial/entregas/<id>/no-reconocida/`; Agrónomo y Transportista, 403; el Gerente ve «Quejas pendientes» en la ficha del cliente.
+- [ ] 11. **Navegador real** (ventana privada): completar el formulario del cliente con quejas y enviarlo hasta el final; volver a abrir el enlace y probar «Reenviar acuse».
+- [ ] 12. Opcional: sin JavaScript, los pasos 2 a 5 y 8 funcionan.
+- [ ] 13. Opcional: en un celular la entrega se apila y los botones se tocan bien.
+- [ ] 14. Después del merge, en Render: `comercial.0011` y `core.0048` aplicadas y `URL_DEL_SITIO` cargada.
+
+## COM-07a · Tarea COM-07a (solicitudes de revisión: evaluar, resolver, anular y consultar)
+
+Los pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-07a-solicitudes-de-revision.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`comercial` 0012: tabla `Anulacion`, cinco columnas y catorce restricciones; `contabilidad` 0010 y `core` 0049: solo `choices`; ninguna de datos). Se necesita un cliente con un correo que puedas leer, un suministro con 1 incumplimiento tolerado y tres entregas concretadas (una por debajo del mínimo y dos con queja).
+
+- [ ] 1. Gerente: el panel de control trae «Solicitudes de revisión · Pendientes: 3» y la pestaña, el número 3 en rojo; el indicador lleva a la lista filtrada por pendientes.
+- [ ] 2. Desde la alerta de la discrepancia (campana): abre la ficha de la solicitud con el mínimo pactado, las cantidades, $5 por planta faltante, el monto y las pérdidas.
+- [ ] 3. «Hubo incumplimiento (aceptar)» + «Ver resumen»: dice el descuento y el nuevo monto a cobrar; «Confirmar la decisión» registra y vuelve a la ficha con «Cuenta como incumplimiento».
+- [ ] 4. Efectos de la aceptación: alerta resuelta, contrato «1 de 1», evento «Incumplimiento de cláusula suministrante» en la bitácora, aviso al Vendedor, comprobante de indemnización al cliente y un `evaluacion_discrepancia` en «Auditoría».
+- [ ] 5. Queja por retraso: la ficha muestra los días, el plazo y $10 por día, sin campo de monto; rechazar sin observaciones da error; con observaciones, el cliente recibe el aviso y el contrato no suma.
+- [ ] 6. Queja por estado de la mercadería: montos inválidos (`-5`, `100,123`, `abc`, uno sobre el tope) dan su error con el tope; vacío se acepta sin indemnización.
+- [ ] 7. Monto mayor que lo que queda a cobrar: el resumen pide el «Medio del reintegro» y muestra las dos partes; sin medio da error; el monto a cobrar queda en $0,00.
+- [ ] 8. Superar los incumplimientos tolerados: el resumen advierte que el contrato se resolverá (queda «vigente» hasta COM-07b); con un contrato finalizado, advierte «historial».
+- [ ] 9. «Anular resolución»: la página dice el contador y el monto a cobrar antes y después; sin motivo da error; con motivo vuelve a pendiente, queda el historial y el evento de bitácora; la alerta sigue resuelta; se vuelve a resolver.
+- [ ] 10. Anular una queja con reintegro: «No se puede anular… ya se le reintegró al cliente» y solo «Volver».
+- [ ] 11. «Reenviar aviso» con el aviso pendiente de envío; «Imprimir comprobante» con un cliente sin correo.
+- [ ] 12. Filtros de la lista (tipo, estado, cliente, contrato, vendedor, fechas) y el buscador `SR-0012` o `12`; sin resultados: «No hay solicitudes con estos filtros.».
+- [ ] 13. La ficha del suministro trae la sección «Solicitudes de revisión», de la más reciente a la más antigua, con «Ver».
+- [ ] 14. Vendedor: ve en lectura solo las solicitudes de sus contratos, «La evalúa el Gerente» en las pendientes, sin panel ni «Anular resolución», sin el grupo del panel; `/comercial/solicitudes/<id>/anular/` y `.../resolver/` dan 403.
+- [ ] 15. Agrónomo: `/comercial/solicitudes/` da 403.
+- [ ] 16. **Navegador real** (ventana privada): evaluar una solicitud hasta el final («Ver resumen» y «Confirmar la decisión») y anular otra; recargar y ver el resultado; con HTMX, «Ver resumen» redibuja solo el resumen.
+- [ ] 17. Opcional: sin JavaScript, evaluar, resolver, anular y reenviar funcionan.
+- [ ] 18. Opcional: en un celular la lista y la ficha se ven y se operan.
+- [ ] 19. Después del merge, en Render: `comercial.0012_solicitudes`, `contabilidad.0010_anulacion` y `core.0049_comercial_solicitudes` aplicadas en el log.
+
 ## CMP-05 · Tarea CMP-05 (pago a proveedores)
 
 Los 24 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-05-pago-a-proveedores.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0005, `contabilidad` 0007 y `core` 0044; las dos últimas solo `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_pagos.py`; la concurrencia no se prueba a mano.

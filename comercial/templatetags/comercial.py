@@ -8,6 +8,15 @@ from maestros.validadores import formatear_cuit
 register = template.Library()
 
 
+@register.simple_tag(takes_context=True)
+def solicitudes_pendientes(context):
+    """El contador rojo de la pestaña «Solicitudes de revisión» (COM-CNS-SRV): las solicitudes pendientes, solo para el Gerente (`None` para los demás). Una consulta."""
+    from comercial.servicios.solicitudes import pendientes_para
+
+    solicitud = context.get("request")
+    return pendientes_para(solicitud.user) if solicitud is not None else None
+
+
 @register.filter
 def cuit(valor):
     """El CUIT como «XX-XXXXXXXX-X» (``maestros.validadores.formatear_cuit``)."""

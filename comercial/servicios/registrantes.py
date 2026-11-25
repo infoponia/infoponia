@@ -222,7 +222,9 @@ def seccion_de_entregas(usuario):
     """`registrar_seccion_de_inicio` (`secComercial` del prototipo, COM-05a2): el grupo «Entregas» del Inicio del Gerente y del Vendedor, dentro de su alcance: «Entregas de hoy» (a realizar con
     fecha ≤ hoy), «Sin transportista» (con envío) y «Próximas entregas» (las 5 primeras, con «Ver todas»). No incluye cobranza ni solicitudes (COM-08, COM-07). `None` para los demás roles.
     Dos consultas para todo el grupo."""
-    from comercial.servicios import entregas
+    from django.urls import reverse
+
+    from comercial.servicios import entregas, solicitudes
     from core.models import Usuario, rol_de
     from core.extensiones import SeccionDeInicio
     from inventario.servicios import stock
@@ -237,6 +239,9 @@ def seccion_de_entregas(usuario):
         "proximas": panel.proximas,
         "url_de_la_lista": entregas.url_de_entregas(),
         "url_sin_transportista": entregas.url_de_entregas(transportista="_"),
+        # COM-07a: el grupo «Solicitudes» (solo el Gerente; `None` para el Vendedor, regla 4 de COM-CNS-SRV: las resuelve el Gerente), dentro de esta misma sección.
+        "solicitudes_pendientes": solicitudes.pendientes_para(usuario),
+        "url_de_solicitudes_pendientes": reverse("comercial:solicitudes") + "?estado=pendiente",
     }
     return SeccionDeInicio("comercial/entregas/_seccion_de_inicio.html", {"entregas": datos})
 

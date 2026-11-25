@@ -355,3 +355,68 @@ class MontoYEstadoDePagoTests(Base):
         self.assertEqual(entregas.estado_de_pago([e.pk, de_venta.pk], HOY), {e.pk: "pendiente", de_venta.pk: None})
         self.assertEqual(entregas.estado_de_pago([e.pk], HOY + timedelta(days=10))[e.pk], "pendiente")
         self.assertEqual(entregas.estado_de_pago([e.pk], HOY + timedelta(days=11))[e.pk], "en_mora")
+
+
+class MontoACobrarConSolicitudesTests(Base):
+    """COM-07a (D-69, punto 9; corrige la nota de D-68, punto 7): el monto a cobrar resta lo **descontado** de las solicitudes aceptadas de la entrega, no la indemnización entera."""
+
+    def concretada(self):
+        """Una entrega concretada de un suministro: 10 plantas a $100 = $1.000,00."""
+        from comercial.tests.fabricas import detalle_suministro, marcar_concretada, suministro
+
+        s = suministro(self.e, plazo_pago=10)
+        d = detalle_suministro(s, self.e.variedad, cantidad=10, primera_en_dias=0)
+        r = reserva_lista(None, self.lote, 10, fecha_entrega=d.fecha_primer_entrega, detalle_suministro=d)
+        return marcar_concretada(entrega(s, [r], fecha=HOY))
+
+    def test_regla_el_monto_a_cobrar_resta_lo_descontado_y_no_la_indemnizacion_entera(self):
+        """Indemnización de $300 con $250 descontados y $50 reintegrados: el monto a cobrar es $1.000 − $250 = $750."""
+        from comercial.tests.fabricas import queja_aceptada
+
+        e = self.concretada()
+        queja_aceptada(e, "otro", monto="300.00", reintegrado="50.00", medio="efectivo")
+        self.assertEqual(entregas.monto_a_cobrar([e.pk])[e.pk], Decimal("750.00"))
+
+    def test_regla_suma_lo_descontado_de_todas_las_aceptadas_e_ignora_pendientes_y_rechazadas(self):
+        """Solo cuentan las aceptadas: una pendiente, una rechazada y una anulada (vuelta a pendiente) no descuentan nada; dos aceptadas suman."""
+        from comercial.tests.fabricas import anulacion, discrepancia_aceptada, queja_aceptada, solicitud_rechazada
+
+        e = self.concretada()
+        queja_aceptada(e, "otro", monto="100.00")
+        queja_aceptada(e, "estado_mercaderia", monto="40.50")
+        d = discrepancia_aceptada(e, monto="900.00")
+        self.assertEqual(entregas.monto_a_cobrar([e.pk])[e.pk], Decimal("0.00"))  # $140,50 + $900 de las tres aceptadas: más que el total
+        anulacion(d)  # vuelve a pendiente: ya no descuenta
+        self.assertEqual(entregas.monto_a_cobrar([e.pk])[e.pk], Decimal("859.50"))
+        solicitud_rechazada(d)  # una rechazada tampoco descuenta
+        self.assertEqual(entregas.monto_a_cobrar([e.pk])[e.pk], Decimal("859.50"))
+
+    def test_regla_nunca_es_negativo(self):
+        """Aunque lo descontado supere el total (datos inconsistentes), el monto a cobrar es 0, nunca negativo."""
+        from comercial.tests.fabricas import queja_aceptada
+
+        e = self.concretada()
+        queja_aceptada(e, "otro", monto="1200.00")
+        self.assertEqual(entregas.monto_a_cobrar([e.pk])[e.pk], Decimal("0.00"))
+
+    def test_regla_una_entrega_sin_concretar_no_tiene_monto_y_el_resto_se_calcula_igual(self):
+        """Una entrega «a realizar» sigue en `None`, aunque otra de la lista tenga solicitudes aceptadas."""
+        from comercial.tests.fabricas import queja_aceptada
+
+        e = self.concretada()
+        queja_aceptada(e, "otro", monto="10.00")
+        _, pendiente = self.entrega_de()
+        self.assertEqual(entregas.monto_a_cobrar([e.pk, pendiente.pk]), {e.pk: Decimal("990.00"), pendiente.pk: None})
+
+    def test_regla_dos_consultas_para_todas_las_entregas(self):
+        """Una consulta por tabla (las solicitudes y las entregas): con una entrega y con cuatro son las mismas."""
+        from comercial.tests.fabricas import queja_aceptada
+
+        primera = self.concretada()
+        queja_aceptada(primera, "otro", monto="10.00")
+        with CaptureQueriesContext(connection) as una:
+            entregas.monto_a_cobrar([primera.pk])
+        otras = [self.concretada() for _ in range(3)]
+        with CaptureQueriesContext(connection) as varias:
+            entregas.monto_a_cobrar([primera.pk] + [o.pk for o in otras])
+        self.assertEqual((len(una), len(varias)), (2, 2))

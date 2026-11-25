@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_rutas, views_suministros
+from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_rutas, views_solicitudes, views_suministros
 
 app_name = "comercial"
 
@@ -75,6 +75,15 @@ urlpatterns = [
     # COM-06b (COM-ATN-ENR): el Gerente atiende la entrega que el cliente dice no haber recibido.
     path("entregas/<int:entrega_id>/no-reconocida/", views_entregas.no_reconocida, name="entrega_no_reconocida"),
     # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
+    # COM-07a: las solicitudes de revisión (quejas y discrepancias): la pestaña, la ficha con el panel del Gerente, el resumen, anular, el comprobante y «Reenviar aviso».
+    path("solicitudes/", views_solicitudes.lista, name="solicitudes"),
+    path("solicitudes/<int:solicitud_id>/", views_solicitudes.ficha, name="solicitud"),
+    path("solicitudes/<int:solicitud_id>/resolver/revisar/", views_solicitudes.resolver_revisar, name="solicitud_resolver_revisar"),
+    path("solicitudes/<int:solicitud_id>/resolver/", views_solicitudes.resolver, name="solicitud_resolver"),
+    path("solicitudes/<int:solicitud_id>/anular/", views_solicitudes.anular, name="solicitud_anular"),
+    path("solicitudes/<int:solicitud_id>/comprobante/", views_solicitudes.comprobante, name="solicitud_comprobante"),
+    path("solicitudes/<int:solicitud_id>/reenviar-aviso/", views_solicitudes.reenviar_aviso, name="solicitud_reenviar_aviso"),
+
     path("envasado/", views_envasado.lista, name="envasado"),
     path("envasado/<int:entrega_id>/", views_envasado.entrega, name="envasado_entrega"),
     path("envasado/<int:entrega_id>/calcular/", views_envasado.calcular, name="envasado_calcular"),

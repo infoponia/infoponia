@@ -267,7 +267,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 
 | Tema | Qué falta | Cuándo |
 |---|---|---|
-| D-69, puntos 9 a 17 | Los propuso Claude con el lote (los puntos 1 a 8 los validó el estudiante antes de escribir). Los más discutibles: guardar lo descontado y lo reintegrado en la solicitud (punto 9); la copia de la resolución en `Anulacion` (punto 10); el disparo de COM-RSV-SUM con `on_commit` en el mismo pedido (punto 13); la severidad `CRITICA` de «suministro resuelto» (punto 14) | Al validar el lote C7 |
+| D-69, puntos 9 a 17 | Los propuso Claude con el lote (los puntos 1 a 8 los validó el estudiante antes de escribir). Los más discutibles: guardar lo descontado y lo reintegrado en la solicitud (punto 9); la copia de la resolución en `Anulacion` (punto 10); el disparo de COM-RSV-SUM con `on_commit` en el mismo pedido (punto 13); la severidad `CRITICA` de «suministro resuelto» (punto 14) | **Cerrado el 25/11/2026:** los validó el estudiante al empezar COM-07a |
 | Estado de paso entre COM-07a y COM-07b | Una aceptación que supera los tolerados deja el contrato «vigente» con más incumplimientos que los tolerados; el paso 33 de COM-07b lo resuelve en su primera ejecución. Mientras tanto, la pre-reserva y la planificación siguen actuando sobre ese contrato (lo que creen, COM-RSV-SUM lo deshace). No rompe datos | Programar COM-07b enseguida de COM-07a |
 | Notificaciones sin enlace (D-42) | La regla 6 de COM-CNS-SRV pide abrir la ficha desde la notificación; hoy la notificación nombra la solicitud y la pestaña la busca por número (D-69, punto 16). El Gerente tiene la alerta, que sí tiene enlace | Cuando las notificaciones tengan enlace |
 | Recordatorio de solicitudes pendientes | Temas abiertos de COM-EVL-DSC y de COM-RSV-QJA: no hay plazo ni recordatorio; mientras tanto, el contador de la pestaña y el grupo del panel | Al decidirlo con el Jardín Botánico |
@@ -818,3 +818,28 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Dos pruebas de CON-03a reemplazadas** (no debilitadas): las acciones ya no están escondidas «hasta CON-03b».
 - **Toque en `core/models.py`** (autorizado, solo el diccionario `ETIQUETAS`): `anula` y `aviso_al_gerente`. Sin migración.
 - **Pasada manual en navegador real** (paso 39 de la «Verificación a mano»): registrar y contraasentar hasta el final; el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+
+## COM-06b (confirmación del cliente; 25/11/2026): lo que se implementó distinto de lo escrito
+
+- **El aviso de «no llegó» va al Vendedor y al responsable contable** (el Contador activo o, sin Contador, el Gerente), sin el Gerente que atiende (decisión del estudiante): la tarea y `confirmacion.md` decían «los Gerentes activos y el Vendedor». Cierra el disparador 1 de «Cuando exista el rol Contador» (`docs/disparadores.md`).
+- **Errores** con `ValidationError` y `code` por campo (patrón de `comercial`); **`registrar_respuesta` recibe `DatosDeRespuesta`** (con `QuejaPedida`).
+- **Un invernadero de origen dado de baja no crea alertas:** la queja se registra igual, sin alerta (como la discrepancia de COM-06a); el invariante «una alerta por solicitud» no cubre ese caso.
+- **Si el correo del enlace no sale no se avisa al Vendedor:** hay reintento (paso 50); las entregas concretadas antes de COM-06b siguen recibiendo el comprobante sin enlace.
+- **El formulario del cliente es una sola página** (la respuesta, las tres quejas con casillas y el motivo); el acuse de «no recibí» no lleva el motivo; `acuse_enviado` es `None` si corre dentro de una transacción mayor.
+- **Regla 5 de COM-ATN-ENR:** `_tiene_cobro_vigente` devuelve siempre `False` hasta COM-08a. «Atender» es solo del Gerente.
+- **Pasada manual en navegador real** (paso 11 de la «Verificación a mano»): el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+
+## COM-07a (solicitudes de revisión; 25/11/2026): lo que se implementó distinto de lo escrito
+
+- **Errores:** el extracto los llama `ErrorComercial(codigo, mensaje, campo)`, pero esa clase no existe; se usan `ValidationError` con `code`, `PermissionDenied` y `Http404`, como COM-06a y COM-06b. Corregir los extractos (`solicitudes.md` y, por el mismo motivo, `cobranza.md`, `rutas.md` y `resolucion.md`) o crear la clase.
+- **`Suministro.cantidad_incumplimientos >= 0`** ya existía (COM-03); la migración suma solo «`solicitud_resolucion` no nula ⇒ resuelto». Las tres restricciones de `SolicitudRevision` de COM-06a se conservan y las nuevas son separadas.
+- **Un solo código para los cambios:** `cambio_simultaneo` no se usa; todo cambio entre el resumen y la confirmación es `solicitud_cambio`, con qué cambió. Dos aceptaciones simultáneas del mismo contrato: la segunda se rechaza con `solicitud_cambio` porque la huella incluye el contador, y con el resumen nuevo el contador sube a 2 (extensión 8b).
+- **`resolver_si_corresponde` se llama en toda aceptación** (con `on_commit`), no solo al superar los tolerados; en COM-07b decide la función.
+- **El contador al anular** usa `Greatest(contador − 1, 0)`: nunca baja de 0.
+- **El filtro de cliente de la lista es de texto** (nombre, razón social o CUIT); el extracto dice «el buscador de clientes de COM-02».
+- **«Reenviar aviso» e «Imprimir comprobante»** los pueden usar el Gerente y el Vendedor del contrato (no son evaluar ni resolver). Un Vendedor inactivo no recibe avisos (D-42).
+- **«Anular resolución» es una página** (la ventana del prototipo, con el respaldo sin JavaScript) y los campos del panel están siempre visibles; el medio del reintegro se elige en el resumen.
+- **`concrecion.enlaces_de_alertas`** quedó sin registrar (lo reemplaza `solicitudes.enlaces_de_alertas`): se puede borrar en una limpieza.
+- **Las pérdidas (`Merma`) de la ficha** se leen sin prueba con una merma real; los bloqueos 2a y 2b se prueban con una fábrica y con `mock.patch` hasta COM-07b y COM-08a.
+- **Cuatro pruebas existentes cambiadas** (no debilitadas): dos de `test_confirmacion_vistas.py` (el enlace de la alerta de queja y el título de la sección de la ficha del suministro), una de `test_rutas_vistas.py` (el título y las aserciones de la sección) y una de `test_modelos_concrecion.py` (la aceptada válida lleva descontado y reintegrado).
+- **Pasada manual en navegador real** (paso 16 de la «Verificación a mano»): evaluar y anular hasta el final; el cliente de Django no ve el CSRF, el encabezado `Origin`, el desplegable propio ni el JavaScript.
