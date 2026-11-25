@@ -1,0 +1,104 @@
+{% load iconos produccion %}{% comment %}El formulario de «Registrar lote existente» (PROD-REG-LTE): lo que HTMX reemplaza dentro de #lote-existente-vivo. Recibe «ofrecido» (DatosDeRegistro: invernaderos, variedades, etapas,
+sectores, no_elegibles), «valores» (lo escrito), «invernadero_id», «variedad_id», «etapa_id», «es_primera_etapa», «errores» ({campo: mensaje}), «resumen» (ResumenDeRegistro o None), «firma» y «cambio_la_firma».
+Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero, la variedad o la etapa solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con
+«Ver resumen» y «Confirmar registro». No hay refresco al escribir. Todo se escapa. Los errores van debajo de su campo; lo que no tiene campo, arriba.{% endcomment %}
+<form id="lote-existente-form" method="post" action="{% url 'produccion:registrar_lote_existente' %}" novalidate>
+  {% csrf_token %}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}</div>{% endif %}
+  <div class="stack">
+    {% if not ofrecido.invernaderos %}
+    <div class="empty"><b>No hay invernaderos donde cargar un lote existente</b><span>Este caso de uso solo se usa en invernaderos activos a tu cargo que todavía no tuvieron siembras por el flujo normal. Cuando se concreta una siembra normal, la acción deja de estar disponible para ese invernadero.</span></div>
+    {% if errores.invernadero %}<div class="err" role="alert">{{ errores.invernadero }}</div>{% endif %}
+    {% else %}
+    <div class="card">
+      <div class="card-title">¿Dónde y qué?</div>
+      <div class="grid2">
+        <div class="fld"><label for="invernadero">Invernadero<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="invernadero" name="invernadero" data-desplegable hx-post="{% url 'produccion:registrar_lote_existente' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso>
+            <option value="">Seleccionar…</option>
+            {% for i in ofrecido.invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
+          </select>
+          {% if errores.invernadero %}<div class="err">{{ errores.invernadero }}</div>{% endif %}</div>
+        <div class="fld"><label for="variedad">Variedad<span class="req" aria-hidden="true"> *</span></label>
+          <select class="field-input" id="variedad" name="variedad" data-desplegable hx-post="{% url 'produccion:registrar_lote_existente' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso{% if not invernadero_id %} disabled{% endif %}>
+            <option value="">{% if invernadero_id %}Seleccionar…{% else %}Elegí primero el invernadero{% endif %}</option>
+            {% for v in ofrecido.variedades %}<option value="{{ v.variedad_id }}"{% if v.variedad_id == variedad_id %} selected{% endif %}>{{ v.nombre }} · {{ v.perfil|perfil_legible }}</option>{% endfor %}
+          </select>
+          {% if invernadero_id and not ofrecido.variedades %}<div class="hint">No hay variedades activas con ciclo para elegir.</div>{% endif %}
+          {% if errores.variedad %}<div class="err">{{ errores.variedad }}</div>{% endif %}</div>
+      </div>
+      <div class="fld" style="margin-top:10px"><label for="etapa">Etapa actual del lote<span class="req" aria-hidden="true"> *</span></label>
+        <select class="field-input" id="etapa" name="etapa" data-desplegable hx-post="{% url 'produccion:registrar_lote_existente' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso{% if not variedad_id %} disabled{% endif %}>
+          <option value="">{% if variedad_id %}Seleccionar…{% else %}Elegí primero la variedad{% endif %}</option>
+          {% for e in ofrecido.etapas %}<option value="{{ e.etapa_id }}"{% if e.etapa_id == etapa_id %} selected{% endif %}>{{ e.nombre }} · {{ e.duracion_dias }} días</option>{% endfor %}
+        </select>
+        {% if errores.etapa %}<div class="err">{{ errores.etapa }}</div>{% else %}<div class="hint">Puede ser cualquier etapa del ciclo de la variedad, no solo Germinación.</div>{% endif %}</div>
+      <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
+    </div>
+
+    {% if invernadero_id and variedad_id and etapa_id %}
+    <div class="card">
+      <div class="card-title">Fechas, plantas y costo</div>
+      <div class="grid2">
+        <div class="fld"><label for="fecha_siembra">Fecha de siembra<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="fecha_siembra" name="fecha_siembra" type="date" value="{{ valores.fecha_siembra }}"{% if errores.fecha_siembra %} aria-invalid="true"{% endif %}>
+          {% if errores.fecha_siembra %}<div class="err">{{ errores.fecha_siembra }}</div>{% else %}<div class="hint">Puede ser pasada, nunca futura.</div>{% endif %}</div>
+        <div class="fld"><label for="fecha_ingreso_etapa">Fecha de ingreso a la etapa actual<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="fecha_ingreso_etapa" name="fecha_ingreso_etapa" type="date" value="{{ valores.fecha_ingreso_etapa }}"{% if errores.fecha_ingreso_etapa %} aria-invalid="true"{% endif %}>
+          {% if errores.fecha_ingreso_etapa %}<div class="err">{{ errores.fecha_ingreso_etapa }}</div>{% else %}<div class="hint">Entre la fecha de siembra y hoy.{% if es_primera_etapa %} Suele coincidir con la fecha de siembra.{% endif %} Con ella se calcula cuándo termina la etapa y cuándo se puede cosechar.</div>{% endif %}</div>
+        <div class="fld"><label for="cantidad">Cantidad de plantas<span class="req" aria-hidden="true"> *</span></label>
+          <input class="field-input" id="cantidad" name="cantidad" type="number" min="1" step="1" inputmode="numeric" value="{{ valores.cantidad }}"{% if errores.cantidad %} aria-invalid="true"{% endif %}>
+          {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% else %}<div class="hint">Las que hay hoy: se toman como cantidad inicial y actual.</div>{% endif %}</div>
+        <div class="fld"><label for="costo_estimado">Costo estimado del lote ($)</label>
+          <input class="field-input mono" id="costo_estimado" name="costo_estimado" type="text" inputmode="decimal" autocomplete="off" value="{{ valores.costo_estimado|default:'0' }}"{% if errores.costo_estimado %} aria-invalid="true"{% endif %}>
+          {% if errores.costo_estimado %}<div class="err">{{ errores.costo_estimado }}</div>{% else %}<div class="hint">Con dos decimales como mucho. Con $0 no se registra asiento.</div>{% endif %}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Distribución por sector</div>
+      {% if ofrecido.sectores %}
+      <p class="sm muted" style="margin-bottom:8px">Indicá cuántas plantas van en cada sector. La suma tiene que dar la cantidad total.</p>
+      <div class="grid2">
+        {% for s in ofrecido.sectores %}
+        <div class="fld"><label for="sector_{{ s.sector_id }}">{{ s.nombre }} <span class="muted">(libres: {{ s.libres }})</span></label>
+          <input class="field-input" id="sector_{{ s.sector_id }}" name="sector_{{ s.sector_id }}" type="number" min="0" step="1" inputmode="numeric" value="{% campo valores 'sector' s.sector_id %}"></div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="hint">No hay sectores activos compatibles con esta etapa y con lugar libre: no hay dónde ubicar el lote. Creá o activá un sector de este tipo, o elegí otra etapa.</div>{% endif %}
+      {% for n in ofrecido.no_elegibles %}<p class="sm muted">{{ n.nombre }}: {{ n.texto }}</p>{% endfor %}
+      {% if errores.distribucion %}<div class="err" role="alert">{{ errores.distribucion }}</div>{% endif %}
+    </div>
+
+    {% if resumen %}
+    <div class="card" role="region" aria-label="Resumen del lote">
+      <div class="card-title">Resumen del lote</div>
+      {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
+      <dl class="kv">
+        <div><dt>Invernadero</dt><dd>{{ resumen.invernadero.nombre_invernadero }}</dd></div>
+        <div><dt>Variedad</dt><dd>{{ resumen.variedad }}</dd></div>
+        <div><dt>Etapa actual</dt><dd>{{ resumen.etapa.nombre }}</dd></div>
+        <div><dt>Fecha de siembra</dt><dd>{{ resumen.fecha_siembra|date:"d/m/Y" }}</dd></div>
+        <div><dt>Ingreso a la etapa</dt><dd>{{ resumen.fecha_ingreso_etapa|date:"d/m/Y" }}</dd></div>
+        <div><dt>Plantas</dt><dd>{{ resumen.cantidad }}</dd></div>
+        <div><dt>Costo estimado</dt><dd class="mono">${{ resumen.costo_estimado|floatformat:2 }}</dd></div>
+        <div><dt>Costo por planta</dt><dd class="mono">${{ resumen.costo_por_planta|floatformat:2 }}</dd></div>
+      </dl>
+      <p class="sm" style="margin-top:8px"><b>Ocupación por sector:</b> {% for s in resumen.distribucion %}{{ s.nombre }}: {{ s.plantas }} (quedan {{ s.libres_despues }} libres){% if not forloop.last %} · {% endif %}{% endfor %}</p>
+      <p class="sm"><b>Asiento contable:</b>
+        {% if resumen.asiento %}Debe {{ resumen.asiento.debe.1 }} / Haber {{ resumen.asiento.haber.1 }} por <span class="mono">${{ resumen.asiento.importe|floatformat:2 }}</span>, con la fecha de hoy.
+        {% else %}con costo $0 no se registra ningún asiento.{% endif %}</p>
+      <p class="sm muted">No se reservan insumos ni se descuenta stock, y no se crea ninguna orden para el Capataz: lo que ya se usó en el lote quedó fuera del sistema.</p>
+      <input type="hidden" name="firma" value="{{ firma }}">
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost" type="submit" name="accion" value="calcular" data-enviando="Calculando…">Ver resumen</button>
+      {% if resumen %}<button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar registro</button>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'produccion:ordenes' %}">Cancelar</a>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</form>

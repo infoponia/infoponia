@@ -57,6 +57,7 @@ def ordenes(request):
             "por_aprobar": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_POR_APROBAR})),
             "por_recibir": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_POR_RECIBIR})),
             "con_reclamo": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_CON_RECLAMO})),
+            "con_pago": len(api.consultar_ordenes(request.user, {"atajo": api.ATAJO_CON_PAGO})),
             "estados": OrdenCompra.Estado.choices,
             # El Contador ve todas las órdenes: sus filtros ofrecen todos los invernaderos y proveedores (solo nombres), que su alcance de ``en_alcance_de`` no le da.
             "invernaderos": (Invernadero.objects.all() if es_contador else Invernadero.objects.en_alcance_de(request.user)).order_by(Lower("nombre_invernadero"), "id"),

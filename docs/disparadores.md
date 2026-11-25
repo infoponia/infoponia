@@ -512,6 +512,13 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
 4. ~~**`registro_merma`**~~ Hecho el 23/11/2026 en PRD-03 (`registrar_merma` la usa como acción propia). (acción de auditoría ya creada por PRD-02) la usa PRD-03 como acción propia; en una transición la merma va dentro de `concrecion_transicion`.
 5. ~~**PRD-04 y `cancelar_orden_incluida`:**~~ Hecho el 23/11/2026 en PRD-04: `poner_fuera_de_servicio` toma cuentas, invernadero, variedades, sectores, insumos, lotes y órdenes en ese orden.~~ ahora, con una transición, toma el lote (nivel 4 de `bloqueos.md`) antes de la orden: quien la llama ya tiene que haber bloqueado cuentas, invernadero, variedad, sectores y lotes en ese orden. `notificar_a` trae al Capataz de la hija `TransicionEtapa`.~~
 
+## Cuando exista PRD-05 (registrar lote existente) — nace con PRD-05 (25/11/2026)
+
+1. **`Siembra.capataz` puede ser nulo** (D-92 punto 12; solo en una siembra de carga inicial, concretada). Toda tarea que lea `siembra.capataz` o `capataz_id` tiene que contemplar `None`: hoy lo hacen `ordenes._fila`, `ordenes.detalle_de_orden` y `detalle.html` («Sin Capataz (carga inicial)»); `ordenes_del_capataz`, el traspaso y la cancelación solo ven órdenes «a realizar», que siempre tienen Capataz. Las estadísticas de producción (EST-01) y cualquier pantalla nueva con el Capataz de una siembra deben comprobarlo.
+2. **CON-04a no asienta la carga inicial.** `siembras._registrar_concrecion` es de las siembras normales; el asiento de un lote existente lo crea `lotes_existentes.registrar_lote_existente` (Debe Productos en Proceso / Haber Capital Inicial, fecha actual). CON-04a no lo reabre ni lo duplica.
+3. ~~**`carga_inicial` en el filtro de la bitácora.**~~ Hecho el 25/11/2026 en PRD-05 (`bitacora.TIPOS_DE_FILTRO`).
+4. **Lo que lee «la entrada a la etapa»** (`lotes.entradas_a_la_etapa` y `fecha_de_entrada_a_maduracion`) ahora también mira la entrada de bitácora `carga_inicial`: una tarea que sume otra forma de entrar a una etapa (una reubicación que cambie la etapa, por ejemplo) tiene que respetar el orden «transición concretada → carga inicial → fecha de siembra».
+
 ## Cuando exista PROD-PNR-FDS (PRD-04)
 
 1. ~~**Estado «fuera de servicio».**~~ Hecho el 23/11/2026 en PRD-04. ~~ Ningún caso de uso de MAE-03 lo produce; `maestros` ya lo muestra y ya ofrece «Volver a activar» y «Dar de baja». PRD-04 agrega `maestros/servicios/sectores.py::pasar_a_fuera_de_servicio` (lote 5 de `docs/api/extensiones_de_maestros.md`) y registra `registrar_efecto_de_vuelta_a_servicio` y `registrar_efecto_de_baja_de_sector`. La clave `fuera_de_servicio` ya está en `VALORES_VISIBLES["estado"]`.~~
@@ -578,7 +585,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 ## Cuando una app tenga un origen de asiento con pantalla propia — nace con el lote 1 de Contabilidad
 
 1. Registrar su `registrar_enlace_de_origen(tipo, funcion)` en `ready()` (punto de extensión de `contabilidad/extensiones.py`, creado por CON-03a el 24/11/2026; solo falta registrar los enlaces),
-   para que el libro de gestión enlace el asiento con su documento. Compras: CMP-04 (recepción), CMP-05 (pago), CMP-06 (corrección).
+   para que el libro de gestión enlace el asiento con su documento. Compras: CMP-04 (recepción), CMP-05 (pago), CMP-06 (corrección). **Hecho el 25/11/2026 el del pago, en CMP-05** (`pagos.enlace_de_origen`); queda CMP-06 (corrección).
 
 ## Cuando se programe COM-04c o CMP-02a (lo que llegue primero) — nace con el lote 2 de Compras
 
@@ -593,7 +600,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 1. **Hecho el 23/11/2026 en CMP-02a** (`tiene_pedidos_u_ordenes` y la tarjeta de pedidos de la ficha, `proveedores.pedidos_del_proveedor`); las órdenes, pagos y reclamos de la ficha se suman de CMP-03 a CMP-06. Texto original: **CMP-02a:** completar `tiene_pedidos_u_ordenes(proveedor)` en `compras/servicios/proveedores.py` (hoy da `False`) con `proveedor.invitaciones.exists() or proveedor.cotizaciones.exists()`; desde entonces el CUIT del proveedor con pedidos no se modifica (regla 2 de CMP-MOD-PRV; la pantalla y las pruebas ya lo esperan). Sumar la tarjeta de pedidos de la ficha (regla 4 de CMP-CNS-PRV).
 2. **CMP-02b:** al dar de baja, anular los enlaces vigentes del proveedor con `enlaces.anular_enlaces_de_proveedor` (regla 3 de CMP-BAJ-PRV), dentro de `baja_proveedor`.
 3. **Hecho el 24/11/2026 en CMP-03** (`impedimentos_de_baja` con `orden_no_terminada` y la tarjeta «Órdenes de compra» de la ficha, `proveedores.ordenes_del_proveedor`). Texto original: **CMP-03:** sumar a `impedimentos_de_baja` el impedimento `orden_no_terminada` (órdenes pendientes de aprobación, aprobadas o parcialmente recibidas; precondición c de CMP-BAJ-PRV) y la tarjeta de órdenes de la ficha.
-4. **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).
+4. **Hecho el 25/11/2026 en CMP-05** (el impedimento `pago_pendiente`, con enlace a la orden, y la columna «Pago» de la tarjeta de órdenes de la ficha del proveedor; los reclamos de la ficha quedan para CMP-06). Texto original: **CMP-05:** sumar a `impedimentos_de_baja` el impedimento `pago_pendiente` (precondición d de CMP-BAJ-PRV) y los pagos de la ficha (CMP-06, los reclamos).
 
 
 ## Cuando se programen COM-03b y COM-04 — nace con COM-03a (23/11/2026)
@@ -630,10 +637,10 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 ## Nacidos en CMP-03 (24/11/2026)
 
-1. **Hecho en CMP-03:** el Contador (USR-11) consulta las órdenes en solo lectura (`en_alcance_de`, `_exigir_consulta`, menú «Compras» → «Órdenes», una sola pestaña, sin enlaces a pedidos ni proveedores). **Queda para CMP-05:** su entrada «Pagos a proveedores» y las marcas de pago pendiente.
-2. **Hecho en CMP-04 lo de recepciones; quedan pagos (CMP-05) y reclamos (CMP-06).** Texto original: **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
-3. **Hecho en CMP-04 «Por recibir» y «Con reclamo sin emitir» (y la marca de reclamo); queda «Con pago pendiente» (CMP-05).** Texto original: **Atajos de la lista de órdenes y marcas de la fila:** «Por recibir» y «Con reclamo sin emitir» (CMP-04), «Con pago pendiente» (CMP-05). Los atajos que hoy no existen se ignoran como un filtro mal formado.
-4. **Hecho en CMP-04 «Por recibir» del Agrónomo; quedan «Reclamos sin emitir» y «Pagos a proveedores pendientes».** Texto original: **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
+1. **Hecho en CMP-03:** el Contador (USR-11) consulta las órdenes en solo lectura (`en_alcance_de`, `_exigir_consulta`, menú «Compras» → «Órdenes», una sola pestaña, sin enlaces a pedidos ni proveedores). **Hecho en CMP-05 (25/11/2026):** su entrada «Pagos a proveedores» (junto a «Contabilidad») y las marcas de pago pendiente.
+2. **Hecho en CMP-04 lo de recepciones y en CMP-05 lo de pagos (sección «Pagos»); queda reclamos (CMP-06).** Texto original: **Secciones de la ficha de la orden:** recepciones (CMP-04), pagos (CMP-05) y reclamos (CMP-06). Lo «recibido» hoy es 0 y lo «pendiente» es toda la cantidad (`LineaDeOrden`).
+3. **Hecho en CMP-04 «Por recibir» y «Con reclamo sin emitir» (y la marca de reclamo) y en CMP-05 «Con pago pendiente» (y su marca).** Texto original: **Atajos de la lista de órdenes y marcas de la fila:** «Por recibir» y «Con reclamo sin emitir» (CMP-04), «Con pago pendiente» (CMP-05). Los atajos que hoy no existen se ignoran como un filtro mal formado.
+4. **Hecho en CMP-04 «Por recibir» del Agrónomo y en CMP-05 «Pagos a proveedores pendientes» (Contador y, sin Contador activo, Gerente); queda «Reclamos sin emitir» (CMP-06).** Texto original: **Inicio:** «Por recibir» del Agrónomo (CMP-04), y «Reclamos sin emitir» y «Pagos a proveedores pendientes» (Gerente y Contador, CMP-05 y CMP-06).
 5. **Hecho en CMP-04.** Texto original: **Estados posteriores a la aprobación** de la orden («parcialmente recibida», «recibida», «recibida con faltante») y del detalle («completo», «cerrado con faltante») los aplica CMP-04; `OrdenCompra.NO_TERMINADAS` ya los incluye para los impedimentos.
 6. **Hecho en CMP-04** (la crea `registrar_recepcion`, junto con `ReclamoProveedor`). Texto original: **`AlertaCompras`:** la crea CMP-04 junto con `ReclamoProveedor` (su FK); el archivo de la tarea CMP-04 debe listarla.
 
@@ -664,7 +671,7 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 
 ## Nacidos en CMP-04 (24/11/2026)
 
-1. **Aviso «quedó para pagar» (CMP-05, D-91).** `avisar_si_quedo_para_pagar(...)` se llama desde `registrar_recepcion` y `cerrar_con_faltante` y tiene que usar la misma regla que ya calcula `resumir_cierre` (todas las líneas del proveedor en la orden completas o cerradas y algo recibido). Hoy ninguna de las dos avisa nada ni arma la bandeja.
+1. **Hecho el 25/11/2026 en CMP-05** (`pagos.avisar_si_quedo_para_pagar`, llamada desde `registrar_recepcion` y `cerrar_con_faltante`; usa la misma regla que la bandeja). Texto original: **Aviso «quedó para pagar» (CMP-05, D-91).** `avisar_si_quedo_para_pagar(...)` se llama desde `registrar_recepcion` y `cerrar_con_faltante` y tiene que usar la misma regla que ya calcula `resumir_cierre` (todas las líneas del proveedor en la orden completas o cerradas y algo recibido). Hoy ninguna de las dos avisa nada ni arma la bandeja.
 2. **Emitir el reclamo (CMP-06).** Resuelve la alerta del Gerente (`AlertaCompras.alerta`), completa la sección «Reclamos» de la ficha y la tarjeta «Reclamos sin emitir» del inicio del Gerente. Hoy `ReclamoProveedor` solo se crea «abierto» y sin emitir.
 3. **Corrección de una recepción (CMP-06).** Usa `stock.lotes_de_ingreso` (ya escrita) y los `DetalleRecepcionMovimiento`; hoy una recepción no se puede corregir.
 4. **Auditoría de las alertas que resuelve `inventario`.** `registrar_ingreso_por_recepcion` no devuelve la reevaluación, así que el registro de la recepción no lista `alertas_resueltas`; si se quiere, la función tiene que devolverla.
@@ -676,9 +683,17 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 3. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05a2»): la migración de `core` es la 0042; «Entregas de hoy» sin filtro de fecha; las notificaciones sin enlace al envasado van a `pendientes_CU` (D-42, D-66).
 4. **Pasada manual en navegador real** (paso 12 de la «Verificación a mano» de COM-05a2) para el cierre de la tanda de «Comercial 1».
 
+
 ## Lo que deja COM-05b (nace el 25/11/2026)
 
 1. **COM-06a:** una entrega «en curso» se arma hoy solo con un vehículo de fábrica (`vehiculo_en_ruta`): COM-INI-RUT toma el invernadero de origen antes de cambiar el vehículo (D-66, punto 11), y con la ruta real COM-06 confirma a mano la asignación (3a) y la cancelación (4a) que hoy cubren solo las pruebas. Con una entrega concretada real, el rechazo `venta_con_entregas_concretadas` y la prueba de la venta con detalles entregados (D-67, punto 4) se completan con datos reales.
 2. **COM-08b:** la extensión 6a de COM-CNL-CVT reemplaza el rechazo `venta_con_entregas_concretadas` (la prueba de COM-05b que lo espera se reemplaza; anotarlo en el PR) y suma `medio_pago` a `DatosDeCancelacionDeVenta`, el cobro y la venta «concretada» con los datos de la cancelación (la restricción de MD-130 ya lo admite).
 3. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05b»): `sin_permiso` por `PermissionDenied`; «Ver cómo queda» como `POST`; el comprobante de cancelación después de la transacción; la restricción `compra_venta_motivo_cancelacion_valido` en `docs/modelo/comercial.md`.
 4. **Pasada manual en navegador real** (paso 19 de la «Verificación a mano» de COM-05b) para el cierre de la tanda de «Comercial 1».
+
+## Lo que deja CMP-05 (nace el 25/11/2026)
+
+1. **CMP-06 (corrección de una recepción):** tiene que impedirla si el par (orden, proveedor) ya tiene `Pago` (`Pago.objects.filter(orden=…, proveedor=…)`; D-89 punto 6: «la corrección exige que no haya pago») y, al corregir, sacar al proveedor de la bandeja si deja de estar listo: la bandeja se calcula, así que no hay nada que reasignar. La corrección **nunca avisa** (D-91 punto 3). La prueba «pago contra corrección de recepción» de `test_pagos_concurrencia.py` se escribe con CMP-06.
+2. **CMP-06 (reclamos):** la columna «Pago» de la ficha del proveedor ya existe; falta la de reclamos. «Reclamos sin emitir» del Inicio del Gerente sigue pendiente.
+3. **Mejora futura:** «comprobante del pago» (número de operación o de recibo): necesita una columna en `Pago` y una decisión nueva.
+

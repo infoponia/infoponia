@@ -1,0 +1,10 @@
+{% autoescape off %}Hola, {{ proveedor }}:
+
+{{ nombre_organizacion }} registró el pago {{ pago }} por lo recibido de la orden de compra {{ orden }}.
+
+Monto: ${{ monto }}
+Medio de pago: {{ medio }}
+Fecha del pago: {{ fecha|date:"d/m/Y" }}
+
+{{ nombre_organizacion }} · Sistema de gestión InfoPonia
+{% endautoescape %}

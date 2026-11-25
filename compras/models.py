@@ -1,6 +1,6 @@
 # Modelos de `compras` (nivel 6 de D-37): Proveedor (CMP-01), desde CMP-02a Pedido, DetallePedido, InvitacionPedido, EnlaceProveedor,
-# Cotizacion y DetalleCotizacion, desde CMP-03, OrdenCompra y DetalleOrdenCompra y, desde CMP-04, Recepcion, DetalleRecepcion, DetalleRecepcionMovimiento, ReclamoProveedor,
-# InconvenienteRecepcion y AlertaCompras. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88, D-89 y D-90). Nunca se borra una fila de
+# Cotizacion y DetalleCotizacion, desde CMP-03, OrdenCompra y DetalleOrdenCompra, desde CMP-04, Recepcion, DetalleRecepcion, DetalleRecepcionMovimiento, ReclamoProveedor,
+# InconvenienteRecepcion y AlertaCompras y, desde CMP-05, Pago. Fuente: docs/modelo/compras.md (MD-121 a MD-130 de A0; D-87, D-88, D-89, D-90 y D-91). Nunca se borra una fila de
 # negocio: hay estados. A2 de D-37: toda FK o M2M se declara acá, en la app de nivel mayor. Ningún import de `comercial` ni de
 # `produccion` (A1).
 
@@ -759,3 +759,48 @@ class AlertaCompras(models.Model):
 
     def __str__(self):
         return f"Alerta de {self.reclamo}"
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Pagos (CMP-05). Fuente: docs/modelo/compras.md («Pago»); D-91 punto 1 y D-89 punto 6; regla 13 de 8.20 y R158.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+class Pago(OrigenDocumento):
+    """Lo que se le pagó a un proveedor por lo recibido de una orden (docs/modelo/compras.md, «Pago»; D-91 punto 1; R018 y R158). Hereda de ``OrigenDocumento`` (tipo ``pago``, D-52):
+    es el ``origen`` del asiento Debe Proveedores / Haber Caja o Banco c/c. NO redeclara ``save()``: el del padre fija ``tipo`` desde ``TIPO_DE_ORIGEN``. Hay **a lo sumo uno por orden y
+    proveedor** (R158, regla 13 de 8.20: los pagos parciales no existen). ``monto_pago`` **se guarda** (D-89 punto 6): es lo que se pagó, y no lo escribe quien paga: lo calcula el servicio
+    (``precios.valor_recibido``). No hay comprobante ni número de operación en el modelo y un pago no se anula (D-91 punto 7). No confundir con ``PagoCliente`` de ``comercial``."""
+
+    class MedioPago(models.TextChoices):
+        """Regla 15 de 8.13 (MD-36): el efectivo se imputa a Caja y los demás medios a Banco c/c."""
+
+        EFECTIVO = "efectivo", "Efectivo"
+        TRANSFERENCIA = "transferencia", "Transferencia"
+        TARJETA_DEBITO = "tarjeta_debito", "Tarjeta de débito"
+        TARJETA_CREDITO = "tarjeta_credito", "Tarjeta de crédito"
+
+    TIPO_DE_ORIGEN = OrigenDocumento.Tipo.PAGO
+
+    fecha_pago = models.DateField("fecha del pago")
+    medio_pago = models.CharField("medio de pago", max_length=20, choices=MedioPago.choices)
+    monto_pago = models.DecimalField("monto pagado", max_digits=14, decimal_places=2)
+    orden = models.ForeignKey(OrdenCompra, on_delete=models.PROTECT, related_name="pagos")
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name="pagos")
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "Pago a proveedor"
+        verbose_name_plural = "Pagos a proveedores"
+        constraints = [
+            # R158 y regla 13 de 8.20: un solo pago por proveedor y por orden. Es también la red de la concurrencia (dos pagos a la vez del mismo par).
+            models.UniqueConstraint(fields=["orden", "proveedor"], name="pago_unico_por_orden_y_proveedor"),
+            models.CheckConstraint(condition=Q(monto_pago__gt=0), name="pago_monto_positivo"),
+            models.CheckConstraint(
+                condition=Q(medio_pago__in=["efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"]), name="pago_medio_valido"
+            ),
+        ]
+
+    def __str__(self):
+        """«PAG-0001»: el identificador que ven las pantallas, los correos y la auditoría (D-36)."""
+        return f"PAG-{self.pk:04d}" if self.pk else "PAG-nuevo"

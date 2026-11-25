@@ -24,6 +24,7 @@ Cómo se guardan los datos de esta ficha: **D-50**.
 | COM-04a | `MovimientoStock`; `Bitacora.cosecha` y el tipo `cosecha`; `Cosecha.origen_cosecha`; las causas de cámara de `Merma` (D-64, fichas al final); **para las entregas** (D-68, punto 3; `docs/api/produccion.md`, sección 10): la causa `dano_en_entrega`, `Merma.orden` y `Consumo.orden` con sus restricciones; **para las solicitudes** (D-69, punto 3; sección 11): los tipos `incumplimiento_de_clausula` y `anulacion_de_resolucion` de la bitácora con su restricción. Migración nueva de `produccion`, más la de `choices` de `contabilidad` (`movimiento_de_stock`) |
 | COM-05a1 | Nada en `produccion` (el tipo `entrega` ya existe, D-67 punto 1). `Entrega` y `DetalleEntrega` viven en `comercial` (`docs/modelo/comercial.md`) |
 | COM-05a2 | La restricción nueva de `ReservaInsumo` («a lo sumo una activa por orden e insumo», D-66 punto 8). Migración nueva de `produccion` |
+| PRD-05 | `Siembra.tipo_siembra` (`normal` / `carga_inicial`) y `Siembra.capataz` nulo con sus dos restricciones (D-92 punto 12, enmendado por D-103); el tipo `carga_inicial` de `Bitacora.TipoEvento`. Migración `0010`. Nada más: `Lote`, `OcupacionSector` y `OrdenTrabajo` ya tienen todo |
 | IOT-07 | La restricción de la prioridad obligatoria en el mantenimiento (el valor `mantenimiento` ya existe, D-67 punto 1). `MantenimientoTecnico` vive en `iot` |
 
 ## Convenciones de esta ficha
@@ -46,7 +47,8 @@ Cómo se guardan los datos de esta ficha: **D-50**.
 | `OrdenTrabajo.Prioridad` | `alta`, `media`, `baja` (opcional en siembra y transición, MD-73) |
 | `ReservaInsumo.Estado` | `activa`, `consumida`, `cancelada` |
 | `Lote.Estado` | `activo`, `finalizado` (MD-51) |
-| `Bitacora.TipoEvento` | `siembra`, `transicion`, `merma` (PRD-01 y PRD-02); `aplicacion`, `otro_evento` y `consumo` (interno: el de una aplicación, no se lista; PRD-03); `fuera_de_servicio` y `reubicacion` (PRD-04); `cosecha` (COM-04, D-64 punto 4); `incumplimiento_de_clausula` y `anulacion_de_resolucion` (los crea COM-04a para COM-07a: D-69 punto 3; `docs/api/produccion.md`, sección 11). Después: `comando` (IOT-05, MD-110: lo escribe la hija `iot.RegistroComando`, `docs/modelo/iot.md`) |
+| `Bitacora.TipoEvento` | `siembra`, `transicion`, `merma` (PRD-01 y PRD-02); `aplicacion`, `otro_evento` y `consumo` (interno: el de una aplicación, no se lista; PRD-03); `fuera_de_servicio` y `reubicacion` (PRD-04); `cosecha` (COM-04, D-64 punto 4); `incumplimiento_de_clausula` y `anulacion_de_resolucion` (los crea COM-04a para COM-07a: D-69 punto 3; `docs/api/produccion.md`, sección 11). Después: `comando` (IOT-05, MD-110: lo escribe la hija `iot.RegistroComando`, `docs/modelo/iot.md`); `carga_inicial` (PRD-05: la carga de un lote existente, con la etapa actual y la fecha de ingreso a ella) |
+| `Siembra.TipoSiembra` | `normal` → «Normal» (por defecto); `carga_inicial` → «Carga inicial» (PRD-05: la siembra que crea Registrar Lote Existente) |
 | `Merma.Causa` (lote en pie) | `plaga`, `enfermedad`, `falla_riego_o_nutrientes`, `condiciones_ambientales`, `dano_mecanico`, `descarte_por_seleccion`, `otra`. La partida en cámara suma `dano_en_camara` y `vencimiento_en_camara` (COM-04; la segunda solo la usa InfoPonia, regla 9 de 8.9) y `dano_en_entrega` (la crea COM-04a y la usa COM-06a, D-68 punto 3) (MD-78). En una partida no se ofrece `descarte_por_seleccion` (regla «Causa» de PROD-REG-MRM) |
 
 Textos visibles de las causas: «Plaga», «Enfermedad», «Falla de riego o nutrientes», «Condiciones ambientales», «Daño mecánico», «Descarte por selección», «Otra» (los del prototipo, `CAUSAS`).
@@ -158,17 +160,24 @@ Hija de `OrdenTrabajo` (`tipo_orden = siembra`). Orden de sembrar una variedad e
 | `cantplantinesSiembra` | entero > 0 | → `cant_plantines_siembra`. **La cantidad planificada**: no cambia al concretar. La real es `Lote.cantidad_inicial` (suma de los agujeros ocupados) |
 | `fechaSiembra` | fecha, nula | → `fecha_siembra`. Nula mientras está «a realizar»; la **fecha efectiva** al concretar (entre la creación de la orden y hoy) |
 | `motivoDiferenciaSiembra` | texto, opcional | → `motivo_diferencia_siembra`. Hasta 300 caracteres. Solo si el total sembrado fue menor que lo planificado |
+| (nuevo, PRD-05) `tipo_siembra` | `Siembra.TipoSiembra` | → `tipo_siembra`. Por defecto `normal`; `carga_inicial` es el «motivo carga inicial» de PROD-REG-LTE (D-92 punto 12; no es `motivo_diferencia_siembra`) |
 
 ### Asociaciones
 
 | ID | Con | Cardinalidad | Estado |
 |---|---|---|---|
 | R104 | Variedad, «tiene» | Siembra → Variedad = 1 | `variedad`, FK a `maestros.Variedad`, `PROTECT` |
-| R075 | Capataz, «realiza» | Siembra → Capataz = 1 | `capataz`, FK a `core.Capataz`, `PROTECT`, obligatoria. Por la clase abstracta `ConCapataz` (D-53): la persona asignada al planificar; se traspasa al nuevo Capataz del invernadero (regla 3 de 8.22). Es la única que puede concretar la siembra |
+| R075 / R078 | Capataz, «realiza» | Siembra → Capataz = 1 (0..1 desde PRD-05) | `capataz`, FK a `core.Capataz`, `PROTECT`. Por la clase abstracta `ConCapataz` (D-53): la persona asignada al planificar; se traspasa al nuevo Capataz del invernadero (regla 3 de 8.22). Es la única que puede concretar la siembra. **Desde PRD-05 es nula** (`Siembra` la redeclara, L1: R078 pasa a 0..1) y solo en una siembra de carga inicial, que nunca se planificó ni se asignó |
 | R103 | Lote, «corresponde» | Siembra → Lote = 0..1; Lote → Siembra = 1 | La clave está en `Lote.siembra` (uno a uno): la siembra tiene lote si y solo si está concretada (regla 1 de 8.13) |
 | R105 | Consumo, «genera» | Siembra → Consumo = 0..* | La clave está en `Consumo.siembra` (nula salvo en consumos de siembra) |
 | R136 | Invernadero | 1 | Está en el padre (`invernadero`) |
 | R140 | OcupacionSector, composición | Siembra → OcupacionSector = 1..* | Por `OcupacionSector.orden` (D-50) |
+
+### Restricciones de la base (PRD-05)
+
+- `siembra_tipo_valido`: `tipo_siembra` en (`normal`, `carga_inicial`).
+- `siembra_capataz_segun_tipo`: `capataz` nulo si y solo si `tipo_siembra = carga_inicial`.
+- Una siembra de carga inicial nace «concretada» con `fecha_creacion_orden = fecha_programada_orden = fecha_resolucion_orden = hoy` (D-103: el CHECK `orden_trabajo_programada_desde_creacion` de la tabla padre no admite otra cosa); `fecha_siembra` lleva la fecha indicada, que puede ser pasada. Es el origen del asiento Debe Productos en Proceso / Haber Capital Inicial.
 
 ### Reglas que la tocan
 

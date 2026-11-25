@@ -205,11 +205,29 @@ class Siembra(OrdenTrabajo, ConCapataz):
     motivo_diferencia_siembra = models.CharField(max_length=300, blank=True, default="")
     variedad = models.ForeignKey(Variedad, on_delete=models.PROTECT, related_name="siembras")  # R104
 
+    class TipoSiembra(models.TextChoices):
+        """PRD-05 (D-92 punto 12): el «motivo carga inicial» del caso de uso PROD-REG-LTE. No es `motivo_diferencia_siembra`."""
+
+        NORMAL = "normal", "Normal"
+        CARGA_INICIAL = "carga_inicial", "Carga inicial"
+
+    tipo_siembra = models.CharField(max_length=20, choices=TipoSiembra.choices, default=TipoSiembra.NORMAL)
+    # PRD-05 (D-92 punto 12; L1: R078 pasa a 0..1): se redeclara `capataz` de `ConCapataz` como nulo. Es nulo si y solo si la siembra es de
+    # carga inicial (CHECK `siembra_capataz_segun_tipo`). Django permite redeclarar un campo heredado de una clase abstracta.
+    capataz = models.ForeignKey(Capataz, null=True, blank=True, on_delete=models.PROTECT, related_name="%(class)s_asignadas")
+
     class Meta:
         verbose_name = "Siembra"
         verbose_name_plural = "Siembras"
         constraints = [
             models.CheckConstraint(condition=Q(cant_plantines_siembra__gt=0), name="siembra_plantines_positivos"),
+            models.CheckConstraint(condition=Q(tipo_siembra__in=["normal", "carga_inicial"]), name="siembra_tipo_valido"),
+            # D-92 punto 12: el Capataz es nulo si y solo si la siembra es de carga inicial (nunca se planificó ni se asignó).
+            models.CheckConstraint(
+                condition=(Q(tipo_siembra="carga_inicial") & Q(capataz__isnull=True))
+                | (~Q(tipo_siembra="carga_inicial") & Q(capataz__isnull=False)),
+                name="siembra_capataz_segun_tipo",
+            ),
         ]
 
 
@@ -327,6 +345,8 @@ class Bitacora(OrigenDocumento):
         # COM-04a (D-69 punto 3; los usa COM-07a): sin lote, etapa ni cosecha.
         INCUMPLIMIENTO_DE_CLAUSULA = "incumplimiento_de_clausula", "Incumplimiento de cláusula suministrante"
         ANULACION_DE_RESOLUCION = "anulacion_de_resolucion", "Anulación de una resolución"
+        # PRD-05 (D-92 punto 12; L2/L3): la carga de un lote existente. `etapa` = la actual; `fecha_bitacora` = el ingreso a esa etapa.
+        CARGA_INICIAL = "carga_inicial", "Carga inicial"
 
     invernadero = models.ForeignKey(Invernadero, on_delete=models.PROTECT, related_name="bitacoras")  # R081
     lote = models.ForeignKey(Lote, null=True, blank=True, on_delete=models.PROTECT, related_name="bitacoras")  # R082
@@ -369,6 +389,7 @@ class Bitacora(OrigenDocumento):
                         "cosecha",
                         "incumplimiento_de_clausula",
                         "anulacion_de_resolucion",
+                        "carga_inicial",
                     ]
                 ),
                 name="bitacora_tipo_evento_valido",

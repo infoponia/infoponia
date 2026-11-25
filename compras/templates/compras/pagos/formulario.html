@@ -1,0 +1,39 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Registrar pago a proveedor» (CMP-REG-PAG pasos 4 y 5; ``VIEWS.c_pag`` del prototipo). Recibe «detalle», «medios», «medio» (lo elegido; **sin preselección**, extensión 5a), «fecha» (por defecto hoy), «hoy» (el
+máximo de la fecha) y «errores» (por campo: ``medio_pago``, ``fecha`` o ``general``). Sin JavaScript: «Ver resumen» lleva al paso 6. No hay número de comprobante: el modelo no lo tiene.{% endcomment %}
+{% block titulo %}Registrar pago · {{ detalle.proveedor.nombre_para_mostrar }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <a class="btn btn-text" href="{% url 'compras:pagos' %}">{% icono "back" 14 %} Pagos a proveedores</a>
+  <div class="page-h"><h1>Registrar pago a proveedor</h1></div>
+  {% if errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{{ errores.general }}</div></div>{% endif %}
+  <form method="post" action="{% url 'compras:pago_nuevo' detalle.orden.pk detalle.proveedor.pk %}" novalidate>
+    {% csrf_token %}
+    <div class="stack">
+      {% include "compras/pagos/_detalle.html" %}
+      <div class="card">
+        <div class="card-title">Cómo se paga</div>
+        <fieldset class="fld" style="border:0;padding:0;margin:0 0 14px">
+          <legend>Medio de pago</legend>
+          <div class="chips" role="radiogroup" aria-describedby="ayuda-medio">
+            {% for valor, texto in medios %}
+            <label class="chip" style="cursor:pointer"><input type="radio" name="medio_pago" value="{{ valor }}"{% if medio == valor %} checked{% endif %}> {{ texto }}</label>
+            {% endfor %}
+          </div>
+          {% if errores.medio_pago %}<div class="field-error" role="alert">{{ errores.medio_pago }}</div>{% endif %}
+          <p class="hint" id="ayuda-medio">Elegí cómo se paga: el efectivo sale de Caja y los demás medios, del Banco.</p>
+        </fieldset>
+        <div class="fld"><label for="fecha">Fecha del pago</label>
+          <input class="field-input" type="date" id="fecha" name="fecha" value="{{ fecha }}" max="{{ hoy }}" required>
+          {% if errores.fecha %}<div class="field-error" role="alert">{{ errores.fecha }}</div>{% endif %}
+          <p class="hint">Por defecto, hoy. No puede ser posterior a hoy ni caer en un ejercicio cerrado.</p></div>
+      </div>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-sin-envio-en-curso>Ver resumen</button>
+      <a class="btn btn-ghost" href="{% url 'compras:pagos' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

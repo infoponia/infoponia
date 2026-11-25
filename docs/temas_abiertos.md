@@ -757,6 +757,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Pendiente de la tanda (no es un desvío): el paso de «navegador real»** de la «Verificación a mano» (paso 12: ventana privada, «Envasado» con el Agrónomo, agregar un envase, «Revisar» y «Confirmar envasado» hasta el final, y comprobar con JavaScript que «Agregar», «Quitar», «Buscar» y «Actualizar» solo redibujan la carga) **queda pendiente para el cierre de la tanda de «Comercial 1»**, junto con COM-04c (`URL_DEL_SITIO` en Render) y COM-05a1. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
 - **Sigue abierto (no es de esta tarea):** los temas abiertos del caso de uso (quién envasa, recordatorio, entrega que se achica, cantidad sugerida) y que las notificaciones no tienen enlace al envasado (D-42; va a `pendientes_CU`, D-66).
 
+
 ## COM-05b (25/11/2026): lo que se implementó distinto de lo escrito
 
 - **«Verificación a mano» de la tarea nombraba un cargador (`comercial/verificacion.py`)**, retirado en D-95: no se creó; los datos los crea el estudiante (la tarea ya trae la «Verificación a mano» reescrita).
@@ -772,3 +773,20 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Una entrega «en curso» no se puede probar a mano** hasta COM-06 (la ruta la inicia COM-06a): la asignación y la cancelación con una entrega en curso solo las cubren las pruebas.
 - **Pendiente de la tanda (no es un desvío): el paso de «navegador real»** de la «Verificación a mano» (paso 19: ventana privada con sesión, asignar un transportista y confirmar una cancelación hasta el final; con JavaScript, al elegir un transportista solo se redibuja «Cómo queda» y «Revisar y cancelar» abre la ventana) **queda pendiente para el cierre de la tanda de «Comercial 1»**, junto con el de COM-05a1 y COM-05a2.
 - **Sigue abierto (no es de esta tarea):** la extensión 6a de COM-CNL-CVT (cobro de lo entregado) y su asiento, de COM-06 y COM-08b; la sugerencia de pedir la descripción con «Otro» y la cancelación de los confirmados sin entregar van a `pendientes_CU` (D-67, punto 4).
+
+## Lo implementado distinto de lo escrito en CMP-05 (25/11/2026)
+
+- **`OrigenDocumento.Tipo.PAGO` y `contabilidad/0007_tipo_pago`** no estaban en «Permitido fuera de la app» (D-91 punto 1 lo pide): ya se agregaron a la tarea.
+- **Nombre de la acción de auditoría:** `registro_pago_proveedor` (la tarea) y no `alta_pago` (`pagos.md`): corregido en `pagos.md`.
+- **Comprobante:** «Qué resuelve» de la tarea decía «fecha, medio, comprobante»; el modelo, D-91 y el caso de uso no tienen comprobante. Corregido en la tarea. «Comprobante del pago» queda como **mejora futura** (columna en `Pago` y decisión nueva); el campo «Número de comprobante» del prototipo no se implementó (`docs/pendientes_prototipo.md`).
+- **`test_valorizacion.py` no existía** (`pagos.md` decía «lo amplía»): se creó. Corregido en `pagos.md`.
+- **Errores de la fecha y de las cuentas del pago** (5b y 8b): los lanza `ErrorContable` (`fecha_futura`, `fecha_en_ejercicio_cerrado`, `fecha_anterior_al_primer_ejercicio` con `campo="fecha"`; `cuenta_inexistente`), no `ErrorDeCompras`; la pantalla los muestra junto al campo. Códigos nuevos de `ErrorDeCompras` que el caso de uso no nombra: `sin_pago_pendiente`, `proveedor_ajeno`, `pago_ya_registrado` (con `datos["pago_id"]`), `medio_obligatorio` y `medio_invalido`.
+- **Texto de 5a:** «Elegí el medio de pago.» (voseo del proyecto), no «Elija…» del prototipo.
+- **`LineaDePago.no_aceptada`** suma los inconvenientes que no son «otro»: el caso de uso solo dice «lo no aceptado por daño».
+- **Correo (9a):** como en CMP-04, no se reintenta (`enviar_correo` registra la falla y el pago queda registrado).
+- **Ícono del menú:** `cart`; no hay uno de dinero en `core/templatetags/iconos.py` (fuera del permitido).
+- **Quién ve el formulario:** `detalle_del_pago` y `resumir_pago` exigen ser el responsable contable; el Gerente con un Contador activo mira la bandeja, la ficha y el Inicio de compras, pero no el formulario (403).
+- **Entrada del menú, no pestaña:** «Pagos a proveedores» es una entrada junto a «Contabilidad» (D-87 punto 6), no una pestaña de «Compras»; el prototipo la ocultaba al Gerente con Contador activo y D-91 punto 6 pide que la vea en solo lectura.
+- **Prueba de CMP-03 actualizada** (no se debilitó): en `test_cmp_cns_odc.py`, `con_pago_pendiente` deja de ser un atajo ignorado (su prueba está en `test_pagos_vistas.py`).
+- **Pasada manual en navegador real** (paso 22 de la «Verificación a mano»): enviar el pago hasta el final. El cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+

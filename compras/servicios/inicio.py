@@ -1,15 +1,18 @@
 # Inicio de «Compras» (CMP-02a y CMP-03; D-87 punto 5, D-43): la sección que ``compras`` registra con ``registrar_seccion_de_inicio`` en ``AppConfig.ready()`` (``panelAgr`` y ``panelGer``
 # del prototipo). El Agrónomo ve «Insumos bajo el mínimo» con «Pedir», «Esperando cotizaciones» y, desde CMP-03, «Pedidos que vencieron» (con «Resolver») y «Órdenes rechazadas» (las de los
-# últimos 7 días, como el prototipo); el Gerente ve «Órdenes pendientes de aprobación». «Por recibir» (Agrónomo) y «Reclamos sin emitir» y «Pagos a proveedores pendientes» se suman en
-# CMP-04 a CMP-06.
+# últimos 7 días, como el prototipo); el Gerente ve «Órdenes pendientes de aprobación». «Por recibir» (Agrónomo) y «Reclamos sin emitir» se suma en
+# CMP-06; «Pagos a proveedores pendientes» (CMP-05) es ``seccion_de_pagos``, del responsable contable.
 
 from collections import namedtuple
 from datetime import timedelta
+from decimal import Decimal
 
 from compras.models import OrdenCompra, Pedido
 from compras.servicios import ordenes as servicio_de_ordenes
+from compras.servicios import pagos as servicio_de_pagos
 from compras.servicios import pedidos as servicio_de_pedidos
 from compras.servicios import recepciones as servicio_de_recepciones
+from contabilidad.servicios import responsables
 from core.extensiones import SeccionDeInicio
 from core.models import Usuario, rol_de
 from inventario.servicios import stock
@@ -62,3 +65,13 @@ def seccion_de_inicio(usuario):
     if rol == Usuario.Rol.GERENTE:
         return SeccionDeInicio("compras/_inicio_gerente.html", {"indicadores": indicadores_del_gerente(usuario)})
     return None
+
+
+def seccion_de_pagos(usuario):
+    """CMP-05 (D-91 punto 6, D-85): la sección «Pagos a proveedores pendientes» del Inicio del responsable contable, el Contador activo y, **sin** Contador activo, el Gerente
+    (``responsables.puede_registrar_asientos``; el Gerente con un Contador activo no la ve). Sin pagos pendientes la muestra al día. ``None`` para cualquier otra cuenta."""
+    if not getattr(usuario, "is_active", False) or not responsables.puede_registrar_asientos(usuario):
+        return None
+    pendientes = servicio_de_pagos.pagos_pendientes()
+    datos = {"cantidad": len(pendientes), "monto_total": sum((p.monto for p in pendientes), Decimal("0.00")), "pendientes": pendientes[:MAXIMO_EN_EL_INICIO]}
+    return SeccionDeInicio("compras/_inicio_pagos.html", datos)

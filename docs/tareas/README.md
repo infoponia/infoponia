@@ -121,7 +121,7 @@ Plan completo en `docs/tareas/ronda_compras_1.md`. CMP-01 a CMP-03 no esperan a 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
 | CMP-04 | Recepción y cierre con faltante (con asiento) | compras (y el ingreso en inventario; `contabilidad` y `core`: un tipo de origen y las acciones de auditoría) | hecha (PR #__, 24/11/2026; revisión a mano pendiente) | CMP-03, CON-02 | `compras/CMP-04-recepcion-y-cierre-con-faltante.md` |
-| CMP-05 | Pago a proveedores (con asiento) | compras | pendiente | CMP-04, USR-11 (hecha), CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
+| CMP-05 | Pago a proveedores (con asiento) | compras (y `contabilidad` y `core`: un tipo de origen y las acciones de auditoría) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CMP-04, USR-11 (hecha), CON-02 | `compras/CMP-05-pago-a-proveedores.md` |
 | CMP-06 | Corrección de recepción y reclamos | compras (y un tipo en inventario) | pendiente | CMP-05 | `compras/CMP-06-correccion-de-recepcion-y-reclamos.md` |
 
 ### Ronda «Contabilidad 2» (D-92; reaperturas y lote existente)
@@ -131,7 +131,7 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| PRD-05 | Registrar Lote Existente | produccion | pendiente | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
+| PRD-05 | Registrar Lote Existente | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
 | CON-04a | Asientos de producción (reapertura) | produccion | pendiente | CON-02 (PRD-04, hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | pendiente | CON-02, COM-04a, COM-04b, COM-06a | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
 | CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11 (hecha), COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |

@@ -59,6 +59,29 @@ Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si `
     </div>
     {% endfor %}
 
+    {% if ficha.pagos %}
+    <div class="card seg" id="pagos">
+      <div class="card-h"><b>Pagos</b><span class="muted sm">uno por proveedor, por lo recibido</span></div>
+      <div class="tablewrap">
+        <table class="data-table">
+          <thead><tr><th>Proveedor</th><th>Estado</th><th class="right">Monto</th><th></th></tr></thead>
+          <tbody>
+          {% for p in ficha.pagos %}
+          <tr>
+            <td>{{ p.proveedor.nombre_para_mostrar }}</td>
+            <td>{% if p.estado == "pagado" %}<span class="status-badge status-ok">Pagado</span><span class="sub2">{{ p.pago }} · {{ p.pago.fecha_pago|date:"d/m/Y" }} · {{ p.pago.get_medio_pago_display }}</span>
+              {% elif p.estado == "pendiente" %}<span class="status-badge status-warn">Pendiente de pago</span>
+              {% else %}<span class="status-badge status-neutral">Todavía no está para pagar</span><span class="sub2">Tiene líneas por recibir o todavía no se le recibió nada.</span>{% endif %}</td>
+            <td class="right nowrap mono">{% if p.monto %}{{ p.monto|pesos }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="right nowrap">{% if p.puede_registrar %}<a class="btn btn-primary btn-sm" href="{% url 'compras:pago_nuevo' orden.pk p.proveedor.pk %}">Registrar pago<span class="sr"> a {{ p.proveedor.nombre_para_mostrar }}</span></a>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     {% if ficha.recepciones %}
     <div class="card seg" id="recepciones">
       <div class="card-h"><b>Recepciones</b><span class="muted sm">lo que llegó, con sus lotes</span></div>

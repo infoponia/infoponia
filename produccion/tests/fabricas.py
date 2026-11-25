@@ -21,7 +21,7 @@ from maestros.tests.fabricas import (
     crear_sector,
 )
 from produccion.errores import ErrorDeProduccion
-from produccion.models import Cosecha, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
+from produccion.models import Bitacora, Cosecha, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra, TransicionEtapa
 from produccion.servicios import ordenes
 
 CODIGOS_DE_ETAPA = ("germinacion", "crecimiento", "floracion", "fructificacion", "maduracion")
@@ -151,6 +151,46 @@ def lote_activo(escenario, cantidad=50, sector="germinacion", costo="100.00", et
         costo_acumulado=Decimal(costo),
     )
     OcupacionSector.objects.filter(orden=siembra).update(lote=nuevo, cant_agujeros_ocupados=cantidad)
+    return nuevo
+
+
+def lote_de_carga_inicial(escenario, cantidad=50, etapa="maduracion", sector=None, ingreso=None, siembra=None, costo="0.00", variedad=None):
+    """Un lote «activo» como lo deja PROD-REG-LTE (PRD-05), escrito directo en la base: siembra de carga inicial concretada sin Capataz
+    (las tres fechas de la orden en hoy; `fecha_siembra` = `siembra`, por defecto hace 60 días), el lote en `etapa`, su ocupación en
+    `sector` (por defecto, el de esa etapa) y la entrada de bitácora `carga_inicial` con `fecha_bitacora` = `ingreso` (por defecto hace
+    10 días). No crea asiento."""
+    hoy = timezone.localdate()
+    variedad = variedad or escenario.variedad
+    sector = sector or escenario.sectores[etapa]
+    orden = Siembra.objects.create(
+        tipo_orden=OrdenTrabajo.Tipo.SIEMBRA,
+        numero=ordenes.siguiente_numero(),
+        fecha_creacion_orden=hoy,
+        fecha_programada_orden=hoy,
+        fecha_resolucion_orden=hoy,
+        estado_orden="concretada",
+        agronomo=escenario.agronomo,
+        invernadero=escenario.invernadero,
+        capataz=None,
+        tipo_siembra=Siembra.TipoSiembra.CARGA_INICIAL,
+        cant_plantines_siembra=cantidad,
+        fecha_siembra=siembra or hoy - timedelta(days=60),
+        variedad=variedad,
+    )
+    etapa_del_ciclo = EtapaProductiva.objects.get(ciclo__variedad=variedad, tipo_etapa__codigo=etapa)
+    nuevo = Lote.objects.create(
+        invernadero=escenario.invernadero, etapa=etapa_del_ciclo, siembra=orden, cantidad_inicial=cantidad, cantidad_actual=cantidad,
+        costo_acumulado=Decimal(costo),
+    )
+    OcupacionSector.objects.create(
+        orden=orden, sector=sector, lote=nuevo, cant_agujeros_planificados=cantidad, cant_agujeros_ocupados=cantidad
+    )
+    registro = Bitacora.objects.create(
+        invernadero=escenario.invernadero, lote=nuevo, etapa=etapa_del_ciclo, responsable=escenario.agronomo,
+        fecha_bitacora=ingreso or hoy - timedelta(days=10), hora_bitacora=timezone.localtime().time(),
+        tipo_evento=Bitacora.TipoEvento.CARGA_INICIAL, descripcion_evento=f"Carga inicial del lote {nuevo.codigo}",
+    )
+    registro.sectores.set([sector])
     return nuevo
 
 

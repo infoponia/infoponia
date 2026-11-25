@@ -34,7 +34,7 @@ from maestros.models import Invernadero
 from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_invernadero
 from produccion.errores import ErrorDeProduccion
 from produccion.models import Bitacora, Merma
-from produccion.tests.fabricas import invernadero_con_produccion, lote_activo
+from produccion.tests.fabricas import invernadero_con_produccion, lote_activo, lote_de_carga_inicial
 from produccion.tests.test_modelos_aplicacion import aplicacion_de, consumo_de
 
 bitacora = perezoso("produccion.servicios.bitacora")
@@ -179,10 +179,10 @@ class ContenidoTests(Base):
         self.evento("aplicacion", tipo="aplicacion", clase=Bitacora)
         textos = {r.tipo: r.tipo_texto for r in self.registros(self.consultar())}
         self.assertEqual(textos, {"siembra": "Siembra", "transicion": "Transición de etapa", "merma": "Merma", "otro_evento": "Otro evento", "aplicacion": "Aplicación de insumos"})
-        # COM-04a suma `cosecha` y los dos de contrato al filtro (docs/disparadores.md, «Cuando exista `produccion` completa», punto 3).
+        # PRD-05 suma `carga_inicial` (D-92 punto 12) y COM-04a, `cosecha` y los dos de contrato, al filtro (docs/disparadores.md, «Cuando exista `produccion` completa», punto 3).
         self.assertEqual(
             [v for v, _ in bitacora.TIPOS_DE_FILTRO],
-            ["siembra", "transicion", "merma", "aplicacion", "otro_evento", "fuera_de_servicio", "reubicacion", "cosecha", "incumplimiento_de_clausula", "anulacion_de_resolucion"],
+            ["siembra", "transicion", "merma", "aplicacion", "otro_evento", "fuera_de_servicio", "reubicacion", "carga_inicial", "cosecha", "incumplimiento_de_clausula", "anulacion_de_resolucion"],
         )
 
     def test_regla_5_el_consumo_interno_de_una_aplicacion_no_se_lista_pero_se_muestra_dentro_de_su_aplicacion(self):
@@ -231,6 +231,16 @@ class FiltrosTests(Base):
         """Regla 6: tipo de evento."""
         self.assertEqual(self.descripciones(tipo="merma"), ["Otro lote", "Pulgón en lechuga"])
         self.assertEqual(self.descripciones(tipo="aplicacion"), ["Nutrientes"])
+
+    def test_regla_5_prd_05_la_carga_inicial_se_lista_con_su_texto_su_lote_y_sus_sectores_y_se_filtra_por_tipo(self):
+        """PRD-05 (D-92 punto 12): la entrada `carga_inicial` de un lote existente se lista como «Carga inicial» con su lote y su sector, en la fecha de ingreso
+        a la etapa, y el filtro por tipo la encuentra."""
+        cargado = lote_de_carga_inicial(self.e, cantidad=20, etapa="crecimiento", ingreso=HOY - timedelta(days=7))
+        registros = self.registros(self.consultar(tipo="carga_inicial"))
+        self.assertEqual([(r.tipo, r.tipo_texto, r.lote, r.fecha, r.sectores) for r in registros],
+                         [("carga_inicial", "Carga inicial", cargado.codigo, HOY - timedelta(days=7), [self.e.sectores["crecimiento"].nombre_sector])])
+        self.assertIn(cargado.codigo, registros[0].descripcion)
+        self.assertNotIn("carga_inicial", [r.tipo for r in self.registros(self.consultar(tipo="merma"))])
 
     def test_regla_6_filtra_por_lote(self):
         """Regla 6: lote."""

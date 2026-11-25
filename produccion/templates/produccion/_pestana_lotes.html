@@ -1,5 +1,7 @@
 {% comment %}Pestaña «Lotes activos» de la ficha del invernadero (`lotesTab` del prototipo; PRD-01). Recibe «lotes», una lista de FilaDeLote
-(`produccion.servicios.lotes.lotes_activos_de`). Todo se escapa: los nombres de variedad vienen de la base. Solo lectura.{% endcomment %}
+(`produccion.servicios.lotes.lotes_activos_de`). Todo se escapa: los nombres de variedad vienen de la base. Solo lectura, salvo la acción «Registrar lote existente» (PRD-05), que se muestra solo con «puede_cargar»
+(el invernadero está a cargo de quien mira, activo y sin siembras normales concretadas) e «invernadero_id».{% endcomment %}
+{% if puede_cargar %}<div style="margin-top:12px"><a class="btn btn-ghost" href="{% url 'produccion:registrar_lote_existente' %}?invernadero={{ invernadero_id }}">+ Registrar lote existente</a></div>{% endif %}
 {% if lotes %}
 <div class="card" style="margin-top:12px">
   <div class="card-b flush">
@@ -24,5 +26,5 @@
   </div>
 </div>
 {% else %}
-<div class="empty" style="margin-top:12px"><b>Sin lotes activos</b><span>Cuando el Capataz concrete una siembra, el lote aparece acá.</span></div>
+<div class="empty" style="margin-top:12px"><b>Sin lotes activos</b><span>Cuando el Capataz concrete una siembra{% if puede_cargar %} o registres un lote existente{% endif %}, el lote aparece acá.</span></div>
 {% endif %}

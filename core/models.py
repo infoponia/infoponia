@@ -833,6 +833,8 @@ class RegistroAuditoria(models.Model):
         PLANIFICACION_ENTREGA = "planificacion_entrega", "Planificación de entrega"
         MODIFICACION_ENTREGA = "modificacion_entrega", "Modificación de entrega"
         ASIGNACION_TRANSPORTISTA = "asignacion_transportista", "Asignación de transportista"
+        # CMP-05 (D-91, D-87 punto 8): el pago a un proveedor. El asiento lo audita la función de asientos (D-86 punto 4).
+        REGISTRO_PAGO_PROVEEDOR = "registro_pago_proveedor", "Registro de pago a proveedor"
         PLANIFICACION_ENVASADO = "planificacion_envasado", "Planificación de envasado"  # COM-05a2 (PROD-PNF-ENV)
         CANCELACION_COMPRA_VENTA = "cancelacion_compra_venta", "Cancelación de compra-venta"  # COM-05b (COM-CNL-CVT)
         # COM-06a (D-68): la ruta y la concreción de las entregas. Un registro por caso de uso (D-36).
@@ -840,6 +842,7 @@ class RegistroAuditoria(models.Model):
         FIN_RUTA = "fin_ruta", "Fin de ruta"  # COM-FIN-RUT
         CONCRECION_ENTREGA = "concrecion_entrega", "Concreción de entrega"  # COM-CNC-ENT
         INTENTO_FALLIDO_ENTREGA = "intento_fallido_entrega", "Intento fallido de entrega"  # COM-CNC-ENT 4a y COM-FIN-RUT
+        REGISTRO_LOTE_EXISTENTE = "registro_lote_existente", "Registro de lote existente"  # PRD-05 (PROD-REG-LTE, D-92 punto 12)
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1169,6 +1172,10 @@ class RegistroAuditoria(models.Model):
         "lineas_cerradas": "Líneas cerradas con faltante",
         "motivos_de_cierre": "Motivo de cada cierre",
         "monto_del_asiento": "Monto del asiento",
+        # CMP-05: el pago a un proveedor.
+        "medio_pago": "Medio de pago",
+        "fecha_pago": "Fecha del pago",
+        "monto_pago": "Monto pagado",
         # COM-04c: decidir un faltante y vencer un enlace del cliente.
         "decisiones": "Decisión de cada detalle",
         "partidas_creadas": "Partidas de cámara creadas",
@@ -1227,6 +1234,10 @@ class RegistroAuditoria(models.Model):
         "reservas_creadas": "Envases reservados",
         "cantidad_reservada": "Cantidad reservada",
         "estado_reserva_insumo": "Estado de la reserva de envase",
+        # PRD-05 (PROD-REG-LTE): la carga de un lote existente.
+        "tipo_siembra": "Tipo de siembra",
+        "fecha_ingreso_etapa": "Fecha de ingreso a la etapa",
+        "costo_estimado": "Costo estimado del lote",
         "estado_ejercicio": "Estado del ejercicio",
         "ejercicio": "Ejercicio contable",
         "numero_asiento": "Número de asiento",
@@ -1291,6 +1302,8 @@ class RegistroAuditoria(models.Model):
         # CMP-01: `core` no importa `compras` (A1 de D-37), así que la lista cerrada se repite acá.
         "tipo_proveedor": {"juridica": "Persona jurídica", "fisica": "Persona física"},
         "tipo_direccion": {"urbana": "Urbana", "rural": "Rural"},
+        # PRD-05: el tipo de la siembra (carga inicial = lote existente).
+        "tipo_siembra": {"normal": "Normal", "carga_inicial": "Carga inicial"},
         # PRD-01: la prioridad de la orden (opcional; sin valor cuenta como media).
         "prioridad_orden": {"alta": "Alta", "media": "Media", "baja": "Baja"},
         # COM-04a (D-64 punto 5): `core` no importa `produccion` (A1 de D-37), así que la lista cerrada se repite acá.
@@ -1377,6 +1390,7 @@ class RegistroAuditoria(models.Model):
         # «estado» común, igual que «estado_venta».
         "estado_ejercicio": {"abierto": "Abierto", "en_cierre": "En cierre", "cerrado": "Cerrado"},
         "tipo_movimiento": {"D": "Debe", "H": "Haber"},
+        "medio_pago": {"efectivo": "Efectivo", "transferencia": "Transferencia", "tarjeta_debito": "Tarjeta de débito", "tarjeta_credito": "Tarjeta de crédito"},  # CMP-05
         # COM-05a1: las listas cerradas de la entrega (`core` no importa `comercial`). «modalidad_entrega» ya existe.
         "estado_confirmacion_cliente": {"no_confirmado": "No confirmada", "confirmado": "Confirmada"},
         "estado_aviso_cliente": {"enviado": "Enviado", "pendiente_envio": "Pendiente de envío", "sin_correo": "Sin correo"},
@@ -1621,12 +1635,14 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.PLANIFICACION_ENTREGA,
         RegistroAuditoria.Accion.MODIFICACION_ENTREGA,
         RegistroAuditoria.Accion.ASIGNACION_TRANSPORTISTA,
+        RegistroAuditoria.Accion.REGISTRO_PAGO_PROVEEDOR,
         RegistroAuditoria.Accion.PLANIFICACION_ENVASADO,
         RegistroAuditoria.Accion.CANCELACION_COMPRA_VENTA,
         RegistroAuditoria.Accion.INICIO_RUTA,
         RegistroAuditoria.Accion.FIN_RUTA,
         RegistroAuditoria.Accion.CONCRECION_ENTREGA,
         RegistroAuditoria.Accion.INTENTO_FALLIDO_ENTREGA,
+        RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
     }
 )
 

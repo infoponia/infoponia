@@ -35,7 +35,7 @@ from produccion.models import (
     TransicionEtapa,
 )
 from produccion.servicios import lotes as api_lotes
-from produccion.servicios import bitacora, inicio, ordenes
+from produccion.servicios import bitacora, inicio, lotes_existentes, ordenes
 
 Estado = OrdenTrabajo.Estado
 Tipo = OrdenTrabajo.Tipo
@@ -265,7 +265,12 @@ def pestana_de_lotes(actor, invernadero):
     `actor` no ve la ficha (solo el Agrónomo a cargo y el Gerente, este en solo lectura)."""
     if not Invernadero.objects.en_alcance_de(actor).filter(pk=invernadero.pk).exists():
         return None
-    return render_to_string("produccion/_pestana_lotes.html", {"lotes": api_lotes.lotes_activos_de([invernadero.pk])})
+    # PRD-05: «Registrar lote existente» solo si este invernadero sigue disponible para la carga (activo, a cargo de `actor` y sin siembras normales).
+    puede_cargar = any(i.pk == invernadero.pk for i in lotes_existentes.invernaderos_disponibles(actor))
+    return render_to_string(
+        "produccion/_pestana_lotes.html",
+        {"lotes": api_lotes.lotes_activos_de([invernadero.pk]), "puede_cargar": puede_cargar, "invernadero_id": invernadero.pk},
+    )
 
 
 # ---- inventario ----

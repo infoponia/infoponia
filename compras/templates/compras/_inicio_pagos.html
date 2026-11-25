@@ -1,0 +1,31 @@
+{% load iconos formato_inventario %}
+{% comment %}Sección «Pagos a proveedores pendientes» del Inicio del responsable contable (`registrar_seccion_de_inicio`, D-43; CMP-05, ``panelCon`` y ``panelGer`` del prototipo): el Contador activo y, sin Contador activo,
+el Gerente. Recibe «datos» con «cantidad», «monto_total» y «pendientes» (los primeros, ``PagoPendiente``, del más antiguo al más reciente). Todo se escapa.{% endcomment %}
+<div class="page" style="margin-top:16px">
+  <h2 style="margin-bottom:12px">Pagos a proveedores</h2>
+  <div class="kpis">
+    <a class="kpi{% if datos.cantidad %} warn{% endif %}" href="{% url 'compras:pagos' %}" style="text-decoration:none;color:inherit"><span class="k">Proveedores para pagar</span><span class="v" data-kpi="pagos-pendientes">{{ datos.cantidad }}</span><span class="c">{% if datos.cantidad %}{{ datos.monto_total|pesos }} en total{% else %}al día{% endif %}</span></a>
+  </div>
+  <div class="card seg" style="margin-top:16px">
+    <div class="card-h"><b>Pagos a proveedores pendientes</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:pagos' %}">Ver todos</a></div>
+    {% if datos.pendientes %}
+    <div class="tablewrap">
+      <table class="data-table">
+        <thead><tr><th>Proveedor</th><th>Listo desde</th><th class="right">Monto</th><th></th></tr></thead>
+        <tbody>
+        {% for p in datos.pendientes %}
+        <tr>
+          <td>{{ p.proveedor.nombre_para_mostrar }}<span class="sub2">{{ p.orden }}</span></td>
+          <td class="nowrap">{{ p.listo_desde|date:"d/m/Y" }}</td>
+          <td class="right nowrap mono">{{ p.monto|pesos }}</td>
+          <td class="right"><a class="btn btn-primary btn-sm" href="{% url 'compras:pago_nuevo' p.orden.pk p.proveedor.pk %}">Pagar<span class="sr"> a {{ p.proveedor.nombre_para_mostrar }} por {{ p.orden }}</span></a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="card-b muted" style="padding:0 20px 16px">No hay pagos pendientes.</div>
+    {% endif %}
+  </div>
+</div>

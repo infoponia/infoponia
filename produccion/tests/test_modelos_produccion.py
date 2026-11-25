@@ -147,6 +147,67 @@ class ModelosDeProduccionTests(ConDatosDeInventario, TestCase):
         """`cant_plantines_siembra > 0`."""
         viola(self, lambda: orden_de_siembra(self.e, plantines=0, agujeros=1))
 
+    def _siembra_de_carga_inicial(self, **cambios):
+        """Una `Siembra` de carga inicial cruda (sin Capataz), con las tres fechas de la orden en hoy y `fecha_siembra` pasada."""
+        hoy = timezone.localdate()
+        valores = dict(
+            tipo_orden=Tipo.SIEMBRA,
+            numero=ordenes.siguiente_numero(),
+            fecha_creacion_orden=hoy,
+            fecha_programada_orden=hoy,
+            fecha_resolucion_orden=hoy,
+            estado_orden="concretada",
+            agronomo=self.e.agronomo,
+            invernadero=self.e.invernadero,
+            capataz=None,
+            tipo_siembra=Siembra.TipoSiembra.CARGA_INICIAL,
+            cant_plantines_siembra=10,
+            fecha_siembra=hoy - timedelta(days=30),
+            variedad=self.e.variedad,
+        )
+        valores.update(cambios)
+        return Siembra.objects.create(**valores)
+
+    def test_d92_las_siembras_existentes_quedan_normales_y_con_capataz(self):
+        """D-92 punto 12 (migración de `produccion`): `tipo_siembra` por defecto `normal`; una siembra normal sigue con Capataz."""
+        siembra = Siembra.objects.get(pk=orden_de_siembra(self.e).pk)
+        self.assertEqual(siembra.tipo_siembra, "normal")
+        self.assertEqual(siembra.capataz, self.e.capataz)
+
+    def test_d92_check_siembra_tipo_valido(self):
+        """CHECK `siembra_tipo_valido` (D-92 punto 12): solo `normal` y `carga_inicial`."""
+        siembra = orden_de_siembra(self.e)
+        viola(self, lambda: Siembra.objects.filter(pk=siembra.pk).update(tipo_siembra="otra"))
+
+    def test_d92_check_siembra_capataz_segun_tipo(self):
+        """CHECK `siembra_capataz_segun_tipo` (D-92 punto 12, L1): el Capataz es nulo si y solo si la siembra es de carga inicial."""
+        carga = self._siembra_de_carga_inicial()
+        self.assertIsNone(Siembra.objects.get(pk=carga.pk).capataz_id)
+        viola(self, lambda: self._siembra_de_carga_inicial(capataz=self.e.capataz))  # carga inicial con Capataz
+        viola(self, lambda: self._siembra_de_carga_inicial(tipo_siembra="normal"))  # normal sin Capataz
+        normal = orden_de_siembra(self.e)
+        viola(self, lambda: Siembra.objects.filter(pk=normal.pk).update(capataz=None))
+
+    def test_d92_la_carga_inicial_cumple_el_check_de_fechas_con_las_tres_fechas_en_hoy(self):
+        """PRD-05, decisión del estudiante (25/11/2026): `fecha_creacion_orden = fecha_programada_orden = fecha_resolucion_orden = hoy` cumple
+        `orden_trabajo_programada_desde_creacion`; `fecha_siembra` es la pasada indicada. Con la programada en el pasado, el CHECK la rechaza."""
+        hoy = timezone.localdate()
+        carga = Siembra.objects.get(pk=self._siembra_de_carga_inicial().pk)
+        self.assertEqual((carga.fecha_creacion_orden, carga.fecha_programada_orden, carga.fecha_resolucion_orden), (hoy, hoy, hoy))
+        self.assertLess(carga.fecha_siembra, hoy)
+        viola(self, lambda: self._siembra_de_carga_inicial(fecha_programada_orden=hoy - timedelta(days=30)))
+
+    def test_d92_la_bitacora_acepta_el_tipo_carga_inicial(self):
+        """CHECK `bitacora_tipo_evento_valido` (D-92 punto 12): suma `carga_inicial`."""
+        hoy = timezone.localdate()
+        registro = Bitacora.objects.create(
+            invernadero=self.e.invernadero,
+            fecha_bitacora=hoy,
+            hora_bitacora=timezone.localtime().time(),
+            tipo_evento=Bitacora.TipoEvento.CARGA_INICIAL,
+        )
+        self.assertEqual(Bitacora.objects.get(pk=registro.pk).tipo_evento, "carga_inicial")
+
     # ---- Lote ----
 
     def test_regla_lote_cantidad_actual_no_supera_la_inicial_ni_el_costo_es_negativo(self):

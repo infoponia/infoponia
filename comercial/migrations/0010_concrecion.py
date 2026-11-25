@@ -10,8 +10,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('comercial', '0009_cancelacion_compra_venta'),
-        ('contabilidad', '0007_pago_y_solicitud'),
-        ('core', '0044_comercial_rutas'),
+        ('contabilidad', '0008_pago_y_solicitud'),
+        ('core', '0046_comercial_rutas'),
         ('maestros', '0011_dias_aviso_vencimiento_camara'),
         ('produccion', '0009_reserva_insumo_una_activa'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

@@ -28,7 +28,7 @@ from compras.models import (
     ReclamoProveedor,
 )
 from compras.precios import valor_recibido
-from compras.servicios import enlaces
+from compras.servicios import enlaces, pagos
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
 from contabilidad.servicios import asientos
@@ -590,6 +590,8 @@ def registrar_recepcion(actor, datos):
             afectados=[recepcion, *detalles_de_recepcion, *[p.detalle for p in plan.planes], plan.orden, *inconvenientes, *([reclamo] if reclamo else [])],
             detalle=detalle_de_auditoria,
         )
+        # CMP-05 (D-91 punto 3): si el proveedor quedó para pagar, aviso al responsable contable (D-42: dentro de la transacción, sin quien registra).
+        pagos.avisar_si_quedo_para_pagar(plan.orden, plan.proveedor, actor=actor)
         transaction.on_commit(lambda: enviar_recepcion(recepcion.pk))
     return recepcion
 
@@ -842,6 +844,10 @@ def cerrar_con_faltante(actor, lineas):
             RegistroAuditoria.objects.registrar(
                 usuario=actor, accion=RegistroAuditoria.Accion.CIERRE_CON_FALTANTE, afectados=[orden, *[l.detalle for l in propias]], detalle=detalle
             )
+        # CMP-05 (D-91 punto 3): cada proveedor que quedó para pagar con este cierre (todas sus líneas completas o cerradas y algo recibido) avisa al responsable contable, sin quien cierra.
+        pares = {(l.detalle.orden, l.detalle.detalle_cotizacion.cotizacion.proveedor) for l in cerradas}
+        for orden, proveedor in sorted(pares, key=lambda par: (par[0].pk, par[1].pk)):
+            pagos.avisar_si_quedo_para_pagar(orden, proveedor, actor=actor)
         por_proveedor = defaultdict(list)
         for linea in cerradas:
             por_proveedor[linea.detalle.detalle_cotizacion.cotizacion.proveedor_id].append((linea.detalle.pk, linea.falta))
