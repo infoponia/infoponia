@@ -877,3 +877,98 @@ class RecepcionesRestriccionesTests(ConDatosDeInventario, TestCase):
         self.linea(recepcion)
         with self.assertRaises(ProtectedError):
             recepcion.delete()
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Pagos (CMP-05). Fuente: docs/modelo/compras.md («Pago»), D-91 punto 1, D-89 punto 6, D-52, regla 13 de 8.20 y R158.
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+from compras.models import Pago  # noqa: E402
+
+
+class PagosRestriccionesTests(ConDatosDeInventario, TestCase):
+    """Las restricciones de la base de los pagos a proveedores: herencia de ``OrigenDocumento``, uno por orden y proveedor, monto positivo, medio válido y nada se borra."""
+
+    def setUp(self):
+        self.agronomo, self.invernadero = crear_agronomo_con_invernadero()
+        self.gerente = crear_gerente()
+        self.existencia = existencia(insumo(), self.invernadero, minimo=10, precio="12.50", transito=12)
+        self.proveedor = proveedor(n=1)
+        self.otro_proveedor = proveedor("Viveros del Este S. R. L.", n=2)
+        self.pedido = armar_pedido(self.agronomo)
+        self.detalle_de_pedido = detalle_de_pedido(self.pedido, self.existencia, cantidad="20")
+        self.cotizacion = cotizacion_de(self.pedido, self.proveedor, [(self.detalle_de_pedido, "12", "120.00", 3)])
+        self.orden = orden_de(self.pedido, [self.cotizacion], estado="aprobada", gerente=self.gerente)
+
+    def rechazo(self, crear, restriccion):
+        """Falla la prueba si la base no rechaza ``crear()`` con un ``IntegrityError`` que nombre ``restriccion``."""
+        with self.assertRaises(IntegrityError) as contexto:
+            with transaction.atomic():
+                crear()
+        self.assertIn(restriccion, str(contexto.exception))
+
+    def pago(self, **campos):
+        """Un ``Pago`` de la orden y del proveedor de la prueba, en efectivo; ``campos`` pisa lo que se pase."""
+        datos = {
+            "orden": self.orden,
+            "proveedor": self.proveedor,
+            "fecha_pago": timezone.localdate(),
+            "medio_pago": "efectivo",
+            "monto_pago": Decimal("120.00"),
+        }
+        datos.update(campos)
+        return Pago.objects.create(**datos)
+
+    def test_d91_el_pago_es_un_documento_de_origen_de_tipo_pago(self):
+        """D-91 punto 1 y D-52: ``Pago`` hereda de ``OrigenDocumento``; su ``tipo`` lo fija la clase (``pago``) y comparte el ``id`` con el padre."""
+        pago = self.pago()
+        self.assertEqual(pago.tipo, OrigenDocumento.Tipo.PAGO)
+        self.assertEqual(OrigenDocumento.objects.get(pk=pago.pk).tipo, "pago")
+        self.assertEqual(OrigenDocumento.objects.get(pk=pago.pk).pago, pago)
+        self.assertEqual(pago.origendocumento_ptr_id, pago.pk)
+
+    def test_d91_el_pago_se_muestra_como_pag_y_el_tipo_se_llama_pago_a_proveedor(self):
+        """El identificador que ven las pantallas, los correos y la auditoría es «PAG-0001»; el tipo de origen se muestra como «Pago a proveedor» (no se confunde con el pago de un cliente)."""
+        pago = self.pago()
+        self.assertEqual(str(pago), f"PAG-{pago.pk:04d}")
+        self.assertEqual(str(Pago()), "PAG-nuevo")
+        self.assertEqual(OrigenDocumento.Tipo.PAGO.label, "Pago a proveedor")
+        self.assertEqual(OrigenDocumento.objects.get(pk=pago.pk).get_tipo_display(), "Pago a proveedor")
+
+    def test_r158_regla_13_de_8_20_un_solo_pago_por_orden_y_proveedor(self):
+        """R158 y regla 13 de 8.20: único ``(orden, proveedor)``. Otro proveedor de la misma orden sí puede tener su pago; el mismo proveedor en otra orden también."""
+        self.pago()
+        self.rechazo(self.pago, "pago_unico_por_orden_y_proveedor")
+        self.pago(proveedor=self.otro_proveedor)
+        self.assertEqual(self.orden.pagos.count(), 2)
+
+    def test_d91_el_monto_pagado_es_mayor_que_cero(self):
+        """D-89 punto 6 y regla 13: lo que se pagó es positivo; cero o negativo lo rechaza la base."""
+        for monto in ("0.00", "-1.00"):
+            with self.subTest(monto=monto):
+                self.rechazo(lambda monto=monto: self.pago(monto_pago=Decimal(monto)), "pago_monto_positivo")
+
+    def test_regla_15_de_8_13_el_medio_de_pago_es_uno_de_los_cuatro(self):
+        """Regla 15 de 8.13 (MD-36): efectivo, transferencia, tarjeta de débito o tarjeta de crédito; otro valor lo rechaza la base."""
+        self.rechazo(lambda: self.pago(medio_pago="cheque"), "pago_medio_valido")
+        self.assertEqual(Pago.MedioPago.values, ["efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"])
+
+    def test_r018_r158_se_llega_al_pago_desde_la_orden_y_desde_el_proveedor(self):
+        """Modelo, «Pago» (R018 y R158): la orden y el proveedor tienen sus pagos (``pagos``)."""
+        pago = self.pago()
+        self.assertEqual(list(self.orden.pagos.all()), [pago])
+        self.assertEqual(list(self.proveedor.pagos.all()), [pago])
+
+    def test_regla_el_monto_guarda_dos_decimales_sin_redondear_de_mas(self):
+        """D-89 punto 7: todo importe de dinero tiene dos decimales en la base."""
+        self.assertEqual(Pago.objects.get(pk=self.pago(monto_pago=Decimal("33.33")).pk).monto_pago, Decimal("33.33"))
+
+    def test_regla_nada_de_un_pago_se_borra(self):
+        """D-52 («nadie borra un documento de origen») y D-91 punto 7 (sin anulación): la orden y el proveedor de un pago son ``PROTECT``."""
+        from django.db.models import ProtectedError
+
+        self.pago()
+        with self.assertRaises(ProtectedError):
+            self.proveedor.delete()
+        with self.assertRaises(ProtectedError):
+            self.orden.delete()

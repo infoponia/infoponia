@@ -1,0 +1,32 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}Resumen del pago (CMP-REG-PAG paso 6) antes de confirmar. Recibe «detalle», «resumen» (``ResumenDePago``: medio, fecha, movimientos del asiento y ejercicio) y «movimientos». El medio y la fecha viajan ocultos para
+que «Confirmar pago» registre exactamente lo mismo. Pagar no se deshace (D-91 punto 7: un error se corrige con un contraasiento y un asiento manual): el aviso lo dice.{% endcomment %}
+{% block titulo %}Confirmar el pago a {{ detalle.proveedor.nombre_para_mostrar }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Confirmá el pago a {{ detalle.proveedor.nombre_para_mostrar }}</h1></div>
+  <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div>El pago <b>no se anula</b>: si te equivocás de medio o de fecha se corrige con un contraasiento y un asiento manual. Revisá antes de confirmar.</div></div>
+  <div class="stack">
+    {% include "compras/pagos/_detalle.html" %}
+    <div class="card">
+      <dl class="dl two">
+        <dt>Monto</dt><dd><b>{{ detalle.monto|pesos }}</b></dd>
+        <dt>Medio de pago</dt><dd>{{ medio_texto }}</dd>
+        <dt>Fecha del pago</dt><dd>{{ resumen.fecha|date:"d/m/Y" }}</dd>
+        <dt>Asiento contable</dt><dd>{% for codigo, tipo, importe in movimientos %}{% if tipo == "D" %}Debe{% else %}Haber{% endif %} {% if codigo == "2.1.01" %}Proveedores{% elif codigo == "1.1.01" %}Caja{% else %}Banco c/c{% endif %} {{ importe|pesos }}{% if not forloop.last %} · {% endif %}{% endfor %}<span class="sub2">Va al ejercicio que abarca esa fecha ({{ resumen.ejercicio }}).</span></dd>
+        <dt>Correo</dt><dd>{{ detalle.proveedor.nombre_para_mostrar }} recibe por correo el monto, el medio, la fecha y la orden.</dd>
+      </dl>
+    </div>
+  </div>
+  <form method="post" action="{% url 'compras:pago_nuevo' detalle.orden.pk detalle.proveedor.pk %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="medio_pago" value="{{ resumen.medio }}">
+    <input type="hidden" name="fecha" value="{{ resumen.fecha|date:'Y-m-d' }}">
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Registrando…">Confirmar pago de {{ detalle.monto|pesos }}</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Cambiar el medio o la fecha</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

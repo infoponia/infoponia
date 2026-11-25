@@ -74,7 +74,7 @@ class RecorridoDeRolContadorTests(TestCase):
         # Paso 7 · SEG-13 y D-85 punto 6: su marco dice Contador, su menú es solo el Panel y no hay Estadísticas.
         self.assertEqual(inicio.context["rol_visible"], "Contador")
         self.assertEqual(inicio.context["sigla"], "CON")
-        self.assertEqual([e["texto"] for e in inicio.context["menu"]], ["Panel de control", "Contabilidad", "Compras"])  # «Contabilidad» la registra CON-03a; «Compras», CMP-03 (D-87 punto 6: solo las órdenes, en lectura)
+        self.assertEqual([e["texto"] for e in inicio.context["menu"]], ["Panel de control", "Contabilidad", "Pagos a proveedores", "Compras"])  # «Contabilidad» la registra CON-03a; «Pagos a proveedores», CMP-05 (D-87 punto 6); «Compras», CMP-03 (solo las órdenes, en lectura)
         self.assertNotContains(inicio, "Estadísticas")
 
         # Paso 8 · SEG-13: otros módulos le dan 403 por la dirección escrita a mano.

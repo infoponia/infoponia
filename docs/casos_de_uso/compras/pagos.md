@@ -172,7 +172,7 @@ Decisiones: **D-91**, **D-89** (monto), **D-85** (quién paga), **D-86** (asient
   «Lo registra el Contador»); medio obligatorio sin preselección (5a); fecha con `ejercicio_para(fecha, automatico=False)` (5b); bloquear la orden y
   las líneas del proveedor; verificar que el par siga pendiente (8a: si ya hay pago, informarlo); calcular `monto_pago` con
   `precios.valor_recibido` (D-89); crear el `Pago`; **por último** `registrar_asiento_automatico(actor, pago, fecha, [(PROVEEDORES, DEBE, monto),
-  (CAJA si efectivo / BANCO, HABER, monto)])`; auditar `alta_pago` (con el asiento en `datos`). `on_commit`: correo al proveedor (d).
+  (CAJA si efectivo / BANCO, HABER, monto)])`; auditar `registro_pago_proveedor` (con el asiento en `datos`). `on_commit`: correo al proveedor (d).
 - **La baja del proveedor** (`proveedores.impedimentos_de_baja`) suma `pago_pendiente` con `pagos_pendientes(proveedor=...)`.
 - **Bandeja y panel:** sección «Pagos a proveedores pendientes» del panel del Contador y, sin Contador activo, del Gerente
   (`core.registrar_seccion_de_inicio`, con `puede_registrar_asientos`); la entrada del menú «Pagos a proveedores» (D-87 punto 6); el atajo «con
@@ -185,7 +185,7 @@ Decisiones: **D-91**, **D-89** (monto), **D-85** (quién paga), **D-86** (asient
 |---|---|
 | CMP-REG-PAG: cada regla, extensión y postcondición; los tres casos de monto (todo recibido, parte, cerrado con faltante); efectivo → Caja y los demás → Banco c/c | `test_cmp_reg_pag.py` |
 | `pagos_pendientes` y `avisar_si_quedo_para_pagar` (el aviso sale una vez; no a quien hizo la acción; sin responsable no falla) | `test_pagos_pendientes.py` |
-| Proveedores en cero después del pago (con recepciones parciales) y `verificar_invariantes_contables` | `test_valorizacion.py` (lo amplía) |
+| Proveedores en cero después del pago (con recepciones parciales) y `verificar_invariantes_contables` | `test_valorizacion.py` (lo crea CMP-05) |
 | Concurrencia: dos pagos del mismo par (uno solo); pago contra corrección de recepción (cuando exista, CMP-06) | `test_pagos_concurrencia.py` |
 
 ### Pantallas (prototipo: `tabPag` línea 2620, `VIEWS.c_pag` 2625, `panelCon` 2917)

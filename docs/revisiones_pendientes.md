@@ -896,6 +896,7 @@ Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 13. Opcional: sin JavaScript todo el envasado funciona con los botones (cada uno recarga la página); en el celular, la lista y la carga se leen.
 - [ ] 14. Después del merge, en Render: `produccion.0009_reserva_insumo_una_activa` y `core.0042_comercial_envasado` aplicadas en el log.
 
+
 ## COM-05b · Tarea COM-05b (asignar transportista y cancelar la compra-venta)
 
 Los 22 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-05b-asignar-transportista-y-cancelar-compra-venta.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0009: tres columnas y cuatro restricciones en `comercial_compraventa`; `core` 0043: solo `choices`): `python manage.py migrate` antes de empezar.
@@ -922,3 +923,33 @@ Los 22 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 20. Opcional: sin JavaScript, «Ver cómo queda» y el resumen de la cancelación como página funcionan.
 - [ ] 21. Opcional: en un celular las pantallas se leen (son para computadora).
 - [ ] 22. Después del merge, en Render: `comercial.0009_cancelacion_compra_venta` y `core.0043_comercial_cancelacion_compra_venta` aplicadas en el log.
+
+## CMP-05 · Tarea CMP-05 (pago a proveedores)
+
+Los 24 pasos son los de «Verificación a mano» de `docs/tareas/compras/CMP-05-pago-a-proveedores.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **tres migraciones nuevas** (`compras` 0005, `contabilidad` 0007 y `core` 0044; las dos últimas solo `choices`): `python manage.py migrate` antes del paso 1. El recorrido es `compras/tests/test_recorrido_pagos.py`; la concurrencia no se prueba a mano.
+
+- [ ] 1. Contador, campana. *(lo cubre una prueba)*
+- [ ] 2. Contador, Inicio. *(lo cubre una prueba)*
+- [ ] 3. Menú. *(lo cubre una prueba)*
+- [ ] 4. Contador, «Pagos a proveedores». *(lo cubre una prueba)*
+- [ ] 5. Ficha de la orden y lista de órdenes *(lo cubre una prueba)*
+- [ ] 6. Contador, «Registrar pago» de A. *(lo cubre una prueba)*
+- [ ] 7. Sin medio. *(lo cubre una prueba)*
+- [ ] 8. Fecha de mañana. *(lo cubre una prueba)*
+- [ ] 9. Resumen. *(lo cubre una prueba)*
+- [ ] 10. «Cambiar el medio o la fecha». *(lo cubre una prueba)*
+- [ ] 11. «Confirmar pago». *(lo cubre una prueba)*
+- [ ] 12. Libro de gestión *(lo cubre una prueba)*
+- [ ] 13. Correo. *(lo cubre una prueba; el envío real, no)*
+- [ ] 14. Auditoría *(lo cubre una prueba)*
+- [ ] 15. Un segundo pago. *(lo cubre una prueba)*
+- [ ] 16. B para pagar. *(lo cubre una prueba)*
+- [ ] 17. Gerente con el Contador activo: solo lectura. *(lo cubre una prueba)*
+- [ ] 18. Baja del proveedor bloqueada. *(lo cubre una prueba)*
+- [ ] 19. Sin Contador activo, el Gerente paga. *(lo cubre una prueba)*
+- [ ] 20. Ficha de la orden y del proveedor, ya pagados. *(lo cubre una prueba)*
+- [ ] 21. Roles sin acceso. *(lo cubre una prueba)*
+- [ ] 22. Navegador real.
+- [ ] 23. Sin JavaScript
+- [ ] 24. Celular
+

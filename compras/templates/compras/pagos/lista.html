@@ -1,0 +1,59 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% comment %}«Pagos a proveedores» (CMP-REG-PAG paso 2; ``tabPag`` del prototipo). Recibe «pendientes» (``PagoPendiente``: proveedor, orden, listo desde, líneas y monto, del más antiguo al más reciente), «registrados»
+(``Pago``), «puede_registrar» y «hay_contador». «Registrar pago» solo si ``puede_registrar`` (D-30: el Gerente con un Contador activo mira en solo lectura, D-91 punto 6).{% endcomment %}
+{% block titulo %}Pagos a proveedores · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'compras/css/compras.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Pagos a proveedores</h1></div>
+  {% if not puede_registrar %}
+  <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>{% if hay_contador %}Los pagos los registra el Contador: acá los mirás sin poder registrarlos.{% else %}Tu cuenta no registra pagos.{% endif %}</div></div>
+  {% endif %}
+  <p class="muted" style="margin:0 0 14px">Proveedores con toda su mercadería recibida o cerrada con faltante. Se muestran del que espera hace más tiempo al más reciente.</p>
+
+  {% if pendientes %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Proveedor</th><th>Orden</th><th>Listo desde</th><th class="right">Líneas</th><th class="right">Monto a pagar</th><th></th></tr></thead>
+      <tbody>
+      {% for p in pendientes %}
+      <tr>
+        <td>{{ p.proveedor.nombre_para_mostrar }}</td>
+        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' p.orden.pk %}"><b>{{ p.orden }}</b></a></td>
+        <td class="nowrap">{{ p.listo_desde|date:"d/m/Y" }}</td>
+        <td class="right">{{ p.cantidad_de_lineas }}</td>
+        <td class="right nowrap mono"><b>{{ p.monto|pesos }}</b></td>
+        <td class="right nowrap">{% if puede_registrar %}<a class="btn btn-primary btn-sm" href="{% url 'compras:pago_nuevo' p.orden.pk p.proveedor.pk %}">Registrar pago<span class="sr"> a {{ p.proveedor.nombre_para_mostrar }} por {{ p.orden }}</span></a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>No hay proveedores para pagar</b><span>Cuando un proveedor tenga todo recibido o cerrado, aparece acá.</span></div>
+  {% endif %}
+
+  <h2 class="ped-sub" style="margin-top:28px">Pagos registrados</h2>
+  {% if registrados %}
+  <div class="tablewrap">
+    <table class="data-table">
+      <thead><tr><th>Fecha</th><th>Pago</th><th>Proveedor</th><th>Orden</th><th>Medio</th><th class="right">Monto</th></tr></thead>
+      <tbody>
+      {% for p in registrados %}
+      <tr>
+        <td class="nowrap">{{ p.fecha_pago|date:"d/m/Y" }}</td>
+        <td>{{ p }}</td>
+        <td>{{ p.proveedor.nombre_para_mostrar }}</td>
+        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' p.orden.pk %}">{{ p.orden }}</a></td>
+        <td>{{ p.get_medio_pago_display }}</td>
+        <td class="right nowrap mono">{{ p.monto_pago|pesos }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><b>Todavía no se registró ningún pago</b></div>
+  {% endif %}
+</div>
+{% endblock %}

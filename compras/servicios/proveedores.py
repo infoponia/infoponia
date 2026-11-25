@@ -17,13 +17,15 @@ from django.db.models import Case, F, Prefetch, Q, Sum, Value, When
 from django.db.models.functions import Concat, Lower
 from django.shortcuts import get_object_or_404
 from django.http import Http404
+from django.urls import reverse
 
 from compras.errores import ErrorDeCompras
-from compras.models import Cotizacion, DetalleOrdenCompra, OrdenCompra, Pedido, Proveedor
-from compras.servicios import enlaces
+from compras.models import Cotizacion, DetalleOrdenCompra, OrdenCompra, Pago, Pedido, Proveedor
+from compras.servicios import enlaces, pagos
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
 from inventario.models import TipoInsumo
+from inventario.servicios.formato import texto_precio
 from maestros.extensiones import Impedimento  # noqa: F401  (los impedimentos de la baja son de este tipo)
 from maestros.servicios.invernaderos import _actor_sigue_activo, _tiene_contenido
 from maestros.validadores import validar_cuit
@@ -84,7 +86,7 @@ def pedidos_del_proveedor(actor, proveedor):
 
 
 # Una orden en la ficha del proveedor (regla 4 de CMP-CNS-PRV): la orden y el monto de las líneas de este proveedor.
-OrdenDelProveedor = namedtuple("OrdenDelProveedor", "orden monto")
+OrdenDelProveedor = namedtuple("OrdenDelProveedor", "orden monto pago pago_pendiente", defaults=(None, False))
 
 
 def ordenes_del_proveedor(actor, proveedor):
@@ -103,7 +105,10 @@ def ordenes_del_proveedor(actor, proveedor):
         .values("orden_id")
         .annotate(monto=Sum("total_linea"))
     }
-    return [OrdenDelProveedor(o, montos.get(o.pk, Decimal("0.00"))) for o in ordenes]
+    # CMP-05 (regla 4 de CMP-CNS-PRV): el pago de cada orden (o que está pendiente), en dos consultas para todas las filas.
+    pagados = {p.orden_id: p for p in Pago.objects.filter(orden__in=ordenes, proveedor=proveedor)}
+    pendientes = {p.orden.pk for p in pagos.pagos_pendientes(proveedor=proveedor)}
+    return [OrdenDelProveedor(o, montos.get(o.pk, Decimal("0.00")), pagados.get(o.pk), o.pk in pendientes) for o in ordenes]
 
 
 def impedimentos_de_baja(proveedor):
@@ -115,7 +120,7 @@ def impedimentos_de_baja(proveedor):
         .distinct()
         .order_by("id")
     )
-    return [
+    impedimentos = [
         Impedimento(
             "orden_no_terminada",
             f"Tiene la orden de compra {orden} sin terminar ({orden.get_estado_orden_compra_display().lower()}).",
@@ -123,6 +128,17 @@ def impedimentos_de_baja(proveedor):
         )
         for orden in sin_terminar
     ]
+    # CMP-05 (precondición d de CMP-BAJ-PRV, H22, D-91 punto 2): un pago pendiente, con la misma consulta que la bandeja; enlaza a la ficha de la orden.
+    for pendiente in pagos.pagos_pendientes(proveedor=proveedor):
+        impedimentos.append(
+            Impedimento(
+                "pago_pendiente",
+                f"Tiene un pago pendiente de la orden de compra {pendiente.orden} (${texto_precio(pendiente.monto)}).",
+                "Registrá el pago (lo hace el Contador o, si no hay uno activo, el Gerente) y volvé a intentar la baja.",
+                reverse("compras:orden_ficha", args=[pendiente.orden.pk]),
+            )
+        )
+    return impedimentos
 
 
 def _error(mensaje, codigo):

@@ -184,8 +184,8 @@ class FiltrosDeLaConsultaTests(ConsultaBase):
         self.assertEqual(self.ids(self.consultar(atajo="por_aprobar")), [self.orden1.pk])
 
     def test_regla_2_un_atajo_de_otra_tarea_o_desconocido_se_ignora(self):
-        """«Con pago pendiente» lo suma CMP-05; hasta entonces, y un atajo desconocido, se ignoran como un filtro mal formado (no filtran). CMP-04 sumó «por recibir» y «con reclamo sin emitir»."""
-        for atajo in ("con_pago_pendiente", "otro"):
+        """Un atajo desconocido se ignora como un filtro mal formado (no filtra). CMP-04 sumó «por recibir» y «con reclamo sin emitir»; CMP-05, «con pago pendiente» (``test_pagos_vistas.py``)."""
+        for atajo in ("otro",):
             with self.subTest(atajo=atajo):
                 self.assertEqual(len(self.consultar(atajo=atajo)), 3)
 

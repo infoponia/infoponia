@@ -27,6 +27,7 @@ class ComprasConfig(AppConfig):
         registrar_entrada(("Compras", "compras:ordenes", "pkg"), (Usuario.Rol.CONTADOR,))
         # CMP-02a: «Insumos bajo el mínimo» con «Pedir» y «Esperando cotizaciones» en el Inicio del Agrónomo (D-87 punto 5).
         extensiones.registrar_seccion_de_inicio(inicio.seccion_de_inicio)
+        extensiones.registrar_seccion_de_inicio(inicio.seccion_de_pagos)  # CMP-05: el responsable contable
 
         # CMP-02b (D-87 punto 5). Los registrantes de ``maestros`` e ``inventario`` no son idempotentes: se guardan con una guarda, porque ``ready()`` puede correr más de una vez.
         from compras.servicios import registrantes
@@ -72,3 +73,10 @@ class ComprasConfig(AppConfig):
         )
         extensiones_de_maestros.registrar_enlace_de_alerta((recepciones.TIPO_DE_ALERTA,), recepciones.enlaces_de_alertas)
         extensiones_de_contabilidad.registrar_enlace_de_origen("recepcion", recepciones.enlace_de_origen)
+
+        # CMP-05 (D-87 punto 6, D-91): «Pagos a proveedores» junto a «Contabilidad» para el Contador y el Gerente (el Gerente con un Contador activo la ve en solo lectura); como `contabilidad` no puede importar
+        # `compras` (A1), la registra `compras`. El enlace del asiento del pago lleva a la ficha de su orden; y la sección «Pagos a proveedores pendientes» del Inicio del responsable contable.
+        from compras.servicios import pagos
+
+        registrar_entrada(("Pagos a proveedores", "compras:pagos", "cart"), (Usuario.Rol.CONTADOR, Usuario.Rol.GERENTE), despues_de="Contabilidad")
+        extensiones_de_contabilidad.registrar_enlace_de_origen("pago", pagos.enlace_de_origen)
