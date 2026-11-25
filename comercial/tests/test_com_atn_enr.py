@@ -18,7 +18,7 @@ from comercial.models import AlertaComercial, Entrega, IntentoFallido, Suministr
 from comercial.servicios import atencion, concrecion, confirmacion
 from comercial.servicios.concrecion import DatosDeConcrecion
 from comercial.servicios.confirmacion import NO_RECIBI, DatosDeRespuesta
-from comercial.tests.fabricas import entrega_concretable, escenario_comercial, verificar_invariantes_de_entregas, verificar_invariantes_de_solicitudes
+from comercial.tests.fabricas import cobro, entrega_concretable, escenario_comercial, verificar_invariantes_de_entregas, verificar_invariantes_de_solicitudes
 from contabilidad.models import AsientoContable
 from core.models import Contador, Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_cuenta, crear_gerente
@@ -197,15 +197,16 @@ class AtenderTests(Base):
         self.assertEqual(AlertaComercial.objects.get(alerta=x.alerta).descripcion_averiguacion, "Volvió a la sucursal; se registra acá.")
 
     def test_regla_5_si_la_entrega_ya_se_cobro_y_no_llego_primero_se_anula_el_cobro(self):
-        """Regla 5: con un cobro vigente (desde COM-08a) «no llegó» se rechaza con `entrega_cobrada`; «la entrega llegó» no pide anular nada. Hasta COM-08a el cobro se simula."""
+        """Regla 5 (con un cobro REAL desde COM-08a, reemplaza a la prueba con `mock.patch` de `_tiene_cobro_vigente`): con un cobro vigente «no llegó» se rechaza con `entrega_cobrada`; «la entrega llegó» no pide anular nada."""
         x = self.no_reconocida()
-        with mock.patch("comercial.servicios.atencion._tiene_cobro_vigente", return_value=True):
-            for resultado in ("no_llego_perdido", "no_llego_devuelto"):
-                with self.assertRaises(ValidationError) as c:
-                    self.atender(x, resultado)
-                self.assertEqual(codigos(c.exception), ["entrega_cobrada"])
-            self.assertEqual(Alerta.objects.get(pk=x.alerta.pk).estado_alerta, "activa")
-            self.atender(x, "llego", "El cliente se equivocó.")
+        x.entrega.refresh_from_db()  # `entrega_concretable` la devuelve sin concretar: el vencimiento del pago se fija al concretarla
+        cobro([x.entrega])
+        for resultado in ("no_llego_perdido", "no_llego_devuelto"):
+            with self.assertRaises(ValidationError) as c:
+                self.atender(x, resultado)
+            self.assertEqual(codigos(c.exception), ["entrega_cobrada"])
+        self.assertEqual(Alerta.objects.get(pk=x.alerta.pk).estado_alerta, "activa")
+        self.atender(x, "llego", "El cliente se equivocó.")
         self.assertEqual(Alerta.objects.get(pk=x.alerta.pk).estado_alerta, "resuelta")
 
     def test_post_b_no_llego_avisa_al_vendedor_y_al_responsable_contable_sin_el_gerente_que_atiende(self):

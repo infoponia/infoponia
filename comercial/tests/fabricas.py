@@ -795,14 +795,14 @@ def pago_de_compra_venta(venta, medio="efectivo", *, monto=None, estado="vigente
     return PagoCliente.objects.create(cliente=venta.cliente, compra_venta=venta, medio_pago=medio, fecha_pago=timezone.localdate(), monto_pagado=monto, estado_pago=estado)
 
 
-def entrega_de_suministro(escenario, lote_, *, contrato=None, cantidad=10, precio="100.00", plazo_pago=10, indemnizacion_pago="300.00", hace_dias=0, cantidades=None):
+def entrega_de_suministro(escenario, lote_, *, contrato=None, cantidad=10, precio="100.00", plazo_pago=10, indemnizacion_pago="300.00", hace_dias=0, cantidades=None, vendedor=None, cliente_=None):
     """COM-08a: una entrega de suministro ya concretada, armada directo (ver `marcar_concretada`), de ``cantidad`` plantas a ``precio`` (por omisión $ 1.000,00), con ``hace_dias`` de concretada: vence
     ``plazo_pago`` días después de eso. Sin ``contrato`` crea un suministro nuevo del cliente del escenario (con su plazo de pago y su indemnización por día); con ``contrato``, suma otra entrega (otro
-    período del mismo detalle, de modo que dos de un contrato no chocan). Devuelve la `Entrega` refrescada."""
+    período del mismo detalle, de modo que dos de un contrato no chocan). ``vendedor`` y ``cliente_`` arman el contrato nuevo de otro Vendedor o de otro cliente (este necesita una dirección). Devuelve la `Entrega` refrescada."""
     from comercial.models import DetalleEntrega
 
     if contrato is None:
-        contrato = suministro(escenario, plazo_pago=plazo_pago, indemnizacion_pago=indemnizacion_pago)
+        contrato = suministro(escenario, plazo_pago=plazo_pago, indemnizacion_pago=indemnizacion_pago, vendedor=vendedor, cliente_=cliente_)
         detalle_ = detalle_suministro(contrato, escenario.variedad, cantidad=cantidad, primera_en_dias=0, precio=precio)
     else:
         detalle_ = contrato.detalles.order_by("pk").first()

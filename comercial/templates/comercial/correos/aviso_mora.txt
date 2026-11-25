@@ -1,0 +1,15 @@
+{% load comercial %}{% autoescape off %}Hola, {{ cliente }}:
+
+Te avisamos que el pago de la entrega {{ entrega }} de tu suministro {{ contrato }}{% if fecha_entrega %} (entregada el {{ fecha_entrega|date:"d/m/Y" }}){% endif %} está en mora.
+
+Monto a cobrar: {{ monto|pesos }}
+Fecha de vencimiento del pago: {{ vencimiento|date:"d/m/Y" }}
+Desde el día siguiente al vencimiento, el contrato suma {{ por_dia|pesos }} por cada día de atraso en el pago.
+{% if solicitud %}
+Además, estamos revisando tu {{ tipo_de_solicitud }} {{ solicitud }} sobre esta entrega. Si se acepta, el monto a cobrar puede bajar.
+{% endif %}
+Si ya pagaste, avisale a tu vendedor: {{ vendedor.get_full_name }}{% if vendedor.email %} ({{ vendedor.email }}){% endif %}{% if vendedor.telefono %}, teléfono {{ vendedor.telefono }}{% endif %}.
+
+Gracias,
+{{ nombre_organizacion }}
+{% endautoescape %}

@@ -18,7 +18,7 @@ from django.test import override_settings
 from comercial.models import IntentoFallido, Queja, SolicitudRevision, Suministro
 from comercial.servicios import solicitudes
 from comercial.tests.base_solicitudes import BaseDeSolicitudes, HOY, codigos
-from comercial.tests.fabricas import queja_aceptada, transportista_con_vehiculo
+from comercial.tests.fabricas import cobro, queja_aceptada, transportista_con_vehiculo
 from contabilidad.models import AsientoContable
 from core.models import RegistroAuditoria
 from maestros.models import Alerta
@@ -183,10 +183,10 @@ class ComRsvQjaServicioTests(BaseDeSolicitudes):
         self.assertEqual(solicitudes.entregas.monto_a_cobrar([x.entrega.pk])[x.entrega.pk], D("0.00"))
 
     def test_ext_6a_con_la_entrega_pagada_se_reintegra_todo(self):
-        """Extensión 6a: pagada ⇒ todo se reintegra con el medio elegido (`estado_de_pago` simulado, D-69 punto 8)."""
+        """Extensión 6a (con un cobro REAL desde COM-08a, reemplaza a la prueba con `mock.patch` de `estado_de_pago`): pagada ⇒ todo se reintegra con el medio elegido."""
         x = self.armar(tipo="queja")
-        with mock.patch("comercial.servicios.entregas.estado_de_pago", return_value={x.entrega.pk: "pagada"}):
-            self.resolver(x.solicitud, monto="80", medio="transferencia")
+        cobro([x.entrega])
+        self.resolver(x.solicitud, monto="80", medio="transferencia")
         s = self.solicitud(x)
         self.assertEqual((s.monto_descontado, s.monto_reintegrado, s.medio_reintegro), (D("0.00"), D("80.00"), "transferencia"))
 
