@@ -524,7 +524,8 @@ class ProdCnsInvVistaTests(ConGeoref, TestCase):
         respuesta = self.client.get(reverse("core:inicio"))
 
         self.assertContains(respuesta, "Todos los invernaderos activos tienen su personal asignado.")
-        self.assertNotContains(respuesta, "pendiente")
+        # El Inicio del Gerente sin Contador activo tiene ahora la sección «Pagos a proveedores pendientes» (CMP-05): lo que no tiene que aparecer es el contador «N pendientes» del personal.
+        self.assertNotRegex(respuesta.content.decode(), r"\d+ pendientes?\b")
 
     def test_regla_5_con_un_transportista_sin_invernadero_no_dice_que_esta_todo_asignado(self):
         """PROD-CNS-INV regla 5 *(MAE-05)*: el mensaje de todo asignado solo va si no hay ni invernaderos ni transportistas
