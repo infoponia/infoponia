@@ -41,12 +41,12 @@ tuvo. Además, una compra-venta con entregas concretadas **se puede cancelar**: 
 
 ## Límites
 
-- Crea modelos (en `comercial`): en `Anulacion`, `pago` y `cliente_pago_en_fecha` (D-94, punto 11); en `PagoCliente`, `anulacion_corregida`
+- Crea modelos (en `comercial`): en `Anulacion`, `pago_cliente` (en D-94 se llamaba `pago`: choca con `compras.Pago`, error E006) y `cliente_pago_en_fecha` (D-94, punto 11); en `PagoCliente`, `anulacion_corregida`
   (punto 10).
   → revisá docs/disparadores.md: cierra el punto 9 de «Cuando exista Entrega» (lo de COM-08) y lo de COM-08b del punto 11.
 - Migraciones (con el número libre en `main` al abrir el PR; **ninguna de datos**):
   - `comercial/migrations/00NN_anulacion_de_cobro.py`: los campos nuevos y las restricciones de `Anulacion` reescritas («exactamente uno de
-    `solicitud` y `pago`», `pago` ⇔ `cliente_pago_en_fecha`, `solicitud` ⇔ `estado_anulado`);
+    `solicitud` y `pago_cliente`», `pago_cliente` ⇔ `cliente_pago_en_fecha`, `solicitud` ⇔ `estado_anulado`);
   - `core/migrations/00NN_comercial_anulacion_cobro.py`: solo `choices` (acción `anulacion_cobro`).
 - Permitido fuera de `comercial`: `core/models.py` (la acción, `ETIQUETAS`, `VALORES_VISIBLES` y `ACCIONES_DE_NEGOCIO`); al cerrar (M3), los
   textos de `docs/disparadores.md`, `docs/tareas/README.md`, `docs/tareas/ronda_comercial_1.md` y `docs/estado.md`. Dentro de `comercial`:

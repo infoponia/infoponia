@@ -400,7 +400,7 @@ f. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 - **COM-08a:** COM-REG-CBR y COM-VNC-PAG completos, sin el asiento; `LineaPago`, lo nuevo de `PagoCliente` y de `Entrega`; `estado_de_pago`
   con «pagada»; `reevaluar_mora` y la alerta «pago en mora»; el paso 30; la pestaña «Cobranza» («Por cobrar» y «Cobros registrados», sin
   «Anular»); el grupo «Cobranza» del panel de control; lo que completa a otras tareas (abajo).
-- **COM-08b:** COM-ANL-CBR completo, sin el contraasiento; `Anulacion.pago`, `cliente_pago_en_fecha` y `PagoCliente.anulacion_corregida`; la
+- **COM-08b:** COM-ANL-CBR completo, sin el contraasiento; `Anulacion.pago_cliente`, `cliente_pago_en_fecha` y `PagoCliente.anulacion_corregida`; la
   fecha propuesta de 7a en la pantalla de COM-REG-CBR; «Anular» en «Cobros registrados»; la extensión 6a de COM-CNL-CVT (`compra_venta.md`).
 - **Fuera de esta ronda · contabilidad** (D-57): la precondición c y el asiento de COM-REG-CBR; el contraasiento de COM-ANL-CBR. El código
   guarda todo lo que necesitan (medio, lo cobrado y el atraso por entrega) y no crea asientos.
@@ -572,7 +572,7 @@ Resumen: `ResumenDePaso(procesados=entregas revisadas, creados=alertas creadas, 
 - **Paso 5, la transacción** (`bloqueos.md`, «Cobranza»): las cuentas (el Gerente y los Vendedores) → los invernaderos de origen de las
   entregas del cobro → las entregas → el **pago** y sus líneas. La relectura: el pago sigue vigente (5a: `cobro_ya_anulado`, termina) y la
   huella coincide (`cambio_simultaneo`). Con todo verificado:
-  1. la `Anulacion`: `fecha_anulacion = hoy`, `motivo_anulacion`, `usuario`, `pago`, `cliente_pago_en_fecha` (b);
+  1. la `Anulacion`: `fecha_anulacion = hoy`, `motivo_anulacion`, `usuario`, `pago_cliente`, `cliente_pago_en_fecha` (b);
   2. el pago a `anulado` y sus líneas a `vigente = False` (a; las líneas no se borran: MD-136);
   3. por cada entrega, `reevaluar_mora(entrega, hoy, avisar_vendedor=False)` (d, e);
   4. el aviso a cada Vendedor activo de los contratos (paso 6): «COB-0032 anulado», «El Gerente anuló el cobro de Pérez SA ($ 47.200,00).
