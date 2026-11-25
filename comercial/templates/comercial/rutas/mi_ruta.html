@@ -1,0 +1,63 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Mi ruta» del Transportista (COM-06a; `VIEWS.ruta` del prototipo, la definición de la línea 1732): el vehículo con su peso y capacidad, las entregas de hoy (las demoradas primero, después por localidad),
+las próximas y, según la situación, «Iniciar ruta» o «Finalizar ruta». «Concretar» e «Intento fallido» solo aparecen con la ruta iniciada. En modo campo (celular, sin menú lateral). Recibe «datos» (`RutaDelDia`).{% endcomment %}
+{% block titulo %}Mi ruta · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Mi ruta</h1>
+    <div class="sub">{% if datos.cantidad == 1 %}1 entrega para hoy{% else %}{{ datos.cantidad }} entregas para hoy{% endif %}</div></div>
+
+  {% if datos.situacion == "sin_vehiculo" %}
+  <div class="alert alert-warn" role="alert"><div>No tenés un vehículo activo para hacer la ruta. Comunicate con el Gerente, que asigna los vehículos.</div></div>
+  {% else %}
+  <div class="card">
+    <dl class="dl">
+      <dt>Vehículo</dt><dd>{{ datos.vehiculo.get_tipo_vehiculo_display }} <span class="mono">{{ datos.vehiculo.patente }}</span>
+        {% if datos.situacion == "en_ruta" %}<span class="status-badge status-info">En ruta</span>{% else %}<span class="status-badge status-neutral">En el invernadero</span>{% endif %}</dd>
+      <dt>Carga de la ruta</dt><dd class="mono">{{ datos.peso|floatformat:2 }} kg de {{ datos.capacidad|floatformat:0 }} kg</dd>
+      <dt>Localidades</dt><dd class="mono">{{ datos.localidades }}</dd>
+    </dl>
+  </div>
+  {% if datos.situacion == "ruta_vencida" %}
+  <div class="alert alert-info" role="status" style="margin-top:12px"><div>Tu ruta del {{ datos.fecha_ruta_vencida|date:"d/m/Y" }} ya no está vigente: una ruta dura como máximo el día en que se inicia. Iniciá la de hoy.</div></div>
+  {% endif %}
+  {% endif %}
+
+  <h2 style="margin:18px 0 8px">Hoy</h2>
+  <p class="muted" style="margin:0 0 10px">Primero las atrasadas; después, agrupadas por localidad.</p>
+  {% for f in datos.entregas %}
+  <div class="ocard {% if f.dias_de_retraso %}late{% else %}today{% endif %}">
+    <div class="b">
+      <div class="ti"><span class="ico">{% icono "box" 18 %}</span>
+        <div><b class="mono">{{ f.codigo }}</b> <span class="status-badge {% if f.con_envasado %}status-ok{% else %}status-warn{% endif %}">{% if f.con_envasado %}Con envasado{% else %}Sin envasado{% endif %}</span>
+          <div>{{ f.cliente }}</div></div></div>
+      <div class="muted">{{ f.destino }}</div>
+      <div>{{ f.contenido }} · <span class="mono">{{ f.peso|floatformat:2 }} kg</span></div>
+      {% if f.dias_de_retraso %}<div class="when danger-t">Atrasada · hace {{ f.dias_de_retraso }} {% if f.dias_de_retraso == 1 %}día{% else %}días{% endif %}</div>{% endif %}
+      {% if not f.con_envasado %}<div class="muted">Sale sin envases reservados: al concretarla, indicá los que uses.</div>{% endif %}
+    </div>
+    {% if datos.situacion == "en_ruta" %}
+    <a class="btn btn-primary" href="{% url 'comercial:entrega_concretar' f.entrega.pk %}">Concretar<span class="sr"> la entrega {{ f.codigo }}</span></a>
+    <a class="btn btn-ghost" href="{% url 'comercial:entrega_intento_fallido' f.entrega.pk %}">Intento fallido<span class="sr"> de la entrega {{ f.codigo }}</span></a>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="empty"><b>No tenés entregas para hoy</b><span>{% if datos.proxima_fecha %}La próxima es el {{ datos.proxima_fecha|date:"d/m/Y" }}.{% else %}Cuando te asignen una, la vas a ver acá.{% endif %}</span></div>
+  {% endfor %}
+
+  {% if datos.proximas %}
+  <h2 style="margin:18px 0 8px">Próximas</h2>
+  <p class="muted" style="margin:0 0 10px">Para organizarte. Se concretan el día programado, con la ruta iniciada.</p>
+  {% for f in datos.proximas %}
+  <div class="ocard"><div class="b"><div><b class="mono">{{ f.codigo }}</b> · {{ f.cliente }}</div><div class="muted">{{ f.destino }}</div><div class="when">{{ f.fecha|date:"d/m/Y" }} · {{ f.contenido }}</div></div></div>
+  {% endfor %}
+  {% endif %}
+
+  {% if datos.situacion == "en_ruta" %}
+  <a class="btn btn-ghost btn-block" href="{% url 'comercial:ruta_finalizar' %}" style="margin-top:12px">Finalizar ruta</a>
+  {% elif datos.situacion != "sin_vehiculo" and datos.cantidad %}
+  <a class="btn btn-primary btn-block" href="{% url 'comercial:ruta_iniciar' %}" style="margin-top:12px">Iniciar ruta</a>
+  {% endif %}
+</div>
+{% endblock %}

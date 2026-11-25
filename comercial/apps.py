@@ -13,7 +13,7 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import camara, enlaces, entregas, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import camara, concrecion, enlaces, entregas, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -94,7 +94,20 @@ class ComercialConfig(AppConfig):
                 origen=Origen.MERMA,
             )
         )
-        extensiones_de_maestros.registrar_enlace_de_alerta((camara.TIPO_POR_VENCER, camara.TIPO_MERMA_RESERVADA), camara.enlaces_de_alertas_de_camara)
+        # COM-06a (PROD-VNC-CAM 3b): «partida vencida en una entrega en curso» para el Gerente (crítica), con el mismo enlace a la pestaña «Cámara».
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=camara.TIPO_EN_ENTREGA_EN_CURSO,
+                nombre="Partida vencida en una entrega en curso",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.CRITICA,
+                clase=Clase.ESTADO,
+                origen=Origen.STOCK_COSECHADO,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta(
+            (camara.TIPO_POR_VENCER, camara.TIPO_MERMA_RESERVADA, camara.TIPO_EN_ENTREGA_EN_CURSO), camara.enlaces_de_alertas_de_camara
+        )
         registrar_paso_diario("vencer_partidas_en_camara", "Vencer partidas en cámara", 20, camara.vencer_partidas_en_camara)
         registrar_paso_diario("reasignar_camara", "Reasignar cámara", 25, camara.reasignar_camara)
         # COM-04c (D-65 punto 7): el paso 27 pasa a «vencido» el enlace de decisión sin respuesta y avisa al Vendedor una sola vez.
@@ -123,3 +136,20 @@ class ComercialConfig(AppConfig):
         extensiones_de_core.registrar_efecto_de_baja_de_cuenta(entregas.efecto_de_baja_de_cuenta)
         # COM-05a2: el grupo «Entregas» del Inicio del Gerente y del Vendedor (después de la sección de cosechas del Agrónomo; `registrar_seccion_de_inicio` es idempotente).
         extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_entregas)
+        # COM-06a (D-68): la discrepancia de una entrega de suministro (alerta de evento para el Gerente, con su enlace a la ficha del suministro) y lo que protege a una ruta iniciada: la baja de la
+        # cuenta de un Transportista en ruta (los demás registrantes de «Transportista en ruta» están en `entregas.impedimentos_de_transportista`).
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=concrecion.TIPO_DISCREPANCIA,
+                nombre="Discrepancia de entrega",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.EVENTO,
+                origen=Origen.SOLICITUD_REVISION,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta((concrecion.TIPO_DISCREPANCIA,), concrecion.enlaces_de_alertas)
+        extensiones_de_core.registrar_impedimento_de_baja_de_cuenta(entregas.impedimentos_de_baja_de_cuenta)
+        # COM-06a: la entrada «Mi ruta» (solo para el Transportista; es de campo, sin menú lateral, así que su acceso real es la sección «Ruta de hoy» de su Panel de control).
+        registrar_entrada(("Mi ruta", "comercial:ruta", "truck"), (Usuario.Rol.TRANSPORTISTA,))
+        extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_ruta)

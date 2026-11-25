@@ -16,6 +16,7 @@ acción (COM-05b, COM-ASG-TRP). «Concretar retiro» es de COM-06. Recibe «dato
         <td class="right nowrap"><a class="rowlink" href="{{ f.url_del_contrato }}">Ver contrato<span class="sr"> de la entrega {{ f.codigo }}</span></a>
           {% if f.accion == "asignar" %}<a class="rowlink" href="{% url 'comercial:entrega_asignar' f.entrega.pk %}">Asignar transportista<span class="sr"> a la entrega {{ f.codigo }}</span></a>
           {% elif f.accion == "cambiar" %}<a class="rowlink" href="{% url 'comercial:entrega_asignar' f.entrega.pk %}">Cambiar transportista<span class="sr"> de la entrega {{ f.codigo }}</span></a>
+          {% elif f.accion == "concretar_retiro" %}<a class="rowlink" href="{% url 'comercial:entrega_concretar' f.entrega.pk %}">Concretar retiro<span class="sr"> de la entrega {{ f.codigo }}</span></a>
           {% elif f.accion == "en_curso" %}<span class="muted">En curso</span>{% endif %}</td>
       </tr>
     {% empty %}

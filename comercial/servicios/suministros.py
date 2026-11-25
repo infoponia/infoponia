@@ -34,6 +34,7 @@ from comercial.models import (
     DetalleReserva,
     DetalleSuministro,
     DireccionCliente,
+    DiscrepanciaEntrega,
     Entrega,
     Suministro,
 )
@@ -900,7 +901,7 @@ POR_PAGINA = 50
 POR_PAGINA_DEL_CALENDARIO = 100
 DIAS_ATRAS_DEL_CALENDARIO = 30
 DIAS_ADELANTE_DEL_CALENDARIO = 28
-TEXTOS_DE_SITUACION = {"pasado": "Pasado", "reservado": "Reservado", "fuera_de_la_ventana": "Fuera de la ventana", "entrega_planificada": "Entrega planificada"}
+TEXTOS_DE_SITUACION = {"pasado": "Pasado", "reservado": "Reservado", "fuera_de_la_ventana": "Fuera de la ventana", "entrega_planificada": "Entrega planificada", "entregado": "Entregado"}
 
 
 @dataclass
@@ -1001,6 +1002,7 @@ class FichaDeSuministro:
     aviso_de_rescision: str | None = None  # COM-03b: la rescisión acordada o el contrato rescindido
     entregas: list = field(default_factory=list)  # COM-05a2 (regla 7): las entregas del contrato (`entregas.entregas_del_contrato`)
     hay_historial: bool = False  # COM-03b: alguna cadena «reemplaza a» con más de una versión («Ver historial de cambios»)
+    discrepancias: list = field(default_factory=list)  # COM-06a (regla 8 de COM-CNS-SUM): las discrepancias de entrega del contrato
 
 
 def suministro_del_alcance(actor, suministro_id):
@@ -1047,11 +1049,14 @@ def _filas_de_calendario(fechas, hoy, ventana):
     )
     # COM-05a2 (regla 6): un período con línea en una entrega «a realizar» dice «Entrega planificada», sea cual sea su fecha. Dos consultas para toda la página.
     con_entrega = entregas.periodos_con_entrega([(detalle.pk, fecha) for fecha, detalle, _ in fechas])
+    entregados = entregas.periodos_entregados([(detalle.pk, fecha) for fecha, detalle, _ in fechas])  # COM-06a (regla 6): «Entregado», con la entrega concretada
     filas = []
     for fecha, detalle, reemplazado in fechas:
         faltan = 0
         if (detalle.pk, fecha) in con_entrega:
             situacion, texto = "entrega_planificada", TEXTOS_DE_SITUACION["entrega_planificada"]
+        elif (detalle.pk, fecha) in entregados:
+            situacion, texto = "entregado", TEXTOS_DE_SITUACION["entregado"]
         elif fecha < hoy:
             situacion, texto = "pasado", TEXTOS_DE_SITUACION["pasado"]
         elif fecha <= ventana:
@@ -1227,6 +1232,9 @@ def ficha_de_suministro(actor, suministro_id):
         aviso_de_rescision=_aviso_de_rescision(suministro),
         hay_historial=hay_historial,
         entregas=entregas.entregas_del_contrato(suministro.pk, hoy),
+        discrepancias=list(
+            DiscrepanciaEntrega.objects.filter(entrega__contrato_entrega_id=suministro.pk).select_related("entrega").prefetch_related("lineas").order_by("numero")
+        ),
     )
 
 

@@ -1,0 +1,26 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Intento fallido» (extensión 4a de COM-CNC-ENT y regla 1 de COM-FIN-RUT; `MODALS.fallo`): el motivo de la lista (obligatorio) y una descripción opcional. La entrega pasa a mañana sin transportista y se avisa al
+Vendedor y al cliente. Sin JavaScript, una página. Recibe «fila» (`FilaDeRuta`), «motivos», «motivo», «descripcion» y, si hubo, «errores».{% endcomment %}
+{% block titulo %}Intento fallido {{ fila.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "chev" 14 %} Mi ruta</a>
+  <div class="page-h"><h1>Intento fallido · <span class="mono">{{ fila.codigo }}</span></h1><div class="sub">{{ fila.cliente }} · {{ fila.destino }}</div></div>
+  <p class="muted">La entrega se reprograma para mañana y queda sin transportista. Los envases vuelven con el producto. Se avisará al Vendedor y al cliente.</p>
+  <form method="post" action="{% url 'comercial:entrega_intento_fallido' fila.entrega.pk %}" novalidate>
+    {% csrf_token %}
+    <fieldset class="fld"><legend class="lbl">Motivo</legend>
+      {% for valor, texto in motivos %}
+      <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="radio" name="motivo" value="{{ valor }}"{% if motivo == valor %} checked{% endif %}> {{ texto }}</label>
+      {% endfor %}
+      {% for m in errores.motivo %}<div class="err" role="alert">{{ m }}</div>{% endfor %}
+    </fieldset>
+    <div class="fld"><label for="descripcion">Descripción <span class="muted">(opcional, hasta 300 caracteres)</span></label>
+      <textarea id="descripcion" name="descripcion" class="field-input{% if errores.descripcion %} bad{% endif %}" maxlength="400">{{ descripcion }}</textarea>
+      {% for m in errores.descripcion %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+    {% for m in generales %}<div class="err" role="alert">{{ m }}</div>{% endfor %}
+    <div class="acts-fila"><button class="btn btn-primary" type="submit" data-enviando="Registrando…">Registrar intento fallido</button><a class="btn btn-ghost" href="{% url 'comercial:ruta' %}">Volver</a></div>
+  </form>
+</div>
+{% endblock %}

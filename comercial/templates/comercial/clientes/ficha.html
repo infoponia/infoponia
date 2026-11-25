@@ -68,6 +68,26 @@ del alta con los datos guardados.{% endcomment %}
       {% endif %}
     </div>
 
+    {% if ficha.entregas_sin_cobrar %}
+    <div class="card seg">
+      <div class="card-h"><h3>Entregas sin cobrar</h3></div>
+      <div class="card-b flush"><table class="data-table">
+        <thead><tr><th>Entrega</th><th class="right">Monto a cobrar</th><th>Vencimiento</th><th>Pago</th></tr></thead>
+        <tbody>{% for f in ficha.entregas_sin_cobrar %}
+          <tr><td class="mono nowrap"><a href="{% url 'comercial:suministro' f.contrato_id %}">{{ f.codigo }}</a><span class="sub2">{{ f.contrato }}</span></td><td class="right mono">{{ f.monto|pesos }}</td><td class="nowrap">{{ f.vencimiento|date:"d/m/Y" }}</td>
+            <td><span class="status-badge {% if f.estado_pago == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{{ f.texto_del_estado }}</span></td></tr>
+        {% endfor %}</tbody></table></div>
+    </div>
+    {% endif %}
+    {% if ficha.discrepancias %}
+    <div class="card seg">
+      <div class="card-h"><h3>Discrepancias pendientes</h3></div>
+      <div class="card-b flush"><table class="data-table">
+        <thead><tr><th>Discrepancia</th><th>Entrega</th><th>Desde</th></tr></thead>
+        <tbody>{% for d in ficha.discrepancias %}<tr><td class="mono"><a href="{% url 'comercial:suministro' d.contrato_id %}">{{ d.codigo }}</a></td><td class="mono">{{ d.entrega }}</td><td>{{ d.fecha|date:"d/m/Y" }}</td></tr>{% endfor %}</tbody></table></div>
+    </div>
+    {% endif %}
+
     <div class="card seg">
       <div class="card-h"><h3>{% icono "pin" 14 %} Direcciones</h3></div>
       {% if ficha.direcciones_activas or ficha.direcciones_inactivas %}

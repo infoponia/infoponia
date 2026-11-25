@@ -19,6 +19,7 @@ from comercial.tests.fabricas import (
     direccion_de_cliente,
     entrega,
     escenario_comercial,
+    iniciar_ruta_de,
     partida_cosechada,
     reserva,
     reserva_lista,
@@ -219,7 +220,8 @@ class CandidatosTests(Base):
 
     def test_motivo_3_en_ruta_solo_si_la_fecha_es_hoy(self):
         """Motivo «En ruta»: `fecha == hoy` y el vehículo está en ruta; para otro día, no."""
-        t = transportista_con_vehiculo(self.e.invernadero, en_ruta=True)
+        t = transportista_con_vehiculo(self.e.invernadero)
+        iniciar_ruta_de(t, self.e, self.lote)  # COM-06a: la ruta se inicia de verdad (antes, la fábrica la dejaba en ruta)
         self.assertEqual(self.de(self.candidatos(fecha=HOY), t).motivo, "En ruta")
         self.assertIsNone(self.de(self.candidatos(fecha=HOY + timedelta(days=1)), t).motivo)
 

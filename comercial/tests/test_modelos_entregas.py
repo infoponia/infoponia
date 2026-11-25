@@ -160,8 +160,10 @@ class RestriccionesDeLineaDeEntregaTests(Base):
         linea = self.linea()
         self.assertIsNone(linea.cant_entregada)
         self.assertIsNone(linea.monto_pagar)
-        viola(self, lambda: DetalleEntrega.objects.filter(pk=linea.pk).update(cant_entregada=-1))
-        DetalleEntrega.objects.filter(pk=linea.pk).update(cant_entregada=0)
+        # COM-06a: la concreción de una línea se carga entera (`linea_entrega_concrecion_completa`): se prueban los cuatro campos juntos.
+        resto = dict(cant_perdida=0, cant_devuelta=0, monto_pagar=0)
+        viola(self, lambda: DetalleEntrega.objects.filter(pk=linea.pk).update(cant_entregada=-1, **resto))
+        DetalleEntrega.objects.filter(pk=linea.pk).update(cant_entregada=0, **resto)
 
     def test_r150_una_linea_se_asocia_a_varias_reservas_y_una_reserva_a_varias_lineas(self):
         """R150: `reservas` es una M2M; una reserva puede estar en las líneas de entregas canceladas (historial, regla 4 de 8.8)."""

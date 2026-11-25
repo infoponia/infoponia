@@ -8,7 +8,7 @@
       <td>{{ f.variedad }}{% if f.condiciones_anteriores %}<span class="sub2">condiciones anteriores</span>{% endif %}</td>
       <td class="right mono">{{ f.cantidad }}</td>
       <td class="right nowrap mono">{{ f.precio|pesos }}</td>
-      <td><span class="status-badge {% if f.situacion == 'reservado' or f.situacion == 'entrega_planificada' %}status-ok{% elif f.situacion == 'sin_cobertura' %}status-warn{% elif f.situacion == 'pasado' %}status-neutral{% else %}status-info{% endif %}">{{ f.texto }}</span></td>
+      <td><span class="status-badge {% if f.situacion == 'reservado' or f.situacion == 'entrega_planificada' or f.situacion == 'entregado' %}status-ok{% elif f.situacion == 'sin_cobertura' %}status-warn{% elif f.situacion == 'pasado' %}status-neutral{% else %}status-info{% endif %}">{{ f.texto }}</span></td>
     </tr>
   {% empty %}
     <tr><td colspan="5" class="muted" style="text-align:center;padding:20px">No hay períodos en este tramo.</td></tr>

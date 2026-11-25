@@ -837,6 +837,11 @@ class RegistroAuditoria(models.Model):
         REGISTRO_PAGO_PROVEEDOR = "registro_pago_proveedor", "Registro de pago a proveedor"
         PLANIFICACION_ENVASADO = "planificacion_envasado", "Planificación de envasado"  # COM-05a2 (PROD-PNF-ENV)
         CANCELACION_COMPRA_VENTA = "cancelacion_compra_venta", "Cancelación de compra-venta"  # COM-05b (COM-CNL-CVT)
+        # COM-06a (D-68): la ruta y la concreción de las entregas. Un registro por caso de uso (D-36).
+        INICIO_RUTA = "inicio_ruta", "Inicio de ruta"  # COM-INI-RUT
+        FIN_RUTA = "fin_ruta", "Fin de ruta"  # COM-FIN-RUT
+        CONCRECION_ENTREGA = "concrecion_entrega", "Concreción de entrega"  # COM-CNC-ENT
+        INTENTO_FALLIDO_ENTREGA = "intento_fallido_entrega", "Intento fallido de entrega"  # COM-CNC-ENT 4a y COM-FIN-RUT
         REGISTRO_LOTE_EXISTENTE = "registro_lote_existente", "Registro de lote existente"  # PRD-05 (PROD-REG-LTE, D-92 punto 12)
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
@@ -1185,6 +1190,27 @@ class RegistroAuditoria(models.Model):
         "fecha_cancelacion_venta": "Fecha de la cancelación",
         "detalles_cancelados": "Detalles cancelados",
         "reservas_de_envases_canceladas": "Reservas de envases canceladas",
+        # COM-06a (D-68): la ruta y la concreción de una entrega. Claves de `cambios` («en_ruta», «fecha_inicio_ruta», las cantidades y los montos de cada línea y de la entrega) y de
+        # `datos` («entregas_de_la_ruta», «intentos_fallidos», las mermas, los consumos, el pago, la discrepancia y la utilizada declarada de cada envase).
+        "estado_orden": "Estado de la entrega",
+        "en_ruta": "En ruta",
+        "fecha_inicio_ruta": "Inicio de la ruta",
+        "entregas_de_la_ruta": "Entregas de la ruta",
+        "intentos_fallidos": "Intentos fallidos",
+        "intento_fallido": "Intento fallido",
+        "motivo": "Motivo",
+        "cant_entregada": "Cantidad entregada",
+        "cant_perdida": "Cantidad perdida",
+        "cant_devuelta": "Cantidad devuelta",
+        "monto_pagar": "Monto a pagar",
+        "monto_total_entrega": "Monto total de la entrega",
+        "fecha_vencimiento_pago": "Vencimiento del pago",
+        "mermas_creadas": "Mermas creadas",
+        "consumos_creados": "Consumos creados",
+        "pago": "Pago del cliente",
+        # «medio_pago» ya existe (CMP-05).
+        "discrepancia": "Discrepancia de entrega",
+        "envases_declarados": "Envases declarados (utilizada de cada uno)",
         # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
         "fecha_inicio_ejercicio": "Inicio del ejercicio",
         "fecha_cierre_ejercicio": "Cierre previsto del ejercicio",
@@ -1340,6 +1366,9 @@ class RegistroAuditoria(models.Model):
         "motivo_rescision": {"a_pedido_del_cliente": "A pedido del cliente", "a_pedido_de_la_empresa": "A pedido de la empresa", "otro": "Otro"},
         # COM-05b: el motivo de la cancelación de una compra-venta (`core` no importa `comercial`).
         "motivo_cancelacion_venta": {"cliente_desistio": "El cliente desistió", "cliente_no_retiro": "El cliente no retiró", "otro": "Otro"},
+        # COM-06a: el motivo de un intento fallido (`core` no importa `comercial`). «medio_pago» ya existe (CMP-05, más abajo).
+        "estado_orden": {"a_realizar": "A realizar", "concretada": "Concretada", "cancelada": "Cancelada"},
+        "motivo": {"cliente_ausente": "Cliente ausente", "domicilio_cerrado": "Domicilio cerrado", "direccion_incorrecta": "Dirección incorrecta", "otro": "Otro"},
         "estado_stock_cosechado": {"disponible": "Disponible", "agotado": "Agotada", "vencido": "Vencida"},  # COM-04b
         "estado_reserva": {
             "activa": "Activa",
@@ -1608,6 +1637,10 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.REGISTRO_PAGO_PROVEEDOR,
         RegistroAuditoria.Accion.PLANIFICACION_ENVASADO,
         RegistroAuditoria.Accion.CANCELACION_COMPRA_VENTA,
+        RegistroAuditoria.Accion.INICIO_RUTA,
+        RegistroAuditoria.Accion.FIN_RUTA,
+        RegistroAuditoria.Accion.CONCRECION_ENTREGA,
+        RegistroAuditoria.Accion.INTENTO_FALLIDO_ENTREGA,
         RegistroAuditoria.Accion.REGISTRO_LOTE_EXISTENTE,  # PRD-05
     }
 )

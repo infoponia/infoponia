@@ -239,3 +239,19 @@ def seccion_de_entregas(usuario):
         "url_sin_transportista": entregas.url_de_entregas(transportista="_"),
     }
     return SeccionDeInicio("comercial/entregas/_seccion_de_inicio.html", {"entregas": datos})
+
+
+def seccion_de_ruta(usuario):
+    """`registrar_seccion_de_inicio` (COM-06a): la sección «Ruta de hoy» del Panel de control del Transportista: su situación (sin vehículo, lista o en ruta), cuántas entregas lleva y el peso, con el
+    acceso a «Mi ruta». `None` para los demás roles. Hoy el Transportista no tiene ninguna otra sección ni entrada de menú (es de campo, sin menú lateral): no se duplica nada."""
+    from comercial.servicios import rutas
+    from core.extensiones import SeccionDeInicio
+    from core.models import Usuario, rol_de
+
+    if not getattr(usuario, "is_active", False) or rol_de(usuario) != Usuario.Rol.TRANSPORTISTA:
+        return None
+    datos = rutas.ruta_del_dia(usuario)
+    return SeccionDeInicio(
+        "comercial/rutas/_seccion_de_inicio.html",
+        {"ruta": {"situacion": datos.situacion, "cantidad": datos.cantidad, "peso": datos.peso, "proxima_fecha": datos.proxima_fecha, "pendientes": datos.cantidad}},
+    )

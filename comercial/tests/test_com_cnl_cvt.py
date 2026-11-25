@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from comercial.models import CompraVenta, DetalleVenta, Entrega, EnlaceCliente, ReservaStock
-from comercial.servicios import compra_ventas, cosechas, entregas
+from comercial.servicios import compra_ventas, concrecion, cosechas, entregas
 from comercial.servicios.cosechas import DatosDeConcrecion
 from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
 from comercial.tests.fabricas import (
@@ -24,6 +24,8 @@ from comercial.tests.fabricas import (
     detalle,
     entrega,
     escenario_comercial,
+    iniciar_ruta_de,
+    marcar_concretada,
     reserva_lista,
     segundo_invernadero,
     transportista_con_vehiculo,
@@ -375,7 +377,7 @@ class ComCnlCvtServicioTests(Base):
     def test_ext_4a_con_una_entrega_en_curso_no_se_puede_cancelar(self):
         """Extensión 4a: con el vehículo del transportista en ruta y fecha de hoy o anterior, la pantalla avisa y no deja seguir; el servicio rechaza con `entrega_en_curso` y no cambia nada."""
         v = self.todo(dias=0)
-        vehiculo_en_ruta(self.t)
+        iniciar_ruta_de(self.t)  # COM-06a: la ruta se inicia de verdad (antes, `vehiculo_en_ruta`)
         datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, v.venta.pk)
         self.assertEqual([e.codigo for e in datos.en_curso], [v.entrega.codigo])
         self.assertIn("No se puede cancelar mientras el producto está en viaje", datos.bloqueo)
@@ -388,7 +390,7 @@ class ComCnlCvtServicioTests(Base):
     def test_ext_6a_con_una_entrega_concretada_se_rechaza_con_venta_con_entregas_concretadas(self):
         """Extensión 6a (llega con COM-06 y COM-08b): antes de COM-06 ninguna entrega se concreta; si una prueba la arma, el servicio rechaza `venta_con_entregas_concretadas`."""
         v = self.todo()
-        Entrega.objects.filter(pk=v.entrega.pk).update(estado_orden="concretada", fecha_resolucion_orden=HOY)
+        marcar_concretada(v.entrega)  # COM-06a: una concretada con sus cantidades y su monto (antes, solo el estado)
         datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, v.venta.pk)
         self.assertEqual([e.codigo for e in datos.concretadas], [v.entrega.codigo])
         with self.assertRaises(ValidationError) as c:
@@ -634,3 +636,43 @@ class ComCnlCvtVistaTests(Base):
             self.assertIn(esperado, html)
         self.assertNotIn("Monto estimado", html)
         self.assertNotIn("El pago se realiza al recibir", html)
+
+
+class ComCnlCvtConEntregaConcretadaRealTests(Base):
+    """COM-06a (`rutas.md`, «Lo que completa a otras tareas», fila COM-05b): las pruebas de 6a y de D-67 punto 4 con una entrega **concretada de verdad** (con `concrecion.concretar_entrega`), no armada con la fábrica."""
+
+    def venta_con_una_entrega_concretada(self):
+        """Una venta con dos detalles (dos variedades) y dos entregas de hoy del mismo transportista, con la ruta iniciada; se concreta la primera (no es la última de la venta: no se cobra).
+        Devuelve `(venta, detalle_entregado, detalle_pendiente, entrega_concretada, entrega_pendiente)`."""
+        otra, _ = variedad_con_stock(self.e, "Otra variedad")
+        lote_a, lote_b = lote_maduro(self.e, 500), lote_maduro(self.e, 500, variedad=otra)
+        venta = compra_venta(self.e, dias=0)
+        entregado, pendiente = detalle(venta, self.e.variedad, 50), detalle(venta, otra, 30)
+        e1 = entrega(venta, [reserva_lista(entregado, lote_a, 50)], transportista=self.t, fecha=HOY)
+        e2 = entrega(venta, [reserva_lista(pendiente, lote_b, 30)], transportista=self.t, fecha=HOY)
+        iniciar_ruta_de(self.t)
+        datos = concrecion.DatosDeConcrecion(sin_envases=True)
+        resumen = concrecion.resumen_de_concrecion(self.t, e1.pk, datos)
+        concrecion.concretar_entrega(self.t, e1.pk, datos, resumen.huella)
+        return venta, entregado, pendiente, e1, e2
+
+    def test_ext_6a_con_una_entrega_concretada_real_el_servicio_sigue_rechazando_hasta_la_cobranza(self):
+        """Extensión 6a (COM-08b la hace posible): con una entrega concretada de verdad, `datos_de_cancelacion` la lista, `cancelar_compra_venta` rechaza con `venta_con_entregas_concretadas` y no cambia nada (ni la venta, ni los detalles, ni la entrega pendiente)."""
+        venta, entregado, pendiente, e1, e2 = self.venta_con_una_entrega_concretada()
+        datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk)
+        self.assertEqual([e.codigo for e in datos.concretadas], [e1.codigo])
+        with self.assertRaises(ValidationError) as c:
+            compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("otro"), datos.huella)
+        self.assertEqual(codigos(c.exception), ["venta_con_entregas_concretadas"])
+        self.assertEqual(CompraVenta.objects.get(pk=venta.pk).estado_venta, "abierta")
+        self.assertEqual(self.estado_de(Entrega, e2).estado_orden, "a_realizar")
+        self.assertEqual(self.estado_de(DetalleVenta, entregado).estado_detalle_venta, "confirmado")
+
+    def test_d67_4_los_detalles_a_cancelar_son_los_que_no_tienen_linea_en_una_entrega_concretada(self):
+        """D-67 punto 4 con datos reales: el detalle confirmado y ya entregado (con línea en una entrega concretada) no se cancela; el que sigue sin entregar sí."""
+        venta, entregado, pendiente, e1, e2 = self.venta_con_una_entrega_concretada()
+        self.assertEqual(self.estado_de(DetalleVenta, entregado).estado_detalle_venta, "confirmado")
+        alcance = compra_ventas._alcance_de_cancelacion(CompraVenta.objects.get(pk=venta.pk), HOY)
+        self.assertEqual([d.pk for d in alcance.detalles], [pendiente.pk])
+        self.assertEqual([e.pk for e in alcance.concretadas], [e1.pk])
+        self.assertEqual([e.pk for e in alcance.a_realizar], [e2.pk])

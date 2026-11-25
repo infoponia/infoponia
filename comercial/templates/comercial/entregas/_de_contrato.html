@@ -1,4 +1,5 @@
 {% comment %}Las entregas de un contrato en su ficha (COM-CNS-CVT regla 4 y COM-CNS-SUM regla 7, COM-05a2): invernadero de origen, fecha programada, estado («Atrasada» si corresponde), transportista o «Retiro» y, en un suministro, la confirmación del cliente; monto, vencimiento y pago, «—» hasta COM-06 y COM-08. Recibe «entregas» (FilaDeEntregaDeContrato) y, si es un suministro, «con_confirmacion». Todo se escapa.{% endcomment %}
+{% load comercial %}
 {% if entregas %}
 <div class="tablewrap">
   <table class="data-table">
@@ -11,7 +12,7 @@
         <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}{% if f.cuando %}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span>{% endif %}</td>
         <td><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span>{% if f.atrasada %} <span class="status-badge status-danger">Atrasada</span>{% endif %}</td>
         <td>{% if f.es_retiro %}Retiro{% elif f.transportista %}{{ f.transportista }}{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
-        {% if con_confirmacion %}<td>{{ f.confirmacion|default:"—" }}</td><td class="right">—</td><td>—</td><td>—</td>{% endif %}
+        {% if con_confirmacion %}<td>{{ f.confirmacion|default:"—" }}</td><td class="right mono">{% if f.monto is not None %}{{ f.monto|pesos }}{% else %}—{% endif %}</td><td>{% if f.vencimiento %}{{ f.vencimiento|date:"d/m/Y" }}{% else %}—{% endif %}</td><td>{% if f.estado_pago %}<span class="status-badge {% if f.estado_pago == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{{ f.estado_pago_texto }}</span>{% else %}—{% endif %}</td>{% endif %}
       </tr>
     {% endfor %}
     </tbody>

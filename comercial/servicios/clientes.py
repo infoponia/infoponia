@@ -13,6 +13,7 @@
 
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -23,7 +24,7 @@ from django.db.models.functions import Coalesce, Concat, Lower, NullIf
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 
-from comercial.models import Cliente, CompraVenta, DetalleSuministro, DireccionCliente, Suministro
+from comercial.models import Cliente, CompraVenta, DetalleSuministro, DireccionCliente, DiscrepanciaEntrega, Entrega, Suministro
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.validadores import validar_telefono
@@ -109,6 +110,52 @@ class FichaDelCliente:
     cliente: Cliente
     direcciones_activas: list
     direcciones_inactivas: list
+    entregas_sin_cobrar: list = field(default_factory=list)  # COM-06a: las entregas de suministro concretadas (código, contrato, monto a cobrar, vencimiento y estado de pago)
+    discrepancias: list = field(default_factory=list)  # COM-06a: las discrepancias pendientes de revisión de sus entregas (código, entrega, fecha)
+
+
+def entregas_sin_cobrar(actor, cliente):
+    """COM-06a (`clientes.md`, «Se completa en»): las entregas de suministro **concretadas** del cliente que todavía se deben (ninguna está «pagada» hasta COM-08a), dentro del alcance de
+    ``actor`` (el Vendedor, las de sus contratos), por vencimiento: `[{codigo, contrato, monto, vencimiento, estado_pago, texto_del_estado}]`. El monto es el monto a cobrar
+    (`entregas.monto_a_cobrar`). Dos consultas."""
+    from comercial.servicios import entregas as servicio_de_entregas
+    from inventario.servicios import stock
+
+    lista = list(
+        Entrega.objects.en_alcance_de(actor)
+        .filter(contrato_entrega__cliente=cliente, estado_orden="concretada", fecha_vencimiento_pago__isnull=False)
+        .select_related("contrato_entrega")
+        .order_by("fecha_vencimiento_pago", "pk")
+    )
+    montos = servicio_de_entregas.monto_a_cobrar([e.pk for e in lista])
+    hoy = stock.hoy()
+    filas = []
+    for e in lista:
+        estado = servicio_de_entregas._estado_de_pago(e.fecha_vencimiento_pago, hoy)
+        filas.append(
+            {
+                "codigo": e.codigo,
+                "contrato": e.contrato_entrega.codigo,
+                "contrato_id": e.contrato_entrega_id,
+                "monto": montos[e.pk],
+                "vencimiento": e.fecha_vencimiento_pago,
+                "estado_pago": estado,
+                "texto_del_estado": servicio_de_entregas.TEXTO_DEL_PAGO.get(estado, ""),
+            }
+        )
+    return filas
+
+
+def discrepancias_pendientes(actor, cliente):
+    """COM-06a: las discrepancias de entrega «pendiente de revisión» de las entregas del cliente dentro del alcance de ``actor``: `[{codigo, entrega, contrato_id, fecha}]`, por número. Una consulta."""
+    return [
+        {"codigo": d.codigo, "entrega": d.entrega.codigo, "contrato_id": d.entrega.contrato_entrega_id, "fecha": d.fecha_solicitud}
+        for d in DiscrepanciaEntrega.objects.filter(
+            entrega__in=Entrega.objects.en_alcance_de(actor), entrega__contrato_entrega__cliente=cliente, estado_solicitud="pendiente"
+        )
+        .select_related("entrega")
+        .order_by("numero")
+    ]
 
 
 # ---- lo que completan otras tareas (hoy devuelven «nada») ----
@@ -151,6 +198,14 @@ def pendientes_del_cliente(cliente, actor):
     ]
     if codigos:
         pendientes.append(f"Compra-ventas abiertas: {len(codigos)} ({', '.join(codigos)}).")
+    # COM-06a (regla 1 de COM-BAJ-CLT): las entregas sin cobrar (con su monto) y las discrepancias pendientes. Las quejas son de COM-06b y el estado de pago, de COM-08a.
+    sin_cobrar = entregas_sin_cobrar(actor, cliente)
+    if sin_cobrar:
+        total = sum((f["monto"] for f in sin_cobrar), Decimal("0.00"))
+        pendientes.append(f"Entregas sin cobrar: {len(sin_cobrar)} (${total}; la primera vence el {sin_cobrar[0]['vencimiento']:%d/%m/%Y}).")
+    discrepancias = discrepancias_pendientes(actor, cliente)
+    if discrepancias:
+        pendientes.append(f"Discrepancias pendientes: {len(discrepancias)} ({', '.join(d['codigo'] for d in discrepancias)}).")
     return pendientes
 
 
@@ -750,6 +805,8 @@ def ficha_del_cliente(actor, cliente_id):
         cliente=cliente,
         direcciones_activas=[h for h in ordenadas if h.estado_direccion == Direccion.Estado.ACTIVO],
         direcciones_inactivas=[h for h in ordenadas if h.estado_direccion != Direccion.Estado.ACTIVO],
+        entregas_sin_cobrar=entregas_sin_cobrar(actor, cliente),
+        discrepancias=discrepancias_pendientes(actor, cliente),
     )
 
 

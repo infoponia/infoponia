@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_suministros
+from comercial import views, views_camara, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_rutas, views_suministros
 
 app_name = "comercial"
 
@@ -64,6 +64,14 @@ urlpatterns = [
     # COM-05b (COM-ASG-TRP): asignar o cambiar el transportista de una entrega, con su `calcular/` («Cómo queda»; no escribe).
     path("entregas/<int:entrega_id>/asignar/", views_entregas.asignar, name="entrega_asignar"),
     path("entregas/<int:entrega_id>/asignar/calcular/", views_entregas.asignar_calcular, name="entrega_asignar_calcular"),
+    # COM-06a (COM-INI-RUT, COM-FIN-RUT, COM-CNC-ENT): «Mi ruta» del Transportista, iniciar y finalizar la ruta, el intento fallido y concretar una entrega (con `calcular/`, que no escribe).
+    path("ruta/", views_rutas.ruta, name="ruta"),
+    path("ruta/iniciar/", views_rutas.iniciar, name="ruta_iniciar"),
+    path("ruta/finalizar/", views_rutas.finalizar, name="ruta_finalizar"),
+    path("entregas/<int:entrega_id>/intento-fallido/", views_rutas.intento_fallido, name="entrega_intento_fallido"),
+    path("entregas/<int:entrega_id>/concretar/", views_rutas.concretar, name="entrega_concretar"),
+    path("entregas/<int:entrega_id>/concretar/calcular/", views_rutas.concretar_calcular, name="entrega_concretar_calcular"),
+    path("entregas/<int:entrega_id>/comprobante/", views_rutas.comprobante, name="entrega_comprobante"),
     # Envasado (COM-05a2, PROD-PNF-ENV): la lista de entregas a envasar del Agrónomo, la carga de envases de cada una (con `calcular/`) y su resumen (`revisar/`); ninguna de las dos escribe.
     path("envasado/", views_envasado.lista, name="envasado"),
     path("envasado/<int:entrega_id>/", views_envasado.entrega, name="envasado_entrega"),

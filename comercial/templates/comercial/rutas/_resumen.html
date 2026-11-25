@@ -1,0 +1,47 @@
+{% load comercial %}{% comment %}El resumen de la concreción (paso 12; también es lo que devuelve HTMX): por línea, lo planificado, lo entregado, lo perdido y lo devuelto y el monto; los envases; el total a cobrar con su medio de pago (o el vencimiento del
+pago en un suministro); las advertencias (5a, 7a, 8a, 8b, 9a, 10b y 14c) y, si no hay errores, «Confirmar entrega» con la huella y todo lo cargado en campos ocultos. Con errores, los lista y no ofrece confirmar. «Corregir» es
+volver al formulario de arriba (13a). No escribe. Recibe «resumen», «datos», «form» y «medios».{% endcomment %}
+{% if resumen.hay_errores %}
+<div class="card" style="margin-top:12px"><div class="card-title">Revisá estos datos</div>
+  <ul>{% for campo, lista in resumen.errores.items %}{% for codigo, mensaje in lista %}<li class="err" role="alert">{{ mensaje }}</li>{% endfor %}{% endfor %}</ul>
+  <p class="muted">Corregilos arriba y volvé a tocar «Ver resumen».</p></div>
+{% else %}
+<div class="card" style="margin-top:12px"><div class="card-title">Resumen de la concreción</div>
+  <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Plan.</th><th class="right">Entreg.</th><th class="right">Perd.</th><th class="right">Dev.</th><th class="right">Monto</th></tr></thead><tbody>
+  {% for lr in resumen.lineas %}{% if lr.leida.planificada %}
+    <tr><td>{{ lr.leida.variedad }}{% if lr.rechazada %} <span class="status-badge status-danger">Rechazada</span>{% endif %}</td>
+      <td class="right mono">{{ lr.leida.planificada }}</td><td class="right mono">{{ lr.entregada }}</td><td class="right mono">{{ lr.perdida }}</td><td class="right mono">{{ lr.devuelta }}</td>
+      <td class="right mono">{{ lr.monto|pesos }}</td></tr>
+  {% endif %}{% endfor %}
+  </tbody></table>
+  <dl class="dl" style="margin-top:10px">
+    <dt>Monto de la entrega</dt><dd class="mono">{{ resumen.total|pesos }}</dd>
+    {% if resumen.es_venta %}
+      {% if resumen.cobra %}<dt>Total a cobrar</dt><dd class="mono"><b>{{ resumen.total_a_cobrar|pesos }}</b>{% if datos.medio_pago %} ({{ datos.medio_pago }}){% endif %}</dd>
+      {% elif resumen.todos_rechazados %}<dt>Cobro</dt><dd>Sin cobro: la venta queda cancelada</dd>
+      {% else %}<dt>Cobro</dt><dd>En esta entrega no se cobra</dd>{% endif %}
+    {% else %}<dt>Vencimiento del pago</dt><dd class="mono">{{ resumen.vencimiento|date:"d/m/Y" }}</dd>{% endif %}
+  </dl>
+  {% if resumen.envases %}<div class="card-title" style="margin-top:12px">Envases</div>
+  <ul>{% for e in resumen.envases %}<li>{{ e.existencia.insumo.nombre_insumo }}: <span class="mono">{{ e.utilizada|floatformat:"-3" }}</span> utilizados, <span class="mono">{{ e.devuelta|floatformat:"-3" }}</span> devueltos{% if e.exceso %} · <b>{{ e.exceso|floatformat:"-3" }} de más</b>{% endif %}</li>{% endfor %}</ul>
+  {% elif resumen.declarados %}<div class="card-title" style="margin-top:12px">Envases declarados</div>
+  <ul>{% for d in resumen.declarados %}<li>{{ d.existencia.insumo.nombre_insumo }}: <span class="mono">{{ d.cantidad|floatformat:"-3" }}</span></li>{% endfor %}</ul>{% endif %}
+  {% for a in resumen.advertencias %}<div class="hint" role="status">{{ a }}</div>{% endfor %}
+</div>
+<form method="post" action="{% url 'comercial:entrega_concretar' resumen.entrega.pk %}" novalidate style="margin-top:12px">
+  {% csrf_token %}
+  <input type="hidden" name="huella" value="{{ resumen.huella }}">
+  {% for l in form.lineas %}
+    <input type="hidden" name="llego_{{ l.pk }}" value="{{ l.llego }}">
+    {% if resumen.es_venta %}<input type="hidden" name="acepta_{{ l.pk }}" value="{% if l.acepta %}1{% else %}0{% endif %}">{% else %}<input type="hidden" name="recibio_{{ l.pk }}" value="{{ l.recibio }}">{% endif %}
+  {% endfor %}
+  <input type="hidden" name="descripcion_perdida" value="{{ datos.descripcion_perdida }}">
+  {% for e in form.envases %}
+    <input type="hidden" name="utilizada_{{ e.pk }}" value="{{ e.utilizada }}"><input type="hidden" name="devuelta_{{ e.pk }}" value="{{ e.devuelta }}">{% if e.confirmo %}<input type="hidden" name="confirmo_exceso_{{ e.pk }}" value="1">{% endif %}
+  {% endfor %}
+  {% for o in form.ofrecidos %}{% if o.valor %}<input type="hidden" name="declarado_{{ o.pk }}" value="{{ o.valor }}">{% endif %}{% endfor %}
+  {% if datos.sin_envases %}<input type="hidden" name="sin_envases" value="1">{% endif %}
+  <input type="hidden" name="medio_pago" value="{{ datos.medio_pago }}">
+  <div class="acts-fila"><button class="btn btn-primary" type="submit" data-enviando="Registrando…">Confirmar entrega</button></div>
+</form>
+{% endif %}

@@ -711,7 +711,106 @@ def entrega(contrato, reservas, *, fecha=None, transportista=None, estado="a_rea
                 entrega=nueva, detalle_suministro=detalle_, fecha_periodo=clave[2], precio_unitario=precio or calendario.precio_en(detalle_, fecha)
             )
         linea.reservas.set(rs)
+    if estado == "concretada":
+        marcar_concretada(nueva)  # desde COM-06a, una entrega concretada trae sus cantidades y sus montos (invariantes de `verificar_invariantes_de_entregas`)
     return nueva
+
+
+def marcar_concretada(entrega_, *, cantidades=None):
+    """COM-06a: deja ``entrega_`` «concretada» **directo en la base** (sin pasar por `concretar_entrega`, que prueba el bloque 2), con los datos de la concreción que exigen la
+    base y `verificar_invariantes_de_entregas`: por línea, entregada, perdida, devuelta y monto, y en la entrega el total (y, en un suministro, el vencimiento del pago con el plazo de
+    la cláusula). ``cantidades`` es una lista de ``(entregada, perdida, devuelta)`` en el orden de las líneas (por omisión, todo lo planificado se entrega). No toca reservas, cámara,
+    detalles ni contrato. Devuelve la entrega refrescada."""
+    from comercial.models import ClausulaSuministrado, CompraVenta, DetalleEntrega, Entrega
+    from comercial.servicios import entregas as servicio
+
+    hoy = timezone.localdate()
+    lineas = list(entrega_.lineas.order_by("pk"))
+    planificadas = servicio.cantidades_planificadas([linea.pk for linea in lineas])
+    total = Decimal("0.00")
+    for i, linea in enumerate(lineas):
+        entregada, perdida, devuelta = cantidades[i] if cantidades else (planificadas[linea.pk], 0, 0)
+        monto = (Decimal(entregada) * linea.precio_unitario).quantize(Decimal("0.01"))
+        DetalleEntrega.objects.filter(pk=linea.pk).update(cant_entregada=entregada, cant_perdida=perdida, cant_devuelta=devuelta, monto_pagar=monto)
+        total += monto
+    vencimiento = None
+    if not CompraVenta.objects.filter(pk=entrega_.contrato_entrega_id).exists():
+        clausula = ClausulaSuministrado.objects.filter(suministro_id=entrega_.contrato_entrega_id).first()
+        vencimiento = hoy + timedelta(days=clausula.plazo_pago_dias if clausula else 30)
+    Entrega.objects.filter(pk=entrega_.pk).update(
+        estado_orden="concretada", fecha_resolucion_orden=hoy, monto_total_entrega=total, fecha_vencimiento_pago=vencimiento
+    )
+    entrega_.refresh_from_db()
+    return entrega_
+
+
+def entrega_concretada(contrato, reservas, *, cantidades=None, transportista=None, fecha=None, con_pago=False, medio="efectivo"):
+    """COM-06a: una entrega ya concretada, armada directo (ver `marcar_concretada`) con ``cantidades``. En una compra-venta con ``con_pago=True``, además deja sus detalles
+    «confirmados» con lo entregado, un `PagoCliente` vigente por el total y la venta «concretada» con la fecha de hoy (la concreción de su única entrega, postcondición k)."""
+    from comercial.models import CompraVenta, DetalleVenta
+
+    nueva = entrega(contrato, reservas, fecha=fecha, transportista=transportista)
+    marcar_concretada(nueva, cantidades=cantidades)
+    if con_pago and contrato.tipo_contrato == "compra_venta":
+        for linea in nueva.lineas.filter(detalle_venta__isnull=False):
+            DetalleVenta.objects.filter(pk=linea.detalle_venta_id).update(estado_detalle_venta="confirmado", cant_entregada_venta=linea.cant_entregada)
+        CompraVenta.objects.filter(pk=contrato.pk).update(estado_venta="concretada", fecha_concrecion_venta=timezone.localdate())
+        pago_de_compra_venta(CompraVenta.objects.get(pk=contrato.pk), medio, monto=nueva.monto_total_entrega)
+    return nueva
+
+
+def pago_de_compra_venta(venta, medio="efectivo", *, monto=None, estado="vigente"):
+    """COM-06a: un `PagoCliente` de ``venta`` creado directo, de hoy, por ``monto`` (por omisión, lo entregado de sus detalles «confirmados» o 100,00). Para las pruebas de las
+    restricciones y de las fichas; la concreción real lo crea `concretar_entrega`."""
+    from comercial.models import DetalleVenta, PagoCliente
+
+    if monto is None:
+        confirmados = DetalleVenta.objects.filter(compra_venta=venta, estado_detalle_venta="confirmado")
+        monto = sum((Decimal(d.cant_entregada_venta or 0) * d.precio_unitario_de_venta for d in confirmados), Decimal("0.00")) or Decimal("100.00")
+    return PagoCliente.objects.create(cliente=venta.cliente, compra_venta=venta, medio_pago=medio, fecha_pago=timezone.localdate(), monto_pagado=monto, estado_pago=estado)
+
+
+def discrepancia(entrega_, *, minima=None, con_alerta=True):
+    """COM-06a: la `DiscrepanciaEntrega` de una entrega de suministro concretada, con una línea por cada línea de la entrega (la entregada que tiene y ``minima``, por omisión, una
+    más) y su alerta para el Gerente con su `AlertaComercial`, creadas directo. La concreción real la crea `concrecion.crear_discrepancia`."""
+    from comercial.models import AlertaComercial, DiscrepanciaEntrega, LineaDiscrepancia
+    from comercial.servicios import solicitudes
+    from maestros.tests.fabricas import crear_alerta
+
+    creada = solicitudes.crear_solicitud(DiscrepanciaEntrega, entrega_)
+    for linea in entrega_.lineas.filter(detalle_suministro__isnull=False).order_by("pk"):
+        entregada = linea.cant_entregada or 0
+        LineaDiscrepancia.objects.create(discrepancia=creada, detalle_entrega=linea, cantidad_entregada=entregada, cantidad_minima_estipulada=minima or entregada + 1)
+    if con_alerta:
+        alerta = crear_alerta(entrega_.invernadero, "comercial_discrepancia_entrega", descripcion_alerta=f"{entrega_.codigo} · {creada.codigo}")
+        AlertaComercial.objects.create(alerta=alerta, solicitud=creada)
+    return creada
+
+
+def verificar_invariantes_de_solicitudes():
+    """Invariantes de `docs/modelo/comercial.md`, «SolicitudRevision» y «DiscrepanciaEntrega» (COM-06a), los que la base no puede vigilar: (1) la entrega de una solicitud es de un
+    suministro y está «concretada»; (2) las líneas de una discrepancia son de la entrega de la discrepancia y de un detalle de suministro; (3) una discrepancia tiene al menos una línea;
+    (4) cada solicitud tiene exactamente una `AlertaComercial`. Lanza `AssertionError` con lo que encuentra."""
+    from comercial.models import AlertaComercial, CompraVenta, DiscrepanciaEntrega, SolicitudRevision
+
+    problemas = []
+    for s in SolicitudRevision.objects.select_related("entrega").order_by("pk"):
+        if CompraVenta.objects.filter(pk=s.entrega.contrato_entrega_id).exists():
+            problemas.append(f"{s.codigo}: de una entrega de compra-venta")
+        if s.entrega.estado_orden != "concretada":
+            problemas.append(f"{s.codigo}: de la entrega {s.entrega.codigo}, que no está concretada")
+        alertas_ = AlertaComercial.objects.filter(solicitud_id=s.pk).count()
+        if alertas_ != 1:
+            problemas.append(f"{s.codigo}: con {alertas_} alertas")
+    for d in DiscrepanciaEntrega.objects.order_by("pk"):
+        lineas = list(d.lineas.select_related("detalle_entrega"))
+        if not lineas:
+            problemas.append(f"{d.codigo}: sin líneas")
+        for linea in lineas:
+            if linea.detalle_entrega.entrega_id != d.entrega_id or linea.detalle_entrega.detalle_suministro_id is None:
+                problemas.append(f"{d.codigo}: línea #{linea.pk} de otra entrega o de un detalle que no es de suministro")
+    if problemas:
+        raise AssertionError("Invariantes de solicitudes rotos: " + "; ".join(problemas))
 
 
 def verificar_invariantes_de_entregas():
@@ -770,6 +869,39 @@ def verificar_invariantes_de_entregas():
     for reserva_id, entregas_ in vivas.items():
         if len(entregas_) > 1:
             problemas.append(f"Reserva #{reserva_id}: en {len(entregas_)} entregas no canceladas")
+    # COM-06a (docs/modelo/comercial.md, «Entrega», «DetalleEntrega» y «PagoCliente»): lo que deja la concreción.
+    for e in Entrega.objects.order_by("pk"):
+        concretada = e.estado_orden == "concretada"
+        es_venta = CompraVenta.objects.filter(pk=e.contrato_entrega_id).exists()
+        if (e.monto_total_entrega is not None) != concretada:
+            problemas.append(f"{e.codigo}: monto total {e.monto_total_entrega!r} con la entrega en estado {e.estado_orden}")
+        if (e.fecha_vencimiento_pago is not None) != (concretada and not es_venta):
+            problemas.append(f"{e.codigo}: vencimiento del pago {e.fecha_vencimiento_pago!r} (solo lo tiene una entrega de suministro concretada)")
+        lineas = list(e.lineas.order_by("pk"))
+        con_datos = [linea for linea in lineas if linea.cant_entregada is not None]
+        if len(con_datos) != (len(lineas) if concretada else 0):
+            problemas.append(f"{e.codigo}: {len(con_datos)} de {len(lineas)} líneas con los datos de la concreción (estado {e.estado_orden})")
+        if concretada and e.monto_total_entrega is not None and sum((l.monto_pagar or 0 for l in lineas), Decimal("0.00")) != e.monto_total_entrega:
+            problemas.append(f"{e.codigo}: el monto total no es la suma de los montos de sus líneas")
+        for linea in con_datos:
+            if linea.monto_pagar != (Decimal(linea.cant_entregada) * linea.precio_unitario).quantize(Decimal("0.01")):
+                problemas.append(f"{e.codigo}: línea #{linea.pk} con un monto que no es entregada × precio")
+            if es_venta and linea.cant_entregada > 0 and linea.cant_devuelta > 0:
+                problemas.append(f"{e.codigo}: línea #{linea.pk} de venta aceptada con devueltas (el cliente acepta todo lo que llegó o lo rechaza todo)")
+    for v in CompraVenta.objects.order_by("pk"):
+        vigentes = list(v.pagos.filter(estado_pago="vigente"))
+        concretadas = Entrega.objects.filter(contrato_entrega_id=v.pk, estado_orden="concretada").exists()
+        if any(p.cliente_id != v.cliente_id for p in v.pagos.all()):
+            problemas.append(f"{v.codigo}: un pago de otro cliente")
+        if v.estado_venta == "concretada" and concretadas:
+            if len(vigentes) != 1:
+                problemas.append(f"{v.codigo}: concretada con {len(vigentes)} pagos vigentes (tiene que tener uno)")
+            else:
+                total = sum((Decimal(d.cant_entregada_venta or 0) * d.precio_unitario_de_venta for d in v.detalles.filter(estado_detalle_venta="confirmado")), Decimal("0.00"))
+                if vigentes[0].monto_pagado != total:
+                    problemas.append(f"{v.codigo}: el pago ({vigentes[0].monto_pagado}) no es el total de lo entregado ({total})")
+        if v.estado_venta == "cancelada" and not concretadas and vigentes:
+            problemas.append(f"{v.codigo}: cancelada sin entregas concretadas y con un pago vigente")
     if problemas:
         raise AssertionError("Invariantes de entregas rotos: " + "; ".join(problemas))
 
@@ -795,6 +927,46 @@ def vehiculo_en_ruta(transportista, *, fecha=None):
     Con la fecha de hoy, sus entregas de hoy o anteriores están «en curso»."""
     Vehiculo.objects.filter(transportista=transportista).update(en_ruta=True, fecha_inicio_ruta=fecha or timezone.localdate())
     return Vehiculo.objects.get(transportista=transportista)
+
+
+def iniciar_ruta_de(transportista, escenario=None, lote_=None):
+    """COM-06a: inicia de verdad la ruta de ``transportista`` con `rutas.iniciar_ruta` (reemplaza a `vehiculo_en_ruta` en las pruebas de «en curso», que desde esta tarea usan el servicio).
+    Si no tiene entregas de la ruta (con envío, «a realizar», de hoy o anteriores) y se pasan ``escenario`` y ``lote_``, le arma una de 1 planta para hoy. Devuelve el `Vehiculo`."""
+    from comercial.servicios import rutas
+
+    if not rutas._de_la_ruta(transportista.pk, timezone.localdate()).exists() and escenario is not None:
+        venta = compra_venta(escenario, dias=0)
+        entrega(venta, [reserva_lista(detalle(venta, escenario.variedad, 1), lote_, 1)], transportista=transportista, fecha=timezone.localdate())
+    return rutas.iniciar_ruta(transportista, rutas.ruta_del_dia(transportista).huella)
+
+
+def entrega_concretable(escenario, lote_, *, tipo="venta", cantidad=50, con_envasado=False, ruta_iniciada=True, transportista=None, retiro=False, minima=None, plazo_pago=15, precio="100.00", dias=0):
+    """COM-06a: una entrega lista para concretar con `concrecion.concretar_entrega`. ``tipo`` es «venta» (una compra-venta de ``cantidad`` plantas a ``precio``, sola en su venta) o «suministro»
+    (un período de ``cantidad`` plantas con cantidad mínima ``minima``, que por omisión es la cantidad); con ``retiro=True`` la venta es con retiro (sin transportista, la concreta el Vendedor).
+    ``con_envasado`` reserva 10 envases (de un stock de 30). Con envío y ``ruta_iniciada`` (por omisión) el Transportista inicia la ruta con `rutas.iniciar_ruta`. Devuelve un `SimpleNamespace`
+    con `entrega`, `contrato`, `detalle`, `reserva`, `transportista` y `envases` (el `InsumoInvernadero` o ``None``)."""
+    from types import SimpleNamespace
+
+    from produccion.tests.fabricas import reservar
+
+    envio = not retiro
+    transportista = transportista or (transportista_con_vehiculo(escenario.invernadero) if envio else None)
+    if tipo == "venta":
+        contrato = compra_venta(escenario, dias=dias, modalidad="retiro" if retiro else "envio")
+        detalle_ = detalle(contrato, escenario.variedad, cantidad, precio=precio)
+        reserva_ = reserva_lista(detalle_, lote_, cantidad)
+    else:
+        contrato = suministro(escenario, plazo_pago=plazo_pago)
+        detalle_ = detalle_suministro(contrato, escenario.variedad, cantidad=cantidad, minima=minima or cantidad, primera_en_dias=dias, precio=precio)
+        reserva_ = reserva_lista(None, lote_, cantidad, fecha_entrega=detalle_.fecha_primer_entrega, detalle_suministro=detalle_)
+    entrega_ = entrega(contrato, [reserva_], transportista=transportista if envio else None, fecha=timezone.localdate() - timedelta(days=0) if dias == 0 else None)
+    envases = None
+    if con_envasado:
+        envases = envase(escenario.invernadero, stock=30)
+        reservar(entrega_, envases, 10)
+    if envio and ruta_iniciada:
+        iniciar_ruta_de(transportista)
+    return SimpleNamespace(entrega=entrega_, contrato=contrato, detalle=detalle_, reserva=reserva_, transportista=transportista, envases=envases)
 
 
 def con_cosecha_concretada(escenario, detalle_, lote_, *, reservada=20, cosechada=20, costo="2.5000", dias_atras=2):

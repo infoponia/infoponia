@@ -753,6 +753,7 @@ class FichaDeCompraVenta:
     acciones: frozenset
     pendiente: object = None  # COM-04c: lo que espera una venta «pendiente de decisión del cliente» (`faltantes.estado_del_faltante`)
     entregas: list = field(default_factory=list)  # COM-05a2 (regla 4): las entregas de la venta (`entregas.entregas_del_contrato`)
+    pago: object = None  # COM-06a (R117): el pago vigente de la venta (medio, fecha y monto), o `None` si todavía no se cobró
 
 
 def ficha_de_compra_venta(actor, venta_id):
@@ -794,6 +795,7 @@ def ficha_de_compra_venta(actor, venta_id):
         frozenset(acciones),
         faltantes.estado_del_faltante(venta, actor),
         entregas.entregas_del_contrato(venta.pk, stock.hoy()),
+        venta.pagos.filter(estado_pago="vigente").first(),  # COM-06a (R117)
     )
 
 

@@ -1,0 +1,87 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Concretar entrega» (COM-CNC-ENT, pasos 4 a 13; `VIEWS.cncent` y `cncentCalc` del prototipo; el Transportista, con envío, y el Vendedor, en un retiro): UNA página con los pasos numerados (lo que llegó y lo que
+recibió el cliente, los envases, el cobro) y, debajo, el resumen. «Ver resumen» manda el formulario a `calcular/` (que no escribe): con HTMX redibuja solo el resumen y sin JavaScript vuelve esta misma página. «Confirmar
+entrega» (dentro del resumen) registra. Nada se valida ni se recalcula al tipear. Recibe «resumen» (`ResumenDeConcrecion`), «form» (valores y errores por campo), «datos», «medios», «mostrar_resumen», «error», «volver»
+y «es_retiro». Las correcciones al prototipo están en el «Cierre» de la tarea (D-61).{% endcomment %}
+{% block titulo %}Concretar {{ resumen.entrega.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <a class="back" href="{{ volver }}">{% icono "chev" 14 %} Volver</a>
+  <div class="page-h"><h1>Concretar <span class="mono">{{ resumen.entrega.codigo }}</span></h1>
+    <div class="sub">{{ resumen.lectura.contrato.cliente.nombre_visible }} · {{ resumen.lectura.contrato.codigo }}{% if es_retiro %} · Retiro en {{ resumen.entrega.invernadero }}{% endif %}</div></div>
+  {% if error %}<div class="alert alert-warn" role="alert"><div>{{ error }}</div></div>{% endif %}
+
+  <form method="post" action="{% url 'comercial:entrega_concretar_calcular' resumen.entrega.pk %}" novalidate>
+    {% csrf_token %}
+    <h2 style="margin:6px 0 8px">1. Lo que llegó y lo que recibió el cliente</h2>
+    {% for l in form.lineas %}
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">{{ l.lr.leida.variedad }} <span class="muted">· planificadas: <span class="mono">{{ l.lr.leida.planificada }}</span></span></div>
+      <div class="fld"><label for="llego_{{ l.pk }}">Llegaron en buen estado <span class="muted">(el resto se registra como pérdida en el traslado)</span></label>
+        <input id="llego_{{ l.pk }}" name="llego_{{ l.pk }}" type="text" inputmode="numeric" autocomplete="off" class="field-input num{% if l.e_llego %} bad{% endif %}" value="{{ l.llego }}">
+        {% for m in l.e_llego %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+      {% if resumen.es_venta %}
+      <fieldset class="fld"><legend class="lbl">El cliente</legend>
+        <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="radio" name="acepta_{{ l.pk }}" value="1"{% if l.acepta %} checked{% endif %}> Acepta lo que llegó</label>
+        <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="radio" name="acepta_{{ l.pk }}" value="0"{% if not l.acepta %} checked{% endif %}> Lo rechaza completo</label>
+        <div class="hint">En una compra-venta se acepta o se rechaza todo lo que llegó en buen estado. Lo rechazado vuelve a la cámara.</div></fieldset>
+      {% else %}
+      <div class="fld"><label for="recibio_{{ l.pk }}">Recibió el cliente <span class="muted">(vacío: todo lo que llegó; lo demás vuelve a la cámara)</span></label>
+        <input id="recibio_{{ l.pk }}" name="recibio_{{ l.pk }}" type="text" inputmode="numeric" autocomplete="off" class="field-input num{% if l.e_recibio %} bad{% endif %}" value="{{ l.recibio }}" placeholder="Todo lo que llegó">
+        {% for m in l.e_recibio %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="fld"><label for="descripcion_perdida">Qué pasó con lo que se perdió <span class="muted">(opcional)</span></label>
+      <input id="descripcion_perdida" name="descripcion_perdida" type="text" maxlength="300" class="field-input" value="{{ datos.descripcion_perdida }}"></div>
+
+    <h2 style="margin:18px 0 8px">2. Envases</h2>
+    {% if form.envases %}
+    {% for e in form.envases %}
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title">{{ e.e.existencia.insumo.nombre_insumo }} <span class="muted">· reservados: <span class="mono">{{ e.e.reservada|floatformat:"-3" }}</span></span></div>
+      <div class="fld"><label for="utilizada_{{ e.pk }}">Utilizados</label>
+        <input id="utilizada_{{ e.pk }}" name="utilizada_{{ e.pk }}" type="text" inputmode="decimal" autocomplete="off" class="field-input num{% if e.e_utilizada %} bad{% endif %}" value="{{ e.utilizada }}">
+        {% for m in e.e_utilizada %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+      <div class="fld"><label for="devuelta_{{ e.pk }}">Devueltos al depósito <span class="muted">(vacío: lo reservado que no se usó)</span></label>
+        <input id="devuelta_{{ e.pk }}" name="devuelta_{{ e.pk }}" type="text" inputmode="decimal" autocomplete="off" class="field-input num{% if e.e_devuelta %} bad{% endif %}" value="{{ e.devuelta }}">
+        {% for m in e.e_devuelta %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+      <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="checkbox" name="confirmo_exceso_{{ e.pk }}" value="1"{% if e.confirmo %} checked{% endif %}> Confirmo la cantidad utilizada, aunque supere lo reservado</label>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="alert alert-info" role="status"><div>La entrega no tenía envasado planificado. Indicá los envases que usaste; se avisará al Agrónomo.</div></div>
+    {% for o in form.ofrecidos %}
+    <div class="fld"><label for="declarado_{{ o.pk }}">{{ o.existencia.insumo.nombre_insumo }} usados</label>
+      <input id="declarado_{{ o.pk }}" name="declarado_{{ o.pk }}" type="text" inputmode="decimal" autocomplete="off" class="field-input num{% if o.errores %} bad{% endif %}" value="{{ o.valor }}" placeholder="0">
+      {% for m in o.errores %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+    {% empty %}
+    <p class="muted">Este invernadero no tiene envases habilitados.</p>
+    {% endfor %}
+    <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="checkbox" name="sin_envases" value="1"{% if datos.sin_envases %} checked{% endif %}> No se usaron envases</label>
+    {% for m in form.e_envases %}<div class="err" role="alert">{{ m }}</div>{% endfor %}
+    {% endif %}
+
+    {% if resumen.es_venta and resumen.es_ultima %}
+    <h2 style="margin:18px 0 8px">3. Cobro</h2>
+    <fieldset class="fld"><legend class="lbl">Medio de pago con el que el cliente pagó el total de la venta</legend>
+      {% for valor, texto in medios %}
+      <label style="display:flex;gap:10px;align-items:center;min-height:44px"><input type="radio" name="medio_pago" value="{{ valor }}"{% if datos.medio_pago == valor %} checked{% endif %}> {{ texto }}</label>
+      {% endfor %}
+      {% for m in form.e_medio %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</fieldset>
+    {% elif resumen.es_venta %}
+    <h2 style="margin:18px 0 8px">3. Cobro</h2>
+    <p class="muted">El cobro se registra en la última entrega de la venta.</p>
+    {% endif %}
+
+    <div class="acts-fila" style="margin:12px 0">
+      <button class="btn btn-primary" type="submit" data-sin-envio-en-curso data-enviando="Calculando…"
+              hx-post="{% url 'comercial:entrega_concretar_calcular' resumen.entrega.pk %}" hx-target="#resumen-de-concrecion" hx-swap="innerHTML show:none" hx-include="closest form">Ver resumen</button>
+      <a class="btn btn-ghost" href="{{ volver }}">Cancelar</a>
+    </div>
+  </form>
+
+  <div id="resumen-de-concrecion" aria-live="polite">{% if mostrar_resumen %}{% include "comercial/rutas/_resumen.html" %}{% endif %}</div>
+</div>
+{% endblock %}
