@@ -6,11 +6,12 @@
 
 import logging
 from collections import defaultdict
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import transaction
 
-from comercial.models import CompraVenta, DetalleReserva, DetalleVenta, EnlaceCliente, ReservaStock
+from comercial.models import CompraVenta, DetalleReserva, DetalleVenta, EnlaceCliente, Entrega, ReservaStock
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import _cubierto
 from core import correo, notificaciones
@@ -18,6 +19,7 @@ from core.enlaces import nuevo_token, resumen_de
 from core.models import RegistroAuditoria, Usuario
 from core.procesos import ResumenDePaso
 from inventario.servicios import stock
+from maestros.servicios import configuracion
 
 logger = logging.getLogger("infoponia.enlaces")
 
@@ -48,6 +50,21 @@ MOTIVOS = {
     SIN_PENDIENTES: "La compra ya no tiene nada pendiente de decisión.",
 }
 
+# Los motivos de la confirmación de una entrega (COM-CNF-ENT, extensiones 2a y 6a): inválido, ya usado o vencido (y anulado, que el cliente lee como «ya no se puede usar»).
+MOTIVOS_DE_CONFIRMACION = {
+    NO_VALIDO: "Este enlace no es válido.",
+    VENCIDO: "El plazo para confirmar la entrega terminó.",
+    USADO: "Este enlace ya se usó: su respuesta quedó registrada.",
+    ANULADO: "Este enlace ya no puede usarse.",
+}
+
+
+def texto_del_motivo(motivo, tipo=None):
+    """El texto de `motivo` (una de las constantes de arriba) para el cliente, según el tipo de enlace (`confirmacion_entrega` o, por omisión, el de faltante)."""
+    if tipo == Tipo.CONFIRMACION_ENTREGA:
+        return MOTIVOS_DE_CONFIRMACION.get(motivo, "Este enlace ya no puede usarse.")
+    return MOTIVOS.get(motivo, "Este enlace ya no puede usarse.")
+
 
 def disponible_de(detalle_ids):
     """`{detalle_id: cantidad disponible}` (regla «Cantidad disponible» de COM-DCD-FLT): la cantidad cubierta de cada detalle, es decir, la suma de lo cubierto por las líneas
@@ -69,17 +86,26 @@ def _vendedor_activo(venta):
     return Usuario.objects.filter(pk=venta.vendedor_id, is_active=True).first()
 
 
-def crear_enlace(tipo, cliente, *, compra_venta, vence):
-    """Crea el enlace vigente de `compra_venta` para `cliente` y registra en `on_commit` el correo con su URL. Devuelve `(enlace, token)`: el token es solo para las pruebas,
-    ningún llamador lo guarda ni lo muestra. Corre dentro de la transacción del caso de uso (sin ella, `RuntimeError`) y con la venta bloqueada. Si la venta ya tenía un enlace
-    vigente del mismo tipo, lo pasa a `reemplazado` (regla «Enlace de decisión»). Un cliente sin correo no tiene enlace (`ValueError`: el llamador lo sabe antes)."""
+def crear_enlace(tipo, cliente, *, compra_venta=None, vence=None, entrega=None):
+    """Crea el enlace vigente para `cliente` y registra en `on_commit` el correo con su URL. Devuelve `(enlace, token)`: el token es solo para las pruebas, ningún llamador lo guarda ni lo
+    muestra. Corre dentro de la transacción del caso de uso (sin ella, `RuntimeError`).
+    - `decision_faltante`: con `compra_venta` (bloqueada) y `vence`; si la venta ya tenía un enlace vigente del mismo tipo, lo pasa a `reemplazado` (regla «Enlace de decisión»).
+    - `confirmacion_entrega` (COM-06b, D-68 punto 1): con la `entrega` de suministro concretada, sin `compra_venta` ni `vence` (la vigencia se calcula, `vencimiento_de`). Uno por entrega y sin
+      reemplazo: un segundo enlace lo rechaza la base (`IntegrityError`).
+    Argumentos que no cuadran con el tipo, o un cliente sin correo (el llamador lo sabe antes): `ValueError`."""
     if transaction.get_autocommit():
         raise RuntimeError("`crear_enlace` corre dentro de la transacción del caso de uso que la llama.")
+    if tipo == Tipo.CONFIRMACION_ENTREGA:
+        if entrega is None or compra_venta is not None or vence is not None:
+            raise ValueError("El enlace de confirmación lleva la entrega, y ni la compra-venta ni el vencimiento (se calcula).")
+    elif entrega is not None or compra_venta is None or vence is None:
+        raise ValueError("El enlace de decisión de faltante lleva la compra-venta y el vencimiento, y no la entrega.")
     if not cliente.email_cliente:
         raise ValueError("Un cliente sin correo no tiene enlace: lo decide el Vendedor (extensión 1a de COM-DCD-FLT).")
-    reemplazar_enlaces_de(compra_venta, tipo)
+    if tipo == Tipo.DECISION_FALTANTE:
+        reemplazar_enlaces_de(compra_venta, tipo)
     token, resumen = nuevo_token()
-    enlace = EnlaceCliente.objects.create(tipo=tipo, cliente=cliente, compra_venta=compra_venta, token_resumen=resumen, fecha_vencimiento=vence)
+    enlace = EnlaceCliente.objects.create(tipo=tipo, cliente=cliente, compra_venta=compra_venta, entrega=entrega, token_resumen=resumen, fecha_vencimiento=vence)
     transaction.on_commit(lambda: enviar_enlace(enlace.pk, token))
     return enlace, token
 
@@ -122,10 +148,35 @@ def enlace_por_id(enlace_id):
     return EnlaceCliente.objects.select_related("compra_venta", "cliente").filter(pk=enlace_id).first()
 
 
+def vencimiento_de(enlace):
+    """El último día en que sirve `enlace` (D-68 punto 8). Faltante: la `fecha_vencimiento` guardada. Confirmación: se **calcula** con el parámetro vigente, `fecha_resolucion_orden` de la entrega
+    + `dias_vigencia_enlace_confirmacion` (si el parámetro cambia, cambia la vigencia de los enlaces ya enviados). `None` si la entrega todavía no se concretó."""
+    if enlace.tipo != Tipo.CONFIRMACION_ENTREGA:
+        return enlace.fecha_vencimiento
+    resolucion = Entrega.objects.filter(pk=enlace.entrega_id).values_list("fecha_resolucion_orden", flat=True).first()
+    if resolucion is None:
+        return None
+    return resolucion + timedelta(days=configuracion.obtener().dias_vigencia_enlace_confirmacion)
+
+
+def _situacion_de_confirmacion(enlace, hoy):
+    """`situacion_del_enlace` de una confirmación (COM-CNF-ENT, extensiones 2a y 6a): `usado`, `anulado`, `vencido` (por estado o porque hoy pasó la vigencia calculada) o `sirve`."""
+    if enlace.estado == Estado.USADO:
+        return USADO
+    vence = vencimiento_de(enlace)
+    if enlace.estado in (Estado.ANULADO, Estado.REEMPLAZADO) or vence is None:
+        return ANULADO
+    if enlace.estado == Estado.VENCIDO or hoy > vence:
+        return VENCIDO
+    return SIRVE
+
+
 def situacion_del_enlace(enlace, hoy=None):
     """Qué hace el enlace hoy (extensiones 2a y 6a), una de las constantes de arriba; se controla al abrirlo y otra vez al registrar. Sirve si está `vigente`, hoy no pasó de su
-    `fecha_vencimiento` (sirve todo ese día), la venta sigue «pendiente de decisión del cliente» y tiene algún detalle pendiente."""
+    vencimiento (sirve todo ese día) y, en el faltante, la venta sigue «pendiente de decisión del cliente» con algún detalle pendiente; en la confirmación, el vencimiento se calcula."""
     hoy = hoy or stock.hoy()
+    if enlace.tipo == Tipo.CONFIRMACION_ENTREGA:
+        return _situacion_de_confirmacion(enlace, hoy)
     venta = CompraVenta.objects.get(pk=enlace.compra_venta_id)
     if enlace.estado == Estado.REEMPLAZADO:
         return REEMPLAZADO
@@ -162,6 +213,8 @@ def enviar_enlace(enlace_id, token):
     enlace = EnlaceCliente.objects.select_related("cliente", "compra_venta").get(pk=enlace_id)
     if enlace.estado != Estado.VIGENTE:
         return
+    if enlace.tipo == Tipo.CONFIRMACION_ENTREGA:
+        return _enviar_confirmacion(enlace, token)
     venta, cliente = enlace.compra_venta, enlace.cliente
     enviado = False
     if cliente.email_cliente and settings.URL_DEL_SITIO and correo.correo_configurado():
@@ -188,6 +241,40 @@ def enviar_enlace(enlace_id, token):
                 f"No se pudo enviar el enlace de {venta.codigo}",
                 f"No se pudo enviar el enlace{donde}: registrá vos la decisión del cliente sobre el faltante desde la ficha de la compra.",
             )
+
+
+def _enviar_confirmacion(enlace, token):
+    """El correo único de la concreción de un suministro (postcondición l de COM-CNC-ENT, D-68 punto 1): el comprobante de entrega y el enlace de confirmación, con hasta cuándo sirve. El resultado
+    va a `EnlaceCliente.estado_envio` y a `Entrega.estado_aviso_cliente`. Si no sale (sin correo del sistema, sin `URL_DEL_SITIO` o fallo), queda «pendiente de envío» y lo reintenta el paso 50 (15a) con
+    `reemitir_enlace`: no se avisa al Vendedor, porque hay reintento. Corre fuera de toda transacción."""
+    from comercial.servicios import concrecion  # adentro: `concrecion` importa este módulo
+
+    entrega = Entrega.objects.select_related("contrato_entrega__cliente", "contrato_entrega__vendedor").get(pk=enlace.entrega_id)
+    cliente = enlace.cliente
+    enviado = False
+    if cliente.email_cliente and settings.URL_DEL_SITIO and correo.correo_configurado():
+        contexto = concrecion.contexto_del_comprobante(entrega)
+        contexto["url"] = settings.URL_DEL_SITIO + RUTA_PUBLICA.format(token=token)
+        contexto["vence"] = vencimiento_de(enlace)
+        enviado = correo.enviar_correo(
+            Destinatario(cliente.pk, cliente.email_cliente), f"Comprobante de tu entrega {entrega.codigo}: confirmá que la recibiste", "comercial/correos/confirmacion_entrega.txt", contexto
+        )
+    EnlaceCliente.objects.filter(pk=enlace.pk).update(estado_envio=EstadoEnvio.ENVIADO if enviado else EstadoEnvio.PENDIENTE_ENVIO)
+    Entrega.objects.filter(pk=entrega.pk).update(estado_aviso_cliente=Entrega.EstadoDelAviso.ENVIADO if enviado else Entrega.EstadoDelAviso.PENDIENTE_ENVIO)
+
+
+def reemitir_enlace(enlace):
+    """Extensión 15a de COM-CNC-ENT (parte 4 del paso 50): el correo con el enlace no salió y el token no se guarda (D-65), así que no se puede mandar el mismo. Si el enlace de confirmación sigue `vigente`
+    y dentro de su vigencia, le pone un **token nuevo** en la misma fila (el viejo, que nunca llegó, deja de servir) y lo manda con `on_commit`. No es un reemplazo: la fila es la misma. Usado, vencido o
+    de otro tipo: no hace nada. Devuelve el token (solo para las pruebas) o `None`. Corre fuera de toda transacción; toma solo el lock del enlace."""
+    with transaction.atomic():
+        actual = bloquear_enlace(enlace.pk)
+        if actual.tipo != Tipo.CONFIRMACION_ENTREGA or actual.estado != Estado.VIGENTE or situacion_del_enlace(actual) != SIRVE:
+            return None
+        token, resumen = nuevo_token()
+        EnlaceCliente.objects.filter(pk=actual.pk).update(token_resumen=resumen)
+        transaction.on_commit(lambda: enviar_enlace(actual.pk, token))
+    return token
 
 
 def avisar_enlaces_vencidos(hoy):

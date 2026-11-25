@@ -7,7 +7,7 @@ celular. Muestra los mensajes de Django con las convenciones de D-29 (el portal 
 <div class="portal">
   <div class="auth-brand portal-marca">
     <div class="logo">{% icono "leafmark" 16 %}</div>
-    <div><b>{{ nombre_organizacion }}</b><small>Su compra</small></div>
+    <div><b>{{ nombre_organizacion }}</b><small>{% block subtitulo %}Su compra{% endblock %}</small></div>
   </div>
   {% if messages %}
   <div data-avisos class="portal-avisos">

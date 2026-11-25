@@ -769,6 +769,7 @@ class EnlaceCliente(models.Model):
 
     class Tipo(models.TextChoices):
         DECISION_FALTANTE = "decision_faltante", "Decisión de faltante"
+        CONFIRMACION_ENTREGA = "confirmacion_entrega", "Confirmación de entrega"  # COM-06b (D-68 punto 1)
 
     class Estado(models.TextChoices):
         VIGENTE = "vigente", "Vigente"
@@ -784,9 +785,12 @@ class EnlaceCliente(models.Model):
     tipo = models.CharField(max_length=20, choices=Tipo.choices, default=Tipo.DECISION_FALTANTE)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="enlaces")
     compra_venta = models.ForeignKey(CompraVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="enlaces")
+    # COM-06b (D-68 punto 1): la entrega de suministro que confirma el cliente. Obligatoria en `confirmacion_entrega` (restricción) y nula en `decision_faltante`.
+    entrega = models.ForeignKey("Entrega", null=True, blank=True, on_delete=models.PROTECT, related_name="enlaces")
     token_resumen = models.CharField(max_length=64, unique=True)
     fecha_creacion = models.DateTimeField(default=timezone.now, editable=False)
     # Sirve hasta el final de ese día (D-65 punto 4). Faltante: la `fecha_pendiente_decision` más reciente de los detalles pendientes + `dias_vigencia_enlace_faltante`.
+    # Confirmación de entrega: NULA; la vigencia se calcula al abrir y al registrar (D-68 punto 8, `enlaces.vencimiento_de`).
     fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=15, choices=Estado.choices, default=Estado.VIGENTE)
     fecha_uso = models.DateTimeField(null=True, blank=True)
@@ -801,7 +805,7 @@ class EnlaceCliente(models.Model):
             # D-65 punto 5: a lo sumo un enlace vigente por venta y tipo.
             models.UniqueConstraint(fields=["compra_venta", "tipo"], condition=Q(estado="vigente"), name="enlace_cliente_un_vigente_por_venta_y_tipo"),
             models.CheckConstraint(condition=Q(estado__in=["vigente", "usado", "reemplazado", "anulado", "vencido"]), name="enlace_cliente_estado_valido"),
-            models.CheckConstraint(condition=Q(tipo__in=["decision_faltante"]), name="enlace_cliente_tipo_valido"),
+            models.CheckConstraint(condition=Q(tipo__in=["decision_faltante", "confirmacion_entrega"]), name="enlace_cliente_tipo_valido"),
             models.CheckConstraint(
                 condition=Q(estado_envio__isnull=True) | Q(estado_envio__in=["enviado", "pendiente_envio"]), name="enlace_cliente_estado_envio_valido"
             ),
@@ -812,11 +816,30 @@ class EnlaceCliente(models.Model):
             ),
             # Modelo, «EnlaceCliente»: decision_faltante => compra_venta no nula.
             models.CheckConstraint(condition=~Q(tipo="decision_faltante") | Q(compra_venta__isnull=False), name="enlace_cliente_faltante_con_venta"),
+            # COM-06b (modelo, «EnlaceCliente»): `confirmacion_entrega` <=> `entrega` no nula y `compra_venta` nula.
+            models.CheckConstraint(
+                condition=(Q(tipo="confirmacion_entrega") & Q(entrega__isnull=False) & Q(compra_venta__isnull=True))
+                | (~Q(tipo="confirmacion_entrega") & Q(entrega__isnull=True)),
+                name="enlace_cliente_confirmacion_con_entrega",
+            ),
+            # COM-06b: `decision_faltante` <=> `fecha_vencimiento` no nula (la de la confirmación se calcula, D-68 punto 8).
+            models.CheckConstraint(
+                condition=(Q(tipo="decision_faltante") & Q(fecha_vencimiento__isnull=False)) | (~Q(tipo="decision_faltante") & Q(fecha_vencimiento__isnull=True)),
+                name="enlace_cliente_vencimiento_segun_tipo",
+            ),
+            # COM-06b: uno por entrega y sin reemplazo (regla «Enlace de confirmación» de COM-CNF-ENT).
+            models.UniqueConstraint(fields=["entrega"], condition=Q(tipo="confirmacion_entrega"), name="enlace_cliente_uno_por_entrega"),
         ]
 
     def __str__(self):
-        """«Enlace de CV-0044 (vigente)»."""
-        return f"Enlace de {self.compra_venta.codigo if self.compra_venta_id else self.tipo} ({self.estado})"
+        """«Enlace de CV-0044 (vigente)» o «Enlace de OT-0231 (vigente)»."""
+        if self.compra_venta_id:
+            origen = self.compra_venta.codigo
+        elif self.entrega_id:
+            origen = self.entrega.codigo
+        else:
+            origen = self.tipo
+        return f"Enlace de {origen} ({self.estado})"
 
 
 class AlertaComercial(models.Model):
@@ -824,6 +847,13 @@ class AlertaComercial(models.Model):
     Una FK nula por cada origen posible y **exactamente una** cargada. COM-03b crea `suministro` y `detalle_suministro`; COM-04 suma `partida`,
     COM-05a1 `entrega` y COM-06a `solicitud`, cada una reescribiendo la restricción. La crea el mismo servicio que crea la alerta, en la misma
     transacción. Las alertas que se resuelven solas se encuentran por esta tabla, nunca por el texto de la descripción."""
+
+    class Resultado(models.TextChoices):
+        """MD-137 (D-68 punto 9): el resultado de la averiguación de una entrega no reconocida (COM-ATN-ENR, regla 2)."""
+
+        LLEGO = "llego", "La entrega llegó"
+        NO_LLEGO_PERDIDO = "no_llego_perdido", "No llegó, producto perdido"
+        NO_LLEGO_DEVUELTO = "no_llego_devuelto", "No llegó, producto devuelto"
 
     alerta = models.OneToOneField("maestros.Alerta", on_delete=models.PROTECT, related_name="vinculo_comercial")
     suministro = models.ForeignKey(Suministro, null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")  # MD-122 (COM-07b)
@@ -838,6 +868,9 @@ class AlertaComercial(models.Model):
     entrega = models.ForeignKey("Entrega", null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")
     # COM-06a (R054, D-68 punto 5): la alerta de una discrepancia de entrega (y, en COM-06b, de una queja). Una sola alerta por solicitud.
     solicitud = models.ForeignKey("SolicitudRevision", null=True, blank=True, on_delete=models.PROTECT, related_name="alertas")
+    # COM-06b (MD-137, D-68 punto 9): solo en la alerta «entrega no reconocida»; lo carga COM-ATN-ENR al resolverla. `maestros.Alerta` no se toca (regla A2 de D-37).
+    resultado_averiguacion = models.CharField(max_length=20, choices=Resultado.choices, null=True, blank=True)
+    descripcion_averiguacion = models.CharField(max_length=500, blank=True, default="")  # obligatoria con resultado: de 1 a 500, sin espacios al borde
 
     class Meta:
         verbose_name = "Alerta comercial"
@@ -862,6 +895,19 @@ class AlertaComercial(models.Model):
                 )
                 | (Q(detalle_suministro__isnull=True) & Q(fecha_periodo__isnull=True) & Q(cantidad_sin_cubrir__isnull=True)),
                 name="alerta_comercial_periodo_completo",
+            ),
+            # COM-06b (MD-137): el resultado es de su lista; resultado no nulo <=> descripción no vacía; resultado no nulo => `entrega` no nula.
+            models.CheckConstraint(
+                condition=Q(resultado_averiguacion__isnull=True) | Q(resultado_averiguacion__in=["llego", "no_llego_perdido", "no_llego_devuelto"]),
+                name="alerta_comercial_resultado_valido",
+            ),
+            models.CheckConstraint(
+                condition=(Q(resultado_averiguacion__isnull=True) & Q(descripcion_averiguacion=""))
+                | (Q(resultado_averiguacion__isnull=False) & ~Q(descripcion_averiguacion="")),
+                name="alerta_comercial_resultado_con_descripcion",
+            ),
+            models.CheckConstraint(
+                condition=Q(resultado_averiguacion__isnull=True) | Q(entrega__isnull=False), name="alerta_comercial_resultado_con_entrega"
             ),
         ]
 
@@ -1223,3 +1269,38 @@ class LineaDiscrepancia(models.Model):
     def __str__(self):
         """«Línea de discrepancia #5» (texto de la auditoría, D-36)."""
         return f"Línea de discrepancia #{self.pk}"
+
+
+# ---- COM-06b: Queja (docs/modelo/comercial.md, «Queja»; D-68 punto 5) ----
+
+
+class Queja(SolicitudRevision):
+    """Queja de un cliente sobre una entrega de suministro (``tipo_solicitud = queja``), hija de `SolicitudRevision` (D-68 punto 5). La registra el cliente con el enlace de confirmación (COM-CNF-ENT,
+    extensión 3a), una por tipo en cada respuesta; la resuelve COM-07. Nace «pendiente», sin Gerente ni monto. «Al menos un detalle» (R156, 1..*) lo verifica el servicio y el invariante. Su clave es
+    ``solicitudrevision_ptr``."""
+
+    class TipoDeQueja(models.TextChoices):
+        """Regla «Tipos de queja» de COM-CNF-ENT: «retraso» solo se ofrece si algún detalle llegó con retraso."""
+
+        ESTADO_MERCADERIA = "estado_mercaderia", "Estado de la mercadería"
+        RETRASO = "retraso", "Retraso"
+        OTRO = "otro", "Otro"
+
+    tipo_queja = models.CharField(max_length=20, choices=TipoDeQueja.choices)
+    motivo_queja = models.CharField(max_length=500, blank=True, default="")  # obligatorio salvo en `retraso` (restricción); hasta 500, sin espacios al borde
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="quejas")  # R118
+    detalles = models.ManyToManyField(DetalleEntrega, related_name="quejas")  # R156
+
+    def save(self, *args, **kwargs):
+        """Fija el discriminador: lo decide la hija y nunca cambia."""
+        self.tipo_solicitud = SolicitudRevision.Tipo.QUEJA
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name = "Queja"
+        verbose_name_plural = "Quejas"
+        constraints = [
+            models.CheckConstraint(condition=Q(tipo_queja__in=["estado_mercaderia", "retraso", "otro"]), name="queja_tipo_valido"),
+            # El motivo de «estado de la mercadería» y «otro» es obligatorio; el de «retraso» es opcional (lo calcula el Sistema).
+            models.CheckConstraint(condition=Q(tipo_queja="retraso") | ~Q(motivo_queja=""), name="queja_motivo_obligatorio_salvo_retraso"),
+        ]

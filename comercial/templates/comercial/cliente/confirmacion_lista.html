@@ -1,0 +1,39 @@
+{% extends "comercial/cliente/base.html" %}{% load iconos %}
+{% comment %}La pantalla final de COM-CNF-ENT (pasos 7 y 8, 3b.6; `S.p.done` del prototipo): «Gracias. Recibimos su respuesta.» con lo que quedó registrado (la confirmación, el número y el tipo de cada queja, o que no reconoce la
+entrega) y «Reenviar acuse» (extensión 8a: el acuse no se pudo enviar, o quiere que se lo manden otra vez). Recibe «hecho» (de la sesión). Al salir de esta pantalla no se puede volver: el enlace ya está usado.{% endcomment %}
+{% block titulo %}Recibimos su respuesta · {{ nombre_organizacion }}{% endblock %}
+{% block subtitulo %}Su entrega{% endblock %}
+{% block contenido %}
+<div class="portal-h"><h1>Gracias. Recibimos su respuesta.</h1></div>
+{% if hecho.respuesta == "no_recibi" %}
+<div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>Su respuesta quedó registrada: <b>no reconoce la entrega</b>. Avisamos a su vendedor y a la gerencia, y se van a comunicar con usted.</div></div>
+{% elif hecho.respuesta == "con_quejas" %}
+<div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>La recepción quedó <b>confirmada</b> y registramos {{ hecho.quejas|length }} queja{{ hecho.quejas|length|pluralize }}.</div></div>
+<section class="sec" aria-label="Sus quejas">
+  <ul class="portal-lista">
+    {% for q in hecho.quejas %}<li><b>{{ q.codigo }}</b> · {{ q.tipo }}</li>{% endfor %}
+  </ul>
+</section>
+{% else %}
+<div class="alert alert-ok" role="status">{% icono "check" 16 %}<div>La recepción de su entrega quedó <b>confirmada</b>.</div></div>
+{% endif %}
+<p class="muted">Este enlace ya no puede volver a usarse.</p>
+{% if hecho.acuse_enviado is False %}
+<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>El acuse todavía no se envió a su correo. Puede pedir que se lo reenviemos.</div></div>
+{% endif %}
+<form method="post" action="{% url 'cliente:reenviar_acuse' %}" class="portal-form">
+  {% csrf_token %}
+  <div class="footbar">
+    <button class="btn btn-ghost" type="submit" data-enviando="Reenviando…">Reenviar acuse</button>
+  </div>
+</form>
+{% if hecho.contacto.nombre %}
+<section class="sec" aria-label="Contacto del Vendedor">
+  <dl class="dl two">
+    <dt>Su vendedor</dt><dd>{{ hecho.contacto.nombre }}</dd>
+    {% if hecho.contacto.telefono %}<dt>Teléfono</dt><dd>{{ hecho.contacto.telefono }}</dd>{% endif %}
+    <dt>Correo</dt><dd>{{ hecho.contacto.email }}</dd>
+  </dl>
+</section>
+{% endif %}
+{% endblock %}

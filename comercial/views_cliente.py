@@ -8,14 +8,16 @@
 
 import functools
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_http_methods, require_safe
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
 from django.views.decorators.vary import vary_on_headers
 
-from comercial.servicios import enlaces, faltantes
+from comercial.models import EnlaceCliente
+from comercial.servicios import confirmacion, enlaces, faltantes
 from comercial.servicios.compra_ventas import texto_de_pesos
 
 SESION = "enlace_cliente"
@@ -61,10 +63,18 @@ def _no_valido(request):
     return render(request, "comercial/cliente/no_valido.html", status=404)
 
 
-def _no_sirve(request, motivo, venta_id=None):
-    """«Este enlace no se puede usar», con el motivo y los datos de contacto del Vendedor (extensión 2a)."""
-    contacto = faltantes.contacto_del_vendedor(venta_id) if venta_id else None
-    return render(request, "comercial/cliente/no_sirve.html", {"motivo": enlaces.MOTIVOS.get(motivo, "Este enlace ya no puede usarse."), "contacto": contacto})
+def _es_confirmacion(enlace):
+    return enlace.tipo == EnlaceCliente.Tipo.CONFIRMACION_ENTREGA
+
+
+def _no_sirve(request, motivo, enlace):
+    """«Este enlace no se puede usar», con el motivo y los datos de contacto del Vendedor del contrato (extensiones 2a y 6a de COM-DCD-FLT y de COM-CNF-ENT)."""
+    if _es_confirmacion(enlace):
+        contacto = confirmacion.contacto_de_la_entrega(enlace.entrega_id)
+    else:
+        contacto = faltantes.contacto_del_vendedor(enlace.compra_venta_id) if enlace.compra_venta_id else None
+    contexto = {"motivo": enlaces.texto_del_motivo(motivo, enlace.tipo), "contacto": contacto, "es_confirmacion": _es_confirmacion(enlace)}
+    return render(request, "comercial/cliente/no_sirve.html", contexto)
 
 
 def _leer(post, datos):
@@ -144,21 +154,24 @@ def entrada(request, token):
     if situacion == enlaces.SIRVE:
         request.session[SESION] = enlace.pk
         return redirect(RUTA_DEL_PORTAL)
-    return _no_sirve(request, situacion, enlace.compra_venta_id)
+    return _no_sirve(request, situacion, enlace)
 
 
 @_pagina_publica
 @require_http_methods(["GET", "POST"])
 def decision(request):
-    """`/cliente/enlace/`: GET muestra la venta y el formulario (paso 2); POST con `accion` = `revisar` (resumen del paso 4), `cambiar` (4b) o `confirmar` (paso 6)."""
+    """`/cliente/enlace/`: GET muestra la venta y el formulario (paso 2); POST con `accion` = `revisar` (resumen del paso 4), `cambiar` (4b) o `confirmar` (paso 6). Según el tipo del enlace
+    es la decisión de un faltante (COM-DCD-FLT) o la confirmación de una entrega (COM-CNF-ENT, `_confirmar`)."""
     enlace = enlaces.enlace_por_id(request.session.get(SESION))
     if enlace is None:
         return _no_valido(request)
+    if _es_confirmacion(enlace):
+        return _confirmar(request, enlace)
     try:
         respuesta, hecho = manejar(request, plantilla="comercial/cliente/decision.html", url=RUTA_DEL_PORTAL, enlace=enlace)
     except ValidationError as error:
         motivo = error.error_dict["__all__"][0].params["motivo"]
-        return _no_sirve(request, motivo, enlace.compra_venta_id)
+        return _no_sirve(request, motivo, enlace)
     if respuesta is not None:
         return respuesta
     _, resumen = hecho
@@ -178,4 +191,139 @@ def listo(request):
     hecho = request.session.get(SESION_LISTO)
     if not hecho or hecho["enlace"] != request.session.get(SESION):
         return _no_valido(request)
+    if hecho.get("tipo") == "confirmacion":
+        return render(request, "comercial/cliente/confirmacion_lista.html", {"hecho": hecho})
     return render(request, "comercial/cliente/listo.html", {"hecho": hecho})
+
+
+# ---- COM-CNF-ENT: confirmar la entrega (COM-06b; docs/casos_de_uso/comercial/confirmacion.md, «Pantallas») ----
+# La página del cliente muestra su entrega y le pide la respuesta: «recibí y estoy conforme», «recibí pero tengo quejas» (una por tipo, con sus productos y su motivo) o «no recibí». Sin JavaScript el
+# formulario es una página, el resumen es otra y el envío, un POST; con HTMX, al elegir la respuesta solo se vuelve a dibujar el bloque de quejas o de motivo (`redibujar`, que no valida: D-29).
+
+SESION_ACUSE = "enlace_cliente_acuse"
+
+
+def _errores_por_campo(error):
+    """`{campo: [mensajes]}` de un `ValidationError` del servicio (el campo `__all__` va a la cabecera)."""
+    return {campo: [e.messages[0] for e in lista] for campo, lista in error.error_dict.items()}
+
+
+def _filas_de_quejas(datos, tipos, respuesta, errores):
+    """Una fila por tipo de queja disponible con lo elegido y sus errores (la plantilla no puede buscar por clave en un diccionario). En «retraso», solo los productos con días de retraso."""
+    por_tipo = {q.tipo: q for q in respuesta.quejas}
+    filas = []
+    for valor, texto in tipos:
+        pedida = por_tipo.get(valor)
+        productos = [
+            {"id": l.detalle_id, "variedad": l.variedad, "dias": l.dias_de_retraso, "marcado": pedida is not None and l.detalle_id in pedida.lineas}
+            for l in datos.lineas
+            if valor != "retraso" or l.dias_de_retraso > 0
+        ]
+        filas.append(
+            {
+                "valor": valor,
+                "texto": texto,
+                "marcada": pedida is not None,
+                "productos": productos,
+                "motivo": pedida.motivo if pedida is not None else "",
+                "obligatorio": valor != "retraso",
+                "error_tipo": errores.get(f"queja_{valor}", []),
+                "error_productos": errores.get(f"lineas_{valor}", []),
+                "error_motivo": errores.get(f"motivo_{valor}", []),
+            }
+        )
+    return filas
+
+
+def _contexto_de_confirmacion(datos, respuesta, errores=None, **extra):
+    errores = errores or {}
+    tipos = confirmacion.tipos_de_queja_disponibles(datos)
+    contexto = {
+        "datos": datos,
+        "url": RUTA_DEL_PORTAL,
+        "respuesta": respuesta,
+        "errores": errores,
+        "error_respuesta": errores.get("respuesta", []),
+        "generales": errores.get("__all__", []),
+        "quejas": _filas_de_quejas(datos, tipos, respuesta, errores),
+        "motivo_no_recibi": respuesta.motivo_no_recibi,
+        "error_motivo_no_recibi": errores.get("motivo_no_recibi", []),
+        # Sin elegir todavía se muestran los dos bloques (así funciona sin JavaScript); elegida la respuesta, solo el que corresponde.
+        "ver_quejas": respuesta.respuesta in ("", confirmacion.CON_QUEJAS),
+        "ver_motivo": respuesta.respuesta in ("", confirmacion.NO_RECIBI),
+        "paso": "formulario",
+    }
+    contexto.update(extra)
+    return contexto
+
+
+def _campos_ocultos(respuesta):
+    """Lo elegido, como campos ocultos del formulario del resumen (el envío vuelve a leerlo con `datos_de_respuesta`)."""
+    campos = [("respuesta", respuesta.respuesta)]
+    for q in respuesta.quejas:
+        campos.append((f"queja_{q.tipo}", "1"))
+        campos.extend((f"lineas_{q.tipo}", i) for i in q.lineas)
+        campos.append((f"motivo_{q.tipo}", q.motivo))
+    if respuesta.respuesta == confirmacion.NO_RECIBI:
+        campos.append(("motivo_no_recibi", respuesta.motivo_no_recibi))
+    return campos
+
+
+def _confirmar(request, enlace):
+    """El flujo de COM-CNF-ENT para el cliente. GET: la entrega y el formulario (paso 2). POST con `accion` = `redibujar` (HTMX: solo el bloque de quejas o de motivo, sin validar), `revisar` (el
+    resumen del paso 4 o de 3b.2), `cambiar` (4a: vuelve al formulario con lo elegido) o `confirmar` (paso 6 o 3b.4). Un enlace que ya no sirve (2a, 6a) termina el flujo."""
+    try:
+        datos = confirmacion.datos_para_el_cliente(enlace)
+    except ValidationError as error:
+        return _no_sirve(request, error.error_dict["__all__"][0].params["motivo"], enlace)
+    if request.method == "GET":
+        return render(request, "comercial/cliente/confirmacion.html", _contexto_de_confirmacion(datos, confirmacion.DatosDeRespuesta()))
+    respuesta = confirmacion.datos_de_respuesta(request.POST)
+    accion = request.POST.get("accion", "revisar")
+    if accion == "redibujar":
+        plantilla = "comercial/cliente/_confirmacion_bloques.html" if request.headers.get("HX-Request") == "true" else "comercial/cliente/confirmacion.html"
+        return render(request, plantilla, _contexto_de_confirmacion(datos, respuesta))
+    if accion == "cambiar":
+        return render(request, "comercial/cliente/confirmacion.html", _contexto_de_confirmacion(datos, respuesta))
+    try:
+        resumen = confirmacion.resumen_de_respuesta(datos, respuesta)
+    except ValidationError as error:  # 3a.4a, 3a.4b, 3a.6a y 3b.1a: por campo
+        return render(request, "comercial/cliente/confirmacion.html", _contexto_de_confirmacion(datos, respuesta, _errores_por_campo(error)))
+    if accion != "confirmar":
+        return render(request, "comercial/cliente/confirmacion.html", _contexto_de_confirmacion(datos, respuesta, paso="resumen", resumen=resumen, ocultas=_campos_ocultos(respuesta)))
+    try:
+        hecho = confirmacion.registrar_respuesta(enlace.pk, respuesta)
+    except ValidationError as error:
+        if "enlace_no_sirve" in codigos_de(error):  # 6a: ya se usó o venció mientras completaba la respuesta
+            return _no_sirve(request, error.error_dict["__all__"][0].params["motivo"], enlace)
+        return render(request, "comercial/cliente/confirmacion.html", _contexto_de_confirmacion(datos, respuesta, _errores_por_campo(error)))
+    request.session[SESION_LISTO] = {
+        "enlace": enlace.pk,
+        "tipo": "confirmacion",
+        "respuesta": hecho.respuesta,
+        "quejas": [{"codigo": q.codigo, "tipo": q.get_tipo_queja_display()} for q in hecho.quejas],
+        "acuse_enviado": hecho.acuse_enviado,
+        "contacto": {"nombre": datos.contacto.nombre, "telefono": datos.contacto.telefono, "email": datos.contacto.email},
+    }
+    return redirect(RUTA_LISTO)
+
+
+@_pagina_publica
+@require_POST
+def reenviar_acuse(request):
+    """`/cliente/enlace/listo/reenviar/` (extensión 8a): reenvía el acuse al correo registrado del cliente, las veces que haga falta. Solo para quien acaba de responder con ese enlace (la sesión): al salir
+    de la pantalla final no se puede volver, porque el enlace ya está usado (2a)."""
+    hecho = request.session.get(SESION_LISTO)
+    if not hecho or hecho["enlace"] != request.session.get(SESION) or hecho.get("tipo") != "confirmacion":
+        return _no_valido(request)
+    try:
+        salio = confirmacion.reenviar_acuse(hecho["enlace"])
+    except ValidationError:
+        return _no_valido(request)
+    hecho["acuse_enviado"] = salio
+    request.session[SESION_LISTO] = hecho
+    if salio:
+        messages.success(request, "Le reenviamos el acuse a su correo.")
+    else:
+        messages.error(request, "No pudimos enviar el acuse. Puede volver a pedirlo.")
+    return redirect(RUTA_LISTO)

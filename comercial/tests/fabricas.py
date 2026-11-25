@@ -262,6 +262,27 @@ def enlace(venta, *, estado="vigente", vence=None, estado_envio="enviado", clien
     )
 
 
+def enlace_de_confirmacion(entrega_, *, estado="vigente", estado_envio="enviado", cliente_=None):
+    """COM-06b: el `EnlaceCliente` de confirmación de ``entrega_`` (una entrega de suministro) creado directo (sin correo ni `on_commit`), con su token. Devuelve ``(enlace, token)``: la base
+    guarda solo el resumen. Nunca lleva `fecha_vencimiento` (la vigencia se calcula, D-68 punto 8); con ``estado="usado"`` guarda `fecha_uso` (restricción)."""
+    from comercial.models import EnlaceCliente
+    from core.enlaces import nuevo_token
+
+    token, resumen = nuevo_token()
+    return (
+        EnlaceCliente.objects.create(
+            tipo=EnlaceCliente.Tipo.CONFIRMACION_ENTREGA,
+            cliente=cliente_ or entrega_.contrato_entrega.cliente,
+            entrega=entrega_,
+            token_resumen=resumen,
+            estado=estado,
+            fecha_uso=timezone.now() if estado == "usado" else None,
+            estado_envio=estado_envio,
+        ),
+        token,
+    )
+
+
 def detalle(venta, variedad, cantidad=10, precio="100.00", estado="abierto"):
     """Un `DetalleVenta` de ``venta`` (sin reservas)."""
     from comercial.models import DetalleVenta
@@ -787,11 +808,55 @@ def discrepancia(entrega_, *, minima=None, con_alerta=True):
     return creada
 
 
+def queja(entrega_, tipo="estado_mercaderia", lineas=None, motivo=None, *, con_alerta=True):
+    """COM-06b: una `Queja` «pendiente» de una entrega de suministro concretada, creada directo con `solicitudes.crear_solicitud`. ``lineas`` son las `DetalleEntrega` a las que se refiere (por
+    omisión, todas las de la entrega); ``motivo`` por omisión es un texto para «estado de la mercadería» u «otro» y vacío para «retraso». Con ``con_alerta`` deja su alerta `comercial_queja` para el
+    Gerente con su `AlertaComercial`. La respuesta real del cliente la registra `confirmacion.registrar_respuesta`."""
+    from django.db import transaction
+
+    from comercial.models import AlertaComercial, Queja
+    from comercial.servicios import solicitudes
+    from maestros.tests.fabricas import crear_alerta
+
+    if motivo is None:
+        motivo = "" if tipo == "retraso" else "El producto llegó en mal estado."
+    with transaction.atomic():
+        creada = solicitudes.crear_solicitud(Queja, entrega_, tipo_queja=tipo, motivo_queja=motivo, cliente=entrega_.contrato_entrega.cliente)
+    creada.detalles.set(lineas if lineas is not None else entrega_.lineas.all())
+    if con_alerta:
+        alerta = crear_alerta(entrega_.invernadero, "comercial_queja", descripcion_alerta=f"{entrega_.codigo} · {creada.codigo}")
+        AlertaComercial.objects.create(alerta=alerta, solicitud=creada)
+    return creada
+
+
+def alerta_no_reconocida(entrega_, motivo="No llegó nada.", *, resuelta=False):
+    """COM-06b: la alerta crítica «entrega no reconocida por el cliente» de ``entrega_`` para el Gerente, con su `AlertaComercial(entrega=…)`, creada directo (la respuesta real del cliente la
+    crea `confirmacion.registrar_respuesta`). Devuelve la `Alerta`."""
+    from comercial.models import AlertaComercial
+    from maestros.models import Alerta
+    from maestros.tests.fabricas import crear_alerta
+
+    alerta = crear_alerta(
+        entrega_.invernadero,
+        "comercial_entrega_no_reconocida",
+        nivel_severidad=Alerta.Severidad.CRITICA,
+        resuelta=resuelta,
+        descripcion_alerta=f"{entrega_.codigo} · el cliente dice que no la recibió: “{motivo}”",
+    )
+    AlertaComercial.objects.create(alerta=alerta, entrega=entrega_)
+    return alerta
+
+
 def verificar_invariantes_de_solicitudes():
     """Invariantes de `docs/modelo/comercial.md`, «SolicitudRevision» y «DiscrepanciaEntrega» (COM-06a), los que la base no puede vigilar: (1) la entrega de una solicitud es de un
     suministro y está «concretada»; (2) las líneas de una discrepancia son de la entrega de la discrepancia y de un detalle de suministro; (3) una discrepancia tiene al menos una línea;
-    (4) cada solicitud tiene exactamente una `AlertaComercial`. Lanza `AssertionError` con lo que encuentra."""
-    from comercial.models import AlertaComercial, CompraVenta, DiscrepanciaEntrega, SolicitudRevision
+    (4) cada solicitud tiene exactamente una `AlertaComercial`; y, desde COM-06b, de cada `Queja`
+    (docs/modelo/comercial.md, «Queja»): (5) al menos un detalle y todos de su entrega, (6) a lo sumo una por tipo en cada entrega (el enlace admite un solo envío), (7) la de retraso solo con
+    detalles con días de retraso mayores que cero y (8) su `cliente` es el del contrato. Lanza `AssertionError` con lo que encuentra."""
+    from collections import Counter
+    from datetime import timedelta
+
+    from comercial.models import AlertaComercial, CompraVenta, DiscrepanciaEntrega, Queja, SolicitudRevision
 
     problemas = []
     for s in SolicitudRevision.objects.select_related("entrega").order_by("pk"):
@@ -809,6 +874,26 @@ def verificar_invariantes_de_solicitudes():
         for linea in lineas:
             if linea.detalle_entrega.entrega_id != d.entrega_id or linea.detalle_entrega.detalle_suministro_id is None:
                 problemas.append(f"{d.codigo}: línea #{linea.pk} de otra entrega o de un detalle que no es de suministro")
+    quejas = list(Queja.objects.select_related("entrega__contrato_entrega").order_by("pk"))
+    for (entrega_id, tipo), cuantas in Counter((q.entrega_id, q.tipo_queja) for q in quejas).items():
+        if cuantas > 1:
+            problemas.append(f"entrega #{entrega_id}: {cuantas} quejas de tipo {tipo} (a lo sumo una por tipo)")
+    for q in quejas:
+        detalles = list(q.detalles.select_related("detalle_suministro__clausula_suministrante"))
+        if not detalles:
+            problemas.append(f"{q.codigo}: sin detalles")
+        if q.cliente_id != q.entrega.contrato_entrega.cliente_id:
+            problemas.append(f"{q.codigo}: de un cliente que no es el del contrato")
+        for detalle_ in detalles:
+            if detalle_.entrega_id != q.entrega_id:
+                problemas.append(f"{q.codigo}: el detalle #{detalle_.pk} es de otra entrega")
+            if q.tipo_queja == "retraso":
+                if detalle_.detalle_suministro_id is None or q.entrega.fecha_resolucion_orden is None:
+                    problemas.append(f"{q.codigo}: queja por retraso con el detalle #{detalle_.pk}, que no es de un suministro concretado")
+                    continue
+                limite = detalle_.fecha_periodo + timedelta(days=detalle_.detalle_suministro.clausula_suministrante.plazo_entrega_dias)
+                if q.entrega.fecha_resolucion_orden <= limite:
+                    problemas.append(f"{q.codigo}: queja por retraso con el detalle #{detalle_.pk}, que no llegó con retraso")
     if problemas:
         raise AssertionError("Invariantes de solicitudes rotos: " + "; ".join(problemas))
 
