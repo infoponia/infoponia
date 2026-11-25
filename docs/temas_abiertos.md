@@ -882,3 +882,16 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Migraciones:** `comercial` 0013 (con `RunSQL` de `comercial_cobro_numero_seq` y su reverso) y `core` 0051 (solo `choices`; `sqlmigrate` es un no-op). El número se confirma al abrir el PR (`git fetch`; en `origin/main` las últimas son `comercial` 0012 y `core` 0050).
 - **Entorno de pruebas:** con `--parallel`, una prueba que **falla** hace caer el ejecutor con `TypeError: cannot pickle 'traceback' object` (falta `tblib`) y no muestra cuál; para ver las fallas hay que correr en serie. Le pasa también al CI si una prueba falla.
 - **Sin prueba:** el envío real por SMTP, la migración hacia atrás y lo que solo ve un navegador (pasos 12, 13 y 17 de la «Verificación a mano»).
+
+## CON-04a (asientos de producción; 25/11/2026): lo que se implementó distinto de lo escrito
+
+- **Paso 5 («Resúmenes») sin pantallas.** Ningún extracto muestra el asiento en un resumen o una ficha y el Capataz no ve valores. No hay bloque «Asiento contable» (decidido con el estudiante el 25/11/2026).
+- **«Con su enlace al origen» sin enlace.** El origen de los cinco asientos es una fila de bitácora y las pantallas de producción no las abre el Contador (404, D-30). `produccion` registra en `contabilidad` un **texto** («Consumo · …», «Merma del lote L-n · …»). Si más adelante hay una pantalla de consulta para el Contador, se le puede sumar la dirección.
+- **La cuenta de un consumo de aplicación se decide por el resultado:** un insumo «como costo de los lotes» sin lotes de plantas en el alcance (extensión 10c) asienta contra Gastos de Producción, igual que uno «como gasto».
+- **La descripción del asiento** no estaba escrita: se usa la `descripcion_evento` del consumo o de la merma, recortada a 300 caracteres.
+- **Fecha del asiento:** la de la merma (hoy) en PROD-REG-MRM; la efectiva en la transición y en el fuera de servicio; la de hoy en la aplicación (D-92 punto 4).
+- **`DESCRIPCION_DE_CUENTA`** (`contabilidad/cuentas.py`) no se tocó: coincide con `plan_de_cuentas.md`, pero «Productos en Proceso» dice que las transiciones la mueven (Debe) y la transición no asienta por sí misma, solo su merma. «Gastos de Producción» sigue figurando como «propuesta (MD-90)» en el extracto de la aplicación.
+- **Defecto previo corregido:** `registrar_merma` y `concretar_transicion` agregaban `costo_acumulado` a la auditoría aunque no cambiara (lote con costo $ 0, que PRD-05 permite) y la auditoría lo rechaza (D-36). Ahora solo se registra si cambió.
+- **Auditoría:** los asientos van en `datos["asientos"]` (lista; siembra, aplicación y fuera de servicio) o `datos["asiento"]` (uno; merma y transición).
+- **Pendiente de CON-04c:** la cosecha, la entrega y la merma de la cámara llaman a `aplicar_merma` y todavía no asientan.
+- **Pasada manual en navegador real** (paso 16 de la «Verificación a mano»): el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript de los formularios de concreción, merma, aplicación y fuera de servicio.

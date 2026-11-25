@@ -1,6 +1,7 @@
 # Pruebas de concurrencia de las siembras (PRD-01; docs/patrones/bloqueos.md, sección `produccion`; docs/patrones/stock.md, sección 5).
 # Paso 5: PLANIFICAR. Dos planificaciones sobre la última semilla y sobre el último agujero; planificar contra la baja del sector y contra
-# la baja de la variedad, en los dos órdenes. El paso 6 suma las de concretar en este mismo archivo.
+# la baja de la variedad, en los dos órdenes. El paso 6 suma las de concretar en este mismo archivo. CON-04a suma las del asiento de la concreción
+# (`ConcretarAsientoConcurrenciaTests`): el ejercicio se bloquea último (D-86 punto 2) y concretar contra cerrar el ejercicio en cierre (D-102).
 #
 # Dos hilos, dos conexiones, el orden fijado con ``primera`` (core/tests/concurrencia.py): ``primera`` se detiene en su punto de parada
 # (por defecto, ``RegistroAuditoria.objects.registrar``: ya tomó sus bloqueos y escribió, pero no confirmó) y recién entonces arranca la
@@ -14,7 +15,13 @@ from decimal import Decimal
 from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
-from core.models import RegistroAuditoria
+from django.core.cache import cache
+
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos, ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador, RegistroAuditoria
+from core.tests.fabricas import crear_cuenta
 from core.tests.concurrencia import correr_a_la_vez
 from inventario.servicios import variedades
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario, perezoso
@@ -141,6 +148,7 @@ class ConcretarConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
     def armar(self, **opciones):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04a: la concreción asienta y el flush de la prueba anterior vació el plan
         self.e = invernadero_con_produccion(geografia_propia=True, **opciones)
 
     def concretar(self, orden):
@@ -185,3 +193,112 @@ class ConcretarConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual(codigos_del_rechazo(rechazos[0]), ["lotes_activos"])
         self.e.variedad.refresh_from_db()
         self.assertEqual(self.e.variedad.estado_variedad, "activo")
+
+
+@tag("concurrencia")
+class ConcretarAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04a · el asiento de cada consumo bloquea el ejercicio AL FINAL (D-86 punto 2, `docs/patrones/asientos.md`) y NUNCA rechaza por la fecha
+    (D-102): una concreción que se cruza con el cierre del ejercicio no falla; su asiento queda en el ejercicio que corresponde y nunca en uno cerrado.
+
+    Escenario: un ejercicio «en cierre» (de hace más de un año) y el abierto, que contiene a hoy. Las fechas son relativas a hoy porque el servicio
+    toma «hoy» del reloj. Usa dos hilos con ``correr_a_la_vez``; ninguna prueba desactiva un bloqueo."""
+
+    def armar(self):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = invernadero_con_produccion(geografia_propia=True)
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+
+    def con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, timezone.localdate() - timedelta(days=400))
+        self.abierto = ejercicio_abierto(timezone.localdate() - timedelta(days=20))
+
+    def concretar(self, orden, escenario=None, **cambios):
+        e = escenario or self.e
+        return lambda: siembras.concretar_siembra(e.capataz, orden.pk, siembras.DatosDeConcrecion(**cambios))
+
+    def cierre(self):
+        return lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def asiento_de(self, orden):
+        """El único asiento de la concreción de `orden` (su semilla tiene un solo consumo)."""
+        return AsientoContable.objects.get(origen__bitacora__consumo__siembra=orden)
+
+    def test_d102_el_cierre_primero_y_concretar_con_fecha_de_hoy_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre ya tomó su fila (sin confirmar); la concreción de hoy no la necesita: termina bien, con el asiento N.º 1 del ejercicio abierto. El
+        ejercicio en cierre queda cerrado y sin asientos. Ninguno de los dos falla (D-102)."""
+        self.armar()
+        self.con_ejercicios()
+        orden = orden_de_siembra(self.e, plantines=50)
+        resultados = correr_a_la_vez(self.cierre(), self.concretar(orden), primera="a")
+        self.sin_errores(resultados)
+        asiento = self.asiento_de(orden)
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (self.abierto.pk, 1, timezone.localdate()))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        self.assertEqual(AsientoContable.objects.filter(ejercicio=self.en_cierre).count(), 0)
+        verificar_invariantes_contables()
+
+    def test_d102_el_cierre_primero_y_concretar_con_fecha_en_el_ejercicio_en_cierre_espera_y_va_al_abierto_con_la_aclaracion(self):
+        """La siembra tiene fecha efectiva dentro del ejercicio en cierre. El cierre tiene esa fila tomada; la concreción espera, la relee ya «cerrada»,
+        elige de nuevo y su asiento va al abierto, con la fecha de hoy y la aclaración de la fecha real. Ninguno falla."""
+        self.armar()
+        self.con_ejercicios()
+        orden = orden_de_siembra(self.e, plantines=50, dias=-40)
+        fecha = timezone.localdate() - timedelta(days=38)
+        resultados = correr_a_la_vez(self.cierre(), self.concretar(orden, fecha_efectiva=fecha), primera="a")
+        self.sin_errores(resultados)
+        asiento = self.asiento_de(orden)
+        self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento), (self.abierto.pk, timezone.localdate()))
+        self.assertIn(f"Fecha del hecho: {fecha:%d/%m/%Y}", asiento.descripcion_asiento)
+        self.assertEqual(Siembra.objects.get(pk=orden.pk).fecha_siembra, fecha)
+        self.assertEqual(AsientoContable.objects.filter(ejercicio=self.en_cierre).count(), 0)
+        verificar_invariantes_contables()
+
+    def test_d102_concretar_primero_con_fecha_en_el_ejercicio_en_cierre_y_el_cierre_a_la_vez_el_asiento_queda_en_el_ejercicio_en_cierre(self):
+        """La concreción ya creó su asiento en el ejercicio en cierre (tiene su fila tomada, sin confirmar); el cierre espera, y cuando la concreción
+        confirma, cierra el ejercicio con ese asiento adentro. Los dos terminan bien."""
+        self.armar()
+        self.con_ejercicios()
+        orden = orden_de_siembra(self.e, plantines=50, dias=-40)
+        fecha = timezone.localdate() - timedelta(days=38)
+        resultados = correr_a_la_vez(self.concretar(orden, fecha_efectiva=fecha), self.cierre(), primera="a")
+        self.sin_errores(resultados)
+        asiento = self.asiento_de(orden)
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (self.en_cierre.pk, 1, fecha))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def test_regla_h8_dos_concreciones_a_la_vez_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos concreciones a la vez (órdenes distintas) asientan con los números 1 y 2; la segunda espera y relee el número."""
+        self.armar()
+        ejercicio_abierto(timezone.localdate() - timedelta(days=20))
+        una = orden_de_siembra(self.e, plantines=50)
+        otra = orden_de_siembra(self.e, plantines=30, sector="crecimiento")
+        resultados = correr_a_la_vez(self.concretar(una), self.concretar(otra), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(sorted([self.asiento_de(una).numero_asiento, self.asiento_de(otra).numero_asiento]), [1, 2])
+        self.assertEqual(self.asiento_de(una).numero_asiento, 1)  # la primera tomó el bloqueo del ejercicio antes
+        self.assertEqual(EjercicioContable.objects.get().ultimo_numero_asiento, 2)
+        verificar_invariantes_contables()
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_la_concrecion_bloquea(self):
+        """D-86 punto 2: la concreción A (invernadero Norte) se detiene justo ANTES de bloquear el ejercicio, con todos sus bloqueos de producción ya
+        tomados; la concreción B (otro invernadero, sin ninguna fila en común) asienta completa y toma el N.º 1. Si A hubiera bloqueado el ejercicio
+        antes que sus filas, B esperaría y el orden sería el inverso."""
+        self.armar()
+        ejercicio_abierto(timezone.localdate() - timedelta(days=20))
+        otro = invernadero_con_produccion(nombre="Invernadero Sur", sufijo="b", geografia_propia=True)
+        a = orden_de_siembra(self.e, plantines=50)
+        b = orden_de_siembra(otro, plantines=50)
+        resultados = correr_a_la_vez(
+            self.concretar(a), self.concretar(b, escenario=otro), primera="a", detener_antes_de=(asientos, "_bloquear_ejercicio")
+        )
+        self.sin_errores(resultados)
+        self.assertEqual((self.asiento_de(b).numero_asiento, self.asiento_de(a).numero_asiento), (1, 2))
+        verificar_invariantes_contables()

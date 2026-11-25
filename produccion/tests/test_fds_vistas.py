@@ -3,6 +3,7 @@
 # el resumen antes de escribir (la «firma» y lo que la persona vio, extensión 14a), los errores por campo, que el HTML se escapa, las entradas desde la ficha del
 # sector y desde la ventana de la baja (maestros) y que todo funciona sin JavaScript (un POST común) y con HTMX (solo el bloque que cambia).
 
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from datetime import timedelta
 
 from django.test import TestCase
@@ -21,7 +22,7 @@ HX = {"HTTP_HX_REQUEST": "true"}
 URL = "produccion:fuera_de_servicio"
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     """Un invernadero con un sector por etapa; `germ` es el de origen y `g2` un destino de Germinación."""
 
     def setUp(self):

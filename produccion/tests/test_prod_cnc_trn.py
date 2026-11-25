@@ -16,7 +16,8 @@
 # `origen` en `datos`); sector_no_elegible (cantidades); cantidad_invalida (cantidades; 8a, 10b y 10c); causa_obligatoria (causa; 10a.3a);
 # causa_invalida; descripcion_larga.
 #
-# Una prueba por regla y por postcondición a a m, menos las contables (D-45: sin ejercicio, cuentas ni asientos). Cada prueba arma sus
+# Una prueba por regla y por postcondición a a m. CON-04a: la transición no asienta por sí misma; solo la merma de las plantas sin trasladar
+# (post. e de PROD-REG-MRM, `ConcretarTransicionAsientoTests`). Cada prueba arma sus
 # propios datos y viola UNA sola regla.
 
 from datetime import timedelta
@@ -27,6 +28,11 @@ from django.http import Http404
 from django.test import TestCase
 from django.utils import timezone
 
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Capataz, Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.models import MovimientoInsumo
@@ -65,7 +71,7 @@ def rechazo(llamada):
     raise AssertionError("Se esperaba un ErrorDeProduccion y no se lanzó ninguno.")
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero completo (sectores de 100 agujeros) con un lote de 50 plantas en Crecimiento (costo 100,00) desde hoy y su transición
     «a realizar» a Floración, planificada por el Agrónomo para el sector de Floración."""
 
@@ -98,6 +104,7 @@ class Base(ConDatosDeInventario, TestCase):
         """La orden sigue «a realizar» y no hay bitácora de transición, merma, notificación ni registro de la concreción."""
         self.assertEqual(TransicionEtapa.objects.get(pk=self.orden.pk).estado_orden, "a_realizar")
         self.assertFalse(Merma.objects.exists())
+        self.assertEqual(AsientoContable.objects.count(), 0)
         self.assertFalse(Bitacora.objects.filter(tipo_evento="transicion").exists())
         self.assertEqual(Notificacion.objects.count(), 0)
         self.assertFalse(RegistroAuditoria.objects.filter(accion="concrecion_transicion").exists())
@@ -508,6 +515,7 @@ class ConcretarTransicionTests(Base):
         antes = (MovimientoInsumo.objects.count(), Consumo.objects.count())
         self.concretar()
         self.assertEqual((MovimientoInsumo.objects.count(), Consumo.objects.count()), antes)
+        self.assertEqual(AsientoContable.objects.count(), 0)  # CON-04a: sin merma, la transición no asienta nada
 
 
 class ResumenDeConcrecionTests(Base):
@@ -580,3 +588,71 @@ class FechaMinimaEnLaConcrecionTests(Base):
         propuesta = transiciones.datos_de_concrecion(self.e.capataz, self.orden.pk)
         self.assertEqual(propuesta.fecha_minima, transiciones.fecha_minima_de_transicion(Lote.objects.get(pk=self.lote.pk)))
         self.assertEqual(api_lotes.fecha_de_entrada_a_la_etapa(Lote.objects.get(pk=self.lote.pk)), hoy())
+
+
+class ConcretarTransicionAsientoTests(Base):
+    """CON-04a · PROD-CNC-TRN con merma = PROD-REG-MRM postcondición e (D-92 puntos 2 a 6 y 9): la merma de las plantas sin trasladar asienta Debe
+    Pérdidas por Mermas / Haber Productos en Proceso por su costo, con la fecha EFECTIVA de la transición. La transición en sí no asienta."""
+
+    def lineas(self, asiento):
+        return sorted(
+            (m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento)
+            for m in MovimientoContable.objects.filter(asiento=asiento).select_related("cuenta")
+        )
+
+    def test_post_e_la_merma_de_la_transicion_asienta_perdidas_por_mermas_contra_productos_en_proceso(self):
+        """10 de 50 plantas a $100,00 se pierden: $20,00. El asiento tiene la merma como origen y la fecha efectiva (hoy)."""
+        self.concretar(cantidades=((self.destino.pk, 40),), causa="plaga")
+        merma = Merma.objects.get()
+        asiento = AsientoContable.objects.get()
+        self.assertEqual(asiento.origen_id, merma.pk)
+        self.assertEqual(asiento.fecha_asiento, hoy())
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("20.00")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, Decimal("20.00"))]))
+        self.assertEqual(Lote.objects.get(pk=self.lote.pk).costo_acumulado, Decimal("80.00"))
+        verificar_invariantes_contables()
+
+    def test_post_e_la_fecha_del_asiento_es_la_efectiva_de_la_transicion_no_la_de_hoy(self):
+        """D-92 punto 4 y H10: con una fecha efectiva de hace 3 días (el lote entró a su etapa hace 5), el asiento de la merma lleva esa fecha."""
+        ejercicio_abierto(hoy() - timedelta(days=30))
+        lote = lote_con_ciclo(self.e, cantidad=50, dias_en_etapa=5, costo="100.00")
+        orden = orden_de_transicion(self.e, lote)
+        fecha = hoy() - timedelta(days=3)
+        transiciones.concretar_transicion(
+            self.e.capataz, orden.pk, datos(fecha_efectiva=fecha, cantidades=((self.destino.pk, 40),), causa="plaga", cantidad=lote.cantidad_actual)
+        )
+        self.assertEqual(AsientoContable.objects.get().fecha_asiento, fecha)
+        verificar_invariantes_contables()
+
+    def test_post_e_sin_plantas_perdidas_no_hay_merma_ni_asiento(self):
+        """Postcondición e solo existe «desde la transición» si hay merma: trasladar todo no asienta."""
+        self.concretar()
+        self.assertFalse(Merma.objects.exists())
+        self.assertEqual(AsientoContable.objects.count(), 0)
+
+    def test_post_e_una_merma_de_costo_cero_no_asienta_y_la_transicion_se_concreta(self):
+        """D-92 punto 5 y H11: un lote sin costo pierde plantas en la transición sin asiento y sin fallar."""
+        Lote.objects.filter(pk=self.lote.pk).update(costo_acumulado=Decimal("0.00"))
+        self.concretar(cantidades=((self.destino.pk, 40),), causa="plaga")
+        self.assertEqual(Merma.objects.count(), 1)
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.assertEqual(TransicionEtapa.objects.get(pk=self.orden.pk).estado_orden, "concretada")
+
+    def test_post_k_l_m_el_asiento_va_entre_los_afectados_y_en_los_datos_del_registro_de_la_concrecion(self):
+        """D-92 punto 3: el único `concrecion_transicion` nombra el asiento de la merma entre sus afectados y en `datos`; sin merma, no trae `asiento`."""
+        self.concretar(cantidades=((self.destino.pk, 40),), causa="plaga")
+        asiento = AsientoContable.objects.get()
+        registro = RegistroAuditoria.objects.get(accion="concrecion_transicion")
+        self.assertIn(("contabilidad.asientocontable", asiento.pk), {(a["modelo"], a["id"]) for a in registro.afectados})
+        self.assertEqual(registro.detalle["datos"]["asiento"]["id"], asiento.pk)
+
+    def test_post_k_l_m_sin_merma_el_registro_no_trae_asiento(self):
+        self.concretar()
+        self.assertNotIn("asiento", RegistroAuditoria.objects.get(accion="concrecion_transicion").detalle["datos"])
+
+    def test_garantia_si_falla_el_asiento_la_transicion_no_se_concreta(self):
+        """D-22: si el asiento de la merma falla, la orden sigue «a realizar» y no queda merma, bitácora, notificación, asiento ni auditoría."""
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.concretar(cantidades=((self.destino.pk, 40),), causa="plaga")
+        self.nada_cambio()
+        self.assertEqual(Lote.objects.get(pk=self.lote.pk).costo_acumulado, Decimal("100.00"))

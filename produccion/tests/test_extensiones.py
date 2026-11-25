@@ -7,7 +7,9 @@ from unittest import mock
 from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
 
+from contabilidad import extensiones as extensiones_de_contabilidad
 from produccion import extensiones
+from produccion.servicios import asientos_de_produccion
 
 
 class ExtensionesDeProduccionTests(TestCase):
@@ -126,3 +128,17 @@ class EntradasDeComercialTests(TestCase):
             extensiones.registrar_entradas_de_comercial(funcion)
             with self.assertRaises(ImproperlyConfigured):
                 extensiones.registrar_entradas_de_comercial(lambda usuario: None)
+
+
+class EnlaceDeOrigenDeLosAsientosTests(TestCase):
+    """CON-04a: `produccion` registra en `contabilidad` el texto de origen de sus asientos (la bitácora). Los textos de un consumo y de una merma reales
+    se prueban junto con cada caso de uso (`test_prod_cnc_smb`, `test_prod_reg_apl`, `test_prod_reg_mrm`)."""
+
+    def test_el_enlace_de_la_bitacora_esta_registrado_en_contabilidad(self):
+        """`ready()` registra la función para el tipo «bitacora» (y no la duplica si corre dos veces)."""
+        registradas = extensiones_de_contabilidad._ENLACES_DE_ORIGEN["bitacora"]
+        self.assertEqual(registradas.count(asientos_de_produccion.enlace_de_origen), 1)
+
+    def test_una_bitacora_que_no_es_consumo_ni_merma_no_tiene_texto_propio(self):
+        """Otra bitácora (un evento, una transición…) da `None`: la ficha muestra solo el tipo, sin enlace."""
+        self.assertIsNone(asientos_de_produccion.enlace_de_origen(mock.Mock(pk=0)))

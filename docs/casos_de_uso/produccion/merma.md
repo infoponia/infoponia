@@ -51,8 +51,8 @@ Precondiciones
 a. El actor está autenticado en el Sistema.
 b. En al menos uno de los invernaderos del actor existe un lote en estado “activo” o una partida de cámara en estado
    “disponible”.
-c. Existe un ejercicio contable vigente.
-d. Existen las cuentas contables “Pérdidas por Mermas”, “Productos en Proceso” y “Productos Terminados”.
+c. Existe un ejercicio contable vigente. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
+d. Existen las cuentas contables “Pérdidas por Mermas”, “Productos en Proceso” y “Productos Terminados”. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
 
 Garantías mínimas
 - La operación es atómica, incluido el caso de uso incluido. Si el caso de uso se cancela o falla, no se registra
@@ -298,7 +298,7 @@ PROD-REG-MRM está escrito para lotes y partidas de cámara. En la ronda **solo 
 ### Lo que NO se hace en la ronda (D-45)
 
 - **Todo lo de la partida en cámara:** extensiones 4a, 4a.4a, 4a.4b y 10c; postcondiciones f, g, h, i, j; las causas «daño en cámara», «vencimiento en cámara» y «daño en la entrega»; el recorte de reservas de cámara, PROD-ASG-STK incluido, y el correo al cliente. En la extensión 4b, sin lotes activos el caso informa y ofrece otro invernadero o cancelar (no hay «merma en cámara»).
-- **Asiento contable** (postcondición e, y las precondiciones c y d) y **movimiento de stock «salida por merma»** (postcondición d): no existen en la ronda. El **costo acumulado del lote sí baja** (`docs/patrones/costo_del_lote.md`).
+- ~~**Asiento contable** (postcondición e, y las precondiciones c y d)~~ **Hecho en CON-04a (25/11/2026):** `registrar_merma` asienta Debe «Pérdidas por Mermas» / Haber «Productos en Proceso» por `ResultadoMerma.costo`, con la fecha de la merma (el asiento va en quien llama a `aplicar_merma`, no en ella; D-92). El **movimiento de stock «salida por merma»** (postcondición d) lo hizo COM-04a. El **costo acumulado del lote baja** (`docs/patrones/costo_del_lote.md`).
 - **Alerta de plantas comprometidas, condición 1** (reservas de cosecha activas): fuera. La **condición 2** (la transición «a realizar» del lote queda con más plantas planificadas que las actuales) **sí se evalúa**: desde este caso de uso ya puede dispararse.
 - Extensión 11a («no logra entregar»): no aplica (D-42; las alertas se crean dentro de la transacción).
 

@@ -9,6 +9,7 @@
 # además un registro de bitácora `otro_evento` con el sector y los días que estuvo fuera. Se prueba punta a punta con las funciones públicas de `maestros`
 # y el registrante REAL, no con uno falso.
 
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from datetime import timedelta
 
 from django.apps import apps
@@ -30,7 +31,7 @@ from produccion.tests.fabricas import invernadero_con_produccion, lote_activo, o
 from produccion.tests.test_modelos_fds import fuera_de_servicio_de
 
 
-class BaseDeRegistrantesDeFds(ConDatosDeInventario, TestCase):
+class BaseDeRegistrantesDeFds(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     """Un invernadero con un sector por etapa; los sectores fuera de servicio de las pruebas se arman con `fuera_de_servicio_de`."""
 
     @classmethod

@@ -1,6 +1,7 @@
 # Pruebas de PROD-PNR-FDS · Poner Sector Fuera de Servicio (PRD-04, paso 4): `resumen_de_fuera_de_servicio` y `poner_fuera_de_servicio`
 # (produccion/servicios/sectores_fuera_de_servicio.py). Una prueba por regla y por postcondición a a k de
-# docs/casos_de_uso/produccion/sector_fuera_de_servicio.md; los nombres siguen `.claude/rules/pruebas.md`.
+# docs/casos_de_uso/produccion/sector_fuera_de_servicio.md; los nombres siguen `.claude/rules/pruebas.md`. CON-04a: el asiento de cada merma
+# (precondiciones c y d: se cumplen solas, D-92 punto 2) se prueba en `AsientosDeLasMermasTests`.
 #
 # CONTRATO que fijan estas pruebas (el estudiante lo revisa antes de implementar; se anota en el Cierre y en temas_abiertos.md):
 #   DatosDeFueraDeServicio(sector_id, motivo="", fecha=None, reubicaciones=(), causas=(), plantas_vistas=None, libres_vistos=None,
@@ -22,6 +23,13 @@ from django.http import Http404
 from django.test import TestCase
 from django.utils import timezone
 
+from decimal import Decimal
+
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, verificar_invariantes_contables
 from core import notificaciones
 from core.models import Notificacion, RegistroAuditoria
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
@@ -54,7 +62,7 @@ from produccion.tests.fabricas import (
 ACCION = RegistroAuditoria.Accion.FUERA_DE_SERVICIO_SECTOR
 
 
-class PruebaDeFueraDeServicio(ConDatosDeInventario, TestCase):
+class PruebaDeFueraDeServicio(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con un sector por etapa (`germ` es el de origen) y ayudas para armar datos."""
 
     @classmethod
@@ -502,10 +510,13 @@ class AuditoriaYAtomicidadTests(PruebaDeFueraDeServicio):
         self.assertIn(f"{self.lote.codigo}: 25", cambios["cantidad_actual"]["despues"])
 
     def test_post_j_ninguna_otra_accion_de_auditoria_ni_una_por_orden(self):
-        """Un registro por caso de uso (D-36): ni `cancelacion_orden` ni `registro_merma` aparte."""
+        """Un registro por caso de uso (D-36): ni `cancelacion_orden` ni `registro_merma` aparte. CON-04a: lo único que se suma son los registros del ejercicio que abre la autorrecuperación (H9), del
+        asiento de la merma y de su movimiento, que audita `contabilidad` (D-86 punto 4)."""
         self.armar()
         self.poner(causas=((self.lote.pk, "plaga", ""),))
-        self.assertEqual(list(RegistroAuditoria.objects.values_list("accion", flat=True)), [ACCION])
+        acciones = set(RegistroAuditoria.objects.values_list("accion", flat=True))
+        self.assertEqual(acciones, {ACCION, "alta_ejercicio_contable", "alta_asiento_contable", "alta_movimiento_contable"})
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=ACCION).count(), 1)
 
     def test_garantia_todo_o_nada_si_falla_la_notificacion_no_queda_nada(self):
         """Garantías mínimas: si el caso de uso falla, el sector sigue activo y no queda registro, reubicación, ocupación, merma,
@@ -585,3 +596,129 @@ class ResumenTests(PruebaDeFueraDeServicio):
         self.assertTrue(resumen.avisos)
         self.sector("Germinación 2")
         self.assertEqual(fds.resumen_de_fuera_de_servicio(self.e.agronomo, self.datos()).avisos, [])
+
+
+class AsientosDeLasMermasTests(PruebaDeFueraDeServicio):
+    """CON-04a · PROD-PNR-FDS (D-92 puntos 2 a 6, 9 y «Lo que todavía no está programado»): un asiento por cada merma de las plantas sin reubicar,
+    originado en la merma, Debe Pérdidas por Mermas / Haber Productos en Proceso por su costo, con la fecha EFECTIVA del fuera de servicio. La
+    reubicación y la cancelación de órdenes no asientan."""
+
+    def armar(self):
+        """Dos lotes en `germ` (40 plantas a $100,00 y 20 a $60,00), dos destinos, una siembra a realizar que se cancela y un ejercicio abierto."""
+        self.l1 = lote_activo(self.e, cantidad=40, costo="100.00")
+        self.l2 = lote_activo(self.e, cantidad=20, costo="60.00")
+        for lote in (self.l1, self.l2):
+            lote.siembra.fecha_siembra = self.hoy - timedelta(days=10)  # llegaron hace diez días: admiten una fecha efectiva de ayer
+            lote.siembra.save(update_fields=["fecha_siembra"])
+        self.g2 = self.sector("Germinación 2")
+        self.g3 = self.sector("Germinación 3")
+        self.siembra = orden_de_siembra(self.e, plantines=8, sector="germinacion")
+        self.ayer = self.hoy - timedelta(days=1)
+        self.abierto = ejercicio_abierto(self.hoy - timedelta(days=30))
+
+    def lineas(self, asiento):
+        return sorted(
+            (m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento)
+            for m in MovimientoContable.objects.filter(asiento=asiento).select_related("cuenta")
+        )
+
+    def causas(self, *lotes):
+        return tuple((lote.pk, "plaga", "") for lote in lotes)
+
+    def test_post_e_un_asiento_por_cada_merma_con_su_costo_la_fecha_efectiva_y_la_merma_como_origen(self):
+        """Dos lotes que no se reubican (40 de $100,00 y 20 de $60,00) son dos mermas y dos asientos: Debe Pérdidas por Mermas / Haber Productos en
+        Proceso por $100,00 y $60,00 (el costo entero de cada lote), con la fecha efectiva (ayer), en el ejercicio que la contiene."""
+        self.armar()
+        self.poner(fecha=self.ayer, causas=self.causas(self.l1, self.l2))
+        self.assertEqual(Merma.objects.count(), 2)
+        self.assertEqual(AsientoContable.objects.count(), 2)
+        for merma, importe in ((Merma.objects.get(lote=self.l1), Decimal("100.00")), (Merma.objects.get(lote=self.l2), Decimal("60.00"))):
+            asiento = AsientoContable.objects.get(origen_id=merma.pk)
+            self.assertEqual((asiento.fecha_asiento, asiento.ejercicio_id), (self.ayer, self.abierto.pk))
+            self.assertEqual(self.lineas(asiento), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, importe), (cuentas.PRODUCTOS_EN_PROCESO, HABER, importe)]))
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])
+        verificar_invariantes_contables()
+
+    def test_post_e_la_reubicacion_y_la_cancelacion_de_ordenes_no_asientan(self):
+        """Reubicar todas las plantas no genera merma ni asiento; cancelar la siembra «a realizar» tampoco."""
+        self.armar()
+        self.poner(reubicaciones=((self.l1.pk, self.g2.pk, 40), (self.l2.pk, self.g3.pk, 20)))
+        self.assertEqual(OrdenTrabajo.objects.get(pk=self.siembra.pk).estado_orden, "cancelada")
+        self.assertEqual((Merma.objects.count(), AsientoContable.objects.count()), (0, 0))
+
+    def test_post_e_solo_las_plantas_sin_reubicar_se_asientan_por_su_costo_proporcional(self):
+        """Se reubican 30 de las 40 plantas del primer lote: la merma de las 10 restantes cuesta $25,00 (100 × 10 ÷ 40) y es lo que se asienta; la
+        reubicación no suma nada."""
+        self.armar()
+        self.poner(reubicaciones=((self.l1.pk, self.g2.pk, 30),), causas=self.causas(self.l1, self.l2))
+        asiento = AsientoContable.objects.get(origen_id=Merma.objects.get(lote=self.l1).pk)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("25.00")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, Decimal("25.00"))]))
+        self.assertEqual(AsientoContable.objects.count(), 2)  # el de l1 y el de l2
+        verificar_invariantes_contables()
+
+    def test_post_e_un_sector_sin_lotes_no_asienta(self):
+        """Un sector vacío se pone fuera de servicio sin mermas ni asientos."""
+        self.poner()
+        self.assertEqual((Merma.objects.count(), AsientoContable.objects.count()), (0, 0))
+
+    def test_post_e_una_merma_de_costo_cero_no_asienta_y_el_sector_pasa_a_fuera_de_servicio(self):
+        """D-92 punto 5 y H11: un lote sin costo se pierde sin asiento y sin fallar."""
+        self.armar()
+        Lote.objects.filter(pk=self.l2.pk).update(costo_acumulado=Decimal("0.00"))
+        self.poner(reubicaciones=((self.l1.pk, self.g2.pk, 40),), causas=self.causas(self.l2))
+        self.assertEqual(Merma.objects.count(), 1)
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.assertEqual(SectorProduccion.objects.get(pk=self.germ.pk).estado_sector, "fuera_de_servicio")
+
+    def test_post_e_la_descripcion_del_asiento_es_la_de_la_merma(self):
+        """El asiento lleva la descripción legible de su merma, que es lo que lee el Contador en el libro."""
+        self.armar()
+        self.poner(causas=self.causas(self.l1, self.l2))
+        merma = Merma.objects.get(lote=self.l1)
+        self.assertEqual(AsientoContable.objects.get(origen_id=merma.pk).descripcion_asiento, merma.descripcion_evento)
+
+    def test_post_i_los_asientos_van_entre_los_afectados_del_registro_de_auditoria_y_en_sus_datos(self):
+        """Postcondición i y D-92 punto 3: `fuera_de_servicio_sector` nombra cada asiento entre sus afectados y en `datos`; sin mermas, no trae `asientos`."""
+        self.armar()
+        self.poner(causas=self.causas(self.l1, self.l2))
+        auditoria = RegistroAuditoria.objects.get(accion=ACCION)
+        afectados = {(a["modelo"], a["id"]) for a in auditoria.afectados}
+        for asiento in AsientoContable.objects.all():
+            self.assertIn(("contabilidad.asientocontable", asiento.pk), afectados)
+        self.assertEqual(len(auditoria.detalle["datos"]["asientos"]), 2)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="alta_asiento_contable").count(), 2)
+
+    def test_post_i_sin_mermas_el_registro_no_trae_asientos(self):
+        self.poner()
+        self.assertNotIn("asientos", RegistroAuditoria.objects.get(accion=ACCION).detalle["datos"])
+
+    def test_garantia_si_falla_el_segundo_asiento_no_queda_nada_del_fuera_de_servicio(self):
+        """D-22: si el asiento de la segunda merma falla, el sector sigue activo y no queda registro, reubicación, merma, asiento ni auditoría; la
+        orden sigue «a realizar» y los lotes no cambian."""
+        self.armar()
+        real = servicio_de_asientos.registrar_asiento_automatico
+        llamadas = []
+
+        def falla_en_la_segunda(*args, **kwargs):
+            llamadas.append(1)
+            if len(llamadas) == 2:
+                raise RuntimeError("falla del asiento")
+            return real(*args, **kwargs)
+
+        datos = self.datos(causas=self.causas(self.l1, self.l2))
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=falla_en_la_segunda):
+            with self.assertRaises(RuntimeError):
+                fds.poner_fuera_de_servicio(self.e.agronomo, datos)
+        self.assertEqual(len(llamadas), 2)
+        self.assertEqual(SectorProduccion.objects.get(pk=self.germ.pk).estado_sector, "activo")
+        self.assertFalse(FueraDeServicio.objects.exists() or Merma.objects.exists() or AsientoContable.objects.exists())
+        self.assertEqual(OrdenTrabajo.objects.get(pk=self.siembra.pk).estado_orden, "a_realizar")
+        self.assertEqual(Lote.objects.get(pk=self.l1.pk).cantidad_actual, 40)
+        self.assertFalse(RegistroAuditoria.objects.filter(accion=ACCION).exists())
+
+    def test_garantia_un_rechazo_no_crea_asientos_ni_abre_el_ejercicio(self):
+        """Un rechazo (motivo obligatorio) no deja asientos ni abre un ejercicio."""
+        self.armar()
+        EjercicioContable.objects.all().delete()
+        self.error(fds.poner_fuera_de_servicio, self.datos(motivo="", causas=self.causas(self.l1, self.l2)))
+        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, 0))

@@ -26,16 +26,23 @@
 # `sector_<id>`, con `datos={"ocupados": n}`; 8b, total cero: campo `cantidad`); causa_obligatoria (8c); causa_invalida; descripcion_larga (300,
 # D-83); cambio_simultaneo (10d, con `datos` = `cantidad_actual` y `ocupados` vigentes). La extensión 4b no es un error: es la lista vacía.
 #
-# Una prueba por regla y por postcondición a, b, c, k, l, m, n (las d, e, f a j son de la cámara o contables: fuera, D-45). El caso de uso
+# Una prueba por regla y por postcondición a, b, c, e, k, l, m, n (la d y las f a j son de la cámara: fuera). CON-04a: la postcondición e (el
+# asiento) se prueba en `RegistrarMermaAsientoTests`. El caso de uso
 # dice «asocia al usuario» y «la fecha actual»: el responsable es quien actúa y la fecha es hoy.
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.http import Http404
 from django.test import TestCase
 from django.utils import timezone
 
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, perezoso
@@ -62,7 +69,7 @@ def rechazo(llamada):
     raise AssertionError("Se esperaba un ErrorDeProduccion y no se lanzó ninguno.")
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.e = invernadero_con_produccion()
@@ -592,3 +599,90 @@ class MovimientoDeStockDeLaMermaTests(Base):
             hora_bitacora=timezone.localtime().time(), cant_merma=50, causa="dano_en_camara",
         )
         self.assertEqual(mermas.merma_acumulada(lote), Decimal("0.00"))
+
+
+class RegistrarMermaAsientoTests(Base):
+    """CON-04a · PROD-REG-MRM postcondición e (D-92 puntos 2 a 6 y 9, D-86): un asiento por la merma, originado en ella, Debe Pérdidas por Mermas /
+    Haber Productos en Proceso por el costo de las plantas perdidas (`ResultadoMerma.costo`), con la fecha de la merma (hoy)."""
+
+    def lineas(self, asiento):
+        return sorted(
+            (m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento)
+            for m in MovimientoContable.objects.filter(asiento=asiento).select_related("cuenta")
+        )
+
+    def test_post_e_asiento_perdidas_por_mermas_contra_productos_en_proceso_por_el_costo_de_las_plantas(self):
+        """Postcondición e: 12 de 100 plantas a $100,00 cuestan $12,00; el asiento tiene la merma como origen, la fecha de hoy y baja del lote
+        exactamente lo mismo. No había ejercicio: lo abre la autorrecuperación (H9)."""
+        lote = self.lote(cantidad=100, costo="100.00")
+        merma = self.registrar(lote, {self.e.sectores["crecimiento"]: 12})
+        asiento = AsientoContable.objects.get(origen_id=merma.pk)
+        self.assertEqual(asiento.fecha_asiento, HOY)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("12.00")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, Decimal("12.00"))]))
+        self.assertEqual(Lote.objects.get(pk=lote.pk).costo_acumulado, Decimal("88.00"))
+        self.assertEqual(EjercicioContable.objects.get().ultimo_numero_asiento, 1)
+        verificar_invariantes_contables()
+
+    def test_post_e_el_costo_se_redondea_a_dos_decimales_half_up(self):
+        """D-92 punto 5 y `costo_del_lote.md`: 1 de 3 plantas a $10,00 cuestan $3,33 (10 × 1 ÷ 3 redondeado)."""
+        lote = self.lote(cantidad=3, costo="10.00")
+        merma = self.registrar(lote, {self.e.sectores["crecimiento"]: 1})
+        asiento = AsientoContable.objects.get(origen_id=merma.pk)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("3.33")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, Decimal("3.33"))]))
+
+    def test_post_e_si_el_lote_se_pierde_entero_el_asiento_es_por_todo_su_costo(self):
+        """`costo_del_lote.md` («n = c»): perder las 3 plantas de un lote de $10,01 asienta $10,01 enteros y el lote queda en $0,00."""
+        lote = self.lote(cantidad=3, costo="10.01")
+        merma = self.registrar(lote, {self.e.sectores["crecimiento"]: 3})
+        self.assertEqual(self.lineas(AsientoContable.objects.get(origen_id=merma.pk))[0][2], Decimal("10.01"))
+        self.assertEqual(Lote.objects.get(pk=lote.pk).costo_acumulado, Decimal("0.00"))
+        verificar_invariantes_contables()
+
+    def test_post_e_una_merma_de_costo_cero_se_registra_y_no_asienta(self):
+        """D-92 punto 5 y H11: un lote sin costo (siembra gratuita) pierde plantas sin generar asiento, y la merma se registra igual."""
+        lote = self.lote(cantidad=10, costo="0.00")
+        self.registrar(lote, {self.e.sectores["crecimiento"]: 4})
+        self.assertEqual(Merma.objects.count(), 1)
+        self.assertEqual(AsientoContable.objects.count(), 0)
+
+    def test_post_e_la_descripcion_del_asiento_es_la_de_la_merma(self):
+        """El asiento lleva la descripción legible de la merma («Merma de 12 plantas por plaga.»), que es lo que lee el Contador en el libro."""
+        lote = self.lote(cantidad=100)
+        merma = self.registrar(lote, {self.e.sectores["crecimiento"]: 12})
+        self.assertEqual(AsientoContable.objects.get(origen_id=merma.pk).descripcion_asiento, merma.descripcion_evento)
+
+    def test_post_e_la_ficha_del_asiento_muestra_la_merma_y_su_lote_sin_enlace(self):
+        """CON-04a, «enlace al origen»: la ficha del libro nombra la merma y su lote, sin dirección (el Contador no abre la bitácora)."""
+        from contabilidad import extensiones as extensiones_de_contabilidad
+
+        lote = self.lote(cantidad=100)
+        merma = self.registrar(lote, {self.e.sectores["crecimiento"]: 12})
+        texto, url = extensiones_de_contabilidad.enlace_de_origen(AsientoContable.objects.get().origen)
+        self.assertEqual(texto, f"Merma del lote {lote.codigo} · {merma.descripcion_evento}")
+        self.assertIsNone(url)
+
+    def test_post_m_el_asiento_va_entre_los_afectados_del_registro_de_auditoria_y_en_sus_datos(self):
+        """Postcondición m y D-92 punto 3: `registro_merma` nombra el asiento entre sus afectados y en `datos`; el asiento y su movimiento los audita
+        `contabilidad` (sin duplicar)."""
+        lote = self.lote(cantidad=100)
+        merma = self.registrar(lote, {self.e.sectores["crecimiento"]: 12})
+        asiento = AsientoContable.objects.get(origen_id=merma.pk)
+        registro = RegistroAuditoria.objects.get(accion="registro_merma")
+        self.assertIn(("contabilidad.asientocontable", asiento.pk), {(a["modelo"], a["id"]) for a in registro.afectados})
+        self.assertEqual(registro.detalle["datos"]["asiento"]["id"], asiento.pk)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="alta_asiento_contable").count(), 1)
+
+    def test_garantia_si_falla_el_asiento_no_queda_nada_de_la_merma(self):
+        """D-22 y `docs/patrones/asientos.md` §4: si el asiento falla, se revierte la merma entera: sin merma, lote igual, sin alertas ni auditoría."""
+        lote = self.lote(cantidad=100)
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.registrar(lote, {self.e.sectores["crecimiento"]: 12})
+        self.nada_se_escribio(lote)
+        self.assertEqual(AsientoContable.objects.count(), 0)
+
+    def test_garantia_un_rechazo_no_crea_asientos(self):
+        """Un rechazo (más plantas que las del sector) no deja asiento ni abre ejercicio."""
+        lote = self.lote(cantidad=10)
+        rechazo(lambda: self.registrar(lote, {self.e.sectores["crecimiento"]: 11}))
+        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, 0))

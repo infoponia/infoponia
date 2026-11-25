@@ -13,6 +13,7 @@ from comercial.models import CompraVenta, DetalleReserva
 from comercial.servicios import compra_ventas
 from comercial.servicios.compra_ventas import DatosDeCompraVenta, Renglon
 from comercial.tests.fabricas import escenario_comercial, partida, segundo_invernadero, verificar_invariantes_de_reservas
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
 from core.tests.concurrencia import correr_a_la_vez
 from core.tests.fabricas import crear_gerente
 from inventario.servicios import variedades
@@ -43,6 +44,7 @@ class StockMaduroConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
     def armar(self):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04a: registrar una merma asienta; el flush de la prueba anterior vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.gerente = crear_gerente()
         self.addCleanup(verificar_invariantes_de_reservas)

@@ -3,6 +3,7 @@
 # Fuente: docs/casos_de_uso/produccion/sector_fuera_de_servicio.md (reglas «Quién lo ejecuta», «Fecha mínima», «Sector de destino
 # elegible», «Órdenes afectadas», extensiones 4a, 6c, 6d y 6e) y «Decisiones de aplicación». Ninguna de estas funciones escribe.
 
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from datetime import timedelta
 
 from django.db import connection
@@ -58,7 +59,7 @@ def registro_de_bitacora(escenario, lote, dias_atras):
     )
 
 
-class PruebaConEscenario(ConDatosDeInventario, TestCase):
+class PruebaConEscenario(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     """Un invernadero con un sector por etapa. `self.germ` es el sector de Germinación; `otro_germ` es un segundo sector de Germinación."""
 
     @classmethod

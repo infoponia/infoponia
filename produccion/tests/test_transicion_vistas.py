@@ -4,6 +4,7 @@
 # con su motivo cuando no hay lotes trasladables, que la causa de la merma aparece solo cuando faltan plantas, que no hay consultas por fila y
 # que todo funciona sin JavaScript (un POST común) y con HTMX (solo el bloque que cambia, sin validar). Cliente de prueba de Django.
 
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from datetime import timedelta
 
 from django.db import connection
@@ -27,7 +28,7 @@ def hoy():
     return timezone.localdate()
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     def setUp(self):
         self.e = invernadero_con_produccion()
         self.gerente = crear_gerente()

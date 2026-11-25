@@ -11,10 +11,17 @@
 
 
 
+from datetime import timedelta
+
+from django.core.cache import cache
 from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
-from core.models import Notificacion, RegistroAuditoria
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos, ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.tests.fabricas import crear_cuenta
+from core.models import Contador, Notificacion, RegistroAuditoria
 from core.tests.concurrencia import correr_a_la_vez
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario, perezoso
 from maestros.models import SectorProduccion
@@ -48,6 +55,7 @@ class FueraDeServicioConcurrenciaTests(ConDatosDeInventario, TransactionTestCase
     def armar(self, plantas=40):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()  # el flush de la prueba anterior vació los tipos de etapa y las categorías
+        asegurar_plan_de_cuentas()  # CON-04a: las mermas asientan; el flush de la prueba anterior vació el plan
         self.e = invernadero_con_produccion(geografia_propia=True)
         self.germ = self.e.sectores["germinacion"]
         self.lote = lote_activo(self.e, cantidad=plantas) if plantas else None
@@ -200,3 +208,105 @@ class FueraDeServicioConcurrenciaTests(ConDatosDeInventario, TransactionTestCase
 def estado_de(orden):
     """El estado actual de la orden en la base."""
     return OrdenTrabajo.objects.get(pk=orden.pk).estado_orden
+
+
+@tag("concurrencia")
+class FueraDeServicioAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04a · el asiento de la merma de un fuera de servicio bloquea el ejercicio AL FINAL (D-86 punto 2) y NUNCA rechaza por la fecha (D-102). La
+    merma lleva la fecha EFECTIVA, que puede caer en el ejercicio que se está cerrando. Las fechas son relativas a hoy porque el servicio toma «hoy»
+    del reloj."""
+
+    def armar(self, escenario=None):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = invernadero_con_produccion(geografia_propia=True)
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+
+    def con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, timezone.localdate() - timedelta(days=400))
+        self.abierto = ejercicio_abierto(timezone.localdate() - timedelta(days=20))
+
+    def lote(self, escenario=None, dias=60):
+        """Un lote de 40 plantas sembrado hace `dias` días en el sector de germinación del escenario."""
+        e = escenario or self.e
+        lote = lote_activo(e, cantidad=40)
+        lote.siembra.fecha_siembra = timezone.localdate() - timedelta(days=dias)
+        lote.siembra.save(update_fields=["fecha_siembra"])
+        return lote
+
+    def poner_en(self, escenario, lote, dias_atras=0):
+        datos = fds.DatosDeFueraDeServicio(
+            sector_id=escenario.sectores["germinacion"].pk,
+            motivo="Rotura",
+            fecha=timezone.localdate() - timedelta(days=dias_atras),
+            causas=((lote.pk, "plaga", ""),),
+        )
+        return lambda: fds.poner_fuera_de_servicio(escenario.agronomo, datos)
+
+    def cierre(self):
+        return lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def test_d102_el_cierre_primero_y_poner_fuera_de_servicio_con_fecha_en_el_ejercicio_en_cierre_espera_y_el_asiento_va_al_abierto(self):
+        """El sector se pone fuera de servicio con una fecha efectiva dentro del ejercicio en cierre. El cierre tiene esa fila tomada; la operación
+        espera, la relee ya «cerrada», elige de nuevo y el asiento de la merma va al abierto, con la fecha de hoy y la aclaración de la fecha real."""
+        self.armar()
+        self.con_ejercicios()
+        lote = self.lote()
+        resultados = correr_a_la_vez(self.cierre(), self.poner_en(self.e, lote, dias_atras=38), primera="a")
+        self.sin_errores(resultados)
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento), (self.abierto.pk, timezone.localdate()))
+        self.assertIn("Fecha del hecho", asiento.descripcion_asiento)
+        self.assertEqual(SectorProduccion.objects.get(pk=self.e.sectores["germinacion"].pk).estado_sector, "fuera_de_servicio")
+        verificar_invariantes_contables()
+
+    def test_d102_poner_fuera_de_servicio_primero_con_fecha_en_el_ejercicio_en_cierre_y_el_cierre_a_la_vez_el_asiento_queda_en_el_ejercicio_en_cierre(self):
+        """La operación ya creó su asiento en el ejercicio en cierre (tiene su fila tomada); el cierre espera y cierra el ejercicio con ese asiento
+        adentro. Los dos terminan bien."""
+        self.armar()
+        self.con_ejercicios()
+        lote = self.lote()
+        resultados = correr_a_la_vez(self.poner_en(self.e, lote, dias_atras=38), self.cierre(), primera="a")
+        self.sin_errores(resultados)
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento), (self.en_cierre.pk, 1))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_poner_fuera_de_servicio_bloquea(self):
+        """D-86 punto 2: la operación A (invernadero Norte) se detiene justo ANTES de bloquear el ejercicio, con todos sus bloqueos de producción ya
+        tomados; la B (otro invernadero, sin filas en común) asienta completa y toma el N.º 1. Si A hubiera bloqueado el ejercicio antes, B esperaría
+        y el orden sería el inverso."""
+        self.armar()
+        ejercicio_abierto(timezone.localdate() - timedelta(days=20))
+        otro = invernadero_con_produccion(nombre="Invernadero Sur", sufijo="b", geografia_propia=True)
+        lote_a, lote_b = self.lote(), self.lote(otro)
+        resultados = correr_a_la_vez(
+            self.poner_en(self.e, lote_a), self.poner_en(otro, lote_b), primera="a", detener_antes_de=(asientos, "_bloquear_ejercicio")
+        )
+        self.sin_errores(resultados)
+        numero = lambda lote: AsientoContable.objects.get(origen__bitacora__merma__lote=lote).numero_asiento
+        self.assertEqual((numero(lote_b), numero(lote_a)), (1, 2))
+        verificar_invariantes_contables()
+
+    def test_regla_h8_dos_puestas_fuera_de_servicio_a_la_vez_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos sectores del mismo invernadero se ponen fuera de servicio a la vez (se serializan por el invernadero) y asientan con los números 1 y 2."""
+        self.armar()
+        ejercicio_abierto(timezone.localdate() - timedelta(days=20))
+        lote_a = self.lote()
+        otro_sector = crear_sector(self.e.invernadero, "Germinación B", "germinacion", 100)
+        lote_b = lote_activo(self.e, cantidad=40, sector="germinacion")
+        OcupacionSector.objects.filter(lote=lote_b).update(sector=otro_sector)
+        lote_b.siembra.fecha_siembra = timezone.localdate() - timedelta(days=60)
+        lote_b.siembra.save(update_fields=["fecha_siembra"])
+        datos_b = fds.DatosDeFueraDeServicio(sector_id=otro_sector.pk, motivo="Rotura", fecha=timezone.localdate(), causas=((lote_b.pk, "plaga", ""),))
+        resultados = correr_a_la_vez(self.poner_en(self.e, lote_a), lambda: fds.poner_fuera_de_servicio(self.e.agronomo, datos_b), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])
+        verificar_invariantes_contables()

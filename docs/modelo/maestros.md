@@ -368,7 +368,7 @@ de uso (los servicios están en `inventario`, D-49). `Variedad` no tiene `densid
 | `cultivo` | FK (R074) | MAE-03 | Protegida |
 | `tempAmbienteMin`, `tempAmbienteMax` | decimal, °C | INV-03 | → `temp_ambiente_min`, `temp_ambiente_max`. `DecimalField(max_digits=7, decimal_places=2)`. Mínimo ≤ máximo (regla 6 de PROD-ALT-VAR) |
 | `humedadMin`, `humedadMax` | decimal, % | INV-03 | → `humedad_min`, `humedad_max`. Igual que arriba |
-| `intensidadLuzMin`, `intensidadLuzMax` | decimal, µmol | INV-03 | → `intensidad_luz_min`, `intensidad_luz_max`. Igual que arriba |
+| `intensidadLuzMin`, `intensidadLuzMax` | decimal, lux | INV-03 | → `intensidad_luz_min`, `intensidad_luz_max`. Igual que arriba |
 | `fotoperiodoMin`, `fotoperiodoMax` | decimal, h/día | INV-03 | → `fotoperiodo_min`, `fotoperiodo_max`. Igual que arriba |
 | `duracionPostCosecha` | entero de 1 a 60, días | INV-03 | → `duracion_post_cosecha`. Días de aptitud comercial del producto cosechado (regla 7 de PROD-ALT-VAR); la usan `StockCosechado.fechaLimite` y la validación de la cosecha (rondas futuras) |
 | `pesoPromedioPlanta` | entero mayor que 0, **gramos** | INV-03 | → `peso_promedio_planta`. **MD-69:** el modelo dice kilogramos; el glosario y el caso de uso dicen gramos y mandan. Verifica la capacidad de carga del vehículo (regla 6 de 8.12, ronda futura) |

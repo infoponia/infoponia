@@ -4,7 +4,8 @@
 # que creó para que el caso de uso lo ponga en su único registro de auditoría (D-36).
 # Fuente: docs/casos_de_uso/produccion/transicion.md (extracto de PROD-REG-MRM y «Núcleo de la merma desde la transición»),
 # docs/api/produccion.md (sección 6), docs/patrones/costo_del_lote.md, D-50 punto 6 y D-51 punto 5.
-# Fuera de la ronda (D-45): el movimiento de stock «salida por merma» (postcondición d), el asiento (e) y la partida en cámara. La condición 1
+# El asiento (postcondición e) NO va acá: lo crea quien llama (D-92, «alternativas»), con `asientos_de_produccion.asentar_merma`.
+# Fuera de la ronda (D-45): la partida en cámara. La condición 1
 # de plantas comprometidas (reservas de cosecha) la suma COM-02 (D-59), con `produccion.extensiones.reservado_de_lotes`.
 # PRD-03 suma, al final, el caso de uso PROD-REG-MRM (Registrar Merma) sobre este núcleo: `registrar_merma` y sus lecturas.
 
@@ -25,7 +26,7 @@ from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion import extensiones
 from produccion.errores import ErrorDeProduccion
 from produccion.models import AlertaDeMerma, Cosecha, Lote, Merma, MovimientoStock, OcupacionSector, OrdenTrabajo, TransicionEtapa
-from produccion.servicios import alcance, costos, movimientos
+from produccion.servicios import alcance, asientos_de_produccion, costos, movimientos
 from produccion.servicios.bloqueos import traducir as _bloquear
 
 # Lo que devuelve `aplicar_merma`: la merma creada, lo que costó (se descontó del costo acumulado del lote) y las alertas creadas.
@@ -470,18 +471,22 @@ def _escribir(actor, plan):
     afectadas = [o for o in plan.ocupaciones if o.sector_id in plan.por_sector]
     ocupados_antes = {pk: a.ocupados for pk, a in api_sectores.agujeros_de(sectores).items()}
     cantidad_antes, costo_antes, estado_antes = lote.cantidad_actual, Decimal(lote.costo_acumulado), lote.estado_lote
+    hoy = timezone.localdate()
     resultado = aplicar_merma(
-        lote, plan.total, plan.causa, plan.descripcion, timezone.localdate(), actor, por_sector=plan.por_sector, sector_ids=sorted(plan.por_sector)
+        lote, plan.total, plan.causa, plan.descripcion, hoy, actor, por_sector=plan.por_sector, sector_ids=sorted(plan.por_sector)
     )
+    # Postcondición e de PROD-REG-MRM; D-92 puntos 3 a 6: el asiento de la merma con su fecha (hoy), al final de los bloqueos (el ejercicio va último, D-86).
+    asiento = asientos_de_produccion.asentar_merma(actor, resultado.merma, resultado.costo, hoy, hoy)
     despues = {pk: a.ocupados for pk, a in api_sectores.agujeros_de(sectores).items()}
     cambios = {
         "cantidad_actual": {"antes": str(cantidad_antes), "despues": str(lote.cantidad_actual)},
-        "costo_acumulado": {"antes": str(costo_antes), "despues": str(lote.costo_acumulado)},
         "agujeros_ocupados": {
             "antes": [f"{s.nombre_sector}: {ocupados_antes[s.pk]}" for s in sectores],
             "despues": [f"{s.nombre_sector}: {despues[s.pk]}" for s in sectores],
         },
     }
+    if Decimal(lote.costo_acumulado) != costo_antes:  # D-36: solo lo que cambió (un lote sin costo no cambia al perder plantas; D-92 punto 5)
+        cambios["costo_acumulado"] = {"antes": str(costo_antes), "despues": str(lote.costo_acumulado)}
     if lote.estado_lote != estado_antes:
         cambios["estado"] = {"antes": estado_antes, "despues": lote.estado_lote}
     datos_de_auditoria = {
@@ -493,10 +498,12 @@ def _escribir(actor, plan):
     }
     if resultado.alertas:
         datos_de_auditoria["alertas_creadas"] = [referencia(a) for a in resultado.alertas]
+    if asiento is not None:
+        datos_de_auditoria["asiento"] = referencia(asiento)
     RegistroAuditoria.objects.registrar(
         usuario=actor,
         accion=RegistroAuditoria.Accion.REGISTRO_MERMA,
-        afectados=[resultado.merma, lote, *afectadas, *sectores, *resultado.alertas],
+        afectados=[resultado.merma, lote, *afectadas, *sectores, *resultado.alertas, *([asiento] if asiento is not None else [])],
         detalle={"cambios": cambios, "datos": datos_de_auditoria},
     )
     return resultado.merma

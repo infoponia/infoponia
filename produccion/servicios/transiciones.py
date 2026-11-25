@@ -23,7 +23,7 @@ from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.errores import ErrorDeProduccion
 from produccion.models import Bitacora, Lote, Merma, OcupacionSector, OrdenTrabajo, TransicionEtapa
 from produccion.servicios import lotes as api_lotes
-from produccion.servicios import mermas, ordenes, sectores_elegibles
+from produccion.servicios import asientos_de_produccion, mermas, ordenes, sectores_elegibles
 from produccion.servicios.sectores_elegibles import SectorNoElegible  # noqa: F401  (se conserva el nombre en este módulo)
 from produccion.servicios.bloqueos import traducir as _bloquear
 
@@ -155,7 +155,7 @@ def repartir_proporcional(cantidad, planificado):
 #   bloqueos.md (cuentas → invernadero → variedad → sectores destino, por id → lote → filas propias), y recién ENTONCES vuelve a
 #   verificar TODO, incluidos los cambios que la persona no vio (`cambio_simultaneo`, extensiones 13a y 13b) y la capacidad de los sectores
 #   (13c); después escribe: la orden, sus ocupaciones, el aviso al Capataz y un único registro de auditoría. Sin reservas de insumo
-#   (la transición no consume) ni asientos (D-45).
+#   (la transición no consume) ni asientos por sí misma (CON-04a: solo su merma asienta).
 # Todos los rechazos de negocio son `ErrorDeProduccion(codigo, mensaje, campo, datos)`, en voseo rioplatense.
 
 PRIORIDADES = ("alta", "media", "baja")
@@ -582,7 +582,7 @@ def _escribir(actor, plan):
 #   variedad → sectores destino y de origen, por id y sin repetir → lote → la orden y sus ocupaciones) y recién ENTONCES verifica todo
 #   (13b y 13a/13c incluidos). Escribe en este orden: la merma de las plantas sin trasladar (`aplicar_merma`, en la etapa de origen y con
 #   la fecha efectiva) → las ocupaciones destino → las de origen en cero → la etapa y la cantidad del lote → la orden → la bitácora de la
-#   transición → el aviso al Agrónomo → UN registro de auditoría. Sin asientos ni ejercicio (D-45) y sin movimiento de stock.
+#   transición → el aviso al Agrónomo → UN registro de auditoría. La merma asienta (CON-04a, postcondición e) y no hay movimiento de insumos.
 
 LARGO_DE_LA_DESCRIPCION_DE_LA_MERMA = 300
 LARGO_DEL_AVISO = 500
@@ -872,7 +872,7 @@ def concretar_transicion(actor, orden_id, datos):
     """PROD-CNC-TRN: concreta una orden de transición y devuelve la `TransicionEtapa` concretada.
 
     - Precondición a y requisito especial: Capataz activo asignado a la orden (`sin_permiso`). Las precondiciones c y d (ejercicio y
-      cuentas contables) no existen en la ronda (D-45).
+      cuentas contables) se cumplen solas (D-92 punto 2).
     - Verificaciones, DESPUÉS de bloquear: `orden_no_pendiente` (13b), `lote_sin_plantas` (4a), `cambio_simultaneo` (13a y 13c), la fecha
       efectiva (6a y 6b), las cantidades (8a, 10b y 10c) y la causa de la merma (10a).
     - Postcondición a: la orden «concretada», con fecha de resolución = hoy, fecha efectiva y cantidad transferida = el total ubicado.
@@ -979,6 +979,10 @@ def _escribir_concrecion(actor, plan):
     orden.fecha_transicion = plan.fecha
     orden.bitacora_de_transicion = bitacora
     orden.save(update_fields=["estado_orden", "fecha_resolucion_orden", "cant_transferido", "fecha_transicion", "bitacora_de_transicion"])
+    # Postcondición e de PROD-REG-MRM (desde CNC-TRN); D-92 puntos 3 a 6: el asiento de la merma, con la fecha EFECTIVA, al final de los bloqueos.
+    asiento = None
+    if resultado is not None:
+        asiento = asientos_de_produccion.asentar_merma(actor, resultado.merma, resultado.costo, plan.fecha, hoy)
     # 7. El aviso al Agrónomo a cargo (si hay uno activo), dentro de la transacción (D-42).
     if plan.agronomo is not None and plan.agronomo.is_active and plan.agronomo.pk != actor.pk:
         notificaciones.notificar(plan.agronomo, f"Transición concretada: {orden.codigo}", _texto_del_aviso(plan, orden))
@@ -997,13 +1001,16 @@ def _escribir_concrecion(actor, plan):
     }
     if resultado is not None:  # D-36: solo lo que cambió (sin merma, la cantidad y el costo del lote no cambian)
         cambios["cantidad_actual"] = {"antes": str(cantidad_antes), "despues": str(lote.cantidad_actual)}
-        cambios["costo_acumulado"] = {"antes": str(costo_antes), "despues": str(lote.costo_acumulado)}
+        if Decimal(lote.costo_acumulado) != costo_antes:  # D-36: solo lo que cambió (un lote sin costo no cambia; D-92 punto 5)
+            cambios["costo_acumulado"] = {"antes": str(costo_antes), "despues": str(lote.costo_acumulado)}
     datos_de_auditoria = {"invernadero": referencia(plan.invernadero), "lote": referencia(lote)}
     afectados = [orden, lote, bitacora, *plan.destino, *plan.origen, *sectores]
     if resultado is not None:
         datos_de_auditoria["merma"] = referencia(resultado.merma)
         datos_de_auditoria["causa_merma"] = Merma.Causa(plan.causa).label
-        afectados += [resultado.merma, *resultado.alertas]
+        afectados += [resultado.merma, *resultado.alertas, *([asiento] if asiento is not None else [])]
+        if asiento is not None:
+            datos_de_auditoria["asiento"] = referencia(asiento)
         if resultado.alertas:
             datos_de_auditoria["alertas_creadas"] = [referencia(a) for a in resultado.alertas]
     RegistroAuditoria.objects.registrar(

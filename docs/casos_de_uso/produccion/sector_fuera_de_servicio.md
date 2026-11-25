@@ -53,8 +53,8 @@ Puntos de extensión
 Precondiciones
 a. El Agrónomo está autenticado en el Sistema.
 b. El Agrónomo tiene a su cargo al menos un invernadero en estado «activo» con al menos un sector en estado «activo».
-c. Existe un ejercicio contable vigente.
-d. Existen las cuentas contables «Pérdidas por Mermas» y «Productos en Proceso».
+c. Existe un ejercicio contable vigente. *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
+d. Existen las cuentas contables «Pérdidas por Mermas» y «Productos en Proceso». *(Se cumple sola: no se verifica aparte ni hay extensión «sin ejercicio»; D-92 punto 2, CON-04a.)*
 
 Garantías mínimas
 - La operación es atómica, incluidos el caso de uso que la extiende y el que incluye. Si el caso de uso se cancela o
@@ -290,7 +290,7 @@ Temas abiertos
 
 ### Lo que NO se hace en la ronda (D-45)
 
-- **Asientos contables** de las mermas (precondiciones c y d: ejercicio y cuentas «Pérdidas por Mermas» y «Productos en Proceso»): no se verifican ni se crean. El costo de las plantas perdidas **sí baja** del costo del lote.
+- ~~**Asientos contables** de las mermas (precondiciones c y d: ejercicio y cuentas «Pérdidas por Mermas» y «Productos en Proceso»): no se verifican ni se crean.~~ **Hecho en CON-04a (25/11/2026):** un asiento por cada merma de las plantas sin reubicar (Debe «Pérdidas por Mermas» / Haber «Productos en Proceso» por su costo), con la fecha efectiva del fuera de servicio; la reubicación y la cancelación de órdenes no asientan. El costo de las plantas perdidas baja del costo del lote.
 - **Movimiento de stock «salida por merma»** de PROD-REG-MRM: no existe en la ronda.
 - Cancelar Orden se ejecuta **solo para siembras y transiciones** (no hay otras órdenes). Sin cosechas, no hay condición 1 de plantas comprometidas.
 - El **hardware** del sector no se toca (tema abierto del CU; lo decide el módulo IoT).

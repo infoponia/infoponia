@@ -566,8 +566,8 @@ class Variedad(models.Model):
     temp_ambiente_max = models.DecimalField("temperatura máxima (°C)", max_digits=7, decimal_places=2)
     humedad_min = models.DecimalField("humedad mínima (%)", max_digits=7, decimal_places=2)
     humedad_max = models.DecimalField("humedad máxima (%)", max_digits=7, decimal_places=2)
-    intensidad_luz_min = models.DecimalField("intensidad lumínica mínima (µmol)", max_digits=7, decimal_places=2)
-    intensidad_luz_max = models.DecimalField("intensidad lumínica máxima (µmol)", max_digits=7, decimal_places=2)
+    intensidad_luz_min = models.DecimalField("intensidad lumínica mínima (lux)", max_digits=7, decimal_places=2)
+    intensidad_luz_max = models.DecimalField("intensidad lumínica máxima (lux)", max_digits=7, decimal_places=2)
     fotoperiodo_min = models.DecimalField("fotoperíodo mínimo (h/día)", max_digits=7, decimal_places=2)
     fotoperiodo_max = models.DecimalField("fotoperíodo máximo (h/día)", max_digits=7, decimal_places=2)
     # Regla 7 de PROD-ALT-VAR: días de aptitud comercial (1 a 60) y peso en GRAMOS (MD-69: manda el CU sobre el modelo).

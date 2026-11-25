@@ -104,6 +104,12 @@ class ProduccionConfig(AppConfig):
             )
         )
 
+        # `contabilidad` (CON-04a): el texto de origen de los asientos de los consumos y las mermas, que se guardan como bitácora. Idempotente.
+        from contabilidad import extensiones as extensiones_de_contabilidad
+        from produccion.servicios import asientos_de_produccion
+
+        extensiones_de_contabilidad.registrar_enlace_de_origen("bitacora", asientos_de_produccion.enlace_de_origen)
+
         # `core`: ``registrar_*`` es idempotente.
         extensiones_de_core.registrar_asignaciones_de_cuenta(registrantes.asignaciones_de_cuenta)
         extensiones_de_core.registrar_seccion_de_inicio(registrantes.seccion_de_inicio)
