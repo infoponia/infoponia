@@ -22,7 +22,7 @@ from django.shortcuts import get_object_or_404
 
 from comercial.models import Cliente, CompraVenta, DetalleReserva, DetalleVenta, DireccionCliente, ReservaStock
 from comercial.servicios import clientes as api_clientes
-from comercial.servicios import comprobantes, stock_maduro
+from comercial.servicios import comprobantes, entregas, stock_maduro
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.servicios import stock
 from inventario.servicios.variedades import bloquear_variedad
@@ -515,7 +515,7 @@ def registrar_compra_venta(actor, datos):
       en ``datos``).
     - Paso 16, FUERA de la transacción: el comprobante (``comprobantes.enviar_comprobante``). La venta queda «para imprimir» (sin correo),
       «enviado» o «pendiente de envío» (falla: el Vendedor responsable recibe un aviso si registró el Gerente).
-    - Postcondición g (planificar la entrega si todo salió de cámara): se completa en COM-05.
+    - Postcondición g (planificar la entrega si todo salió de cámara): `entregas.programar_para_reservas` (COM-05a1), con `on_commit`.
     """
     previo = _analizar(actor, datos, estricto=True)
     if previo.errores:
@@ -637,6 +637,8 @@ def registrar_compra_venta(actor, datos):
             afectados=[venta, *detalles, *reservas, *[l for l in lineas], *cosechas],
             detalle={"datos": datos_de_auditoria},
         )
+        # Postcondición g (D-66 punto 5): si todo salió de cámara, la entrega se planifica después de confirmar (`on_commit`); `planificar_venta` vuelve a leer si está lista.
+        entregas.programar_para_reservas([r.pk for r in reservas])
 
     # Paso 16 y extensiones 16a y 16b: FUERA de la transacción (D-14, D-54).
     venta.estado_comprobante = comprobantes.enviar_comprobante(venta)

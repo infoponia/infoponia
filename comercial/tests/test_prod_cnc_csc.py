@@ -245,6 +245,7 @@ class PostcondicionesTests(Base):
         espera = detalle(compra_venta(self.e, dias=2), self.e.variedad, 10)
         with self.captureOnCommitCallbacks(execute=False) as callbacks:
             resultado = self.cosechando(40)
+        callbacks = [c for c in callbacks if getattr(getattr(c, "func", None), "__name__", "") != "_correr"]  # COM-05a1: la planificación de la entrega es otro callback
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(ReservaStock.objects.filter(detalle_venta=espera).count(), 0)  # todavía no: recién después de confirmar
         callbacks[0]()
@@ -255,6 +256,7 @@ class PostcondicionesTests(Base):
         """k: si no ingresó nada a la cámara (se cosechó justo lo reservado), no se programa PROD-ASG-CAM."""
         with self.captureOnCommitCallbacks(execute=False) as callbacks:
             self.cosechando(30)
+        callbacks = [c for c in callbacks if getattr(getattr(c, "func", None), "__name__", "") != "_correr"]  # COM-05a1: la planificación de la entrega es otro callback
         self.assertEqual(callbacks, [])
 
     def test_post_k_si_la_asignacion_falla_no_rompe_la_concrecion(self):
@@ -532,3 +534,19 @@ class FaltanteTests(Base):
         resultado = self.concretar({(self.lote, self.sector): 10}, cosecha=sin)
         self.assertEqual((resultado.faltante, resultado.asignacion), (0, None))
         self.assertEqual(self.releer(DetalleVenta, self.detalle.pk).estado_detalle_venta, "abierto")
+
+
+class PlanificacionDeLaEntregaTests(Base):
+    """Postcondición n (COM-05a1; D-66 punto 5): la reserva de la cosecha que quedó lista programa la entrega de su venta con `on_commit`."""
+
+    def test_post_n_concretar_la_cosecha_programa_la_entrega_despues_de_confirmar(self):
+        """Postcondición n: si la reserva quedó «lista para entrega» y con ella la venta, la entrega se planifica después de confirmar."""
+        from comercial.models import Entrega
+
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.cosechando(30)
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        entrega = Entrega.objects.get()
+        self.assertEqual((entrega.contrato_entrega_id, entrega.lineas.get().reservas.get().cosecha_id), (self.venta.pk, self.cosecha.pk))

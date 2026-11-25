@@ -573,3 +573,32 @@ class RegistroDelPasoTests(BaseDeRescision):
         salida = StringIO()
         call_command("proceso_diario", "--fecha", iso(11), "--solo", "cerrar_rescisiones", stdout=salida)
         self.assertEqual(self.recargado(self.s).estado_suministro, "rescindido")
+
+
+class CierreConEntregasTests(BaseDeRescision):
+    """COM-05a1 (punto 6 de «Cuando exista Entrega»): el cierre de una rescisión espera las entregas del contrato «a realizar»."""
+
+    def test_regla_el_cierre_espera_las_entregas_a_realizar_y_se_cierra_cuando_se_cancelan(self):
+        """Con una entrega «a realizar» (aunque esté atrasada) el contrato sigue «vigente»; se cierra el día que se cancela."""
+        from comercial.models import Entrega, ReservaStock
+        from comercial.tests.fabricas import entrega
+
+        self.rescindir()
+        r = ReservaStock.objects.get(detalle_suministro=self.d, fecha_entrega_reserva=en(3))
+        e = entrega(self.s, [r])
+        resumen = suministros.cerrar_rescisiones(en(11))
+        self.assertEqual((self.recargado(self.s).estado_suministro, resumen.procesados), ("vigente", 0))
+        Entrega.objects.filter(pk=e.pk).update(estado_orden="cancelada", fecha_resolucion_orden=en(0), motivo_cancelacion="Motivo de prueba")
+        suministros.cerrar_rescisiones(en(11))
+        self.assertEqual(self.recargado(self.s).estado_suministro, "rescindido")
+
+    def test_regla_una_entrega_concretada_no_frena_el_cierre(self):
+        """Solo las entregas «a realizar» esperan: una concretada no."""
+        from comercial.models import ReservaStock
+        from comercial.tests.fabricas import entrega
+
+        self.rescindir()
+        r = ReservaStock.objects.get(detalle_suministro=self.d, fecha_entrega_reserva=en(3))
+        entrega(self.s, [r], estado="concretada")
+        suministros.cerrar_rescisiones(en(11))
+        self.assertEqual(self.recargado(self.s).estado_suministro, "rescindido")

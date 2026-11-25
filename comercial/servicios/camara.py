@@ -26,8 +26,8 @@ from django.db.models.functions import Coalesce
 from django.template.loader import render_to_string
 from django.urls import reverse
 
-from comercial.models import AlertaComercial, CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
-from comercial.servicios import calendario, enlaces, faltantes, stock_maduro
+from comercial.models import AlertaComercial, CompraVenta, DetalleEntrega, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
+from comercial.servicios import calendario, enlaces, entregas, faltantes, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import Periodo, _cubierto
 from core import correo, notificaciones
@@ -277,6 +277,7 @@ def _recubrir(afectados, actor):
                     enlaces_nuevos.append(camino.enlace)
         if sin_cubrir:
             sin_cubrir_de.append((a.contrato.codigo, sin_cubrir))
+    entregas.programar_para_reservas([r.pk for r in reservas])  # si PROD-ASG-STK volvió a cubrir con stock listo, la entrega se planifica después de confirmar (COM-05a1)
     return Recubierto(reservas, cosechas, sin_cubrir_de, detalles, enlaces_nuevos)
 
 
@@ -329,6 +330,7 @@ def _candidatos(partida, hoy):
             compra_venta__estado_venta__in=(CompraVenta.Estado.ABIERTA, CompraVenta.Estado.PENDIENTE_DECISION),
             compra_venta__fecha_pactada_venta__lte=partida.fecha_limite,
         )
+        .exclude(lineas_de_entrega__entrega__estado_orden__in=entregas.NO_CANCELADAS)  # sin línea en una entrega «a realizar» o «concretada» (COM-05a1)
         .filter(
             Q(compra_venta__modalidad_entrega="retiro", compra_venta__invernadero_retiro_id=invernadero.pk)
             | Q(compra_venta__modalidad_entrega="envio", compra_venta__vendedor_id=invernadero.vendedor_id)
@@ -361,6 +363,10 @@ def _candidatos(partida, hoy):
         .order_by("pk")
     )
     periodos = [Periodo(d, fecha) for d in detalles for fecha in calendario.calendario(d, hasta=tope)]
+    con_entrega = set(  # un período con alguna línea en una entrega «a realizar» o «concretada» ya no es candidato (COM-05a1)
+        DetalleEntrega.objects.filter(detalle_suministro_id__in={p.detalle.pk for p in periodos}, entrega__estado_orden__in=entregas.NO_CANCELADAS).values_list("detalle_suministro_id", "fecha_periodo")
+    )
+    periodos = [p for p in periodos if (p.detalle.pk, p.fecha) not in con_entrega]
     sin_cubrir = stock_maduro.sin_cubrir_de_periodos(periodos)
     for p in periodos:
         if sin_cubrir[p] > 0:
@@ -460,6 +466,7 @@ def _asignar_partida(partida_id, hoy):
         # Postcondición d: una venta que vuelve a «abierta» ya no tiene detalles pendientes, así que su enlace de decisión deja de servir (`anulado`; D-65 punto 5). Va al final del orden de bloqueo.
         anulados = [e for venta in ventas_reabiertas.values() for e in enlaces.anular_enlaces_de(venta)]
         _avisar_asignacion(partida, por_contrato, libre)
+        entregas.programar_para_reservas([r.pk for r in reservas])  # paso 9 y postcondición e: cada venta o período que quedó listo se planifica después de confirmar
         for argumentos in correos:
             transaction.on_commit(partial(_correo_de_faltante_cubierto, *argumentos))
         afectados = [partida, *reservas, *lineas, *reabiertos, *ventas_reabiertas.values(), *anulados]
@@ -564,15 +571,17 @@ def _vencer_en_transaccion(partida_id, hoy, previo):
         if not (actual[0] <= detalles_de_venta and actual[1] <= detalles_de_suministro):
             raise _ContratosNuevos()
         recorte = recortar_partida(p, 0)
+        entregas_afectadas = entregas.entregas_de_reservas([l.reserva_id for l, _ in recorte.lineas])
         resultado = fisico.vencer_partida(p, hoy)  # a y c: primero lo físico; después se vuelve a cubrir (decisión del plan)
         recubierto = _recubrir(recorte.por_detalle, None)
+        quita = entregas.quitar_lineas_liberadas(None, entregas_afectadas, "Se venció en cámara el producto reservado.")  # 3a y postcondición d
         merma = resultado.merma if resultado is not None else None
         alerta = None
         if recorte.lineas:
             alerta = _avisar_merma_reservada(p, merma, recubierto, recorte.por_detalle, "Venció la partida")
         aviso = resolver_aviso_de_partida(p)  # e
         afectados = [p, *([merma, resultado.movimiento] if resultado is not None else []), *[l for l, _ in recorte.lineas], *recorte.reservas_liberadas]
-        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces]
+        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces, *[c.entrega for c in quita.cancelaciones]]
         if alerta is not None:
             afectados.append(alerta)
         datos = {"partida": referencia(p), "fecha_limite": f"{p.fecha_limite:%d/%m/%Y}"}
@@ -582,6 +591,10 @@ def _vencer_en_transaccion(partida_id, hoy, previo):
                 datos["reservas_liberadas"] = [str(r) for r in recorte.reservas_liberadas]
         if recubierto.reservas:
             datos["recubierto"] = [str(r) for r in recubierto.reservas]
+        if quita.lineas_quitadas:
+            datos["lineas_quitadas"] = [str(l) for l in quita.lineas_quitadas]
+        if quita.cancelaciones:
+            datos["entregas_canceladas"] = [str(c.entrega) for c in quita.cancelaciones]
         if recubierto.faltantes:
             datos["sin_cubrir_tras_recorte"] = [f"{codigo}: {n}" for codigo, n in recubierto.faltantes]
         RegistroAuditoria.objects.registrar(usuario=None, accion=RegistroAuditoria.Accion.VENCIMIENTO_PARTIDA, afectados=afectados, detalle={"datos": datos})

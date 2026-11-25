@@ -22,7 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from comercial.models import CompraVenta, DetalleReserva, DetalleVenta, EnlaceCliente, ReservaStock
-from comercial.servicios import enlaces, stock_maduro
+from comercial.servicios import enlaces, entregas, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import Periodo
 from core import correo, notificaciones
@@ -516,6 +516,8 @@ def _registrar(venta_id, enlace_id, decisiones, vistos, vendedor, previo, hoy):
         from comercial.servicios import camara as camara_comercial
 
         camara_comercial.programar_asignacion_de_camara([p.pk for p in partidas] + sorted(reasignar))
+        if despues == CompraVenta.Estado.ABIERTA:  # paso 7 y postcondición m (D-66 punto 5): la venta que queda «abierta» y lista se planifica después de confirmar
+            entregas.programar_planificacion_de_venta(venta.pk)
         if venta.cliente.email_cliente:
             contexto = {
                 "codigo": venta.codigo, "cliente": venta.cliente.nombre_visible, "filas": filas, "cancelada": not quedan, "total": total, "fecha_pactada": venta.fecha_pactada_venta,

@@ -177,39 +177,104 @@ las restricciones de la base, los bloqueos, la relectura de 8b, el paso 50, la c
 
 ## Verificación a mano (la completa Claude Code al cerrar)
 
-**Datos para verificar** (`CLAUDE.md`, «Datos para la verificación a mano»; `docs/patrones/datos_de_verificacion.md`): antes de pedirle
-al estudiante la verificación, Claude Code deja la base local cargada con lo que piden los pasos de abajo, ampliando el cargador de
-`comercial` (`comercial/verificacion.py`, registrado en `ComercialConfig.ready()` con `registrar_cargador`, orden 20; lo crea COM-01;
-cuentas `<rol>@prueba<N>.local` con el número libre al crearlo: hoy `prueba5`, porque `maestros` usa 1 y 2, `iot` 3 y `produccion` 4),
-siempre llamando a los servicios. El estudiante no carga datos a mano. En el «Cierre», qué quedó cargado y con qué cuentas.
+**Antes de empezar.** Hay migraciones nuevas (`comercial` 0008 y `core` 0040): `python manage.py migrate`. No se cargan datos de prueba (D-95): lo que
+sigue lo creás vos a mano, con la contraseña de las cuentas de prueba de tu `CLAUDE.local.md`. Nunca escribas una contraseña en un archivo versionado.
 
-Hay migraciones nuevas (`comercial`, `core`): `python manage.py migrate`. Datos: los de COM-04c (un invernadero «Sur» con Agrónomo, Capataz
-y Vendedor y un lote de «Lechuga Crespa» en Maduración); en «Configuración», máximo de entregas diarias 2 y de localidades 2; dos
-transportistas de «Sur» (Juan, con una camioneta de 50 kg; Ana, con un furgón de 400 kg); un cliente con correo y dirección en Paraná.
+**Qué tiene que existir** (lo de COM-04c: un invernadero «Sur» con Agrónomo, Capataz y Vendedor, y un lote de «Lechuga Crespa» en Maduración con
+al menos 600 plantas):
+- En «Configuración operativa»: máximo de entregas diarias **2** y de localidades distintas por día **2**.
+- Dos transportistas del invernadero «Sur» (Ficha del invernadero › «Logística» › agregar): **Juan Gómez**, con una camioneta de **50 kg**, y
+  **Ana Ruiz**, con un furgón de **400 kg** (Comercial › Vehículos › Nuevo vehículo, con su transportista).
+- Un cliente con correo y dos direcciones en localidades distintas (por ejemplo Paraná y Oro Verde), y otra dirección en una tercera (Crespo).
+- Para ver los correos sin servidor de correo: en tu `.env` el modo consola; sin él, el aviso al cliente queda «pendiente de envío» (es lo normal).
+- Una **partida de cámara** de «Lechuga Crespa» con 600 plantas disponibles (Producción › Cosecha: concretá una cosecha que deje excedente) **o**,
+  si preferís no pasar por la cosecha, hacé el paso 1 así: registrá la venta, y con el **Capataz** concretá su cosecha (Producción › Bandeja).
 
-1. Con el Vendedor, una compra-venta con envío de 100 plantas para dentro de 3 días. Con el Capataz, concretá su cosecha (COM-04a): en
-   «Comercial › Entregas» aparece `OT-…` con el peso calculado (100 × el peso por planta / 1.000) y el transportista que tenga más capacidad
-   libre (con 0 entregas los dos, gana el de más capacidad libre: Ana). Ana tiene la notificación y el cliente, el correo.
-2. Una segunda venta para el mismo día y destino en otra localidad, y una tercera en una tercera localidad: con el máximo de 2 localidades, la
-   tercera queda **sin transportista** (si nadie más cumple). En la campana del Gerente, «Entrega sin transportista» con el motivo; abrila:
-   lleva a la lista, a esa entrega. El Vendedor tiene la notificación.
-3. Subí el máximo de localidades a 3 y corré `python manage.py proceso_diario --fecha <mañana> --solo planificar_entregas` (o sin `--solo`,
-   todos los pasos): la entrega recibe transportista, la alerta queda resuelta, el transportista y el Vendedor tienen el aviso. Corrélo de
-   nuevo: nada nuevo.
-4. Con una entrega sin transportista para pasado mañana: `proceso_diario --fecha <mañana>` envía «Mañana sale … sin transportista» al Gerente
-   y al Vendedor; repetilo: no sale otro.
-5. En la ficha del invernadero › «Logística»: la columna «Entregas a realizar» de cada transportista. Como Gerente, intentá quitar a Ana: lo
-   impide con sus entregas y «Ver sus entregas» lleva a la lista filtrada.
-6. Dá de baja la cuenta de Juan con una entrega a realizar: la ventana lo informa; después, su entrega queda sin transportista con la alerta.
-7. Vencé en cámara (`proceso_diario --fecha <fecha límite + 1>`) una partida reservada para una entrega «a realizar» que sale toda de esa
-   partida: la entrega queda «Cancelada» y el transportista tiene el aviso.
-8. Sin JavaScript: la lista de entregas y sus filtros funcionan con «Filtrar».
-9. Después del merge: en Render, desde la «Shell», `python manage.py proceso_diario --listar` (aparece el 50) y revisar en el log que se
-   aplicaron las migraciones nuevas.
+**Lo que ya cubre una prueba** (no hace falta repetirlo a mano): las reglas de selección, capacidad y límites (`test_entregas_calculos.py`), las
+postcondiciones y extensiones de COM-PNF-ENT y del paso 50 (`test_com_pnf_ent.py`), la cancelación (`test_prod_cnl_ord_entregas.py`), los
+registrantes (`test_extensiones_entregas.py`), la concurrencia y el recorrido por rol y estado (`test_recorrido_entregas.py`). Lo que sigue es lo
+que solo se ve con el navegador y con tus ojos.
+
+1. **Planificación inmediata.** Con el Vendedor: Comercial › Contratos › «Nueva compra-venta», con envío, 100 plantas de «Lechuga Crespa», a $1.500,
+   fecha dentro de 3 días, dirección de Paraná. Con el Capataz, concretá su cosecha (Producción › Bandeja). Con el Gerente o el Vendedor:
+   Comercial › **Entregas**: aparece `OT-…` «A realizar», con el peso (100 × el peso por planta de la variedad ÷ 1.000, por ejemplo «15,00 kg» si
+   son 150 g), el contenido «100 Lechuga Crespa» y **Ana Ruiz** (con 0 entregas empatan: gana la de más capacidad libre). Ana tiene la
+   notificación «Nueva entrega para el …» (entrá con su cuenta) y el cliente, el correo «Tu entrega del …» (en la consola, o «pendiente de envío»).
+   La camioneta de 50 kg de Juan no entraba igual: 15 kg sí entra, probá con 400 plantas (60 kg) y solo Ana cumple.
+2. **Sin transportista.** Registrá una segunda venta para el mismo día a la dirección de Oro Verde y una tercera a la de Crespo, y concretá sus cosechas:
+   con el máximo de 2 localidades, la tercera queda **sin transportista** (si ningún otro cumple). En la campana del Gerente aparece «Entrega sin
+   transportista» con el motivo («máximo de localidades distintas por día»): abrila, tiene que llevar a la lista con esa entrega y una fila marcada.
+   El Vendedor tiene la notificación «Entrega sin transportista: OT-…».
+3. **Paso 50.** Subí el máximo de localidades a 3 y corré `python manage.py proceso_diario --fecha <mañana> --solo planificar_entregas`: la entrega
+   recibe transportista, la alerta queda resuelta, y el transportista y el Vendedor tienen el aviso. Corrélo de nuevo: no aparece nada nuevo.
+4. **Recordatorio único.** Con una entrega sin transportista para pasado mañana: `proceso_diario --fecha <mañana>` manda «Mañana sale … sin transportista»
+   al Gerente y al Vendedor; repetilo: no sale otro.
+5. **Logística y vehículos.** Ficha del invernadero › «Logística»: la columna «Entregas a realizar» de cada transportista. Como Gerente, intentá quitar a Ana
+   con una entrega a realizar: lo impide y «Ver sus entregas» lleva a la lista filtrada por ella. En Comercial › Vehículos, intentá bajar la capacidad del
+   furgón por debajo del peso que ya tiene asignado un día, y quitarle el transportista: los dos se rechazan con su explicación.
+6. **Baja de un transportista.** Como Gerente, dá de baja la cuenta de Juan teniendo una entrega a realizar: la ventana dice «Entregas a realizar: N»; después, su
+   entrega queda sin transportista, con la alerta y el aviso al Vendedor.
+7. **Vencimiento en cámara.** Con una entrega «a realizar» que sale toda de una partida: corré `proceso_diario --fecha <fecha límite de la partida + 1 día>`:
+   la entrega queda «Cancelada» (Comercial › Entregas › estado «Canceladas»), el transportista tiene «Se canceló la entrega …» y la partida figura vencida.
+8. **Sin JavaScript.** Desactivá JavaScript en el navegador: la lista de entregas y sus filtros (estado, transportista, invernadero) funcionan con «Filtrar».
+9. **Navegador real.** En una ventana privada: abrí Comercial › Entregas con el Vendedor y con el Gerente, y filtrá con «Filtrar» hasta el final
+   (con JavaScript, la tabla se redibuja sin recargar y la URL queda con los filtros). El cliente de Django no ve el JavaScript, el CSRF ni el encabezado
+   `Origin`, así que esto solo se comprueba acá. La lista no tiene formularios que envíen datos.
+10. **Después del merge, en Render:** desde la «Shell», `python manage.py proceso_diario --listar` (aparece el 50) y, en el log del despliegue, que se aplicaron
+    `comercial 0008` y `core 0040`. Cargá `URL_DEL_SITIO` si todavía no está (pendiente de COM-04c).
 
 ## Cierre (la completa Claude Code al cerrar)
 
-<!-- Al cerrar, Claude Code suma, si corrigió o completó pantallas (D-61):
-### Pantallas: lo que se corrigió del prototipo
+**Qué se hizo.**
+- Modelos: `Entrega` (hija de `OrdenTrabajo`), `DetalleEntrega` con su M2M a `ReservaStock` y `AlertaComercial.entrega` con «exactamente un origen» de cuatro;
+  migraciones `comercial/0008_entregas` y `core/0040_comercial_entregas` (solo `choices`). Acciones `planificacion_entrega`, `modificacion_entrega` y
+  `asignacion_transportista`, sus etiquetas y valores visibles. Nada en `produccion`.
+- `comercial/servicios/entregas.py`: cálculos (cantidad planificada, peso, en curso, atrasada, candidatos con su motivo, selección, agrupamiento); COM-PNF-ENT inmediato
+  (`programar_planificacion_*` con `on_commit`, una transacción por invernadero, 8b, agrupamiento de suministro y de venta, alerta, avisos, correo al cliente con su estado);
+  el paso diario 50 (recuperación, búsqueda de transportista con recordatorio único, atrasadas, reintento de correos); `cancelar_entrega_incluida` y `quitar_lineas_liberadas`;
+  y lo que protege a las entregas (logística, impedimento y efecto de baja del transportista, «Entregas a realizar», vehículos, cierre de rescisión).
+- Enganches: `registrar_compra_venta`, `pactar_suministro`, la pre-reserva, `concretar_cosecha`, la cancelación de cosecha, COM-DCD-FLT, PROD-ASG-CAM, PROD-VNC-CAM 3a,
+  la merma en cámara 10c y la condición «sin entrega» de los candidatos de cámara.
+- Pantalla: pestaña «Entregas» de Comercial (lista con filtros, `?entrega=` y `?transportista=`).
+
+**Pruebas (M1).** `manage.py test comercial produccion maestros inventario core contabilidad --keepdb --parallel --exclude-tag concurrencia --exclude-tag migracion`:
+**5987 pruebas, OK**. `manage.py test comercial produccion --keepdb --tag concurrencia`: **118 pruebas, OK**. `makemigrations --check --dry-run`: sin cambios. `check`: sin
+problemas. No hay migración de datos (no se corrió `--tag migracion`).
+
+**Decisiones y desvíos de la documentación.**
+- `Entrega.contrato` se llama **`contrato_entrega`**: `contrato` choca con la relación inversa `OrigenDocumento.contrato` (Django lo rechaza, E006); mismo caso que `tipo_orden` y
+  `tipo_contrato` (D-81). Corregir `docs/modelo/comercial.md` y la tarea.
+- `DetalleEntrega` nace con `cant_entregada` y `monto_pagar` (vacíos hasta COM-06a), como pidió el estudiante.
+- El «último correo» que reintenta el paso 50 se deduce sin columna nueva: es el del cambio de fecha si la fecha programada es posterior a la prometida y a la de creación; las
+  entregas que la corrida misma acaba de planificar o reasignar no se reintentan en esa corrida (su correo ya sale con `on_commit`).
+- La baja de la cuenta de un transportista crea una alerta nueva si la anterior ya estaba resuelta (una entrega puede tener varias `AlertaComercial`, una por cada vez que quedó sin transportista).
+- La pantalla se adelantó al bloque de servicios porque los registrantes arman la URL con `reverse`.
+- «Verificación a mano»: el cargador `comercial/verificacion.py` que nombraba la tarea se ignora (D-95); los datos los crea el estudiante.
+
+**Pantallas: lo que se corrigió del prototipo** (D-61)
+
 | Pantalla (función del prototipo) | Qué tenía | Qué se hizo | Por qué (paso o regla) |
--->
+|---|---|---|---|
+| `tabEntregas` | «Asignar transportista», «Cambiar transportista» y «Concretar retiro» | Solo «Ver contrato» | `entregas.md`, «Lo que difiere del prototipo» (COM-05b y COM-06) |
+| `tabEntregas` | «Vencida» para la fecha pasada | «Atrasada · hace N días», en rojo | MD-139 |
+| `tabEntregas` | Filtro de transportista por nombre | Por id, más «Sin transportista» | `entregas.md`, «Lo que difiere del prototipo» |
+| `tabEntregas` | Sin texto para la lista vacía sin filtros, sin paginación, sin respaldo sin JavaScript | «No hay entregas a realizar. InfoPonia las planifica solas…» (con filtros: «No hay entregas con estos filtros.»); páginas de 50; formulario GET con «Filtrar» y HTMX que redibuja solo la tabla | `.claude/rules/interfaz.md` (estados vacíos, respaldo sin JavaScript) |
+| `tabEntregas` | ID `ENT-0110` | `OT-0231` | D-52, punto 3 |
+
+**Pruebas existentes cambiadas** (anotar en el PR):
+- `test_com_reg_cvt.py`: `test_post_g_no_se_planifica_ninguna_entrega_hasta_com_05` (verificaba que `Entrega` no existía) pasó a `test_post_g_la_venta_tiene_entregas_desde_com_05a1`.
+- `test_logistica.py`: `test_ext_no_hace_consultas_por_fila` pasó de 1 a 2 consultas (los vehículos y las entregas «a realizar»: una por tabla).
+- `test_com_dcd_flt.py`: `test_ext_1a_el_vendedor_decide_por_el_cliente_sin_correo` (autorizado por el estudiante): ahora el Vendedor también recibe el aviso de la entrega planificada; se verifica que no haya aviso de falta de correo ni correo al cliente.
+- `test_prod_asg_cam.py`: tres pruebas miran solo el correo y el aviso propios del caso de uso (ahora también sale el de la entrega planificada).
+- `test_prod_cnc_csc.py`: dos pruebas de la postcondición k cuentan solo los `on_commit` de la cámara (ahora hay uno más, el de la entrega).
+- Los `mock.patch` de `test_com_mod_veh.py` y `test_com_baj_veh.py` **no se tocaron**; las pruebas con datos reales están en `test_extensiones_entregas.py`.
+
+**Verifiqué (recorrido y migraciones).** `test_recorrido_entregas.py` (venta que sale de cámara → entrega con transportista, avisos y lista por rol; sin flota → alerta →
+enlace de la campana a la lista; paso 50 por el comando `proceso_diario`; baja de la cuenta del transportista; vencimiento en cámara) y `sqlmigrate` de `comercial 0008` y
+`core 0040` (la de `core` es un no-op: solo `choices`), aplicadas en la base de pruebas.
+
+**Lo cubre una prueba.** Reglas de selección, capacidad, límites, agrupamiento, planificación y paso 50, cancelación incluida, registrantes y vehículos, permisos, filtros y
+orden de la lista, concurrencia (dos planificaciones por el último lugar, planificación contra merma, dos corridas del paso 50).
+
+**No pude verificar.** El JavaScript, el CSRF y el encabezado `Origin` (el cliente de Django no los ve: paso 9 de la «Verificación a mano»); el envío real de correos y el cron;
+el despliegue en Render y Neon; la corrida de `--tag migracion` (la tarea no toca datos).

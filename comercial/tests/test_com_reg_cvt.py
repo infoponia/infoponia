@@ -122,9 +122,10 @@ class FlujoPrincipalTests(BaseDeRegistro):
         self.assertEqual(Cosecha.objects.count(), 0)
         self.assertEqual(venta.estado_venta, "abierta")
 
-    def test_post_g_no_se_planifica_ninguna_entrega_hasta_com_05(self):
-        """Postcondición g: «se completa en COM-05»: en COM-02 la venta con todo en cámara queda «abierta» y sin entrega."""
-        self.assertFalse(hasattr(CompraVenta, "entregas"))
+    def test_post_g_la_venta_tiene_entregas_desde_com_05a1(self):
+        """Postcondición g: «se completa en COM-05». CAMBIADA en COM-05a1 (antes: «no se planifica ninguna entrega hasta COM-05», que verificaba que el modelo `Entrega` no existía): ahora la
+        compra-venta tiene la relación `entregas`; que la venta que sale toda de cámara programa su entrega lo prueba `PlanificacionDeLaEntregaTests`."""
+        self.assertTrue(hasattr(CompraVenta, "entregas"))
 
     def test_regla_la_venta_no_genera_pago_ni_asiento(self):
         """Garantía mínima 4: al registrar no se genera ningún pago ni asiento contable (D-57)."""
@@ -603,3 +604,30 @@ class FormularioYResumenTests(BaseDeRegistro):
         formulario = compra_ventas.datos_del_formulario(self.gerente, DatosDeCompraVenta())
         self.assertEqual(len(formulario.vendedores), 2)
         self.assertTrue(all(invernaderos for _, invernaderos in formulario.vendedores))
+
+
+class PlanificacionDeLaEntregaTests(BaseDeRegistro):
+    """Postcondición g (COM-05a1; D-66 punto 5): una venta que sale toda de cámara programa su entrega con `on_commit`."""
+
+    def test_post_g_una_venta_que_sale_toda_de_camara_programa_su_entrega_despues_de_confirmar(self):
+        """Postcondición g: con todas las reservas «lista para entrega» la entrega se planifica DESPUÉS de confirmar (no dentro de la transacción de quien registra)."""
+        from comercial.models import Entrega
+        from comercial.tests.fabricas import partida_cosechada, transportista_con_vehiculo
+
+        partida_cosechada(self.lote, 50)
+        transportista_con_vehiculo(self.e.invernadero, "800")
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            venta = self.registrar()
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        entrega = Entrega.objects.get()
+        self.assertEqual((entrega.contrato_entrega_id, entrega.estado_orden), (venta.pk, "a_realizar"))
+
+    def test_post_g_una_venta_con_una_cosecha_pendiente_no_planifica_nada(self):
+        """Con una reserva «activa» (la cosecha todavía no se concretó), la venta no está lista: no hay entrega."""
+        from comercial.models import Entrega
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.registrar()
+        self.assertEqual(Entrega.objects.count(), 0)

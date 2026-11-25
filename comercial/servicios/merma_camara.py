@@ -16,7 +16,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from comercial.models import DetalleReserva
-from comercial.servicios import camara, stock_maduro
+from comercial.servicios import camara, entregas, stock_maduro
 from core.models import RegistroAuditoria, Usuario, referencia
 from maestros.models import Variedad
 from produccion.models import Merma, StockCosechado
@@ -207,8 +207,10 @@ def _registrar(actor, datos, previo):
         if not (actual[0] <= detalles_de_venta and actual[1] <= detalles_de_suministro):
             raise camara._ContratosNuevos()
         recorte = camara.recortar_partida(partida, partida.cantidad_disponible_cosechado - cantidad)  # 10c (vacío si la pérdida cabe en el stock libre)
+        entregas_afectadas = entregas.entregas_de_reservas([l.reserva_id for l, _ in recorte.lineas])
         resultado = fisico.aplicar_merma_de_partida(partida, cantidad, datos.causa, descripcion, actor)  # f, g y h; primero lo físico, después se vuelve a cubrir
         recubierto = camara._recubrir(recorte.por_detalle, actor)
+        quita = entregas.quitar_lineas_liberadas(actor, entregas_afectadas, "Se perdió en cámara el producto reservado.")  # 10c: las líneas recortadas y la entrega vacía
         agotada = partida.estado_stock_cosechado == StockCosechado.Estado.AGOTADO
         if agotada:
             camara.resolver_aviso_de_partida(partida)  # la alerta «partida por vencer»
@@ -216,7 +218,7 @@ def _registrar(actor, datos, previo):
         if recorte.lineas:  # 10c.6: la alerta para el Agrónomo (regla 2 de 8.9) y el aviso al Vendedor de cada contrato afectado
             alerta = camara._avisar_merma_reservada(partida, resultado.merma, recubierto, recorte.por_detalle, "Merma en la partida")
         afectados = [partida, resultado.merma, resultado.movimiento, *[l for l, _ in recorte.lineas], *recorte.reservas_liberadas]
-        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces]
+        afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces, *[c.entrega for c in quita.cancelaciones]]
         if alerta is not None:
             afectados.append(alerta)
         recortes = _recortes_de(recorte.por_detalle)
@@ -227,6 +229,10 @@ def _registrar(actor, datos, previo):
                 datos_de_auditoria["reservas_liberadas"] = [str(r) for r in recorte.reservas_liberadas]
         if recubierto.reservas:
             datos_de_auditoria["recubierto"] = [str(r) for r in recubierto.reservas]
+        if quita.lineas_quitadas:
+            datos_de_auditoria["lineas_quitadas"] = [str(l) for l in quita.lineas_quitadas]
+        if quita.cancelaciones:
+            datos_de_auditoria["entregas_canceladas"] = [str(c.entrega) for c in quita.cancelaciones]
         if recubierto.faltantes:
             datos_de_auditoria["sin_cubrir_tras_recorte"] = [f"{codigo}: {n}" for codigo, n in recubierto.faltantes]
         RegistroAuditoria.objects.registrar(

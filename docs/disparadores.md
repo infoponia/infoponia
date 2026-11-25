@@ -82,7 +82,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    lo informa antes de confirmar. Se conecta con `registrar_efecto_de_baja_de_cuenta` y `registrar_asignaciones_de_cuenta` de
    `core/extensiones.py` (D-43).
    **Planificado (lote C5a):** COM-05a, con la alerta «entrega sin transportista» y el aviso al Vendedor (`docs/casos_de_uso/comercial/entregas.md`,
-   «Lo que completa a otras tareas»).
+   «Lo que completa a otras tareas»). **Hecho el 24/11/2026 en COM-05a1.**
 2. **Transportista en ruta o con entregas (D-55, nace en MAE-05).** Reglas 9 y 10 de PROD-MOD-INV y precondición d de USR-BAJ-USR.
    `comercial` registra:
 - `maestros.extensiones.registrar_impedimento_de_transportista`, con los códigos `transportista_en_ruta` y
@@ -93,18 +93,19 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    **Planificado (lote C5a):** `transportista_con_entregas`, COM-05a1. `transportista_en_ruta` (los dos puntos), **COM-06a (lote C6)**
    (`docs/casos_de_uso/comercial/rutas.md`, «Lo que completa a otras tareas»). La regla de COM-ASG-TRP, **COM-05b (lote C5b)**: la
    extensión 3a (`entrega_en_curso`; `docs/casos_de_uso/comercial/entregas.md`, «COM-ASG-TRP»).
+   **Hecho el 24/11/2026 en COM-05a1:** `transportista_con_entregas`. Siguen abiertos `transportista_en_ruta` (COM-06a) y la regla de COM-ASG-TRP (COM-05b).
 3. **Logística de la ficha del invernadero (D-55, nace en MAE-05).** Regla 3 de PROD-CNS-INV: `comercial` registra
    `maestros.extensiones.registrar_logistica_de_transportista` con el vehículo, la situación (en ruta o no) y las entregas a
    realizar de cada transportista. Con el registrante, «Logística» muestra las tres columnas de `logistica(inv, ger, true)` del
    prototipo `docs/prototipos/produccion/logistica_transportista.html`.
    **Planificado (lote C1):** COM-01 registra el punto con el vehículo y la situación (en ruta) y `entregas_a_realizar = 0`; COM-05a completa
-   las entregas a realizar y `url_entregas` (la lista de entregas con `?transportista=<id>`) en el mismo registrante (admite uno solo).    **Hecho el 23/11/2026 en COM-01 (parte de COM-01):** `comercial` registra el punto con el vehículo y la situación (en ruta) y `entregas_a_realizar = 0` y `url_entregas = None`; sigue abierto lo de COM-05a (las entregas a realizar y su URL, en el mismo registrante).
+   las entregas a realizar y `url_entregas` (la lista de entregas con `?transportista=<id>`) en el mismo registrante (admite uno solo).    **Hecho el 23/11/2026 en COM-01 (parte de COM-01):** `comercial` registra el punto con el vehículo y la situación (en ruta) y `entregas_a_realizar = 0` y `url_entregas = None`; sigue abierto lo de COM-05a (las entregas a realizar y su URL, en el mismo registrante). **Hecho el 24/11/2026 en COM-05a1.**
 4. **Venta que sale toda de cámara (nace en COM-02, lote C2).** Postcondición g de COM-REG-CVT: si todas las reservas de una compra-venta
    quedan «lista para entrega», InfoPonia planifica la entrega (COM-PNF-ENT). COM-05 suma esa llamada al final de `registrar_compra_venta` y
    su paso diario 50 planifica también las ventas que ya estaban así.
    COM-PCT-SUM (postcondición f) y PROD-PRR-SUM hacen lo mismo con un período de suministro (lote C3).
    **Planificado (lote C5a):** COM-05a, con `programar_planificacion_*` y `transaction.on_commit` (D-66, punto 5); el paso 50 recupera lo
-   que no se planificó.
+   que no se planificó. **Hecho el 24/11/2026 en COM-05a1.**
 5. **Fin de un detalle y de un suministro por entrega (nace en COM-03, lote C3).** Un `DetalleSuministro` pasa a «finalizado» al concretarse
    la entrega de su último período, y el `Suministro` cuando todos sus detalles están finalizados (regla 5 de 8.11). COM-06, al concretar,
    lo verifica y cambia los estados. COM-MOD-SUM ya finaliza un contrato que se queda sin detalles vigentes ni períodos pendientes.
@@ -112,7 +113,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
 6. **Cierre de una rescisión (nace en COM-03, lote C3).** El paso diario 35 (`cerrar_rescisiones`) pasa a «rescindido» un suministro con
    rescisión acordada el día siguiente a su última entrega conservada. COM-05 (o COM-06) le suma la condición «sin entregas del contrato
    a realizar», para no cerrar un contrato con una entrega atrasada.
-   **Hecho en COM-03b (24/11/2026):** el paso 35 existe y cierra sin esperar entregas. **Planificado (lote C5a):** COM-05a (la condición en `cerrar_rescisiones`).
+   **Hecho en COM-03b (24/11/2026):** el paso 35 existe y cierra sin esperar entregas. **Planificado (lote C5a):** COM-05a (la condición en `cerrar_rescisiones`). **Hecho el 24/11/2026 en COM-05a1.** Sigue abierto el punto 1 de «Cuando se programen COM-05a1 y COM-06» (`periodos_conservados`).
 
 7. **Lo que deja COM-04 para las entregas (nace en el lote C4).** COM-05 lo suma al crear `Entrega`:
    - PROD-ASG-CAM: la condición «sin detalle de entrega en una entrega no cancelada» de sus candidatos y el paso 9 (COM-PNF-ENT); lo mismo
@@ -128,6 +129,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    **Planificado (lote C5a):** COM-05a hace los dos primeros guiones (candidatos «sin entrega» y los disparadores; las líneas quitadas y la
    entrega vacía cancelada, D-66 puntos 4 y 9). El tercero (el enlace de COM-CNL-CVT) es de **COM-05b** (**planificado, lote C5b**:
    postcondición e de COM-CNL-CVT, `anular_enlaces_de(venta)`; `docs/casos_de_uso/comercial/compra_venta.md`, «COM-CNL-CVT»).
+   **Hecho el 24/11/2026 en COM-05a1:** los dos primeros guiones (candidatos «sin entrega», los disparadores, las líneas quitadas y la entrega vacía cancelada).
 
 8. **Lo que deja COM-05a (nace en el lote C5a; desde el C5b, COM-05a es COM-05a1 y COM-05a2).**
    - **COM-05b** (**planificado, lote C5b**): COM-ASG-TRP reutiliza `candidatos_para`, `peso_de_entregas` y la acción `asignacion_transportista`, resuelve la alerta
@@ -393,7 +395,7 @@ alimenta. Cada una tiene su docstring «Se completa en IOT-NN». Fuente: los ext
 invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un invernadero inactivo y la bandeja lo excluye; hecho el 22/11/2026). Nació en MAE-01b.
    **Asignación de stock: COM-02 (lote C2)**, en `stock_maduro` (invernaderos considerados = solo activos). Planificaciones y reintento de
    entregas: COM-03 y COM-05 (**planificado en el lote C5a:** COM-05a, en la planificación inmediata y en el paso 50).
-   **Pedidos: hecho el 24/11/2026 en CMP-02b.** Un invernadero inactivo no se ofrece al armar un pedido (CMP-RLZ-PED lo rechaza con `invernadero_inactivo` vía `bloquear_invernadero_activo`) y la baja del invernadero se impide con un pedido en curso. Quedan las planificaciones, la asignación de stock y el reintento de entregas.
+   **Pedidos: hecho el 24/11/2026 en CMP-02b.** Un invernadero inactivo no se ofrece al armar un pedido (CMP-RLZ-PED lo rechaza con `invernadero_inactivo` vía `bloquear_invernadero_activo`) y la baja del invernadero se impide con un pedido en curso. Quedan las planificaciones, la asignación de stock y el reintento de entregas. **Hecho el 24/11/2026 en COM-05a1:** la planificación de entregas y el paso 50 no toman un invernadero inactivo.
 
 ## Cuando exista Cliente o CompraVenta
 
@@ -554,7 +556,7 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
    consulta (reglas 2 y 3 de COM-MOD-VEH, precondición c y regla 1 de COM-BAJ-VEH); la lista suma «Entregas a realizar» y la ficha, la carga
    de los próximos días frente a la capacidad (regla 2 de COM-CNS-VEH).
 
-   COM-01 está hecha (23/11/2026): `entregas_a_realizar_del_transportista` (lista vacía) y `carga_maxima_asignada` (`(0, None)`) ya existen y sus llamadores están probados con `mock.patch`: COM-05a solo les pone la consulta.
+   COM-01 está hecha (23/11/2026): `entregas_a_realizar_del_transportista` (lista vacía) y `carga_maxima_asignada` (`(0, None)`) ya existen y sus llamadores están probados con `mock.patch`: COM-05a solo les pone la consulta. **Hecho el 24/11/2026 en COM-05a1** (las pruebas con `mock.patch` siguen; las de datos reales están en `test_extensiones_entregas.py`). La columna «Entregas a realizar» y la tarjeta de carga de las pantallas de vehículos son de COM-05a2.
 
 ## Cuando exista el rol Contador (USR-11) — nace con el lote 1 de Contabilidad
 
@@ -613,11 +615,11 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 1. ~~**`on_commit` de PROD-ASG-CAM (COM-04b).**~~ Hecho el 24/11/2026 en COM-04b (`camara.programar_asignacion_de_camara` en `concretar_cosecha` y en `_cancelar_en_transaccion`). Texto original: `concretar_cosecha` y `cancelar_cosecha` (y `cancelar_cosecha_incluida`) no disparan la asignación automática de cámara de las partidas que crean o liberan (postcondiciones k y h): COM-04b registra el `transaction.on_commit` en `comercial/servicios/cosechas.py`. Hasta entonces las recupera el paso diario 25.
 2. ~~**«Pérdida en cámara» y pestaña «Cámara» (COM-04b).**~~ Hecho el 24/11/2026 en COM-04b (`entradas_de_comercial` devuelve la URL de `comercial:merma_camara`). Texto original: `entradas_de_comercial` devuelve`merma_en_camara = None`: COM-04b lo completa junto con la pantalla.
 3. ~~**Enlace y correo del camino de faltante (COM-04c).**~~ Hecho el 24/11/2026 en COM-04c (`faltantes._enlace_del_camino`; la prueba de concurrencia «cancelar contra la decisión del cliente» está en `test_cancelar_cosecha_concurrencia.py`). Texto original: **Enlace y correo del camino de faltante (COM-04c).** `faltantes.seguir_camino_de_faltante` no crea el enlace del cliente ni manda el correo (ni el aviso «registrá vos la decisión» sin correo): COM-04c los suma en la misma función; también la prueba de concurrencia «cancelar contra la decisión del cliente».
-4. **Planificar la entrega (COM-05a1)** cuando una cosecha deja lista una venta o un período (postcondición n de PROD-CNC-CSC) y los **asientos** (D-57, CON-04c) originados en cada `salida_por_cosecha`.
+4. **Planificar la entrega (COM-05a1)** cuando una cosecha deja lista una venta o un período (postcondición n de PROD-CNC-CSC) y los **asientos** (D-57, CON-04c) originados en cada `salida_por_cosecha`. **Planificar la entrega: hecho el 24/11/2026 en COM-05a1;** los asientos siguen abiertos (CON-04c).
 
 ## Lo que deja COM-04b (nace el 24/11/2026)
 1. ~~**COM-04c.**~~ Hecho el 24/11/2026 en COM-04c (`camara._asignar_partida` anula el enlace con `enlaces.anular_enlaces_de`; la prueba de la merma contra la decisión está en `test_com_dcd_flt.py`). Texto original: **COM-04c.** `camara._asignar_partida` (paso 7 de PROD-ASG-CAM) no anula el enlace de decisión del cliente de la venta que vuelve a «abierta»; `camara._recubrir` usa `faltantes.seguir_camino_de_faltante`, así que el enlace nuevo y el correo del camino de faltante (3a.2a de PROD-VNC-CAM, 10c de PROD-REG-MRM) se suman en esa misma función. También la prueba de concurrencia «merma en cámara contra la decisión del cliente» (`test_camara_concurrencia.py`).
-2. **COM-05a1.** La condición «sin detalle de entrega en una entrega no cancelada» de `camara._candidatos`; el paso 9 y la postcondición e de PROD-ASG-CAM (planificar la entrega); y, en `camara._vencer_en_transaccion` y `merma_camara._registrar`, quitar las líneas recortadas de su entrega «a realizar» y cancelar la que queda vacía (postcondición d y extensión 3a de PROD-VNC-CAM; 10c).
+2. ~~**COM-05a1.**~~ Hecho el 24/11/2026 en COM-05a1. Texto original: La condición «sin detalle de entrega en una entrega no cancelada» de `camara._candidatos`; el paso 9 y la postcondición e de PROD-ASG-CAM (planificar la entrega); y, en `camara._vencer_en_transaccion` y `merma_camara._registrar`, quitar las líneas recortadas de su entrega «a realizar» y cancelar la que queda vacía (postcondición d y extensión 3a de PROD-VNC-CAM; 10c).
 3. **COM-06a.** La extensión 3b de PROD-VNC-CAM (partida con líneas en una entrega en curso); llamar a `camara.resolver_aviso_de_partida` cuando una entrega agota una partida.
 4. **CON-04c.** Los asientos de `vencimiento_partida` y de `registro_merma` sobre una partida (se originan en la `Merma` y su `MovimientoStock`, que ya guardan el costo).
 5. **Decisión pendiente (ficha del invernadero).** Si el Capataz y el Vendedor tienen que ver la pestaña «Cámara», `maestros.views.invernadero` (hoy `rol_requerido(GERENTE, AGRONOMO)`) tiene que abrirse a esos roles, con sus pruebas.
@@ -636,7 +638,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 
 ## Lo que deja COM-04c (nace el 24/11/2026)
 1. **Render: cargar `URL_DEL_SITIO`** (sin barra final) antes de usar el enlace del cliente; sin ella el correo no sale y el enlace queda «No se pudo enviar». Pasada manual en navegador real al cerrar la tanda de «Comercial 1» (pasos 3 y 14 de la «Verificación a mano» de COM-04c).
-2. **COM-05a1:** planificar la entrega después de decidir (paso 7 y postcondición m de COM-DCD-FLT: si la venta queda «abierta» con todas sus reservas «lista para entrega»); el punto de enganche es el final de `faltantes._registrar`, con `on_commit`, junto a la asignación de cámara.
+2. **COM-05a1:** planificar la entrega después de decidir (paso 7 y postcondición m de COM-DCD-FLT: si la venta queda «abierta» con todas sus reservas «lista para entrega»); el punto de enganche es el final de `faltantes._registrar`, con `on_commit`, junto a la asignación de cámara. **Hecho el 24/11/2026 en COM-05a1.**
 3. **COM-05b:** COM-CNL-CVT llama a `enlaces.anular_enlaces_de(venta)` (ya existe; es el tercer llamador). **COM-06b:** suma el tipo `confirmacion_entrega` y su FK a `Entrega` al mismo `EnlaceCliente`, con `crear_enlace(…, entrega=)` sin reemplazo y vigencia calculada (`enlace_del_cliente.md`, sección 9); el paso 27 no lo toma.
 4. **Documentar `URL_DEL_SITIO`** en `docs/patrones/enlace_del_cliente.md` (sección 3) y los bloqueos de COM-DCD-FLT en `docs/patrones/bloqueos.md` (ver `docs/temas_abiertos.md`, «COM-04c»).
 
@@ -650,3 +652,11 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 4. **Cuando se programe CON-03b (asiento manual y contraasiento):** validar la fecha con `ejercicios.ejercicio_para(fecha, automatico=False)`, que lanza `fecha_en_ejercicio_cerrado`, `fecha_anterior_al_primer_ejercicio` y `fecha_futura` (D-102). El automático nunca las lanza.
 5. **Cuando se programe Estadísticas (EST-02):** usar `libro.resultado_del_periodo(desde, hasta)` y `libro.total_por_cuenta_en_periodo(...)`; con `tipo=None` el total es el saldo según la naturaleza de la cuenta y puede ser negativo (D-102).
 6. **Cuando se arme el cron único:** el paso 5 `abrir_ejercicio` ya está registrado y va primero (D-56); no hace falta programarlo aparte.
+
+## Lo que deja COM-05a1 (nace el 24/11/2026)
+
+1. **COM-05a2:** el aviso de envasado al Agrónomo (postcondición h de COM-PNF-ENT) en `_planificar_en_invernadero`, junto al aviso al transportista; la columna «Entregas a realizar» y la tarjeta de carga de los próximos días en las pantallas de vehículos (`carga_maxima_asignada` y `entregas_a_realizar_del_transportista` ya existen); «Ver sus entregas» en la ventana de baja de un vehículo; las secciones de entregas de las fichas de contrato y el panel. La restricción de `ReservaInsumo` («a lo sumo una activa», D-66 punto 8) y las funciones de envasado: `entrega_para_agrupar` ya lee las reservas de insumo «activas».
+2. **COM-05b:** COM-ASG-TRP reutiliza `candidatos_para(..., excluir=)`, `seleccionar`, `motivo_de_alerta`, `peso_de_entregas` y la acción `asignacion_transportista` (ya declarada); cambia el enlace de la alerta (`entregas.enlaces_de_alertas`) a la pantalla de asignación. COM-CNL-CVT usa `cancelar_entrega_incluida` (que ya resuelve la alerta y avisa).
+3. **COM-06:** `transportista_en_ruta` (impedimento del invernadero y de la baja de cuenta) y PROD-VNC-CAM 3b: `quitar_lineas_liberadas` solo toca las «a realizar»; una entrega en curso con producto vencido se trata en 3b. COM-INI-RUT usa `peso_de_entregas` y bloquea el invernadero antes de cambiar el vehículo.
+4. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05a1»): el nombre `contrato_entrega`; las varias `AlertaComercial` por entrega; el «último correo» del paso 50. Agregar en `docs/patrones/bloqueos.md`, «Entregas y envasado», el orden de la baja de cuenta tal como quedó (invernaderos de las entregas y después las entregas).
+5. **Pasada manual en navegador real** (paso 9 de la «Verificación a mano» de COM-05a1) para el cierre de la tanda de «Comercial 1».

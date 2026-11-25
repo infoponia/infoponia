@@ -898,3 +898,21 @@ class ComprobanteTests(BaseDePacto):
         self.assertEqual(RegistroAuditoria.objects.count(), antes)
         with self.assertRaises(PermissionDenied):
             comprobantes.reenviar_comprobante(crear_vendedor(email="otro@infoponia.com"), s.pk)
+
+
+class PlanificacionDeLaEntregaTests(BaseDePacto):
+    """Postcondición f (COM-05a1; D-66 punto 5): cada período que salió todo de cámara programa su entrega con `on_commit`."""
+
+    def test_post_f_los_periodos_que_salen_de_camara_programan_su_entrega_despues_de_confirmar(self):
+        """Postcondición f: un período por fecha (los de la ventana: a los 3 y a los 10 días) con todas sus reservas «lista para entrega»: una entrega por período, después de confirmar."""
+        from comercial.models import Entrega
+        from comercial.tests.fabricas import partida_cosechada, transportista_con_vehiculo
+
+        partida_cosechada(self.lote, 100)
+        transportista_con_vehiculo(self.e.invernadero, "800")
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            suministro = self.pactar()
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        self.assertEqual(sorted(e.fecha_programada_orden for e in Entrega.objects.filter(contrato_entrega_id=suministro.pk)), [HOY + timedelta(days=3), HOY + timedelta(days=10)])

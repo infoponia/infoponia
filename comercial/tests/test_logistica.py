@@ -55,10 +55,11 @@ class LogisticaDeTransportistasTests(TestCase):
             self.assertEqual(vehiculos.logistica_de_transportistas([]), {})
 
     def test_ext_no_hace_consultas_por_fila(self):
-        """Interfaz (API «Transportistas»): una sola consulta para toda la lista, con tres transportistas."""
+        """Interfaz (API «Transportistas»): una consulta por tabla para toda la lista, con tres transportistas. CAMBIADA en COM-05a1: antes era una sola (los vehículos); ahora son dos,
+        porque se suman las entregas «a realizar» de cada uno (otra tabla); nunca una por transportista."""
         vehiculo(patente="AE123CD", transportista=self.diego)
         vehiculo(patente="ABC123", transportista=self.carla, en_ruta_hoy=True)
-        with self.assertNumQueries(1):
+        with self.assertNumQueries(2):
             vehiculos.logistica_de_transportistas([self.diego, self.carla, self.ana])
 
 

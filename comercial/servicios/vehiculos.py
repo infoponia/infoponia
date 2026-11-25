@@ -9,23 +9,22 @@
 # se vuelve a leer ya bloqueado. La base respalda lo que no se puede bloquear: la patente única y el ``OneToOneField`` del
 # transportista (``IntegrityError`` traducido al mismo error de campo, nunca un 500).
 #
-# Lo que completa COM-05, escrito ya como funciones que hoy devuelven «nada»: ``entregas_a_realizar_del_transportista`` y
-# ``carga_maxima_asignada``.
+# Lo que completó COM-05a1: ``entregas_a_realizar_del_transportista`` y ``carga_maxima_asignada`` (reglas 2 y 3 de COM-MOD-VEH, precondición c y regla 1 de COM-BAJ-VEH).
 
 import re
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q, Value
+from django.db.models import Count, Q, Value
 from django.db.models.functions import Concat
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from comercial.models import REGEX_PATENTE, Vehiculo
+from comercial.models import REGEX_PATENTE, Entrega, Vehiculo
 from core import notificaciones
 from core.extensiones import DatoDeCuenta
 from core.models import RegistroAuditoria, Transportista, Usuario, referencia, rol_de
@@ -77,20 +76,35 @@ class DatosDeVehiculo:
         )
 
 
-# ---- lo que completa COM-05 (hoy devuelve «nada») ----
+# ---- lo que completó COM-05a1 ----
 
 
 def entregas_a_realizar_del_transportista(transportista):
-    """Las entregas «a realizar» de ``transportista`` (regla 3 de COM-MOD-VEH; precondición c y regla 1 de COM-BAJ-VEH): sin
-    vehículo no podría concretarlas. **Se completa en COM-05**, cuando exista ``Entrega``. En COM-01, lista vacía."""
-    return []
+    """Las entregas «a realizar» de ``transportista`` (regla 3 de COM-MOD-VEH; precondición c y regla 1 de COM-BAJ-VEH): sin vehículo no podría concretarlas. Por fecha
+    programada e id; lista vacía si no tiene ninguna."""
+    return list(Entrega.objects.filter(transportista_id=transportista.pk, estado_orden="a_realizar").order_by("fecha_programada_orden", "pk"))
 
 
 def carga_maxima_asignada(vehiculo, desde):
-    """``(peso, fecha)``: el mayor peso que el transportista del vehículo tiene asignado en un día desde ``desde`` en adelante
-    (la suma de sus entregas no canceladas de esa fecha) y esa fecha (regla 2 de COM-MOD-VEH; regla 6 de 8.12). **Se completa en
-    COM-05**. En COM-01, ``(0, None)``."""
-    return Decimal("0"), None
+    """``(peso, fecha)``: el mayor peso que el transportista del vehículo tiene asignado en un día desde ``desde`` en adelante (la suma del peso de sus entregas no canceladas
+    de esa fecha) y esa fecha (regla 2 de COM-MOD-VEH; regla 6 de 8.12); con empate, la más próxima. Sin transportista o sin entregas, ``(0, None)``."""
+    from comercial.servicios import entregas
+
+    if vehiculo.transportista_id is None:
+        return Decimal("0"), None
+    por_dia = defaultdict(list)
+    for entrega_id, fecha in (
+        Entrega.objects.filter(transportista_id=vehiculo.transportista_id, fecha_programada_orden__gte=desde)
+        .exclude(estado_orden="cancelada")
+        .values_list("pk", "fecha_programada_orden")
+    ):
+        por_dia[fecha].append(entrega_id)
+    if not por_dia:
+        return Decimal("0"), None
+    pesos = entregas.peso_de_entregas([e for ids in por_dia.values() for e in ids])
+    totales = {fecha: sum((pesos[e] for e in ids), Decimal("0")) for fecha, ids in por_dia.items()}
+    fecha = max(totales, key=lambda f: (totales[f], -f.toordinal()))
+    return totales[fecha], fecha
 
 
 # ---- textos ----
@@ -554,7 +568,7 @@ def buscar_vehiculos(actor, texto="", estado="", invernadero_id=None):
 
 def ficha_del_vehiculo(actor, vehiculo_id):
     """COM-CNS-VEH, regla 2: el vehículo con su transportista, el invernadero de este y si está en ruta hoy. La carga asignada
-    frente a la capacidad se suma en COM-05. 404 si no existe."""
+    frente a la capacidad se suma en COM-05a2. 404 si no existe."""
     _exigir_gerente(actor)
     vehiculo = get_object_or_404(
         Vehiculo.objects.en_alcance_de(actor).select_related("transportista__invernadero_asignado__invernadero"), pk=vehiculo_id
@@ -592,12 +606,17 @@ def acciones_permitidas(actor, vehiculo):
 
 def logistica_de_transportistas(transportistas):
     """Lo que `comercial` registra en ``maestros.extensiones.registrar_logistica_de_transportista`` (D-55): ``{id: Logistica}`` con
-    el vehículo activo («Camioneta AE123CD · 800 kg» o ``None``) y si está en ruta hoy; las entregas y su URL las completa COM-05.
-    Una sola consulta para toda la lista."""
+    el vehículo activo («Camioneta AE123CD · 800 kg» o ``None``), si está en ruta hoy y sus entregas «a realizar» con la URL de la lista de entregas filtrada por él (COM-05a1; sin
+    entregas, ``None``). Una consulta por tabla para toda la lista."""
+    from comercial.servicios import entregas
+
     ids = [t.pk for t in transportistas]
     if not ids:
         return {}
     hoy = timezone.localdate()
+    a_realizar = dict(
+        Entrega.objects.filter(transportista_id__in=ids, estado_orden="a_realizar").values_list("transportista_id").annotate(cantidad=Count("pk")).order_by()
+    )
     por_transportista = {
         v.transportista_id: v
         for v in Vehiculo.objects.filter(transportista_id__in=ids, estado_vehiculo=Estado.ACTIVO)
@@ -606,8 +625,8 @@ def logistica_de_transportistas(transportistas):
         pk: Logistica(
             _descripcion(por_transportista[pk]) if pk in por_transportista else None,
             bool(pk in por_transportista and por_transportista[pk].esta_en_ruta(hoy)),
-            0,
-            None,
+            a_realizar.get(pk, 0),
+            entregas.url_de_entregas(transportista=pk) if a_realizar.get(pk) else None,
         )
         for pk in ids
     }

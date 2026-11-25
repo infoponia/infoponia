@@ -373,3 +373,28 @@ class ExtensionesTests(Base):
         resultado = self.cancelar(huella=resumen.huella)
         self.assertEqual((resumen.estimacion.cubierto, resumen.estimacion.sin_cubrir), (resultado.asignacion.cubierta, resultado.sin_cubrir))
         self.assertEqual((resultado.asignacion.cubierta, resultado.sin_cubrir), (25, 5))
+
+
+class PlanificacionDeLaEntregaTests(Base):
+    """COM-05a1: la postcondición i de PROD-CNL-ORD (cosechas): lo que PROD-ASG-STK volvió a cubrir con stock listo se planifica después de confirmar."""
+
+    def test_post_i_si_las_reservas_nuevas_dejan_lista_la_venta_se_programa_su_entrega(self):
+        """Postcondición i: al cancelar la cosecha, la cámara cubre lo que ella cubría; la venta queda lista y su entrega se planifica después de confirmar."""
+        from comercial.models import Entrega
+
+        self.camara(30)
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            self.cancelar()
+            self.assertEqual(Entrega.objects.count(), 0)
+        for callback in callbacks:
+            callback()
+        entrega = Entrega.objects.get()
+        self.assertEqual((entrega.contrato_entrega_id, entrega.lineas.get().reservas.get().estado_reserva), (self.venta.pk, "lista_para_entrega"))
+
+    def test_post_i_sin_stock_listo_no_se_planifica_nada(self):
+        """Sin stock de cámara la cosecha cancelada se vuelve a cubrir con producto en pie («activa»): nada que planificar."""
+        from comercial.models import Entrega
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.cancelar()
+        self.assertEqual(Entrega.objects.count(), 0)

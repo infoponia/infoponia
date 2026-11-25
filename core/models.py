@@ -824,6 +824,11 @@ class RegistroAuditoria(models.Model):
         MODIFICACION_EJERCICIO_CONTABLE = "modificacion_ejercicio_contable", "Modificación de ejercicio contable"
         ALTA_ASIENTO_CONTABLE = "alta_asiento_contable", "Alta de asiento contable"
         ALTA_MOVIMIENTO_CONTABLE = "alta_movimiento_contable", "Alta de movimiento contable"
+        # COM-05a1 (D-66): las entregas. Un registro por entrega creada o cambiada por InfoPonia (origen: proceso automático, D-27). La cancelación de una
+        # entrega usa `cancelacion_orden`, que ya existe; COM-05b suma la asignación manual con `asignacion_transportista`.
+        PLANIFICACION_ENTREGA = "planificacion_entrega", "Planificación de entrega"
+        MODIFICACION_ENTREGA = "modificacion_entrega", "Modificación de entrega"
+        ASIGNACION_TRANSPORTISTA = "asignacion_transportista", "Asignación de transportista"
 
     # D-36: nombre visible de cada campo de «cambios» y de cada clave de «datos». El orden de este diccionario
     # es el orden en que se muestran las filas (jsonb no conserva el orden de las claves); lo que no figura va
@@ -1155,6 +1160,22 @@ class RegistroAuditoria(models.Model):
         # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
         "fecha_inicio_ejercicio": "Inicio del ejercicio",
         "fecha_cierre_ejercicio": "Cierre previsto del ejercicio",
+        # Entregas (COM-05a1): las claves de `datos` y de `cambios` de planificación, modificación, asignación y cancelación de una entrega («transportista»,
+        # «alertas_creadas», «alertas_resueltas», «modalidad_entrega», «motivo_cancelacion» y «fecha_resolucion_orden» ya existen).
+        "entrega": "Entrega",
+        "entregas": "Entregas",
+        "contrato": "Contrato",
+        "fecha_programada": "Fecha programada",
+        "destino": "Destino",
+        "peso": "Peso (kg)",
+        "motivo_sin_transportista": "Motivo de que no tenga transportista",
+        "lineas_de_entrega": "Líneas de entrega",
+        "lineas_agregadas": "Líneas agregadas",
+        "lineas_quitadas": "Líneas quitadas",
+        "entregas_canceladas": "Entregas canceladas",
+        "entregas_sin_transportista": "Entregas que quedan sin transportista",
+        "estado_confirmacion_cliente": "Confirmación del cliente",
+        "estado_aviso_cliente": "Aviso al cliente",
         "estado_ejercicio": "Estado del ejercicio",
         "ejercicio": "Ejercicio contable",
         "numero_asiento": "Número de asiento",
@@ -1295,6 +1316,9 @@ class RegistroAuditoria(models.Model):
         # «estado» común, igual que «estado_venta».
         "estado_ejercicio": {"abierto": "Abierto", "en_cierre": "En cierre", "cerrado": "Cerrado"},
         "tipo_movimiento": {"D": "Debe", "H": "Haber"},
+        # COM-05a1: las listas cerradas de la entrega (`core` no importa `comercial`). «modalidad_entrega» ya existe.
+        "estado_confirmacion_cliente": {"no_confirmado": "No confirmada", "confirmado": "Confirmada"},
+        "estado_aviso_cliente": {"enviado": "Enviado", "pendiente_envio": "Pendiente de envío", "sin_correo": "Sin correo"},
     }
     SIN_VALOR = "—"
 
@@ -1531,6 +1555,9 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.MODIFICACION_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_ASIENTO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_MOVIMIENTO_CONTABLE,
+        RegistroAuditoria.Accion.PLANIFICACION_ENTREGA,
+        RegistroAuditoria.Accion.MODIFICACION_ENTREGA,
+        RegistroAuditoria.Accion.ASIGNACION_TRANSPORTISTA,
     }
 )
 

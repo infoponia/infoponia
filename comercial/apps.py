@@ -13,7 +13,7 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import camara, enlaces, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import camara, enlaces, entregas, pre_reserva, registrantes, stock_maduro, suministros, vehiculos
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -101,3 +101,23 @@ class ComercialConfig(AppConfig):
         registrar_paso_diario("avisar_enlaces_vencidos", "Avisar enlaces vencidos", 27, enlaces.avisar_enlaces_vencidos)
         if "camara" not in [clave for clave, _, _ in extensiones_de_maestros._PESTANAS]:
             extensiones_de_maestros.registrar_pestana_de_invernadero("camara", "Cámara", camara.pestana_de_camara)
+
+        # COM-05a1 (D-66, D-62 y D-56): las entregas. La alerta «entrega sin transportista» (para el Gerente, con su enlace a la lista de entregas), el paso diario 50 (COM-PNF-ENT) y lo
+        # que protege a las entregas en las tareas anteriores: el impedimento de baja de un transportista de un invernadero, lo que se informa al dar de baja una cuenta y su efecto. Todos
+        # idempotentes (``ready()`` puede correr más de una vez).
+        registrar_tipo_de_alerta(
+            TipoAlerta(
+                codigo=entregas.TIPO_SIN_TRANSPORTISTA,
+                nombre="Entrega sin transportista",
+                destinatario=Destinatario.GERENTE,
+                severidad=Alerta.Severidad.ADVERTENCIA,
+                clase=Clase.ESTADO,
+                origen=Origen.ENTREGA,
+            )
+        )
+        extensiones_de_maestros.registrar_enlace_de_alerta((entregas.TIPO_SIN_TRANSPORTISTA,), entregas.enlaces_de_alertas)
+        registrar_paso_diario("planificar_entregas", "Planificar entregas", 50, entregas.planificar_entregas)
+        if entregas.impedimentos_de_transportista not in extensiones_de_maestros._IMPEDIMENTOS_DE_TRANSPORTISTA:
+            extensiones_de_maestros.registrar_impedimento_de_transportista(entregas.impedimentos_de_transportista)
+        extensiones_de_core.registrar_asignaciones_de_cuenta(entregas.asignaciones_de_cuenta)
+        extensiones_de_core.registrar_efecto_de_baja_de_cuenta(entregas.efecto_de_baja_de_cuenta)

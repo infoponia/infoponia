@@ -758,6 +758,21 @@ Los 16 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 15. (Opcional) Con `--fecha 2027-11-01`: el ejercicio pasa a «en cierre», se abre el siguiente y el Contador (o el Gerente) recibe el aviso; repetido, no hace nada.
 - [ ] 16. (Opcional) Con `--fecha 2028-11-01`: el que estaba «en cierre» se cierra solo, sin Contador, y se avisa.
 
+## COM-05a1 · Tarea COM-05a1 (entregas: planificación automática, paso diario 50 y cancelación incluida)
+
+Los 10 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-05a1-planificacion-de-entregas.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0008 y `core` 0040, solo `choices`): `python manage.py migrate`; después `python manage.py runserver` (con `CORREO_CONSOLA=1` en tu `.env` para ver el correo en la terminal). Necesitás un Gerente, un Agrónomo, un Capataz y un Vendedor del mismo invernadero «Sur», con un lote de «Lechuga Crespa» de 600 plantas en Maduración. Crear a mano: «Configuración» con máximo de entregas diarias 2 y de localidades 2; los transportistas **Juan Gómez** (camioneta de 50 kg) y **Ana Ruiz** (furgón de 400 kg) en ese invernadero; un cliente con correo y direcciones en Paraná, Oro Verde y Crespo.
+
+- [ ] 1. Una compra-venta con envío de 100 plantas para dentro de 3 días y, con el Capataz, su cosecha concretada: en Comercial › Entregas aparece `OT-…` «A realizar», con el peso (100 × peso por planta ÷ 1.000), «100 Lechuga Crespa» y Ana Ruiz; ella tiene la notificación y el cliente, el correo.
+- [ ] 2. Una segunda venta (Oro Verde) y una tercera (Crespo) el mismo día: la tercera queda **sin transportista**; «Entrega sin transportista» en la campana del Gerente, que lleva a esa fila; el Vendedor tiene el aviso.
+- [ ] 3. Máximo de localidades 3 y `proceso_diario --fecha <mañana> --solo planificar_entregas`: la entrega recibe transportista, la alerta queda resuelta y hay avisos; una segunda corrida no hace nada nuevo.
+- [ ] 4. Una entrega sin transportista para pasado mañana: `proceso_diario --fecha <mañana>` manda «Mañana sale … sin transportista» al Gerente y al Vendedor; repetirlo no manda otro.
+- [ ] 5. Ficha del invernadero › «Logística»: la columna «Entregas a realizar»; quitar a Ana con una entrega a realizar se impide y «Ver sus entregas» lleva a la lista filtrada; en Vehículos, bajar la capacidad por debajo de la carga o quitar el transportista se rechaza.
+- [ ] 6. Dar de baja la cuenta de Juan con una entrega a realizar: la ventana dice «Entregas a realizar: N»; después su entrega queda sin transportista, con la alerta.
+- [ ] 7. Vencer en cámara (`proceso_diario --fecha <fecha límite + 1>`) una partida de la que sale toda una entrega a realizar: queda «Cancelada» y el transportista tiene el aviso.
+- [ ] 8. Sin JavaScript: la lista de entregas y sus filtros funcionan con «Filtrar».
+- [ ] 9. **Navegador real** (ventana privada), **pendiente para el cierre de la tanda**: Comercial › Entregas con el Vendedor y con el Gerente, y «Filtrar» hasta el final (con JavaScript la tabla se redibuja y la URL conserva los filtros).
+- [ ] 10. Después del merge, en Render: `proceso_diario --listar` con el 50 y, en el log, `comercial.0008_entregas` y `core.0040_comercial_entregas` aplicadas.
+
 ## CON-03a · Tarea CON-03a (libro de gestión, plan de cuentas y ejercicios con el cierre)
 
 Los 28 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-03a-libro-plan-y-ejercicios.md` (con los comandos y el código para pegar en `python manage.py shell`, con valores concretos), copiados acá para ir tachándolos (M5). **Tiene pantallas y un formulario que se envía:** el paso 20 es el de «navegador real». Los pasos 15 y 20 en adelante dejan ejercicios y asientos en la base de desarrollo que no se pueden sacar; los pasos 25 a 28 son opcionales. Sin migraciones.
