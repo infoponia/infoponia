@@ -223,15 +223,24 @@ class LibroCronologicoVistaTests(VistaBase):
         """«Pantallas»: una línea bajo el título explica «Libro de gestión» (glosario: no es el libro diario legal)."""
         self.assertIn("No es el libro diario ni el mayor legales", _texto(self.get(self.contador, LIBRO)))
 
-    def test_sin_acciones_de_asientos_manuales_hasta_con_03b(self):
-        """Marca del caso de uso: «Registrar asiento» y «Contraasentar» quedan escondidas hasta CON-03b, para todos los roles."""
+    def test_las_acciones_de_asientos_manuales_se_muestran_solo_a_quien_puede_registrar(self):
+        """Marca del caso de uso (CON-03b, reemplaza a la de «escondidas hasta CON-03b»): «Registrar asiento» y «Contraasentar» las ve el Contador; el Gerente con un Contador
+        activo ve el libro y la ficha sin acciones y con «Lo registra el Contador»; sin Contador activo, el Gerente las ve (D-85 punto 5)."""
         asiento = asiento_de_prueba(self.abierto, HOY, _caja_a_ventas())
         ficha = reverse("contabilidad:asiento", args=[self.abierto.pk, asiento.numero_asiento])
-        for cuenta in (self.contador, self.gerente):
-            for url in (LIBRO, ficha):
-                contenido = _texto(self.get(cuenta, url))
-                self.assertNotIn("Contraasentar", contenido)
-                self.assertNotIn("Registrar asiento", contenido)
+        for url in (LIBRO, ficha):
+            contenido = _texto(self.get(self.contador, url))
+            self.assertTrue("Registrar asiento" in contenido or "Contraasentar" in contenido)
+            self.assertNotIn("Lo registra el Contador", contenido)
+            contenido = _texto(self.get(self.gerente, url))
+            self.assertNotIn("Contraasentar", contenido)
+            self.assertNotIn("Registrar asiento", contenido)
+            self.assertIn("Lo registra el Contador", contenido)
+        self.assertIn("Registrar asiento", _texto(self.get(self.contador, LIBRO)))
+        self.assertIn("Contraasentar", _texto(self.get(self.contador, ficha)))
+        Contador.objects.update(is_active=False)
+        self.assertIn("Registrar asiento", _texto(self.get(self.gerente, LIBRO)))
+        self.assertIn("Contraasentar", _texto(self.get(self.gerente, ficha)))
 
     def test_paginacion_de_50_asientos_conserva_los_filtros(self):
         """«Paginación»: 50 asientos por página; «Siguiente» conserva los filtros."""
