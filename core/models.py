@@ -854,6 +854,9 @@ class RegistroAuditoria(models.Model):
         RESOLUCION_SUMINISTRO = "resolucion_suministro", "Resolución de suministro por incumplimientos"  # COM-RSV-SUM
         RESOLUCION_SUMINISTRO_DESCARTADA = "resolucion_suministro_descartada", "Disparo de resolución de suministro descartado"  # COM-RSV-SUM 2b
         ATENCION_SUMINISTRO_RESUELTO = "atencion_suministro_resuelto", "Atención de suministro resuelto"  # COM-RSV-SUM, «Dar por atendida»
+        # COM-08a (D-94): el cobro de entregas de suministro (Vendedor o Gerente) y el vencimiento del pago de una entrega (paso diario 30, InfoPonia).
+        REGISTRO_COBRO = "registro_cobro", "Registro de cobro de suministro"  # COM-REG-CBR
+        VENCIMIENTO_PAGO = "vencimiento_pago", "Vencimiento del pago de una entrega"  # COM-VNC-PAG
         # CMP-06 (D-87 punto 8: verbo del dominio): corregir una recepción y emitir y cerrar un reclamo a un proveedor. El asiento inverso lo audita la función de asientos (D-86 punto 4).
         CORRECCION_RECEPCION = "correccion_recepcion", "Corrección de recepción"
         EMISION_RECLAMO = "emision_reclamo", "Emisión de reclamo a proveedor"
@@ -1116,6 +1119,12 @@ class RegistroAuditoria(models.Model):
         "monto_a_cobrar": "Monto a cobrar",
         "fecha_anulacion": "Fecha de la anulación",
         "indemnizacion_retraso_pago": "Indemnización por atraso en el pago",
+        # COM-08a (D-94): el cobro de suministro y la mora («medio_pago», «fecha_pago», «entregas», «cliente» y «alerta» ya existen).
+        "monto_pagado": "Monto pagado",
+        "numero_cobro": "Número del cobro",
+        "indemnizacion_atraso_total": "Indemnización por atraso total",
+        "fecha_aviso_mora": "Fecha del aviso de mora",
+        "detalle_de_entregas": "Detalle por entrega",
         # Proveedores (CMP-01): «nombre», «apellido», «email», «telefono» y «estado» ya existen y conservan su lugar; las nuevas van al final.
         # Diferencia con «Límites» de la tarea (que decía solo las acciones): docs/patrones/auditoria.md pide sumarlas; aprobado por el estudiante.
         "tipo_proveedor": "Tipo de proveedor",
@@ -1699,6 +1708,8 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.RESOLUCION_SUMINISTRO,  # COM-07b
         RegistroAuditoria.Accion.RESOLUCION_SUMINISTRO_DESCARTADA,  # COM-07b
         RegistroAuditoria.Accion.ATENCION_SUMINISTRO_RESUELTO,  # COM-07b
+        RegistroAuditoria.Accion.REGISTRO_COBRO,  # COM-08a
+        RegistroAuditoria.Accion.VENCIMIENTO_PAGO,  # COM-08a
         RegistroAuditoria.Accion.CORRECCION_RECEPCION,  # CMP-06
         RegistroAuditoria.Accion.EMISION_RECLAMO,
         RegistroAuditoria.Accion.CIERRE_RECLAMO,

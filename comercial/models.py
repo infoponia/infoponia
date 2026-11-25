@@ -983,6 +983,12 @@ class Entrega(OrdenTrabajo):
     # COM-06a (D-68 punto 7): se fijan al concretar. El total es la suma de los `monto_pagar` de las líneas; el vencimiento, solo en un suministro (MD-124, MD-132).
     monto_total_entrega = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     fecha_vencimiento_pago = models.DateField(null=True, blank=True)
+    # COM-08a (D-94, puntos 5 y 12; no están en el modelo). `fecha_aviso_mora`: cuándo entró en mora por primera vez y se avisó (la carga `cobranza.reevaluar_mora` y no vuelve a nula: así el correo de mora
+    # sale una sola vez). `estado_aviso_mora`: el resultado de ese correo (el paso 30 reintenta los `pendiente_envio`). `indemnizacion_retraso_dia`: la de la cláusula del suministrado vigente al vencer
+    # (la copia `concretar_entrega`; `modificar_suministro` la actualiza solo si el vencimiento no pasó); nula en una compra-venta.
+    fecha_aviso_mora = models.DateField(null=True, blank=True)
+    estado_aviso_mora = models.CharField(max_length=20, choices=EstadoDelAviso.choices, null=True, blank=True)
+    indemnizacion_retraso_dia = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True)
 
     objects = EntregaQuerySet.as_manager()
 
@@ -1018,6 +1024,17 @@ class Entrega(OrdenTrabajo):
             # COM-06a: el total de una entrega concretada no es negativo (que esté no nulo ⇔ «concretada» lo verifica `verificar_invariantes_de_entregas`: el estado está en otra tabla).
             models.CheckConstraint(
                 condition=Q(monto_total_entrega__isnull=True) | Q(monto_total_entrega__gte=0), name="entrega_monto_total_no_negativo"
+            ),
+            # COM-08a (D-94, punto 5): el resultado del correo de mora es de su lista y solo existe con la fecha del primer aviso. Que solo una entrega de suministro concretada
+            # tenga `fecha_aviso_mora` lo verifica `verificar_invariantes_de_cobros()` (el estado y el tipo de contrato están en otras tablas).
+            models.CheckConstraint(
+                condition=Q(estado_aviso_mora__isnull=True) | Q(estado_aviso_mora__in=["enviado", "pendiente_envio", "sin_correo"]), name="entrega_aviso_mora_valido"
+            ),
+            models.CheckConstraint(
+                condition=Q(estado_aviso_mora__isnull=True) | Q(fecha_aviso_mora__isnull=False), name="entrega_aviso_mora_con_fecha"
+            ),
+            models.CheckConstraint(
+                condition=Q(indemnizacion_retraso_dia__isnull=True) | Q(indemnizacion_retraso_dia__gte=0), name="entrega_indemnizacion_dia_no_negativa"
             ),
         ]
 
@@ -1112,13 +1129,31 @@ class PagoCliente(OrigenDocumento):
         VIGENTE = "vigente", "Vigente"
         ANULADO = "anulado", "Anulado"
 
+    class Tipo(models.TextChoices):
+        """COM-08a (D-94, punto 3): el {xor} de C7. Nunca cambia. Los pagos que ya existían (COM-06a) son de compra-venta: la migración lo agrega con ese valor por omisión (no es una migración de datos)."""
+
+        COMPRA_VENTA = "compra_venta", "Compra-venta"
+        SUMINISTRO = "suministro", "Suministro"
+
+    class EstadoDelAviso(models.TextChoices):
+        """Resultado del correo del comprobante de cobro (D-94, punto 13), como `SolicitudRevision.estado_aviso_cliente`."""
+
+        ENVIADO = "enviado", "Enviado"
+        PENDIENTE_ENVIO = "pendiente_envio", "Pendiente de envío"
+        SIN_CORREO = "sin_correo", "Sin correo"
+
     medio_pago = models.CharField(max_length=20, choices=Medio.choices)
     fecha_pago = models.DateField(default=timezone.localdate)
     monto_pagado = models.DecimalField(max_digits=14, decimal_places=2)  # en una compra-venta, el total de la venta
     estado_pago = models.CharField(max_length=10, choices=Estado.choices, default=Estado.VIGENTE)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="pagos")  # R116
-    # R117. C7 (COM-06a): no nula; COM-08a la reescribe con el {xor} con el cobro de suministro.
+    # R117. C7 {xor} (COM-08a, D-94 punto 3): `tipo_pago = compra_venta` ⇔ `compra_venta` no nula.
     compra_venta = models.ForeignKey(CompraVenta, null=True, blank=True, on_delete=models.PROTECT, related_name="pagos")
+    # COM-08a (D-94, punto 3; del código, no están en el modelo). `numero` (secuencia `comercial_cobro_numero_seq`, código «COB-0032») solo en un pago de suministro, que es el que tiene pantalla propia.
+    tipo_pago = models.CharField(max_length=15, choices=Tipo.choices, default=Tipo.COMPRA_VENTA)
+    numero = models.PositiveIntegerField(null=True, blank=True)
+    usuario = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.PROTECT, related_name="pagos_registrados")  # quien lo registró (1a1 y 10a de COM-REG-CBR); nulo en los anteriores
+    estado_aviso_cliente = models.CharField(max_length=20, choices=EstadoDelAviso.choices, null=True, blank=True)  # nulo en una compra-venta: su comprobante es el de la venta
 
     class Meta:
         verbose_name = "Pago del cliente"
@@ -1127,14 +1162,62 @@ class PagoCliente(OrigenDocumento):
             models.CheckConstraint(condition=Q(monto_pagado__gt=0), name="pago_cliente_monto_positivo"),
             models.CheckConstraint(condition=Q(medio_pago__in=["efectivo", "transferencia", "tarjeta_debito", "tarjeta_credito"]), name="pago_cliente_medio_valido"),
             models.CheckConstraint(condition=Q(estado_pago__in=["vigente", "anulado"]), name="pago_cliente_estado_valido"),
-            models.CheckConstraint(condition=Q(compra_venta__isnull=False), name="pago_cliente_c7_con_compra_venta"),
+            # C7 como {xor} (COM-08a, D-94 punto 3): reemplaza a `pago_cliente_c7_con_compra_venta` (COM-06a, «`compra_venta` no nula»). Que un pago de suministro tenga al menos una línea y uno de compra-venta ninguna lo verifica el invariante (son dos tablas).
+            models.CheckConstraint(condition=Q(tipo_pago__in=["compra_venta", "suministro"]), name="pago_cliente_tipo_valido"),
+            models.CheckConstraint(
+                condition=(Q(tipo_pago="compra_venta") & Q(compra_venta__isnull=False)) | (Q(tipo_pago="suministro") & Q(compra_venta__isnull=True)), name="pago_cliente_c7_xor"
+            ),
+            models.CheckConstraint(
+                condition=(Q(tipo_pago="suministro") & Q(numero__isnull=False)) | (Q(tipo_pago="compra_venta") & Q(numero__isnull=True)), name="pago_cliente_numero_solo_suministro"
+            ),
+            models.UniqueConstraint(fields=["numero"], name="pago_cliente_numero_unico"),
+            models.CheckConstraint(
+                condition=Q(estado_aviso_cliente__isnull=True) | Q(estado_aviso_cliente__in=["enviado", "pendiente_envio", "sin_correo"]), name="pago_cliente_aviso_valido"
+            ),
+            models.CheckConstraint(condition=~Q(tipo_pago="compra_venta") | Q(estado_aviso_cliente__isnull=True), name="pago_cliente_venta_sin_aviso"),
             # Una venta se paga una vez: a lo sumo un pago vigente (COM-08b puede dejar uno anulado y registrar el correcto).
             models.UniqueConstraint(fields=["compra_venta"], condition=Q(estado_pago="vigente"), name="pago_cliente_un_vigente_por_venta"),
         ]
 
+    @property
+    def codigo(self):
+        """«COB-0032» (D-94, punto 3); solo un pago de suministro tiene número. Uno de compra-venta: «Pago #12»."""
+        return f"COB-{self.numero:04d}" if self.numero is not None else f"Pago #{self.pk}"
+
     def __str__(self):
-        """«Pago #12» (texto de la auditoría, D-36)."""
-        return f"Pago #{self.pk}"
+        """«COB-0032» o «Pago #12» (texto de la auditoría, D-36)."""
+        return self.codigo
+
+
+class LineaPago(models.Model):
+    """R154 (PagoCliente «cancela» Entrega) guardada como tabla, no como `Entrega.pago` (COM-08a; D-94, punto 2): una fila por entrega cobrada en un pago de suministro, con lo que se cobró por ella
+    (`monto_cobrado` = su monto a cobrar de entonces) y su atraso. Así una entrega conserva el pago anulado y recibe el correcto (MD-136) y el comprobante, los contraasientos (fuera de la ronda, D-57)
+    y las estadísticas leen lo cobrado sin recalcularlo. `vigente` copia `pago.estado_pago = vigente` (la base no puede mirar otra tabla en un índice); lo escriben juntos `registrar_cobro` y
+    `anular_cobro` (COM-08b). No se borra nunca (MD-136)."""
+
+    pago = models.ForeignKey(PagoCliente, on_delete=models.PROTECT, related_name="lineas")
+    entrega = models.ForeignKey(Entrega, on_delete=models.PROTECT, related_name="lineas_de_pago")
+    monto_cobrado = models.DecimalField(max_digits=14, decimal_places=2)
+    dias_atraso = models.PositiveIntegerField(default=0)
+    indemnizacion_atraso = models.DecimalField(max_digits=14, decimal_places=2, default=0)  # `dias_atraso × Entrega.indemnizacion_retraso_dia`; fija: no cambia si después cambia la cláusula (D-94, punto 12)
+    vigente = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Línea de pago"
+        verbose_name_plural = "Líneas de pago"
+        constraints = [
+            models.UniqueConstraint(fields=["pago", "entrega"], name="linea_pago_una_por_entrega_y_pago"),
+            # Garantía mínima 2 de COM-REG-CBR: a lo sumo un pago vigente por entrega (el índice único parcial).
+            models.UniqueConstraint(fields=["entrega"], condition=Q(vigente=True), name="linea_pago_una_vigente_por_entrega"),
+            models.CheckConstraint(condition=Q(monto_cobrado__gt=0), name="linea_pago_monto_positivo"),
+            models.CheckConstraint(condition=Q(dias_atraso__gte=0), name="linea_pago_dias_no_negativos"),
+            models.CheckConstraint(condition=Q(indemnizacion_atraso__gte=0), name="linea_pago_indemnizacion_no_negativa"),
+            models.CheckConstraint(condition=Q(dias_atraso__gt=0) | Q(indemnizacion_atraso=0), name="linea_pago_sin_atraso_sin_indemnizacion"),
+        ]
+
+    def __str__(self):
+        """«Línea de pago #N» (texto de la auditoría, D-36)."""
+        return f"Línea de pago #{self.pk}"
 
 
 class IntentoFallido(models.Model):
