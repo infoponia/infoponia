@@ -183,3 +183,66 @@ class AlcanceDeContratosTests(ConDatosDeInventario, TestCase):
     def test_regla_el_alcance_tambien_vale_para_la_compra_venta(self):
         """`CompraVenta.objects` hereda el alcance del contrato."""
         self.assertEqual(set(CompraVenta.objects.en_alcance_de(self.e.vendedor).values_list("pk", flat=True)), {self.mia.pk})
+
+
+class CompraVentaCancelacionModeloTests(ConDatosDeInventario, TestCase):
+    """COM-05b, MD-130 (docs/modelo/comercial.md, «CompraVenta»): los tres datos de la cancelación y sus restricciones de la base."""
+
+    def setUp(self):
+        self.e = escenario_comercial()
+        self.venta = compra_venta(self.e)
+
+    def _actualizar(self, **campos):
+        return lambda: CompraVenta.objects.filter(pk=self.venta.pk).update(**campos)
+
+    def test_regla_md130_una_venta_nueva_nace_sin_datos_de_cancelacion(self):
+        """MD-130: motivo y fecha nulos y descripción vacía en toda venta que no se canceló con COM-CNL-CVT."""
+        self.assertIsNone(self.venta.motivo_cancelacion_venta)
+        self.assertIsNone(self.venta.fecha_cancelacion_venta)
+        self.assertEqual(self.venta.descripcion_cancelacion, "")
+
+    def test_regla_md130_la_lista_de_motivos_es_cerrada(self):
+        """MD-130: `cliente_desistio`, `cliente_no_retiro` y `otro`; cualquier otro valor lo rechaza la base."""
+        hoy = timezone.localdate()
+        self.assertEqual(
+            [valor for valor, _ in CompraVenta.MotivoCancelacion.choices], ["cliente_desistio", "cliente_no_retiro", "otro"]
+        )
+        viola(self, self._actualizar(estado_venta="cancelada", motivo_cancelacion_venta="porque_si", fecha_cancelacion_venta=hoy))
+        for motivo in ("cliente_desistio", "cliente_no_retiro", "otro"):
+            CompraVenta.objects.filter(pk=self.venta.pk).update(estado_venta="cancelada", motivo_cancelacion_venta=motivo, fecha_cancelacion_venta=hoy)
+
+    def test_regla_md130_motivo_y_fecha_van_juntos(self):
+        """MD-130: `motivo_cancelacion_venta` no nulo ⇔ `fecha_cancelacion_venta` no nula."""
+        hoy = timezone.localdate()
+        viola(self, self._actualizar(estado_venta="cancelada", motivo_cancelacion_venta="otro", fecha_cancelacion_venta=None))
+        viola(self, self._actualizar(estado_venta="cancelada", motivo_cancelacion_venta=None, fecha_cancelacion_venta=hoy))
+        CompraVenta.objects.filter(pk=self.venta.pk).update(estado_venta="cancelada", motivo_cancelacion_venta="otro", fecha_cancelacion_venta=hoy)
+
+    def test_regla_md130_el_motivo_solo_con_venta_cancelada_o_concretada(self):
+        """MD-130: motivo no nulo ⇒ `estado_venta` en (`cancelada`, `concretada`) (la segunda, cuando COM-08b cobre lo entregado)."""
+        hoy = timezone.localdate()
+        for estado in ("abierta", "pendiente_decision"):
+            viola(self, self._actualizar(estado_venta=estado, motivo_cancelacion_venta="cliente_desistio", fecha_cancelacion_venta=hoy))
+        for estado in ("cancelada", "concretada"):
+            CompraVenta.objects.filter(pk=self.venta.pk).update(estado_venta=estado, motivo_cancelacion_venta="cliente_desistio", fecha_cancelacion_venta=hoy)
+
+    def test_regla_md130_la_descripcion_exige_motivo(self):
+        """MD-130: `descripcion_cancelacion` no vacía ⇒ motivo no nulo."""
+        hoy = timezone.localdate()
+        viola(self, self._actualizar(descripcion_cancelacion="Se arrepintió"))
+        CompraVenta.objects.filter(pk=self.venta.pk).update(
+            estado_venta="cancelada", motivo_cancelacion_venta="otro", fecha_cancelacion_venta=hoy, descripcion_cancelacion="Se arrepintió"
+        )
+
+    def test_regla_md130_una_venta_cancelada_por_faltante_sin_motivo_no_viola_ninguna(self):
+        """MD-130 y COM-DCD-FLT: una venta que queda «cancelada» porque el cliente rechazó todo no lleva motivo, fecha ni descripción."""
+        CompraVenta.objects.filter(pk=self.venta.pk).update(estado_venta="cancelada")
+        self.venta.refresh_from_db()
+        self.assertEqual(self.venta.estado_venta, "cancelada")
+        self.assertIsNone(self.venta.motivo_cancelacion_venta)
+
+    def test_regla_md130_el_detalle_admite_el_estado_cancelado(self):
+        """MD-130: `estado_detalle_venta = cancelado` (ya existe desde COM-02): la base lo admite y sigue rechazando uno fuera de la lista."""
+        d = detalle(self.venta, self.e.variedad, cantidad=5)
+        DetalleVenta.objects.filter(pk=d.pk).update(estado_detalle_venta="cancelado")
+        viola(self, lambda: DetalleVenta.objects.filter(pk=d.pk).update(estado_detalle_venta="anulado"))

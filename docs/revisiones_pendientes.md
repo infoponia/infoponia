@@ -895,3 +895,30 @@ Los 14 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-0
 - [ ] 12. **Navegador real** (ventana privada), **pendiente para el cierre de la tanda**: «Envasado» con el Agrónomo, agregar un envase, «Revisar» y «Confirmar envasado» hasta el final; con JavaScript, «Agregar», «Quitar», «Buscar» y «Actualizar» solo redibujan la carga.
 - [ ] 13. Opcional: sin JavaScript todo el envasado funciona con los botones (cada uno recarga la página); en el celular, la lista y la carga se leen.
 - [ ] 14. Después del merge, en Render: `produccion.0009_reserva_insumo_una_activa` y `core.0042_comercial_envasado` aplicadas en el log.
+
+## COM-05b · Tarea COM-05b (asignar transportista y cancelar la compra-venta)
+
+Los 22 pasos son los de «Verificación a mano» de `docs/tareas/comercial/COM-05b-asignar-transportista-y-cancelar-compra-venta.md` (con lo que hay que crear a mano y los valores), copiados acá para ir tachándolos (M5). Hay **dos migraciones nuevas** (`comercial` 0009: tres columnas y cuatro restricciones en `comercial_compraventa`; `core` 0043: solo `choices`): `python manage.py migrate` antes de empezar.
+
+- [ ] 1. Gerente: la campana trae «Entrega sin transportista»; abrirla lleva a «Asignar transportista · OT-…»; Juan (50 kg) aparece con «Capacidad de carga insuficiente» y no se puede elegir.
+- [ ] 2. Elegir a Ana muestra «Cómo queda» (carga, entregas, localidades, fecha) sin guardar nada.
+- [ ] 3. «Asignar transportista»: aviso «OT-… asignada a Ana Pérez.», alerta resuelta, Ana con «Nueva entrega…», el Vendedor con «OT-… ya tiene transportista» y un `asignacion_transportista` en «Auditoría».
+- [ ] 4. Vendedor: «Cambiar transportista» de una entrega de Ana para mañana; Ana no aparece entre los candidatos; Ana recibe «Ya no tenés la entrega…».
+- [ ] 5. Entrega de fecha pasada (si la hay): la pantalla avisa que sale hoy; al asignarla, «Se reprogramó para hoy y se avisó el retraso.», el Vendedor tiene «Entrega con retraso» y el cliente el correo con la fecha nueva.
+- [ ] 6. Dos pestañas con la misma entrega: la segunda vuelve a la lista con «La entrega cambió mientras la mirabas…».
+- [ ] 7. Sin candidatos: el motivo de cada transportista; el Gerente ve «Podés dar de alta un transportista…» y el Vendedor «Avisale al Gerente…»; «Asignar transportista» deshabilitado.
+- [ ] 8. Permisos: Agrónomo, Capataz y un Vendedor de otro contrato reciben 403 en `/comercial/entregas/<id>/asignar/`.
+- [ ] 9. Entrega en curso: solo la cubren las pruebas hasta COM-06 (no se puede probar a mano).
+- [ ] 10. Vendedor: «Cancelar compra-venta» en la ficha de una venta con una cosecha, una entrega con envases, lo cosechado y lo de cámara; la pantalla dice qué se cancela y qué pasa con el producto.
+- [ ] 11. «Revisar y cancelar» sin motivo da «Elegí el motivo de la cancelación.»; una descripción de 301 caracteres da «La descripción pasa de 300 caracteres.».
+- [ ] 12. Con «El cliente desistió»: el resumen (ventana) dice «La cancelación no se puede deshacer.»; «Volver» no cancela; «Confirmar cancelación» avisa «CV-… cancelada. Se canceló 1 cosecha y 1 entrega; N plantas entraron a la cámara.».
+- [ ] 13. Efectos: venta «Cancelada» con motivo y fecha; partida «Cancelación del cliente» en «Cámara»; cosecha y entrega canceladas; avisos al Capataz, al Agrónomo y al transportista; envases y plantas libres; un `cancelacion_compra_venta` en «Auditoría».
+- [ ] 14. Venta «pendiente de decisión del cliente» (si hay una): al cancelarla, el enlace del correo dice «Este enlace no se puede usar».
+- [ ] 15. Cliente sin correo: «El cliente no tiene correo: imprimí el comprobante.» y el botón «Imprimir comprobante» abre la página imprimible con la cancelación.
+- [ ] 16. El Gerente cancela otra venta: el Vendedor recibe «CV-… cancelada».
+- [ ] 17. Una venta cancelada no ofrece «Cancelar compra-venta» (a mano dice que ya está cancelada); el Agrónomo recibe 403.
+- [ ] 18. Entrega en curso que impide cancelar: solo la cubren las pruebas hasta COM-06.
+- [ ] 19. **Navegador real** (ventana privada con sesión), **pendiente para el cierre de la tanda**: asignar un transportista y confirmar una cancelación hasta el final; con JavaScript, al elegir solo se redibuja «Cómo queda» y «Revisar y cancelar» abre la ventana.
+- [ ] 20. Opcional: sin JavaScript, «Ver cómo queda» y el resumen de la cancelación como página funcionan.
+- [ ] 21. Opcional: en un celular las pantallas se leen (son para computadora).
+- [ ] 22. Después del merge, en Render: `comercial.0009_cancelacion_compra_venta` y `core.0043_comercial_cancelacion_compra_venta` aplicadas en el log.

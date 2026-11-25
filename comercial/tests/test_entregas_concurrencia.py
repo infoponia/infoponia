@@ -1,6 +1,6 @@
 # Pruebas de concurrencia de las entregas (COM-05a1, paso 7; docs/casos_de_uso/comercial/entregas.md, «Pruebas»; docs/patrones/bloqueos.md, «Entregas y envasado»): dos
 # planificaciones por el último lugar de un transportista (el semáforo es el invernadero de origen: una queda sin transportista), una planificación contra una merma en cámara que libera la
-# reserva (en los dos órdenes) y dos corridas del paso 50 a la vez. La merma en cámara contra el envasado de la entrega es de COM-05a2 (abajo; el resto del envasado, en `test_envasado_concurrencia.py`); la de la cancelación de la venta llega con COM-05b. Dos hilos, dos
+# reserva (en los dos órdenes) y dos corridas del paso 50 a la vez. La merma en cámara contra el envasado de la entrega es de COM-05a2 (abajo; el resto del envasado, en `test_envasado_concurrencia.py`); la asignación de un transportista (COM-ASG-TRP) y la cancelación de la venta (COM-CNL-CVT) llegaron con COM-05b (al final). Dos hilos, dos
 # conexiones, el orden fijado con ``primera``. Son ``TransactionTestCase``: sin Georef de la migración (el cliente tiene una dirección en la localidad propia que arma
 # `geografia_propia`). Todas terminan verificando los invariantes de las reservas y de las entregas. Nunca un error 500: el que pierde espera y relee (8b).
 
@@ -15,6 +15,7 @@ from comercial.tests.fabricas import (
     envase,
     detalle,
     direccion_de_cliente,
+    entrega,
     escenario_comercial,
     partida_cosechada,
     reserva,
@@ -149,3 +150,110 @@ class EntregasConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         (r,) = ReservaInsumo.objects.filter(orden_id=entrega_.pk)
         self.assertEqual((r.estado, r.cantidad_utilizada), ("cancelada", None))
         self.assertEqual(stock.disponible_para_planificar([bandeja.pk], HOY)[bandeja.pk], 20)
+
+    # ---- COM-05b: asignar un transportista (COM-ASG-TRP) y la cancelación de la venta (COM-CNL-CVT) ----
+
+    def entrega_sin_transportista(self, cantidad=100):
+        """Una venta lista con su entrega «a realizar» sin transportista (creada directo, sin avisos)."""
+        venta, det, r = self.venta_lista(cantidad)
+        return venta, entrega(venta, [r])
+
+    def asignar(self, entrega_, transportista, actor=None):
+        """Una operación que asigna `transportista` a la entrega, con la huella que vio la pantalla antes de que arrancara la otra operación."""
+        actor = actor or self.e.vendedor
+        huella = entregas.datos_de_asignacion(actor, entrega_.pk).huella
+        return lambda: entregas.asignar_transportista(actor, entrega_.pk, transportista.pk, huella)
+
+    def test_regla_una_asignacion_y_una_planificacion_por_el_ultimo_lugar_de_un_transportista(self):
+        """COM-ASG-TRP, requisito especial: la asignación y la planificación del mismo transportista y la misma fecha se ejecutan de a una. Un vehículo de 20 kg y dos entregas de 15 kg: la
+        asignación primero se queda con el transportista y la planificación, que espera el invernadero, no lo tiene lugar: queda sin transportista con su alerta."""
+        self.armar("20")
+        _, e1 = self.entrega_sin_transportista(100)
+        v2, _, _ = self.venta_lista(100)
+        resultados = correr_a_la_vez(self.asignar(e1, self.t), lambda: entregas.planificar_venta(v2.pk, HOY), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual((rechazos, otros), ([], []), resultados)
+        self.assertEqual(Entrega.objects.get(pk=e1.pk).transportista_id, self.t.pk)
+        nueva = Entrega.objects.exclude(pk=e1.pk).get()
+        self.assertIsNone(nueva.transportista_id)
+        self.assertIn("capacidad de carga insuficiente", AlertaComercial.objects.get(entrega=nueva).alerta.descripcion_alerta)
+
+    def test_regla_la_planificacion_primero_y_la_asignacion_ve_que_el_transportista_ya_no_cumple(self):
+        """Con la planificación primero (se queda con el último lugar), la asignación relee los candidatos con el invernadero tomado (8b) y recibe `transportista_no_cumple`; la entrega sigue sin transportista."""
+        self.armar("20")
+        _, e1 = self.entrega_sin_transportista(100)
+        v2, _, _ = self.venta_lista(100)
+        resultados = correr_a_la_vez(lambda: entregas.planificar_venta(v2.pk, HOY), self.asignar(e1, self.t), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], resultados)
+        self.assertEqual([codigos(r) for r in rechazos], [["transportista_no_cumple"]])
+        self.assertIsNone(Entrega.objects.get(pk=e1.pk).transportista_id)
+
+    def test_regla_dos_asignaciones_de_la_misma_entrega_la_segunda_ve_la_entrega_cambiada(self):
+        """Extensión 8a: dos asignaciones de la misma entrega a transportistas distintos: la segunda relee, ve la huella cambiada y recibe `entrega_cambio`; queda el transportista de la primera."""
+        from comercial.tests.fabricas import transportista_con_vehiculo as otro_transportista
+
+        self.armar("800")
+        otro = otro_transportista(self.e.invernadero, "800")
+        _, e1 = self.entrega_sin_transportista()
+        resultados = correr_a_la_vez(self.asignar(e1, self.t), self.asignar(e1, otro), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], resultados)
+        self.assertEqual([codigos(r) for r in rechazos], [["entrega_cambio"]])
+        self.assertEqual(Entrega.objects.get(pk=e1.pk).transportista_id, self.t.pk)
+
+    def test_regla_la_baja_del_transportista_primero_y_la_asignacion_ve_la_cuenta_inactiva(self):
+        """Una asignación contra la baja de la cuenta del transportista (con la baja primero): la asignación relee las cuentas bloqueadas y recibe `transportista_no_cumple` (8b, «Inactivo»)."""
+        from core.servicios import baja_usuario
+
+        self.armar("800")
+        _, e1 = self.entrega_sin_transportista()
+        resultados = correr_a_la_vez(lambda: baja_usuario(self.gerente, self.t.pk), self.asignar(e1, self.t), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], resultados)
+        self.assertEqual([codigos(r) for r in rechazos], [["transportista_no_cumple"]])
+        self.assertIsNone(Entrega.objects.get(pk=e1.pk).transportista_id)
+
+    def test_regla_la_asignacion_primero_y_la_baja_del_transportista_deja_la_entrega_sin_transportista_con_su_alerta(self):
+        """Con la asignación primero, la baja confirma después: la entrega «a realizar» del transportista dado de baja queda sin transportista, con la alerta para el Gerente (postcondición g de USR-BAJ-USR)."""
+        from core.servicios import baja_usuario
+
+        self.armar("800")
+        _, e1 = self.entrega_sin_transportista()
+        resultados = correr_a_la_vez(self.asignar(e1, self.t), lambda: baja_usuario(self.gerente, self.t.pk), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual((rechazos, otros), ([], []), resultados)
+        self.assertIsNone(Entrega.objects.get(pk=e1.pk).transportista_id)
+        self.assertEqual(AlertaComercial.objects.get(entrega=e1).alerta.estado_alerta, "activa")
+
+    def test_regla_la_cancelacion_de_la_venta_primero_y_la_asignacion_recibe_la_entrega_cancelada(self):
+        """COM-ASG-TRP 8a contra COM-CNL-CVT: con la cancelación primero, la asignación, que espera el invernadero, recibe `entrega_no_a_realizar` y no registra nada."""
+        from comercial.servicios import compra_ventas
+        from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+
+        self.armar("800")
+        venta, e1 = self.entrega_sin_transportista()
+        huella = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk).huella
+        cancelar = lambda: compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("cliente_desistio"), huella)
+        resultados = correr_a_la_vez(cancelar, self.asignar(e1, self.t), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual(otros, [], resultados)
+        self.assertEqual([codigos(r) for r in rechazos], [["entrega_no_a_realizar"]])
+        self.assertEqual(Entrega.objects.get(pk=e1.pk).estado_orden, "cancelada")
+
+    def test_regla_una_planificacion_contra_la_cancelacion_de_la_misma_venta_no_deja_entregas_a_realizar(self):
+        """La que dejó COM-05a1 para esta tarea: planificación y cancelación de la misma venta (la cancelación primero): la planificación, que espera el invernadero, relee, ve la venta cancelada y
+        no crea nada; no queda ninguna entrega «a realizar» de la venta cancelada."""
+        from comercial.models import CompraVenta
+        from comercial.servicios import compra_ventas
+        from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+
+        self.armar("800")
+        venta, _, _ = self.venta_lista(100)
+        huella = compra_ventas.datos_de_cancelacion(self.e.vendedor, venta.pk).huella
+        cancelar = lambda: compra_ventas.cancelar_compra_venta(self.e.vendedor, venta.pk, DatosDeCancelacionDeVenta("cliente_no_retiro"), huella)
+        resultados = correr_a_la_vez(cancelar, lambda: entregas.planificar_venta(venta.pk, HOY), primera="a")
+        buenos, rechazos, otros = separar(resultados)
+        self.assertEqual((rechazos, otros), ([], []), resultados)
+        self.assertEqual(CompraVenta.objects.get(pk=venta.pk).estado_venta, "cancelada")
+        self.assertEqual(Entrega.objects.filter(estado_orden="a_realizar").count(), 0)

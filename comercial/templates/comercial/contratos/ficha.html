@@ -2,7 +2,7 @@
 {% comment %}Ficha de la compra-venta (COM-CNS-CVT, regla 4, en lo que existe hoy; VIEWS.cv del prototipo): cliente (con CUIT y enlace a su ficha), Vendedor, modalidad con
 su dirección o su invernadero de retiro, las tres fechas, los detalles (variedad, solicitada, entregada o «—», precio, subtotal y estado) y el estado del comprobante
 con «Ver comprobante» y «Reenviar comprobante». Se completan después (D-25: no se muestran hasta que existan): las entregas y el cobro (COM-05, COM-06, COM-08),
-la cancelación (COM-05b) y el vencimiento del enlace de un faltante (COM-04). Mientras no haya entregas: «La entrega se planifica cuando todo el producto esté
+el vencimiento del enlace de un faltante (COM-04). «Cancelar compra-venta» y los datos de la cancelación llegan con COM-05b (COM-CNL-CVT). Mientras no haya entregas: «La entrega se planifica cuando todo el producto esté
 listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha», «venta» y «es_gerente».{% endcomment %}
 {% block titulo %}{{ venta.codigo }} · Contratos · InfoPonia{% endblock %}
 {% block contenido %}
@@ -13,6 +13,7 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
     <h1 class="mono">{{ venta.codigo }}</h1>
     {% include "comercial/contratos/_estado.html" with estado=venta.estado_venta texto=venta.get_estado_venta_display %}
     <span class="spacer"></span>
+    {% if "cancelar" in ficha.acciones %}<a class="btn btn-danger" href="{% url 'comercial:compra_venta_cancelar' venta.pk %}">{% icono "x" 14 %} Cancelar compra-venta</a>{% endif %}
     <a class="btn btn-ghost" href="{% url 'comercial:cliente' venta.cliente.pk %}">{% icono "user" 14 %} Ver cliente</a>
   </div>
 
@@ -52,6 +53,14 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
       </div>
     </div>
 
+    {% if venta.motivo_cancelacion_venta %}
+    <div class="card">
+      <div class="card-title">Cancelación</div>
+      <p>Cancelada el {{ venta.fecha_cancelacion_venta|date:"d/m/Y" }}. Motivo: {{ venta.get_motivo_cancelacion_venta_display|lower }}.</p>
+      {% if venta.descripcion_cancelacion %}<p class="muted">{{ venta.descripcion_cancelacion }}</p>{% endif %}
+    </div>
+    {% endif %}
+
     {% if ficha.pendiente %}
     <div class="card">
       <div class="card-title">Pendiente de decisión del cliente</div>
@@ -79,7 +88,8 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
         {% else %}<span class="status-badge status-neutral">Para imprimir</span> El cliente no tiene correo: se entrega impreso.{% endif %}
       </p>
       <div class="acts-fila">
-        <a class="btn btn-ghost" href="{% url 'comercial:compra_venta_comprobante' venta.pk %}" target="_blank" rel="noopener">{% icono "ext" 14 %} Ver comprobante</a>
+        {% if venta.motivo_cancelacion_venta and venta.estado_comprobante == "para_imprimir" %}<a class="btn btn-primary" href="{% url 'comercial:compra_venta_comprobante' venta.pk %}" target="_blank" rel="noopener">{% icono "ext" 14 %} Imprimir comprobante</a>
+        {% else %}<a class="btn btn-ghost" href="{% url 'comercial:compra_venta_comprobante' venta.pk %}" target="_blank" rel="noopener">{% icono "ext" 14 %} Ver comprobante</a>{% endif %}
         {% if "reenviar_comprobante" in ficha.acciones %}
         <form method="post" action="{% url 'comercial:compra_venta_reenviar_comprobante' venta.pk %}">
           {% csrf_token %}

@@ -117,7 +117,7 @@ class ComRegCvtPermisosTests(BaseDeVistas):
         self.client.force_login(self.e.vendedor)
         pagina = self.client.get(reverse("comercial:compra_venta", args=[propia.pk]))
         self.assertContains(pagina, "Reenviar comprobante")
-        self.assertNotContains(pagina, "Cancelar compra-venta")  # lo agrega COM-05b (D-25)
+        self.assertContains(pagina, "Cancelar compra-venta")  # COM-05b: el Vendedor del contrato la ve con la venta abierta
         for url in re.findall(r'href="(/comercial/[^"]*)"', pagina.content.decode()):
             self.assertNotEqual(self.client.get(url).status_code, 403, url)
 
@@ -362,13 +362,13 @@ class ComCnsCvtVistaTests(BaseDeVistas):
         self.assertContains(self.client.get(reverse("comercial:contratos"), {"estado": "cancelada"}), "Ninguna compra-venta coincide con los filtros.")
         self.assertContains(self.client.get(reverse("comercial:contratos"), {"estado": "abierta"}), self.propia.codigo)
 
-    def test_regla_4_la_ficha_muestra_el_detalle_el_comprobante_y_no_ofrece_cancelar(self):
-        """Regla 4 y D-25: cliente con enlace, Vendedor, destino, fechas, detalle con subtotal y el aviso de entregas; sin «Cancelar compra-venta»."""
+    def test_regla_4_la_ficha_muestra_el_detalle_el_comprobante_y_ofrece_cancelar(self):
+        """Regla 4 y regla 5: cliente con enlace, Vendedor, destino, fechas, detalle con subtotal y el aviso de entregas; con la venta abierta, «Cancelar compra-venta» (COM-05b)."""
         pagina = self.client.get(reverse("comercial:compra_venta", args=[self.propia.pk]))
         for texto in (self.e.cliente.razon_social_cliente, "San Martín 123", "Abierto", "$ 1.000,00", "La entrega se planifica cuando todo el producto esté listo."):
             self.assertContains(pagina, texto)
         self.assertContains(pagina, reverse("comercial:cliente", args=[self.e.cliente.pk]))
-        self.assertNotContains(pagina, "Cancelar compra-venta")
+        self.assertContains(pagina, "Cancelar compra-venta")
 
     def test_regla_el_comprobante_imprimible_es_una_pagina_sin_menu_con_la_leyenda(self):
         """Extensiones 16a y 16b: una página con estilos de impresión, sin menú, que dice «Comprobante interno, sin validez fiscal. El pago se realiza

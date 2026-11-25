@@ -233,12 +233,12 @@ class EnlaceDeLaAlertaTests(Base):
     def alerta_de(self, e, venta):
         return entregas._alerta_sin_transportista(e, venta, "capacidad de carga insuficiente")
 
-    def test_ext_d62_el_gerente_va_a_la_lista_de_entregas_en_esa_entrega(self):
-        """D-62 y 6a: el enlace del Gerente es la lista de entregas con `?entrega=<id>` y el texto «OT-0231 · 26/11 · Pérez SA»; otro rol no recibe enlace."""
+    def test_ext_d62_el_gerente_va_a_la_asignacion_de_esa_entrega(self):
+        """D-62, 6a y extensión 1b de COM-ASG-TRP (COM-05b): el enlace del Gerente es la pantalla de asignación de esa entrega y el texto «OT-0231 · 26/11 · Pérez SA»; otro rol no recibe enlace."""
         venta, e = self.entrega_de()
         alerta = self.alerta_de(e, venta)
         enlaces = entregas.enlaces_de_alertas(self.gerente, [alerta])
-        self.assertEqual(enlaces[alerta.pk].url, reverse("comercial:entregas") + f"?entrega={e.pk}")
+        self.assertEqual(enlaces[alerta.pk].url, reverse("comercial:entrega_asignar", args=[e.pk]))
         self.assertEqual(enlaces[alerta.pk].detalle, f"{e.codigo} · {e.fecha_programada_orden:%d/%m} · {venta.cliente.nombre_visible}")
         self.assertEqual(entregas.enlaces_de_alertas(self.e.vendedor, [alerta]), {})
         self.assertEqual(entregas.enlaces_de_alertas(self.gerente, []), {})

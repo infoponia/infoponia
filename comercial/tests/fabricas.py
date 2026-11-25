@@ -463,6 +463,9 @@ def verificar_invariantes_de_reservas():
     # 8. Ninguna reserva «lista para entrega» con una línea de lote sin cosechar.
     for linea in DetalleReserva.objects.filter(reserva__estado_reserva="lista_para_entrega", lote__isnull=False, cantidad_cosechada__isnull=True):
         problemas.append(f"Reserva #{linea.reserva_id}: «lista para entrega» con la línea #{linea.pk} sin cosechar")
+    # COM-05b (COM-CNL-CVT, paso 6): ninguna reserva de un detalle «cancelado» queda sin liberar.
+    for r in ReservaStock.objects.filter(detalle_venta__estado_detalle_venta="cancelado").exclude(estado_reserva="liberada"):
+        problemas.append(f"Reserva #{r.pk}: sin liberar y de un detalle cancelado")
     if problemas:
         raise AssertionError("Invariantes de reservas rotos: " + "; ".join(problemas))
     verificar_invariantes_de_suministros()
@@ -757,6 +760,9 @@ def verificar_invariantes_de_entregas():
                     problemas.append(f"{e.codigo}: línea #{linea.pk} con la reserva #{r.pk} de otro detalle")
                 if linea.detalle_suministro_id and (r.detalle_suministro_id != linea.detalle_suministro_id or r.fecha_entrega_reserva != linea.fecha_periodo):
                     problemas.append(f"{e.codigo}: línea #{linea.pk} con la reserva #{r.pk} de otro detalle o de otro período")
+    # COM-05b (COM-CNL-CVT, paso 6): ninguna entrega «a realizar» de una venta cancelada.
+    for e in Entrega.objects.filter(estado_orden="a_realizar", contrato_entrega__in=CompraVenta.objects.filter(estado_venta="cancelada").values("pk")):
+        problemas.append(f"{e.codigo}: «a realizar» y de una venta cancelada")
     vivas = defaultdict(list)
     for entrega_id, reserva_id in DetalleEntrega.objects.exclude(entrega__estado_orden="cancelada").values_list("entrega_id", "reservas"):
         if reserva_id is not None:
@@ -780,3 +786,74 @@ def envase(invernadero, stock=30, unidad="unidad", *, nombre="Bandeja PET 1 kg",
         lote(creado, stock, vence=vence)
     return creado
 
+
+# ---- COM-05b: asignar un transportista y cancelar la compra-venta ----
+
+
+def vehiculo_en_ruta(transportista, *, fecha=None):
+    """Deja el vehículo de ``transportista`` con la ruta iniciada (hoy, o en ``fecha``): MD-118; en COM-05b nadie inicia una ruta (lo hace COM-06), así que se arma directo.
+    Con la fecha de hoy, sus entregas de hoy o anteriores están «en curso»."""
+    Vehiculo.objects.filter(transportista=transportista).update(en_ruta=True, fecha_inicio_ruta=fecha or timezone.localdate())
+    return Vehiculo.objects.get(transportista=transportista)
+
+
+def con_cosecha_concretada(escenario, detalle_, lote_, *, reservada=20, cosechada=20, costo="2.5000", dias_atras=2):
+    """Una reserva de ``detalle_`` con una cosecha ya concretada (hace ``dias_atras`` días) que cosechó ``cosechada`` de las ``reservada`` plantas de ``lote_``, con su salida por
+    cosecha (el costo de la partida que nazca después) y su bitácora (invariante de COM-04a). La reserva queda «lista para entrega». Devuelve la reserva."""
+    from comercial.models import DetalleReserva, ReservaStock
+    from produccion.models import Bitacora, Cosecha, MovimientoStock
+
+    hoy = timezone.localdate()
+    r = reserva(detalle_, [(lote_, reservada)])
+    Bitacora.objects.create(
+        invernadero=lote_.invernadero, lote=lote_, etapa=lote_.etapa, tipo_evento="cosecha", cosecha=r.cosecha,
+        fecha_bitacora=hoy, hora_bitacora=timezone.localtime().time(),
+    )
+    Cosecha.objects.filter(pk=r.cosecha_id).update(estado_orden="concretada", fecha_resolucion_orden=hoy, fecha_cosecha=hoy - timedelta(days=dias_atras))
+    DetalleReserva.objects.filter(reserva=r).update(cantidad_cosechada=cosechada)
+    ReservaStock.objects.filter(pk=r.pk).update(estado_reserva="lista_para_entrega")
+    MovimientoStock.objects.create(origen_id=r.cosecha_id, lote=lote_, tipo_movimiento="salida_por_cosecha", cantidad=cosechada, costo_unitario=Decimal(costo))
+    r.refresh_from_db()
+    return r
+
+
+def venta_con_todo(escenario, *, pendiente=False, con_envases=False, transportista=None, cliente_=None, dias=3):
+    """Una compra-venta con envío con todo lo que COM-CNL-CVT tiene que deshacer (D-67 punto 4), en dos variedades:
+
+    - el detalle ``abierto`` (la variedad del escenario, 40 plantas): una reserva «activa» sobre ``lote_a`` con su cosecha «a realizar»;
+    - el detalle ``cosechado`` (otra variedad, «Rúcula», 30 plantas a $100): una línea de lote ya cosechada (20 de ``lote_b``, con su cosecha concretada) y una línea de cámara (10
+      de una partida), en reservas «lista para entrega», y su ``entrega`` «a realizar» con las dos (con ``transportista`` si se pasa; con ``con_envases``, 5 envases reservados).
+
+    Con ``pendiente=True`` la venta queda «pendiente de decisión del cliente» (el detalle ``abierto`` también) y con su enlace vigente. Devuelve un `SimpleNamespace` con la venta, los
+    dos detalles, sus reservas, las cosechas, los lotes, la partida de cámara, la entrega, el enlace (o ``None``) y los envases (o ``None``)."""
+    from types import SimpleNamespace
+
+    from produccion.tests.fabricas import lote_maduro, reservar, variedad_con_stock
+
+    otra, _ = variedad_con_stock(escenario, f"Rúcula {next(_secuencia)}")
+    lote_a = lote_maduro(escenario, 300)
+    lote_b = lote_maduro(escenario, 300, variedad=otra)
+    estado = "pendiente_decision" if pendiente else "abierta"
+    venta = compra_venta(escenario, dias=dias, estado=estado, cliente_=cliente_)
+    abierto = detalle(venta, escenario.variedad, 40, estado="pendiente_decision" if pendiente else "abierto")
+    if pendiente:
+        from comercial.models import DetalleVenta
+
+        DetalleVenta.objects.filter(pk=abierto.pk).update(fecha_pendiente_decision=timezone.localdate())
+    reserva_abierta = reserva(abierto, [(lote_a, 40)])
+    cosechado = detalle(venta, otra, 30)
+    reserva_cosechada = con_cosecha_concretada(escenario, cosechado, lote_b, reservada=20, cosechada=20)
+    en_camara = partida(lote_b, 10)
+    reserva_de_camara = reserva(cosechado, [(en_camara, 10)])
+    entrega_ = entrega(venta, [reserva_cosechada, reserva_de_camara], transportista=transportista)
+    envases = None
+    if con_envases:
+        envases = envase(escenario.invernadero, stock=30)
+        reservar(entrega_, envases, 5)
+    enlace_, token = None, None
+    if pendiente and (cliente_ or escenario.cliente).email_cliente:
+        enlace_, token = enlace(venta)
+    return SimpleNamespace(
+        venta=venta, abierto=abierto, cosechado=cosechado, reserva_abierta=reserva_abierta, cosecha=reserva_abierta.cosecha, reserva_cosechada=reserva_cosechada,
+        reserva_de_camara=reserva_de_camara, lote_a=lote_a, lote_b=lote_b, partida=en_camara, entrega=entrega_, enlace=enlace_, token=token, envases=envases, variedad_b=otra,
+    )

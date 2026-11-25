@@ -1,0 +1,16 @@
+{% comment %}La tarjeta «Cómo queda» de COM-ASG-TRP (paso 6; extensión 5a): lo que dice el resumen de elegir a un transportista. Es el fragmento que devuelve `calcular/` con HTMX y también va dentro de la página
+(sin JavaScript, con «Ver cómo queda»). Recibe «como» (o nada si todavía no se eligió) y «error_transportista».{% endcomment %}
+{% if como %}
+<div class="card" style="margin-top:12px">
+  <div class="card-title">Cómo queda</div>
+  <dl class="dl">
+    <dt>Transportista</dt><dd>{{ como.transportista.get_full_name }}</dd>
+    <dt>Carga del día</dt><dd class="mono">{{ como.peso_del_dia|floatformat:2 }} + {{ como.peso_entrega|floatformat:2 }} = {{ como.peso_total|floatformat:2 }} de {{ como.capacidad|floatformat:2 }} kg</dd>
+    <dt>Entregas del día</dt><dd class="mono">{{ como.entregas }} de {{ como.maximo_entregas }}</dd>
+    <dt>Localidades del día</dt><dd class="mono">{{ como.localidades }} de {{ como.maximo_localidades }}</dd>
+    <dt>Fecha de la entrega</dt><dd>{{ como.fecha|date:"d/m/Y" }}</dd>
+    {% if como.deja %}<dt>Deja la entrega</dt><dd>{{ como.deja.get_full_name }} <span class="muted">(recibirá un aviso)</span></dd>{% endif %}
+  </dl>
+</div>
+{% elif error_transportista %}<div class="err" role="alert">{{ error_transportista }}</div>
+{% endif %}

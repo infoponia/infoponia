@@ -1,5 +1,6 @@
 {% comment %}La tabla de «Entregas» y su paginación (también es lo que devuelve HTMX). Orden: primero las de envío sin transportista, después fecha programada e id. «Atrasada» (MD-139), nunca
-«Vencida». Un retiro no tiene transportista («No corresponde»); la acción es solo «Ver contrato» (COM-05a1). Recibe «datos», «filtros» y «consulta».{% endcomment %}
+«Vencida». Un retiro no tiene transportista («No corresponde»); las acciones son «Ver contrato» (COM-05a1) y, con envío «a realizar», «Asignar transportista» (sin transportista) o «Cambiar transportista» (con transportista y no en curso), o «En curso» sin
+acción (COM-05b, COM-ASG-TRP). «Concretar retiro» es de COM-06. Recibe «datos», «filtros» y «consulta».{% endcomment %}
 <div class="tablewrap">
   <table class="data-table">
     <thead><tr><th>Entrega</th><th>Cliente y destino</th><th>Fecha</th><th class="right">Peso</th><th>Transportista</th><th>Estado</th><th></th></tr></thead>
@@ -12,7 +13,10 @@
         <td class="right nowrap mono">{{ f.peso|floatformat:2 }} kg</td>
         <td>{% if f.es_retiro %}<span class="muted">No corresponde</span>{% elif f.transportista %}{{ f.transportista }}{% elif f.estado == "a_realizar" %}<span class="status-badge status-danger">Sin transportista</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
         <td><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
-        <td class="right"><a class="rowlink" href="{{ f.url_del_contrato }}">Ver contrato<span class="sr"> de la entrega {{ f.codigo }}</span></a></td>
+        <td class="right nowrap"><a class="rowlink" href="{{ f.url_del_contrato }}">Ver contrato<span class="sr"> de la entrega {{ f.codigo }}</span></a>
+          {% if f.accion == "asignar" %}<a class="rowlink" href="{% url 'comercial:entrega_asignar' f.entrega.pk %}">Asignar transportista<span class="sr"> a la entrega {{ f.codigo }}</span></a>
+          {% elif f.accion == "cambiar" %}<a class="rowlink" href="{% url 'comercial:entrega_asignar' f.entrega.pk %}">Cambiar transportista<span class="sr"> de la entrega {{ f.codigo }}</span></a>
+          {% elif f.accion == "en_curso" %}<span class="muted">En curso</span>{% endif %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="7" class="muted" style="text-align:center;padding:24px">{% if datos.hay_filtros %}No hay entregas con estos filtros.{% else %}No hay entregas a realizar. InfoPonia las planifica solas cuando todo el producto de una venta o de un período está listo.{% endif %}</td></tr>

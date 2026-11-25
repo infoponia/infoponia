@@ -299,7 +299,7 @@ class CompraVentaQuerySet(ContratoQuerySet):
 
 class CompraVenta(Contrato):
     """Venta al contado: al registrarse queda abierta, con el stock reservado y sin pago ni asiento (regla 19 de 8.6). Los datos de la
-    cancelación (MD-130) los suma COM-05b. El monto no se guarda: es derivado (docs/modelo/comercial.md, «CompraVenta»)."""
+    cancelación (MD-130, COM-05b) los carga COM-CNL-CVT. El monto no se guarda: es derivado (docs/modelo/comercial.md, «CompraVenta»)."""
 
     class Estado(models.TextChoices):
         """Regla 21 de 8.6: nace «abierta»."""
@@ -315,9 +315,20 @@ class CompraVenta(Contrato):
         RETIRO = "retiro", "Retiro en invernadero"
         ENVIO = "envio", "Envío a domicilio"
 
+    class MotivoCancelacion(models.TextChoices):
+        """MD-130: la lista cerrada de motivos de COM-CNL-CVT (paso 5)."""
+
+        CLIENTE_DESISTIO = "cliente_desistio", "El cliente desistió"
+        CLIENTE_NO_RETIRO = "cliente_no_retiro", "El cliente no retiró"
+        OTRO = "otro", "Otro"
+
     estado_venta = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ABIERTA)
     fecha_pactada_venta = models.DateField()  # igual o posterior a la de hoy al registrar
     fecha_concrecion_venta = models.DateField(null=True, blank=True)  # la carga COM-06a
+    # MD-130 (COM-05b): los carga solo COM-CNL-CVT; una venta que queda «cancelada» porque el cliente rechazó todo (COM-DCD-FLT) no los tiene.
+    motivo_cancelacion_venta = models.CharField(max_length=20, choices=MotivoCancelacion.choices, null=True, blank=True)
+    descripcion_cancelacion = models.CharField(max_length=300, blank=True, default="")  # opcional, también con «otro»
+    fecha_cancelacion_venta = models.DateField(null=True, blank=True)  # la de hoy al cancelar
     modalidad_entrega = models.CharField(max_length=10, choices=Modalidad.choices)
     # R146: solo con envío, y una dirección ACTIVA del cliente (D-58): la base no puede verificarlo entre dos apps, lo verifica el servicio.
     direccion_envio = models.ForeignKey(
@@ -349,6 +360,25 @@ class CompraVenta(Contrato):
                 condition=(Q(modalidad_entrega="envio") & Q(direccion_envio__isnull=False) & Q(invernadero_retiro__isnull=True))
                 | (Q(modalidad_entrega="retiro") & Q(invernadero_retiro__isnull=False) & Q(direccion_envio__isnull=True)),
                 name="compra_venta_destino_segun_modalidad",
+            ),
+            # MD-130 (COM-05b): el motivo y la fecha de la cancelación van juntos; el motivo solo con una venta cancelada o concretada (la segunda,
+            # cuando COM-08b cobre lo entregado, extensión 6a); la descripción, solo con motivo; y el motivo, de su lista cerrada.
+            models.CheckConstraint(
+                condition=Q(motivo_cancelacion_venta__isnull=True, fecha_cancelacion_venta__isnull=True)
+                | Q(motivo_cancelacion_venta__isnull=False, fecha_cancelacion_venta__isnull=False),
+                name="compra_venta_cancelacion_con_fecha",
+            ),
+            models.CheckConstraint(
+                condition=Q(motivo_cancelacion_venta__isnull=True) | Q(estado_venta__in=["cancelada", "concretada"]),
+                name="compra_venta_motivo_segun_estado",
+            ),
+            models.CheckConstraint(
+                condition=Q(descripcion_cancelacion="") | Q(motivo_cancelacion_venta__isnull=False),
+                name="compra_venta_descripcion_con_motivo",
+            ),
+            models.CheckConstraint(
+                condition=Q(motivo_cancelacion_venta__isnull=True) | Q(motivo_cancelacion_venta__in=["cliente_desistio", "cliente_no_retiro", "otro"]),
+                name="compra_venta_motivo_cancelacion_valido",
             ),
         ]
 

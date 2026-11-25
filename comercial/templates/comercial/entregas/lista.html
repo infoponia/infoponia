@@ -1,7 +1,7 @@
 {% extends "core/base_con_sesion.html" %}{% load estaticos %}
 {% comment %}«Comercial» → «Entregas» (COM-05a1; `tabEntregas` del prototipo, última definición). La lista de entregas del Gerente y del Vendedor: filtros en la URL (formulario GET común: sin
-JavaScript funciona igual con «Filtrar», y con HTMX solo se redibuja la tabla; nunca se filtra al tipear), la tabla con sus columnas y el texto explicativo. Solo «Ver contrato»:
-«Asignar transportista» (COM-05b) y «Concretar retiro» (COM-06) llegan con sus tareas (D-25). Recibe «datos», «filtros», «estados», «sin_transportista», «es_gerente» y «consulta».{% endcomment %}
+JavaScript funciona igual con «Filtrar», y con HTMX solo se redibuja la tabla; nunca se filtra al tipear), la tabla con sus columnas y el texto explicativo. Las acciones de cada fila: «Ver contrato»
+y «Asignar» o «Cambiar transportista» (COM-05b); «Concretar retiro» llega con COM-06 (D-25). Recibe «datos», «filtros», «estados», «sin_transportista», «es_gerente» y «consulta».{% endcomment %}
 {% block titulo %}Entregas · Comercial · InfoPonia{% endblock %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">

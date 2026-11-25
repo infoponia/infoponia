@@ -1,0 +1,23 @@
+{% extends "core/base_con_sesion.html" %}{% load estaticos %}
+{% comment %}El resumen de la cancelación como página (respaldo sin JavaScript de la ventana de «_cancelar_resumen.html»; COM-CNL-CVT, pasos 6 y 7). «Volver» deja la pantalla de cancelación con lo elegido;
+«Confirmar cancelación» cancela. Recibe «resumen», «datos_post» y «cuantos».{% endcomment %}
+{% block titulo %}Resumen · Cancelar {{ resumen.datos.venta.codigo }} · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page narrow">
+  <div class="page-h"><h1>Resumen de la cancelación</h1></div>
+  <div class="card">
+    {% include "comercial/contratos/_cancelar_resumen_datos.html" %}
+    <form method="post" action="{% url 'comercial:compra_venta_cancelar' resumen.datos.venta.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="huella" value="{{ datos_post.huella }}">
+      <input type="hidden" name="motivo" value="{{ datos_post.motivo }}">
+      <input type="hidden" name="descripcion" value="{{ datos_post.descripcion }}">
+      <div class="acts">
+        <button class="btn btn-ghost" type="submit" name="volver" value="1">Volver</button>
+        <button class="btn btn-danger" type="submit" data-enviando="Cancelando…">Confirmar cancelación</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

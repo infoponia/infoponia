@@ -93,7 +93,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    **Planificado (lote C5a):** `transportista_con_entregas`, COM-05a1. `transportista_en_ruta` (los dos puntos), **COM-06a (lote C6)**
    (`docs/casos_de_uso/comercial/rutas.md`, «Lo que completa a otras tareas»). La regla de COM-ASG-TRP, **COM-05b (lote C5b)**: la
    extensión 3a (`entrega_en_curso`; `docs/casos_de_uso/comercial/entregas.md`, «COM-ASG-TRP»).
-   **Hecho el 24/11/2026 en COM-05a1:** `transportista_con_entregas`. Siguen abiertos `transportista_en_ruta` (COM-06a) y la regla de COM-ASG-TRP (COM-05b).
+   **Hecho el 24/11/2026 en COM-05a1:** `transportista_con_entregas`. **Hecho el 25/11/2026 en COM-05b:** la regla de COM-ASG-TRP (`entrega_en_curso`). Sigue abierto `transportista_en_ruta` (COM-06a).
 3. **Logística de la ficha del invernadero (D-55, nace en MAE-05).** Regla 3 de PROD-CNS-INV: `comercial` registra
    `maestros.extensiones.registrar_logistica_de_transportista` con el vehículo, la situación (en ruta o no) y las entregas a
    realizar de cada transportista. Con el registrante, «Logística» muestra las tres columnas de `logistica(inv, ger, true)` del
@@ -129,10 +129,10 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
    **Planificado (lote C5a):** COM-05a hace los dos primeros guiones (candidatos «sin entrega» y los disparadores; las líneas quitadas y la
    entrega vacía cancelada, D-66 puntos 4 y 9). El tercero (el enlace de COM-CNL-CVT) es de **COM-05b** (**planificado, lote C5b**:
    postcondición e de COM-CNL-CVT, `anular_enlaces_de(venta)`; `docs/casos_de_uso/comercial/compra_venta.md`, «COM-CNL-CVT»).
-   **Hecho el 24/11/2026 en COM-05a1:** los dos primeros guiones (candidatos «sin entrega», los disparadores, las líneas quitadas y la entrega vacía cancelada).
+   **Hecho el 24/11/2026 en COM-05a1:** los dos primeros guiones (candidatos «sin entrega», los disparadores, las líneas quitadas y la entrega vacía cancelada). **Hecho el 25/11/2026 en COM-05b:** el tercero (`anular_enlaces_de(venta)` en COM-CNL-CVT).
 
 8. **Lo que deja COM-05a (nace en el lote C5a; desde el C5b, COM-05a es COM-05a1 y COM-05a2).**
-   - **COM-05b** (**planificado, lote C5b**): COM-ASG-TRP reutiliza `candidatos_para`, `peso_de_entregas` y la acción `asignacion_transportista`, resuelve la alerta
+   - **COM-05b** (**hecho el 25/11/2026**): COM-ASG-TRP reutiliza `candidatos_para`, `peso_de_entregas` y la acción `asignacion_transportista`, resuelve la alerta
      «entrega sin transportista» y le cambia el enlace (a la asignación, extensión 1b); suma «Asignar» y «Cambiar transportista» a la lista de
      entregas. COM-CNL-CVT cancela las entregas «a realizar» de la venta con `cancelar_entrega_incluida`.
    - **COM-06:** COM-INI-RUT usa `peso_de_entregas` («Peso de la ruta») y bloquea el invernadero como semáforo (D-66, punto 11); COM-CNC-ENT
@@ -142,7 +142,7 @@ Los tres puntos los cerró NOT-01 (20/11/2026, D-42). La campana suma las alerta
      topea en la reservada y el exceso va en el consumo del envase. «Concretar retiro» en la lista de entregas; `transportista_en_ruta`.
      **Planificado (lote C6):** todo, COM-06a (`rutas.md`, «Cómo se aplica»).
 
-9. **Lo que deja COM-05b (nace en el lote C5b).**
+9. **Lo que deja COM-05b (nace en el lote C5b).** **Hecho el 25/11/2026 en COM-05b:** el rechazo `venta_con_entregas_concretadas` (con una prueba de fábrica) y la cancelación de los confirmados sin entregar; siguen abiertos los puntos de abajo para COM-06 y COM-08b.
    - **COM-06:** COM-CNL-CVT con entregas concretadas (extensión 6a) se vuelve posible. Hasta COM-08, el servicio sigue rechazando
      `venta_con_entregas_concretadas` (lo deja COM-05b, con una prueba de fábrica); COM-06 lo confirma con una entrega concretada real.
      COM-CNL-CVT cancela solo los detalles **sin** línea en una entrega concretada (D-67, punto 4): COM-06 suma esa prueba con datos reales.
@@ -640,7 +640,7 @@ USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servici
 ## Lo que deja COM-04c (nace el 24/11/2026)
 1. **Render: cargar `URL_DEL_SITIO`** (sin barra final) antes de usar el enlace del cliente; sin ella el correo no sale y el enlace queda «No se pudo enviar». Pasada manual en navegador real al cerrar la tanda de «Comercial 1» (pasos 3 y 14 de la «Verificación a mano» de COM-04c).
 2. **COM-05a1:** planificar la entrega después de decidir (paso 7 y postcondición m de COM-DCD-FLT: si la venta queda «abierta» con todas sus reservas «lista para entrega»); el punto de enganche es el final de `faltantes._registrar`, con `on_commit`, junto a la asignación de cámara. **Hecho el 24/11/2026 en COM-05a1.**
-3. **COM-05b:** COM-CNL-CVT llama a `enlaces.anular_enlaces_de(venta)` (ya existe; es el tercer llamador). **COM-06b:** suma el tipo `confirmacion_entrega` y su FK a `Entrega` al mismo `EnlaceCliente`, con `crear_enlace(…, entrega=)` sin reemplazo y vigencia calculada (`enlace_del_cliente.md`, sección 9); el paso 27 no lo toma.
+3. ~~**COM-05b.**~~ **Hecho el 25/11/2026 en COM-05b** (COM-CNL-CVT anula el enlace de la venta cancelada). Texto original: COM-CNL-CVT llama a `enlaces.anular_enlaces_de(venta)` (ya existe; es el tercer llamador). **COM-06b:** suma el tipo `confirmacion_entrega` y su FK a `Entrega` al mismo `EnlaceCliente`, con `crear_enlace(…, entrega=)` sin reemplazo y vigencia calculada (`enlace_del_cliente.md`, sección 9); el paso 27 no lo toma.
 4. **Documentar `URL_DEL_SITIO`** en `docs/patrones/enlace_del_cliente.md` (sección 3) y los bloqueos de COM-DCD-FLT en `docs/patrones/bloqueos.md` (ver `docs/temas_abiertos.md`, «COM-04c»).
 
 ## Cuando se programen CON-03b, CON-04a a CON-04d, CMP-04 y Estadísticas — nacen con CON-02 (24/11/2026)
@@ -657,7 +657,7 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 ## Lo que deja COM-05a1 (nace el 24/11/2026)
 
 1. ~~**COM-05a2.**~~ **Hecho el 24/11/2026 en COM-05a2** (el aviso, la columna y la carga de los vehículos, las secciones de las fichas, el panel y la restricción de `ReservaInsumo`). Texto original: el aviso de envasado al Agrónomo (postcondición h de COM-PNF-ENT) en `_planificar_en_invernadero`, junto al aviso al transportista; la columna «Entregas a realizar» y la tarjeta de carga de los próximos días en las pantallas de vehículos (`carga_maxima_asignada` y `entregas_a_realizar_del_transportista` ya existen); «Ver sus entregas» en la ventana de baja de un vehículo; las secciones de entregas de las fichas de contrato y el panel. La restricción de `ReservaInsumo` («a lo sumo una activa», D-66 punto 8) y las funciones de envasado: `entrega_para_agrupar` ya lee las reservas de insumo «activas».
-2. **COM-05b:** COM-ASG-TRP reutiliza `candidatos_para(..., excluir=)`, `seleccionar`, `motivo_de_alerta`, `peso_de_entregas` y la acción `asignacion_transportista` (ya declarada); cambia el enlace de la alerta (`entregas.enlaces_de_alertas`) a la pantalla de asignación. COM-CNL-CVT usa `cancelar_entrega_incluida` (que ya resuelve la alerta y avisa).
+2. ~~**COM-05b.**~~ **Hecho el 25/11/2026 en COM-05b.** Texto original: COM-ASG-TRP reutiliza `candidatos_para(..., excluir=)`, `seleccionar`, `motivo_de_alerta`, `peso_de_entregas` y la acción `asignacion_transportista` (ya declarada); cambia el enlace de la alerta (`entregas.enlaces_de_alertas`) a la pantalla de asignación. COM-CNL-CVT usa `cancelar_entrega_incluida` (que ya resuelve la alerta y avisa).
 3. **COM-06:** `transportista_en_ruta` (impedimento del invernadero y de la baja de cuenta) y PROD-VNC-CAM 3b: `quitar_lineas_liberadas` solo toca las «a realizar»; una entrega en curso con producto vencido se trata en 3b. COM-INI-RUT usa `peso_de_entregas` y bloquea el invernadero antes de cambiar el vehículo.
 4. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05a1»): el nombre `contrato_entrega`; las varias `AlertaComercial` por entrega; el «último correo» del paso 50. Agregar en `docs/patrones/bloqueos.md`, «Entregas y envasado», el orden de la baja de cuenta tal como quedó (invernaderos de las entregas y después las entregas).
 5. **Pasada manual en navegador real** (paso 9 de la «Verificación a mano» de COM-05a1) para el cierre de la tanda de «Comercial 1».
@@ -672,6 +672,13 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 ## Lo que deja COM-05a2 (nace el 24/11/2026)
 
 1. **COM-06a:** COM-CNC-ENT confirma la cantidad utilizada y devuelta de cada `ReservaInsumo` «activa» de la entrega (pasos 4, 9 y 10) y el exceso de envases va en el consumo, **sin tocar la restricción** (D-68, punto 2). La extensión 14a (retiro en concreción) tiene que verificar que las reservas de insumo no cambiaron entre el paso 4 y el registro: `envasado.huella_de(entrega_id)` y el bloqueo de la entrega al registrar el envasado son lo que necesita. PROD-VNC-CAM 3b trata la entrega **en curso** (`entregas.en_curso`), que el envasado ya respeta (3b, 10a).
-2. **COM-05b:** la cancelación de la compra-venta usa `cancelar_entrega_incluida`, que ya cancela las reservas de insumo de la entrega («cancelada», sin consumo) y avisa al Agrónomo; el envasado deja de abrirse en una entrega cancelada (10a).
+2. ~~**COM-05b.**~~ **Hecho el 25/11/2026 en COM-05b.** Texto original: la cancelación de la compra-venta usa `cancelar_entrega_incluida`, que ya cancela las reservas de insumo de la entrega («cancelada», sin consumo) y avisa al Agrónomo; el envasado deja de abrirse en una entrega cancelada (10a).
 3. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05a2»): la migración de `core` es la 0042; «Entregas de hoy» sin filtro de fecha; las notificaciones sin enlace al envasado van a `pendientes_CU` (D-42, D-66).
 4. **Pasada manual en navegador real** (paso 12 de la «Verificación a mano» de COM-05a2) para el cierre de la tanda de «Comercial 1».
+
+## Lo que deja COM-05b (nace el 25/11/2026)
+
+1. **COM-06a:** una entrega «en curso» se arma hoy solo con un vehículo de fábrica (`vehiculo_en_ruta`): COM-INI-RUT toma el invernadero de origen antes de cambiar el vehículo (D-66, punto 11), y con la ruta real COM-06 confirma a mano la asignación (3a) y la cancelación (4a) que hoy cubren solo las pruebas. Con una entrega concretada real, el rechazo `venta_con_entregas_concretadas` y la prueba de la venta con detalles entregados (D-67, punto 4) se completan con datos reales.
+2. **COM-08b:** la extensión 6a de COM-CNL-CVT reemplaza el rechazo `venta_con_entregas_concretadas` (la prueba de COM-05b que lo espera se reemplaza; anotarlo en el PR) y suma `medio_pago` a `DatosDeCancelacionDeVenta`, el cobro y la venta «concretada» con los datos de la cancelación (la restricción de MD-130 ya lo admite).
+3. **Documentación a corregir** (`docs/temas_abiertos.md`, «COM-05b»): `sin_permiso` por `PermissionDenied`; «Ver cómo queda» como `POST`; el comprobante de cancelación después de la transacción; la restricción `compra_venta_motivo_cancelacion_valido` en `docs/modelo/comercial.md`.
+4. **Pasada manual en navegador real** (paso 19 de la «Verificación a mano» de COM-05b) para el cierre de la tanda de «Comercial 1».

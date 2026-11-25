@@ -1,0 +1,14 @@
+{% comment %}Lo que dice el resumen de la cancelación (pasos 6 y 7 de COM-CNL-CVT), en la ventana y en la página. Recibe «resumen» (ResumenDeCancelacionDeVenta) y «cuantos».{% endcomment %}
+{% with d=resumen.datos %}
+<dl class="dl">
+  <dt>Compra-venta</dt><dd><span class="mono">{{ d.venta.codigo }}</span> · {{ d.cliente }}</dd>
+  <dt>Motivo</dt><dd>{{ resumen.motivo_texto }}{% if resumen.descripcion %}: {{ resumen.descripcion }}{% endif %}</dd>
+  <dt>Detalles cancelados</dt><dd class="mono">{{ cuantos }}</dd>
+  <dt>Cosechas canceladas</dt><dd class="mono">{{ d.cosechas|length }}</dd>
+  <dt>Entregas canceladas</dt><dd class="mono">{{ d.entregas|length }}</dd>
+  <dt>Ingresan a la cámara</dt><dd class="mono">{% for g in d.a_camara %}{{ g.cantidad }} de {{ g.variedad }}{% if not forloop.last %}, {% endif %}{% empty %}nada{% endfor %}</dd>
+  <dt>Estado final</dt><dd><span class="status-badge status-neutral">{{ resumen.estado_final }}</span></dd>
+  <dt>Comprobante</dt><dd>{% if d.comprobante %}Se envía a {{ d.comprobante }}.{% else %}El cliente no tiene correo: se imprime.{% endif %}</dd>
+</dl>
+<div class="alert alert-warn"><div>La cancelación no se puede deshacer.</div></div>
+{% endwith %}

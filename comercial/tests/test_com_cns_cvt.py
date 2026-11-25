@@ -154,12 +154,16 @@ class ComCnsCvtServicioTests(ConDatosDeInventario, TestCase):
         self.assertIn(self.e.invernadero.nombre_invernadero, destino)
 
     def test_regla_5_desde_la_ficha_se_va_al_cliente_y_se_reenvia_solo_un_comprobante_pendiente(self):
-        """Regla 5: «Ver cliente» siempre; «Reenviar comprobante» solo con el comprobante pendiente de envío y un cliente con correo
-        (cancelar la venta no se ofrece: lo agrega COM-05b, D-25)."""
+        """Regla 5: «Ver cliente» siempre; «Reenviar comprobante» solo con el comprobante pendiente de envío y un cliente con correo; «Cancelar compra-venta» (COM-05b) con la venta
+        «abierta» o «pendiente de decisión del cliente», para el Vendedor del contrato y el Gerente."""
         ficha = compra_ventas.ficha_de_compra_venta(self.e.vendedor, self.mia.pk)
-        self.assertEqual(ficha.acciones, frozenset({"ver_cliente", "reenviar_comprobante"}))
+        self.assertEqual(ficha.acciones, frozenset({"ver_cliente", "reenviar_comprobante", "cancelar"}))
         CompraVenta.objects.filter(pk=self.mia.pk).update(estado_comprobante="enviado")
+        self.assertEqual(compra_ventas.ficha_de_compra_venta(self.e.vendedor, self.mia.pk).acciones, frozenset({"ver_cliente", "cancelar"}))
+        CompraVenta.objects.filter(pk=self.mia.pk).update(estado_venta="concretada")
         self.assertEqual(compra_ventas.ficha_de_compra_venta(self.e.vendedor, self.mia.pk).acciones, frozenset({"ver_cliente"}))
+        CompraVenta.objects.filter(pk=self.mia.pk).update(estado_venta="pendiente_decision")
+        self.assertIn("cancelar", compra_ventas.ficha_de_compra_venta(self.gerente, self.mia.pk).acciones)
 
     def test_post_a_es_una_consulta_no_modifica_datos_ni_audita(self):
         """Postcondición a: no modifica datos ni registra auditoría."""

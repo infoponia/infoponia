@@ -95,10 +95,10 @@ class RecorridoDeEntregasTests(ConDatosDeInventario, TestCase):
         self.assertIn("Entrega sin transportista", texto(self.client.get(reverse("alertas:lista"))))
         abrir = self.client.get(reverse("alertas:ir", args=[alerta.pk]))
         self.assertEqual(abrir.status_code, 302)
-        self.assertIn(f"/comercial/entregas/?entrega={sin.pk}", abrir["Location"])
+        self.assertIn(f"/comercial/entregas/{sin.pk}/asignar/", abrir["Location"])  # COM-05b, extensión 1b: la alerta lleva a la asignación
         fila = self.client.get(abrir["Location"])
         self.assertIn(sin.codigo, texto(fila))
-        self.assertIn("Sin transportista", texto(fila))
+        self.assertIn("Asignar transportista", texto(fila))
 
         # 4. Llega un transportista: el paso 50 (el comando del cron) se lo asigna, resuelve la alerta y avisa; una segunda corrida no hace nada.
         nuevo = transportista_con_vehiculo(self.e.invernadero, "800")

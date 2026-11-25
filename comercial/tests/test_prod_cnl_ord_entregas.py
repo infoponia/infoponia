@@ -6,6 +6,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.test import TestCase
 from django.utils import timezone
 
@@ -284,3 +285,75 @@ class QuitarLineasLiberadasTests(ConDatosDeInventario, TestCase):
         entrega(venta, [r], estado="cancelada")
         self.assertEqual(entregas.entregas_de_reservas([r.pk]), [a_realizar.pk])
         self.assertEqual(entregas.entregas_de_reservas([]), [])
+
+
+class ProdCnlOrdEntregasDesdeCompraVentaTests(ConDatosDeInventario, TestCase):
+    """La «Cancelación de una entrega» cuando la incluye COM-CNL-CVT (COM-05b; `cancelar_orden.md`, «la compra-venta cancelada»): el aviso al cliente no sale de acá (es el
+    comprobante de la venta), el motivo lo arma el caso de uso base y lo que se cancela es lo que el caso de uso base le pasa."""
+
+    def setUp(self):
+        from comercial.tests.fabricas import venta_con_todo
+
+        self.e = escenario_comercial()
+        self.t = transportista_con_vehiculo(self.e.invernadero, "800")
+        self.v = venta_con_todo(self.e, transportista=self.t, con_envases=True)
+
+    def cancelar_venta(self, actor=None):
+        from comercial.servicios import compra_ventas
+        from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+
+        actor = actor or self.e.vendedor
+        datos = compra_ventas.datos_de_cancelacion(actor, self.v.venta.pk)
+        return compra_ventas.cancelar_compra_venta(actor, self.v.venta.pk, DatosDeCancelacionDeVenta("cliente_desistio"), datos.huella)
+
+    def test_regla_la_entrega_con_envases_y_transportista_se_cancela_con_sus_reservas_de_envase_y_sus_avisos(self):
+        """Con envases y transportista: la orden «cancelada» con el motivo de la venta, el envase cancelado sin consumo, el aviso al transportista y el del Agrónomo; ningún correo propio."""
+        from django.core import mail
+
+        self.cancelar_venta()
+        e = Entrega.objects.get(pk=self.v.entrega.pk)
+        self.assertEqual((e.estado_orden, e.motivo_cancelacion), ("cancelada", f"Se canceló la compra-venta {self.v.venta.codigo}: el cliente desistió."))
+        self.assertEqual(list(ReservaInsumo.objects.filter(orden=e).values_list("estado", flat=True)), ["cancelada"])
+        self.assertEqual(list(Notificacion.objects.filter(destinatario=self.t).values_list("titulo", flat=True)), [f"Se canceló la entrega {e.codigo}"])
+        self.assertIn(f"Se canceló {e.codigo}, que tenía envases reservados", Notificacion.objects.filter(destinatario=self.e.agronomo).values_list("titulo", flat=True))
+        self.assertEqual(mail.outbox, [])
+
+    def test_regla_la_entrega_sin_envases_ni_transportista_no_avisa_a_nadie_de_la_entrega(self):
+        """Sin envases y sin transportista: solo se cancela la orden (y su alerta); el Agrónomo no recibe el aviso de los envases."""
+        from comercial.tests.fabricas import venta_con_todo
+
+        otra = venta_con_todo(self.e)
+        from comercial.servicios import compra_ventas
+        from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+
+        datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, otra.venta.pk)
+        compra_ventas.cancelar_compra_venta(self.e.vendedor, otra.venta.pk, DatosDeCancelacionDeVenta("otro"), datos.huella)
+        self.assertEqual(Entrega.objects.get(pk=otra.entrega.pk).estado_orden, "cancelada")
+        self.assertNotIn(f"Se canceló {otra.entrega.codigo}, que tenía envases reservados", Notificacion.objects.values_list("titulo", flat=True))
+
+    def test_regla_la_entrega_de_retiro_se_cancela_sin_transportista_que_avisar(self):
+        """Extensión 6b de COM-CNL-CVT: un retiro «a realizar» se cancela igual que una entrega con envío."""
+        venta = compra_venta(self.e, modalidad="retiro")
+        det = detalle(venta, self.e.variedad, 20)
+        lote = lote_maduro(self.e, 100)
+        e = entrega(venta, [reserva_lista(det, lote, 20)])
+        with transaction.atomic():
+            entregas.cancelar_entrega_incluida(self.e.vendedor, e, "Se canceló la venta.")
+        self.assertEqual(Entrega.objects.get(pk=e.pk).estado_orden, "cancelada")
+
+    def test_regla_una_entrega_en_curso_no_la_cancela_la_venta(self):
+        """Situación 11 vale solo para quien admite cancelar una entrega en curso: COM-CNL-CVT la detecta antes (4a) y no cancela nada."""
+        from django.core.exceptions import ValidationError
+
+        from comercial.tests.fabricas import vehiculo_en_ruta, venta_con_todo
+
+        en_ruta = transportista_con_vehiculo(self.e.invernadero, "800")
+        otra = venta_con_todo(self.e, transportista=en_ruta, dias=0)
+        vehiculo_en_ruta(en_ruta)
+        from comercial.servicios import compra_ventas
+        from comercial.servicios.compra_ventas import DatosDeCancelacionDeVenta
+
+        datos = compra_ventas.datos_de_cancelacion(self.e.vendedor, otra.venta.pk)
+        with self.assertRaises(ValidationError):
+            compra_ventas.cancelar_compra_venta(self.e.vendedor, otra.venta.pk, DatosDeCancelacionDeVenta("otro"), datos.huella)
+        self.assertEqual(Entrega.objects.get(pk=otra.entrega.pk).estado_orden, "a_realizar")

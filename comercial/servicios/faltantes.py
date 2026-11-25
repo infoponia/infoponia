@@ -369,9 +369,11 @@ def _bloquear(venta, previo, enlace_id, vendedor):
     return enlaces.bloquear_enlace(enlace_id) if enlace_id else None
 
 
-def _rechazar_detalle(detalle, venta, vendedor, hoy):
-    """Postcondiciones i, j y k para un detalle rechazado: sus reservas no liberadas pasan a «liberada»; cada cosecha «a realizar» se cancela (con el aviso al Capataz y al Agrónomo); por cada
-    línea de lote ya cosechada con cubierto > 0, una partida `rechazo_cantidad_reducida` con su movimiento. Devuelve `(partidas, cosechas_canceladas, reservas_liberadas, partidas_para_reasignar)`."""
+def liberar_reservas_de_detalle(detalle, venta, vendedor, hoy, *, motivo_de_la_cosecha=None, motivo_de_la_partida=StockCosechado.Motivo.RECHAZO_CANTIDAD_REDUCIDA):
+    """Postcondiciones i, j y k para un detalle rechazado (y la cancelación de la venta, COM-CNL-CVT, COM-05b): sus reservas no liberadas pasan a «liberada»; cada cosecha «a realizar» se cancela
+    (con el aviso al Capataz y al Agrónomo); por cada línea de lote ya cosechada con cubierto > 0, una partida de `motivo_de_la_partida` (por omisión `rechazo_cantidad_reducida`) con su
+    movimiento. `motivo_de_la_cosecha` es el texto que reciben las cosechas canceladas (por omisión, «El cliente rechazó el faltante de CV-…»). Una sola lógica para los dos casos de uso: ninguna
+    función nueva duplica la liberación (`cancelar_orden.md`). Devuelve `(partidas, cosechas_canceladas, reservas_liberadas, partidas_para_reasignar)`."""
     from comercial.servicios import cosechas as cosechas_comercial
     from produccion.models import OrdenTrabajo
     from produccion.servicios import camara as fisico_camara
@@ -382,7 +384,7 @@ def _rechazar_detalle(detalle, venta, vendedor, hoy):
     for reserva in reservas:
         cosecha = reserva.cosecha
         if cosecha is not None and cosecha.estado_orden == OrdenTrabajo.Estado.A_REALIZAR:
-            cosechas_comercial.cancelar_cosecha_incluida(vendedor, cosecha, f"El cliente rechazó el faltante de {venta.codigo}", recubrir=False)
+            cosechas_comercial.cancelar_cosecha_incluida(vendedor, cosecha, motivo_de_la_cosecha or f"El cliente rechazó el faltante de {venta.codigo}", recubrir=False)
             canceladas.append(cosecha)
             liberadas.append(reserva)
             continue
@@ -397,7 +399,7 @@ def _rechazar_detalle(detalle, venta, vendedor, hoy):
                 if cantidad > 0 and costo is not None:
                     partidas.append(
                         fisico_camara.crear_partida(
-                            linea.lote, cantidad, StockCosechado.Motivo.RECHAZO_CANTIDAD_REDUCIDA,
+                            linea.lote, cantidad, motivo_de_la_partida,
                             fecha_cosecha=cosecha.fecha_cosecha, fecha_ingreso=hoy, costo_unitario=costo, origen=venta,
                         )
                     )
@@ -462,7 +464,7 @@ def _registrar(venta_id, enlace_id, decisiones, vistos, vendedor, previo, hoy):
             else:  # i, j y k
                 DetalleVenta.objects.filter(pk=d.pk).update(estado_detalle_venta=Estado.RECHAZADO)
                 rechazados.append(d)
-                p, c, r, a = _rechazar_detalle(d, venta, vendedor, hoy)
+                p, c, r, a = liberar_reservas_de_detalle(d, venta, vendedor, hoy)
                 partidas += p
                 canceladas += c
                 liberadas += r
