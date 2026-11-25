@@ -1208,7 +1208,7 @@ class RegistroAuditoria(models.Model):
         "mermas_creadas": "Mermas creadas",
         "consumos_creados": "Consumos creados",
         "pago": "Pago del cliente",
-        "medio_pago": "Medio de pago",
+        # «medio_pago» ya existe (CMP-05).
         "discrepancia": "Discrepancia de entrega",
         "envases_declarados": "Envases declarados (utilizada de cada uno)",
         # CON-02: ejercicios, asientos y movimientos contables («origen» ya existe, de IOT-03; «ejercicio» y «cuenta» son referencias).
@@ -1366,10 +1366,9 @@ class RegistroAuditoria(models.Model):
         "motivo_rescision": {"a_pedido_del_cliente": "A pedido del cliente", "a_pedido_de_la_empresa": "A pedido de la empresa", "otro": "Otro"},
         # COM-05b: el motivo de la cancelación de una compra-venta (`core` no importa `comercial`).
         "motivo_cancelacion_venta": {"cliente_desistio": "El cliente desistió", "cliente_no_retiro": "El cliente no retiró", "otro": "Otro"},
-        # COM-06a: el motivo de un intento fallido y el medio de pago (`core` no importa `comercial`).
+        # COM-06a: el motivo de un intento fallido (`core` no importa `comercial`). «medio_pago» ya existe (CMP-05, más abajo).
         "estado_orden": {"a_realizar": "A realizar", "concretada": "Concretada", "cancelada": "Cancelada"},
         "motivo": {"cliente_ausente": "Cliente ausente", "domicilio_cerrado": "Domicilio cerrado", "direccion_incorrecta": "Dirección incorrecta", "otro": "Otro"},
-        "medio_pago": {"efectivo": "Efectivo", "transferencia": "Transferencia", "tarjeta_debito": "Tarjeta de débito", "tarjeta_credito": "Tarjeta de crédito"},
         "estado_stock_cosechado": {"disponible": "Disponible", "agotado": "Agotada", "vencido": "Vencida"},  # COM-04b
         "estado_reserva": {
             "activa": "Activa",
