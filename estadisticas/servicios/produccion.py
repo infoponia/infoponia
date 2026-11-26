@@ -88,6 +88,56 @@ def _cosechas_del_periodo(invernadero_ids, periodo):
     )
 
 
+def _lotes_sembrados_en(invernadero_ids, periodo):
+    """Los lotes de los invernaderos cuya siembra tiene `fecha_siembra` dentro del período (la normal y la carga inicial). Base del indicador 1
+    (que se queda con las normales) y del denominador de la merma; la usa también el indicador 7 (`consolidadas.por_invernadero`)."""
+    return Lote.objects.filter(invernadero_id__in=list(invernadero_ids), siembra__fecha_siembra__range=_rango(periodo))
+
+
+def _mermas_de_lotes(invernadero_ids, periodo):
+    """Las mermas de lotes en pie con su fecha en el período: sin las de partidas en cámara (producto ya cosechado, D-93 punto 3.2)."""
+    return ModeloMerma.objects.filter(invernadero_id__in=list(invernadero_ids), fecha_bitacora__range=_rango(periodo)).exclude(
+        causa__in=CAUSAS_DE_CAMARA
+    )
+
+
+def _ordenes_del_periodo(invernadero_ids, periodo, solo_produccion):
+    """Las órdenes con `fecha_programada_orden` en el período, sin las canceladas y, con «Solo de producción», solo de siembra, transición y cosecha."""
+    consulta = OrdenTrabajo.objects.filter(
+        invernadero_id__in=list(invernadero_ids), fecha_programada_orden__range=_rango(periodo)
+    ).exclude(estado_orden=OrdenTrabajo.Estado.CANCELADA)
+    if solo_produccion:
+        consulta = consulta.filter(tipo_orden__in=list(TIPOS_DE_PRODUCCION))
+    return consulta
+
+
+def _condiciones_de_ordenes(hoy):
+    """`(a_tiempo, vencida)`: las dos condiciones del indicador 3 (D-93 punto 3.3) como `Q`, para contar con `Count(filter=…)`."""
+    Estado = OrdenTrabajo.Estado
+    a_tiempo = Q(estado_orden=Estado.CONCRETADA, fecha_resolucion_orden__lte=F("fecha_programada_orden"))
+    vencida = Q(estado_orden=Estado.CONCRETADA, fecha_resolucion_orden__gt=F("fecha_programada_orden")) | Q(
+        estado_orden=Estado.A_REALIZAR, fecha_programada_orden__lt=hoy
+    )
+    return a_tiempo, vencida
+
+
+def _costo_de_la_cosecha():
+    """La expresión «cantidad × costo por planta» de una salida por cosecha (indicador 4)."""
+    return ExpressionWrapper(F("cantidad") * F("costo_unitario"), output_field=DecimalField(max_digits=24, decimal_places=4))
+
+
+def _consumos_del_periodo(invernadero_ids, periodo):
+    """Los consumos de los invernaderos con su fecha de consumo en el período (indicador 5)."""
+    return Consumo.objects.filter(invernadero_id__in=list(invernadero_ids), fecha_consumo__range=_rango(periodo))
+
+
+def _alertas_del_periodo(invernadero_ids, periodo):
+    """Las alertas de los tipos del IoT con su fecha (local) en el período, de los invernaderos indicados (indicador 6)."""
+    return Alerta.objects.filter(
+        invernadero_id__in=list(invernadero_ids), tipo_alerta__in=CODIGOS_DE_ALERTAS_IOT, fecha_hora_alerta__date__range=_rango(periodo)
+    )
+
+
 def sembradas_y_cosechadas(invernadero_ids, periodo):
     """Indicador 1: plantas sembradas (siembras normales concretadas con `fecha_siembra` en el período: la carga inicial no es una siembra del
     período, D-92 punto 12) y cosechadas (salidas por cosecha del período), por variedad (D-93 punto 3.1). 2 consultas."""
@@ -98,11 +148,8 @@ def sembradas_y_cosechadas(invernadero_ids, periodo):
         return filas.setdefault(variedad_id, [f"{cultivo} {variedad}", 0, 0 if disponible else None])
 
     sembradas = (
-        Lote.objects.filter(
-            invernadero_id__in=list(invernadero_ids),
-            siembra__tipo_siembra=Siembra.TipoSiembra.NORMAL,
-            siembra__fecha_siembra__range=_rango(periodo),
-        )
+        _lotes_sembrados_en(invernadero_ids, periodo)
+        .filter(siembra__tipo_siembra=Siembra.TipoSiembra.NORMAL)
         .values("siembra__variedad_id", "siembra__variedad__cultivo__nombre_cultivo", "siembra__variedad__nombre_variedad")
         .annotate(total=Sum("cantidad_inicial"))
         .order_by()
@@ -129,9 +176,10 @@ def sembradas_y_cosechadas(invernadero_ids, periodo):
     )
 
 
-def _plantas_al_inicio(invernadero_ids, periodo):
+def _plantas_al_inicio(invernadero_ids, periodo, por_invernadero=False):
     """Plantas en producción al inicio del período: por cada lote con `fecha_siembra` anterior a «desde» (también los de carga inicial),
-    `cantidad_inicial` − sus mermas anteriores − sus plantas cosechadas anteriores, sin bajar de 0 (D-93 punto 3.2 con D-103). 1 consulta."""
+    `cantidad_inicial` − sus mermas anteriores − sus plantas cosechadas anteriores, sin bajar de 0 (D-93 punto 3.2 con D-103). 1 consulta.
+    Con `por_invernadero`, devuelve `{invernadero_id: plantas}` (el indicador 7)."""
     entero = IntegerField()
     mermas = (
         ModeloMerma.objects.filter(lote=OuterRef("pk"), fecha_bitacora__lt=periodo.desde)
@@ -156,12 +204,10 @@ def _plantas_al_inicio(invernadero_ids, periodo):
     else:
         cosechadas = Value(0, output_field=entero)
     base = Greatest(F("cantidad_inicial") - previas - cosechadas, Value(0), output_field=entero)
-    total = (
-        Lote.objects.filter(invernadero_id__in=list(invernadero_ids), siembra__fecha_siembra__lt=periodo.desde)
-        .annotate(base=base)
-        .aggregate(total=Sum("base"))["total"]
-    )
-    return total or 0
+    lotes = Lote.objects.filter(invernadero_id__in=list(invernadero_ids), siembra__fecha_siembra__lt=periodo.desde).annotate(base=base)
+    if por_invernadero:
+        return {f["invernadero_id"]: f["total"] for f in lotes.values("invernadero_id").annotate(total=Sum("base")).order_by()}
+    return lotes.aggregate(total=Sum("base"))["total"] or 0
 
 
 def merma(invernadero_ids, periodo):
@@ -169,8 +215,7 @@ def merma(invernadero_ids, periodo):
     al inicio + plantas sembradas en el período, también las cargas iniciales) × 100, y el reparto por causa. 3 consultas."""
     ids = list(invernadero_ids)
     cuentas = (
-        ModeloMerma.objects.filter(invernadero_id__in=ids, fecha_bitacora__range=_rango(periodo))
-        .exclude(causa__in=CAUSAS_DE_CAMARA)
+        _mermas_de_lotes(ids, periodo)
         .values("causa")
         .annotate(plantas=Sum("cant_merma"))
         .order_by()
@@ -178,7 +223,7 @@ def merma(invernadero_ids, periodo):
     por_causa = sorted(((f["causa"], f["plantas"]) for f in cuentas), key=lambda f: (-f[1], f[0]))
     perdidas = sum(plantas for _, plantas in por_causa)
     al_inicio = _plantas_al_inicio(ids, periodo)
-    del_periodo = Lote.objects.filter(invernadero_id__in=ids, siembra__fecha_siembra__range=_rango(periodo)).aggregate(
+    del_periodo = _lotes_sembrados_en(ids, periodo).aggregate(
         normales=Sum("cantidad_inicial", filter=Q(siembra__tipo_siembra=Siembra.TipoSiembra.NORMAL)),
         cargas=Sum("cantidad_inicial", filter=Q(siembra__tipo_siembra=Siembra.TipoSiembra.CARGA_INICIAL)),
     )
@@ -198,16 +243,8 @@ def ordenes_a_tiempo(invernadero_ids, periodo, hoy, solo_produccion=False):
     """Indicador 3 (D-93 punto 3.3): las órdenes con `fecha_programada_orden` en el período, sin las canceladas (con «Solo de producción»,
     solo siembra, transición y cosecha). A tiempo: concretada con resolución ≤ programada. Vencida: concretada después, o «a realizar» con
     programada < hoy; las «a realizar» que todavía no vencen no cuentan. 1 consulta."""
-    Estado = OrdenTrabajo.Estado
-    consulta = OrdenTrabajo.objects.filter(
-        invernadero_id__in=list(invernadero_ids), fecha_programada_orden__range=_rango(periodo)
-    ).exclude(estado_orden=Estado.CANCELADA)
-    if solo_produccion:
-        consulta = consulta.filter(tipo_orden__in=list(TIPOS_DE_PRODUCCION))
-    a_tiempo = Q(estado_orden=Estado.CONCRETADA, fecha_resolucion_orden__lte=F("fecha_programada_orden"))
-    vencida = Q(estado_orden=Estado.CONCRETADA, fecha_resolucion_orden__gt=F("fecha_programada_orden")) | Q(
-        estado_orden=Estado.A_REALIZAR, fecha_programada_orden__lt=hoy
-    )
+    consulta = _ordenes_del_periodo(invernadero_ids, periodo, solo_produccion)
+    a_tiempo, vencida = _condiciones_de_ordenes(hoy)
     por_tipo = {
         f["tipo_orden"]: (f["a_tiempo"], f["vencidas"])
         for f in consulta.values("tipo_orden")
@@ -232,10 +269,7 @@ def costo_por_planta_cosechada(invernadero_ids, periodo):
     plantas cosechadas, a 2 decimales (`ROUND_HALF_UP`). Sin cosecha disponible, no se muestra. 1 consulta."""
     if not cosecha_disponible():
         return CostoPorPlanta(False, None, None, None)
-    costo_del_movimiento = ExpressionWrapper(
-        F("cantidad") * F("costo_unitario"), output_field=DecimalField(max_digits=24, decimal_places=4)
-    )
-    totales = _cosechas_del_periodo(invernadero_ids, periodo).aggregate(plantas=Sum("cantidad"), costo=Sum(costo_del_movimiento))
+    totales = _cosechas_del_periodo(invernadero_ids, periodo).aggregate(plantas=Sum("cantidad"), costo=Sum(_costo_de_la_cosecha()))
     plantas = totales["plantas"] or 0
     costo = totales["costo"] or Decimal("0")
     por_planta = (costo / plantas).quantize(DOS_DECIMALES, rounding=ROUND_HALF_UP) if plantas else None
@@ -247,7 +281,7 @@ def consumo_de_insumos(invernadero_ids, periodo):
     y total; cantidad por insumo, con su unidad, dentro de su categoría (las de insumos distintos no se suman). 1 consulta."""
     c = "insumo_invernadero__insumo"
     filas = (
-        Consumo.objects.filter(invernadero_id__in=list(invernadero_ids), fecha_consumo__range=_rango(periodo))
+        _consumos_del_periodo(invernadero_ids, periodo)
         .values(f"{c}_id", f"{c}__nombre_insumo", f"{c}__unidad_medida_insumo", f"{c}__tipo_insumo_id", f"{c}__tipo_insumo__nombre_tipo_insumo")
         .annotate(cantidad=Sum("cant_consumo"), monto=Sum("monto_consumo"))
         .order_by()
@@ -275,9 +309,7 @@ def alertas_iot(invernadero_ids, periodo):
         return None
     nombres = {codigo: nombre for codigo, nombre, *_ in TIPOS_DE_ALERTA_DE_IOT}
     cuentas = (
-        Alerta.objects.filter(
-            invernadero_id__in=con_iot, tipo_alerta__in=CODIGOS_DE_ALERTAS_IOT, fecha_hora_alerta__date__range=_rango(periodo)
-        )
+        _alertas_del_periodo(con_iot, periodo)
         .values("tipo_alerta")
         .annotate(cantidad=Count("pk"))
         .order_by()

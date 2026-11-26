@@ -10,7 +10,7 @@ la fila de su tarea al cerrar (M3).
 | ID | Tarea | Casos de uso | Depende de | Tamaño |
 |---|---|---|---|---|
 | EST-01 | App `estadisticas` y estadísticas de producción | EST-CNS-PRD | PRD-03 (hecha); mejor después de CON-04a; la cosecha, de COM-04a (si no, «no disponible») | mediana · hecha (PR #__, 26/11/2026; revisión a mano pendiente) |
-| EST-02 | Estadísticas consolidadas del Gerente (sin lo comercial) | EST-CNS-CNS (indicadores 7, 9 y 10) | EST-01, CON-03a, CMP-06 | mediana |
+| EST-02 | Estadísticas consolidadas del Gerente (sin lo comercial) | EST-CNS-CNS (indicadores 7, 9 y 10) | EST-01, CON-03a, CMP-06 | mediana · hecha (PR #__, 26/11/2026; revisión a mano pendiente) |
 | EST-03 | Lo comercial dentro de las consolidadas | EST-CNS-CNS (indicador 8) | EST-02, COM-08c | chica |
 
 ## 2. Por qué este orden

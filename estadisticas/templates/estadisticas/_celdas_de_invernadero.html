@@ -1,0 +1,9 @@
+{% comment %}Las siete celdas de números de una fila del indicador 7 (EST-02): `f` es una `FilaDeInvernadero`. «—» es un valor sin base para calcular; las plantas cosechadas y el costo por planta
+dicen «—» también cuando todavía no existe la cosecha, y las alertas del IoT, cuando el invernadero (o ninguno de los de la fila) tiene sistema IoT.{% endcomment %}
+<td class="right nowrap">{{ f.sembradas|floatformat:"0g" }}</td>
+<td class="right nowrap">{% if f.cosechadas is None %}—{% else %}{{ f.cosechadas|floatformat:"0g" }}{% endif %}</td>
+<td class="right nowrap">{% if f.merma is None %}—{% else %}{{ f.merma|floatformat:1 }} %{% endif %}</td>
+<td class="right nowrap">{% if f.ordenes_a_tiempo is None %}—{% else %}{{ f.ordenes_a_tiempo|floatformat:1 }} %{% endif %}</td>
+<td class="right nowrap">{% if f.costo_por_planta is None %}—{% else %}$ {{ f.costo_por_planta|floatformat:"2g" }}{% endif %}</td>
+<td class="right nowrap">$ {{ f.consumo|floatformat:"2g" }}</td>
+<td class="right nowrap">{% if f.alertas_iot is None %}—{% else %}{{ f.alertas_iot }}{% endif %}</td>
