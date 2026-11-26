@@ -224,7 +224,7 @@ def seccion_de_entregas(usuario):
     Dos consultas para todo el grupo."""
     from django.urls import reverse
 
-    from comercial.servicios import cobranza, entregas, solicitudes
+    from comercial.servicios import cobranza, entregas, estadisticas, solicitudes
     from core.models import Usuario, rol_de
     from core.extensiones import SeccionDeInicio
     from inventario.servicios import stock
@@ -245,6 +245,9 @@ def seccion_de_entregas(usuario):
         # COM-08a: el grupo «Cobranza» (Por cobrar, En mora y Sin confirmar por el cliente), dentro de esta misma sección y después de «Solicitudes».
         "cobranza": cobranza.panel_de_cobranza(usuario, stock.hoy()),
         "url_de_cobranza": reverse("comercial:cobranza"),
+        # COM-08c: «Resultados del mes en curso» (solo el Vendedor; el Gerente tiene la pestaña «Estadísticas»), entre «Solicitudes» y «Cobranza».
+        "resultados": estadisticas.resultados_del_mes(usuario, stock.hoy()) if rol_de(usuario) == Usuario.Rol.VENDEDOR else None,
+        "url_de_estadisticas": reverse("comercial:estadisticas"),
     }
     return SeccionDeInicio("comercial/entregas/_seccion_de_inicio.html", {"entregas": datos})
 

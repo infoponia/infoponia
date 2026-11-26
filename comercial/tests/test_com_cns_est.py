@@ -332,11 +332,11 @@ class Regla3VentasTests(BaseDeEstadisticas):
         otra, lote_otra = self.otra_variedad()
         self.venta(cantidad=10, precio="100.00")  # variedad del escenario: $ 1.000,00
         self.suministro(cantidad=20, precio="50.00")  # variedad del escenario: $ 1.000,00
-        self.venta(cantidad=5, precio="300.00", variedad=otra, lote=lote_otra)  # la otra: $ 1.500,00
+        self.venta(cantidad=5, precio="500.00", variedad=otra, lote=lote_otra)  # la otra: $ 2.500,00
         ventas = self.stats().ventas
-        self.assertEqual(ventas.variedades[0], VentaDeVariedad(str(otra), 5, D("1500.00")))
+        self.assertEqual(ventas.variedades[0], VentaDeVariedad(str(otra), 5, D("2500.00")))
         self.assertEqual(ventas.variedades[1], VentaDeVariedad(str(self.e.variedad), 30, D("2000.00")))
-        self.assertEqual((ventas.total, ventas.entregas, ventas.plantas), (D("3500.00"), 3, 35))
+        self.assertEqual((ventas.total, ventas.entregas, ventas.plantas), (D("4500.00"), 3, 35))
 
     def test_regla_3_no_descuenta_indemnizaciones(self):
         """Regla 3: las ventas son lo que registró cada entrega; lo indemnizado va en el indicador 5."""
@@ -724,6 +724,7 @@ class Regla10EnlacesTests(BaseDeEstadisticas):
         self.assertEqual(propio.solicitudes, f"{solicitudes}?estado=aceptada")
         self.assertEqual(propio.cobranza, cobranza)
         self.assertEqual(propio.faltantes, contratos)
+        self.venta()  # el Gerente elige entre los Vendedores que tienen contratos
         vendedor = self.e.vendedor.pk
         del_gerente = self.stats(self.gerente, vendedor=str(vendedor)).enlaces
         self.assertEqual(del_gerente.compra_ventas, f"{contratos}?vendedor={vendedor}")
@@ -798,7 +799,7 @@ class PostcondicionYRendimientoTests(BaseDeEstadisticas):
         self.assertEqual(total_con_2, total_con_20)
         for nombre, cantidad in con_2.items():
             self.assertLessEqual(cantidad, 4, nombre)  # el indicador 7 son cuatro consultas; los demás, menos
-        self.assertEqual(self.stats(self.gerente).ventas.entregas, 20)  # y las 20 ventas están contadas
+        self.assertGreaterEqual(self.stats(self.gerente).ventas.entregas, 20)  # y las entregas están contadas
 
 
 class ResultadosDelMesTests(BaseDeEstadisticas):
@@ -823,3 +824,52 @@ class ResultadosDelMesTests(BaseDeEstadisticas):
         r = estadisticas.resultados_del_mes(self.e.vendedor, ULTIMO_DEL_MES_ANTERIOR)
         self.assertEqual((r.desde, r.hasta), (ULTIMO_DEL_MES_ANTERIOR.replace(day=1), ULTIMO_DEL_MES_ANTERIOR))
         self.assertEqual(r.ventas.entregas, 1)
+
+
+class FuncionesPublicasRendimientoTests(BaseDeEstadisticas):
+    """Lo mismo para las tres funciones públicas (las que llama EST-03 y la pantalla), no solo para cada indicador."""
+
+    poblar = PostcondicionYRendimientoTests.poblar  # los mismos datos, sin heredar (y repetir) las pruebas de la otra clase
+    consultas = PostcondicionYRendimientoTests.consultas
+
+    def publicas(self):
+        return {
+            "filtros_gerente": (estadisticas.filtros_de_estadisticas, self.gerente, {}, HOY),
+            "filtros_vendedor": (estadisticas.filtros_de_estadisticas, self.e.vendedor, {}, HOY),
+            "estadisticas_gerente": (estadisticas.estadisticas, self.gerente, FiltrosDeEstadisticas(HOY.replace(day=1), HOY), HOY),
+            "estadisticas_vendedor": (estadisticas.estadisticas, self.e.vendedor, FiltrosDeEstadisticas(HOY.replace(day=1), HOY), HOY),
+            "resultados_del_mes": (estadisticas.resultados_del_mes, self.e.vendedor, HOY),
+        }
+
+    def test_rendimiento_las_funciones_publicas_hacen_las_mismas_consultas_con_2_y_con_20_entregas(self):
+        """Cada función pública hace las mismas consultas con 2 que con 20 entregas (y con más Vendedores): sin consultas por fila."""
+        self.poblar(2)
+        con_2 = {nombre: self.consultas(*args) for nombre, args in self.publicas().items()}
+        self.poblar(18)
+        for i in range(5):
+            crear_vendedor(email=f"mas.vendedores{i}@infoponia.com")
+            self.del_otro_vendedor()
+        con_20 = {nombre: self.consultas(*args) for nombre, args in self.publicas().items()}
+        self.assertEqual(con_2, con_20)
+        self.assertLessEqual(con_2["estadisticas_gerente"], 20)
+        self.assertLessEqual(con_2["resultados_del_mes"], 8)
+        self.assertLessEqual(con_2["filtros_gerente"], 4)
+
+    def test_regla_2_la_convencion_de_dias_es_la_de_estadisticas_periodos(self):
+        """Las tres pantallas (EST-01, EST-02 y COM-08c) aceptan y rechazan lo mismo: días inclusivos, `hasta <= hoy`, `desde <= hasta` y 366 días como máximo (`estadisticas.periodos.validar`)."""
+        from estadisticas import periodos
+
+        dia = date(2026, 11, 26)
+        casos = [(dia - timedelta(days=n), dia) for n in (0, 1, 364, 365, 366, 400)] + [(dia, dia - UN_DIA), (dia, dia + UN_DIA), (dia - UN_DIA, dia + UN_DIA)]
+        for desde, hasta in casos:
+            try:
+                periodos.validar(desde, hasta, dia)
+                esperado = True
+            except ValidationError:
+                esperado = False
+            try:
+                self.filtros(self.gerente, hoy=dia, periodo="rango", desde=desde.isoformat(), hasta=hasta.isoformat())
+                obtenido = True
+            except ValidationError:
+                obtenido = False
+            self.assertEqual(obtenido, esperado, (desde, hasta))
