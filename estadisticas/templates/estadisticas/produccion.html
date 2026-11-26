@@ -8,6 +8,7 @@ después en el formulario, su valor es el último y gana (`_ultimo` en la vista)
 <link rel="stylesheet" href="{% static_v 'estadisticas/css/estadisticas.css' %}">
 <div class="page est">
   <div class="page-h"><h1>Estadísticas</h1></div>
+  {% if es_gerente %}<p class="sm" style="margin:0 0 8px"><a class="link" href="{% url 'estadisticas:consolidadas' %}?pestana=produccion">← Estadísticas consolidadas</a></p>{% endif %}
   <p class="muted sm" style="margin:0 0 14px">Cómo rindió la producción en el período que elijas, comparada con el período anterior.</p>
 
   <form method="get" action="{% url 'estadisticas:produccion' %}" aria-label="Período y filtros de las estadísticas">

@@ -1,0 +1,157 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Estadísticas» consolidadas del Gerente (EST-02, EST-CNS-CNS; prototipo `statsTabs`, `stRes`, `stProd`, `stCmp` y `stRtd`). Como la de producción (EST-01), es un formulario GET: la URL se puede compartir y volver a abrir
+y funciona sin JavaScript. Las pestañas, los atajos del período y el selector de órdenes son botones que envían el formulario; los campos escondidos conservan lo ya elegido y, como el botón apretado va después, su valor gana
+(`_ultimo` en la vista). Recibe «filtro», «pestana», «pestanas», «atajos», «hoy», «error», «consulta» y, si el período es válido, «resultado» (`Consolidadas`), «periodo», «deltas» y lo propio de cada pestaña (barras y enlaces).
+Las barras son de CSS: sin bibliotecas de gráficos. «—» es un valor sin base para calcular (no un cero).{% endcomment %}
+{% block titulo %}Estadísticas consolidadas · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'estadisticas/css/estadisticas.css' %}">
+<div class="page est">
+  <div class="page-h"><h1>Estadísticas</h1></div>
+  <p class="muted sm" style="margin:0 0 14px">Cómo le fue a toda la organización en el período que elijas, comparada con el período anterior.</p>
+
+  <form method="get" action="{% url 'estadisticas:consolidadas' %}" aria-label="Pestaña, período y filtros de las estadísticas consolidadas">
+    <input type="hidden" name="enviado" value="1">
+    <input type="hidden" name="pestana" value="{{ pestana }}">
+    <input type="hidden" name="periodo" value="{{ filtro.periodo }}">
+    <input type="hidden" name="ordenes" value="{{ filtro.ordenes }}">
+    {# Con Enter en un campo de fecha el navegador aprieta el primer botón: que sea uno que no cambie lo elegido. #}
+    <button class="default-oculto" type="submit" name="periodo" value="{{ filtro.periodo }}" tabindex="-1" aria-hidden="true">Aplicar</button>
+
+    <div class="tabs" role="tablist" aria-label="Estadísticas consolidadas">
+      {% for codigo, texto in pestanas %}<button class="tab" type="submit" name="pestana" value="{{ codigo }}" role="tab" aria-selected="{% if pestana == codigo %}true{% else %}false{% endif %}">{{ texto }}</button>{% endfor %}
+    </div>
+
+    <div class="perbar">
+      <div class="chips" role="group" aria-label="Período">
+        {% for codigo, texto in atajos %}<button class="chip" type="submit" name="periodo" value="{{ codigo }}" aria-pressed="{% if filtro.periodo == codigo %}true{% else %}false{% endif %}">{{ texto }}</button>{% endfor %}
+      </div>
+      <label class="chk"><input type="checkbox" name="comparar"{% if filtro.comparar %} checked{% endif %}> Comparar con el período anterior</label>
+    </div>
+
+    {% if filtro.periodo == "personalizado" %}
+    <div class="perdates" style="margin:10px 0">
+      <label class="dlbl"><span>Desde</span><input type="date" class="field-input" name="desde" max="{{ hoy|date:'Y-m-d' }}" value="{% if periodo %}{{ periodo.desde|date:'Y-m-d' }}{% else %}{{ filtro.desde }}{% endif %}"></label>
+      <label class="dlbl"><span>Hasta</span><input type="date" class="field-input" name="hasta" max="{{ hoy|date:'Y-m-d' }}" value="{% if periodo %}{{ periodo.hasta|date:'Y-m-d' }}{% else %}{{ filtro.hasta }}{% endif %}"></label>
+      <button class="btn btn-ghost btn-sm" type="submit" name="periodo" value="personalizado">Aplicar</button>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-danger" role="alert" style="margin-top:12px">{% icono "warn" 16 %}<div>{{ error }}</div></div>
+    {% else %}
+    <div class="perinfo muted sm">Período: <b>{{ periodo.desde|date:"d/m/Y" }} al {{ periodo.hasta|date:"d/m/Y" }}</b>{% if filtro.comparar %} · se compara con {{ resultado.anterior.desde|date:"d/m/Y" }} al {{ resultado.anterior.hasta|date:"d/m/Y" }}{% endif %}</div>
+    {% with a=resultado.actual %}
+
+    {% if pestana == "resumen" %}
+    {# ---------------------------------------------------------------- Resumen (stRes) ---------------------------------------------------------------- #}
+    <div class="kpis">
+      <a class="kpi" href="{% url 'estadisticas:consolidadas' %}?{{ consulta }}&amp;pestana=resultados"><div class="k">Ventas</div><div class="v">$ {{ a.libro.ventas|floatformat:"2g" }}</div><div class="d">{% if deltas.ventas %}<span class="dta {{ deltas.ventas.clase }}">{{ deltas.ventas.texto }}</span>{% endif %}</div></a>
+      <a class="kpi" href="{% url 'estadisticas:consolidadas' %}?{{ consulta }}&amp;pestana=compras"><div class="k">Compras recibidas</div><div class="v">$ {{ a.compras.total|floatformat:"2g" }}</div><div class="d">{% if deltas.compras %}<span class="dta {{ deltas.compras.clase }}">{{ deltas.compras.texto }}</span>{% endif %}</div></a>
+      <a class="kpi" href="{% url 'estadisticas:consolidadas' %}?{{ consulta }}&amp;pestana=resultados"><div class="k">Resultado</div><div class="v"{% if a.libro.resultado < 0 %} style="color:var(--status-danger)"{% endif %}>$ {{ a.libro.resultado|floatformat:"2g" }}</div><div class="d">{% if deltas.resultado %}<span class="dta {{ deltas.resultado.clase }}">{{ deltas.resultado.texto }}</span>{% endif %}</div></a>
+      <a class="kpi" href="{% url 'estadisticas:consolidadas' %}?{{ consulta }}&amp;pestana=produccion"><div class="k">Plantas cosechadas</div>
+        {% if a.por_invernadero.total.cosechadas is None %}<div class="v">—</div><div class="d"><span class="dta">Disponible cuando exista la cosecha</span></div>
+        {% else %}<div class="v">{{ a.por_invernadero.total.cosechadas|floatformat:"0g" }}</div><div class="d">{% if deltas.cosechadas %}<span class="dta {{ deltas.cosechadas.clase }}">{{ deltas.cosechadas.texto }}</span>{% endif %}</div>{% endif %}</a>
+    </div>
+
+    {% elif pestana == "produccion" %}
+    {# ---------------------------------------------------------------- Producción (stProd) ---------------------------------------------------------------- #}
+    {% with t=a.por_invernadero.total %}
+    <div class="kpis">
+      <div class="kpi"><div class="k">Plantas sembradas</div><div class="v">{{ t.sembradas|floatformat:"0g" }}</div><div class="d">{% if deltas.sembradas %}<span class="dta {{ deltas.sembradas.clase }}">{{ deltas.sembradas.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Plantas cosechadas</div>
+        {% if t.cosechadas is None %}<div class="v">—</div><div class="d"><span class="dta">Disponible cuando exista la cosecha</span></div>
+        {% else %}<div class="v">{{ t.cosechadas|floatformat:"0g" }}</div><div class="d">{% if deltas.cosechadas %}<span class="dta {{ deltas.cosechadas.clase }}">{{ deltas.cosechadas.texto }}</span>{% endif %}</div>{% endif %}</div>
+      <div class="kpi"><div class="k">Merma</div><div class="v">{% if t.merma is None %}—{% else %}{{ t.merma|floatformat:1 }} %{% endif %}</div><div class="d">{% if deltas.merma %}<span class="dta {{ deltas.merma.clase }}">{{ deltas.merma.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Órdenes a tiempo</div><div class="v">{% if t.ordenes_a_tiempo is None %}—{% else %}{{ t.ordenes_a_tiempo|floatformat:1 }} %{% endif %}</div><div class="d">{% if deltas.ordenes_a_tiempo %}<span class="dta {{ deltas.ordenes_a_tiempo.clase }}">{{ deltas.ordenes_a_tiempo.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Costo por planta cosechada</div>
+        {% if t.cosechadas is None %}<div class="v">—</div><div class="d"><span class="dta">Disponible cuando exista la cosecha</span></div>
+        {% else %}<div class="v">{% if t.costo_por_planta is None %}—{% else %}$ {{ t.costo_por_planta|floatformat:"2g" }}{% endif %}</div><div class="d">{% if deltas.costo_por_planta %}<span class="dta {{ deltas.costo_por_planta.clase }}">{{ deltas.costo_por_planta.texto }}</span>{% endif %}</div>{% endif %}</div>
+      <div class="kpi"><div class="k">Consumo de insumos</div><div class="v">$ {{ t.consumo|floatformat:"2g" }}</div><div class="d">{% if deltas.consumo %}<span class="dta {{ deltas.consumo.clase }}">{{ deltas.consumo.texto }}</span>{% endif %}</div></div>
+    </div>
+
+    <div class="stack">
+      <div class="card seg">
+        <div class="card-h"><h3>{% icono "leaf" 16 %} Producción por invernadero</h3><a class="link enlace-del-bloque" href="{{ enlace_de_produccion }}">Ver el detalle de producción</a></div>
+        <div class="card-b"><div class="chips" role="group" aria-label="Qué órdenes contar">
+          <button class="chip" type="submit" name="ordenes" value="todas" aria-pressed="{% if filtro.ordenes == 'todas' %}true{% else %}false{% endif %}">Todas las órdenes</button>
+          <button class="chip" type="submit" name="ordenes" value="produccion" aria-pressed="{% if filtro.ordenes == 'produccion' %}true{% else %}false{% endif %}">Solo de producción</button>
+        </div></div>
+        {% if not a.por_invernadero.filas and not a.por_invernadero.dados_de_baja %}
+        <div class="card-b"><span class="muted">No hay invernaderos activos para comparar.</span></div>
+        {% else %}
+        <div class="tablewrap" style="border:0;box-shadow:none"><table class="data-table"><thead><tr><th>Invernadero</th><th class="right">Sembradas</th><th class="right">Cosechadas</th><th class="right">Merma</th><th class="right">Órdenes a tiempo</th><th class="right">Costo por planta</th><th class="right">Consumo</th><th class="right">Alertas del IoT</th></tr></thead><tbody>
+          {% for f, enlace in filas_con_enlace %}
+          <tr><td><a class="link" href="{{ enlace }}">{{ f.nombre }}</a></td>{% include "estadisticas/_celdas_de_invernadero.html" with f=f %}</tr>
+          {% endfor %}
+          {% if a.por_invernadero.dados_de_baja %}
+          <tr><td>{{ a.por_invernadero.dados_de_baja.nombre }}<span class="sub2">Invernaderos dados de baja con actividad en el período</span></td>{% include "estadisticas/_celdas_de_invernadero.html" with f=a.por_invernadero.dados_de_baja %}</tr>
+          {% endif %}
+          <tr class="cat"><td>Total de la organización</td>{% include "estadisticas/_celdas_de_invernadero.html" with f=t %}</tr>
+        </tbody></table></div>
+        {% endif %}
+      </div>
+
+      <div class="card seg">
+        <div class="card-h"><h3>{% icono "box" 16 %} Merma en cámara</h3></div>
+        <div class="card-b">
+          <p class="muted sm" style="margin:0 0 10px">Partidas ya cosechadas que se perdieron en cámara. No entran en la merma de las plantas.</p>
+          <div class="hb">{% for f, ancho in barras_de_camara %}<div class="hb-r"><span class="hb-l">{{ f.texto }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>{{ f.plantas|floatformat:"0g" }} planta{{ f.plantas|pluralize }}</b></div>{% empty %}<div class="muted sm">No hubo mermas en cámara en el período.</div>{% endfor %}</div>
+          <div class="totrow" style="margin-top:12px;padding:12px 0 0"><span>Valor perdido</span><b>{% if a.merma_en_camara.valor is None %}—{% else %}$ {{ a.merma_en_camara.valor|floatformat:"2g" }}{% endif %}</b></div>
+          {% if a.merma_en_camara.sin_asiento %}<p class="muted sm" style="margin:8px 0 0">Todavía no hay asientos para estas mermas.</p>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endwith %}
+
+    {% elif pestana == "compras" %}
+    {# ---------------------------------------------------------------- Compras (stCmp) ---------------------------------------------------------------- #}
+    {% if not a.compras.por_proveedor and not a.compras.total %}
+    <div class="empty">{% icono "pkg" 28 %}<b>No se recibió mercadería en este período</b><span>Probá con otro rango de fechas.</span></div>
+    {% else %}
+    <div class="kpis">
+      <div class="kpi"><div class="k">Compras recibidas</div><div class="v">$ {{ a.compras.total|floatformat:"2g" }}</div><div class="d">{% if deltas.compras %}<span class="dta {{ deltas.compras.clase }}">{{ deltas.compras.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Proveedores con compras</div><div class="v">{{ a.compras.por_proveedor|length }}</div><div class="d"></div></div>
+      <div class="kpi"><div class="k">Rubros comprados</div><div class="v">{{ a.compras.por_categoria|length }}</div><div class="d"></div></div>
+    </div>
+    <p class="muted sm" style="margin:10px 0 0">Lo recibido en el período menos las correcciones de recepción del período, valorizado como el asiento de cada recepción.
+      {% if enlaces_de_recepciones %}Ver en el libro: recepciones {% for texto, url in enlaces_de_recepciones %}<a class="link" href="{{ url }}">{{ texto }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}
+      y correcciones {% for texto, url in enlaces_de_correcciones %}<a class="link" href="{{ url }}">{{ texto }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}.{% endif %}</p>
+    <div class="stack" style="margin-top:14px">
+      <div class="split">
+        <div class="card seg"><div class="card-h"><h3>{% icono "users" 16 %} Por proveedor</h3></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_proveedor %}<div class="hb-r"><span class="hb-l">{{ f.nombre }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% empty %}<div class="muted sm">Sin compras netas en el período.</div>{% endfor %}</div></div></div>
+        <div class="card seg"><div class="card-h"><h3>{% icono "box" 16 %} Por rubro</h3></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_categoria %}<div class="hb-r"><span class="hb-l">{{ f.nombre }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% empty %}<div class="muted sm">Sin compras netas en el período.</div>{% endfor %}</div></div></div>
+      </div>
+      <div class="card seg"><div class="card-h"><h3>{% icono "chart" 16 %} Compras por mes</h3></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_mes %}<div class="hb-r"><span class="hb-l">{{ f.mes|stringformat:"02d" }}/{{ f.anio }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% endfor %}</div></div></div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    {# ---------------------------------------------------------------- Resultados (stRtd) ---------------------------------------------------------------- #}
+    {% if not a.libro.ingresos_por_cuenta and not a.libro.costos_por_cuenta %}
+    <div class="empty">{% icono "book" 28 %}<b>No hay movimientos en este período</b><span>Probá con otro rango de fechas.</span></div>
+    {% else %}
+    <div class="kpis">
+      <div class="kpi"><div class="k">Ingresos</div><div class="v">$ {{ a.libro.ingresos|floatformat:"2g" }}</div><div class="d">{% if deltas.ingresos %}<span class="dta {{ deltas.ingresos.clase }}">{{ deltas.ingresos.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Egresos</div><div class="v">$ {{ a.libro.egresos|floatformat:"2g" }}</div><div class="d">{% if deltas.egresos %}<span class="dta {{ deltas.egresos.clase }}">{{ deltas.egresos.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Resultado</div><div class="v"{% if a.libro.resultado < 0 %} style="color:var(--status-danger)"{% endif %}>$ {{ a.libro.resultado|floatformat:"2g" }}</div><div class="d">{% if deltas.resultado %}<span class="dta {{ deltas.resultado.clase }}">{{ deltas.resultado.texto }}</span>{% endif %}</div></div>
+    </div>
+    {% if enlaces_al_libro|length > 1 %}<p class="muted sm" style="margin:10px 0 0">El período cruza dos ejercicios: las cifras suman los asientos de los dos, por su fecha. Ver el libro: {% for texto, url in enlaces_al_libro %}<a class="link" href="{{ url }}">{{ texto }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}.</p>{% endif %}
+    <div class="stack" style="margin-top:14px"><div class="split">
+      <div class="card seg"><div class="card-h"><h3>{% icono "chart" 16 %} De dónde vienen los ingresos</h3></div>
+        {% if ingresos_con_porcentaje %}<table class="data-table"><thead><tr><th>Cuenta</th><th class="right">Importe</th><th class="right">%</th></tr></thead><tbody>
+          {% for f, porcentaje, enlaces in ingresos_con_porcentaje %}<tr><td>{% for texto, url in enlaces %}{% if forloop.first %}<a class="link" href="{{ url }}">{{ f.nombre }}</a>{% else %} <a class="link" href="{{ url }}" aria-label="{{ f.nombre }}: {{ texto }}">({{ texto }})</a>{% endif %}{% empty %}{{ f.nombre }}{% endfor %}</td><td class="right nowrap">$ {{ f.monto|floatformat:"2g" }}</td><td class="right">{% if porcentaje is None %}—{% else %}{{ porcentaje|floatformat:0 }} %{% endif %}</td></tr>{% endfor %}
+        </tbody></table>{% else %}<div class="card-b"><span class="muted">Sin ingresos.</span></div>{% endif %}</div>
+      <div class="card seg"><div class="card-h"><h3>{% icono "cart" 16 %} En qué se gasta</h3></div>
+        {% if costos_con_porcentaje %}<table class="data-table"><thead><tr><th>Cuenta</th><th class="right">Importe</th><th class="right">%</th></tr></thead><tbody>
+          {% for f, porcentaje, enlaces in costos_con_porcentaje %}<tr><td>{% for texto, url in enlaces %}{% if forloop.first %}<a class="link" href="{{ url }}">{{ f.nombre }}</a>{% else %} <a class="link" href="{{ url }}" aria-label="{{ f.nombre }}: {{ texto }}">({{ texto }})</a>{% endif %}{% empty %}{{ f.nombre }}{% endfor %}</td><td class="right nowrap">$ {{ f.monto|floatformat:"2g" }}</td><td class="right">{% if porcentaje is None %}—{% else %}{{ porcentaje|floatformat:0 }} %{% endif %}</td></tr>{% endfor %}
+        </tbody></table>{% else %}<div class="card-b"><span class="muted">Sin egresos.</span></div>{% endif %}</div>
+    </div></div>
+    {% endif %}
+    {% endif %}
+
+    {% endwith %}
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

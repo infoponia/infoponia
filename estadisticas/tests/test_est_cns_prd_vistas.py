@@ -69,10 +69,13 @@ class EstCnsPrdVistaTests(ConCatalogoIot, TestCase):
         self.assertEqual(self.ver(self.gerente).status_code, 200)
 
     def test_regla_menu_la_entrada_es_del_agronomo_y_del_gerente(self):
-        """EST-CNS-PRD regla 9 (H28): la entrada «Estadísticas» del menú es del Agrónomo y del Gerente; el resto de los roles no la tiene."""
-        for rol, debe in ((Rol.AGRONOMO, True), (Rol.GERENTE, True), (Rol.VENDEDOR, False), (Rol.CONTADOR, False), (Rol.CAPATAZ, False), (Rol.TECNICO, False)):
+        """EST-CNS-PRD regla 9 (H28): la entrada «Estadísticas» del menú es del Agrónomo y del Gerente; el resto de los roles no la tiene. Desde EST-02 el
+        Agrónomo entra por la pantalla de producción y el Gerente, por las consolidadas (cuya pestaña «Producción» lleva a esta pantalla)."""
+        destinos = {Rol.AGRONOMO: "estadisticas:produccion", Rol.GERENTE: "estadisticas:consolidadas"}
+        for rol in (Rol.AGRONOMO, Rol.GERENTE, Rol.VENDEDOR, Rol.CONTADOR, Rol.CAPATAZ, Rol.TECNICO):
             with self.subTest(rol=rol):
-                self.assertEqual(("Estadísticas", "estadisticas:produccion", "chart") in menu_de(rol), debe)
+                entradas = [e for e in menu_de(rol) if e[0] == "Estadísticas"]
+                self.assertEqual(entradas, [("Estadísticas", destinos[rol], "chart")] if rol in destinos else [])
 
     def test_regla_menu_se_ve_en_el_marco_del_agronomo(self):
         """H28: el enlace del menú lleva a la pantalla."""

@@ -8,4 +8,5 @@ app_name = "estadisticas"
 
 urlpatterns = [
     path("", views.produccion, name="produccion"),
+    path("consolidadas/", views.consolidadas, name="consolidadas"),
 ]

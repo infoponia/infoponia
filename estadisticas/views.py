@@ -1,5 +1,6 @@
-# Vistas de `estadisticas` (EST-01): la pantalla «Estadísticas» de producción (EST-CNS-PRD) del Agrónomo y del Gerente. Las vistas solo orquestan:
-# leen el filtro (un GET: la URL se puede compartir y volver a abrir), llaman al servicio y arman lo que muestra la plantilla. No audita (regla 9).
+# Vistas de `estadisticas`: la pantalla «Estadísticas» de producción (EST-01, EST-CNS-PRD) del Agrónomo y del Gerente y las «Estadísticas consolidadas»
+# del Gerente (EST-02, EST-CNS-CNS). Las vistas solo orquestan: leen el filtro (un GET: la URL se puede compartir y volver a abrir), llaman al servicio y
+# arman lo que muestra la plantilla. No auditan (regla 9 de EST-CNS-PRD; regla 7 de EST-CNS-CNS).
 
 from urllib.parse import urlencode
 
@@ -13,7 +14,10 @@ from core.acceso import rol_de, rol_requerido
 from core.models import Usuario
 from estadisticas import periodos
 from estadisticas.presentacion import barras, delta
+from contabilidad.servicios.ejercicios import ejercicios_numerados
+from estadisticas.servicios import consolidadas as servicio_consolidado
 from estadisticas.servicios import produccion as servicio
+from estadisticas.servicios.produccion import _porcentaje
 from maestros.models import Invernadero
 from produccion import formularios
 
@@ -108,7 +112,14 @@ def produccion(request):
     del Gerente, comparados con el período anterior. Es una consulta GET: funciona sin JavaScript y no se audita."""
     hoy = timezone.localdate()
     filtro = _filtro(request.GET)
-    contexto = {"filtro": filtro, "atajos": periodos.TEXTOS_DE_ATAJO.items(), "hoy": hoy, "error": None, "resultado": None}
+    contexto = {
+        "filtro": filtro,
+        "atajos": periodos.TEXTOS_DE_ATAJO.items(),
+        "hoy": hoy,
+        "error": None,
+        "resultado": None,
+        "es_gerente": rol_de(request.user) == GERENTE,
+    }
     try:
         periodo = _periodo(filtro, hoy)
         resultado = servicio.estadisticas_de_produccion(
@@ -134,3 +145,135 @@ def produccion(request):
         barras_de_alertas=barras(actual.alertas_iot.filas, lambda f: f.cantidad) if actual.alertas_iot else [],
     )
     return render(request, "estadisticas/produccion.html", contexto)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Estadísticas consolidadas del Gerente (EST-02)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+TEXTOS_DE_PESTANA = {"resumen": "Resumen", "produccion": "Producción", "compras": "Compras", "resultados": "Resultados"}
+
+
+def _ejercicios_del_periodo(periodo):
+    """Los ejercicios que toca el período (uno, o dos si lo cruza): el libro filtra de a un ejercicio, así que cada enlace lleva el suyo."""
+    return [
+        e
+        for e in ejercicios_numerados()
+        if e.ejercicio.fecha_inicio_ejercicio <= periodo.hasta and e.ejercicio.fecha_cierre_ejercicio >= periodo.desde
+    ]
+
+
+def _enlaces_al_libro(periodo, **filtros):
+    """`[(texto, url)]`: la consulta del libro de gestión (cronológica) con el mismo período y los `filtros`, una por ejercicio que toca el período
+    (D-93 punto 6, EST-CNS-CNS regla 4). Solo el Gerente llega acá y puede abrir el libro (D-30)."""
+    enlaces = []
+    for e in _ejercicios_del_periodo(periodo):
+        consulta = {
+            "ejercicio": e.ejercicio.pk,
+            "desde": max(periodo.desde, e.ejercicio.fecha_inicio_ejercicio).isoformat(),
+            "hasta": periodo.hasta.isoformat(),
+            **filtros,
+        }
+        enlaces.append((f"Ejercicio {e.numero}", reverse("contabilidad:libro") + "?" + urlencode(consulta)))
+    return enlaces
+
+
+def _enlace_de_produccion(periodo, invernadero_id=None):
+    """La pantalla de producción (EST-01) con el mismo período (personalizado) y, si se indica, ese invernadero (regla 5 de EST-CNS-PRD)."""
+    consulta = {"enviado": 1, "periodo": "personalizado", "desde": periodo.desde.isoformat(), "hasta": periodo.hasta.isoformat()}
+    if invernadero_id:
+        consulta["invernadero"] = invernadero_id
+    return reverse("estadisticas:produccion") + "?" + urlencode(consulta)
+
+
+def _con_porcentaje(filas, total, periodo):
+    """`[(fila, % del total, enlaces al libro)]` de las filas de un detalle por cuenta: el prototipo muestra el % de cada cuenta y cada una lleva a sus
+    asientos del libro, con el mismo período (uno por ejercicio que toca el período)."""
+    return [(f, _porcentaje(f.monto, total), _enlaces_al_libro(periodo, cuenta=f.codigo)) for f in filas]
+
+
+def _deltas_consolidadas(resultado):
+    """El texto de comparación de cada cifra (vacío si la comparación está apagada). Egresos, compras, consumo y merma mejoran si bajan."""
+    c = resultado.comparaciones
+    if not c:
+        return {}
+
+    def delta_de(clave, **opciones):
+        return delta(c.get(clave), **opciones)
+
+    return {
+        "ventas": delta_de("ventas", decimales=2),
+        "compras": delta_de("compras", mejor_si_sube=False, decimales=2),
+        "resultado": delta_de("resultado", decimales=2),
+        "ingresos": delta_de("ingresos", decimales=2),
+        "egresos": delta_de("egresos", mejor_si_sube=False, decimales=2),
+        "sembradas": delta_de("sembradas"),
+        "cosechadas": delta_de("cosechadas"),
+        "merma": delta_de("merma", mejor_si_sube=False, decimales=1, unidad="pts", con_porcentaje=False),
+        "ordenes_a_tiempo": delta_de("ordenes_a_tiempo", decimales=1, unidad="pts", con_porcentaje=False),
+        "costo_por_planta": delta_de("costo_por_planta", mejor_si_sube=False, decimales=2),
+        "consumo": delta_de("consumo", mejor_si_sube=False, decimales=2),
+        "alertas_iot": delta_de("alertas_iot", mejor_si_sube=False),
+    }
+
+
+def _contexto_de_la_pestana(resultado):
+    """Lo que la plantilla necesita de cada pestaña (barras, porcentajes y enlaces) además del resultado del servicio."""
+    pestana, periodo, actual = resultado.pestana, resultado.periodo, resultado.actual
+    contexto = {}
+    if pestana == "produccion":
+        contexto["barras_de_camara"] = barras(actual.merma_en_camara.causas, lambda f: f.plantas)
+        contexto["enlace_de_produccion"] = _enlace_de_produccion(periodo)
+        contexto["filas_con_enlace"] = [(f, _enlace_de_produccion(periodo, f.invernadero_id)) for f in actual.por_invernadero.filas]
+    elif pestana == "compras":
+        compras = actual.compras
+        contexto["barras_por_proveedor"] = barras(compras.por_proveedor, lambda f: max(f.monto, 0))
+        contexto["barras_por_categoria"] = barras(compras.por_categoria, lambda f: max(f.monto, 0))
+        contexto["barras_por_mes"] = barras(compras.por_mes, lambda f: max(f.monto, 0))
+        contexto["enlaces_de_recepciones"] = _enlaces_al_libro(periodo, origen="recepcion")
+        contexto["enlaces_de_correcciones"] = _enlaces_al_libro(periodo, origen="correccion_de_recepcion")
+    elif pestana == "resultados":
+        libro = actual.libro
+        contexto["ingresos_con_porcentaje"] = _con_porcentaje(libro.ingresos_por_cuenta, libro.ingresos, periodo)
+        contexto["costos_con_porcentaje"] = _con_porcentaje(libro.costos_por_cuenta, libro.egresos, periodo)
+        contexto["enlaces_al_libro"] = _enlaces_al_libro(periodo)
+    return contexto
+
+
+@rol_requerido(GERENTE)
+@require_safe
+def consolidadas(request):
+    """«Estadísticas» consolidadas del Gerente (EST-CNS-CNS): las pestañas Resumen, Producción, Compras y Resultados del período elegido, comparadas
+    con el período anterior. Es una consulta GET (funciona sin JavaScript y no se audita); el filtro del período es el de EST-01. Lo comercial
+    (indicador 8) llega con EST-03."""
+    hoy = timezone.localdate()
+    filtro = _filtro(request.GET)
+    pestana = _ultimo(request.GET, "pestana")
+    pestana = pestana if pestana in servicio_consolidado.PESTANAS else "resumen"
+    contexto = {
+        "filtro": filtro,
+        "pestana": pestana,
+        "pestanas": TEXTOS_DE_PESTANA.items(),
+        "atajos": periodos.TEXTOS_DE_ATAJO.items(),
+        "hoy": hoy,
+        "error": None,
+        "resultado": None,
+    }
+    try:
+        periodo = _periodo(filtro, hoy)
+    except ValidationError as error:
+        contexto["error"] = error.messages[0]  # un período inválido no muestra datos, pero el formulario sigue ahí para corregirlo
+        return render(request, "estadisticas/consolidadas.html", contexto)
+    resultado = servicio_consolidado.estadisticas_consolidadas(
+        request.user, pestana, periodo, filtro["comparar"], hoy, solo_produccion=filtro["ordenes"] == "produccion"
+    )
+    # Los enlaces de las cifras del Resumen a su pestaña conservan el filtro (sin la pestaña).
+    parametros = {"enviado": 1, "periodo": filtro["periodo"], "ordenes": filtro["ordenes"]}
+    if filtro["periodo"] == "personalizado":
+        parametros.update(desde=periodo.desde.isoformat(), hasta=periodo.hasta.isoformat())
+    if filtro["comparar"]:
+        parametros["comparar"] = "on"
+    contexto.update(
+        resultado=resultado, periodo=periodo, consulta=urlencode(parametros), deltas=_deltas_consolidadas(resultado), **_contexto_de_la_pestana(resultado)
+    )
+    return render(request, "estadisticas/consolidadas.html", contexto)

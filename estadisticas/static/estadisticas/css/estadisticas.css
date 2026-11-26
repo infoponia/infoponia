@@ -25,3 +25,8 @@
 .est .enlace-del-bloque{font-size:13px;margin-left:auto}
 .est .default-oculto{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 @media (max-width:760px){.est .hb-r{grid-template-columns:1fr auto}.est .hb-t{grid-column:1/-1;order:3}}
+/* EST-02: las cifras del Resumen son enlaces a su pestaña; las pestañas son botones que envían el formulario. */
+.est a.kpi{color:inherit;text-decoration:none}
+.est a.kpi:hover{border-color:var(--border-strong);box-shadow:0 2px 8px rgba(16,24,40,.07)}
+.est .tabs .tab{cursor:pointer}
+.est .data-table tr.cat td{border-top:2px solid var(--border-strong)}

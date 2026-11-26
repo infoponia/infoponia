@@ -13,7 +13,7 @@ from django.utils import timezone
 from inventario.tests.fabricas import categoria_del_sistema, existencia, insumo
 from produccion.models import AplicacionInsumos, Consumo, Merma, MovimientoStock, OrdenTrabajo, Siembra
 from produccion.servicios import ordenes
-from produccion.tests.fabricas import cosecha, insumo_adicional, invernadero_con_produccion, lote_activo, lote_de_carga_inicial, variedad_con_stock
+from produccion.tests.fabricas import cosecha, insumo_adicional, invernadero_con_produccion, lote_activo, lote_de_carga_inicial, partida_de, variedad_con_stock
 
 HOY = date(2026, 11, 26)
 DESDE = date(2026, 11, 1)  # el mes de HOY: el período por defecto es DESDE … HOY
@@ -95,6 +95,23 @@ def merma_de(lote, cantidad, causa, fecha, *, orden_de_entrega=None):
     )
 
 
+def merma_de_camara(lote, cantidad, causa, fecha, costo_unitario="2.5000"):
+    """Una merma de partida en cámara tal como la deja `camara.aplicar_merma_de_partida`: la `Merma` (sin etapa) y su `MovimientoStock`
+    `merma_en_camara` (origen: la merma; costo: el de la partida). Su costo es `cantidad × costo_unitario`; con `costo_unitario` en 0 no tiene costo
+    y, por la regla H11, nunca tendrá asiento."""
+    merma = merma_de(lote, cantidad, causa, fecha)
+    partida = partida_de(lote, disponible=cantidad, costo=costo_unitario)
+    MovimientoStock.objects.create(
+        fecha=timezone.make_aware(datetime.combine(fecha, time(10, 0))),
+        cantidad=cantidad,
+        tipo_movimiento=MovimientoStock.TipoMovimiento.MERMA_EN_CAMARA,
+        costo_unitario=Decimal(costo_unitario),
+        origen_id=merma.pk,
+        partida=partida,
+    )
+    return merma
+
+
 def salida_por_cosecha(lote, cantidad, fecha, costo_unitario="2.0000", *, hora=time(12, 0), tipo="salida_por_cosecha", escenario=None):
     """Un `MovimientoStock` de salida del `lote` el `fecha` a las `hora` (hora local). Por defecto una salida por cosecha; `tipo` permite
     armar una `salida_por_merma` (que EST no cuenta). Su origen es una cosecha concretada ese día y a tiempo."""
@@ -155,6 +172,6 @@ def instante_utc(anio, mes, dia, hora, minuto=0):
 
 
 __all__ = [
-    "HOY", "DESDE", "dos_invernaderos", "lote_sembrado", "lote_cargado", "otra_variedad", "nombre_de", "orden", "merma_de",
+    "HOY", "DESDE", "dos_invernaderos", "lote_sembrado", "lote_cargado", "otra_variedad", "nombre_de", "orden", "merma_de", "merma_de_camara",
     "salida_por_cosecha", "aplicacion_de", "consumo_de", "existencia_de_envase", "existencia_de", "instante_utc", "insumo_adicional",
 ]
