@@ -1,6 +1,6 @@
 # Estadísticas consolidadas del Gerente (EST-CNS-CNS, EST-02; D-93 punto 4): una función por indicador, todas de solo lectura y con un número fijo
 # de consultas agregadas por bloque (D-93 punto 7), más `estadisticas_consolidadas`, que arma la pestaña elegida. Dinero y porcentajes en `Decimal`.
-# Indicador 7 («producción comparando invernaderos») reutiliza los filtros de EST-01 (`produccion._…`); el 8 (comerciales) es de EST-03.
+# Indicador 7 («producción comparando invernaderos») reutiliza los filtros de EST-01 (`produccion._…`); el 8 (comerciales, EST-03) llama a `comercial` (H25).
 # Diferencia con D-93 punto 4.7 (decidida por el estudiante, 26/11/2026): además de una fila por invernadero activo hay una fila «Dados de baja» y el
 # total es el de toda la organización (igual al de EST-01 para el Gerente); así no se pierde la historia de un invernadero dado de baja en el período.
 
@@ -10,6 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, DecimalField, Exists, ExpressionWrapper, F, OuterRef, Q, Subquery, Sum
 
+from comercial.servicios import estadisticas as estadisticas_comerciales
 from compras.models import DetalleCorreccionRecepcion, DetalleOrdenCompra, DetalleRecepcion
 from compras.precios import valor_recibido
 from contabilidad import cuentas
@@ -43,10 +44,16 @@ Compras = namedtuple("Compras", "total por_proveedor por_categoria por_mes")
 FilaDeCuenta = namedtuple("FilaDeCuenta", "codigo nombre monto")
 LibroDeGestion = namedtuple("LibroDeGestion", "ventas ingresos egresos resultado ingresos_por_cuenta costos_por_cuenta")
 
-PESTANAS = ("resumen", "produccion", "compras", "resultados")
+def _exigir_gerente(actor):
+    """Regla 1 de EST-CNS-CNS: solo el Gerente activo (el Contador tiene el libro; el Vendedor, sus estadísticas comerciales). `PermissionDenied` si no."""
+    if actor is None or not getattr(actor, "is_active", False) or rol_de(actor) != Usuario.Rol.GERENTE:
+        raise PermissionDenied("Solo el Gerente consulta las estadísticas consolidadas.")
+
+
+PESTANAS = ("resumen", "produccion", "comercial", "compras", "resultados")
 # Lo que arma `estadisticas_consolidadas`. Solo se llenan los indicadores que la pestaña muestra; `previo` es el mismo armado del período anterior.
 Consolidadas = namedtuple("Consolidadas", "pestana periodo anterior actual previo comparaciones")
-Bloques = namedtuple("Bloques", "por_invernadero merma_en_camara compras libro")
+Bloques = namedtuple("Bloques", "por_invernadero merma_en_camara comerciales compras libro")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -182,6 +189,20 @@ def merma_en_camara(periodo):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
+# Indicador 8 · Comerciales (EST-03)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+def comerciales(actor, periodo, hoy):
+    """Indicador 8 (EST-CNS-CNS regla 3.2; D-93 puntos 2 y 4.8): los de COM-CNS-EST para el período, de todos los invernaderos y todos los Vendedores.
+    NO recalcula nada (H25): arma los filtros con `filtros_de_estadisticas` (rango del período, sin invernadero ni Vendedor) y devuelve lo que da
+    `estadisticas` de `comercial`. Solo el Gerente activo (regla 1 de EST-CNS-CNS; el Vendedor ve lo suyo en Comercial). Lectura pura, sin auditoría."""
+    _exigir_gerente(actor)
+    filtros = estadisticas_comerciales.filtros_de_estadisticas(actor, {"periodo": "rango", "desde": periodo.desde.isoformat(), "hasta": periodo.hasta.isoformat()}, hoy)
+    return estadisticas_comerciales.estadisticas(actor, filtros, hoy)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
 # Indicador 9 · Compras
 # ---------------------------------------------------------------------------------------------------------------------------------
 
@@ -295,12 +316,13 @@ def libro(periodo):
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 
-def _bloques(pestana, periodo, hoy, solo_produccion):
+def _bloques(actor, pestana, periodo, hoy, solo_produccion):
     """Solo los indicadores que muestra la pestaña (los demás quedan en `None` y no se calculan): el Resumen toma un dato de cada uno."""
     resumen = pestana == "resumen"
     return Bloques(
         por_invernadero(periodo, hoy, solo_produccion) if pestana == "produccion" or resumen else None,
         merma_en_camara(periodo) if pestana == "produccion" else None,
+        comerciales(actor, periodo, hoy) if pestana == "comercial" else None,
         compras(periodo) if pestana == "compras" or resumen else None,
         libro(periodo) if pestana == "resultados" or resumen else None,
     )
@@ -329,6 +351,24 @@ def _comparaciones(pestana, actual, previo):
         if a.alertas_iot is not None and p.alertas_iot is not None:
             comparaciones["alertas_iot"] = c(a.alertas_iot, p.alertas_iot)
         return comparaciones
+    if pestana == "comercial":
+        # Decisión del estudiante (26/11/2026): se comparan los totales; la cobranza es una foto a hoy (igual en los dos períodos) y las filas por
+        # variedad y por cliente no se comparan.
+        a, p = actual.comerciales, previo.comerciales
+        return {
+            "ventas_monto": c(a.ventas.total, p.ventas.total),
+            "ventas_entregas": c(a.ventas.entregas, p.ventas.entregas),
+            "ventas_plantas": c(a.ventas.plantas, p.ventas.plantas),
+            "a_tiempo": c(a.puntualidad.porcentaje_a_tiempo, p.puntualidad.porcentaje_a_tiempo),
+            "promedio_de_retraso": c(a.puntualidad.promedio_de_retraso, p.puntualidad.promedio_de_retraso),
+            "intentos_fallidos": c(a.puntualidad.intentos_fallidos, p.puntualidad.intentos_fallidos),
+            "incumplimientos": c(a.incumplimientos.cantidad, p.incumplimientos.cantidad),
+            "indemnizado": c(a.incumplimientos.total, p.incumplimientos.total),
+            "con_faltante": c(a.faltantes.con_faltante, p.faltantes.con_faltante),
+            "rechazados_por_cantidad": c(a.faltantes.rechazados_por_cantidad, p.faltantes.rechazados_por_cantidad),
+            "rechazados_al_recibir": c(a.faltantes.rechazados_al_recibir, p.faltantes.rechazados_al_recibir),
+            "cancelados": c(a.faltantes.cancelados, p.faltantes.cancelados),
+        }
     if pestana == "compras":
         return {"compras": c(actual.compras.total, previo.compras.total)}
     return {
@@ -341,11 +381,10 @@ def _comparaciones(pestana, actual, previo):
 def estadisticas_consolidadas(actor, pestana, periodo, comparar, hoy, solo_produccion=False):
     """Arma la pestaña `pestana` (`PESTANAS`) del período y, con `comparar`, la del período anterior de igual duración. Solo el Gerente activo
     (EST-CNS-CNS regla 1; `PermissionDenied`: el Contador tiene el libro y el Vendedor, sus estadísticas comerciales). Es una consulta: no audita (regla 7)."""
-    if actor is None or not getattr(actor, "is_active", False) or rol_de(actor) != Usuario.Rol.GERENTE:
-        raise PermissionDenied("Solo el Gerente consulta las estadísticas consolidadas.")
+    _exigir_gerente(actor)
     if pestana not in PESTANAS:
         raise ValueError(f"Pestaña desconocida: {pestana!r} (usá {', '.join(PESTANAS)}).")
     del_anterior = periodos.anterior(periodo)
-    actual = _bloques(pestana, periodo, hoy, solo_produccion)
-    previo = _bloques(pestana, del_anterior, hoy, solo_produccion) if comparar else None
+    actual = _bloques(actor, pestana, periodo, hoy, solo_produccion)
+    previo = _bloques(actor, pestana, del_anterior, hoy, solo_produccion) if comparar else None
     return Consolidadas(pestana, periodo, del_anterior, actual, previo, _comparaciones(pestana, actual, previo) if previo else {})

@@ -139,8 +139,4 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 
 ### Ronda «Estadísticas 1» (D-93)
 
-Plan completo en `docs/tareas/ronda_estadisticas_1.md`. Va última; EST-03 espera a COM-08c.
-
-| ID | Título | App | Estado | Depende de / espera | Archivo |
-|---|---|---|---|---|---|
-| EST-03 | Lo comercial dentro de las consolidadas | estadisticas | pendiente | EST-02 (hecha), COM-08c | `estadisticas/EST-03-estadisticas-comerciales-en-las-consolidadas.md` |
+Plan completo en `docs/tareas/ronda_estadisticas_1.md`. Sin tareas pendientes: EST-03 (26/11/2026) cerró la ronda.

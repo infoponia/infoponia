@@ -104,6 +104,10 @@ Las barras son de CSS: sin bibliotecas de gráficos. «—» es un valor sin bas
     </div>
     {% endwith %}
 
+    {% elif pestana == "comercial" %}
+    {# ---------------------------------------------------------------- Comercial (stCom; EST-03) ---------------------------------------------------------------- #}
+    {% include "estadisticas/_comercial.html" %}
+
     {% elif pestana == "compras" %}
     {# ---------------------------------------------------------------- Compras (stCmp) ---------------------------------------------------------------- #}
     {% if not a.compras.por_proveedor and not a.compras.total %}

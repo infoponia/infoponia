@@ -151,7 +151,7 @@ def produccion(request):
 # Estadísticas consolidadas del Gerente (EST-02)
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-TEXTOS_DE_PESTANA = {"resumen": "Resumen", "produccion": "Producción", "compras": "Compras", "resultados": "Resultados"}
+TEXTOS_DE_PESTANA = {"resumen": "Resumen", "produccion": "Producción", "comercial": "Comercial", "compras": "Compras", "resultados": "Resultados"}
 
 
 def _ejercicios_del_periodo(periodo):
@@ -214,6 +214,19 @@ def _deltas_consolidadas(resultado):
         "costo_por_planta": delta_de("costo_por_planta", mejor_si_sube=False, decimales=2),
         "consumo": delta_de("consumo", mejor_si_sube=False, decimales=2),
         "alertas_iot": delta_de("alertas_iot", mejor_si_sube=False),
+        # Pestaña «Comercial» (EST-03): sube es bueno en ventas y en puntualidad; es malo en retraso, intentos, incumplimientos y faltantes.
+        "ventas_monto": delta_de("ventas_monto", decimales=2),
+        "ventas_entregas": delta_de("ventas_entregas"),
+        "ventas_plantas": delta_de("ventas_plantas"),
+        "a_tiempo": delta_de("a_tiempo", decimales=1, unidad="pts", con_porcentaje=False),
+        "promedio_de_retraso": delta_de("promedio_de_retraso", mejor_si_sube=False, decimales=1, unidad="días", con_porcentaje=False),
+        "intentos_fallidos": delta_de("intentos_fallidos", mejor_si_sube=False),
+        "incumplimientos": delta_de("incumplimientos", mejor_si_sube=False),
+        "indemnizado": delta_de("indemnizado", mejor_si_sube=False, decimales=2),
+        "con_faltante": delta_de("con_faltante", mejor_si_sube=False),
+        "rechazados_por_cantidad": delta_de("rechazados_por_cantidad", mejor_si_sube=False),
+        "rechazados_al_recibir": delta_de("rechazados_al_recibir", mejor_si_sube=False),
+        "cancelados": delta_de("cancelados", mejor_si_sube=False),
     }
 
 
@@ -225,6 +238,10 @@ def _contexto_de_la_pestana(resultado):
         contexto["barras_de_camara"] = barras(actual.merma_en_camara.causas, lambda f: f.plantas)
         contexto["enlace_de_produccion"] = _enlace_de_produccion(periodo)
         contexto["filas_con_enlace"] = [(f, _enlace_de_produccion(periodo, f.invernadero_id)) for f in actual.por_invernadero.filas]
+    elif pestana == "comercial":
+        # Los enlaces de cada indicador ya vienen de `comercial` (regla 10 de COM-CNS-EST); este lleva a la misma pantalla con el período (la puede abrir el Gerente, D-30).
+        consulta = {"periodo": "rango", "desde": periodo.desde.isoformat(), "hasta": periodo.hasta.isoformat()}
+        contexto["enlace_a_comercial"] = reverse("comercial:estadisticas") + "?" + urlencode(consulta)
     elif pestana == "compras":
         compras = actual.compras
         contexto["barras_por_proveedor"] = barras(compras.por_proveedor, lambda f: max(f.monto, 0))
@@ -243,9 +260,8 @@ def _contexto_de_la_pestana(resultado):
 @rol_requerido(GERENTE)
 @require_safe
 def consolidadas(request):
-    """«Estadísticas» consolidadas del Gerente (EST-CNS-CNS): las pestañas Resumen, Producción, Compras y Resultados del período elegido, comparadas
-    con el período anterior. Es una consulta GET (funciona sin JavaScript y no se audita); el filtro del período es el de EST-01. Lo comercial
-    (indicador 8) llega con EST-03."""
+    """«Estadísticas» consolidadas del Gerente (EST-CNS-CNS): las pestañas Resumen, Producción, Comercial, Compras y Resultados del período elegido, comparadas
+    con el período anterior. Es una consulta GET (funciona sin JavaScript y no se audita); el filtro del período es el de EST-01. La pestaña «Comercial» (indicador 8, EST-03) muestra lo de `comercial`."""
     hoy = timezone.localdate()
     filtro = _filtro(request.GET)
     pestana = _ultimo(request.GET, "pestana")

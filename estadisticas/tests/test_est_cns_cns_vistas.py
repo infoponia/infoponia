@@ -1,14 +1,18 @@
-# Pruebas de la pantalla «Estadísticas» consolidadas (EST-02, paso 4): acceso solo del Gerente, las cuatro pestañas, el período por GET, la comparación, los
+# Pruebas de la pantalla «Estadísticas» consolidadas (EST-02, paso 4; EST-03, paso 2: la pestaña «Comercial»): acceso solo del Gerente, las pestañas, el período por GET, la comparación, los
 # enlaces y el menú. Fuente: EST-CNS-CNS reglas 1, 2, 4 y 7 (docs/casos_de_uso/estadisticas/estadisticas.md) y D-93 puntos 2 y 6. El día de «hoy» se fija en `HOY`
 # (26/11/2026) con un `patch` de `timezone.localdate`, así las pruebas no dependen del día en que corren.
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
+from comercial.templatetags.comercial import pesos, porcentaje
+from comercial.tests.fabricas import discrepancia_aceptada
+from comercial.tests.test_com_cns_est import BaseDeEstadisticas
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
 from contabilidad.models import EjercicioContable
@@ -24,6 +28,11 @@ from maestros.tests.fabricas import crear_agronomo, crear_tecnico, crear_vendedo
 URL = reverse("estadisticas:consolidadas")
 Rol = Usuario.Rol
 D = Decimal
+
+
+def sin_filtros_de(resultado):
+    """Los indicadores de un `Estadisticas` de comercial sin sus filtros (las opciones de los desplegables no son números)."""
+    return tuple(resultado[1:])
 
 
 class EstCnsCnsVistaTests(PlanDeCuentasMixin, ConCatalogoIot, TestCase):
@@ -95,13 +104,13 @@ class EstCnsCnsVistaTests(PlanDeCuentasMixin, ConCatalogoIot, TestCase):
 
     # ---- Pestañas ----
 
-    def test_pestanas_la_pantalla_ofrece_resumen_produccion_compras_y_resultados(self):
-        """Prototipo `statsTabs` (sin «Comercial», que llega con EST-03): cuatro pestañas; abre en «Resumen» y una pestaña desconocida también."""
+    def test_pestanas_la_pantalla_ofrece_resumen_produccion_comercial_compras_y_resultados(self):
+        """Prototipo `statsTabs` y EST-03: cinco pestañas, en ese orden (la «Comercial» llegó con EST-03 y antes no estaba); abre en «Resumen» y una pestaña desconocida también."""
         respuesta = self.ver()
         self.assertEqual(respuesta.context["pestana"], "resumen")
-        for codigo in ("resumen", "produccion", "compras", "resultados"):
-            self.assertContains(respuesta, f'name="pestana" value="{codigo}"')
-        self.assertNotContains(respuesta, 'value="comercial"')
+        contenido = respuesta.content.decode()
+        posiciones = [contenido.index(f'name="pestana" value="{codigo}"') for codigo in ("resumen", "produccion", "comercial", "compras", "resultados")]
+        self.assertEqual(posiciones, sorted(posiciones))
         self.assertEqual(self.ver(pestana="inventada").context["pestana"], "resumen")
 
     def test_pestana_resumen_muestra_ventas_compras_resultado_y_plantas_cosechadas(self):
@@ -235,3 +244,119 @@ class EstCnsCnsVistaTests(PlanDeCuentasMixin, ConCatalogoIot, TestCase):
         self.assertContains(self.client.get(produccion), "Estadísticas consolidadas")
         self.client.force_login(self.n.agronomo)
         self.assertNotContains(self.client.get(produccion), "Estadísticas consolidadas")
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Pestaña «Comercial» (EST-03, paso 2; EST-CNS-CNS regla 3.2; D-93 puntos 2 y 4.8)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+class EstCnsCnsComercialVistaTests(BaseDeEstadisticas):
+    """La pestaña «Comercial» de las consolidadas. Datos de COM-08c (`BaseDeEstadisticas`), armados relativos al día real, así que la pantalla usa el día real."""
+
+    def ver(self, cuenta=None, **parametros):
+        """Abre la pestaña «Comercial» como `cuenta` (por defecto, el Gerente) con los parámetros GET."""
+        self.client.force_login(cuenta or self.gerente)
+        return self.client.get(URL, {"pestana": "comercial", **parametros})
+
+    def con_datos(self):
+        """Una venta del mes, una del mes anterior, un suministro en mora con una discrepancia aceptada y un faltante: algo en cada bloque."""
+        self.venta(cantidad=10, precio="100.00", pactada=-1)
+        self.venta(cantidad=5, precio="100.00", hace=(timezone.localdate() - (timezone.localdate().replace(day=1) - timedelta(days=1))).days)
+        discrepancia_aceptada(self.en_mora(10), monto="50.00", descontado="50.00", con_alerta=False)
+        self.con_faltante()
+
+    def test_regla_1_solo_el_gerente_ve_la_pestana(self):
+        """EST-CNS-CNS regla 1: el Vendedor (que ve lo suyo en Comercial), el Agrónomo y el Contador reciben 403 también con `pestana=comercial`."""
+        for cuenta in (self.e.vendedor, self.e.agronomo, crear_cuenta(Contador, email="contador@infoponia.com")):
+            with self.subTest(cuenta=cuenta.pk):
+                self.assertEqual(self.ver(cuenta).status_code, 403)
+
+    def test_regla_3_2_muestra_las_cuatro_tarjetas_y_los_seis_bloques_con_los_textos_de_comercial(self):
+        """EST-CNS-CNS regla 3.2 y «Hecho cuando»: las tarjetas, los bloques y los textos explicativos son los de «Comercial › Estadísticas» (COM-08c)."""
+        self.con_datos()
+        respuesta = self.ver()
+        self.assertEqual(respuesta.status_code, 200)
+        for texto in (
+            "Ventas", "Entregas a tiempo", "Indemnizado", "Cobranza en mora", "Ventas por variedad", "Entregas a tiempo y con retraso", "Incumplimientos aceptados",
+            "Cobranza a la fecha", "Faltantes y rechazos de compra-venta", "Clientes con más compras", "En mora hasta 30 días",
+            "Intentos de entrega fallidos", "Descuentos sobre el monto a cobrar", "Pagadas en dinero",
+            "A tiempo es en la fecha prometida al cliente o antes (la pactada o la del período), aunque la entrega se haya reprogramado.",
+            "Quejas y discrepancias que el Gerente aceptó en el período. Las anuladas no cuentan.",
+            "Productos de compra-venta que no se pudieron entregar completos o que el cliente no aceptó.",
+            "Las ventas se cuentan cuando se concreta la entrega y no descuentan indemnizaciones. La cobranza es la situación de hoy.",
+        ):
+            self.assertContains(respuesta, texto)
+
+    def test_hecho_cuando_el_gerente_ve_los_mismos_numeros_que_en_comercial_para_el_mismo_periodo(self):
+        """«Hecho cuando» de EST-03: cada monto, porcentaje y cantidad de la pestaña aparece con el mismo formato en «Comercial › Estadísticas» (Gerente, mismo rango)."""
+        self.con_datos()
+        hoy = timezone.localdate()
+        rango = {"desde": hoy.replace(day=1).isoformat(), "hasta": hoy.isoformat()}
+        consolidadas_ = self.ver(periodo="personalizado", **rango)
+        self.client.force_login(self.gerente)
+        en_comercial = self.client.get(reverse("comercial:estadisticas"), {"periodo": "rango", **rango})
+        datos = consolidadas_.context["resultado"].actual.comerciales
+        self.assertEqual(sin_filtros_de(datos), sin_filtros_de(en_comercial.context["datos"]))
+        for valor in (
+            pesos(datos.ventas.total), porcentaje(datos.puntualidad.porcentaje_a_tiempo), pesos(datos.incumplimientos.total), pesos(datos.cobranza.en_mora_total),
+            pesos(datos.cobranza.pendiente_total), pesos(datos.cobranza.hasta_30), pesos(datos.incumplimientos.descuentos), datos.clientes[0].nombre,
+        ):
+            with self.subTest(valor=valor):
+                self.assertContains(consolidadas_, valor)
+                self.assertContains(en_comercial, valor)
+
+    def test_d93_punto_2_los_totales_se_comparan_con_el_periodo_anterior_y_la_cobranza_no(self):
+        """D-93 punto 2 y decisión del estudiante (26/11/2026): las ventas llevan su diferencia frente al período anterior; la cobranza dice que es la situación de hoy, sin comparación."""
+        self.con_datos()
+        respuesta = self.ver(enviado=1, comparar="on")
+        deltas = respuesta.context["deltas"]
+        self.assertEqual(deltas["ventas_monto"]["clase"], "up")  # vendió más que el mes anterior
+        self.assertContains(respuesta, "frente al período anterior")
+        self.assertContains(respuesta, "no se compara con el período anterior")
+        self.assertNotIn("cobranza", " ".join(deltas))
+
+    def test_regla_2_con_la_comparacion_apagada_no_hay_diferencias(self):
+        """EST-CNS-CNS regla 2: sin «Comparar con el período anterior» la pestaña no muestra diferencias."""
+        self.con_datos()
+        respuesta = self.ver(enviado=1)
+        self.assertEqual(respuesta.context["deltas"], {})
+        self.assertNotContains(respuesta, "frente al período anterior")
+
+    def test_regla_2_el_periodo_elegido_llega_a_comercial(self):
+        """D-93 punto 2: «Mes anterior» pide a `comercial` ese rango (del 1 al último día del mes pasado)."""
+        hoy = timezone.localdate()
+        ultimo = hoy.replace(day=1) - timedelta(days=1)
+        r = self.ver(periodo="mes_anterior").context["resultado"].actual.comerciales
+        self.assertEqual((r.filtros.desde, r.filtros.hasta), (ultimo.replace(day=1), ultimo))
+
+    def test_regla_4_los_enlaces_de_cada_indicador_los_abre_el_gerente(self):
+        """EST-CNS-CNS regla 4 y regla 10 de COM-CNS-EST: cada «Ver …» y el enlace «Verlos en Comercial» llevan a una pantalla que el Gerente abre (D-30: ninguno da 403)."""
+        self.con_datos()
+        respuesta = self.ver()
+        enlaces = respuesta.context["resultado"].actual.comerciales.enlaces
+        destinos = [*enlaces, respuesta.context["enlace_a_comercial"]]
+        for url in destinos:
+            with self.subTest(url=url):
+                self.assertContains(respuesta, f'href="{url}"'.replace("&", "&amp;"))
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_regla_2_un_periodo_invalido_muestra_el_error_y_ningun_dato(self):
+        """EST-CNS-PRD regla 2: «desde» posterior a «hasta» muestra el mensaje y el formulario, sin datos comerciales."""
+        respuesta = self.ver(periodo="personalizado", desde="2026-11-20", hasta="2026-11-10")
+        self.assertContains(respuesta, "La fecha “desde” no puede ser posterior a “hasta”.")
+        self.assertIsNone(respuesta.context["resultado"])
+        self.assertNotContains(respuesta, "Ventas por variedad")
+
+    def test_sin_datos_muestra_los_estados_vacios_de_comercial(self):
+        """Sin entregas en el período: «Sin ventas en el período.» y el promedio de retraso «—», como en «Comercial › Estadísticas»."""
+        respuesta = self.ver()
+        self.assertContains(respuesta, "Sin ventas en el período.")
+        self.assertContains(respuesta, "—")
+
+    def test_regla_7_la_consulta_no_audita(self):
+        """EST-CNS-CNS regla 7 y SEG-14: abrir la pestaña no registra auditoría."""
+        self.con_datos()
+        antes = RegistroAuditoria.objects.count()
+        self.ver(enviado=1, comparar="on")
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
