@@ -11,6 +11,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.core import mail
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.test import override_settings
@@ -20,8 +21,13 @@ from comercial.models import AlertaComercial, Entrega, LineaDiscrepancia, Solici
 from comercial.servicios import solicitudes
 from comercial.tests.base_solicitudes import BaseDeSolicitudes, HOY, codigos, poner_estado
 from comercial.tests.fabricas import cobro, queja_aceptada
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
 from contabilidad.models import AsientoContable
-from core.models import Notificacion, RegistroAuditoria, Usuario
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import verificar_invariantes_contables
+from core.models import Contador, Notificacion, RegistroAuditoria, Usuario
+from core.tests.fabricas import crear_cuenta
 from maestros.models import Alerta
 from produccion.models import Bitacora
 
@@ -84,11 +90,7 @@ class ComEvlDscServicioTests(BaseDeSolicitudes):
         self.resolver(x.solicitud)
         self.assertEqual(self.contrato(x).cantidad_incumplimientos, 2)
 
-    def test_post_e_no_se_crea_ningun_asiento_fuera_de_la_ronda(self):
-        """Postcondición e y precondición c: «Fuera de esta ronda · contabilidad» (D-57): no se exige ejercicio ni cuentas y no se crea un asiento."""
-        x = self.armar()
-        self.resolver(x.solicitud)
-        self.assertEqual(AsientoContable.objects.count(), 0)
+    # `test_post_e_no_se_crea_ningun_asiento_fuera_de_la_ronda` (COM-07a, D-57) se REEMPLAZÓ por `ComEvlDscAsientoTests` (CON-04d): la regla cambió, la indemnización aceptada ahora asienta (D-92 punto 6).
 
     def test_post_f_registra_el_evento_en_la_bitacora_del_invernadero_de_origen(self):
         """Postcondición f: un evento «incumplimiento de cláusula suministrante» en el invernadero de origen, sin lote, etapa ni Capataz, con la descripción de la entrega, la línea y el total."""
@@ -142,7 +144,7 @@ class ComEvlDscServicioTests(BaseDeSolicitudes):
         (registro,) = RegistroAuditoria.objects.filter(accion="evaluacion_discrepancia")
         self.assertEqual((registro.usuario_id, registro.rol), (self.gerente.pk, "gerente"))
         modelos = [a["modelo"] for a in registro.afectados]
-        self.assertEqual(modelos, ["comercial.discrepanciaentrega", "maestros.alerta", "comercial.suministro", "produccion.bitacora"])
+        self.assertEqual(modelos, ["comercial.discrepanciaentrega", "maestros.alerta", "comercial.suministro", "produccion.bitacora", "contabilidad.asientocontable"])  # CON-04d: el asiento de la indemnización entra en los afectados
         self.assertEqual(registro.afectados[0]["id"], x.solicitud.pk)
         self.assertEqual(registro.detalle["cambios"]["estado_solicitud"], {"antes": "pendiente", "despues": "aceptada"})
         self.assertEqual(registro.detalle["cambios"]["monto_descontado"], {"antes": None, "despues": "15.00"})
@@ -445,3 +447,101 @@ class ComEvlDscServicioTests(BaseDeSolicitudes):
         entrega = Entrega.objects.get(pk=x.entrega.pk)
         self.assertEqual(entrega.monto_total_entrega, D("500.00"))
         self.assertEqual(solicitudes.entregas.monto_a_cobrar([entrega.pk])[entrega.pk], D("0.00"))  # $600 de indemnización, solo $500 descontados
+
+
+class ComEvlDscAsientoTests(BaseDeSolicitudes):
+    """CON-04d · paso 2: el asiento de la indemnización de una discrepancia aceptada (COM-EVL-DSC postcondición e; D-92 puntos 5 y 6, D-86). Origen: la `SolicitudRevision`; fecha: la de la resolución (hoy). Debe «Indemnizaciones por
+    Incumplimiento a Cliente» por el monto / Haber «Deudores por Ventas» por lo descontado / Haber Caja (efectivo) o Banco c/c (transferencia) por lo reintegrado (regla 15 de 8.13). Monto 0 o rechazada: sin asiento y sin error (H11)."""
+
+    def lineas(self, asiento):
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def asiento_de(self, solicitud):
+        return AsientoContable.objects.get(origen_id=solicitud.pk)
+
+    def test_post_e_sin_pagar_la_indemnizacion_va_contra_deudores_por_ventas(self):
+        """Postcondición e: la entrega sin pagar (monto $ 500 → $ 485): Debe Indemnizaciones por Incumplimiento 15,00 / Haber Deudores por Ventas 15,00, originado en la discrepancia, con la fecha de hoy."""
+        x = self.armar()
+        self.resolver(x.solicitud)
+        asiento = self.asiento_de(x.solicitud)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, DEBE, D("15.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("15.00"))]))
+        self.assertEqual((asiento.fecha_asiento, asiento.origen_id, AsientoContable.objects.count()), (HOY, x.solicitud.pk, 1))
+        verificar_invariantes_contables()
+
+    def test_ext_6a_con_la_entrega_pagada_el_asiento_va_contra_caja_o_banco_segun_el_medio_de_reintegro(self):
+        """Extensión 6a: con la entrega ya cobrada todo se reintegra: Debe Indemnizaciones / Haber Caja (efectivo); con transferencia, Banco c/c."""
+        for medio, cuenta in (("efectivo", cuentas.CAJA), ("transferencia", cuentas.BANCO)):
+            with self.subTest(medio=medio):
+                x = self.armar()
+                cobro([x.entrega])
+                self.resolver(x.solicitud, medio=medio)
+                self.assertEqual(self.lineas(self.asiento_de(x.solicitud)), sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, DEBE, D("15.00")), (cuenta, HABER, D("15.00"))]))
+
+    def test_ext_6d_si_la_indemnizacion_supera_lo_que_queda_por_cobrar_el_asiento_es_compuesto(self):
+        """Extensión 6d: quedan $ 5 por cobrar y la indemnización es $ 15: Debe Indemnizaciones 15,00 / Haber Deudores 5,00 / Haber Caja 10,00 (la parte reintegrada, con el medio elegido)."""
+        x = self.armar()
+        queja_aceptada(x.entrega, "otro", monto="495.00")
+        self.resolver(x.solicitud, medio="efectivo")
+        self.assertEqual(
+            self.lineas(self.asiento_de(x.solicitud)),
+            sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, DEBE, D("15.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("5.00")), (cuentas.CAJA, HABER, D("10.00"))]),
+        )
+
+    def test_regla_una_discrepancia_rechazada_no_asienta_y_no_falla(self):
+        """Postcondición i: rechazar no registra monto ni asiento (H11)."""
+        x = self.armar()
+        self.resolver(x.solicitud, decision="rechazar", observaciones="El cliente retiró de más.")
+        self.assertEqual(AsientoContable.objects.count(), 0)
+
+    def test_post_k_el_registro_de_auditoria_nombra_el_asiento_y_no_se_audita_aparte(self):
+        """Postcondición k y D-86 punto 4: el único registro `evaluacion_discrepancia` nombra el asiento entre sus afectados y en `datos["asientos"]`."""
+        x = self.armar()
+        self.resolver(x.solicitud)
+        registro = RegistroAuditoria.objects.filter(accion="evaluacion_discrepancia").get()
+        asiento = self.asiento_de(x.solicitud)
+        self.assertTrue(any(a["id"] == asiento.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_asiento_la_discrepancia_sigue_pendiente(self):
+        """Garantía mínima: si el asiento falla, la discrepancia sigue «pendiente», sin monto, sin incumplimiento, con su alerta activa y sin evento de bitácora ni registro de auditoría."""
+        x = self.armar()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.resolver(x.solicitud)
+        s = SolicitudRevision.objects.get(pk=x.solicitud.pk)
+        self.assertEqual((s.estado_solicitud, s.monto_indemnizacion, Suministro.objects.get(pk=x.contrato.pk).cantidad_incumplimientos), ("pendiente", None, 0))
+        self.assertEqual((Alerta.objects.get(vinculo_comercial__solicitud=x.solicitud.pk).estado_alerta, Bitacora.objects.filter(tipo_evento="incumplimiento_de_clausula").count()), ("activa", 0))
+        self.assertEqual((AsientoContable.objects.count(), RegistroAuditoria.objects.filter(accion="evaluacion_discrepancia").count()), (0, 0))
+
+    # ---- decisión (4) del estudiante del 26/11/2026: la re-aceptación de una solicitud cuya aceptación anterior se anuló ----
+
+    def test_tarea_con04d_reaceptacion_no_asienta_y_avisa_al_responsable_contable(self):
+        """Decisión (4) del 26/11/2026 (choque con R012, un origen un asiento): la discrepancia se acepta, se anula y se vuelve a aceptar. La segunda aceptación NO falla ni asienta (el origen ya tiene su asiento): avisa al
+        responsable contable (el Contador) para que lo registre a mano, la auditoría lo deja asentado (`asiento_manual_pendiente`) y no se crea otro asiento con esta solicitud de origen."""
+        cache.clear()
+        contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        x = self.armar()
+        self.resolver(x.solicitud)
+        self.assertEqual(AsientoContable.objects.filter(origen_id=x.solicitud.pk).count(), 1)
+        solicitudes.anular_resolucion(self.gerente, x.solicitud.pk, "Se aceptó por error.", solicitudes.datos_de_anulacion(self.gerente, x.solicitud.pk).huella)
+        antes = len(self.avisos(contador))
+        self.resolver(x.solicitud)  # no lanza
+        self.assertEqual(SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, "aceptada")
+        self.assertEqual(AsientoContable.objects.filter(origen_id=x.solicitud.pk).count(), 1)  # sigue siendo el de la primera aceptación
+        nuevos = self.avisos(contador)[antes:]
+        self.assertEqual(len(nuevos), 1)
+        self.assertTrue(nuevos[0].titulo.startswith(f"Registrar el asiento de {x.solicitud.codigo}"))
+        self.assertEqual(self.avisos(self.gerente, "Registrar el asiento"), [])
+        registro = RegistroAuditoria.objects.filter(accion="evaluacion_discrepancia").latest("pk")
+        self.assertIn("asiento_manual_pendiente", registro.detalle["datos"])
+        verificar_invariantes_contables()
+
+    def test_tarea_con04d_reaceptacion_sin_contador_el_aviso_va_al_gerente_si_no_es_quien_resuelve(self):
+        """Decisión (4) y D-85 punto 5: sin Contador activo el responsable contable es el Gerente, que es quien resuelve y no se avisa a sí mismo (H21): no queda ningún aviso, pero sí la constancia en la auditoría."""
+        cache.clear()
+        x = self.armar()
+        self.resolver(x.solicitud)
+        solicitudes.anular_resolucion(self.gerente, x.solicitud.pk, "Se aceptó por error.", solicitudes.datos_de_anulacion(self.gerente, x.solicitud.pk).huella)
+        self.resolver(x.solicitud)
+        self.assertEqual(self.avisos(self.gerente, "Registrar el asiento"), [])
+        self.assertIn("asiento_manual_pendiente", RegistroAuditoria.objects.filter(accion="evaluacion_discrepancia").latest("pk").detalle["datos"])

@@ -31,7 +31,7 @@ límite, los detalles (una línea por cadena «reemplaza a», con el precio vige
     {% with r=ficha.resolucion %}
     <div class="alert alert-danger" role="status" id="resolucion">{% icono "warn" 16 %}<div>
       <b>Resuelto por incumplimientos el {{ r.fecha|date:"d/m/Y" }}:</b> {{ r.incumplimientos }} de {{ r.tolerados }} <span class="muted">tolerados</span>{% if r.solicitud %}, por <a href="{% url 'comercial:solicitud' r.solicitud.pk %}">{{ r.solicitud.codigo }}</a>{% endif %}.
-      {% if r.multa %}Multa: <span class="mono">{{ r.multa|pesos }}</span> <span class="muted">· Asiento: fuera de esta ronda · contabilidad.</span>{% else %}El contrato no prevé multa.{% endif %}
+      {% if r.multa %}Multa: <span class="mono">{{ r.multa|pesos }}</span> {% if r.asiento %}{% include "comercial/_asiento.html" with titulo="Asiento de la multa" filas=r.asiento.filas numero=r.asiento.numero fecha=r.asiento.fecha %}{% endif %}{% else %}El contrato no prevé multa.{% endif %}
       Las entregas concretadas se siguen cobrando.
       {% if r.entregas_canceladas %}<span class="sub2">Entregas canceladas: {% for e in r.entregas_canceladas %}<span class="mono">{{ e.codigo }}</span> ({{ e.fecha_programada_orden|date:"d/m" }}){% if not forloop.last %}, {% endif %}{% endfor %}.</span>{% endif %}
     </div></div>

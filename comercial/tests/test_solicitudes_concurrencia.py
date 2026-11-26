@@ -31,10 +31,13 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_solicitudes,
 )
-from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
-from core.models import RegistroAuditoria
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.servicios import ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador, RegistroAuditoria
 from core.tests.concurrencia import codigos, correr_a_la_vez
-from core.tests.fabricas import crear_gerente
+from core.tests.fabricas import crear_cuenta, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.models import Localidad
 from maestros.tests.fabricas import asegurar_datos_de_maestros
@@ -60,6 +63,7 @@ class SolicitudesConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.detalle = detalle_suministro(self.contrato, self.e.variedad, direccion=self.direccion, cantidad=10, minima=8, precio="100.00", primera_en_dias=0, indemnizacion_faltante="5.00")
         self.addCleanup(verificar_invariantes_de_entregas)
         self.addCleanup(verificar_invariantes_de_solicitudes)
+        self.addCleanup(verificar_invariantes_contables)  # CON-04d: aceptar y anular una resolución asientan
 
     def concretada(self, dias, tipo="discrepancia"):
         """Una entrega concretada (5 de 10 plantas) del período `dias` días después del primero, con su solicitud pendiente. Devuelve `SimpleNamespace(entrega, solicitud)`."""
@@ -194,3 +198,73 @@ class SolicitudesConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
                 self.assertEqual((len(buenos), rechazos, otros), (2, [], []), (primera, resultados))
                 self.assertEqual((self.estado(aceptada), Entrega.objects.get(pk=otra.pk).estado_orden), ("aceptada", "concretada"))
                 self.assertEqual(self.contador(), antes + 1)
+
+    # ---- CON-04d · paso 2: el asiento de la indemnización y el ejercicio (D-86 punto 2; D-102) ----
+
+    def _cierre_y_aceptacion(self, primera_la_aceptacion):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy. El cierre y la aceptación corren a la vez en el orden pedido."""
+        self.armar()
+        contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        abierto = ejercicio_abierto(HOY - timedelta(days=20))
+        x = self.concretada(0)
+        aceptacion, cierre = self.aceptar(x), lambda: ejercicios.cerrar_ejercicio(contador, en_cierre.pk)
+        resultados = correr_a_la_vez(*((aceptacion, cierre) if primera_la_aceptacion else (cierre, aceptacion)), primera="a")
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+        asiento = AsientoContable.objects.get(origen_id=x.solicitud.pk)
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (abierto.pk, 1, HOY))
+        self.assertEqual(EjercicioContable.objects.get(pk=en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def test_d102_el_cierre_primero_y_la_aceptacion_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre tiene su fila tomada; la aceptación de hoy no la necesita."""
+        self._cierre_y_aceptacion(primera_la_aceptacion=False)
+
+    def test_d102_la_aceptacion_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """La aceptación ya asentó y tiene el ejercicio abierto bloqueado; el cierre toca solo su fila."""
+        self._cierre_y_aceptacion(primera_la_aceptacion=True)
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_la_aceptacion_bloquea(self):
+        """La aceptación se detiene justo ANTES de bloquear el ejercicio (con su invernadero, contrato y entrega ya tomados) y otra, de un invernadero distinto, asienta completa y toma el N.º 1: el ejercicio se bloquea al final."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        otro = escenario_comercial(nombre="Invernadero Sur", sufijo="b", email_del_cliente="clienteb@ejemplo.com", geografia_propia=True)
+        lote_b = lote_maduro(otro, 500)
+        direccion_b = direccion_de_cliente(otro.cliente, localidad_id=Localidad.objects.get(id_georef="99001001").pk).direccion
+        contrato_b = suministro(otro, tolerados=5, plazo_pago=15)
+        detalle_b = detalle_suministro(contrato_b, otro.variedad, direccion=direccion_b, cantidad=10, minima=8, precio="100.00", primera_en_dias=0, indemnizacion_faltante="5.00")
+        reserva = reserva_lista(None, lote_b, 10, fecha_entrega=detalle_b.fecha_primer_entrega, detalle_suministro=detalle_b)
+        entrega_b = marcar_concretada(entrega(contrato_b, [reserva]), cantidades=[(5, 5, 0)])
+        solicitud_b = SimpleNamespace(entrega=entrega_b, solicitud=discrepancia(entrega_b, minima=8))
+        datos = DatosDeResolucion("aceptar", "", "", "")
+        huella_b = solicitudes.resumen_de_resolucion(self.gerente, solicitud_b.solicitud.pk, datos).huella
+        a = self.aceptar(self.concretada(0))
+        b = lambda: solicitudes.resolver_solicitud(self.gerente, solicitud_b.solicitud.pk, datos, huella_b)  # noqa: E731
+        resultados = correr_a_la_vez(a, b, primera="a", detener_antes_de=(servicio_de_asientos, "_bloquear_ejercicio"))
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])
+
+    # ---- CON-04d · paso 3: el contraasiento de la anulación y el ejercicio (D-86 punto 2; D-102) ----
+
+    def _cierre_y_anulacion(self, primera_la_anulacion):
+        self.armar()
+        contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        abierto = ejercicio_abierto(HOY - timedelta(days=20))
+        x = self.concretada(0)
+        self.aceptar(x)()  # la aceptación ya hecha (asiento N.º 1): el contraasiento y el cierre corren a la vez
+        anulacion = self.anular(x)
+        cierre = lambda: ejercicios.cerrar_ejercicio(contador, en_cierre.pk)  # noqa: E731
+        resultados = correr_a_la_vez(*((anulacion, cierre) if primera_la_anulacion else (cierre, anulacion)), primera="a")
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", "ejercicio_id")), [(1, abierto.pk), (2, abierto.pk)])
+        self.assertEqual(EjercicioContable.objects.get(pk=en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def test_d102_el_cierre_primero_y_la_anulacion_a_la_vez_los_dos_terminan_y_el_contraasiento_va_al_abierto(self):
+        """El cierre tiene su fila tomada; la anulación de hoy no la necesita."""
+        self._cierre_y_anulacion(primera_la_anulacion=False)
+
+    def test_d102_la_anulacion_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_contraasiento_va_al_abierto(self):
+        """La anulación ya contraasentó y tiene el ejercicio abierto bloqueado; el cierre toca solo su fila."""
+        self._cierre_y_anulacion(primera_la_anulacion=True)

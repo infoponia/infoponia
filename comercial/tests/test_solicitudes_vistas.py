@@ -210,7 +210,7 @@ class ResolverTests(BaseDeVistas):
         respuesta = self.revisar(x)
         html = texto(respuesta)
         for esperado in ("Evaluar la discrepancia", "Resumen", "Discrepancia aceptada, con indemnización de $ 15,00.", "el monto a cobrar pasa de $ 500,00 a $ 485,00", "Incumplimientos del contrato", "Confirmar la decisión",
-                         reverse("comercial:solicitud_resolver", args=[x.solicitud.pk]), 'name="huella"', "Fuera de esta ronda"):
+                         reverse("comercial:solicitud_resolver", args=[x.solicitud.pk]), 'name="huella"', "Asiento que se registra"):
             self.assertIn(esperado, html)
         self.assertEqual(SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, "pendiente")
 
@@ -293,11 +293,11 @@ class ResolverTests(BaseDeVistas):
 
 class AnularTests(BaseDeVistas):
     def test_la_pagina_de_anular_dice_que_va_a_pasar_y_pide_el_motivo(self):
-        """Paso 2: el estado nuevo, el contador y el monto a cobrar antes y después, el contraasiento «Fuera de esta ronda» y el motivo; el texto explicativo."""
+        """Paso 2: el estado nuevo, el contador y el monto a cobrar antes y después, el contraasiento que se registra (CON-04d) y el motivo; el texto explicativo."""
         x = self.armar()
         self.resolver(x.solicitud)
         html = texto(self.ir("solicitud_anular", x.solicitud.pk))
-        for esperado in ("La solicitud vuelve a pendiente para resolverla de nuevo", "1 → 0", "$ 485,00 → $ 500,00", "Fuera de esta ronda", 'name="motivo"', 'name="huella"', "Anular resolución"):
+        for esperado in ("La solicitud vuelve a pendiente para resolverla de nuevo", "1 → 0", "$ 485,00 → $ 500,00", "Contraasiento que se registra", 'name="motivo"', 'name="huella"', "Anular resolución"):
             self.assertIn(esperado, html)
 
     def test_con_un_bloqueo_solo_el_mensaje_y_volver(self):
@@ -419,3 +419,47 @@ class LoQueCompletaAOtrasTareasTests(BaseDeVistas):
         for esperado in ("Solicitudes de revisión", x.solicitud.codigo, y.solicitud.codigo, "Cuenta como incumplimiento", reverse("comercial:solicitud", args=[x.solicitud.pk]), reverse("comercial:solicitud", args=[y.solicitud.pk])):
             self.assertIn(esperado, html)
         self.assertLess(html.index(y.solicitud.codigo), html.index(x.solicitud.codigo))
+
+
+class AsientoEnPantallaTests(BaseDeVistas):
+    """CON-04d · paso 6, decisión (3) del 26/11/2026: el resumen de la decisión muestra el asiento que se registrará y la pantalla de anular, el contraasiento; texto sin enlace, solo para el Gerente (que ya ve los
+    importes); el Vendedor y el Agrónomo reciben 403 y no ven nada."""
+
+    revisar = ResolverTests.revisar
+
+    def test_tarea_con04d_el_resumen_de_aceptar_muestra_el_asiento_de_la_indemnizacion(self):
+        x = self.armar()
+        html = texto(self.revisar(x))
+        for esperado in ("Asiento que se registra", "Indemnizaciones por Incumplimiento a Cliente", "Deudores por Ventas", "$ 15,00", "Debe", "Haber"):
+            self.assertIn(esperado, html)
+        self.assertNotIn("Fuera de esta ronda", html)
+        respuesta = self.enviar("solicitud_resolver_revisar", x.solicitud.pk, datos={"decision": "aceptar"}, usuario=self.e.vendedor)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertNotIn("Deudores por Ventas", texto(respuesta))
+
+    def test_tarea_con04d_el_resumen_de_una_indemnizacion_ya_cobrada_muestra_caja_o_banco(self):
+        from comercial.tests.fabricas import cobro
+
+        x = self.armar()
+        cobro([x.entrega])
+        html = texto(self.revisar(x, medio_reintegro="transferencia"))
+        self.assertIn("Banco c/c", html)
+
+    def test_tarea_con04d_el_rechazo_no_muestra_asiento(self):
+        x = self.armar()
+        html = texto(self.revisar(x, decision="rechazar", observaciones="No procede."))
+        self.assertNotIn("Asiento que se registra", html)
+
+    def test_tarea_con04d_anular_muestra_el_contraasiento_que_se_registra(self):
+        x = self.armar()
+        self.resolver(x.solicitud)
+        html = texto(self.ir("solicitud_anular", x.solicitud.pk))
+        for esperado in ("Contraasiento que se registra", "Indemnizaciones por Incumplimiento a Cliente", "Deudores por Ventas", "$ 15,00"):
+            self.assertIn(esperado, html)
+        self.assertNotIn("Fuera de esta ronda", html)
+        self.assertEqual(self.ir("solicitud_anular", x.solicitud.pk, usuario=self.e.vendedor).status_code, 403)
+
+    def test_tarea_con04d_anular_una_rechazada_dice_que_no_hay_contraasiento(self):
+        x = self.armar()
+        self.resolver(x.solicitud, decision="rechazar", observaciones="No procede.")
+        self.assertIn("Sin contraasiento", texto(self.ir("solicitud_anular", x.solicitud.pk)))

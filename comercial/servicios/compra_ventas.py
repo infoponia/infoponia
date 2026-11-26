@@ -26,7 +26,7 @@ from django.shortcuts import get_object_or_404
 
 from comercial.models import Cliente, CompraVenta, DetalleEntrega, DetalleReserva, DetalleVenta, DireccionCliente, PagoCliente, ReservaStock
 from comercial.servicios import clientes as api_clientes
-from comercial.servicios import comprobantes, entregas, stock_maduro
+from comercial.servicios import asientos_comerciales, comprobantes, entregas, stock_maduro
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.servicios import stock
@@ -830,7 +830,7 @@ A_REALIZAR, CONCRETADA = "a_realizar", "concretada"
 DatosDeCancelacion = namedtuple(
     "DatosDeCancelacion", "venta cliente detalles a_lotes a_partidas a_camara cosechas entregas en_curso concretadas comprobante huella bloqueo cobro"
 )
-ResumenDeCancelacionDeVenta = namedtuple("ResumenDeCancelacionDeVenta", "datos motivo motivo_texto descripcion estado_final")
+ResumenDeCancelacionDeVenta = namedtuple("ResumenDeCancelacionDeVenta", "datos motivo motivo_texto descripcion estado_final asiento")  # asiento: las líneas del cobro de lo entregado (CON-04d), `[]` sin cobro
 _Alcance = namedtuple("_Alcance", "detalles reservas lineas cosechas a_realizar concretadas en_curso cuentas invernaderos variedades lotes partidas")
 
 
@@ -1046,7 +1046,8 @@ def resumen_de_cancelacion_de_venta(actor, compra_venta_id, datos, hoy=None):
         raise ValidationError({NO_CAMPO: [ValidationError(mensaje, code=codigo)]})
     _validar_medio(datos, previos.cobro is not None)
     estado_final = "Concretada (se cobra lo entregado)" if previos.cobro is not None else "Cancelada"
-    return ResumenDeCancelacionDeVenta(previos, datos.motivo, CompraVenta.MotivoCancelacion(datos.motivo).label, datos.descripcion, estado_final)
+    asiento = asientos_comerciales.filas_de(asientos_comerciales.movimientos_previstos_del_cobro_de_venta(datos.medio_pago, previos.cobro.total)) if previos.cobro is not None else []
+    return ResumenDeCancelacionDeVenta(previos, datos.motivo, CompraVenta.MotivoCancelacion(datos.motivo).label, datos.descripcion, estado_final, asiento)
 
 
 class _AlcanceCambio(Exception):
@@ -1159,6 +1160,7 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
                 tipo_pago=PagoCliente.Tipo.COMPRA_VENTA, compra_venta_id=venta.pk, cliente=venta.cliente, medio_pago=datos.medio_pago, fecha_pago=hoy, monto_pagado=cobro.total,
                 estado_pago=PagoCliente.Estado.VIGENTE, usuario=quien,
             )
+        asiento_del_cobro = asientos_comerciales.asentar_cobro_de_compra_venta(quien, pago, hoy) if pago is not None else None  # 6a (CON-04d): después de todos los bloqueos; el ejercicio va último (D-86)
         if rol_de(quien) == GERENTE and venta.vendedor.is_active:  # h
             texto_del_aviso = f"El Gerente canceló la venta de {venta.cliente.nombre_visible}. Motivo: {motivo_texto.lower()}."
             if pago is not None:
@@ -1177,6 +1179,8 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
         }
         if pago is not None:
             datos_de_auditoria["pago_de_lo_entregado"] = f"{pago.codigo} · {pago.monto_pagado} · {pago.medio_pago}"
+            if asiento_del_cobro is not None:
+                datos_de_auditoria["asientos"] = [str(asiento_del_cobro)]
         for clave, valores in (
             ("partidas_creadas", partidas),
             ("movimientos_creados", movimientos),
@@ -1203,6 +1207,7 @@ def _cancelar(venta_id, datos, huella, actor, previo, hoy):
                 *alertas_resueltas,
                 *anulados,
                 *([pago] if pago is not None else []),
+                *([asiento_del_cobro] if asiento_del_cobro is not None else []),
             ],
             detalle={
                 "cambios": {

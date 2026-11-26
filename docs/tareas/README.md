@@ -75,8 +75,8 @@ COM-07 también (D-68, punto 1; D-69, punto 1).
 | COM-07a | Solicitudes de revisión: evaluar, resolver, anular y consultar (D-69) | comercial (y `core` y `contabilidad`: acciones y tipo) | hecha (PR #92, 25/11/2026; revisión a mano pendiente) | COM-06b (y la sección 11 de COM-04a) | `comercial/COM-07a-solicitudes-de-revision.md` |
 | COM-07b | Resolución del suministro por incumplimientos (paso diario 33) | comercial (y `core`: acciones) | hecha (PR #93, 25/11/2026; revisión a mano pendiente) | COM-07a | `comercial/COM-07b-resolucion-del-suministro.md` |
 | COM-08a | Cobro de suministros y mora (paso diario 30) (D-94) | comercial (y `core`: acciones) | hecha (PR #94, 25/11/2026; revisión a mano pendiente) | COM-07b | `comercial/COM-08a-cobro-y-mora.md` |
-| COM-08b | Anular un cobro y cobrar lo entregado al cancelar una compra-venta (D-94) | comercial (y `core`: acción) | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | COM-08a | `comercial/COM-08b-anular-cobro-y-cobro-al-cancelar.md` |
-| COM-08c | Estadísticas comerciales y «Resultados del mes en curso» (D-94) | comercial | pendiente | COM-08b (o en paralelo con ella) | `comercial/COM-08c-estadisticas.md` |
+| COM-08b | Anular un cobro y cobrar lo entregado al cancelar una compra-venta (D-94) | comercial (y `core`: acción) | hecha (PR #97, 25/11/2026; revisión a mano pendiente) | COM-08a | `comercial/COM-08b-anular-cobro-y-cobro-al-cancelar.md` |
+| COM-08c | Estadísticas comerciales y «Resultados del mes en curso» (D-94) | comercial | hecha (26/11/2026; revisión a mano pendiente) | COM-08b (o en paralelo con ella) | `comercial/COM-08c-estadisticas.md` |
 
 ### Ronda «IoT 1» (D-70 a D-79)
 
@@ -135,7 +135,7 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 | PRD-05 | Registrar Lote Existente | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
 | CON-04a | Asientos de producción (reapertura) | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02 (hecha), PRD-04 (hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, COM-04a, COM-04b, COM-06a (hechas) | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
-| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11 (hecha), COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
+| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, USR-11 (hecha), COM-06b a COM-08b (hechas) | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
 
 ### Ronda «Estadísticas 1» (D-93)
 

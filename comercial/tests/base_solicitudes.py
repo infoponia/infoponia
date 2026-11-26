@@ -5,6 +5,7 @@
 from datetime import timedelta
 from types import SimpleNamespace
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
@@ -25,6 +26,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, verificar_invariantes_contables
 from core.models import Notificacion
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -56,7 +58,7 @@ def poner_estado(contrato, estado):
         Suministro.objects.filter(pk=contrato.pk).update(estado_suministro=estado)
 
 
-class BaseDeSolicitudes(ConDatosDeInventario, TestCase):
+class BaseDeSolicitudes(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor, un lote y un Gerente. `armar()` deja un suministro con una entrega concretada y su solicitud pendiente."""
 
     @classmethod
@@ -68,6 +70,8 @@ class BaseDeSolicitudes(ConDatosDeInventario, TestCase):
     def setUp(self):
         self.addCleanup(verificar_invariantes_de_entregas)
         self.addCleanup(verificar_invariantes_de_solicitudes)
+        self.addCleanup(verificar_invariantes_contables)  # CON-04d: aceptar y anular una resolución asientan
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
 
     def armar(
         self, *, tipo="discrepancia", cantidad=10, minima=8, entregada=5, precio="100.00", tolerados=3, incumplimientos=0, plazo_entrega=0, retraso=0, por_dia="10.00", por_planta="5.00",

@@ -23,6 +23,9 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_cobros,
     verificar_invariantes_de_entregas,
 )
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio_abierto, verificar_invariantes_contables
 from core.tests.concurrencia import codigos, correr_a_la_vez
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
@@ -41,6 +44,7 @@ class AnulacionDeCobroConcurrenciaTests(ConDatosDeInventario, TransactionTestCas
         """Un invernadero con su Vendedor, un lote de 500 y un Gerente; el cliente con una dirección en la localidad propia. Cada prueba arma sus entregas y sus cobros."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04d: cobrar y anular un cobro asientan; el flush de la prueba anterior vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 500)
         self.gerente = crear_gerente()
@@ -191,3 +195,46 @@ class AnulacionDeCobroConcurrenciaTests(ConDatosDeInventario, TransactionTestCas
         exitos, rechazos, otros = separar(resultados)
         self.assertEqual((rechazos, otros), ([], []))
         self.assertIn((True, True, False), exitos)
+
+
+@tag("concurrencia")
+class AnulacionDeCobroAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04d · paso 1: el contraasiento de la anulación bloquea el ejercicio AL FINAL (D-86 punto 2), después del pago y de sus líneas (el orden de la anulación), y numera sin huecos (H8)."""
+
+    def armar(self):
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = escenario_comercial(geografia_propia=True)
+        self.lote = lote_maduro(self.e, 500)
+        self.gerente = crear_gerente()
+        direccion_de_cliente(self.e.cliente, localidad_id=Localidad.objects.get(id_georef="99001001").pk)
+        for verificar in (verificar_invariantes_de_entregas, verificar_invariantes_de_cobros, verificar_invariantes_contables):
+            self.addCleanup(verificar)
+        ejercicio_abierto(HOY - timedelta(days=20))
+
+    def cobrado(self, e):
+        """Un cobro ya registrado (en el hilo de la prueba) de una entrega nueva de ``e``; devuelve la operación que lo anula, con la huella que vio la pantalla."""
+        entrega_ = entrega_de_suministro(e, lote_maduro(e, 500))
+        datos = cobranza.DatosDeCobro(cliente_id=e.cliente.pk, entrega_ids=[entrega_.pk], medio_pago="efectivo")
+        with override_settings(CORREO_CONFIGURADO=False):
+            pago = cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, HOY).huella, HOY)
+        huella = cobranza.datos_de_anulacion_de_cobro(self.gerente, pago.pk, HOY).huella
+
+        def operacion():
+            with override_settings(CORREO_CONFIGURADO=False):
+                return cobranza.anular_cobro(self.gerente, pago.pk, "Error de carga.", False, huella, HOY)
+
+        return operacion
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    # Sin prueba de «el ejercicio es lo último» para la anulación: solo el Gerente anula y es uno, así que dos anulaciones quedan en fila en su cuenta y nada distingue el orden (lo prueba el cobro, que sí lo hacen cuentas distintas).
+
+    def test_regla_h8_dos_anulaciones_a_la_vez_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos anulaciones de cobros distintos a la vez toman el 3 y el 4 (los cobros tenían el 1 y el 2)."""
+        self.armar()
+        a, b = self.cobrado(self.e), self.cobrado(self.e)
+        self.sin_errores(correr_a_la_vez(a, b, primera="a"))
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2, 3, 4])

@@ -106,7 +106,7 @@ class RecorridoDeSolicitudesDeRevisionTests(BaseDeSolicitudes):
         # 5. Anular la discrepancia: la página dice qué va a pasar; sin motivo se pide; con motivo vuelve a pendiente y se vuelve a resolver; el historial queda.
         anular = reverse("comercial:solicitud_anular", args=[d.solicitud.pk])
         pagina = texto(g.get(anular))
-        for esperado in ("2 → 1", "$ 485,00 → $ 500,00", "Fuera de esta ronda"):
+        for esperado in ("2 → 1", "$ 485,00 → $ 500,00", "Contraasiento que se registra"):
             self.assertIn(esperado, pagina)
         huella_a = solicitudes.datos_de_anulacion(self.gerente, d.solicitud.pk).huella
         self.assertIn("el motivo es obligatorio", texto(g.post(anular, {"motivo": "", "huella": huella_a})))

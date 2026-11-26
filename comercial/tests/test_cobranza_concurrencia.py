@@ -7,6 +7,9 @@
 #
 # Contrato de código que fijan estas pruebas: `cobranza._bloquear_entregas(...)` es el único lugar donde el cobro toma las filas de las entregas (después de las cuentas y los invernaderos).
 
+from datetime import timedelta
+
+from django.core.cache import cache
 from django.test import TransactionTestCase, override_settings, tag
 from django.utils import timezone
 
@@ -23,8 +26,13 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.servicios import ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador
 from core.tests.concurrencia import codigos, correr_a_la_vez
-from core.tests.fabricas import crear_gerente
+from core.tests.fabricas import crear_cuenta, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.models import Localidad
 from maestros.tests.fabricas import asegurar_datos_de_maestros
@@ -39,6 +47,7 @@ class CobranzaConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         """Un invernadero con su Vendedor, un lote de 500 y un Gerente; el cliente con una dirección en la localidad propia. Cada prueba arma sus entregas."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04d: cobrar asienta; el flush de la prueba anterior vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 500)
         self.gerente = crear_gerente()
@@ -174,3 +183,79 @@ class CobranzaConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         exitos, rechazos, otros = separar(resultados)
         self.assertEqual((len(exitos), rechazos, otros), (2, [], []))
         self.assertEqual(self.cobros(), 1)
+
+
+@tag("concurrencia")
+class CobroAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04d · paso 1: el asiento del cobro bloquea el ejercicio AL FINAL (D-86 punto 2; `docs/patrones/asientos.md`), numera sin huecos (H8) y nunca rechaza por la fecha (D-102), también contra el cierre del
+    ejercicio en los dos órdenes (el patrón de CON-04c)."""
+
+    def armar(self):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = escenario_comercial(geografia_propia=True)
+        self.lote = lote_maduro(self.e, 500)
+        self.gerente = crear_gerente()
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        direccion_de_cliente(self.e.cliente, localidad_id=Localidad.objects.get(id_georef="99001001").pk)
+        for verificar in (verificar_invariantes_de_entregas, verificar_invariantes_de_cobros, verificar_invariantes_contables):
+            self.addCleanup(verificar)
+
+    def cobro_de(self, e, entregas_=None, actor=None):
+        """La operación de cobrar ``entregas_`` (una entrega de suministro nueva por omisión) de ``e``, con la huella del resumen."""
+        entregas_ = entregas_ or [entrega_de_suministro(e, lote_maduro(e, 500))]
+        actor = actor or e.vendedor
+        datos = cobranza.DatosDeCobro(cliente_id=e.cliente.pk, entrega_ids=[x.pk for x in entregas_], medio_pago="efectivo")
+        huella = cobranza.resumen_de_cobro(actor, datos, HOY).huella
+
+        def operacion():
+            with override_settings(CORREO_CONFIGURADO=False):
+                return cobranza.registrar_cobro(actor, datos, huella, HOY)
+
+        return operacion
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        self.abierto = ejercicio_abierto(HOY - timedelta(days=20))
+
+    def _cierre_y_cobro(self, primero_el_cobro):
+        self.armar()
+        self.con_ejercicios()
+        cobro, cierre = self.cobro_de(self.e), lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+        self.sin_errores(correr_a_la_vez(*((cobro, cierre) if primero_el_cobro else (cierre, cobro)), primera="a"))
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (self.abierto.pk, 1, HOY))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+
+    def test_d102_el_cierre_primero_y_el_cobro_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre tiene su fila tomada; el cobro de hoy no la necesita."""
+        self._cierre_y_cobro(primero_el_cobro=False)
+
+    def test_d102_el_cobro_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cobro ya asentó y tiene el ejercicio abierto bloqueado; el cierre toca solo su fila."""
+        self._cierre_y_cobro(primero_el_cobro=True)
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_el_cobro_bloquea(self):
+        """El cobro A se detiene justo ANTES de bloquear el ejercicio (con sus cuentas, invernadero y entrega ya tomados); el cobro B (otro invernadero, sin filas en común) asienta completo y toma el N.º 1."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        otro = escenario_comercial(nombre="Invernadero Sur", sufijo="b", email_del_cliente="clienteb@ejemplo.com", geografia_propia=True)
+        direccion_de_cliente(otro.cliente, localidad_id=Localidad.objects.get(id_georef="99001001").pk)
+        a, b = self.cobro_de(self.e), self.cobro_de(otro)
+        resultados = correr_a_la_vez(a, b, primera="a", detener_antes_de=(servicio_de_asientos, "_bloquear_ejercicio"))
+        self.sin_errores(resultados)
+        numero = lambda pago: AsientoContable.objects.get(origen_id=pago.pk).numero_asiento  # noqa: E731
+        self.assertEqual((numero(resultados["b"]), numero(resultados["a"])), (1, 2))
+
+    def test_regla_h8_dos_cobros_de_entregas_distintas_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos cobros a la vez (de entregas distintas del mismo cliente), cada uno con su asiento compuesto, toman los números 1 y 2."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        self.sin_errores(correr_a_la_vez(self.cobro_de(self.e), self.cobro_de(self.e), primera="a"))
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])

@@ -19,7 +19,7 @@
         <dt>El cliente pagó en la fecha del cobro</dt><dd>{% if ficha.anulacion.cliente_pago_en_fecha %}Sí{% else %}No{% endif %}</dd>
         <dt>Cobro correcto</dt><dd>{% if ficha.cobro_correcto %}<a class="rowlink" href="{% url 'comercial:cobro' ficha.cobro_correcto.pk %}"><span class="mono">{{ ficha.cobro_correcto.codigo }}</span></a>{% else %}<span class="muted">Todavía no se registró.</span>{% endif %}</dd>
       </dl>
-      <p class="muted">El contraasiento no se genera en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+      {% if ficha.contraasiento %}{% include "comercial/_asiento.html" with titulo="Contraasiento de la anulación" filas=ficha.contraasiento.filas numero=ficha.contraasiento.numero fecha=ficha.contraasiento.fecha %}{% else %}<p class="muted">Este cobro no tenía asiento (es anterior a que se asienten los cobros): no hay contraasiento.</p>{% endif %}
       {% if ficha.puede_registrar_correcto %}<div class="acts-fila"><a class="btn btn-primary" href="{% url 'comercial:cobranza_registrar' %}?anulacion={{ ficha.anulacion.pk }}">Registrar el cobro correcto</a></div>{% endif %}
     </div>
   </div>
@@ -66,6 +66,6 @@
       </div>
     </div>
   </div>
-  <p class="muted" style="margin-top:12px">El asiento de este cobro no se genera en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+  {% if ficha.asiento %}{% include "comercial/_asiento.html" with titulo="Asiento del cobro" filas=ficha.asiento.filas numero=ficha.asiento.numero fecha=ficha.asiento.fecha %}{% else %}<p class="muted" style="margin-top:12px">Este cobro no tiene asiento (es anterior a que se asienten los cobros).</p>{% endif %}
 </div>
 {% endblock %}

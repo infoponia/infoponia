@@ -4,6 +4,7 @@
 # quede en la URL, que el cliente no vea perdidas ni costos y los flujos con HTMX y sin él. El cliente de Django no ve el CSRF real ni el encabezado `Origin`: eso va como paso de «navegador real» en la «Verificación a mano».
 
 from datetime import timedelta
+from decimal import Decimal
 from html import unescape
 from unittest import mock
 
@@ -27,6 +28,9 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, asiento_de_prueba, ejercicio_abierto
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -46,7 +50,7 @@ def texto(respuesta):
     return unescape(respuesta.content.decode())
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un suministro con dos detalles (dos variedades), el Vendedor y el Gerente. `nueva()` arma una entrega concretada con su enlace de confirmación; el cliente es un `Client` anónimo aparte."""
 
     @classmethod
@@ -361,6 +365,21 @@ class AtenderEntregaNoReconocidaVistaTests(Base):
         self.url = reverse("comercial:entrega_no_reconocida", args=[self.entrega.pk])
         self.ficha = reverse("comercial:suministro", args=[self.contrato.pk])
 
+    def test_tarea_con04d_la_pantalla_muestra_los_asientos_de_la_entrega_en_lugar_de_fuera_de_esta_ronda(self):
+        """CON-04d, decisión (3) del 26/11/2026 y regla 1 de COM-ATN-ENR: «los asientos de la venta y del costo» de la entrega, como texto sin enlace, solo al Gerente (que ya ve los importes); el Vendedor recibe 403 y no ve nada."""
+        ej = ejercicio_abierto(HOY - timedelta(days=30))
+        asiento_de_prueba(ej, HOY, [(cuentas.DEUDORES_POR_VENTAS, DEBE, Decimal("100.00")), (cuentas.VENTAS, HABER, Decimal("100.00")), (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("40.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("40.00"))], origen=self.entrega)
+        self.client.force_login(self.gerente)
+        html = texto(self.client.get(self.url))
+        for esperado in ("Asiento N.º", "Costo de Producción Vendida", "Productos Terminados", "Deudores por Ventas", "Ventas"):
+            self.assertIn(esperado, html)
+        self.assertNotIn("Fuera de esta ronda", html)
+        self.assertNotRegex(html, r"<a [^>]*>[^<]*Asiento N")
+        self.client.force_login(self.e.vendedor)
+        respuesta = self.client.get(self.url)
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertNotIn("Asiento N.º", texto(respuesta))
+
     def test_regla_solo_el_gerente_entra_y_los_demas_reciben_403(self):
         """Las vistas del Gerente con `rol_requerido`: el Vendedor, el Agrónomo y el Transportista reciben 403 en el GET y en el POST; sin sesión, al inicio de sesión. No cambia nada."""
         for cuenta in (self.e.vendedor, self.e.agronomo, crear_vendedor(email="otro@infoponia.com")):
@@ -372,10 +391,10 @@ class AtenderEntregaNoReconocidaVistaTests(Base):
         self.assertEqual(Alerta.objects.get(pk=self.alerta.pk).estado_alerta, "activa")
 
     def test_flujo_principal_el_gerente_ve_todo_y_resuelve_la_alerta(self):
-        """COM-ATN-ENR: la pantalla muestra lo que dijo el cliente, la entrega con sus cantidades, la confirmación, el cobro y los asientos «Fuera de esta ronda»; «Resolver alerta» resuelve y vuelve a la ficha del suministro con el aviso."""
+        """COM-ATN-ENR: la pantalla muestra lo que dijo el cliente, la entrega con sus cantidades, la confirmación, el cobro y los asientos de la entrega (CON-04d); «Resolver alerta» resuelve y vuelve a la ficha del suministro con el aviso."""
         self.client.force_login(self.gerente)
         html = texto(self.client.get(self.url))
-        for esperado in ("No llegó nada a la sucursal.", self.entrega.codigo, self.contrato.codigo, str(self.e.variedad), "No confirmada", "Sin cobro registrado", "Fuera de esta ronda · contabilidad", "La entrega llegó", "No llegó, producto perdido", "No llegó, producto devuelto", "Resolver alerta"):
+        for esperado in ("No llegó nada a la sucursal.", self.entrega.codigo, self.contrato.codigo, str(self.e.variedad), "No confirmada", "Sin cobro registrado", "Sin asientos", "La entrega llegó", "No llegó, producto perdido", "No llegó, producto devuelto", "Resolver alerta"):
             self.assertIn(esperado, html)
         respuesta = self.client.post(self.url, {"resultado": "no_llego_perdido", "descripcion": "Hablé con el cliente: se perdió."}, follow=True)
         self.assertEqual(respuesta.redirect_chain, [(self.ficha, 302)])

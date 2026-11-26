@@ -28,6 +28,11 @@ class ComercialConfig(AppConfig):
         # `contabilidad` (CON-04c): el texto de origen, sin dirección, de los asientos de la cosecha (su movimiento «salida por cosecha») y de la entrega. Idempotente.
         extensiones_de_contabilidad.registrar_enlace_de_origen("movimiento_de_stock", asientos_comerciales.enlace_de_movimiento_de_stock)
         extensiones_de_contabilidad.registrar_enlace_de_origen("orden_de_trabajo", asientos_comerciales.enlace_de_orden_de_trabajo)
+        # CON-04d: lo mismo para los asientos del cobro (y de lo entregado al cancelar una compra-venta), de la indemnización, de las anulaciones y de la multa.
+        extensiones_de_contabilidad.registrar_enlace_de_origen("pago_cliente", asientos_comerciales.enlace_de_pago_cliente)
+        extensiones_de_contabilidad.registrar_enlace_de_origen("solicitud_revision", asientos_comerciales.enlace_de_solicitud_revision)
+        extensiones_de_contabilidad.registrar_enlace_de_origen("anulacion", asientos_comerciales.enlace_de_anulacion)
+        extensiones_de_contabilidad.registrar_enlace_de_origen("contrato", asientos_comerciales.enlace_de_contrato)
 
         # Menú: «Comercial» para el Gerente (después de «Producción») y el Vendedor (que no tiene «Producción»: queda después de «Panel de
         # control»). ``registrar_entrada`` no repite una entrada ya registrada.

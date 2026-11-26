@@ -126,3 +126,10 @@
 /* COM-05a1: la lista de entregas */
 .danger-t{color:var(--status-danger)}
 .data-table tr.r-warn td:first-child{box-shadow:inset 3px 0 0 var(--status-warn)}
+
+/* COM-08c: las barras horizontales de «Ventas por variedad» (HTML y CSS, sin bibliotecas; el monto va escrito al lado) y las filtros de «Estadísticas». */
+.hbar{height:8px;background:var(--secondary);border-radius:999px;overflow:hidden}
+.hbar i{display:block;height:100%;background:var(--primary);border-radius:999px}
+.est-filtros .rango{display:inline-flex;align-items:center;gap:8px;font-size:13.5px}
+.est-filtros .rango .field-input{width:auto;min-width:150px}
+.est-grupo{margin-bottom:20px}

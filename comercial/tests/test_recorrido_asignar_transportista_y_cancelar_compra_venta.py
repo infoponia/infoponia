@@ -27,6 +27,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_reservas,
 )
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -44,7 +45,7 @@ def texto(respuesta):
 
 
 @override_settings(CORREO_CONFIGURADO=True)
-class RecorridoDeAsignarTransportistaYCancelarCompraVentaTests(ConDatosDeInventario, TestCase):
+class RecorridoDeAsignarTransportistaYCancelarCompraVentaTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     def setUp(self):
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 5000)

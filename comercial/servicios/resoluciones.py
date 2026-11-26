@@ -2,7 +2,7 @@
 # aceptación (COM-EVL-DSC o COM-RSV-QJA, extensión 6b) deja a un suministro «vigente» con más incumplimientos que los tolerados, el contrato se resuelve sin intervención de nadie. COM-07a dejó
 # el punto de entrada (`resolver_si_corresponde`, que las aceptaciones llaman con `transaction.on_commit`); esta tarea lo completa y suma la recuperación diaria (paso 33).
 #
-# Fuera de la ronda (D-57, D-69 punto 8): el asiento de la multa (postcondición h, paso 6.4 y extensión 5b) y su precondición c. La multa se informa igual en la alerta y en el aviso al cliente.
+# CON-04d (D-92 punto 10): el asiento de la multa (postcondición h, paso 6.4) lo hace `asientos_comerciales.asentar_multa_de_resolucion`; la precondición c y la extensión 5b desaparecen (D-92 punto 2).
 #
 # Un intento = UNA transacción (la garantía mínima de atomicidad del caso de uso), con el orden de bloqueo de «Resolver un suministro» (docs/patrones/bloqueos.md; el de «Cancelar una
 # compra-venta» con el suministro en lugar de la venta; `FOR NO KEY UPDATE`): las cuentas → los invernaderos (`bloquear_invernadero_para_alertas`: activo o no, D-64 punto 12) → el cliente →
@@ -22,7 +22,7 @@ from django.http import Http404
 from django.urls import reverse
 
 from comercial.models import AlertaComercial, Cliente, Contrato, DetalleReserva, DetalleSuministro, Entrega, ReservaStock, SolicitudRevision, Suministro
-from comercial.servicios import comprobantes, entregas, faltantes, stock_maduro
+from comercial.servicios import asientos_comerciales, comprobantes, entregas, faltantes, stock_maduro
 from comercial.servicios.compra_ventas import texto_de_pesos
 from core import notificaciones
 from core.procesos import ResumenDePaso
@@ -321,6 +321,8 @@ def _resolver(suministro_id, hoy, previo):
         # 4.7: la alerta «suministro resuelto» para el Gerente.
         descripcion = _descripcion_de_la_alerta(suministro, solicitud, cosechas_canceladas, entregas_canceladas, partidas)
         alerta = _crear_la_alerta(ahora, descripcion)
+        # 4.6 bis, h (CON-04d): el asiento de la multa, DESPUÉS de todos los bloqueos de negocio: el ejercicio va último (D-86). Actor `None`: la resolución es de InfoPonia en sus dos caminos.
+        asiento = asientos_comerciales.asentar_multa_de_resolucion(Suministro.objects.get(pk=suministro.pk), hoy)
         # 4.9: los avisos (dentro de la transacción, D-42).
         vendedor = _avisar_al_vendedor(suministro, entregas_canceladas)
         if alerta is None:  # D-63 punto 4: sin invernadero activo del Vendedor no hay alerta: se avisa al Vendedor y al Gerente con el mismo texto.
@@ -329,7 +331,7 @@ def _resolver(suministro_id, hoy, previo):
                 notificaciones.notificar(gerente, _acotar(f"{suministro.codigo} resuelto por incumplimientos", notificaciones.LARGO_TITULO), _acotar(descripcion, notificaciones.LARGO_DETALLE))
         avisados = _avisar_a_los_agronomos(suministro, cosechas_canceladas, partidas, cancelaciones)
         # 4.8: UN registro de auditoría (D-36).
-        _auditar(suministro, hoy, solicitud, ahora, reservas_liberadas, cosechas_canceladas, entregas_canceladas, reservas_de_envases, partidas, alertas_resueltas, alerta)
+        _auditar(suministro, hoy, solicitud, ahora, reservas_liberadas, cosechas_canceladas, entregas_canceladas, reservas_de_envases, partidas, alertas_resueltas, alerta, asiento)
         # 5: después de confirmar, PROD-ASG-CAM con lo que ingresó y con lo que se liberó de la cámara, y el aviso de resolución al cliente.
         ids = sorted({p.pk for p in partidas} | set(reasignar))
         if ids:
@@ -342,7 +344,7 @@ def _resolver(suministro_id, hoy, previo):
         )
 
 
-def _auditar(suministro, hoy, solicitud, ahora, reservas_liberadas, cosechas_canceladas, entregas_canceladas, reservas_de_envases, partidas, alertas_resueltas, alerta):
+def _auditar(suministro, hoy, solicitud, ahora, reservas_liberadas, cosechas_canceladas, entregas_canceladas, reservas_de_envases, partidas, alertas_resueltas, alerta, asiento=None):
     """Paso 4.8 (m): el único registro del caso de uso, sin usuario (InfoPonia, D-27). Afectados: el suministro (principal), los detalles, las reservas liberadas, las cosechas y las entregas
     canceladas con sus reservas de envases, las partidas creadas con su movimiento, las alertas resueltas y la creada. Las funciones incluidas no auditan por su cuenta."""
     movimientos = list(MovimientoStock.objects.filter(partida__in=partidas, tipo_movimiento=MovimientoStock.TipoMovimiento.INGRESO_A_CAMARA).order_by("pk")) if partidas else []
@@ -368,6 +370,7 @@ def _auditar(suministro, hoy, solicitud, ahora, reservas_liberadas, cosechas_can
         ("movimientos_creados", movimientos),
         ("alertas_resueltas", alertas_resueltas),
         ("alertas_creadas", [alerta] if alerta is not None else []),
+        ("asientos", [asiento] if asiento is not None else []),
     ):
         if valores:
             datos[clave] = [str(v) for v in valores]
@@ -377,6 +380,7 @@ def _auditar(suministro, hoy, solicitud, ahora, reservas_liberadas, cosechas_can
         afectados=[
             suministro, *ahora.detalles, *reservas_liberadas, *cosechas_canceladas, *entregas_canceladas, *reservas_de_envases, *partidas, *movimientos, *alertas_resueltas,
             *([alerta] if alerta is not None else []),
+            *([asiento] if asiento is not None else []),
         ],
         detalle={"cambios": cambios, "datos": datos},
     )
@@ -452,6 +456,7 @@ def datos_de_la_resolucion(suministro):
         incumplimientos=suministro.cantidad_incumplimientos,
         tolerados=suministro.incumplimientos_tolerados,
         multa=suministro.multa_resolucion,
+        asiento=asientos_comerciales.asiento_de(suministro.pk),  # CON-04d: el asiento de la multa (texto, sin enlace), o `None` sin multa o anterior a esta tarea
         solicitud=solicitud,
         entregas_canceladas=canceladas,
     )

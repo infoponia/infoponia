@@ -21,7 +21,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
 from comercial.models import AlertaComercial, Anulacion, ClausulaSuministrado, Cliente, Contrato, Entrega, LineaPago, PagoCliente, SolicitudRevision, Suministro
-from comercial.servicios import entregas
+from comercial.servicios import asientos_comerciales, entregas
 from comercial.servicios.compra_ventas import FRASE_DEL_MEDIO, texto_de_pesos
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
@@ -283,7 +283,7 @@ ListaDeCobros = namedtuple("ListaDeCobros", "pagina filas")
 FilaDeCobro = namedtuple("FilaDeCobro", "pago_id codigo fecha cliente cliente_id entregas medio monto atraso estado estado_texto")
 LineaDeLaFicha = namedtuple("LineaDeLaFicha", "entrega_id codigo contrato_codigo fecha_concrecion vencimiento monto_total monto_cobrado dias_atraso indemnizacion")
 FichaDeCobro = namedtuple(
-    "FichaDeCobro", "pago codigo cliente fecha medio estado usuario base indemnizacion total lineas aviso puede_reenviar puede_imprimir anulacion cobro_correcto puede_anular puede_registrar_correcto"
+    "FichaDeCobro", "pago codigo cliente fecha medio estado usuario base indemnizacion total lineas aviso puede_reenviar puede_imprimir anulacion cobro_correcto puede_anular puede_registrar_correcto asiento contraasiento"
 )
 
 
@@ -365,6 +365,7 @@ class ResumenDeCobro:
     errores: dict
     hay_pendientes: bool
     huella: str
+    asiento: list = field(default_factory=list)  # CON-04d: las líneas del asiento que se registrará (decisión (3) del 26/11/2026); vacío si el medio todavía no se eligió
 
     @property
     def hay_errores(self):
@@ -639,6 +640,7 @@ def resumen_de_cobro(actor, datos, hoy=None):
         errores=errores,
         hay_pendientes=any(l.solicitudes_pendientes for l in lineas),
         huella=_huella(hoy, lineas, fecha_pago),
+        asiento=asientos_comerciales.filas_de(asientos_comerciales.movimientos_previstos_del_cobro(datos.medio_pago, base, indemnizacion)) if lineas and datos.medio_pago in MEDIOS else [],
     )
 
 
@@ -733,10 +735,11 @@ def _registrar(quien, datos, filas, hoy, fecha_pago=None, anulacion=None):
     resueltas = list(Alerta.objects.filter(pk__in=[a.pk for a in previas], estado_alerta="resuelta").order_by("pk"))
     if quien.pk is not None and rol_de(quien) == GERENTE:
         _avisar_a_los_vendedores(pago, cliente, filas)
+    asiento = asientos_comerciales.asentar_cobro(quien, pago, lineas, hoy)  # postcondición d (CON-04d): después de todos los bloqueos; el ejercicio va último (D-86)
     RegistroAuditoria.objects.registrar(
         usuario=quien,
         accion=RegistroAuditoria.Accion.REGISTRO_COBRO,
-        afectados=[pago, *lineas, *resueltas],
+        afectados=[pago, *lineas, *resueltas, *([asiento] if asiento is not None else [])],
         detalle={
             "cambios": {
                 "medio_pago": {"antes": None, "despues": pago.medio_pago},
@@ -750,6 +753,7 @@ def _registrar(quien, datos, filas, hoy, fecha_pago=None, anulacion=None):
                 "indemnizacion_atraso_total": str(atraso),
                 "detalle_de_entregas": [f"{f.codigo}: {f.monto_a_cobrar} + {f.indemnizacion} de atraso ({f.dias_de_atraso} días)" for f in filas],
                 "alertas_resueltas": [str(a) for a in resueltas],
+                **({"asientos": [str(asiento)]} if asiento is not None else {}),
                 **({"anulacion_corregida": referencia(anulacion)} if anulacion is not None else {}),
             },
         },
@@ -928,6 +932,8 @@ def ficha_de_cobro(actor, pago_id):
         cobro_correcto=cobro_correcto,
         puede_anular=es_gerente and pago.estado_pago == PagoCliente.Estado.VIGENTE,
         puede_registrar_correcto=puede_registrar_correcto,
+        asiento=asientos_comerciales.asiento_de(pago.pk),  # CON-04d: el asiento del cobro y, si se anuló, su contraasiento (texto, sin enlace)
+        contraasiento=asientos_comerciales.asiento_de(anulacion.pk) if anulacion is not None else None,
     )
 
 
@@ -978,7 +984,6 @@ def en_mora_para(actor, hoy):
 # ---- anular un cobro (COM-ANL-CBR; COM-08b; D-94 puntos 5, 10 y 11) ----
 # Bloqueos (docs/patrones/bloqueos.md, «Cobranza»): las cuentas (el Gerente y los Vendedores) → los invernaderos de origen → las entregas → el pago y sus líneas. Es el orden de «Registrar un cobro» más el pago.
 
-CONTRAASIENTO = "Fuera de esta ronda · contabilidad"  # postcondición c: el contraasiento no existe en esta ronda (D-57)
 LARGO_DEL_MOTIVO = 500
 EntregaDeAnulacion = namedtuple("EntregaDeAnulacion", "entrega_id codigo contrato_codigo monto_cobrado dias_atraso indemnizacion estado_despues alerta")
 DatosDeAnulacionDeCobro = namedtuple("DatosDeAnulacionDeCobro", "pago codigo cliente fecha medio monto indemnizacion entregas contraasiento huella")
@@ -1021,7 +1026,7 @@ def _huella_de_anulacion(pago, filas, hoy):
 
 def datos_de_anulacion_de_cobro(actor, pago_id, hoy=None):
     """Pasos 1 y 2 de COM-ANL-CBR (solo lectura): el cobro (código, cliente, fecha, medio, monto y atraso total), cada entrega con lo cobrado y el estado en que queda (`pendiente` o `en_mora`, y si se le asegura la
-    alerta), el contraasiento como «Fuera de esta ronda» y la huella. Solo el Gerente (`PermissionDenied`); `Http404`; `cobro_de_compra_venta` (1a) y `cobro_ya_anulado` (5a)."""
+    alerta), el contraasiento previsto (sus líneas) y la huella. Solo el Gerente (`PermissionDenied`); `Http404`; `cobro_de_compra_venta` (1a) y `cobro_ya_anulado` (5a)."""
     _exigir_gerente(actor)
     hoy = hoy or stock.hoy()
     pago = _pago_para_anular(pago_id)
@@ -1035,7 +1040,7 @@ def datos_de_anulacion_de_cobro(actor, pago_id, hoy=None):
         monto=pago.monto_pagado,
         indemnizacion=sum((f.indemnizacion for f in filas), Decimal("0.00")),
         entregas=filas,
-        contraasiento=CONTRAASIENTO,
+        contraasiento=asientos_comerciales.contraasiento_previsto(pago),  # las líneas que se registrarán (o `None` si el cobro no tiene asiento: anterior a CON-04d)
         huella=_huella_de_anulacion(pago, filas, hoy),
     )
 
@@ -1116,10 +1121,11 @@ def _anular(quien, pago, filas, motivo, cliente_pago_en_fecha, hoy):
         _, creadas = reevaluar_mora_con_rastro(f.entrega_id, hoy)  # d y e: «pendiente» o «en mora»; la alerta nueva si vuelve a estar en mora
         nuevas += creadas
     _avisar_la_anulacion(pago, filas, motivo)
+    contraasiento = asientos_comerciales.asentar_anulacion(quien, anulacion, pago, hoy, f"Anulación del cobro {pago.codigo}")  # postcondición c (CON-04d)
     RegistroAuditoria.objects.registrar(
         usuario=quien,
         accion=RegistroAuditoria.Accion.ANULACION_COBRO,
-        afectados=[pago, anulacion, *lineas, *nuevas],
+        afectados=[pago, anulacion, *lineas, *nuevas, *([contraasiento] if contraasiento is not None else [])],
         detalle={
             "cambios": {"estado_pago": {"antes": PagoCliente.Estado.VIGENTE, "despues": PagoCliente.Estado.ANULADO}},
             "datos": {
@@ -1128,6 +1134,7 @@ def _anular(quien, pago, filas, motivo, cliente_pago_en_fecha, hoy):
                 "cobro_anulado": referencia(pago),
                 "entregas_que_vuelven": [f"{f.codigo}: {f.estado_despues}" for f in filas],
                 "alertas_creadas": [str(a) for a in nuevas],
+                **({"asientos": [str(contraasiento)]} if contraasiento is not None else {}),
             },
         },
     )

@@ -1,0 +1,38 @@
+{% extends "core/base_con_sesion.html" %}{% load estaticos %}
+{% comment %}«Comercial» → «Estadísticas» (COM-08c; `VIEWS.est` del prototipo, D-61): los filtros (período, invernadero y, solo para el Gerente, Vendedor) y el cuerpo con las cuatro tarjetas y los seis indicadores. Los filtros son un formulario GET común con «Ver estadísticas»: sin JavaScript funciona igual, y con HTMX solo se redibuja el cuerpo. Nada se valida al cambiar un desplegable. Recibe «filtros», «pedido», «datos», «errores», «es_gerente» y «hoy». Todo se escapa.{% endcomment %}
+{% block titulo %}Estadísticas · Comercial · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
+<div class="page">
+  <div class="page-h"><h1>Comercial</h1></div>
+  {% include "comercial/_pestanas.html" with activa="estadisticas" %}
+
+  <p class="muted" style="margin:0 0 12px">Resultados del período elegido. Las ventas se cuentan cuando se concreta la entrega y no descuentan indemnizaciones. La cobranza es la situación de hoy.</p>
+
+  <form class="filters est-filtros" method="get" action="{% url 'comercial:estadisticas' %}" role="search"
+        hx-get="{% url 'comercial:estadisticas' %}" hx-target="#cuerpo-de-estadisticas" hx-push-url="true">
+    <select class="field-input" name="periodo" data-desplegable aria-label="Período">
+      {% for valor, texto in filtros.meses %}<option value="{{ valor }}"{% if pedido.periodo == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
+      <option value="rango"{% if pedido.periodo == "rango" %} selected{% endif %}>Otro rango</option>
+    </select>
+    <span class="rango">
+      <label for="est-desde">Desde</label><input class="field-input" id="est-desde" type="date" name="desde" value="{{ pedido.desde }}">
+      <label for="est-hasta">Hasta</label><input class="field-input" id="est-hasta" type="date" name="hasta" value="{{ pedido.hasta }}">
+    </span>
+    <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero">
+      <option value="">Todos los invernaderos</option>
+      {% for id, nombre in filtros.invernaderos %}<option value="{{ id }}"{% if pedido.invernadero == id|stringformat:"s" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    {% if es_gerente %}
+    <select class="field-input" name="vendedor" data-desplegable aria-label="Vendedor">
+      <option value="">Todos los Vendedores</option>
+      {% for id, nombre in filtros.vendedores %}<option value="{{ id }}"{% if pedido.vendedor == id|stringformat:"s" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <button class="btn btn-primary" type="submit">Ver estadísticas</button>
+  </form>
+  <p class="hint" style="margin:-8px 0 16px">«Desde» y «Hasta» solo se usan con «Otro rango» (hasta {{ hoy|date:"d/m/Y" }}, de a lo sumo un año).</p>
+
+  <div id="cuerpo-de-estadisticas">{% include "comercial/estadisticas/_cuerpo.html" %}</div>
+</div>
+{% endblock %}

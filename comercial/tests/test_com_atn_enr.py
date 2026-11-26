@@ -20,6 +20,7 @@ from comercial.servicios.concrecion import DatosDeConcrecion
 from comercial.servicios.confirmacion import NO_RECIBI, DatosDeRespuesta
 from comercial.tests.fabricas import cobro, entrega_concretable, escenario_comercial, verificar_invariantes_de_entregas, verificar_invariantes_de_solicitudes
 from contabilidad.models import AsientoContable
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from core.models import Contador, Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_cuenta, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -42,7 +43,7 @@ def campos(error):
     return sorted(error.error_dict) if hasattr(error, "error_dict") else []
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor, un lote y un Gerente. `no_reconocida()` arma el recorrido real hasta la alerta crítica."""
 
     @classmethod
@@ -76,7 +77,7 @@ class Base(ConDatosDeInventario, TestCase):
 class FichaTests(Base):
     def test_regla_1_la_ficha_trae_todo_lo_que_genero_la_entrega(self):
         """Regla 1: las líneas con sus cantidades, el transportista y su vehículo, cuándo se concretó, los intentos fallidos, la confirmación con el motivo del cliente, los consumos de envases, el cobro y los
-        asientos («Fuera de esta ronda · contabilidad», D-57)."""
+        asientos (CON-04d: el de la venta y el costo de la entrega y el de cada consumo de envase, con sus líneas; antes «Fuera de esta ronda · contabilidad», D-57)."""
         x = self.no_reconocida()
         IntentoFallido.objects.create(entrega=x.entrega, transportista=x.transportista, fecha_programada=HOY, motivo="cliente_ausente", descripcion="Nadie atendió.")
         ficha = atencion.ficha_de_no_reconocida(self.gerente, x.alerta.pk)
@@ -89,7 +90,10 @@ class FichaTests(Base):
         self.assertEqual((ficha.confirmacion, ficha.motivo_del_cliente), ("No confirmada", "No llegó nada a la sucursal."))
         self.assertEqual(len(ficha.consumos), 1)
         self.assertIn("Bandeja", ficha.consumos[0])
-        self.assertEqual((ficha.cobro, ficha.asientos), ("Sin cobro registrado", "Fuera de esta ronda · contabilidad"))
+        self.assertEqual(ficha.cobro, "Sin cobro registrado")
+        self.assertEqual([a.titulo for a in ficha.asientos], ["Venta y costo de la entrega", "Consumo de envases"])
+        self.assertIn("Productos Terminados", [f.cuenta for f in ficha.asientos[0].filas])
+        self.assertIn("Insumos en Stock", [f.cuenta for f in ficha.asientos[1].filas])
         self.assertEqual([valor for valor, _ in ficha.resultados], ["llego", "no_llego_perdido", "no_llego_devuelto"])
 
     def test_regla_1_sin_envasado_ni_intentos_la_ficha_los_deja_vacios(self):
@@ -209,25 +213,48 @@ class AtenderTests(Base):
         self.atender(x, "llego", "El cliente se equivocó.")
         self.assertEqual(Alerta.objects.get(pk=x.alerta.pk).estado_alerta, "resuelta")
 
-    def test_post_b_no_llego_avisa_al_vendedor_y_al_responsable_contable_sin_el_gerente_que_atiende(self):
-        """Postcondición b: con «no llegó» se avisa al Vendedor del contrato y al responsable contable: sin Contador es el Gerente, que es quien atiende y no se avisa a sí mismo."""
+    def test_post_b_no_llego_ya_no_avisa_al_vendedor_y_sin_contador_el_gerente_que_atiende_no_se_avisa_a_si_mismo(self):
+        """Postcondición b con CON-04d (D-85 punto 8, D-92 punto 11): el Vendedor ya NO recibe el aviso «corresponde corregir los asientos a mano». Sin Contador el responsable contable es el Gerente, que es quien atiende
+        y no se avisa a sí mismo (H21, D-85 punto 7): no queda ningún aviso. REEMPLAZA a `test_post_b_no_llego_avisa_al_vendedor_y_al_responsable_contable_…` (COM-06b), que esperaba un aviso al Vendedor."""
         x = self.no_reconocida()
         self.atender(x, "no_llego_perdido")
-        (aviso,) = self.avisos(self.e.vendedor)
-        self.assertIn(x.entrega.codigo, aviso.detalle)
-        self.assertIn("no llegó al cliente (producto perdido)", aviso.detalle)
-        self.assertIn("corregir los asientos a mano", aviso.detalle)
+        self.assertEqual(self.avisos(self.e.vendedor), [])
         self.assertEqual(self.avisos(self.gerente), [])
 
-    def test_post_b_con_contador_el_aviso_va_al_contador_y_no_al_gerente(self):
-        """Postcondición b (H12, disparador «Cuando exista el rol Contador»): con un Contador activo, el aviso va al Contador y al Vendedor; con «producto devuelto» el texto lo dice."""
+    def test_post_b_con_contador_el_aviso_va_solo_al_contador_y_no_al_vendedor_ni_al_gerente(self):
+        """Postcondición b con CON-04d y H12: con un Contador activo, el aviso va al Contador («OT-… no llegó al cliente (producto devuelto): corresponde corregir los asientos a mano.») y a nadie más: ni al Vendedor ni al
+        Gerente que atiende. REEMPLAZA a `test_post_b_con_contador_el_aviso_va_al_contador_y_no_al_gerente` (COM-06b), que esperaba además un aviso al Vendedor."""
         contador = crear_cuenta(Contador, email="contador@infoponia.com")
         x = self.no_reconocida()
         self.atender(x, "no_llego_devuelto")
-        self.assertEqual(len(self.avisos(self.e.vendedor)), 1)
         (aviso,) = self.avisos(contador)
+        self.assertIn(x.entrega.codigo, aviso.detalle)
         self.assertIn("no llegó al cliente (producto devuelto)", aviso.detalle)
+        self.assertIn("corresponde corregir los asientos a mano", aviso.detalle)
+        self.assertEqual(self.avisos(self.e.vendedor), [])
         self.assertEqual(self.avisos(self.gerente), [])
+
+    def test_post_b_un_contador_dado_de_baja_deja_de_ser_el_responsable_y_no_recibe_el_aviso(self):
+        """D-85 punto 4 y `responsable_contable`: el aviso va al Contador ACTIVO. Con la cuenta del Contador dada de baja, el responsable es el Gerente (que atiende, así que tampoco hay aviso); el Contador de baja no recibe nada."""
+        from core.models import Usuario
+
+        contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        Usuario.objects.filter(pk=contador.pk).update(is_active=False)
+        from django.core.cache import cache
+
+        cache.clear()
+        x = self.no_reconocida()
+        self.atender(x, "no_llego_perdido")
+        self.assertEqual((self.avisos(contador), self.avisos(self.e.vendedor)), ([], []))
+
+    def test_post_b_el_aviso_usa_el_responsable_contable_y_no_pregunta_por_el_rol(self):
+        """D-85 punto 5 («nunca `rol == ...` suelto»): el aviso se manda con `responsables.notificar_al_responsable_contable`, excluyendo al Gerente que atiende."""
+        x = self.no_reconocida()
+        with mock.patch("comercial.servicios.atencion.responsables.notificar_al_responsable_contable") as notificar:
+            self.atender(x, "no_llego_perdido")
+        (llamada,) = notificar.call_args_list
+        self.assertTrue(llamada.args[0].startswith(f"Corregir los asientos de {x.entrega.codigo}"))
+        self.assertEqual(llamada.kwargs["excluir"].pk, self.gerente.pk)
 
     def test_post_b_la_entrega_que_llego_no_avisa_a_nadie(self):
         """Postcondición b es solo de «no llegó»: con «la entrega llegó» (el cliente se equivocó) no hay nada que corregir y no se avisa."""

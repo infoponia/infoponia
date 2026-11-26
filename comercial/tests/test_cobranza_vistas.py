@@ -16,6 +16,9 @@ from comercial.models import PagoCliente
 from comercial.servicios import cobranza, registrantes
 from comercial.tests.base_cobranza import HOY, BaseDeCobranza
 from comercial.tests.fabricas import cobro, compra_venta, detalle, discrepancia, entrega_concretada, reserva_lista
+from contabilidad.tests.fabricas import verificar_invariantes_contables  # noqa: F401
+from core.models import Contador
+from core.tests.fabricas import crear_cuenta
 from maestros.tests.fabricas import crear_transportista, crear_vendedor
 
 D = Decimal
@@ -108,7 +111,7 @@ class RegistrarTests(BaseDeVistas):
         """Con `?cliente=` el cliente queda fijo y aparecen «Entregas que paga» con las entregas del cliente, el atraso de cada una, el resumen y los textos explicativos; «Pago» no aparece hasta elegir una entrega."""
         e = self.en_mora(dias_de_mora=3)
         html = texto(self.ir("cobranza_registrar", QUERY_STRING=f"cliente={self.e.cliente.pk}"))
-        for esperado in ("Se registra el cobro de este cliente.", "Entregas que paga", e.codigo, "3 días de atraso · $ 900,00", "Cada entrega se paga completa", "Días de atraso × lo pactado por día", "Fuera de esta ronda · contabilidad", "Calcular total"):
+        for esperado in ("Se registra el cobro de este cliente.", "Entregas que paga", e.codigo, "3 días de atraso · $ 900,00", "Cada entrega se paga completa", "Días de atraso × lo pactado por día", "Al confirmar se registra el asiento del cobro", "Calcular total"):
             self.assertIn(esperado, html)
         self.assertNotIn("Medio de pago", html)
 
@@ -156,7 +159,7 @@ class RegistrarTests(BaseDeVistas):
         e = self.en_mora(dias_de_mora=5)
         respuesta = self.enviar("cobranza_revisar", datos=self.pedido([e]))
         html = texto(respuesta)
-        for esperado in ("Revisá el cobro", e.codigo, "$ 1.000,00", "5 días · $ 1.500,00", "$ 2.500,00", "Transferencia", f"{HOY:%d/%m/%Y}", "Fuera de esta ronda · contabilidad", "Confirmar cobro", 'name="huella"'):
+        for esperado in ("Revisá el cobro", e.codigo, "$ 1.000,00", "5 días · $ 1.500,00", "$ 2.500,00", "Transferencia", f"{HOY:%d/%m/%Y}", "Asiento que se registra al confirmar", "Confirmar cobro", 'name="huella"'):
             self.assertIn(esperado, html)
         self.assertEqual(PagoCliente.objects.filter(tipo_pago="suministro").count(), 0)
 
@@ -378,7 +381,7 @@ class AnulacionVistasTests(BaseDeVistas):
     # ---- la pantalla ----
 
     def test_flujo_principal_la_pantalla_dice_que_pasa_con_cada_entrega_y_pide_el_motivo(self):
-        """Paso 2: el cobro, qué va a pasar con cada entrega («vuelve a en mora» o «vuelve a pendiente»), el contraasiento como «Fuera de esta ronda · contabilidad», el motivo y la casilla; con su texto explicativo."""
+        """Paso 2: el cobro, qué va a pasar con cada entrega («vuelve a en mora» o «vuelve a pendiente»), el contraasiento (el cobro de la fábrica no tiene asiento: dice que no se registra contraasiento), el motivo y la casilla; con su texto explicativo."""
         en_mora, pendiente = self.en_mora(dias_de_mora=3), self.concretada()
         pago = cobro([en_mora, pendiente], usuario=self.gerente)
         html = texto(self.ir("cobro_anular", pago.pk))
@@ -386,7 +389,7 @@ class AnulacionVistasTests(BaseDeVistas):
             pago.codigo,
             "vuelve a «en mora»",
             "vuelve a «pendiente»",
-            "Fuera de esta ronda · contabilidad",
+            "no se registra contraasiento",
             "Motivo",
             "El cliente pagó en esa fecha",
             "Anular cobro",
@@ -509,3 +512,52 @@ class AnulacionVistasTests(BaseDeVistas):
         self.assertIn("Registrar el cobro correcto", texto(self.ir("cobro", pago.pk)))
         cobro([e], usuario=self.gerente)  # un cobro común de la misma entrega
         self.assertNotIn("Registrar el cobro correcto", texto(self.ir("cobro", pago.pk)))
+
+
+class AsientoEnPantallaTests(BaseDeVistas):
+    """CON-04d · paso 6, decisión (3) del estudiante del 26/11/2026: donde antes decía «Fuera de esta ronda · contabilidad» las pantallas muestran el asiento real (las líneas que se van a registrar en los resúmenes;
+    «Asiento N.º X» con sus líneas en las fichas), SIN enlace, y solo a los roles que ya ven importes en esa pantalla (el Gerente y el Vendedor del contrato; los demás reciben 403 y no ven nada)."""
+
+    def cobrar(self, e, medio="transferencia", actor=None):
+        actor = actor or self.gerente
+        datos = cobranza.DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[e.pk], medio_pago=medio)
+        with override_settings(CORREO_CONFIGURADO=False):
+            return cobranza.registrar_cobro(actor, datos, cobranza.resumen_de_cobro(actor, datos, HOY).huella, HOY)
+
+    def test_tarea_con04d_el_resumen_del_cobro_muestra_las_lineas_del_asiento_que_se_va_a_registrar(self):
+        """Paso 8 de COM-REG-CBR: Debe Banco c/c 2.500,00 / Haber Deudores por Ventas 1.000,00 / Haber Indemnizaciones por Atraso en el Pago 1.500,00, y ya no «Fuera de esta ronda»."""
+        e = self.en_mora(dias_de_mora=5)
+        for actor in (self.gerente, self.e.vendedor):
+            html = texto(self.enviar("cobranza_revisar", datos=self.pedido([e]), usuario=actor))
+            for esperado in ("Banco c/c", "Deudores por Ventas", "Indemnizaciones por Atraso en el Pago", "$ 2.500,00", "$ 1.000,00", "$ 1.500,00", "Debe", "Haber"):
+                self.assertIn(esperado, html, actor)
+            self.assertNotIn("Fuera de esta ronda", html)
+        self.assertEqual(PagoCliente.objects.filter(tipo_pago="suministro").count(), 0)
+
+    def test_tarea_con04d_la_ficha_del_cobro_muestra_el_asiento_sin_enlace_y_solo_a_quien_ve_importes(self):
+        """La ficha del cobro: «Asiento N.º 1» con sus líneas, como texto (ningún enlace a /contabilidad/); el Gerente y el Vendedor del contrato lo ven; el Contador y el Agrónomo reciben 403 y no ven nada."""
+        pago = self.cobrar(self.concretada(), medio="efectivo")
+        for actor in (self.gerente, self.e.vendedor):
+            html = texto(self.ir("cobro", pago.pk, usuario=actor))
+            for esperado in ("Asiento N.º 1", "Caja", "Deudores por Ventas", "$ 1.000,00"):
+                self.assertIn(esperado, html, actor)
+            self.assertNotIn("Fuera de esta ronda", html)
+            self.assertNotRegex(html, r"<a [^>]*>[^<]*Asiento N.º")  # texto, sin enlace (el menú sí tiene su entrada «Contabilidad»)
+        for ajeno in (self.e.agronomo, crear_cuenta(Contador, email="contador@infoponia.com")):
+            respuesta = self.ir("cobro", pago.pk, usuario=ajeno)
+            self.assertEqual(respuesta.status_code, 403)
+            self.assertNotIn("Asiento N.º", texto(respuesta))
+
+    def test_tarea_con04d_anular_cobro_muestra_el_contraasiento_previsto_y_la_ficha_el_real(self):
+        """Paso 2 de COM-ANL-CBR: el contraasiento previsto (Debe Deudores / Haber Banco c/c, invertido); después de anular, la ficha del cobro muestra el asiento y su contraasiento."""
+        pago = self.cobrar(self.concretada())
+        html = texto(self.ir("cobro_anular", pago.pk))
+        for esperado in ("Contraasiento", "Banco c/c", "Deudores por Ventas", "$ 1.000,00"):
+            self.assertIn(esperado, html)
+        self.assertNotIn("Fuera de esta ronda", html)
+        datos = cobranza.datos_de_anulacion_de_cobro(self.gerente, pago.pk, HOY)
+        cobranza.anular_cobro(self.gerente, pago.pk, "Error de carga.", False, datos.huella, HOY)
+        ficha = texto(self.ir("cobro", pago.pk))
+        self.assertIn("Asiento N.º 1", ficha)
+        self.assertIn("Asiento N.º 2", ficha)
+        self.assertNotIn("Fuera de esta ronda", ficha)

@@ -28,6 +28,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_reservas,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -52,7 +53,7 @@ def huella_de(respuesta):
 
 
 @override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test")
-class RecorridoDeConfirmacionDelClienteTests(ConDatosDeInventario, TestCase):
+class RecorridoDeConfirmacionDelClienteTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     def setUp(self):
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 5000)
@@ -180,14 +181,14 @@ class RecorridoDeConfirmacionDelClienteTests(ConDatosDeInventario, TestCase):
         self.client.force_login(self.gerente)
         self.assertIn(url_b, texto(self.client.get(ficha_b)))
         pantalla = texto(self.client.get(url_b))
-        for esperado in ("No llegó nada a la sucursal de Santo Tomé.", e_b.codigo, "Fuera de esta ronda · contabilidad", "Sin cobro registrado", "100"):
+        for esperado in ("No llegó nada a la sucursal de Santo Tomé.", e_b.codigo, "Asiento N.º", "Sin cobro registrado", "100"):
             self.assertIn(esperado, pantalla)
         resuelta = self.client.post(url_b, {"resultado": "no_llego_perdido", "descripcion": "Hablé con el cliente y con el chofer: se perdió."}, follow=True)
         self.assertEqual(resuelta.redirect_chain, [(ficha_b, 302)])
         critica.refresh_from_db()
         self.assertEqual(critica.estado_alerta, "resuelta")
         self.assertEqual(AlertaComercial.objects.get(alerta=critica).resultado_averiguacion, "no_llego_perdido")
-        self.assertTrue(any("no llegó al cliente (producto perdido)" in n.detalle for n in Notificacion.objects.filter(destinatario=self.e.vendedor)))
+        self.assertFalse(any("no llegó al cliente (producto perdido)" in n.detalle for n in Notificacion.objects.filter(destinatario=self.e.vendedor)))  # CON-04d (D-85 punto 8): el Vendedor ya no recibe este aviso; sin Contador, el Gerente que atiende tampoco (H21)
         self.assertEqual(RegistroAuditoria.objects.filter(accion__in=["respuesta_cliente_entrega", "atencion_entrega_no_reconocida"]).count(), 3)
 
         # ---- la ficha del cliente informa las quejas pendientes ----
