@@ -3,7 +3,7 @@
 # indicadores de un período; `resultados_del_mes` es lo que muestra el panel del Vendedor. EST-03 (app `estadisticas`, nivel 8) llama a las dos primeras con un período cualquiera.
 #
 # Convención del período: la misma que `estadisticas/periodos.py` (EST-01 y EST-02; D-93 punto 2): días inclusivos, `desde <= hasta`, `hasta <= hoy` y un máximo de 366 días. `comercial` (nivel 6) no
-# puede importar de `estadisticas` (nivel 8, regla A1 de D-37): la convención se repite acá y una prueba compara los límites de las dos.
+# puede importar de `estadisticas` (nivel 8, regla A1 de D-37): la convención se repite acá y una prueba de `estadisticas` (`test_convencion_de_periodo.py`) compara los límites de las dos.
 # Rendimiento: una consulta agregada por indicador (`values().annotate()`), con los filtros en la base; nunca una consulta por fila.
 
 import calendar

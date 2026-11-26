@@ -855,21 +855,18 @@ class FuncionesPublicasRendimientoTests(BaseDeEstadisticas):
         self.assertLessEqual(con_2["resultados_del_mes"], 8)
         self.assertLessEqual(con_2["filtros_gerente"], 4)
 
-    def test_regla_2_la_convencion_de_dias_es_la_de_estadisticas_periodos(self):
-        """Las tres pantallas (EST-01, EST-02 y COM-08c) aceptan y rechazan lo mismo: días inclusivos, `hasta <= hoy`, `desde <= hasta` y 366 días como máximo (`estadisticas.periodos.validar`)."""
-        from estadisticas import periodos
-
+    def test_regla_2_la_convencion_de_dias_es_la_de_las_otras_pantallas_de_estadisticas(self):
+        """Días inclusivos, `hasta <= hoy`, `desde <= hasta` y 366 días como máximo: la convención de EST-01 y EST-02 (D-93 punto 2). La comparación con `estadisticas.periodos.validar` está en
+        `estadisticas/tests/test_convencion_de_periodo.py` (`comercial` no puede importar de `estadisticas`, A1 de D-37; ni siquiera sus pruebas)."""
         dia = date(2026, 11, 26)
-        casos = [(dia - timedelta(days=n), dia) for n in (0, 1, 364, 365, 366, 400)] + [(dia, dia - UN_DIA), (dia, dia + UN_DIA), (dia - UN_DIA, dia + UN_DIA)]
-        for desde, hasta in casos:
-            try:
-                periodos.validar(desde, hasta, dia)
-                esperado = True
-            except ValidationError:
-                esperado = False
+        casos = (
+            (dia, dia, True), (dia - timedelta(days=1), dia, True), (dia - timedelta(days=364), dia, True), (dia - timedelta(days=365), dia, True),
+            (dia - timedelta(days=366), dia, False), (dia - timedelta(days=400), dia, False), (dia, dia - UN_DIA, False), (dia, dia + UN_DIA, False), (dia - UN_DIA, dia + UN_DIA, False),
+        )
+        for desde, hasta, valido in casos:
             try:
                 self.filtros(self.gerente, hoy=dia, periodo="rango", desde=desde.isoformat(), hasta=hasta.isoformat())
                 obtenido = True
             except ValidationError:
                 obtenido = False
-            self.assertEqual(obtenido, esperado, (desde, hasta))
+            self.assertEqual(obtenido, valido, (desde, hasta))
