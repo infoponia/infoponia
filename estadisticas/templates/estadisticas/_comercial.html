@@ -1,0 +1,87 @@
+{% load comercial %}{% comment %}Pestaña «Comercial» de las consolidadas (EST-03, EST-CNS-CNS regla 3.2; D-93 punto 4.8). La estructura, los textos, el orden y el formato de los números son los de «Comercial › Estadísticas» (COM-08c, `comercial/estadisticas/_cuerpo.html`), copiados acá para no tocar la otra app; los números NO se calculan en esta app: salen de `comercial.servicios.estadisticas` (H25). Se les suma la comparación con el período anterior (D-93 punto 2) en los totales; la cobranza es una foto a hoy y no se compara (decisión del estudiante, 26/11/2026), ni las filas por variedad y por cliente. Recibe «a» (los bloques del período; `a.comerciales` es el `Estadisticas` de comercial), «deltas» (texto y color de cada comparación; vacío si la comparación está apagada) y «enlace_a_comercial». Todo se escapa.{% endcomment %}
+{% with d=a.comerciales v=a.comerciales.ventas p=a.comerciales.puntualidad i=a.comerciales.incumplimientos c=a.comerciales.cobranza f=a.comerciales.faltantes l=a.comerciales.enlaces %}
+<p class="muted sm" style="margin:12px 0">Resultados del período elegido. Las ventas se cuentan cuando se concreta la entrega y no descuentan indemnizaciones. La cobranza es la situación de hoy.
+  Son los mismos números de «Comercial › Estadísticas», de todos los invernaderos y todos los Vendedores. <a class="link" href="{{ enlace_a_comercial }}">Verlos en Comercial, con filtros</a>.</p>
+<div class="kpis">
+  <div class="kpi"><div class="k">Ventas</div><div class="v">{{ v.total|pesos }}</div><div class="d">{{ v.entregas }} entrega{{ v.entregas|pluralize }} concretada{{ v.entregas|pluralize }}{% if deltas.ventas_monto %}<span class="dta {{ deltas.ventas_monto.clase }}">{{ deltas.ventas_monto.texto }}</span>{% endif %}</div></div>
+  <div class="kpi"><div class="k">Entregas a tiempo</div><div class="v">{{ p.porcentaje_a_tiempo|porcentaje }}</div><div class="d">{{ p.con_retraso }} con retraso{% if deltas.a_tiempo %}<span class="dta {{ deltas.a_tiempo.clase }}">{{ deltas.a_tiempo.texto }}</span>{% endif %}</div></div>
+  <div class="kpi{% if i.cantidad %} warn{% endif %}"><div class="k">Indemnizado</div><div class="v">{{ i.total|pesos }}</div><div class="d">{{ i.cantidad }} solicitud{{ i.cantidad|pluralize:",es" }} aceptada{{ i.cantidad|pluralize }}{% if deltas.indemnizado %}<span class="dta {{ deltas.indemnizado.clase }}">{{ deltas.indemnizado.texto }}</span>{% endif %}</div></div>
+  <div class="kpi{% if c.en_mora_cantidad %} danger{% endif %}"><div class="k">Cobranza en mora</div><div class="v">{{ c.en_mora_total|pesos }}</div><div class="d">a la fecha</div></div>
+</div>
+
+<div class="stack" style="margin-top:14px">
+<div class="split est-grupo">
+  <div class="card">
+    <div class="card-title">Ventas por variedad</div>
+    <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Plantas</th><th class="right">Monto</th><th style="width:34%"></th></tr></thead><tbody>
+    {% for x in v.variedades %}
+      <tr><td><b>{{ x.variedad }}</b></td><td class="right">{{ x.plantas|miles }}</td><td class="right">{{ x.monto|pesos }}</td><td><div class="hbar" aria-hidden="true"><i style="width:{{ x.monto|ancho_de_barra:v.variedades.0.monto }}%"></i></div></td></tr>
+    {% empty %}
+      <tr><td colspan="4" class="muted">Sin ventas en el período.</td></tr>
+    {% endfor %}
+    </tbody></table>
+    <div class="card-b">{% if deltas.ventas_plantas %}<span class="dta {{ deltas.ventas_plantas.clase }}">Plantas vendidas: {{ v.plantas|miles }} · {{ deltas.ventas_plantas.texto }}</span>{% endif %}
+    <div class="acts-fila"><a class="btn btn-ghost" href="{{ l.compra_ventas }}">Ver compra-ventas</a> <a class="btn btn-ghost" href="{{ l.suministros }}">Ver suministros</a></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Entregas a tiempo y con retraso</div>
+    <div class="facts two">
+      <div><span class="k">A tiempo</span><span class="v">{{ p.a_tiempo }}</span><span class="d">{{ p.porcentaje_a_tiempo|porcentaje }}</span></div>
+      <div><span class="k">Con retraso</span><span class="v">{{ p.con_retraso }}</span><span class="d">{{ p.porcentaje_con_retraso|porcentaje }}</span></div>
+      <div><span class="k">Promedio de retraso de las entregas con retraso</span><span class="v">{% if p.promedio_de_retraso is None %}—{% else %}{{ p.promedio_de_retraso|un_decimal }} días{% endif %}</span>{% if deltas.promedio_de_retraso %}<span class="dta {{ deltas.promedio_de_retraso.clase }}">{{ deltas.promedio_de_retraso.texto }}</span>{% endif %}</div>
+      <div><span class="k">Intentos de entrega fallidos</span><span class="v">{{ p.intentos_fallidos }}</span><span class="d">El transportista llegó y no pudo entregar (cliente ausente, domicilio cerrado…); la entrega pasó a otro día.</span>{% if deltas.intentos_fallidos %}<span class="dta {{ deltas.intentos_fallidos.clase }}">{{ deltas.intentos_fallidos.texto }}</span>{% endif %}</div>
+    </div>
+    <div class="card-b"><p class="hint">A tiempo es en la fecha prometida al cliente o antes (la pactada o la del período), aunque la entrega se haya reprogramado.</p>
+    <div class="acts-fila"><a class="btn btn-ghost" href="{{ l.entregas }}">Ver entregas</a></div></div>
+  </div>
+</div>
+
+<div class="split est-grupo">
+  <div class="card">
+    <div class="card-title">Incumplimientos aceptados</div>
+    <div class="facts two">
+      <div><span class="k">Aceptados</span><span class="v">{{ i.cantidad }}</span><span class="d">{{ i.quejas }} queja{{ i.quejas|pluralize }} y {{ i.discrepancias }} discrepancia{{ i.discrepancias|pluralize }}</span>{% if deltas.incumplimientos %}<span class="dta {{ deltas.incumplimientos.clase }}">{{ deltas.incumplimientos.texto }}</span>{% endif %}</div>
+      <div><span class="k">Descuentos sobre el monto a cobrar</span><span class="v">{{ i.descuentos|pesos }}</span></div>
+      <div><span class="k">Pagadas en dinero</span><span class="v">{{ i.pagos_en_dinero|pesos }}</span></div>
+    </div>
+    <div class="card-b"><p class="hint">Quejas y discrepancias que el Gerente aceptó en el período. Las anuladas no cuentan.</p>
+    <div class="acts-fila"><a class="btn btn-ghost" href="{{ l.solicitudes }}">Ver solicitudes</a></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Cobranza a la fecha</div>
+    <div class="facts two">
+      <div><span class="k">Pendiente</span><span class="v">{{ c.pendiente_total|pesos }}</span><span class="d">{{ c.pendiente_cantidad }} entrega{{ c.pendiente_cantidad|pluralize }}</span></div>
+      <div><span class="k">En mora hasta 30 días</span><span class="v">{{ c.hasta_30|pesos }}</span></div>
+      <div><span class="k">En mora de 31 a 60 días</span><span class="v">{{ c.de_31_a_60|pesos }}</span></div>
+      <div><span class="k">En mora más de 60 días</span><span class="v">{{ c.mas_de_60|pesos }}</span></div>
+    </div>
+    <div class="card-b"><p class="hint">Es la situación de hoy, no la del período, y por eso no se compara con el período anterior. En mora: {{ c.en_mora_cantidad }} entrega{{ c.en_mora_cantidad|pluralize }}.</p>
+    <div class="acts-fila"><a class="btn btn-ghost" href="{{ l.cobranza }}">Ver cobranza</a></div></div>
+  </div>
+</div>
+
+<div class="split est-grupo">
+  <div class="card">
+    <div class="card-title">Faltantes y rechazos de compra-venta</div>
+    <div class="facts two">
+      <div><span class="k">Con faltante</span><span class="v">{{ f.con_faltante }}</span>{% if deltas.con_faltante %}<span class="dta {{ deltas.con_faltante.clase }}">{{ deltas.con_faltante.texto }}</span>{% endif %}</div>
+      <div><span class="k">Rechazados por cantidad reducida</span><span class="v">{{ f.rechazados_por_cantidad }}</span>{% if deltas.rechazados_por_cantidad %}<span class="dta {{ deltas.rechazados_por_cantidad.clase }}">{{ deltas.rechazados_por_cantidad.texto }}</span>{% endif %}</div>
+      <div><span class="k">Rechazados al recibir</span><span class="v">{{ f.rechazados_al_recibir }}</span>{% if deltas.rechazados_al_recibir %}<span class="dta {{ deltas.rechazados_al_recibir.clase }}">{{ deltas.rechazados_al_recibir.texto }}</span>{% endif %}</div>
+      <div><span class="k">Cancelados</span><span class="v">{{ f.cancelados }}</span>{% if deltas.cancelados %}<span class="dta {{ deltas.cancelados.clase }}">{{ deltas.cancelados.texto }}</span>{% endif %}</div>
+    </div>
+    <div class="card-b"><p class="hint">Productos de compra-venta que no se pudieron entregar completos o que el cliente no aceptó.</p>
+    <div class="acts-fila"><a class="btn btn-ghost" href="{{ l.faltantes }}">Ver compra-ventas</a></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Clientes con más compras</div>
+    <table class="data-table"><tbody>
+    {% for x in d.clientes %}
+      <tr><td class="muted" style="width:32px">{{ forloop.counter }}</td><td><b>{{ x.nombre }}</b><span class="sub2">{{ x.entregas }} entrega{{ x.entregas|pluralize }} · <a href="{{ x.url_compra_ventas }}">compra-ventas</a> · <a href="{{ x.url_suministros }}">suministros</a></span></td><td class="right">{{ x.monto|pesos }}<span class="sub2">{{ x.porcentaje|porcentaje }} del total</span></td></tr>
+    {% empty %}
+      <tr><td class="muted">Sin ventas en el período.</td></tr>
+    {% endfor %}
+    </tbody></table>
+  </div>
+</div>
+</div>
+{% endwith %}

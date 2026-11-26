@@ -30,3 +30,9 @@
 .est a.kpi:hover{border-color:var(--border-strong);box-shadow:0 2px 8px rgba(16,24,40,.07)}
 .est .tabs .tab{cursor:pointer}
 .est .data-table tr.cat td{border-top:2px solid var(--border-strong)}
+/* EST-03: la pestaña «Comercial» copia el marcado de «Comercial › Estadísticas» (COM-08c): barras de «Ventas por variedad», filas de botones y separación de los bloques. */
+.est .hbar{height:8px;background:var(--secondary);border-radius:999px;overflow:hidden}
+.est .hbar i{display:block;height:100%;background:var(--primary);border-radius:999px}
+.est .est-grupo{margin-bottom:20px}
+.est .acts-fila{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.est .facts .dta{margin-top:4px}

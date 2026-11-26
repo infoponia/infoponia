@@ -14,14 +14,27 @@
 #   merma_en_camara(periodo) -> MermaEnCamara(causas, plantas, valor, sin_asiento)                              parte de 4.7; 2 consultas
 #   compras(periodo) -> Compras(total, por_proveedor, por_categoria, por_mes)                                   indicador 9; 2 consultas
 #   libro(periodo) -> LibroDeGestion(ventas, ingresos, egresos, resultado, ingresos_por_cuenta, costos_por_cuenta)   indicador 10; 2 + 2 por cuenta de resultado
+#   comerciales(actor, periodo, hoy) -> comercial.servicios.estadisticas.Estadisticas                          indicador 8 (EST-03); solo el Gerente; llama a
+#       `filtros_de_estadisticas` y a `estadisticas` de `comercial` con el período (todos los invernaderos y Vendedores): no recalcula nada (H25).
+#       La pestaña «comercial» de `estadisticas_consolidadas` la llama para el período y, si se compara, para el anterior; compara los totales y no la
+#       cobranza (foto a hoy; decisión del estudiante, 26/11/2026).
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
+from django.core.exceptions import PermissionDenied
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
+from comercial.models import DetalleVenta, Entrega, SolicitudRevision
+from comercial.servicios import estadisticas as estadisticas_comerciales
+from comercial.tests.fabricas import cliente, discrepancia_aceptada
+from comercial.tests.test_com_cns_est import BaseDeEstadisticas
 from compras.models import CorreccionRecepcion, Recepcion
 from compras.tests.base_correcciones import CorreccionBase
+from core.models import RegistroAuditoria, Usuario
 from core.tests.fabricas import crear_gerente
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
@@ -488,3 +501,151 @@ class EstCnsCnsLibroServicioTests(PlanDeCuentasMixin, TestCase):
             asiento_de_prueba(self.e2, date(2026, 12, dia), [(cuentas.CAJA, DEBE, D("1.00")), (cuentas.VENTAS, HABER, D("1.00"))])
         with self.assertNumQueries(2 + 2 * cuentas_de_resultado):
             consolidadas.libro(periodo)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Indicador 8 · Comerciales (EST-03; EST-CNS-CNS regla 3.2; D-93 puntos 2 y 4.8; H25)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+HOY_REAL = timezone.localdate()  # los datos de comercial se arman relativos al día real (`BaseDeEstadisticas`, COM-08c)
+DEL_MES = Periodo(HOY_REAL.replace(day=1), HOY_REAL)
+ULTIMO_DEL_MES_ANTERIOR = HOY_REAL.replace(day=1) - timedelta(days=1)
+# Las cifras que la pestaña «Comercial» compara con el período anterior (decisión del estudiante, 26/11/2026): los totales, sin la cobranza.
+CLAVES_COMPARADAS = {
+    "ventas_monto",
+    "ventas_entregas",
+    "ventas_plantas",
+    "a_tiempo",
+    "promedio_de_retraso",
+    "intentos_fallidos",
+    "incumplimientos",
+    "indemnizado",
+    "con_faltante",
+    "rechazados_por_cantidad",
+    "rechazados_al_recibir",
+    "cancelados",
+}
+
+
+def sin_filtros(resultado):
+    """Los indicadores de un `Estadisticas` de comercial sin el campo `filtros` (las opciones de los desplegables no son números)."""
+    return tuple(resultado[1:])
+
+
+class EstCnsCnsComercialesServicioTests(BaseDeEstadisticas):
+    """Indicador 8: los de COM-CNS-EST, pedidos a `comercial` con el período de las consolidadas, todos los invernaderos y todos los Vendedores. Datos:
+    el escenario de COM-08c (un invernadero con su Vendedor, un lote de 5.000 plantas, el Gerente y otro Vendedor con su cliente)."""
+
+    def com_cns_est(self, actor, periodo):
+        """Lo que da COM-CNS-EST para `actor` con ese rango (la fuente de verdad: EST-03 no puede dar otra cosa)."""
+        filtros = estadisticas_comerciales.FiltrosDeEstadisticas(periodo.desde, periodo.hasta)
+        return estadisticas_comerciales.estadisticas(actor, filtros, HOY_REAL)
+
+    def test_regla_3_2_comerciales_son_los_de_com_cns_est_para_el_mismo_periodo(self):
+        """EST-CNS-CNS regla 3.2 y H25: cada indicador (ventas, puntualidad, incumplimientos, cobranza, faltantes, clientes y enlaces) es el que calcula
+        `comercial` para el Gerente con el mismo rango; el período del filtro es el de las consolidadas."""
+        self.venta(cantidad=10, precio="100.00")
+        self.suministro(cantidad=5, precio="200.00")
+        discrepancia_aceptada(self.en_mora(10), monto="50.00", descontado="50.00", con_alerta=False)
+        r = consolidadas.comerciales(self.gerente, DEL_MES, HOY_REAL)
+        self.assertEqual(sin_filtros(r), sin_filtros(self.com_cns_est(self.gerente, DEL_MES)))
+        self.assertEqual((r.filtros.desde, r.filtros.hasta, r.filtros.invernadero_id, r.filtros.vendedor_id), (DEL_MES.desde, DEL_MES.hasta, None, None))
+        self.assertGreater(r.ventas.total, 0)
+
+    def test_hecho_cuando_con_un_solo_vendedor_el_gerente_ve_lo_mismo_que_el_vendedor(self):
+        """«Hecho cuando» de EST-03: con los datos de un solo Vendedor, el Gerente ve en las consolidadas los mismos números que el Vendedor en COM-CNS-EST
+        para el mismo período (salvo los enlaces, que no son números)."""
+        self.venta(cantidad=10, precio="100.00", pactada=-1)  # con retraso
+        self.suministro(cantidad=5, precio="200.00")
+        r = consolidadas.comerciales(self.gerente, DEL_MES, HOY_REAL)
+        del_vendedor = self.com_cns_est(self.e.vendedor, DEL_MES)
+        for campo in ("ventas", "puntualidad", "incumplimientos", "cobranza", "faltantes"):
+            with self.subTest(indicador=campo):
+                self.assertEqual(getattr(r, campo), getattr(del_vendedor, campo))
+        self.assertEqual([(c.cliente_id, c.monto, c.entregas) for c in r.clientes], [(c.cliente_id, c.monto, c.entregas) for c in del_vendedor.clientes])
+
+    def test_regla_3_2_suma_todos_los_vendedores_y_todos_los_invernaderos(self):
+        """EST-CNS-CNS regla 3.2 con la regla 1 de COM-CNS-EST: el Gerente ve todos los contratos. Una venta del Vendedor del escenario y un suministro del
+        otro Vendedor: dos entregas, y el otro cliente aparece entre los clientes con más compras."""
+        propia = self.venta(cantidad=10, precio="100.00")
+        ajena = self.del_otro_vendedor()
+        r = consolidadas.comerciales(self.gerente, DEL_MES, HOY_REAL)
+        self.assertEqual(r.ventas.entregas, 2)
+        self.assertEqual(r.ventas.total, propia.monto_total_entrega + ajena.monto_total_entrega)
+        self.assertIn(self.otro_cliente.pk, [c.cliente_id for c in r.clientes])
+
+    def test_regla_1_solo_el_gerente(self):
+        """EST-CNS-CNS regla 1: solo el Gerente consulta las consolidadas. El Vendedor (que sí ve COM-CNS-EST), el Agrónomo y un Gerente inactivo reciben
+        `PermissionDenied`, también desde la pestaña «comercial» de `estadisticas_consolidadas`."""
+        inactivo = Usuario.objects.get(pk=self.gerente.pk)
+        inactivo.is_active = False
+        for nombre, cuenta in (("vendedor", self.e.vendedor), ("agronomo", self.e.agronomo), ("gerente inactivo", inactivo)):
+            with self.subTest(cuenta=nombre):
+                with self.assertRaises(PermissionDenied):
+                    consolidadas.comerciales(cuenta, DEL_MES, HOY_REAL)
+                with self.assertRaises(PermissionDenied):
+                    consolidadas.estadisticas_consolidadas(cuenta, "comercial", DEL_MES, True, HOY_REAL)
+
+    def test_d93_punto_2_el_previo_es_el_periodo_anterior_y_se_comparan_los_totales(self):
+        """D-93 punto 2 y EST-CNS-CNS regla 2: la pestaña «comercial» arma el período y el anterior de igual duración (dos llamadas a `estadisticas`). Una
+        venta de 10 plantas hoy y una de 5 el último día del mes anterior (cae en el período anterior): ventas y plantas se comparan entre los dos."""
+        hoy_ = self.venta(cantidad=10, precio="100.00")
+        antes = self.venta(cantidad=5, precio="100.00", hace=(HOY_REAL - ULTIMO_DEL_MES_ANTERIOR).days)
+        r = consolidadas.estadisticas_consolidadas(self.gerente, "comercial", DEL_MES, True, HOY_REAL)
+        self.assertEqual(r.pestana, "comercial")
+        self.assertEqual(sin_filtros(r.actual.comerciales), sin_filtros(consolidadas.comerciales(self.gerente, DEL_MES, HOY_REAL)))
+        self.assertEqual(sin_filtros(r.previo.comerciales), sin_filtros(consolidadas.comerciales(self.gerente, r.anterior, HOY_REAL)))
+        self.assertEqual(set(r.comparaciones), CLAVES_COMPARADAS)
+        ventas = r.comparaciones["ventas_monto"]
+        self.assertEqual((ventas.valor, ventas.anterior), (hoy_.monto_total_entrega, antes.monto_total_entrega))
+        self.assertEqual(ventas.diferencia, hoy_.monto_total_entrega - antes.monto_total_entrega)
+        self.assertEqual((r.comparaciones["ventas_entregas"].diferencia, r.comparaciones["ventas_plantas"].diferencia), (0, 5))
+
+    def test_decision_del_estudiante_la_cobranza_no_se_compara(self):
+        """Decisión del estudiante (26/11/2026; hueco de EST-CNS-CNS): la cobranza (regla 6 de COM-CNS-EST) es una foto a hoy, igual en los dos períodos;
+        se muestra sin comparación. Ninguna clave de la cobranza está entre las comparaciones, aunque haya entregas en mora."""
+        self.en_mora(10)
+        r = consolidadas.estadisticas_consolidadas(self.gerente, "comercial", DEL_MES, True, HOY_REAL)
+        self.assertEqual(r.actual.comerciales.cobranza, r.previo.comerciales.cobranza)
+        self.assertGreater(r.actual.comerciales.cobranza.en_mora_total, 0)
+        self.assertFalse([clave for clave in r.comparaciones if "cobranza" in clave or "mora" in clave or "pendiente" in clave])
+
+    def test_regla_2_la_comparacion_apagada_no_calcula_el_periodo_anterior(self):
+        """EST-CNS-CNS regla 2: sin «Comparar con el período anterior» solo se pide el período actual."""
+        self.venta()
+        r = consolidadas.estadisticas_consolidadas(self.gerente, "comercial", DEL_MES, False, HOY_REAL)
+        self.assertEqual((r.previo, r.comparaciones), (None, {}))
+        self.assertIsNotNone(r.actual.comerciales)
+
+    def test_regla_3_2_las_otras_pestanas_no_piden_lo_comercial(self):
+        """D-93 punto 7 (sin calcular de más): Resumen, Producción, Compras y Resultados no llaman a `comercial`; su bloque comercial queda en `None`."""
+        for pestana in ("resumen", "produccion", "compras", "resultados"):
+            with self.subTest(pestana=pestana):
+                self.assertIsNone(consolidadas.estadisticas_consolidadas(self.gerente, pestana, DEL_MES, False, HOY_REAL).actual.comerciales)
+
+    def test_regla_7_no_escribe_ni_audita(self):
+        """EST-CNS-CNS regla 7 (SEG-14) y postcondición a de COM-CNS-EST: la consulta no escribe ni audita. Todas las sentencias son `SELECT` y las filas de
+        auditoría, solicitudes, entregas y detalles de venta no cambian."""
+        self.venta()
+        discrepancia_aceptada(self.en_mora(5), monto="50.00", descontado="50.00", con_alerta=False)
+        contar = lambda: (RegistroAuditoria.objects.count(), SolicitudRevision.objects.count(), Entrega.objects.count(), DetalleVenta.objects.count())  # noqa: E731
+        antes = contar()
+        with CaptureQueriesContext(connection) as capturadas:
+            consolidadas.estadisticas_consolidadas(self.gerente, "comercial", DEL_MES, True, HOY_REAL)
+        self.assertEqual(contar(), antes)
+        self.assertTrue(all(q["sql"].lstrip().upper().startswith("SELECT") for q in capturadas.captured_queries))
+
+    def test_d93_punto_7_consultas_fijas_con_pocas_o_muchas_entregas(self):
+        """D-93 punto 7: un número fijo de consultas, no una por entrega ni por cliente. Se cuentan con 2 ventas y con 12 (de clientes distintos)."""
+
+        def consultas():
+            with CaptureQueriesContext(connection) as capturadas:
+                consolidadas.comerciales(self.gerente, DEL_MES, HOY_REAL)
+            return len(capturadas)
+
+        for i in range(2):
+            self.venta(cliente_=cliente(razon_social=f"Cliente pocos {i}"))
+        pocas = consultas()
+        for i in range(10):
+            self.venta(cliente_=cliente(razon_social=f"Cliente muchos {i}"))
+        self.assertEqual(consultas(), pocas)
