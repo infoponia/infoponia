@@ -27,7 +27,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 from comercial.models import AlertaComercial, CompraVenta, DetalleEntrega, DetalleReserva, DetalleSuministro, DetalleVenta, Entrega, ReservaStock, Suministro
-from comercial.servicios import calendario, enlaces, entregas, faltantes, stock_maduro
+from comercial.servicios import asientos_comerciales, calendario, enlaces, entregas, faltantes, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import Periodo, _cubierto
 from core import correo, notificaciones
@@ -582,11 +582,16 @@ def _vencer_en_transaccion(partida_id, hoy, previo):
         if recorte.lineas:
             alerta = _avisar_merma_reservada(p, merma, recubierto, recorte.por_detalle, "Venció la partida")
         aviso = resolver_aviso_de_partida(p)  # e
+        # CON-04c (D-92 puntos 3 a 6): el asiento de la merma por vencimiento (postcondición b), DESPUÉS de todos los bloqueos; actor `None` (InfoPonia).
+        asiento = asientos_comerciales.asentar_merma_de_partida(None, merma, resultado.movimiento, hoy, hoy) if resultado is not None else None
         afectados = [p, *([merma, resultado.movimiento] if resultado is not None else []), *[l for l, _ in recorte.lineas], *recorte.reservas_liberadas]
+        afectados += [asiento] if asiento is not None else []
         afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces, *[c.entrega for c in quita.cancelaciones]]
         if alerta is not None:
             afectados.append(alerta)
         datos = {"partida": referencia(p), "fecha_limite": f"{p.fecha_limite:%d/%m/%Y}"}
+        if asiento is not None:
+            datos["asientos"] = [str(asiento)]
         if recorte.lineas:
             datos["lineas_recortadas"] = [f"{a.contrato.codigo}: {a.recortado}" for a in recorte.por_detalle]
             if recorte.reservas_liberadas:

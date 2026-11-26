@@ -13,7 +13,8 @@ class ComercialConfig(AppConfig):
         """Registra la entrada «Comercial» del menú y los registrantes de `maestros` («Logística») y de `core` (ficha de la cuenta). Con
         guarda en cada uno: ``ready()`` puede correr más de una vez (las pruebas lo vuelven a llamar) y ningún registrante debe quedar
         duplicado (el de «Logística» admite uno solo y una segunda llamada lanza ``RuntimeError``)."""
-        from comercial.servicios import atencion, camara, cobranza, concrecion, confirmacion, enlaces, entregas, pre_reserva, registrantes, resoluciones, solicitudes, stock_maduro, suministros, vehiculos
+        from comercial.servicios import asientos_comerciales, atencion, camara, cobranza, concrecion, confirmacion, enlaces, entregas, pre_reserva, registrantes, resoluciones, solicitudes, stock_maduro, suministros, vehiculos
+        from contabilidad import extensiones as extensiones_de_contabilidad
         from core import extensiones as extensiones_de_core
         from core.menu import registrar_entrada
         from core.models import Usuario
@@ -23,6 +24,10 @@ class ComercialConfig(AppConfig):
         from maestros.alertas import Clase, Destinatario, Origen, TipoAlerta, registrar_tipo_de_alerta
         from maestros.models import Alerta
         from produccion import extensiones as extensiones_de_produccion
+
+        # `contabilidad` (CON-04c): el texto de origen, sin dirección, de los asientos de la cosecha (su movimiento «salida por cosecha») y de la entrega. Idempotente.
+        extensiones_de_contabilidad.registrar_enlace_de_origen("movimiento_de_stock", asientos_comerciales.enlace_de_movimiento_de_stock)
+        extensiones_de_contabilidad.registrar_enlace_de_origen("orden_de_trabajo", asientos_comerciales.enlace_de_orden_de_trabajo)
 
         # Menú: «Comercial» para el Gerente (después de «Producción») y el Vendedor (que no tiene «Producción»: queda después de «Panel de
         # control»). ``registrar_entrada`` no repite una entrada ya registrada.

@@ -24,6 +24,8 @@ urlpatterns = [
     path("comercial/", include("comercial.urls")),
     # CMP-01: «Compras» → «Proveedores» (Gerente y Agrónomo).
     path("compras/", include("compras.urls")),
+    # EST-01: «Estadísticas» de producción (Agrónomo y Gerente).
+    path("estadisticas/", include("estadisticas.urls")),
     # COM-04c: portal público del cliente (decide un faltante sin cuenta por el enlace que recibió por correo; D-65).
     path("cliente/", include("comercial.urls_cliente")),
     # CON-03a: «Contabilidad» (libro de gestión, plan de cuentas y ejercicios; Contador y Gerente).

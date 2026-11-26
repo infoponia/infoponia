@@ -23,6 +23,8 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from unittest import mock
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.utils import timezone
@@ -40,6 +42,11 @@ from comercial.tests.fabricas import (
     suministro,
     verificar_invariantes_de_reservas,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -62,7 +69,7 @@ def codigos(prueba, llamada, campo=None):
     return sorted(e.code for clave, lista in rechazo.exception.error_dict.items() if campo in (None, clave) for e in lista)
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un lote de 100 plantas en Maduración (costo 100,00: 1,00 por planta) ocupando 100 agujeros de un sector, y una cosecha «a realizar» con contrato
     (compra-venta con envío de 50 plantas para dentro de 10 días) que reserva 30 plantas de él. La postcosecha es de 7 días."""
 
@@ -323,10 +330,11 @@ class PostcondicionesTests(Base):
     def test_post_p_q_y_r_un_solo_registro_de_auditoria_con_todo_lo_tocado(self):
         """p, q, r y D-36: UN registro `concrecion_cosecha` del Capataz con la orden, la reserva y sus líneas, el lote, las ocupaciones, los movimientos,
         los registros de bitácora y las partidas."""
-        antes = RegistroAuditoria.objects.count()
+        antes = RegistroAuditoria.objects.filter(accion="concrecion_cosecha").count()
         self.cosechando(40)
-        self.assertEqual(RegistroAuditoria.objects.count(), antes + 1)
-        registro = RegistroAuditoria.objects.latest("pk")
+        # CON-04c: los registros de alta de asiento y de movimiento los hace `contabilidad`; el caso de uso sigue con UN solo registro suyo (D-36).
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="concrecion_cosecha").count(), antes + 1)
+        registro = RegistroAuditoria.objects.filter(accion="concrecion_cosecha").latest("pk")
         self.assertEqual((registro.accion, registro.usuario_id), ("concrecion_cosecha", self.e.capataz.pk))
         textos = [a["texto"] for a in registro.afectados]
         for esperado in (self.cosecha.codigo, self.lote.codigo, "Reserva #", "Línea #", "Ocupación #", "Movimiento de stock #", "Bitácora #", "P-"):
@@ -550,3 +558,141 @@ class PlanificacionDeLaEntregaTests(Base):
             callback()
         entrega = Entrega.objects.get()
         self.assertEqual((entrega.contrato_entrega_id, entrega.lineas.get().reservas.get().cosecha_id), (self.venta.pk, self.cosecha.pk))
+
+
+class ConcretarCosechaAsientoTests(Base):
+    """CON-04c · paso 1: el asiento de la cosecha (PROD-CNC-CSC postcondición f; D-92 puntos 3 a 6; D-86; D-102). Un asiento por cada `MovimientoStock`
+    «salida por cosecha», originado en el movimiento, y uno por cada merma de lote en pie de la extensión 10a (decisión del estudiante del 26/11/2026)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ejercicio = ejercicio_abierto(HOY - timedelta(days=30))
+        self.addCleanup(verificar_invariantes_contables)
+
+    def con_costo(self, lote, costo):
+        """Le pone al lote un costo acumulado de `costo` (con 100 plantas, `costo / 100` por planta)."""
+        Lote.objects.filter(pk=lote.pk).update(costo_acumulado=Decimal(costo))
+
+    def lineas(self, asiento):
+        """`[(código de cuenta, tipo, importe)]` del asiento, en orden de creación."""
+        return [(m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta").order_by("pk")]
+
+    def test_post_f_un_asiento_por_movimiento_de_salida_por_cosecha_productos_terminados_contra_productos_en_proceso(self):
+        """f: el asiento de la salida por cosecha, originado en el movimiento: Debe Productos Terminados / Haber Productos en Proceso por cantidad × costo por
+        planta (30 × 2,5000 = 75,00), con la fecha efectiva."""
+        self.con_costo(self.lote, "250.00")
+        self.cosechando(30)
+        movimiento = MovimientoStock.objects.get(tipo_movimiento="salida_por_cosecha")
+        asiento = AsientoContable.objects.get(origen_id=movimiento.pk)
+        self.assertEqual(
+            self.lineas(asiento), [(cuentas.PRODUCTOS_TERMINADOS, DEBE, Decimal("75.00")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, Decimal("75.00"))]
+        )
+        self.assertEqual((asiento.fecha_asiento, asiento.numero_asiento, asiento.ejercicio_id), (HOY, 1, self.ejercicio.pk))
+
+    def test_post_f_con_dos_lotes_hay_un_asiento_por_cada_movimiento(self):
+        """f: «por cada movimiento de stock de salida»: dos lotes cosechados, dos asientos, cada uno con su costo por planta."""
+        otro = lote_maduro(self.e, 20)
+        self.con_costo(otro, "20.00")  # el otro lote: 20 plantas a 1,00
+        cosecha = cosecha_manual(self.e, [(self.lote, 10), (otro, 10)], dias=1)
+        self.concretar({(self.lote, self.sector): 10, (otro, self.sector): 10}, cosecha=cosecha)
+        movimientos = MovimientoStock.objects.filter(tipo_movimiento="salida_por_cosecha").order_by("lote_id")
+        self.assertEqual(movimientos.count(), 2)
+        self.assertEqual(AsientoContable.objects.count(), 2)
+        for movimiento in movimientos:
+            asiento = AsientoContable.objects.get(origen_id=movimiento.pk)
+            importe = (movimiento.cantidad * movimiento.costo_unitario).quantize(Decimal("0.01"))
+            self.assertEqual(self.lineas(asiento), [(cuentas.PRODUCTOS_TERMINADOS, DEBE, importe), (cuentas.PRODUCTOS_EN_PROCESO, HABER, importe)])
+
+    def test_post_f_la_fecha_del_asiento_es_la_fecha_efectiva_de_la_cosecha(self):
+        """D-92 punto 4: la fecha del hecho es la de la cosecha, no la de hoy (ayer, dentro del ejercicio abierto)."""
+        ayer = HOY - timedelta(days=1)
+        Cosecha.objects.filter(pk=self.cosecha.pk).update(fecha_creacion_orden=ayer - timedelta(days=1))
+        self.cosechando(30, fecha_efectiva=ayer)
+        self.assertEqual(AsientoContable.objects.get().fecha_asiento, ayer)
+
+    def test_post_f_un_lote_que_rindio_cero_no_tiene_movimiento_ni_asiento(self):
+        """f y H11: un lote que rinde 0 no tiene «salida por cosecha» (post. e) y, por lo tanto, no tiene asiento ni error."""
+        self.cosechando(0)
+        self.assertFalse(MovimientoStock.objects.filter(tipo_movimiento="salida_por_cosecha").exists())
+        self.assertFalse(AsientoContable.objects.exists())
+
+    def test_post_f_un_lote_sin_costo_no_genera_asiento_y_la_cosecha_no_falla(self):
+        """D-92 punto 5 y H11: importe 0 (el lote existente sin costo, PRD-05): no hay asiento y no falla."""
+        self.con_costo(self.lote, "0.00")
+        self.cosechando(30)
+        self.assertEqual(MovimientoStock.objects.filter(tipo_movimiento="salida_por_cosecha").count(), 1)
+        self.assertFalse(AsientoContable.objects.exists())
+        self.assertEqual(self.releer(Cosecha, self.cosecha.pk).estado_orden, "concretada")
+
+    def test_post_f_el_importe_se_redondea_a_dos_decimales_half_up(self):
+        """D-92 punto 5: 7 plantas × 0,3333 = 2,3331 → 2,33 (ROUND_HALF_UP). El movimiento guarda el costo a 4 decimales."""
+        self.con_costo(self.lote, "33.33")  # 100 plantas: 0,3333 por planta
+        cosecha = cosecha_manual(self.e, [(self.lote, 7)], dias=1)
+        self.concretar({(self.lote, self.sector): 7}, cosecha=cosecha)
+        self.assertEqual(self.lineas(AsientoContable.objects.get())[0][2], Decimal("2.33"))
+
+    def test_ext_10a_la_merma_de_la_cosecha_asienta_perdidas_contra_productos_en_proceso(self):
+        """Decisión del estudiante del 26/11/2026 (CON-04a, diferencia 10): la merma de lote en pie de la cosecha (ext. 10a → PROD-REG-MRM postcondición e) se
+        asienta con `asientos_de_produccion.asentar_merma`: Debe Pérdidas por Mermas / Haber Productos en Proceso por `ResultadoMerma.costo`. Con 2,50 por
+        planta: se cosechan 20 (el lote queda con 80 plantas y 200,00), se pierden 4 → 200,00 × 4 ÷ 80 = 10,00; originado en la merma."""
+        self.con_costo(self.lote, "250.00")
+        self.concretar(
+            {(self.lote, self.sector): 20}, perdidas=((self.lote.pk, self.sector.pk, 4),), causas=((self.lote.pk, "plaga", ""),)
+        )
+        merma = Merma.objects.get()
+        asiento = AsientoContable.objects.get(origen_id=merma.pk)
+        self.assertEqual(
+            self.lineas(asiento), [(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("10.00")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, Decimal("10.00"))]
+        )
+        self.assertEqual(asiento.fecha_asiento, HOY)
+        self.assertEqual(AsientoContable.objects.count(), 2)  # el de la salida por cosecha y el de la merma
+
+    def test_post_r_el_registro_de_auditoria_nombra_los_asientos(self):
+        """r y D-86 punto 4: el único registro `concrecion_cosecha` nombra cada asiento entre sus afectados y en `datos`; no se audita aparte (lo hace
+        `contabilidad`)."""
+        self.concretar({(self.lote, self.sector): 20}, perdidas=((self.lote.pk, self.sector.pk, 4),), causas=((self.lote.pk, "plaga", ""),))
+        registro = RegistroAuditoria.objects.filter(accion="concrecion_cosecha").latest("pk")
+        textos = [a["texto"] for a in registro.afectados]
+        self.assertEqual(sum(1 for t in textos if t.startswith("Asiento")), 2)
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 2)
+        self.assertGreaterEqual(RegistroAuditoria.objects.filter(accion="alta_asiento_contable").count(), 2)
+
+    def test_garantia_si_falla_el_asiento_no_queda_nada_de_la_cosecha(self):
+        """Garantías mínimas y `docs/patrones/asientos.md`: si el asiento falla, la cosecha sigue «a realizar», el lote intacto, sin movimiento ni auditoría."""
+        antes = RegistroAuditoria.objects.count()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.cosechando(30)
+        self.assertEqual(self.releer(Cosecha, self.cosecha.pk).estado_orden, "a_realizar")
+        self.assertEqual(self.releer(Lote, self.lote.pk).cantidad_actual, 100)
+        self.assertFalse(MovimientoStock.objects.exists())
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
+
+    def test_d102_si_la_fecha_efectiva_cae_en_un_ejercicio_cerrado_el_asiento_va_al_abierto_con_la_fecha_de_hoy(self):
+        """D-102: nunca rechaza por la fecha; la descripción aclara «Fecha del hecho: dd/mm/aaaa (el ejercicio de esa fecha ya está cerrado)…»."""
+        hecho = HOY - timedelta(days=50)
+        ejercicio(EjercicioContable.Estado.CERRADO, HOY - timedelta(days=400))
+        Cosecha.objects.filter(pk=self.cosecha.pk).update(fecha_creacion_orden=hecho - timedelta(days=5))
+        self.cosechando(30, fecha_efectiva=hecho)
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento), (self.ejercicio.pk, HOY))
+        self.assertIn(f"Fecha del hecho: {hecho:%d/%m/%Y}", asiento.descripcion_asiento)
+
+    def test_d92_punto_2_sin_ejercicio_el_primero_se_abre_solo(self):
+        """D-92 punto 2: no hay precondición de ejercicio; con la base sin ejercicios, el primer asiento lo abre (D-84 punto 3)."""
+        EjercicioContable.objects.all().delete()
+        self.cosechando(30)
+        self.assertEqual((EjercicioContable.objects.count(), AsientoContable.objects.get().numero_asiento), (1, 1))
+
+    def test_paso_4_el_libro_muestra_el_origen_de_la_cosecha_como_texto_sin_direccion(self):
+        """CON-04c paso 4 (criterio de CON-04a, D-30): el origen del asiento de la cosecha se ve como «Salida por cosecha · OT-…, lote L-…, 30 plantas», SIN enlace (el
+        Contador no abre las pantallas de cosecha); el movimiento de otro tipo no tiene texto propio. Y `ready()` lo registra una sola vez."""
+        from comercial.servicios import asientos_comerciales
+        from contabilidad import extensiones
+
+        self.cosechando(30)
+        asiento = AsientoContable.objects.get()
+        texto, url = extensiones.enlace_de_origen(asiento.origen)
+        self.assertEqual((texto, url), (f"Salida por cosecha · {self.cosecha.codigo}, lote {self.lote.codigo}, 30 plantas", None))
+        self.assertEqual(extensiones._ENLACES_DE_ORIGEN["movimiento_de_stock"].count(asientos_comerciales.enlace_de_movimiento_de_stock), 1)
+        self.assertIsNone(asientos_comerciales.enlace_de_movimiento_de_stock(mock.Mock(pk=0)))

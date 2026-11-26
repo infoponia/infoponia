@@ -34,7 +34,7 @@ from django.db import transaction
 from django.http import Http404
 
 from comercial.models import CompraVenta, DetalleReserva, DetalleSuministro, DetalleVenta, ReservaStock, Suministro
-from comercial.servicios import calendario, entregas, faltantes, stock_maduro
+from comercial.servicios import asientos_comerciales, calendario, entregas, faltantes, stock_maduro
 from comercial.servicios import camara as camara_comercial  # PROD-ASG-CAM (COM-04b); `camara` es el núcleo físico de `produccion`
 from comercial.servicios.stock_maduro import Periodo
 from core import notificaciones
@@ -45,7 +45,7 @@ from maestros.models import Invernadero, SectorProduccion
 from maestros.servicios import configuracion
 from maestros.servicios.invernaderos import bloquear_invernadero_activo
 from produccion.models import Cosecha, Lote, Merma, MovimientoStock, OcupacionSector, OrdenTrabajo, StockCosechado
-from produccion.servicios import camara, mermas, ordenes, transiciones
+from produccion.servicios import asientos_de_produccion, camara, mermas, ordenes, transiciones
 from produccion.servicios import cosechas as fisico
 from produccion.servicios import lotes as api_lotes
 
@@ -1051,7 +1051,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
       perdidas `mermas.aplicar_merma` (m); `cosechas.concretar_orden` (a); la reserva (h: con contrato «lista para entrega», salvo cubierto 0, que la
       «libera»; sin contrato, «liberada»); las partidas (i y j, con el costo de la salida del lote); con contrato y faltante (13a, regla «Faltante»),
       `stock_maduro.asignar(..., origen_cosecha="encadenada")` y lo no cubierto por el camino de faltante (l). Sin el `on_commit` de PROD-ASG-CAM
-      (k) la programa con `on_commit`; el enlace del cliente es de COM-04c y la postcondición n (planificar la entrega), de COM-05.
+      (k) la programa con `on_commit`; el enlace del cliente es de COM-04c y la postcondición n (planificar la entrega), de COM-05. Asientos (CON-04c): ver más abajo.
     - Postcondiciones o a r y D-36: aviso al Agrónomo y, con faltante o excedente, al Vendedor; UN registro `concrecion_cosecha`.
     """
     cosecha = _cosecha_del_capataz(actor, cosecha_id)
@@ -1076,7 +1076,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
         fecha = datos.fecha_efectiva or hoy
         antes_de_lotes = {p.lote.pk: (p.lote.cantidad_actual, p.lote.costo_acumulado) for p in planes}
         ocupaciones_antes = {o.pk: o.cant_agujeros_ocupados for o in OcupacionSector.objects.filter(lote__in=[p.lote for p in planes])}
-        resultados, mermas_hechas, partidas = {}, [], []
+        resultados, mermas_hechas, partidas, costos_de_mermas = {}, [], [], {}
         for p in planes:
             resultados[p.lote.pk] = fisico.cosechar_lote(cosecha, p.lote, p.por_sector, fecha, actor)
             DetalleReserva.objects.filter(pk=p.linea.pk).update(cantidad_cosechada=p.cosechada)
@@ -1084,9 +1084,9 @@ def concretar_cosecha(actor, cosecha_id, datos):
         for p in planes:
             if p.total_perdidas:
                 por_sector = {s: n for s, n in p.perdidas.items() if n}
-                mermas_hechas.append(
-                    mermas.aplicar_merma(p.lote, p.total_perdidas, p.causa, p.descripcion, hoy, actor, por_sector=por_sector, sector_ids=list(por_sector)).merma
-                )
+                resultado_de_merma = mermas.aplicar_merma(p.lote, p.total_perdidas, p.causa, p.descripcion, hoy, actor, por_sector=por_sector, sector_ids=list(por_sector))
+                mermas_hechas.append(resultado_de_merma.merma)
+                costos_de_mermas[resultado_de_merma.merma.pk] = resultado_de_merma.costo
         fisico.concretar_orden(cosecha, fecha)
         todas = _lineas_de(reserva)
         cubierto = sum(min(l.cantidad_cosechada, l.cantidad_reservada) if l.lote_id else l.cantidad_reservada for l in todas)
@@ -1123,6 +1123,12 @@ def concretar_cosecha(actor, cosecha_id, datos):
                 camino = faltantes.seguir_camino_de_faltante(contrato.periodo if contrato.tipo == "sum" else detalle_actual, sin_cubrir, origen=actor)
                 enlace_nuevo = camino.enlace  # COM-04c: el enlace del cliente va a la auditoría de quien lo crea
         entregas.programar_para_reservas([reserva.pk, *(r.pk for r in (asignacion.reservas if asignacion is not None else []))])  # n (D-66 punto 5): si la reserva quedó lista, con ella la venta o el período
+        # CON-04c (D-92 puntos 3 a 6): los asientos, DESPUÉS de todos los bloqueos de negocio (el ejercicio se bloquea al final, D-86). Postcondición f: uno por cada
+        # movimiento «salida por cosecha», con la fecha efectiva; extensión 10a (decisión del 26/11/2026): uno por cada merma de lote, con la fecha de la merma.
+        asientos_creados = asientos_de_produccion.referencias_de(
+            [asientos_comerciales.asentar_salida_por_cosecha(actor, r.movimiento, fecha, hoy) for r in resultados.values() if r.movimiento is not None]
+            + [asientos_de_produccion.asentar_merma(actor, m, costos_de_mermas[m.pk], hoy, hoy) for m in mermas_hechas]
+        )
         reservado_total = sum(p.linea.cantidad_reservada for p in planes)
         cosechado_total = sum(p.cosechada for p in planes)
         perdido_total = sum(p.total_perdidas for p in planes)
@@ -1136,6 +1142,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
             .exclude(pk__in=[r.movimiento.pk for r in resultados.values() if r.movimiento is not None])
             .order_by("pk")
         )
+        afectados += asientos_creados
         if asignacion is not None:
             afectados += [*asignacion.reservas, *asignacion.cosechas]
         if contrato is not None:
@@ -1157,6 +1164,7 @@ def concretar_cosecha(actor, cosecha_id, datos):
                 f"{o}: {ocupaciones_antes[o.pk]} → {o.cant_agujeros_ocupados}" for o in OcupacionSector.objects.filter(lote__in=[p.lote for p in planes]).order_by("pk") if ocupaciones_antes[o.pk] != o.cant_agujeros_ocupados
             ],
             "reserva": reserva.estado_reserva,
+            "asientos": [str(a) for a in asientos_creados],
         }
         RegistroAuditoria.objects.registrar(
             usuario=actor, accion=RegistroAuditoria.Accion.CONCRECION_COSECHA, afectados=afectados, detalle={"cambios": cambios, "datos": datos_de_auditoria}

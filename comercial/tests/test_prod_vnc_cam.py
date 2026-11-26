@@ -15,6 +15,7 @@
 
 import logging
 from datetime import timedelta
+from decimal import Decimal
 from unittest import mock
 
 from django.test import TestCase
@@ -38,6 +39,11 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_reservas,
     verificar_invariantes_de_suministros,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, verificar_invariantes_contables
 from core.models import ROL_INFOPONIA, Notificacion, RegistroAuditoria
 from core.procesos import ResumenDePaso, pasos_diarios
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -50,7 +56,7 @@ HOY = timezone.localdate()
 AYER = HOY - timedelta(days=1)
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor y su Agrónomo y un lote de 300 plantas en Maduración."""
 
     @classmethod
@@ -493,3 +499,100 @@ class ProdVncCam3bTests(Base):
         alerta = Alerta.objects.get(tipo_alerta=camara.TIPO_EN_ENTREGA_EN_CURSO)
         enlaces = camara.enlaces_de_alertas_de_camara(gerente, [alerta])
         self.assertIn("?pestana=camara", enlaces[alerta.pk].url)
+
+
+class ProdVncCamAsientoTests(Base):
+    """CON-04c · paso 2: el asiento del vencimiento en cámara (PROD-VNC-CAM postcondición b; D-92 puntos 3 a 6; D-86). Uno por merma por vencimiento, originado
+    en la merma, por la cantidad por el costo unitario de la partida; el actor es `None` (InfoPonia)."""
+
+    def setUp(self):
+        self.ejercicio = ejercicio_abierto(HOY - timedelta(days=30))
+        self.addCleanup(verificar_invariantes_contables)
+
+    def lineas(self, asiento):
+        return [(m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta").order_by("pk")]
+
+    def test_post_b_la_merma_por_vencimiento_asienta_perdidas_contra_productos_terminados(self):
+        """b: 40 plantas × 2,5000 = 100,00, Debe Pérdidas por Mermas / Haber Productos Terminados, originado en la merma, con la fecha del paso."""
+        partida(self.lote, 40, fecha_limite=AYER, costo="2.5000")
+        self.correr()
+        merma = Merma.objects.get(lote=self.lote, causa="vencimiento_en_camara")
+        asiento = AsientoContable.objects.get(origen_id=merma.pk)
+        self.assertEqual(
+            self.lineas(asiento), [(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("100.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("100.00"))]
+        )
+        self.assertEqual((asiento.fecha_asiento, asiento.numero_asiento), (HOY, 1))
+
+    def test_post_b_el_actor_es_infoponia_en_los_registros_del_asiento(self):
+        """g y D-86 punto 4: el paso diario no tiene actor: los registros de alta del asiento quedan sin usuario (origen InfoPonia)."""
+        partida(self.lote, 40, fecha_limite=AYER)
+        self.correr()
+        registro = RegistroAuditoria.objects.filter(accion="alta_asiento_contable").get()
+        self.assertIsNone(registro.usuario_id)
+
+    def test_regla_el_paso_corrido_dos_veces_no_duplica_asientos(self):
+        """Garantía mínima («ninguna partida genera más de una merma por vencimiento»): la segunda corrida no encuentra la partida y no crea otro asiento."""
+        partida(self.lote, 40, fecha_limite=AYER)
+        self.correr()
+        self.correr()
+        self.assertEqual(AsientoContable.objects.count(), 1)
+        self.assertEqual(Merma.objects.filter(causa="vencimiento_en_camara").count(), 1)
+
+    def test_post_b_con_producto_reservado_el_asiento_es_por_toda_la_disponible(self):
+        """b y 3a: la partida tiene líneas reservadas; el asiento es por la cantidad perdida entera (la disponible), no por lo reservado."""
+        p = partida(self.lote, 40, fecha_limite=AYER, costo="2.0000")
+        reserva(self.venta(25), [(p, 25)])
+        self.correr()
+        self.assertEqual(self.lineas(AsientoContable.objects.get())[0], (cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("80.00")))
+
+    def test_post_b_una_partida_sin_costo_no_genera_asiento_y_el_paso_no_falla(self):
+        """D-92 punto 5 y H11: costo unitario 0 → sin asiento; la merma y el estado «vencida» se registran igual."""
+        p = partida(self.lote, 40, fecha_limite=AYER, costo="0.0000")
+        self.correr()
+        p.refresh_from_db()
+        self.assertEqual(p.estado_stock_cosechado, "vencido")
+        self.assertEqual(Merma.objects.filter(causa="vencimiento_en_camara").count(), 1)
+        self.assertFalse(AsientoContable.objects.exists())
+
+    def test_post_g_el_registro_de_auditoria_de_la_partida_nombra_el_asiento(self):
+        """g, D-86 punto 4: el registro `vencimiento_partida` nombra el asiento entre sus afectados y en `datos`."""
+        partida(self.lote, 40, fecha_limite=AYER)
+        self.correr()
+        registro = RegistroAuditoria.objects.filter(accion="vencimiento_partida").get()
+        self.assertEqual(sum(1 for a in registro.afectados if a["texto"].startswith("Asiento")), 1)
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_ext_3b_la_partida_pospuesta_por_una_entrega_en_curso_no_asienta(self):
+        """3b: la partida no se vence ese día (producto en una entrega en curso): ninguna merma, ninguna asiento."""
+        p = partida(self.lote, 40, fecha_limite=AYER)
+        t = transportista_con_vehiculo(self.e.invernadero)
+        venta = compra_venta(self.e, dias=0)
+        det = detalle(venta, self.e.variedad, 30)
+        entrega(venta, [reserva(det, [(p, 30)])], transportista=t, fecha=HOY)
+        iniciar_ruta_de(t)
+        self.correr()
+        self.assertFalse(AsientoContable.objects.exists())
+
+    def test_garantia_si_falla_el_asiento_de_una_partida_no_se_vence_y_las_demas_siguen(self):
+        """*a y «todo o nada» por partida: el asiento de la primera partida falla (se registra en el log); esa partida queda «disponible», sin merma ni
+        asiento, y la segunda se vence y asienta."""
+        primera = partida(self.lote, 40, fecha_limite=AYER - timedelta(days=1))
+        segunda = partida(self.lote, 30, fecha_limite=AYER)
+        real = servicio_de_asientos.registrar_asiento_automatico
+        llamadas = []
+
+        def falla_la_primera(*args, **kwargs):
+            llamadas.append(1)
+            if len(llamadas) == 1:
+                raise RuntimeError("falla del asiento")
+            return real(*args, **kwargs)
+
+        with self.assertLogs("infoponia.camara", level="ERROR"):
+            with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=falla_la_primera):
+                self.correr()
+        primera.refresh_from_db()
+        segunda.refresh_from_db()
+        self.assertEqual((primera.estado_stock_cosechado, primera.cantidad_disponible_cosechado), ("disponible", 40))
+        self.assertEqual(segunda.estado_stock_cosechado, "vencido")
+        self.assertEqual(AsientoContable.objects.count(), 1)
+        self.assertEqual(Merma.objects.filter(causa="vencimiento_en_camara").count(), 1)

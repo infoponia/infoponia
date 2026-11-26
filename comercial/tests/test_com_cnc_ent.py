@@ -1,5 +1,5 @@
 # Pruebas de COM-CNC-ENT · Concretar Entrega (COM-06a, pasos 3 y 4): `concrecion.entregas_concretables`, `datos_de_concrecion`, `resumen_de_concrecion`, `repartir`, `concretar_entrega`,
-# `crear_discrepancia`, `intentos_fallidos` y el intento fallido (extensión 4a, `rutas.registrar_intento_fallido`). Una por postcondición (a a g, i a o, p y q; e y h, sin asiento: D-57) y por
+# `crear_discrepancia`, `intentos_fallidos` y el intento fallido (extensión 4a, `rutas.registrar_intento_fallido`). Una por postcondición (a a g, i a o, p y q; e, g y h con su asiento: CON-04c) y por
 # extensión (1a, 3a, 4a, 5a, 5b, 7a, 8a, 8b, 9a, 10a, 10b, 13a, 14a, 14b, 14c, 15a); el reparto; la devolución a una partida vencida, a una agotada y desde un lote con la fecha límite pasada; el
 # exceso de envases; un detalle de venta en dos entregas; el fin del detalle y del suministro (y la rescisión acordada, que no se toca); que todo es atómico y sin consultas por fila.
 # Fuente: docs/casos_de_uso/comercial/rutas.md («COM-CNC-ENT» y «Cómo se aplica», «Concretar» e «Intento fallido»), D-66, D-68 y las secciones 8 y 10 de docs/api/produccion.md.
@@ -51,6 +51,11 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_reservas,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.models import LoteInsumo
@@ -79,7 +84,7 @@ def origen(clave, aporte, limite_en_dias=30):
     return Origen(clave, "partida", None, None, None, aporte, HOY + timedelta(days=limite_en_dias), Decimal("1.0000"), None)
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Agrónomo y su Vendedor, un lote de 5000 plantas maduras y un Gerente."""
 
     @classmethod
@@ -362,14 +367,6 @@ class ComCncEntServicioTests(Base):
         for clave in ("mermas_creadas", "movimientos_creados", "consumos_creados", "pago"):
             self.assertIn(clave, r.detalle["datos"])
         self.assertEqual(len(set((a["modelo"], a["id"]) for a in r.afectados)), len(r.afectados))
-
-    def test_post_h_no_hay_asientos_contables(self):
-        """Postcondiciones e, g y h: los asientos de la merma, del consumo y de la entrega quedan fuera de la ronda (D-57): la concreción no crea ninguno."""
-        from contabilidad.models import AsientoContable
-
-        x = self.concretable(con_envasado=True)
-        self.concretar(x, utilizada={x.envases.pk: "10"}, llego={self.linea(x).pk: "45"})
-        self.assertFalse(AsientoContable.objects.exists())
 
     # ---- en una compra-venta ----
 
@@ -1090,3 +1087,232 @@ class ComCncEntIntentoFallidoTests(Base):
         Entrega.objects.filter(pk=x.entrega.pk).update(transportista=x.transportista, fecha_programada_orden=HOY)
         self.intentar(x, "domicilio_cerrado")
         self.assertEqual(RegistroAuditoria.objects.filter(accion="intento_fallido_entrega").count(), 2)
+
+
+class ConcretarEntregaAsientoTests(Base):
+    """CON-04c · paso 3: los asientos de la concreción de una entrega (COM-CNC-ENT postcondiciones e, g y h; D-92 puntos 3 a 6; D-86; D-68 punto 2). La fecha es la de la
+    resolución (hoy) y el actor, quien concreta. Decisiones del estudiante del 26/11/2026: (2) lo devuelto a una partida vencida asienta como un vencimiento; (3) la compra-venta
+    sigue la regla «Venta registrada por entrega» y no la fila (h) de la tarea; (4) lo de las entregas anteriores sin asiento se reconoce en Ventas (transición, D-92 punto 1)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ejercicio = ejercicio_abierto(HOY - timedelta(days=30))
+        self.addCleanup(verificar_invariantes_contables)
+
+    def lineas(self, asiento):
+        """`[(cuenta, tipo, importe)]` del asiento, ordenado (el compuesto no fija el orden de sus líneas)."""
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def asiento_de(self, origen_):
+        return AsientoContable.objects.get(origen_id=origen_.pk)
+
+    def dos_entregas(self, cantidad_cada_una=50):
+        """Una compra-venta de 100 plantas a $100 con dos entregas «a realizar» de 50 del mismo transportista. Devuelve `(x1, x2)` como `entrega_concretable`."""
+        t = transportista_con_vehiculo(self.e.invernadero)
+        venta = compra_venta(self.e, dias=0)
+        det = detalle(venta, self.e.variedad, 2 * cantidad_cada_una)
+        e1 = entrega(venta, [reserva_lista(det, self.lote, cantidad_cada_una)], transportista=t, fecha=HOY)
+        e2 = entrega(venta, [reserva_lista(det, self.lote, cantidad_cada_una)], transportista=t, fecha=HOY)
+        iniciar_ruta_de(t)
+        return tuple(SimpleNamespace(entrega=e, contrato=venta, detalle=det, transportista=t, envases=None) for e in (e1, e2))
+
+    # ---- h: el asiento compuesto de la entrega ----
+
+    def test_post_h_suministro_debita_deudores_contra_ventas_y_el_costo_contra_productos_terminados(self):
+        """h (suministro): Debe Deudores por Ventas / Haber Ventas por el monto total de la entrega y Debe Costo de Producción Vendida / Haber Productos Terminados por el costo
+        de lo entregado (50 × 1,0000), en UN asiento compuesto originado en la entrega."""
+        x = self.concretable(tipo="suministro")
+        self.concretar(x)
+        monto = self.refrescar(x).monto_total_entrega
+        asiento = self.asiento_de(x.entrega)
+        self.assertEqual(
+            self.lineas(asiento),
+            sorted([
+                (cuentas.DEUDORES_POR_VENTAS, DEBE, monto), (cuentas.VENTAS, HABER, monto),
+                (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("50.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("50.00")),
+            ]),
+        )
+        self.assertEqual((asiento.fecha_asiento, AsientoContable.objects.count()), (HOY, 1))
+
+    def test_regla_venta_registrada_por_entrega_una_sola_entrega_cobra_con_caja_en_efectivo_y_con_banco_en_los_demas_medios(self):
+        """Regla «Venta registrada por entrega»: con una sola entrega, Debe Caja (efectivo) o Banco c/c (los demás medios) / Haber Ventas por el total, más el costo."""
+        for medio, cuenta in (("efectivo", cuentas.CAJA), ("transferencia", cuentas.BANCO)):
+            with self.subTest(medio=medio):
+                x = self.concretable()
+                self.concretar(x, medio_pago=medio)
+                self.assertEqual(
+                    self.lineas(self.asiento_de(x.entrega)),
+                    sorted([
+                        (cuenta, DEBE, Decimal("5000.00")), (cuentas.VENTAS, HABER, Decimal("5000.00")),
+                        (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("50.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("50.00")),
+                    ]),
+                )
+
+    def test_regla_venta_registrada_por_entrega_la_no_ultima_debita_deudores_y_la_ultima_cobra_con_caja_o_banco(self):
+        """Decisión (3) del 26/11/2026. Dos entregas de 50 a $100: la primera (no última) registra la venta contra Deudores por Ventas; la última cobra el total (10.000,00) con Caja,
+        acredita Ventas por lo suyo (5.000,00) y cancela lo acumulado en Deudores (5.000,00). Siempre se suma el costo (CPV / Productos Terminados)."""
+        x1, x2 = self.dos_entregas()
+        self.concretar(x1)
+        self.assertEqual(
+            self.lineas(self.asiento_de(x1.entrega)),
+            sorted([
+                (cuentas.DEUDORES_POR_VENTAS, DEBE, Decimal("5000.00")), (cuentas.VENTAS, HABER, Decimal("5000.00")),
+                (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("50.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("50.00")),
+            ]),
+        )
+        self.concretar(x2)
+        self.assertEqual(
+            self.lineas(self.asiento_de(x2.entrega)),
+            sorted([
+                (cuentas.CAJA, DEBE, Decimal("10000.00")), (cuentas.VENTAS, HABER, Decimal("5000.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, Decimal("5000.00")),
+                (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("50.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("50.00")),
+            ]),
+        )
+
+    def test_regla_venta_registrada_por_entrega_transicion_lo_anterior_sin_asiento_va_a_ventas_y_deudores_no_queda_contrario(self):
+        """Decisión (4) del 26/11/2026 y D-92 punto 1: la primera entrega se concretó antes de esta tarea (sin asiento). La última no puede acreditar Deudores por lo que nunca se
+        debitó: lo de la anterior (5.000,00) se reconoce en Ventas (10.000,00 en total) y Deudores no aparece."""
+        x1, x2 = self.dos_entregas()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", return_value=None):  # la primera, como si fuera anterior a CON-04c: sin asiento
+            self.concretar(x1)
+        self.assertFalse(AsientoContable.objects.exists())
+        self.concretar(x2)
+        asiento = self.asiento_de(x2.entrega)
+        self.assertEqual(
+            self.lineas(asiento),
+            sorted([
+                (cuentas.CAJA, DEBE, Decimal("10000.00")), (cuentas.VENTAS, HABER, Decimal("10000.00")),
+                (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("50.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("50.00")),
+            ]),
+        )
+        self.assertNotIn(cuentas.DEUDORES_POR_VENTAS, [c for c, _, _ in self.lineas(asiento)])
+
+    def test_post_h_un_detalle_rechazado_no_suma_a_ventas_ni_al_costo(self):
+        """Una compra-venta con dos detalles en una entrega (30 y 20 a $100) y el cliente rechaza el segundo: Caja y Ventas por 3.000,00 y el costo solo de lo aceptado (30 × 1,0000)."""
+        t = transportista_con_vehiculo(self.e.invernadero)
+        venta = compra_venta(self.e, dias=0)
+        otra, _ = variedad_con_stock(self.e, "Rúcula de la prueba")
+        d1, d2 = detalle(venta, self.e.variedad, 30), detalle(venta, otra, 20)
+        lote_b = lote_maduro(self.e, 300, variedad=otra)
+        e = entrega(venta, [reserva_lista(d1, self.lote, 30), reserva_lista(d2, lote_b, 20)], transportista=t, fecha=HOY)
+        iniciar_ruta_de(t)
+        x = SimpleNamespace(entrega=e, contrato=venta, detalle=d1, transportista=t, envases=None)
+        self.concretar(x, acepta={DetalleEntrega.objects.get(entrega=e, detalle_venta=d2).pk: False})
+        self.assertEqual(
+            self.lineas(self.asiento_de(e)),
+            sorted([
+                (cuentas.CAJA, DEBE, Decimal("3000.00")), (cuentas.VENTAS, HABER, Decimal("3000.00")),
+                (cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("30.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("30.00")),
+            ]),
+        )
+
+    def test_post_h_si_no_hubo_venta_ni_cobro_no_hay_asiento_de_la_entrega(self):
+        """h: «si en la entrega no hubo ninguna venta ni cobro, no se generó asiento»: todo rechazado (8b) y sin costo entregado; el asiento de la entrega no existe y no falla
+        (lo devuelto a una partida vigente tampoco asienta)."""
+        x = self.concretable()
+        self.concretar(x, acepta={self.linea(x).pk: False}, medio_pago="")
+        self.assertFalse(AsientoContable.objects.exists())
+
+    def test_post_h_una_entrega_no_ultima_sin_cobro_asienta_aunque_no_se_cobre(self):
+        """8a: la primera entrega no cobra pero sí registra la venta contra Deudores: el asiento existe con medio de pago vacío."""
+        x1, _ = self.dos_entregas()
+        self.concretar(x1, medio_pago="")
+        self.assertTrue(AsientoContable.objects.filter(origen_id=x1.entrega.pk).exists())
+
+    # ---- e: la merma «daño en la entrega» ----
+
+    def test_post_e_la_merma_de_la_entrega_se_valoriza_con_el_costo_de_cada_origen(self):
+        """e: una entrega de dos orígenes (20 de lote a 2,5000 y 10 de cámara a 1,0000); llegan 25 de 30. Las 5 perdidas se reparten 3 y 2: el asiento de la merma es Debe Pérdidas por
+        Mermas / Haber Productos Terminados por 3 × 2,5000 + 2 × 1,0000 = 9,50, originado en la merma. El costo entregado (17 × 2,5 + 8 × 1 = 50,50) va al asiento de la entrega."""
+        x = self.mixta()
+        self.concretar(x, llego={self.linea(x).pk: "25"})
+        merma = Merma.objects.get(causa="dano_en_entrega")
+        self.assertEqual(
+            self.lineas(self.asiento_de(merma)), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("9.50")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("9.50"))])
+        )
+        costo = [l for l in self.lineas(self.asiento_de(x.entrega)) if l[0] == cuentas.COSTO_DE_PRODUCCION_VENDIDA]
+        self.assertEqual(costo, [(cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, Decimal("50.50"))])
+
+    def test_regla_8_6_29_lo_devuelto_a_una_partida_vencida_asienta_perdidas_contra_productos_terminados(self):
+        """Decisión (2) del 26/11/2026: lo devuelto a una partida que ya venció se registra como merma por vencimiento y se asienta como tal: Debe Pérdidas por Mermas / Haber
+        Productos Terminados por 50 × 1,0000 = 50,00, originado en esa merma."""
+        x = self.concretable()
+        partida = x.reserva.lineas.get().partida
+        StockCosechado.objects.filter(pk=partida.pk).update(fecha_limite=HOY - timedelta(days=1))
+        self.concretar(x, acepta={self.linea(x).pk: False})
+        merma = Merma.objects.get(causa="vencimiento_en_camara")
+        self.assertEqual(
+            self.lineas(self.asiento_de(merma)), sorted([(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("50.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("50.00"))])
+        )
+
+    def test_regla_lo_devuelto_desde_un_lote_con_la_fecha_limite_pasada_asienta_su_vencimiento(self):
+        """La partida nueva que nace vencida (regla «Lo devuelto a la cámara»): su merma por vencimiento (20 × 2,5000 = 50,00) también se asienta."""
+        x = self.mixta(dias_atras=400)
+        self.concretar(x, acepta={x.entrega.lineas.get().pk: False})
+        merma = Merma.objects.get(causa="vencimiento_en_camara", cant_merma=20)
+        self.assertEqual(self.lineas(self.asiento_de(merma))[0][2], Decimal("50.00"))
+
+    # ---- g: los consumos de envases ----
+
+    def test_post_g_cada_consumo_de_envase_asienta_costo_de_produccion_vendida_contra_insumos_en_stock(self):
+        """g: un asiento por consumo, originado en el consumo, por su `monto_consumo` (con el exceso incluido: 12 envases): Debe Costo de Producción Vendida / Haber Insumos en Stock."""
+        x = self.concretable(con_envasado=True)
+        iin = x.envases.pk
+        self.concretar(x, utilizada={iin: "12"}, confirmo_exceso={iin})
+        consumo = Consumo.objects.get()
+        self.assertGreater(consumo.monto_consumo, 0)
+        self.assertEqual(
+            self.lineas(self.asiento_de(consumo)),
+            sorted([(cuentas.COSTO_DE_PRODUCCION_VENDIDA, DEBE, consumo.monto_consumo), (cuentas.INSUMOS_EN_STOCK, HABER, consumo.monto_consumo)]),
+        )
+        self.assertEqual(AsientoContable.objects.count(), 2)  # el del consumo y el de la entrega
+
+    def test_post_g_lo_devuelto_de_un_envase_no_asienta(self):
+        """g: «lo devuelto no generó ningún registro de stock»: con 10 reservados, 6 usados y 4 devueltos, el consumo es 6 y no hay otro asiento de envases."""
+        x = self.concretable(con_envasado=True)
+        self.concretar(x, utilizada={x.envases.pk: "6"}, devuelta={x.envases.pk: "4"})
+        self.assertEqual(Consumo.objects.get().cant_consumo, Decimal("6"))
+        self.assertEqual(AsientoContable.objects.filter(origen__in=Consumo.objects.all()).count(), 1)
+
+    # ---- auditoría y todo o nada ----
+
+    def test_post_q_el_registro_de_auditoria_nombra_los_asientos(self):
+        """q y D-86 punto 4: el único registro `concrecion_entrega` nombra cada asiento entre sus afectados y en `datos` (entrega, merma y consumo); no se audita aparte."""
+        x = self.concretable(con_envasado=True)
+        self.concretar(x, utilizada={x.envases.pk: "10"}, llego={self.linea(x).pk: "45"})
+        (r,) = RegistroAuditoria.objects.filter(accion="concrecion_entrega")
+        self.assertEqual(sum(1 for a in r.afectados if a["texto"].startswith("Asiento")), 3)
+        self.assertEqual(len(r.detalle["datos"]["asientos"]), 3)
+        self.assertEqual(AsientoContable.objects.count(), 3)
+
+    def test_garantia_si_falla_un_asiento_no_queda_nada_de_la_concrecion(self):
+        """Garantías mínimas: si el asiento falla, la entrega sigue «a realizar», sin pago, sin merma, sin consumo, y la auditoría no tiene el registro."""
+        x = self.concretable(con_envasado=True)
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.concretar(x, utilizada={x.envases.pk: "10"}, llego={self.linea(x).pk: "45"})
+        self.assertEqual(self.refrescar(x).estado_orden, "a_realizar")
+        self.assertFalse(PagoCliente.objects.exists() or Merma.objects.exists() or Consumo.objects.exists())
+        self.assertFalse(RegistroAuditoria.objects.filter(accion="concrecion_entrega").exists())
+
+    def test_d92_punto_5_un_costo_cero_omite_las_lineas_del_costo_y_conserva_la_venta(self):
+        """H11: si el costo de lo entregado es $0,00 (origen sin costo, p. ej. un lote existente sin costo), las líneas del costo se omiten y no falla; queda el asiento de la venta."""
+        x = self.concretable()
+        StockCosechado.objects.filter(pk=x.reserva.lineas.get().partida_id).update(costo_unitario_cosechado=Decimal("0.0000"))
+        self.concretar(x)
+        self.assertEqual(
+            self.lineas(self.asiento_de(x.entrega)), sorted([(cuentas.CAJA, DEBE, Decimal("5000.00")), (cuentas.VENTAS, HABER, Decimal("5000.00"))])
+        )
+
+    def test_paso_4_el_libro_muestra_el_origen_de_la_entrega_como_texto_sin_direccion(self):
+        """CON-04c paso 4 (criterio de CON-04a, D-30): el origen del asiento compuesto se ve como «Entrega OT-… · CV-…, <cliente>», SIN enlace; una orden que no es una entrega
+        (una cosecha, una siembra) no tiene texto propio. Y `ready()` lo registra una sola vez."""
+        from comercial.servicios import asientos_comerciales
+        from contabilidad import extensiones
+
+        x = self.concretable()
+        self.concretar(x)
+        texto, url = extensiones.enlace_de_origen(self.asiento_de(x.entrega).origen)
+        self.assertEqual((texto, url), (f"Entrega {x.entrega.codigo} · {x.contrato.codigo}, {self.e.cliente}", None))
+        self.assertEqual(extensiones._ENLACES_DE_ORIGEN["orden_de_trabajo"].count(asientos_comerciales.enlace_de_orden_de_trabajo), 1)
+        self.assertIsNone(asientos_comerciales.enlace_de_orden_de_trabajo(mock.Mock(pk=0)))

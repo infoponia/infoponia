@@ -65,6 +65,8 @@ _TRAZOS = {
     "router": '<rect x="2" y="14" width="20" height="8" rx="2"/>'
     '<path d="M6 18h.01M10 18h.01M15 10v4M17.8 7.2a4 4 0 0 0-5.6 0M20.7 4.3a8 8 0 0 0-11.4 0"/>',
     "wrench": '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/>',
+    # EST-01: «Estadísticas» (el del prototipo).
+    "chart": '<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>',
 }
 
 

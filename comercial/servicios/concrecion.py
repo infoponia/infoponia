@@ -1,6 +1,6 @@
 # Concreción de entregas de `comercial` (COM-06a): COM-CNC-ENT con el retiro (1a) y la discrepancia de un suministro (14c). Lo que registra la concreción: la cámara (egreso, merma de
 # entrega y devolución, con el núcleo de `produccion`, sección 10 de `docs/api/produccion.md`), los envases (cierre de las reservas y consumo), los montos y el vencimiento, el pago
-# y el cierre de una compra-venta, el fin del detalle y del suministro y la discrepancia. Todo en UNA transacción y con UN registro de auditoría (D-36). Sin asientos (D-57).
+# y el cierre de una compra-venta, el fin del detalle y del suministro y la discrepancia. Todo en UNA transacción y con UN registro de auditoría (D-36). Con sus asientos (CON-04c; antes, D-57, sin ellos).
 # Fuente: docs/casos_de_uso/comercial/rutas.md («Concretar»), D-68 y docs/patrones/bloqueos.md («Concretar una entrega»).
 #
 # Bloqueos (`FOR NO KEY UPDATE`): las cuentas (el actor, el Vendedor del contrato y el Agrónomo del invernadero de origen) → el invernadero de origen → las variedades → los lotes de
@@ -40,7 +40,7 @@ from comercial.models import (
     Suministro,
     Vehiculo,
 )
-from comercial.servicios import calendario, enlaces, entregas, rutas, solicitudes
+from comercial.servicios import asientos_comerciales, calendario, enlaces, entregas, rutas, solicitudes
 from comercial.servicios import camara as camara_comercial
 from comercial.servicios.comprobantes import Destinatario
 from core import correo, notificaciones
@@ -578,7 +578,7 @@ def concretar_entrega(actor, entrega_id, datos, huella):
     Después de bloquear vuelve a leer y verifica: 14a (`entrega_no_concretable`, `ruta_no_iniciada`), la huella (`cambio_simultaneo`: la pantalla vuelve al paso 4) y todos los datos (los
     mismos errores por campo del resumen: `cantidad_invalida`, `envase_invalido` y `medio_de_pago_obligatorio`). Registra, con el núcleo de `produccion` (sección 10 de `docs/api/produccion.md`):
     el egreso de cada partida, las mermas «daño en la entrega» por lote, las devoluciones a la cámara, los consumos de envases (el exceso incluido), y, en `comercial`, las reservas, las líneas,
-    la entrega, los detalles, el pago y el estado de la venta, la discrepancia, el fin del detalle y del suministro. Sin asientos (D-57). Los correos salen después de confirmar."""
+    la entrega, los detalles, el pago y el estado de la venta, la discrepancia, el fin del detalle y del suministro. Con asientos (CON-04c): los de las mermas, los consumos y el compuesto de la entrega. Los correos salen después de confirmar."""
     actor, previa = _entrega_para_concretar(actor, entrega_id)
     datos = datos or DatosDeConcrecion()
     lectura_previa = _leer(previa, stock.hoy())
@@ -610,13 +610,15 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
     contrato = lectura.contrato
     es_venta = lectura.venta is not None
     movimientos, mermas_creadas, partidas_tocadas, partidas_nuevas = [], [], {}, []
-    perdidas_por_lote = {}
+    perdidas_por_lote, costo_perdido_por_lote, costo_entregado, vencimientos = {}, {}, Decimal("0"), []  # CON-04c: cada parte se valoriza con el costo de su origen
     # 1 y 2: la cámara y las mermas por lote de origen (R144)
     for lr in resumen.lineas:
         for r in lr.repartos:
             o = r.origen
             lote = o.lote
             perdidas_por_lote.setdefault(lote.pk, [lote, 0])[1] += r.perdida
+            costo_perdido_por_lote[lote.pk] = costo_perdido_por_lote.get(lote.pk, Decimal("0")) + r.perdida * o.costo
+            costo_entregado += r.entregada * o.costo
             if o.tipo == "partida":
                 if o.aporte > 0:
                     movimientos.append(fisico.egresar_de_partida(o.partida, o.aporte, entrega))  # lo que salió en el vehículo
@@ -626,6 +628,7 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
                     if resultado.merma is not None:  # `ResultadoMermaDePartida(merma, movimiento)`
                         mermas_creadas.append(resultado.merma.merma)
                         movimientos.append(resultado.merma.movimiento)
+                        vencimientos.append(resultado.merma)
                 partidas_tocadas[o.partida.pk] = o.partida
             elif r.devuelta:
                 nueva = fisico.crear_partida(
@@ -636,10 +639,14 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
                     if resultado is not None:
                         mermas_creadas.append(resultado.merma)
                         movimientos.append(resultado.movimiento)
+                        vencimientos.append(resultado)
                 partidas_nuevas.append(nueva)
+    danos, costos_de_danos = [], {}
     for lote, cantidad in (perdidas_por_lote[k] for k in sorted(perdidas_por_lote)):
         if cantidad > 0:
-            mermas_creadas.append(mermas.aplicar_merma_de_entrega(entrega, lote, cantidad, datos.descripcion_perdida[:LARGO_DE_LA_DESCRIPCION], quien))
+            danos.append(mermas.aplicar_merma_de_entrega(entrega, lote, cantidad, datos.descripcion_perdida[:LARGO_DE_LA_DESCRIPCION], quien))
+            mermas_creadas.append(danos[-1])
+            costos_de_danos[danos[-1].pk] = costo_perdido_por_lote[lote.pk]
     # 3: las reservas de stock (en una compra-venta, las de un detalle rechazado se liberan)
     entregadas, liberadas = [], []
     for ll in lectura.lineas:
@@ -712,6 +719,19 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
     # 8: los avisos y los correos
     _avisar(quien, entrega, lectura, resumen, discrepancia)
     _programar_comprobante(entrega, lectura, resumen)
+    # 8b: los asientos (CON-04c; D-92 puntos 3 a 6), DESPUÉS de todos los bloqueos de negocio: el ejercicio se bloquea al final (D-86). e: uno por merma «daño en la entrega»
+    # (y uno por cada vencimiento de lo devuelto a una partida vencida, regla 29 de 8.6); g: uno por consumo de envase; h: el compuesto de la entrega.
+    asientos_creados = [
+        asientos_comerciales.asentar_merma_de_entrega(quien, m, costos_de_danos[m.pk], hoy) for m in danos
+    ] + [asientos_comerciales.asentar_merma_de_partida(quien, v.merma, v.movimiento, hoy, hoy) for v in vencimientos]
+    asientos_creados += [asientos_comerciales.asentar_consumo_de_envase(quien, c.consumo, hoy) for c in consumos_creados]
+    asientos_creados.append(
+        asientos_comerciales.asentar_entrega(
+            quien, entrega, hoy, es_venta=es_venta, es_ultima=resumen.es_ultima, cobra=resumen.cobra, medio_pago=datos.medio_pago, monto=resumen.total,
+            total_a_cobrar=resumen.total_a_cobrar, costo=costo_entregado,
+        )
+    )
+    asientos_creados = [a for a in asientos_creados if a is not None]
     # 9: la auditoría (postcondiciones p y q)
     entrega.refresh_from_db()
     lineas = [lr.leida.linea for lr in resumen.lineas]
@@ -739,6 +759,8 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
             datos_auditoria[clave] = [str(x) for x in lista]
     if declarados_texto:
         datos_auditoria["envases_declarados"] = declarados_texto
+    if asientos_creados:
+        datos_auditoria["asientos"] = [str(a) for a in asientos_creados]
     if pago is not None:
         datos_auditoria["pago"] = str(pago)
     if discrepancia is not None:
@@ -749,7 +771,7 @@ def _registrar(quien, entrega, lectura, resumen, datos, hoy):
         afectados=_sin_repetidos(
             [
                 entrega, *lineas, *entregadas, *liberadas, *reservas_cerradas, *partidas_tocadas.values(), *partidas_nuevas, *afectados_extra,
-                lectura.venta or lectura.suministro, *mermas_creadas, *([pago] if pago else []), *([discrepancia.discrepancia] if discrepancia else []),
+                lectura.venta or lectura.suministro, *mermas_creadas, *([pago] if pago else []), *([discrepancia.discrepancia] if discrepancia else []), *asientos_creados,
             ]
         ),
         detalle={"cambios": cambios, "datos": datos_auditoria},
