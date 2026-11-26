@@ -3,7 +3,7 @@
 
 from django.urls import path
 
-from comercial import views, views_camara, views_cobranza, views_contratos, views_cosechas, views_entregas, views_envasado, views_faltantes, views_rutas, views_solicitudes, views_suministros
+from comercial import views, views_camara, views_cobranza, views_contratos, views_cosechas, views_entregas, views_envasado, views_estadisticas, views_faltantes, views_rutas, views_solicitudes, views_suministros
 
 app_name = "comercial"
 
@@ -93,6 +93,9 @@ urlpatterns = [
     path("solicitudes/<int:solicitud_id>/anular/", views_solicitudes.anular, name="solicitud_anular"),
     path("solicitudes/<int:solicitud_id>/comprobante/", views_solicitudes.comprobante, name="solicitud_comprobante"),
     path("solicitudes/<int:solicitud_id>/reenviar-aviso/", views_solicitudes.reenviar_aviso, name="solicitud_reenviar_aviso"),
+
+    # COM-08c (COM-CNS-EST): la pestaña «Estadísticas» (solo lectura; los filtros van en la URL).
+    path("estadisticas/", views_estadisticas.lista, name="estadisticas"),
 
     path("envasado/", views_envasado.lista, name="envasado"),
     path("envasado/<int:entrega_id>/", views_envasado.entrega, name="envasado_entrega"),

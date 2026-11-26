@@ -51,3 +51,38 @@ def pesos(valor):
     from comercial.servicios.compra_ventas import texto_de_pesos
 
     return "—" if valor is None else texto_de_pesos(valor)
+
+
+# ---- COM-08c: números de las estadísticas. El servicio devuelve `Decimal` sin redondear; se redondea acá, recién para mostrar. ----
+
+
+@register.filter
+def porcentaje(valor):
+    """Un porcentaje entero («50 %»), redondeado a lo que corresponde (`ROUND_HALF_UP`); `None` da «—»."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    return "—" if valor is None else f"{Decimal(valor).quantize(Decimal('1'), rounding=ROUND_HALF_UP)} %"
+
+
+@register.filter
+def miles(valor):
+    """Un entero con punto de miles («12.500»)."""
+    return f"{int(valor):,}".replace(",", ".")
+
+
+@register.filter
+def un_decimal(valor):
+    """Un promedio con un decimal y coma («1,5»), `ROUND_HALF_UP`; `None` da «—»."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    return "—" if valor is None else str(Decimal(valor).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)).replace(".", ",")
+
+
+@register.filter
+def ancho_de_barra(monto, maximo):
+    """El ancho en % (con punto decimal, para el CSS) de la barra de `monto` frente al mayor (`maximo`); mínimo 2 % si hay monto, para que se vea."""
+    from decimal import Decimal
+
+    if not maximo or not monto:
+        return "0"
+    return f"{max(Decimal(2), Decimal(monto) * 100 / Decimal(maximo)):.1f}"

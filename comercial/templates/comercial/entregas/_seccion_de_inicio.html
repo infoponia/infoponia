@@ -25,6 +25,15 @@
     <a class="kpi{% if g.solicitudes_pendientes %} warn{% endif %}" href="{{ g.url_de_solicitudes_pendientes }}" style="text-decoration:none;color:inherit"><span class="k">Pendientes</span><span class="v">{{ g.solicitudes_pendientes }}</span><span class="c">quejas y discrepancias a resolver</span></a>
   </div>
   {% endif %}
+  {% if g.resultados %}
+  <h2 style="margin:18px 0 12px">Resultados de {{ g.resultados.desde|date:"F \d\e Y" }} (mes en curso)</h2>
+  <div class="kpis">
+    <a class="kpi" href="{{ g.url_de_estadisticas }}" style="text-decoration:none;color:inherit"><span class="k">Ventas</span><span class="v">{{ g.resultados.ventas.total|pesos }}</span><span class="c">{{ g.resultados.ventas.entregas }} entrega{{ g.resultados.ventas.entregas|pluralize }} concretada{{ g.resultados.ventas.entregas|pluralize }} en el mes</span></a>
+    <a class="kpi" href="{{ g.url_de_estadisticas }}" style="text-decoration:none;color:inherit"><span class="k">Entregas a tiempo</span><span class="v">{{ g.resultados.puntualidad.porcentaje_a_tiempo|porcentaje }}</span><span class="c">{{ g.resultados.puntualidad.con_retraso }} con retraso respecto de la fecha prometida</span></a>
+    <a class="kpi{% if g.resultados.incumplimientos.total %} warn{% endif %}" href="{{ g.url_de_estadisticas }}" style="text-decoration:none;color:inherit"><span class="k">Indemnizado</span><span class="v">{{ g.resultados.incumplimientos.total|pesos }}</span><span class="c">por quejas y discrepancias aceptadas en el mes</span></a>
+  </div>
+  <p class="hint" style="margin:-8px 0 18px">Para otros meses, vea Comercial › <a href="{{ g.url_de_estadisticas }}">Estadísticas</a>.</p>
+  {% endif %}
   {% if g.cobranza %}
   <h2 style="margin:18px 0 12px">Cobranza</h2>
   <div class="kpis">
