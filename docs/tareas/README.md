@@ -143,6 +143,5 @@ Plan completo en `docs/tareas/ronda_estadisticas_1.md`. Va última; EST-03 esper
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| EST-01 | App `estadisticas` y estadísticas de producción | estadisticas | pendiente | PRD-03 (hecha); CON-04a (hecha) | `estadisticas/EST-01-app-y-estadisticas-de-produccion.md` |
-| EST-02 | Estadísticas consolidadas del Gerente | estadisticas | pendiente | EST-01, CON-03a, CMP-06 | `estadisticas/EST-02-estadisticas-consolidadas.md` |
+| EST-02 | Estadísticas consolidadas del Gerente | estadisticas | pendiente | EST-01 (hecha), CON-03a, CMP-06 | `estadisticas/EST-02-estadisticas-consolidadas.md` |
 | EST-03 | Lo comercial dentro de las consolidadas | estadisticas | pendiente | EST-02, COM-08c | `estadisticas/EST-03-estadisticas-comerciales-en-las-consolidadas.md` |

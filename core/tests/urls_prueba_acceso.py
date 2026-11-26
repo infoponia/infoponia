@@ -50,4 +50,6 @@ urlpatterns = [
     path("compras/", include("compras.urls")),
     # CON-03a: el menú del Gerente y del Contador tiene también «Contabilidad» (contabilidad la registra en ready()).
     path("contabilidad/", include("contabilidad.urls")),
+    # EST-01: el menú del Gerente y del Agrónomo tiene también «Estadísticas» (estadisticas la registra en ready()).
+    path("estadisticas/", include("estadisticas.urls")),
 ]

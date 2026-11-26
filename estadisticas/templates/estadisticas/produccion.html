@@ -1,0 +1,131 @@
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% comment %}«Estadísticas» de producción (EST-01, EST-CNS-PRD; prototipo `VIEWS.e_main` y `stProd`). Todo es un formulario GET (la URL se puede compartir y volver a abrir y
+funciona sin JavaScript): los botones del período y los del selector de órdenes envían el formulario; los campos escondidos conservan lo ya elegido, y como el botón apretado va
+después en el formulario, su valor es el último y gana (`_ultimo` en la vista). Recibe «filtro», «atajos», «hoy», «error», «invernaderos» y, si el filtro es válido, «resultado»,
+«periodo», «deltas», «enlaces», «hay_actividad», «barras_de_merma» y «barras_de_alertas». Las barras son de CSS: sin bibliotecas de gráficos.{% endcomment %}
+{% block titulo %}Estadísticas · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'estadisticas/css/estadisticas.css' %}">
+<div class="page est">
+  <div class="page-h"><h1>Estadísticas</h1></div>
+  <p class="muted sm" style="margin:0 0 14px">Cómo rindió la producción en el período que elijas, comparada con el período anterior.</p>
+
+  <form method="get" action="{% url 'estadisticas:produccion' %}" aria-label="Período y filtros de las estadísticas">
+    <input type="hidden" name="enviado" value="1">
+    <input type="hidden" name="periodo" value="{{ filtro.periodo }}">
+    <input type="hidden" name="ordenes" value="{{ filtro.ordenes }}">
+    {# Con Enter en un campo de fecha el navegador aprieta el primer botón: que sea uno que no cambie lo elegido. #}
+    <button class="default-oculto" type="submit" name="periodo" value="{{ filtro.periodo }}" tabindex="-1" aria-hidden="true">Aplicar</button>
+
+    <div class="perbar">
+      <div class="chips" role="group" aria-label="Período">
+        {% for codigo, texto in atajos %}<button class="chip" type="submit" name="periodo" value="{{ codigo }}" aria-pressed="{% if filtro.periodo == codigo %}true{% else %}false{% endif %}">{{ texto }}</button>{% endfor %}
+      </div>
+      <label class="chk"><input type="checkbox" name="comparar"{% if filtro.comparar %} checked{% endif %}> Comparar con el período anterior</label>
+    </div>
+
+    {% if filtro.periodo == "personalizado" %}
+    <div class="perdates" style="margin:10px 0">
+      <label class="dlbl"><span>Desde</span><input type="date" class="field-input" name="desde" max="{{ hoy|date:'Y-m-d' }}" value="{% if periodo %}{{ periodo.desde|date:'Y-m-d' }}{% else %}{{ filtro.desde }}{% endif %}"></label>
+      <label class="dlbl"><span>Hasta</span><input type="date" class="field-input" name="hasta" max="{{ hoy|date:'Y-m-d' }}" value="{% if periodo %}{{ periodo.hasta|date:'Y-m-d' }}{% else %}{{ filtro.hasta }}{% endif %}"></label>
+    </div>
+    {% endif %}
+
+    <div class="filters" style="margin-top:12px">
+      {% if invernaderos|length > 1 %}
+      <label class="dlbl" style="border:0;padding:0;background:none;min-height:0"><span>Invernadero</span>
+        <select class="field-input" name="invernadero" data-desplegable aria-label="Invernadero">
+          <option value="">Todos los invernaderos</option>
+          {% for i in invernaderos %}<option value="{{ i.pk }}"{% if i.pk == filtro.invernadero %} selected{% endif %}>{{ i.nombre }}</option>{% endfor %}
+        </select></label>
+      {% elif invernaderos %}<input type="hidden" name="invernadero" value="{{ filtro.invernadero|default_if_none:'' }}">{% endif %}
+      <button class="btn btn-ghost btn-sm" type="submit" name="periodo" value="{{ filtro.periodo }}">Aplicar</button>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger" role="alert" style="margin-top:12px">{% icono "warn" 16 %}<div>{{ error }}</div></div>
+    {% elif not invernaderos %}
+    <div class="empty" style="margin-top:16px">{% icono "leaf" 28 %}<b>No tenés invernaderos para consultar</b><span>Cuando tengas un invernadero a cargo vas a ver acá sus estadísticas.</span></div>
+    {% else %}
+    <div class="perinfo muted sm">Período: <b>{{ periodo.desde|date:"d/m/Y" }} al {{ periodo.hasta|date:"d/m/Y" }}</b>{% if filtro.comparar %} · se compara con {{ resultado.anterior.desde|date:"d/m/Y" }} al {{ resultado.anterior.hasta|date:"d/m/Y" }}{% endif %}</div>
+    {% with a=resultado.actual %}
+    {% if not hay_actividad %}
+    <div class="empty">{% icono "leaf" 28 %}<b>No hay actividad en este período</b><span>Probá con otro rango de fechas.</span></div>
+    {% else %}
+
+    <div class="kpis">
+      <div class="kpi"><div class="k">Plantas sembradas</div><div class="v">{{ a.sembradas_y_cosechadas.sembradas|floatformat:"0g" }}</div><div class="d">{% if deltas.sembradas %}<span class="dta {{ deltas.sembradas.clase }}">{{ deltas.sembradas.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Plantas cosechadas</div>
+        {% if a.sembradas_y_cosechadas.cosecha_disponible %}<div class="v">{{ a.sembradas_y_cosechadas.cosechadas|floatformat:"0g" }}</div><div class="d">{% if deltas.cosechadas %}<span class="dta {{ deltas.cosechadas.clase }}">{{ deltas.cosechadas.texto }}</span>{% endif %}</div>
+        {% else %}<div class="v">—</div><div class="d"><span class="dta">Disponible cuando exista la cosecha</span></div>{% endif %}</div>
+      <div class="kpi"><div class="k">Merma</div><div class="v">{% if a.merma.porcentaje is None %}—{% else %}{{ a.merma.porcentaje|floatformat:1 }} %{% endif %}</div><div class="d">{% if deltas.merma %}<span class="dta {{ deltas.merma.clase }}">{{ deltas.merma.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Órdenes a tiempo</div><div class="v">{% if a.ordenes.porcentaje_a_tiempo is None %}—{% else %}{{ a.ordenes.porcentaje_a_tiempo|floatformat:1 }} %{% endif %}</div><div class="d">{% if a.ordenes.total %}{{ a.ordenes.a_tiempo }} de {{ a.ordenes.total }} órdenes{% endif %}{% if deltas.ordenes %}<span class="dta {{ deltas.ordenes.clase }}">{{ deltas.ordenes.texto }}</span>{% endif %}</div></div>
+      <div class="kpi"><div class="k">Costo por planta cosechada</div>
+        {% if a.costo.disponible %}<div class="v">{% if a.costo.costo_por_planta is None %}—{% else %}$ {{ a.costo.costo_por_planta|floatformat:"2g" }}{% endif %}</div><div class="d">{% if deltas.costo %}<span class="dta {{ deltas.costo.clase }}">{{ deltas.costo.texto }}</span>{% endif %}</div>
+        {% else %}<div class="v">—</div><div class="d"><span class="dta">Disponible cuando exista la cosecha</span></div>{% endif %}</div>
+    </div>
+
+    <div class="stack">
+      <div class="split">
+        <div class="card seg">
+          <div class="card-h"><h3>{% icono "leaf" 16 %} Plantas sembradas y cosechadas</h3>{% if enlaces.bitacora %}<a class="link enlace-del-bloque" href="{{ enlaces.bitacora }}">Ver en la bitácora</a>{% endif %}</div>
+          {% if a.sembradas_y_cosechadas.filas %}
+          <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Sembradas</th><th class="right">Cosechadas</th></tr></thead><tbody>
+            {% for f in a.sembradas_y_cosechadas.filas %}<tr><td>{{ f.variedad }}</td><td class="right nowrap">{{ f.sembradas|floatformat:"0g" }}</td><td class="right nowrap">{% if f.cosechadas is None %}—{% else %}{{ f.cosechadas|floatformat:"0g" }}{% endif %}</td></tr>{% endfor %}
+          </tbody></table>
+          {% if not a.sembradas_y_cosechadas.cosecha_disponible %}<div class="card-b"><span class="muted sm">Cosechadas: disponible cuando exista la cosecha.</span></div>{% endif %}
+          {% else %}<div class="card-b"><span class="muted">No se sembró ni se cosechó nada en este período.</span></div>{% endif %}
+        </div>
+
+        <div class="card seg">
+          <div class="card-h"><h3>{% icono "chart" 16 %} Merma por causa</h3>{% if enlaces.bitacora_merma %}<a class="link enlace-del-bloque" href="{{ enlaces.bitacora_merma }}">Ver las mermas</a>{% endif %}</div>
+          <div class="card-b">
+            {% if a.merma.denominador %}<p class="muted sm" style="margin:0 0 10px">{{ a.merma.perdidas|floatformat:"0g" }} plantas perdidas sobre {{ a.merma.al_inicio|floatformat:"0g" }} en producción al inicio más {{ a.merma.sembradas_en_el_periodo|floatformat:"0g" }} sembradas.</p>
+            {% else %}<p class="muted sm" style="margin:0 0 10px">No había plantas en producción ni se sembró en este período: no se puede calcular el porcentaje.</p>{% endif %}
+            <div class="hb">{% for f, ancho in barras_de_merma %}<div class="hb-r"><span class="hb-l">{{ f.texto }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>{{ f.plantas|floatformat:"0g" }} · {{ f.porcentaje|floatformat:0 }} %</b></div>{% empty %}<div class="muted sm">No hubo mermas en el período.</div>{% endfor %}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card seg">
+        <div class="card-h"><h3>{% icono "check" 16 %} Órdenes de trabajo a tiempo y vencidas</h3>{% if enlaces.ordenes %}<a class="link enlace-del-bloque" href="{{ enlaces.ordenes }}">Ver las órdenes</a>{% endif %}</div>
+        <div class="card-b"><div class="chips" role="group" aria-label="Qué órdenes contar">
+          <button class="chip" type="submit" name="ordenes" value="todas" aria-pressed="{% if filtro.ordenes == 'todas' %}true{% else %}false{% endif %}">Todas</button>
+          <button class="chip" type="submit" name="ordenes" value="produccion" aria-pressed="{% if filtro.ordenes == 'produccion' %}true{% else %}false{% endif %}">Solo de producción</button>
+        </div></div>
+        {% if a.ordenes.filas %}
+        <table class="data-table"><thead><tr><th>Tipo de orden</th><th class="right">A tiempo</th><th class="right">Vencidas</th><th class="right">% a tiempo</th></tr></thead><tbody>
+          {% for f in a.ordenes.filas %}<tr><td>{{ f.texto }}</td><td class="right nowrap">{{ f.a_tiempo }}</td><td class="right nowrap">{{ f.vencidas }}</td><td class="right nowrap">{{ f.porcentaje_a_tiempo|floatformat:0 }} %</td></tr>{% endfor %}
+        </tbody></table>
+        <div class="totrow"><span>Total</span><b>{{ a.ordenes.a_tiempo }} a tiempo · {{ a.ordenes.vencidas }} vencidas ({{ a.ordenes.porcentaje_vencidas|floatformat:0 }} %)</b></div>
+        {% else %}<div class="card-b"><span class="muted">No hubo órdenes con fecha programada en este período.</span></div>{% endif %}
+      </div>
+
+      <div class="card seg">
+        <div class="card-h"><h3>{% icono "box" 16 %} Consumo de insumos</h3>{% if enlaces.insumos %}<a class="link enlace-del-bloque" href="{{ enlaces.insumos }}">Ver los insumos</a>{% endif %}</div>
+        {% if a.consumo.categorias %}
+        <div class="totrow" style="border-top:0"><span>Consumo total del período{% if deltas.consumo %} <span class="dta {{ deltas.consumo.clase }}">{{ deltas.consumo.texto }}</span>{% endif %}</span><b>$ {{ a.consumo.monto_total|floatformat:"2g" }}</b></div>
+        <table class="data-table"><thead><tr><th>Categoría</th><th>Insumo</th><th class="right">Cantidad</th><th class="right">Monto</th></tr></thead><tbody>
+          {% for c in a.consumo.categorias %}
+          {% for i in c.insumos %}<tr><td>{% if forloop.first %}<b>{{ c.nombre }}</b><span class="sub2">$ {{ c.monto|floatformat:"2g" }}</span>{% endif %}</td><td>{{ i.nombre }}</td><td class="right nowrap">{{ i.cantidad|floatformat:"-3g" }} {{ i.unidad_texto }}</td><td class="right nowrap">$ {{ i.monto|floatformat:"2g" }}</td></tr>{% endfor %}
+          {% endfor %}
+        </tbody></table>
+        {% else %}<div class="card-b"><span class="muted">No se consumieron insumos en este período.</span></div>{% endif %}
+      </div>
+
+      {% if a.alertas_iot %}
+      <div class="card seg">
+        <div class="card-h"><h3>{% icono "activity" 16 %} Alertas del IoT</h3>{% if enlaces.iot %}<a class="link enlace-del-bloque" href="{{ enlaces.iot }}">Ver el monitoreo</a>{% endif %}</div>
+        <div class="card-b">
+          <p class="muted sm" style="margin:0 0 10px">{{ a.alertas_iot.total }} alerta{{ a.alertas_iot.total|pluralize }} en el período{% if deltas.alertas_iot %} · <span class="dta {{ deltas.alertas_iot.clase }}" style="display:inline">{{ deltas.alertas_iot.texto }}</span>{% endif %}.</p>
+          <div class="hb">{% for f, ancho in barras_de_alertas %}<div class="hb-r"><span class="hb-l">{{ f.texto }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>{{ f.cantidad }} alerta{{ f.cantidad|pluralize }}</b></div>{% empty %}<div class="muted sm">No hubo alertas del IoT en el período.</div>{% endfor %}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endwith %}
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
