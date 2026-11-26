@@ -922,3 +922,14 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 - **Pruebas de concurrencia:** anulación y cobro comparten las cuentas del Gerente y del Vendedor y quedan en fila ahí, y el paso 30 no puede competir por una entrega ya cobrada: invertir el orden de bloqueo de la anulación no lo detecta ninguna prueba con dos hilos. Por eso hay dos pruebas **sondeadas** que detienen la anulación en cada punto y miran con `NOWAIT` qué filas tiene tomadas (fallan si se invierte el orden; se comprobó). «Anular contra registrar el cobro correcto de la misma anulación» se probó como dos cobros correctos a la vez de la misma anulación.
 - **Entorno:** con `--parallel`, una prueba que falla hace caer el ejecutor con `TypeError: cannot pickle 'traceback' object` (falta `tblib`); y una base de pruebas clonada sin la migración nueva de otra tarea falla con «no existe la columna …» (recrearla con `--noinput` y sin `--keepdb`).
 - **Pasada manual en navegador real** (paso 13 de la «Verificación a mano»): anular y cancelar con cobro hasta el final; el cliente de Django no ve el CSRF, el encabezado `Origin` ni el JavaScript.
+
+## EST-01 · lo implementado distinto de lo escrito (26/11/2026)
+
+1. **Merma, «en producción al inicio»:** usa `Siembra.fecha_siembra` y no `fecha_resolucion_orden` (D-93 punto 3.2 + D-103; decisión del estudiante). Se propuso enmendar el texto de D-93 (hecho en la nota del 26/11/2026).
+2. **Firmas:** `ordenes_a_tiempo` y `estadisticas_de_produccion` reciben `hoy` y `solo_produccion`; la segunda devuelve el período anterior, los invernaderos del alcance y las comparaciones («Cómo se aplica» de `estadisticas.md` no los nombra).
+3. **`cosecha_disponible()`:** una sola función para los indicadores 1 (cosechadas) y 4, en lugar de un `disponible()` por indicador (D-93 punto 5). Como COM-04a ya está en `main`, es un respaldo.
+4. **«Últimos 3 meses»** toma el último día del mes cuando el día no existe (31/05 → 28/02): D-93 no lo dice.
+5. **Mermas:** las de cámara no descuentan lo que había «al inicio» y la de «daño en la entrega» sí cuenta como perdida (lectura literal de D-93 punto 3.2); con una entrega dañada de un lote ya cosechado podría restar dos veces (se frena en 0, nunca negativo). Revisar tras la entrevista al productor (H26).
+6. **«No disponible» de la cosecha:** hoy la cosecha existe, así que ese texto solo se ve en la prueba que lo simula (`test_d93_punto_5_*`).
+7. **`Siembra.capataz` nulo** (tema abierto de la sección de PRD-05): EST-01 no lo lee.
+8. **Entorno:** con `--parallel`, una prueba que falla oculta el error real (`cannot pickle 'traceback' object`, falta `tblib`): para ver el fallo, correr sin `--parallel`.

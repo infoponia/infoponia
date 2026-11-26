@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'comercial',     # nivel 6
     'compras',       # nivel 6
     'iot',           # nivel 7
+    'estadisticas',  # nivel 8
 ]
 
 # Decisión de la demo de la defensa (hoy docs/decisiones/D-01-demo.md, punto 5; DAT-01): la app ``demo`` (nivel 9, solo el comando
