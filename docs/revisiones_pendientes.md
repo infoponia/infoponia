@@ -1242,3 +1242,24 @@ Los 22 pasos son los de «Verificación a mano» de `docs/tareas/estadisticas/ES
 - [ ] 20. **Navegador real** (la pantalla envía un formulario: el filtro del período). Abrí «Estadísticas» en una **ventana privada**, entrá con tu cuenta de Agrónomo y, **sin tocar nada más**, tocá «Mes anterior», «Personalizado» → escribí fechas → «Aplicar», y «Solo de producción». Cada envío tiene que recargar la pantalla con el resultado esperado. Si aparece «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola (F12), avisá: lo más probable es un encabezado que el cliente de Django no ve. Además, copiá la dirección de la barra después de aplicar un período y pegala en otra pestaña: tiene que mostrar el mismo período (la URL se puede compartir). Con Enter dentro de un campo de fecha tiene que aplicar el período escrito (no volver a «Este mes»).
 - [ ] 21. **(Opcional) Sin JavaScript.** Desactivá JavaScript en el navegador y repetí los pasos 7, 10 y 13: todo funciona igual (son botones de un formulario GET); el selector de invernadero se ve como lista común. Las barras son de CSS: se ven igual.
 - [ ] 22. **(Opcional) En el celular.** El Agrónomo y el Gerente usan el marco de escritorio, pero la pantalla tiene que poder leerse y usarse en ancho angosto: las barras de merma y de alertas pasan a dos líneas y las tarjetas se apilan.
+
+## CON-04c · Tarea CON-04c (asientos de cosecha, cámara y entregas)
+
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` (con lo que hay que crear a mano), copiados acá para ir tachándolos (M5). **No tiene migración**: no hay que correr `migrate` por esta tarea. El paso 14 es el de **navegador real**.
+
+- [ ] 1. Como Contador, «Contabilidad › Libro de gestión»: sin asientos *(lo cubre el recorrido)*.
+- [ ] 2. Cosecha con contrato: el Capataz cosecha 30 de 40 y pierde 4 (lote de 100 plantas a $ 2,00); «Ver resumen» no asienta; asientos N.º 1 (Productos Terminados / Productos en Proceso $ 60,00) y N.º 2 (Pérdidas por Mermas / Productos en Proceso $ 8,00) *(lo cubren `ConcretarCosechaAsientoTests` y el recorrido)*.
+- [ ] 3. Cosecha sin contrato de 20 plantas: asiento $ 40,00; una que rinde 0 no asienta y no da error.
+- [ ] 4. Merma en cámara de 5 plantas («Daño en cámara»): Pérdidas por Mermas / Productos Terminados $ 10,00 *(lo cubre `RegistrarMermaEnCamaraAsientoTests`)*.
+- [ ] 5. Entrega de un suministro (llegan 95 de 100): merma «daño en la entrega» $ 10,00 y asiento compuesto (Deudores por Ventas / Ventas $ 9.500,00; Costo de Producción Vendida / Productos Terminados $ 190,00).
+- [ ] 6. Retiro de una compra-venta de 20 plantas a $ 100,00: Caja / Ventas $ 2.000,00 y costo $ 40,00; con transferencia, Banco c/c.
+- [ ] 7. Compra-venta en dos entregas y transición *(las cubren `test_regla_venta_registrada_por_entrega_*`)*.
+- [ ] 8. Envases con exceso (12 usados de 10): asiento del consumo $ 36,00; lo devuelto no asienta.
+- [ ] 9. Entrega rechazada: sin asiento de la entrega ni de cobro.
+- [ ] 10. *(Opcional)* Vencimiento en cámara por el paso diario: asiento por la disponible entera y, corrido dos veces, no se duplica *(lo cubre `ProdVncCamAsientoTests`)*.
+- [ ] 11. Libro y fichas: «Totales (N asientos)», Debe = Haber; origen como texto **sin enlace**.
+- [ ] 12. Capataz, Agrónomo, Vendedor y Transportista: 403 en `/contabilidad/`.
+- [ ] 13. «Auditoría»: los registros de concreción nombran los asientos.
+- [ ] 14. **Navegador real.** Ventana privada: concretar una cosecha (Capataz), una entrega (Transportista) y registrar una merma en cámara (Agrónomo), hasta el final; después comprobar el asiento en el libro.
+- [ ] 15. *(Opcional)* Sin JavaScript y en el celular.
+- [ ] 16. Todo o nada y la fecha del hecho en un ejercicio cerrado (D-102): *(los cubren las pruebas)*.

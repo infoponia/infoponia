@@ -31,6 +31,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
 from core.models import RegistroAuditoria
 from core.tests.concurrencia import codigos, correr_a_la_vez
 from core.tests.fabricas import crear_gerente
@@ -50,6 +51,7 @@ class SolicitudesConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         """Un invernadero con su Vendedor, un lote de 500, un Gerente, un suministro de 10 plantas por período a $100 (mínimo 8) y un cliente con una dirección en la localidad propia."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04c: concretar una entrega o registrar una merma asienta; el flush vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 500)
         self.gerente = crear_gerente()

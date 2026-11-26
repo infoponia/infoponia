@@ -461,8 +461,11 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
   reapertura (D-92 punto 9). Las precondiciones «existe un ejercicio y existen las cuentas» no se programan (D-92 punto 2).
   **Decidido el haber de la carga inicial (MD-90):** Capital Inicial (H3/H4, D-92 punto 7).
 
-- **Comercial 1 (COM-04, D-64):** los asientos de la cosecha (uno por movimiento «salida por cosecha», con su `costo_unitario`), de la
-  merma en cámara y del vencimiento se originan en `MovimientoStock` y en `Merma`, que ya guardan el costo: no hay que migrar nada.
+- ~~**Comercial 1 (COM-04, D-64):** los asientos de la cosecha (uno por movimiento «salida por cosecha», con su `costo_unitario`), de la
+  merma en cámara y del vencimiento se originan en `MovimientoStock` y en `Merma`, que ya guardan el costo: no hay que migrar nada.~~
+  **Hecho en CON-04c (26/11/2026):** además de la cosecha, la merma en cámara y el vencimiento, quedó hecho COM-CNC-ENT (mermas «daño en la entrega»,
+  consumos de envases y el asiento compuesto de la entrega; antes «Fuera de esta ronda · contabilidad», D-57). Lo de `SolicitudRevision`, `Anulacion` y
+  `PagoCliente` sigue siendo de CON-04d.
 - **Comercial 1 (COM-07, D-69):** el asiento de cada indemnización se origina en su `SolicitudRevision` (hija de `OrigenDocumento`), con lo
   descontado contra Deudores por Ventas y lo reintegrado contra Caja o Banco según `medio_reintegro`; el contraasiento, en su `Anulacion`; la
   multa, en el `Suministro` (R012, MD-123). Todo lo que hace falta ya está guardado: no hay que migrar nada.

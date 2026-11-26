@@ -933,3 +933,22 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 6. **«No disponible» de la cosecha:** hoy la cosecha existe, así que ese texto solo se ve en la prueba que lo simula (`test_d93_punto_5_*`).
 7. **`Siembra.capataz` nulo** (tema abierto de la sección de PRD-05): EST-01 no lo lee.
 8. **Entorno:** con `--parallel`, una prueba que falla oculta el error real (`cannot pickle 'traceback' object`, falta `tblib`): para ver el fallo, correr sin `--parallel`.
+
+## CON-04c (asientos de cosecha, cámara y entregas; 26/11/2026): lo que se implementó distinto de lo escrito
+
+Decisiones del estudiante del 26/11/2026:
+
+1. **La merma de un lote en pie dentro de la cosecha (ext. 10a de PROD-CNC-CSC) se asienta en CON-04c**, reutilizando `asientos_de_produccion.asentar_merma` (Debe Pérdidas por Mermas / Haber Productos en Proceso por `ResultadoMerma.costo`, fecha de la merma). La tabla de la tarea no la nombraba; el «Cierre» de CON-04a (diferencia 10) la dejaba para esta tarea.
+2. **Lo devuelto a una partida ya vencida en la entrega (regla 29 de 8.6) asienta como un vencimiento** (Debe Pérdidas por Mermas / Haber Productos Terminados por cantidad × costo de la partida), también el de una partida nueva que nace vencida. COM-CNC-ENT no mencionaba su asiento.
+3. **En la entrega de una compra-venta se sigue la regla «Venta registrada por entrega» de COM-CNC-ENT y no la fila (h) de la tarea** (que decía Deudores por Ventas / Ventas por el monto total para todas): las no últimas debitan Deudores por Ventas / Haber Ventas; la última cobra con Caja (efectivo) o Banco c/c y cancela lo acumulado en Deudores; siempre se suma Costo de Producción Vendida / Productos Terminados. CON-04d ya excluía este cobro («va dentro del asiento compuesto de la entrega: CON-04c»).
+4. **Transición (D-92 punto 1, sin asientos hacia atrás):** si una compra-venta tiene entregas anteriores sin asiento, el Haber a Deudores es solo por las que sí tienen asiento y el resto se reconoce en Ventas en la entrega final, para que Deudores nunca quede con saldo contrario. Con la primera entrega ya asentada y la última después, el resultado es el normal.
+
+Otras diferencias:
+
+5. **El asiento de la cosecha es por movimiento y con su costo** (D-92 puntos 5 y 6): `cantidad × costo_unitario` del `MovimientoStock`, no un recálculo con el costo del lote.
+6. **El paso 4 de la tarea («Resúmenes») no tiene pantallas:** ningún extracto muestra el asiento en un resumen y el del resumen de `cncent` del prototipo es «Solo prototipo» (`rutas.md`). Igual que en CON-04a.
+7. **«Con sus enlaces»** (la «Verificación a mano» original): el origen de los asientos es un texto sin dirección (D-30 no admite un enlace que lleve a un error; el Contador no abre esas pantallas).
+8. **Costo de lo entregado:** se valoriza por origen (lote cosechado o partida), sin promedios (regla «Costo de lo entregado, perdido o devuelto»); un lote existente sin costo (PRD-05) da importe 0 y la línea se omite.
+9. **Las marcas «Fuera de esta ronda · contabilidad»** de `cosecha.md`, `camara.md`, `merma.md` y `rutas.md` quedan falsas (ver el punto 7 del M3); la tarea no permitía tocarlas.
+10. **Pruebas de otras tareas que cambiaron** (sin debilitarlas): las `Base` y los `armar` de `comercial/tests` que pasan por estos servicios cargan el plan de cuentas (13 pruebas de concurrencia de COM-04b, COM-05a, COM-05b, COM-07 y COM-08 fallaban sin él).
+11. **Entorno:** con `--parallel`, una prueba que falla oculta el error real (`cannot pickle 'traceback' object`, falta `tblib`).

@@ -6,6 +6,7 @@
 
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
@@ -21,7 +22,12 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_reservas,
 )
 from comercial.tests.test_stock_maduro_concurrencia import datos_de_retiro
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos, ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador
 from core.tests.concurrencia import correr_a_la_vez
+from core.tests.fabricas import crear_cuenta
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.tests.fabricas import asegurar_datos_de_maestros
 from produccion.models import Lote, Merma, StockCosechado
@@ -38,6 +44,7 @@ class CamaraConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         """Un invernadero sin stock en pie (su único lote queda finalizado) con una partida de `disponible` plantas."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04c: la merma en cámara y el vencimiento asientan; el flush vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         lote = lote_maduro(self.e, 10)
         self.partida = partida(lote, disponible, fecha_limite=fecha_limite)
@@ -142,3 +149,77 @@ class CamaraConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual(rechazos[0].error_dict["cantidad"][0].code, "cantidad_invalida")
         self.assertEqual(StockCosechado.objects.get(pk=self.partida.pk).cantidad_disponible_cosechado, 10)
         self.assertEqual(Merma.objects.count(), 1)
+
+
+@tag("concurrencia")
+class CamaraAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04c · paso 2: el asiento de la merma en cámara y del vencimiento bloquea el ejercicio AL FINAL (D-86 punto 2) y nunca rechaza por la fecha (D-102)."""
+
+    def armar(self):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = escenario_comercial(geografia_propia=True)
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        self.addCleanup(verificar_invariantes_de_reservas)
+        self.addCleanup(verificar_invariantes_contables)
+
+    def una_partida(self, e, disponible=40, fecha_limite=None):
+        lote = lote_maduro(e, 10)
+        p = partida(lote, disponible, fecha_limite=fecha_limite)
+        Lote.objects.filter(pk=lote.pk).update(estado_lote="finalizado", cantidad_actual=0, costo_acumulado=0)
+        return p
+
+    def con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        self.abierto = ejercicio_abierto(HOY - timedelta(days=20))
+
+    def cierre(self):
+        return lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+
+    def mermar(self, e, p, cantidad=5):
+        datos = DatosDeMermaEnCamara(p.pk, cantidad, "dano_en_camara")
+        return lambda: merma_camara.registrar_merma_en_camara(e.agronomo, datos)
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def _cierre_y_merma(self, primera_la_merma):
+        """El cierre del ejercicio en cierre y una merma de hoy a la vez: los dos terminan y el asiento N.º 1 va al ejercicio abierto."""
+        self.armar()
+        self.con_ejercicios()
+        merma, cierre = self.mermar(self.e, self.una_partida(self.e)), self.cierre()
+        self.sin_errores(correr_a_la_vez(*((merma, cierre) if primera_la_merma else (cierre, merma)), primera="a"))
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento), (self.abierto.pk, 1))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+
+    def test_d102_el_cierre_primero_y_la_merma_en_camara_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre tiene su fila tomada; la merma de hoy no la necesita."""
+        self._cierre_y_merma(primera_la_merma=False)
+
+    def test_d102_la_merma_en_camara_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """La merma ya asentó y tiene el ejercicio abierto bloqueado; el cierre toca solo su fila."""
+        self._cierre_y_merma(primera_la_merma=True)
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_la_merma_en_camara_bloquea(self):
+        """La merma A (invernadero Norte) se detiene justo ANTES de bloquear el ejercicio; la B (otro invernadero, sin filas en común) asienta completa y toma el N.º 1."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        otro = escenario_comercial(nombre="Invernadero Sur", sufijo="b", email_del_cliente="clienteb@ejemplo.com", geografia_propia=True)
+        pa, pb = self.una_partida(self.e), self.una_partida(otro)
+        resultados = correr_a_la_vez(self.mermar(self.e, pa), self.mermar(otro, pb), primera="a", detener_antes_de=(asientos, "_bloquear_ejercicio"))
+        self.sin_errores(resultados)
+        numero = lambda r: AsientoContable.objects.get(origen_id=r.merma.pk).numero_asiento  # noqa: E731
+        self.assertEqual((numero(resultados["b"]), numero(resultados["a"])), (1, 2))
+
+    def test_regla_h8_dos_mermas_de_la_misma_partida_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos mermas de una misma partida a la vez se serializan y asientan con los números 1 y 2."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        p = self.una_partida(self.e)
+        resultados = correr_a_la_vez(self.mermar(self.e, p, 5), self.mermar(self.e, p, 5), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])

@@ -16,7 +16,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from comercial.models import DetalleReserva
-from comercial.servicios import camara, entregas, stock_maduro
+from comercial.servicios import asientos_comerciales, camara, entregas, stock_maduro
 from core.models import RegistroAuditoria, Usuario, referencia
 from maestros.models import Variedad
 from produccion.models import Merma, StockCosechado
@@ -217,12 +217,17 @@ def _registrar(actor, datos, previo):
         alerta = None
         if recorte.lineas:  # 10c.6: la alerta para el Agrónomo (regla 2 de 8.9) y el aviso al Vendedor de cada contrato afectado
             alerta = camara._avisar_merma_reservada(partida, resultado.merma, recubierto, recorte.por_detalle, "Merma en la partida")
+        # CON-04c (D-92 puntos 3 a 6): el asiento, DESPUÉS de todos los bloqueos de negocio (el ejercicio se bloquea al final, D-86). Postcondición i.
+        asiento = asientos_comerciales.asentar_merma_de_partida(actor, resultado.merma, resultado.movimiento, resultado.merma.fecha_bitacora, resultado.merma.fecha_bitacora)
         afectados = [partida, resultado.merma, resultado.movimiento, *[l for l, _ in recorte.lineas], *recorte.reservas_liberadas]
+        afectados += [asiento] if asiento is not None else []
         afectados += [*recubierto.reservas, *recubierto.cosechas, *recubierto.detalles, *recubierto.enlaces, *[c.entrega for c in quita.cancelaciones]]
         if alerta is not None:
             afectados.append(alerta)
         recortes = _recortes_de(recorte.por_detalle)
         datos_de_auditoria = {"partida": referencia(partida), "plantas_perdidas": cantidad, "causa_merma": Merma.Causa(datos.causa).label}
+        if asiento is not None:
+            datos_de_auditoria["asientos"] = [str(asiento)]
         if recortes:
             datos_de_auditoria["lineas_recortadas"] = [f"{codigo}: {n}" for codigo, n in recortes]
             if recorte.reservas_liberadas:

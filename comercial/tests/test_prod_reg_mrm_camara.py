@@ -17,6 +17,8 @@
 #   - Se baja primero el stock físico y después se vuelve a cubrir (decisión del plan), con la acción de auditoría `registro_merma`.
 
 from datetime import timedelta
+from decimal import Decimal
+from unittest import mock
 
 from django.core.exceptions import PermissionDenied
 from django.test import TestCase
@@ -37,6 +39,11 @@ from comercial.tests.fabricas import (
     suministro,
     verificar_invariantes_de_reservas,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -47,7 +54,7 @@ from produccion.tests.fabricas import lote_maduro
 HOY = timezone.localdate()
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor, Agrónomo y Capataz y un lote de 300 plantas en Maduración."""
 
     @classmethod
@@ -405,3 +412,68 @@ class EntregasTests(Base):
         self.registrar(p, 10)
         e.refresh_from_db()
         self.assertEqual(e.estado_orden, "a_realizar")
+
+
+class RegistrarMermaEnCamaraAsientoTests(Base):
+    """CON-04c · paso 2: el asiento de la merma en cámara (PROD-REG-MRM postcondición i; D-92 puntos 3 a 6; D-86). Uno por merma, originado en la merma:
+    Debe Pérdidas por Mermas / Haber Productos Terminados por cantidad perdida × costo unitario de la partida, con la fecha de la merma (hoy)."""
+
+    def setUp(self):
+        self.ejercicio = ejercicio_abierto(HOY - timedelta(days=30))
+        self.addCleanup(verificar_invariantes_contables)
+
+    def lineas(self, asiento):
+        return [(m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta").order_by("pk")]
+
+    def test_post_i_la_merma_en_camara_asienta_perdidas_contra_productos_terminados_por_la_cantidad_por_el_costo_de_la_partida(self):
+        """i: 8 plantas × 2,5000 (el costo unitario de la partida, no el del lote) = 20,00, originado en la merma, con la fecha de hoy y el actor."""
+        p = partida(self.lote, 50, costo="2.5000")
+        resultado = self.registrar(p, 8)
+        asiento = AsientoContable.objects.get(origen_id=resultado.merma.pk)
+        self.assertEqual(
+            self.lineas(asiento), [(cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("20.00")), (cuentas.PRODUCTOS_TERMINADOS, HABER, Decimal("20.00"))]
+        )
+        self.assertEqual((asiento.fecha_asiento, asiento.ejercicio_id, asiento.numero_asiento), (HOY, self.ejercicio.pk, 1))
+        self.assertEqual(AsientoContable.objects.count(), 1)
+
+    def test_post_i_con_recorte_de_reservas_el_asiento_es_por_lo_perdido_no_por_lo_recortado(self):
+        """i y j: la pérdida supera el stock libre y se recortan reservas; el asiento sigue siendo cantidad perdida × costo (10 × 1,0000 = 10,00)."""
+        p = partida(self.lote, 20)
+        reserva(self.venta(20), [(p, 20)])
+        self.sin_stock_de_lote()
+        resultado = self.registrar(p, 10)
+        asiento = AsientoContable.objects.get(origen_id=resultado.merma.pk)
+        self.assertEqual(self.lineas(asiento)[0], (cuentas.PERDIDAS_POR_MERMAS, DEBE, Decimal("10.00")))
+
+    def test_post_i_el_importe_se_redondea_a_dos_decimales_half_up(self):
+        """D-92 punto 5: 7 × 0,3333 = 2,3331 → 2,33."""
+        p = partida(self.lote, 50, costo="0.3333")
+        self.registrar(p, 7)
+        self.assertEqual(self.lineas(AsientoContable.objects.get())[0][2], Decimal("2.33"))
+
+    def test_post_i_una_partida_sin_costo_no_genera_asiento_y_la_merma_no_falla(self):
+        """D-92 punto 5 y H11: costo unitario 0 → importe 0: sin asiento y sin error."""
+        p = partida(self.lote, 50, costo="0.0000")
+        self.registrar(p, 8)
+        self.assertEqual(Merma.objects.filter(causa="dano_en_camara").count(), 1)
+        self.assertFalse(AsientoContable.objects.exists())
+
+    def test_post_m_el_registro_de_auditoria_nombra_el_asiento(self):
+        """m y n, D-86 punto 4: el único registro `registro_merma` nombra el asiento entre sus afectados y en `datos`."""
+        p = partida(self.lote, 50)
+        self.registrar(p, 8)
+        registro = RegistroAuditoria.objects.filter(accion="registro_merma").latest("pk")
+        self.assertEqual(sum(1 for a in registro.afectados if a["texto"].startswith("Asiento")), 1)
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_asiento_no_queda_la_merma_ni_cambia_la_partida(self):
+        """Todo o nada: con el asiento forzado a fallar no queda merma, movimiento ni auditoría, y la partida conserva su disponible."""
+        p = partida(self.lote, 50)
+        antes = RegistroAuditoria.objects.filter(accion="registro_merma").count()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.registrar(p, 8)
+        p.refresh_from_db()
+        self.assertEqual(p.cantidad_disponible_cosechado, 50)
+        self.assertFalse(Merma.objects.filter(causa="dano_en_camara").exists())
+        self.assertEqual(RegistroAuditoria.objects.filter(accion="registro_merma").count(), antes)

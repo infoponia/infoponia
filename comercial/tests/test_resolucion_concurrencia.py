@@ -32,6 +32,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_resolucion,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
 from core.models import Notificacion, RegistroAuditoria
 from core.tests.concurrencia import codigos, correr_a_la_vez
 from core.tests.fabricas import crear_gerente
@@ -51,6 +52,7 @@ class ResolucionConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         «entregada»). Sus períodos: -40, -33, -26, -19, -12, -5, +2, +9, +16… Devuelve un `SimpleNamespace(contrato, detalle, quejas)`."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04c: concretar una entrega o registrar una merma asienta; el flush vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 500)
         self.gerente = crear_gerente()

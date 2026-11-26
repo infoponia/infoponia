@@ -8,6 +8,7 @@
 
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
@@ -16,7 +17,12 @@ from comercial.servicios import compra_ventas, cosechas
 from comercial.servicios.compra_ventas import DatosDeCompraVenta, Renglon
 from comercial.servicios.cosechas import DatosDeCosecha, DatosDeConcrecion, DatosDeModificacion
 from comercial.tests.fabricas import compra_venta, cosecha_manual, detalle, escenario_comercial, verificar_invariantes_de_reservas
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos, ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador
 from core.tests.concurrencia import correr_a_la_vez
+from core.tests.fabricas import crear_cuenta
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.tests.fabricas import asegurar_datos_de_maestros
 from produccion.models import Cosecha, Lote, MovimientoStock
@@ -36,6 +42,7 @@ class CosechasConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         """El escenario sin Georef, un lote de `plantas` y una cosecha con contrato (venta con retiro de 50) que reserva `reservadas`."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04c: concretar una cosecha asienta; el flush de la prueba anterior vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, plantas)
         self.sector = self.e.sectores["maduracion"]
@@ -180,3 +187,87 @@ class CosechasConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual(self.releer().estado_orden, "concretada")
         self.assertEqual(sum(l.cantidad_reservada for l in DetalleReserva.objects.filter(partida__isnull=False)), 70)
         self.assertEqual(Lote.objects.get(pk=self.lote.pk).cantidad_actual, 0)
+
+
+@tag("concurrencia")
+class ConcretarCosechaAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04c · paso 1: el asiento de la cosecha bloquea el ejercicio AL FINAL (D-86 punto 2) y NUNCA rechaza por la fecha (D-102). La fecha del asiento
+    es la efectiva de la cosecha: una cosecha de hoy no necesita el ejercicio en cierre."""
+
+    def armar(self, **kwargs):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = escenario_comercial(geografia_propia=True)
+        self.lote = lote_maduro(self.e, 100)
+        self.sector = self.e.sectores["maduracion"]
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        self.addCleanup(verificar_invariantes_de_reservas)
+
+    def con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        self.abierto = ejercicio_abierto(HOY - timedelta(days=20))
+
+    def cierre(self):
+        return lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+
+    def cosecha_de(self, e=None, lote=None, plantas=30):
+        """Una cosecha con contrato (venta con retiro de 50) que reserva `plantas` del lote, y lo que la concreta."""
+        e = e or self.e
+        lote = lote or self.lote
+        venta = compra_venta(e, dias=10, modalidad="retiro", retiro=e.invernadero)
+        cosecha = cosecha_manual(e, [(lote, plantas)], detalle_=detalle(venta, e.variedad, 50), dias=5)
+        datos = DatosDeConcrecion(cantidades=((lote.pk, e.sectores["maduracion"].pk, plantas),))
+        return lambda: cosechas.concretar_cosecha(e.capataz, cosecha.pk, datos)
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def test_d102_el_cierre_primero_y_la_cosecha_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre del ejercicio en cierre tiene su fila tomada (sin confirmar); la cosecha de hoy no la necesita: termina con el asiento N.º 1 del abierto."""
+        self.armar()
+        self.con_ejercicios()
+        resultados = correr_a_la_vez(self.cierre(), self.cosecha_de(), primera="a")
+        self.sin_errores(resultados)
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (self.abierto.pk, 1, HOY))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def test_d102_la_cosecha_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_queda_en_el_abierto(self):
+        """La cosecha ya creó su asiento y tiene el ejercicio abierto bloqueado (sin confirmar); el cierre toca solo su fila y termina."""
+        self.armar()
+        self.con_ejercicios()
+        resultados = correr_a_la_vez(self.cosecha_de(), self.cierre(), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(AsientoContable.objects.get().ejercicio_id, self.abierto.pk)
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def test_regla_h8_dos_cosechas_a_la_vez_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos cosechas distintas (cada una con su asiento) a la vez toman los números 1 y 2."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        otro = lote_maduro(self.e, 100)
+        resultados = correr_a_la_vez(self.cosecha_de(), self.cosecha_de(lote=otro), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])
+        verificar_invariantes_contables()
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_la_cosecha_bloquea(self):
+        """D-86 punto 2: la cosecha A se detiene justo ANTES de bloquear el ejercicio (con su invernadero, lote y orden ya tomados); la cosecha B (otro
+        invernadero, sin filas en común) asienta completa y toma el N.º 1. Si A hubiera bloqueado el ejercicio antes, el orden sería el inverso."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        otro = escenario_comercial(nombre="Invernadero Sur", sufijo="b", email_del_cliente="clienteb@ejemplo.com", geografia_propia=True)
+        lote_b = lote_maduro(otro, 100)
+        resultados = correr_a_la_vez(
+            self.cosecha_de(), self.cosecha_de(e=otro, lote=lote_b), primera="a", detener_antes_de=(asientos, "_bloquear_ejercicio")
+        )
+        self.sin_errores(resultados)
+        self.assertEqual(AsientoContable.objects.count(), 2)
+        primero = AsientoContable.objects.get(numero_asiento=1)
+        self.assertEqual(primero.origen.movimientostock.lote_id, lote_b.pk)
+        verificar_invariantes_contables()

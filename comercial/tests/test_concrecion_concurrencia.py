@@ -4,8 +4,10 @@
 # Son ``TransactionTestCase``: sin Georef de la migración (el cliente tiene una dirección en la localidad propia que arma `geografia_propia`). Todas terminan verificando los invariantes. Nunca
 # un error 500: el que pierde espera el invernadero, relee con todo bloqueado y se rechaza con un código.
 
+from datetime import timedelta
 from types import SimpleNamespace
 
+from django.core.cache import cache
 from django.test import TransactionTestCase, tag
 from django.utils import timezone
 
@@ -25,8 +27,12 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_reservas,
 )
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos, ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador
 from core.tests.concurrencia import codigos, correr_a_la_vez
-from core.tests.fabricas import crear_gerente
+from core.tests.fabricas import crear_cuenta, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.models import Localidad
 from maestros.tests.fabricas import asegurar_datos_de_maestros
@@ -41,6 +47,7 @@ class ConcrecionConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         """Un invernadero con un transportista de 800 kg, un lote de 500 y un cliente con una dirección en la localidad propia."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04c: concretar una entrega asienta; el flush de la prueba anterior vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 500)
         self.gerente = crear_gerente()
@@ -153,3 +160,78 @@ class ConcrecionConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertEqual((len(buenos), len(rechazos), otros), (1, 1, []), resultados)
         self.assertEqual(codigos(rechazos[0]), ["entrega_no_concretable"])
         self.assertEqual(Entrega.objects.get(pk=x.entrega.pk).estado_orden, "concretada")
+
+
+@tag("concurrencia")
+class ConcrecionAsientoConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
+    """CON-04c · paso 3: los asientos de la concreción (mermas, consumos y el compuesto de la entrega) bloquean el ejercicio AL FINAL (D-86 punto 2) y nunca rechazan por la fecha
+    (D-102). Se usan retiros (concreta el Vendedor, sin ruta) para no armar transportistas."""
+
+    def armar(self):
+        cache.clear()  # el responsable contable no debe quedar en un caché de otra prueba
+        asegurar_datos_de_maestros()
+        asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # el flush de este TransactionTestCase vacía el plan en cada prueba
+        self.e = escenario_comercial(geografia_propia=True)
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        self.addCleanup(verificar_invariantes_de_reservas)
+        self.addCleanup(verificar_invariantes_de_entregas)
+        self.addCleanup(verificar_invariantes_contables)
+
+    def retiro_de(self, e, cantidad=50):
+        """Una entrega de retiro de hoy lista para concretar por el Vendedor de `e`: devuelve la operación."""
+        lote = lote_maduro(e, 500)
+        venta = compra_venta(e, dias=0, modalidad="retiro")
+        det = detalle(venta, e.variedad, cantidad)
+        entrega_ = entrega(venta, [reserva_lista(det, lote, cantidad)], transportista=None, fecha=HOY)
+        datos = DatosDeConcrecion(medio_pago="efectivo", sin_envases=True)
+        huella = concrecion.resumen_de_concrecion(e.vendedor, entrega_.pk, datos).huella
+        return lambda: concrecion.concretar_entrega(e.vendedor, entrega_.pk, datos, huella)
+
+    def con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        self.abierto = ejercicio_abierto(HOY - timedelta(days=20))
+
+    def cierre(self):
+        return lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)
+
+    def sin_errores(self, resultados):
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+
+    def _cierre_y_entrega(self, primera_la_entrega):
+        self.armar()
+        self.con_ejercicios()
+        entrega_, cierre = self.retiro_de(self.e), self.cierre()
+        self.sin_errores(correr_a_la_vez(*((entrega_, cierre) if primera_la_entrega else (cierre, entrega_)), primera="a"))
+        asiento = AsientoContable.objects.get()
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (self.abierto.pk, 1, HOY))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+
+    def test_d102_el_cierre_primero_y_la_concrecion_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre tiene su fila tomada; la concreción de hoy no la necesita."""
+        self._cierre_y_entrega(primera_la_entrega=False)
+
+    def test_d102_la_concrecion_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """La concreción ya asentó y tiene el ejercicio abierto bloqueado; el cierre toca solo su fila."""
+        self._cierre_y_entrega(primera_la_entrega=True)
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_la_concrecion_bloquea(self):
+        """La concreción A se detiene justo ANTES de bloquear el ejercicio (con su invernadero, lotes, contrato y entrega ya tomados); la B (otro invernadero, sin filas en común)
+        asienta completa y toma el N.º 1."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        otro = escenario_comercial(nombre="Invernadero Sur", sufijo="b", email_del_cliente="clienteb@ejemplo.com", geografia_propia=True)
+        a, b = self.retiro_de(self.e), self.retiro_de(otro)
+        resultados = correr_a_la_vez(a, b, primera="a", detener_antes_de=(asientos, "_bloquear_ejercicio"))
+        self.sin_errores(resultados)
+        numero = lambda entrega_: AsientoContable.objects.get(origen_id=entrega_.pk).numero_asiento  # noqa: E731
+        self.assertEqual((numero(resultados["b"]), numero(resultados["a"])), (1, 2))
+
+    def test_regla_h8_dos_concreciones_de_entregas_distintas_toman_numeros_consecutivos_sin_hueco(self):
+        """H8: dos entregas distintas a la vez (cada una con su asiento compuesto) toman los números 1 y 2."""
+        self.armar()
+        ejercicio_abierto(HOY - timedelta(days=20))
+        resultados = correr_a_la_vez(self.retiro_de(self.e), self.retiro_de(self.e), primera="a")
+        self.sin_errores(resultados)
+        self.assertEqual(sorted(AsientoContable.objects.values_list("numero_asiento", flat=True)), [1, 2])

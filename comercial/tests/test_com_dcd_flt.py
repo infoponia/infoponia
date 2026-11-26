@@ -33,6 +33,7 @@ from comercial.tests.fabricas import (
     reserva,
     verificar_invariantes_de_reservas,
 )
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
 from core.models import ROL_CLIENTE_ENLACE, Notificacion, RegistroAuditoria
 from core.tests.concurrencia import correr_a_la_vez
 from core.tests.fabricas import crear_gerente
@@ -467,6 +468,7 @@ class ComDcdFltConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         """Un invernadero sin geografía, una partida de cámara y una venta con retiro «pendiente de decisión» que la usa, con su enlace."""
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
+        asegurar_plan_de_cuentas()  # CON-04c: concretar una entrega o registrar una merma asienta; el flush vació el plan
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 100)
         self.venta = compra_venta(self.e, modalidad="retiro", retiro=self.e.invernadero, estado="pendiente_decision")
