@@ -26,9 +26,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from comercial.models import AlertaComercial, Anulacion, Contrato, DiscrepanciaEntrega, Entrega, LineaDiscrepancia, Queja, SolicitudRevision, Suministro
-from comercial.servicios import cobranza, entregas, indemnizaciones, resoluciones
+from comercial.servicios import asientos_comerciales, cobranza, entregas, indemnizaciones, resoluciones
 from comercial.servicios.compra_ventas import texto_de_pesos
 from comercial.servicios.comprobantes import Destinatario
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import responsables
 from core import correo, notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from inventario.servicios import stock
@@ -371,6 +373,7 @@ class ResumenDeResolucion:
     multa: Decimal | None = None
     textos: list = field(default_factory=list)
     huella: str = ""
+    asiento: list = field(default_factory=list)  # CON-04d: las líneas del asiento de la indemnización que se registrará (decisión (3) del 26/11/2026); vacío si rechaza, si el monto es 0 o si hay errores
 
     @property
     def hay_errores(self):
@@ -477,7 +480,10 @@ def resumen_de_resolucion(actor, solicitud_id, datos=None, hoy=None):
     s = _solicitud(solicitud_id)
     if s.estado_solicitud != Estado.PENDIENTE:
         raise _no_pendiente(s)
-    return _evaluar(_leer(solicitud_id, hoy or stock.hoy()), datos or DatosDeResolucion())
+    resumen = _evaluar(_leer(solicitud_id, hoy or stock.hoy()), datos or DatosDeResolucion())
+    if resumen.decision == ACEPTAR and not resumen.hay_errores and resumen.monto and resumen.monto > 0:
+        resumen.asiento = asientos_comerciales.filas_de(asientos_comerciales.movimientos_de_indemnizacion(resumen.monto, resumen.descontado, resumen.reintegrado, resumen.medio))
+    return resumen
 
 
 # ---- el registro (paso 8) ----
@@ -619,6 +625,19 @@ def _registrar(quien, invernadero, lectura, resumen):
     alerta_resuelta = alertas.resolver_alerta(vinculo.alerta_id) if vinculo is not None else None  # `None` si ya estaba resuelta (una solicitud reabierta, D-69 punto 4)
     mora_resueltas, mora_nuevas = cobranza.reevaluar_mora_con_rastro(entrega.pk, hoy)  # COM-08a, MD-125: una aceptación que salda la entrega resuelve su alerta «pago en mora»
     _avisar_resolucion_al_vendedor(s, entrega, suministro, resumen, aceptar)
+    # postcondición e (CON-04d), después de todos los bloqueos de negocio: el ejercicio va último (D-86). Decisión del estudiante del 26/11/2026 (choque con R012, un origen un asiento): si esta solicitud ya tuvo
+    # asiento (una aceptación anterior que se anuló), la nueva aceptación NO asienta: avisa al responsable contable para que lo registre a mano y queda constancia en la auditoría.
+    asiento, pendiente_a_mano = None, None
+    if aceptar and resumen.monto > 0:
+        if AsientoContable.objects.filter(origen_id=s.pk).exists():
+            pendiente_a_mano = f"{s.codigo}: {_pesos(resumen.monto)} ({_pesos(resumen.descontado)} contra Deudores por Ventas y {_pesos(resumen.reintegrado)} reintegrados)"
+            responsables.notificar_al_responsable_contable(
+                _acotar(f"Registrar el asiento de {s.codigo}", notificaciones.LARGO_TITULO),
+                _acotar(f"Se volvió a aceptar {s.codigo} después de anular su aceptación y el sistema no puede repetir el asiento: registrá a mano la indemnización de {pendiente_a_mano}.", notificaciones.LARGO_DETALLE),
+                excluir=quien,
+            )
+        else:
+            asiento = asientos_comerciales.asentar_indemnizacion(quien, s, resumen.monto, resumen.descontado, resumen.reintegrado, resumen.medio, hoy)
     cambios = _cambios(
         estado_solicitud=("pendiente", campos["estado_solicitud"]),
         fecha_resolucion=(None, _iso(hoy)),
@@ -645,7 +664,11 @@ def _registrar(quien, invernadero, lectura, resumen):
         datos["alertas_resueltas"] = [str(a) for a in resueltas]
     if mora_nuevas:
         datos["alertas_creadas"] = [str(a) for a in mora_nuevas]
-    afectados = [s] + resueltas + mora_nuevas + ([suministro, evento] if aceptar else [])
+    if asiento is not None:
+        datos["asientos"] = [str(asiento)]
+    if pendiente_a_mano is not None:
+        datos["asiento_manual_pendiente"] = pendiente_a_mano
+    afectados = [s] + resueltas + mora_nuevas + ([suministro, evento] if aceptar else []) + ([asiento] if asiento is not None else [])
     RegistroAuditoria.objects.registrar(
         usuario=quien,
         accion=RegistroAuditoria.Accion.EVALUACION_DISCREPANCIA if s.tipo_solicitud == Tipo.DISCREPANCIA else RegistroAuditoria.Accion.RESOLUCION_QUEJA,
@@ -769,6 +792,7 @@ class DatosDeAnulacion:
     bloqueo: tuple | None
     huella: str
     datos_de_huella: dict
+    contraasiento: list | None = None  # CON-04d: las líneas del contraasiento que se registrará, o `None` (rechazada, sin asiento original o ya revertido)
 
     @property
     def codigo_del_bloqueo(self):
@@ -818,7 +842,10 @@ def datos_de_anulacion(actor, solicitud_id, hoy=None):
     s = _solicitud(solicitud_id)
     if s.estado_solicitud == Estado.PENDIENTE:
         raise _rechazar("solicitud_no_resuelta", f"{s.codigo} está pendiente de revisión: no hay una resolución para anular.")
-    return _datos_de_anulacion(_leer(solicitud_id, hoy or stock.hoy()))
+    datos = _datos_de_anulacion(_leer(solicitud_id, hoy or stock.hoy()))
+    if datos.aceptada:
+        datos.contraasiento = asientos_comerciales.contraasiento_previsto(s)
+    return datos
 
 
 def anular_resolucion(actor, solicitud_id, motivo, huella):
@@ -905,6 +932,19 @@ def _anular(quien, invernadero, lectura, datos, motivo):
     if datos.aceptada:
         detalle += f" Monto a cobrar: {_pesos(datos.monto_a_cobrar_antes)} → {_pesos(datos.monto_a_cobrar_despues)}. Incumplimientos: {datos.contador_antes} → {datos.contador_despues}."
     _aviso_al_vendedor(vendedor, f"Se anuló la resolución de {s.codigo}", f"{detalle} Motivo: {motivo}")
+    # postcondición c (CON-04d), después de todos los bloqueos de negocio: el ejercicio va último (D-86). Si el asiento original ya se revirtió con una anulación anterior (decisión del estudiante del 26/11/2026: la
+    # re-aceptación no asentó), no hay contraasiento y se avisa al responsable contable por si registró a mano la indemnización.
+    contraasiento, pendiente_a_mano = None, None
+    if datos.aceptada:
+        if asientos_comerciales.ya_contraasentado(anulacion, s):
+            pendiente_a_mano = f"{s.codigo}: el asiento de su primera aceptación ya se revirtió y no se repite"
+            responsables.notificar_al_responsable_contable(
+                _acotar(f"Revertir a mano el asiento de {s.codigo}", notificaciones.LARGO_TITULO),
+                _acotar(f"Se anuló otra vez la aceptación de {s.codigo} y el sistema no puede repetir el contraasiento (el asiento original ya se revirtió): si registraste a mano la indemnización de la nueva aceptación, revertila con un asiento manual.", notificaciones.LARGO_DETALLE),
+                excluir=quien,
+            )
+        else:
+            contraasiento = asientos_comerciales.asentar_anulacion(quien, anulacion, s, hoy, f"Anulación de la resolución de {s.codigo}")
     cambios = _cambios(
         estado_solicitud=(anterior["estado_solicitud"], Estado.PENDIENTE.value),
         fecha_resolucion=(_iso(anterior["fecha_resolucion"]), None),
@@ -929,10 +969,14 @@ def _anular(quien, invernadero, lectura, datos, motivo):
         datos_auditoria["alertas_resueltas"] = [str(a) for a in mora_resueltas]
     if mora_nuevas:
         datos_auditoria["alertas_creadas"] = [str(a) for a in mora_nuevas]
+    if contraasiento is not None:
+        datos_auditoria["asientos"] = [str(contraasiento)]
+    if pendiente_a_mano is not None:
+        datos_auditoria["asiento_manual_pendiente"] = pendiente_a_mano
     RegistroAuditoria.objects.registrar(
         usuario=quien,
         accion=RegistroAuditoria.Accion.ANULACION_RESOLUCION_SOLICITUD,
-        afectados=[s, anulacion] + mora_resueltas + mora_nuevas + ([suministro, evento] if datos.aceptada else []),
+        afectados=[s, anulacion] + mora_resueltas + mora_nuevas + ([suministro, evento] if datos.aceptada else []) + ([contraasiento] if contraasiento is not None else []),
         detalle={"cambios": cambios, "datos": datos_auditoria},
     )
     return Anulacion.objects.get(pk=anulacion.pk)

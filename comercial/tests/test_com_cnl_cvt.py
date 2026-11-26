@@ -35,6 +35,11 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_entregas,
     verificar_invariantes_de_reservas,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, verificar_invariantes_contables
 from core import correo
 from core.models import Notificacion, RegistroAuditoria, Usuario
 from core.tests.fabricas import crear_gerente
@@ -55,7 +60,7 @@ def codigos(error):
     return [e.code for e in error.error_list]
 
 
-class Base(ConDatosDeInventario, TestCase):
+class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor, su Agrónomo, su Capataz y un transportista de 800 kg, y un Gerente."""
 
     def setUp(self):
@@ -819,8 +824,61 @@ class ComCnlCvtConEntregaConcretadaRealTests(Base):
         self.assertEqual([e.pk for e in alcance.a_realizar], [e2.pk])
 
 
+    # ---- CON-04d · paso 1: el asiento del cobro de lo entregado (extensión 6a; D-92 puntos 3 a 6; D-86) ----
+
+    def asiento_del_cobro(self):
+        """El único `PagoCliente` de la prueba y su asiento (origen: el pago), sin contar el asiento de la concreción de la entrega (CON-04c), que tiene a la entrega como origen."""
+        pago = PagoCliente.objects.get()
+        return pago, AsientoContable.objects.get(origen_id=pago.pk)
+
+    def lineas(self, asiento):
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def test_post_f_el_cobro_en_efectivo_asienta_caja_contra_deudores_por_lo_cobrado(self):
+        """Postcondición f, extensión 6a y D-94 punto 14: el pago de compra-venta origina un asiento Debe Caja (efectivo) / Haber Deudores por Ventas por Σ `monto_pagar` de lo entregado (la entrega ya había registrado su
+        venta contra Deudores: CON-04c), con la fecha de hoy."""
+        venta, _, _, e1, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        self.cancelar_con_cobro(self.e.vendedor, venta, "efectivo")
+        pago, asiento = self.asiento_del_cobro()
+        monto = self.monto_de(e1)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.CAJA, DEBE, monto), (cuentas.DEUDORES_POR_VENTAS, HABER, monto)]))
+        self.assertEqual((asiento.fecha_asiento, asiento.origen_id, pago.monto_pagado), (HOY, pago.pk, monto))
+        verificar_invariantes_contables()
+
+    def test_regla_15_de_8_13_un_medio_que_no_es_efectivo_va_a_banco(self):
+        """Regla 15 de 8.13: tarjeta de débito (como transferencia y tarjeta de crédito) va a Banco c/c, no a Caja. Los tres medios los cubre `ComRegCbrAsientoTests`; acá, que la cancelación usa la misma regla."""
+        venta, _, _, _, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        self.cancelar_con_cobro(self.e.vendedor, venta, "tarjeta_debito")
+        _, asiento = self.asiento_del_cobro()
+        self.assertEqual([c for c, _, _ in self.lineas(asiento)], sorted([cuentas.BANCO, cuentas.DEUDORES_POR_VENTAS]))
+
+    def test_post_f_sin_entregas_concretadas_no_hay_cobro_ni_asiento_del_cobro(self):
+        """Postcondición f: sin entregas concretadas la cancelación no cobra nada: sin `PagoCliente` y sin asiento (regla 22 de 8.6: «sin entregas concretadas, ninguno»)."""
+        v = self.todo()
+        self.cancelar(self.e.vendedor, v)
+        self.assertEqual((PagoCliente.objects.count(), AsientoContable.objects.count()), (0, 0))
+
+    def test_post_i_el_registro_de_auditoria_nombra_el_asiento_del_cobro(self):
+        """Postcondición i y D-86 punto 4: el único registro `cancelacion_compra_venta` nombra el asiento entre sus afectados y en `datos["asientos"]`; no se audita aparte."""
+        venta, _, _, _, _ = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        self.cancelar_con_cobro(self.e.vendedor, venta, "efectivo")
+        _, asiento = self.asiento_del_cobro()
+        registro = RegistroAuditoria.objects.filter(accion="cancelacion_compra_venta").get()
+        self.assertTrue(any(a["id"] == asiento.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_asiento_del_cobro_la_venta_no_se_cancela(self):
+        """Garantía mínima: si el asiento falla, la venta sigue «abierta», sin pago y con la entrega pendiente; no queda el registro de auditoría de la cancelación."""
+        venta, _, _, _, e2 = self.venta_con_una_entrega_concretada(fecha_de_la_segunda=HOY + timedelta(days=1))
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.cancelar_con_cobro(self.e.vendedor, venta, "efectivo")
+        self.assertEqual((CompraVenta.objects.get(pk=venta.pk).estado_venta, PagoCliente.objects.count()), ("abierta", 0))
+        self.assertEqual((self.estado_de(Entrega, e2).estado_orden, RegistroAuditoria.objects.filter(accion="cancelacion_compra_venta").count()), ("a_realizar", 0))
+
+
 class ComCnlCvtVistaConCobroTests(Base):
-    """COM-08b (paso 6; extensión 6a de COM-CNL-CVT): la sección «Cobro de lo entregado» de la pantalla de cancelación (el monto, el medio de pago con botones de opción, el texto y el asiento como «Fuera de esta ronda · contabilidad»), el resumen
+    """COM-08b (paso 6; extensión 6a de COM-CNL-CVT): la sección «Cobro de lo entregado» de la pantalla de cancelación (el monto, el medio de pago con botones de opción, el texto y el asiento (CON-04d: el texto del cobro; el detalle, en el resumen)), el resumen
     con el cobro (ventana con HTMX y página sin JavaScript; no escribe), el error del medio junto a su campo y la confirmación que cobra y deja la venta «concretada»."""
 
     def venta(self):
@@ -846,7 +904,7 @@ class ComCnlCvtVistaConCobroTests(Base):
             "La venta ya tiene entregas concretadas: lo entregado se cobra ahora, en un solo pago. El resto se cancela.",
             e1.codigo,
             texto_de_pesos(sum((l.monto_pagar for l in DetalleEntrega.objects.filter(entrega=e1)), Decimal("0.00"))),
-            "Fuera de esta ronda · contabilidad",
+            "Al confirmar se registra el asiento del cobro",
             "Concretada (se cobra lo entregado)",
         ):
             self.assertIn(esperado, html)
@@ -911,3 +969,27 @@ class ComCnlCvtVistaConCobroTests(Base):
         self.client.force_login(self.e.vendedor)
         html = self.client.post(self.url(venta), {**self.pedido(venta, medio_pago="tarjeta_debito"), "volver": "1"}).content.decode()
         self.assertRegex(html, r'name="medio_pago" value="tarjeta_debito"[^>]*checked')
+
+
+class ComCnlCvtAsientoEnPantallaTests(Base):
+    """CON-04d · paso 6, decisión (3) del 26/11/2026: el resumen de la cancelación con cobro muestra las líneas del asiento del cobro de lo entregado (Debe Caja o Banco c/c / Haber Deudores por Ventas), sin enlace y solo
+    a quienes ya ven los importes de esa pantalla (el Vendedor de la venta y el Gerente; otro Vendedor recibe 403 y no ve nada)."""
+
+    venta = ComCnlCvtVistaConCobroTests.venta
+    url = ComCnlCvtVistaConCobroTests.url
+    pedido = ComCnlCvtVistaConCobroTests.pedido
+
+    def test_tarea_con04d_el_resumen_muestra_el_asiento_del_cobro_y_ya_no_fuera_de_esta_ronda(self):
+        venta, e1 = self.venta()
+        for actor, medio, cuenta in ((self.e.vendedor, "efectivo", "Caja"), (self.gerente, "transferencia", "Banco c/c")):
+            self.client.force_login(actor)
+            respuesta = self.client.post(self.url(venta, "cancelar_revisar"), self.pedido(venta, medio_pago=medio))
+            html = unescape(respuesta.content.decode())
+            for esperado in (cuenta, "Deudores por Ventas", "Debe", "Haber", "Asiento que se registra"):
+                self.assertIn(esperado, html, actor)
+            self.assertNotIn("Fuera de esta ronda", html)
+        ajeno = crear_vendedor(email="ajeno-cvt@infoponia.com")
+        self.client.force_login(ajeno)
+        respuesta = self.client.post(self.url(venta, "cancelar_revisar"), self.pedido(venta, medio_pago="efectivo"))
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertNotIn("Deudores por Ventas", unescape(respuesta.content.decode()))

@@ -466,14 +466,16 @@ invernaderos inactivos. Hoy lo cumple PRD-01 (planificar y concretar rechazan un
   **Hecho en CON-04c (26/11/2026):** además de la cosecha, la merma en cámara y el vencimiento, quedó hecho COM-CNC-ENT (mermas «daño en la entrega»,
   consumos de envases y el asiento compuesto de la entrega; antes «Fuera de esta ronda · contabilidad», D-57). Lo de `SolicitudRevision`, `Anulacion` y
   `PagoCliente` sigue siendo de CON-04d.
-- **Comercial 1 (COM-07, D-69):** el asiento de cada indemnización se origina en su `SolicitudRevision` (hija de `OrigenDocumento`), con lo
+- ~~**Comercial 1 (COM-07, D-69):** el asiento de cada indemnización se origina en su `SolicitudRevision` (hija de `OrigenDocumento`), con lo
   descontado contra Deudores por Ventas y lo reintegrado contra Caja o Banco según `medio_reintegro`; el contraasiento, en su `Anulacion`; la
-  multa, en el `Suministro` (R012, MD-123). Todo lo que hace falta ya está guardado: no hay que migrar nada.
-- **Comercial 1 (COM-08, D-94):** el asiento del cobro de un suministro se origina en su `PagoCliente` (Debe Caja o Banco c/c por
+  multa, en el `Suministro` (R012, MD-123). Todo lo que hace falta ya está guardado: no hay que migrar nada.~~
+  **Hecho en CON-04d (26/11/2026):** COM-EVL-DSC y COM-RSV-QJA (con el compuesto), el contraasiento de COM-ANL-SRV y la multa de COM-RSV-SUM (Debe Indemnizaciones por Resolución / Haber 2.1.02, actor InfoPonia). La re-aceptación de una solicitud ya asentada no asienta y avisa al responsable contable (decisión del 26/11/2026, `docs/temas_abiertos.md`).
+- ~~**Comercial 1 (COM-08, D-94):** el asiento del cobro de un suministro se origina en su `PagoCliente` (Debe Caja o Banco c/c por
   `monto_pagado` / Haber Deudores por Ventas por Σ `LineaPago.monto_cobrado` / Haber Indemnizaciones por Atraso en el Pago por Σ
   `indemnizacion_atraso`, si es mayor que cero); el contraasiento de un cobro anulado, en su `Anulacion`; el del cobro de 6a de COM-CNL-CVT, en
   su `PagoCliente` de compra-venta (MD-130). La precondición c de COM-REG-CBR (ejercicio y cuentas) se suma al reabrirlo. Todo lo que hace
-  falta ya está guardado.
+  falta ya está guardado.~~
+  **Hecho en CON-04d (26/11/2026):** el asiento del cobro (con la `fecha_pago`, también en 7a), el contraasiento de la `Anulacion` del cobro y el cobro de 6a. La precondición c no se programa (D-92 punto 2).
 
 0. ~~**Inventario.** `MovimientoInsumo` **ya hereda** de `OrigenDocumento` (D-52: CON-01 crea el padre e INV-01 la hija): no hay nada que migrar. CMP-AJT-STK (INV-02) vuelve a verificar el
    ejercicio y las cuentas y crea el asiento de cada ajuste (`docs/casos_de_uso/inventario/ajuste_de_stock.md`: lo marcado «Fuera de la
@@ -607,8 +609,9 @@ COM-01 está hecha (23/11/2026): las funciones neutras ya existen. En clientes, 
 
 USR-11 está hecha (24/11/2026): el rol, `core.Contador` y `contabilidad/servicios/responsables.py` existen. El punto 1 sigue vigente para CON-04d; el punto 2 nace con el modelo.
 
-1. El aviso de «registrar asiento manual» de COM-ATN-ENR (postcondición b) pasa del Vendedor a `responsable_contable()` (H12). Lo programa
-   **CON-04d**, o COM-06b si llega después de CON-02. Toda pantalla que diga «Gerente y Vendedor registran asientos» se corrige.
+1. ~~El aviso de «registrar asiento manual» de COM-ATN-ENR (postcondición b) pasa del Vendedor a `responsable_contable()` (H12). Lo programa
+   **CON-04d**, o COM-06b si llega después de CON-02. Toda pantalla que diga «Gerente y Vendedor registran asientos» se corrige.~~
+   **Hecho en CON-04d (26/11/2026):** el aviso va solo a `responsable_contable()` (sin el Gerente que atiende: H21, D-85 punto 7); el Vendedor ya no lo recibe.
 2. ~~`EjercicioContable.contador` (R010, MD-116) es una FK nula a `core.Contador` (`PROTECT`, `related_name="ejercicios_cerrados"`), declarada en `contabilidad` (regla A2 de D-37). La crea CON-02. El modelo `Contador` ya existe en `core` (USR-11).~~ **Cumplido en CON-02 (24/11/2026).**
 
 ## Cuando se programe CON-03a — nace con el lote 1 de Contabilidad

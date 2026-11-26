@@ -22,7 +22,7 @@
         {% endfor %}
         <li>Se avisa al Vendedor de cada contrato. Al cliente no se le escribe.</li>
       </ul>
-      <p class="muted">El contraasiento del cobro{% if datos.indemnizacion > 0 %}, con la indemnización por atraso,{% endif %}: <span class="status-badge status-neutral">{{ datos.contraasiento }}</span></p>
+      {% if datos.contraasiento %}{% include "comercial/_asiento.html" with titulo="Contraasiento que se registra" filas=datos.contraasiento %}{% else %}<p class="muted">Este cobro no tiene asiento (es anterior a que se asienten los cobros): no se registra contraasiento.</p>{% endif %}
     </div>
   </div>
 

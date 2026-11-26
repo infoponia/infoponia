@@ -17,6 +17,7 @@
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.core import mail
 from django.core.exceptions import PermissionDenied
@@ -33,7 +34,11 @@ from comercial.tests.fabricas import (
     discrepancia_aceptada,
     pago_de_compra_venta,
 )
-from contabilidad.models import AsientoContable
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import asiento_de_prueba, ejercicio, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria
 from maestros.models import Alerta, Invernadero
 from maestros.tests.fabricas import crear_capataz_activo
@@ -102,12 +107,8 @@ class ComAnlCbrServicioTests(BaseDeCobranza):
         pago, _, _ = self.un_cobro_de_dos()
         self.assertIs(self.anular(pago).cliente_pago_en_fecha, False)
 
-    def test_post_c_no_crea_el_contraasiento_fuera_de_esta_ronda(self):
-        """Postcondición c: «Fuera de esta ronda · contabilidad» (D-57): no se crea ningún asiento; la pantalla lo dice."""
-        pago, _, _ = self.un_cobro_de_dos()
-        self.assertEqual(cobranza.datos_de_anulacion_de_cobro(self.gerente, pago.pk, HOY).contraasiento, "Fuera de esta ronda · contabilidad")
-        self.anular(pago)
-        self.assertEqual(AsientoContable.objects.count(), 0)
+    # `test_post_c_no_crea_el_contraasiento_fuera_de_esta_ronda` (COM-08b, D-57) se REEMPLAZÓ por `ComAnlCbrAsientoTests` (CON-04d): el contraasiento ahora se crea (D-92 punto 6). Lo que mostraba la pantalla
+    # (`datos.contraasiento`) lo cubre `test_cobranza_vistas` / `ComAnlCbrAsientoTests` en el paso de las pantallas.
 
     def test_post_d_cada_entrega_vuelve_a_pendiente_o_en_mora_segun_su_vencimiento_guardado(self):
         """Postcondición d y regla «Estado de las entregas»: se recalcula con `fecha_vencimiento_pago` (MD-132): el día del vencimiento todavía es «pendiente»; al día siguiente, «en mora»."""
@@ -425,3 +426,92 @@ class ComAnlCbrCobroCorrectoTests(BaseDeCobranza):
         for anulacion_id in (de_solicitud.pk, 999999):
             error = self.rechazo(cobranza.resumen_de_cobro, self.gerente, self.datos([self.e1], anulacion_id=anulacion_id, usar_fecha_anulada=True), self.LUEGO)
             self.assertEqual(codigos(error), ["fecha_no_admitida"])
+
+
+class ComAnlCbrAsientoTests(BaseDeCobranza):
+    """CON-04d · paso 1: el contraasiento de la anulación de un cobro (COM-ANL-CBR postcondición c; D-92 puntos 6 y 8; D-86). Lo origina la `Anulacion` (no `contraasentar`, que es del Contador): los movimientos del
+    asiento del cobro, con el Debe y el Haber invertidos, con la fecha de hoy (regla «Contraasiento»). Si el cobro no tiene asiento (anterior a CON-04d, D-92 punto 1), no hay contraasiento y la anulación no falla."""
+
+    def registrar(self, entregas_, *, medio="transferencia", hoy=HOY):
+        datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[e.pk for e in entregas_], medio_pago=medio)
+        return cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, hoy).huella, hoy)
+
+    def anular(self, pago, *, hoy=HOY):
+        with override_settings(CORREO_CONFIGURADO=False), self.captureOnCommitCallbacks(execute=True):
+            datos = cobranza.datos_de_anulacion_de_cobro(self.gerente, pago.pk, hoy)
+            return cobranza.anular_cobro(self.gerente, pago.pk, "Se cargó con el medio equivocado.", False, datos.huella, hoy)
+
+    def lineas(self, asiento):
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def test_post_c_la_anulacion_origina_el_contraasiento_del_cobro_completo_incluida_la_indemnizacion(self):
+        """Postcondición c: el cobro de dos entregas (una en mora 3 días) tiene Debe Banco 2.900,00 / Haber Deudores 2.000,00 / Haber Atraso 900,00; el contraasiento es lo mismo invertido, originado en la `Anulacion`, con la fecha de hoy."""
+        pago = self.registrar([self.en_mora(dias_de_mora=3), self.concretada()])
+        original = AsientoContable.objects.get(origen_id=pago.pk)
+        lineas_del_original = self.lineas(original)
+        anulacion_ = self.anular(pago)
+        contra = AsientoContable.objects.get(origen_id=anulacion_.pk)
+        self.assertEqual(
+            self.lineas(contra),
+            sorted([(cuentas.BANCO, HABER, D("2900.00")), (cuentas.DEUDORES_POR_VENTAS, DEBE, D("2000.00")), (cuentas.INDEMNIZACIONES_POR_ATRASO, DEBE, D("900.00"))]),
+        )
+        self.assertEqual((contra.fecha_asiento, AsientoContable.objects.count()), (HOY, 2))
+        self.assertEqual(self.lineas(AsientoContable.objects.get(pk=original.pk)), lineas_del_original)  # el original no se tocó
+        verificar_invariantes_contables()
+
+    def test_post_c_un_cobro_en_efectivo_sin_atraso_se_contraasienta_contra_caja(self):
+        """Postcondición c: efectivo y sin atraso: Debe Deudores / Haber Caja, por el mismo importe que el original."""
+        pago = self.registrar([self.concretada()], medio="efectivo")
+        contra = AsientoContable.objects.get(origen_id=self.anular(pago).pk)
+        self.assertEqual(self.lineas(contra), sorted([(cuentas.CAJA, HABER, D("1000.00")), (cuentas.DEUDORES_POR_VENTAS, DEBE, D("1000.00"))]))
+
+    def test_regla_contraasiento_usa_los_movimientos_del_original_invertidos_y_la_fecha_de_hoy_aunque_el_cobro_sea_de_otra_fecha(self):
+        """Regla «Contraasiento» (COM-ANL-CBR) y D-92 punto 8: se invierte lo que quedó asentado (no se recalcula) y se fecha hoy, cuatro días después del cobro."""
+        ejercicio_abierto(HOY - timedelta(days=60))
+        pago = self.registrar([self.concretada()], hoy=HOY - timedelta(days=4))
+        original = AsientoContable.objects.get(origen_id=pago.pk)
+        self.assertEqual(original.fecha_asiento, HOY - timedelta(days=4))
+        contra = AsientoContable.objects.get(origen_id=self.anular(pago).pk)
+        self.assertEqual(contra.fecha_asiento, HOY)
+        invertidos = sorted((c, HABER if t == DEBE else DEBE, i) for c, t, i in self.lineas(original))
+        self.assertEqual(self.lineas(contra), invertidos)
+
+    def test_regla_un_cobro_anterior_a_con04d_sin_asiento_se_anula_sin_contraasiento_y_sin_fallar(self):
+        """D-92 punto 1 (sin asientos hacia atrás): un cobro sin asiento (anterior a esta tarea) se anula igual; no hay contraasiento porque no hay nada que revertir."""
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", return_value=None):
+            pago = self.registrar([self.concretada()])
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        anulacion_ = self.anular(pago)
+        self.assertEqual((PagoCliente.objects.get(pk=pago.pk).estado_pago, AsientoContable.objects.count()), ("anulado", 0))
+        self.assertTrue(Anulacion.objects.filter(pk=anulacion_.pk).exists())
+
+    def test_d102_si_el_asiento_del_cobro_esta_en_un_ejercicio_cerrado_el_contraasiento_va_al_abierto_con_la_fecha_de_hoy(self):
+        """D-102 y regla «Contraasiento»: el original quedó en un ejercicio ya cerrado; el contraasiento no falla y va al ejercicio abierto con la fecha de hoy. El original no se modifica."""
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", return_value=None):
+            pago = self.registrar([self.concretada()], medio="efectivo")
+        cerrado = ejercicio(EjercicioContable.Estado.CERRADO, HOY - timedelta(days=400), HOY - timedelta(days=40))
+        abierto = ejercicio_abierto(HOY - timedelta(days=39))
+        original = asiento_de_prueba(cerrado, HOY - timedelta(days=45), [(cuentas.CAJA, DEBE, D("1000.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("1000.00"))], origen=pago)
+        contra = AsientoContable.objects.get(origen_id=self.anular(pago).pk)
+        self.assertEqual((contra.ejercicio_id, contra.fecha_asiento), (abierto.pk, HOY))
+        self.assertEqual(self.lineas(contra), sorted([(cuentas.CAJA, HABER, D("1000.00")), (cuentas.DEUDORES_POR_VENTAS, DEBE, D("1000.00"))]))
+        self.assertEqual(AsientoContable.objects.get(pk=original.pk).ejercicio_id, cerrado.pk)
+        verificar_invariantes_contables()
+
+    def test_post_f_el_registro_de_auditoria_nombra_el_contraasiento(self):
+        """Postcondición f y D-86 punto 4: el único registro `anulacion_cobro` nombra el contraasiento entre sus afectados y en `datos["asientos"]`; no se audita aparte."""
+        pago = self.registrar([self.concretada()])
+        anulacion_ = self.anular(pago)
+        registro = RegistroAuditoria.objects.filter(accion="anulacion_cobro").get()
+        contra = AsientoContable.objects.get(origen_id=anulacion_.pk)
+        self.assertTrue(any(a["id"] == contra.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_contraasiento_el_cobro_sigue_vigente_y_no_queda_la_anulacion(self):
+        """Garantía mínima (atómica): si el contraasiento falla, el cobro sigue «vigente» con sus líneas vigentes, sin `Anulacion`, sin otro asiento y sin el registro de auditoría de la anulación."""
+        pago = self.registrar([self.concretada()])
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.anular(pago)
+        self.assertEqual((PagoCliente.objects.get(pk=pago.pk).estado_pago, Anulacion.objects.count(), AsientoContable.objects.count()), ("vigente", 0, 1))
+        self.assertEqual((LineaPago.objects.filter(pago=pago, vigente=True).count(), RegistroAuditoria.objects.filter(accion="anulacion_cobro").count()), (1, 0))

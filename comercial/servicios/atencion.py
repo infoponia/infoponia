@@ -13,9 +13,10 @@ from django.http import Http404
 from django.urls import reverse
 
 from comercial.models import AlertaComercial, Entrega, LineaPago, Vehiculo
-from comercial.servicios import concrecion, entregas
+from comercial.servicios import asientos_comerciales, concrecion, entregas
 from comercial.servicios.compra_ventas import texto_de_pesos
 from comercial.servicios.confirmacion import TIPO_NO_RECONOCIDA
+from contabilidad.servicios import responsables
 from contabilidad.servicios.responsables import responsable_contable
 from core import notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
@@ -23,14 +24,13 @@ from maestros.extensiones import Enlace
 from maestros.models import Alerta
 from maestros.servicios import alertas
 from maestros.servicios.alertas import bloquear_invernadero_para_alertas
-from produccion.models import Consumo, OrdenTrabajo
+from produccion.models import Consumo, Merma, OrdenTrabajo
 
 MENSAJE_SIN_ACCESO = "Tu cuenta no tiene acceso a esta acción."
 LARGO_DE_LA_DESCRIPCION = 500
 GERENTE = Usuario.Rol.GERENTE
 Resultado = AlertaComercial.Resultado
 SIN_COBRO = "Sin cobro registrado"
-ASIENTOS_FUERA_DE_LA_RONDA = "Fuera de esta ronda · contabilidad"  # regla 1; D-57
 TEXTO_DEL_RESULTADO_EN_EL_AVISO = {
     Resultado.NO_LLEGO_PERDIDO: "no llegó al cliente (producto perdido)",
     Resultado.NO_LLEGO_DEVUELTO: "no llegó al cliente (producto devuelto)",
@@ -86,7 +86,7 @@ class FichaDeNoReconocida:
     motivo_del_cliente: str
     consumos: list
     cobro: str
-    asientos: str
+    asientos: list  # regla 1 (CON-04d): los asientos de la entrega, de sus mermas y consumos y del cobro vigente: `SimpleNamespace(titulo, numero, fecha, filas)`, texto sin enlace
     resultados: list
 
 
@@ -132,9 +132,27 @@ def ficha_de_no_reconocida(actor, alerta_id):
         motivo_del_cliente=motivo,
         consumos=consumos,
         cobro=_texto_del_cobro(entrega),
-        asientos=ASIENTOS_FUERA_DE_LA_RONDA,
+        asientos=_asientos_de_la_entrega(entrega),
         resultados=list(Resultado.choices),
     )
+
+
+def _asientos_de_la_entrega(entrega):
+    """Regla 1 de COM-ATN-ENR: todo lo asentado por la entrega, para que el Gerente vea qué corregir: el asiento de la venta y del costo (origen: la entrega), el de cada merma «daño en la entrega» y el de cada consumo de envase, y
+    el del cobro vigente, si lo hay. Lista vacía si nada se asentó (anterior a CON-04c). Solo lectura."""
+    origenes = [("Venta y costo de la entrega", entrega.pk)]
+    origenes += [("Merma de la entrega", m.pk) for m in Merma.objects.filter(orden_id=entrega.pk).order_by("pk")]
+    origenes += [("Consumo de envases", c.pk) for c in Consumo.objects.filter(orden_id=entrega.pk).order_by("pk")]
+    linea = LineaPago.objects.filter(entrega_id=entrega.pk, vigente=True).first()
+    if linea is not None:
+        origenes.append(("Cobro de la entrega", linea.pago_id))
+    asientos = []
+    for titulo, origen_id in origenes:
+        a = asientos_comerciales.asiento_de(origen_id)
+        if a is not None:
+            a.titulo = titulo
+            asientos.append(a)
+    return asientos
 
 
 def _tiene_cobro_vigente(entrega):
@@ -156,8 +174,8 @@ def atender_entrega_no_reconocida(actor, alerta_id, resultado, descripcion):
     y resuelve la alerta. Devuelve la `Alerta` resuelta. Solo el Gerente activo (`PermissionDenied`); `Http404` si la alerta no es de este tipo.
 
     Errores (`ValidationError`, por campo): `resultado_obligatorio` y `resultado_invalido` (`resultado`), `descripcion_obligatoria` y `descripcion_larga` (`descripcion`), `alerta_resuelta` y `entrega_cobrada`
-    (regla 5: «Primero anulá el cobro.», solo con «no llegó») en `__all__`. Con «no llegó», un aviso al Vendedor y al responsable contable (el Contador o, sin Contador, el Gerente), sin el Gerente que atiende:
-    corresponde corregir los asientos a mano. No toca la entrega, el stock, los asientos ni los incumplimientos (regla 3). Una transacción, con los bloqueos del encabezado y un registro `atencion_entrega_no_reconocida`."""
+    (regla 5: «Primero anulá el cobro.», solo con «no llegó») en `__all__`. Con «no llegó», un aviso SOLO al responsable contable (el Contador o, sin Contador, el Gerente), sin el Gerente que atiende (H21):
+    corresponde corregir los asientos a mano. El Vendedor ya no lo recibe (CON-04d). No toca la entrega, el stock, los asientos ni los incumplimientos (regla 3). Una transacción, con los bloqueos del encabezado y un registro `atencion_entrega_no_reconocida`."""
     _exigir_gerente(actor)
     descripcion = (descripcion or "").strip()
     resultado = (resultado or "").strip()
@@ -173,7 +191,7 @@ def atender_entrega_no_reconocida(actor, alerta_id, resultado, descripcion):
     entrega_previa = Entrega.objects.select_related("contrato_entrega").get(pk=previo.entrega_id)
     responsable = responsable_contable()
     with transaction.atomic():
-        cuentas = {actor.pk, entrega_previa.contrato_entrega.vendedor_id} | ({responsable.pk} if responsable is not None else set())
+        cuentas = {actor.pk} | ({responsable.pk} if responsable is not None else set())  # el Vendedor ya no recibe el aviso: no se bloquea
         list(Usuario.objects.select_for_update(no_key=True).filter(pk__in=cuentas).order_by("pk"))
         quien = _exigir_gerente(actor)  # después de bloquear: una baja de la cuenta que esperaba, ya está
         bloquear_invernadero_para_alertas(entrega_previa.invernadero_id)
@@ -188,9 +206,9 @@ def atender_entrega_no_reconocida(actor, alerta_id, resultado, descripcion):
         AlertaComercial.objects.filter(pk=vinculo.pk).update(resultado_averiguacion=resultado, descripcion_averiguacion=descripcion)
         resuelta = alertas.resolver_alerta(alerta.pk)  # la API de maestros (D-41); `None` si ya estaba resuelta (no puede: se verificó arriba)
         if resultado != Resultado.LLEGO:  # postcondición b
-            vendedor = entregas._usuario_activo(entrega.contrato_entrega.vendedor_id)
-            notificaciones.notificar_a_varios(
-                [vendedor, responsable],
+            # CON-04d (D-85 punto 8, D-92 punto 11): el aviso va SOLO al responsable contable (el Contador activo o, sin Contador, el Gerente), nunca al Vendedor, que dejó de registrar asientos. Sin Contador el
+            # responsable es el Gerente que atiende y no se le avisa a quien actúa (H21, D-85 punto 7): no queda aviso. Decisión del estudiante del 26/11/2026.
+            responsables.notificar_al_responsable_contable(
                 entregas._acotar(f"Corregir los asientos de {entrega.codigo}", entregas.LARGO_DEL_TITULO),
                 entregas._acotar(f"{entrega.codigo} {TEXTO_DEL_RESULTADO_EN_EL_AVISO[resultado]}: corresponde corregir los asientos a mano.", entregas.LARGO_DEL_DETALLE),
                 excluir=quien,

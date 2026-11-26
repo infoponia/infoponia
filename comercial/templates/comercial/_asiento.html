@@ -1,0 +1,7 @@
+{% comment %}CON-04d, decisión (3) del 26/11/2026: las líneas de un asiento como texto, SIN enlace (D-30; el Contador es quien lee el libro). Recibe «titulo» (por ejemplo «Asiento que se registra»), «filas» (cuenta, tipo «Debe» o «Haber», importe) y, si ya existe, «numero» y «fecha». Solo se incluye donde la pantalla ya muestra importes.{% endcomment %}{% load comercial %}
+<div class="asiento-texto" style="margin-top:8px">
+  <p class="sub2" style="margin:0 0 4px"><b>{{ titulo }}{% if numero %} · Asiento N.º {{ numero }}{% endif %}</b>{% if fecha %} <span class="muted">· {{ fecha|date:"d/m/Y" }}</span>{% endif %}</p>
+  <table class="tbl"><thead><tr><th>Cuenta</th><th>Movimiento</th><th class="num">Importe</th></tr></thead><tbody>
+    {% for f in filas %}<tr><td>{{ f.cuenta }}</td><td>{{ f.tipo }}</td><td class="num mono">{{ f.importe|pesos }}</td></tr>{% endfor %}
+  </tbody></table>
+</div>

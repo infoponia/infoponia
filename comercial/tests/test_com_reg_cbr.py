@@ -40,7 +40,11 @@ from comercial.tests.fabricas import (
     queja,
     reserva_lista,
 )
-from contabilidad.models import AsientoContable
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import ejercicio_abierto, verificar_invariantes_contables
 from core.models import RegistroAuditoria
 from maestros.tests.fabricas import crear_transportista, crear_vendedor
 from produccion.models import Bitacora
@@ -196,10 +200,7 @@ class ComRegCbrServicioTests(BaseDeCobranza):
         self.assertEqual(registro.detalle["cambios"]["monto_pagado"]["despues"], "2500.00")
         self.assertTrue(any("1500.00" in texto and "5" in texto for texto in registro.detalle["datos"]["detalle_de_entregas"]))
 
-    def test_post_d_no_se_crea_ningun_asiento_en_esta_ronda(self):
-        """Postcondición d y precondición c: «Fuera de esta ronda · contabilidad» (D-57): ni asiento ni verificación del ejercicio y las cuentas."""
-        self.cobrar(self.vendedor(), [self.concretada()])
-        self.assertEqual(AsientoContable.objects.count(), 0)
+    # `test_post_d_no_se_crea_ningun_asiento_en_esta_ronda` (COM-08a, D-57) se REEMPLAZÓ por `ComRegCbrAsientoTests` (CON-04d): la regla cambió, el cobro ahora asienta (D-92 punto 6).
 
     # ---- reglas: quién cobra y qué se cobra ----
 
@@ -646,3 +647,144 @@ class ComRegCbrFechaDelCobroAnuladoTests(BaseDeCobranza):
         huella = cobranza.resumen_de_cobro(self.gerente, self.datos([e2]), self.LUEGO).huella
         self.assertEqual(codigos(self.rechazo(cobranza.registrar_cobro, self.gerente, segundo, huella, self.LUEGO)), ["anulacion_ya_usada"])
         self.assertEqual(PagoCliente.objects.filter(tipo_pago="suministro", estado_pago="vigente").count(), 1)
+
+
+class ComRegCbrAsientoTests(BaseDeCobranza):
+    """CON-04d · paso 1: el asiento del cobro (COM-REG-CBR postcondición d; D-92 puntos 3 a 6 y 9; D-86). UN asiento compuesto con el `PagoCliente` como origen y la fecha del cobro (`fecha_pago`, D-92 punto 4):
+    Debe Caja (efectivo) o Banco c/c (los demás medios) por `monto_pagado` / Haber Deudores por Ventas por Σ `monto_cobrado` / Haber Indemnizaciones por Atraso en el Pago por Σ `indemnizacion_atraso`, solo si es mayor que 0.
+    Decisiones del estudiante del 26/11/2026: (1) el cobro que corrige uno anulado (7a) asienta con la `fecha_pago` y no con la actual; (2) sin transición para Deudores por Ventas."""
+
+    def cobrar(self, actor, entregas_, medio="transferencia", hoy=HOY, **extra):
+        """Resumen y registro, como la pantalla, con los `on_commit` ejecutados."""
+        datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[e.pk for e in entregas_], medio_pago=medio, **extra)
+        with override_settings(CORREO_CONFIGURADO=False), self.captureOnCommitCallbacks(execute=True):
+            return cobranza.registrar_cobro(actor, datos, cobranza.resumen_de_cobro(actor, datos, hoy).huella, hoy)
+
+    def lineas(self, asiento):
+        """`[(cuenta, tipo, importe)]` del asiento, ordenado (el compuesto no fija el orden de sus líneas)."""
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def asiento_de(self, pago):
+        return AsientoContable.objects.get(origen_id=pago.pk)
+
+    def test_post_d_un_asiento_compuesto_con_atraso_va_contra_banco_deudores_e_indemnizaciones_por_atraso(self):
+        """Postcondición d: una entrega en mora 5 días ($ 1.000,00 + 5 × $ 300,00): Debe Banco c/c 2.500,00 / Haber Deudores por Ventas 1.000,00 / Haber Indemnizaciones por Atraso 1.500,00, originado en el pago, con la fecha de hoy."""
+        e = self.en_mora(dias_de_mora=5)
+        pago = self.cobrar(self.e.vendedor, [e])
+        asiento = self.asiento_de(pago)
+        self.assertEqual(
+            self.lineas(asiento),
+            sorted([(cuentas.BANCO, DEBE, D("2500.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("1000.00")), (cuentas.INDEMNIZACIONES_POR_ATRASO, HABER, D("1500.00"))]),
+        )
+        self.assertEqual((asiento.fecha_asiento, asiento.origen_id, AsientoContable.objects.count()), (HOY, pago.pk, 1))
+        verificar_invariantes_contables()
+
+    def test_post_d_efectivo_sin_atraso_va_a_caja_y_no_hay_linea_de_atraso(self):
+        """Postcondición d: el efectivo se imputa a Caja; sin atraso, la línea de Indemnizaciones por Atraso se omite (solo si es mayor que cero) y quedan dos movimientos."""
+        pago = self.cobrar(self.e.vendedor, [self.concretada()], medio="efectivo")
+        self.assertEqual(self.lineas(self.asiento_de(pago)), sorted([(cuentas.CAJA, DEBE, D("1000.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("1000.00"))]))
+
+    def test_regla_15_de_8_13_los_demas_medios_van_a_banco(self):
+        """Regla 15 de 8.13: transferencia, tarjeta de débito y tarjeta de crédito van a Banco c/c; solo el efectivo, a Caja."""
+        for medio in ("transferencia", "tarjeta_debito", "tarjeta_credito"):
+            pago = self.cobrar(self.e.vendedor, [self.concretada()], medio=medio)
+            self.assertIn(cuentas.BANCO, [c for c, _, _ in self.lineas(self.asiento_de(pago))], medio)
+
+    def test_post_d_con_varias_entregas_el_asiento_suma_lo_cobrado_y_el_atraso_de_todas(self):
+        """Postcondición d: un solo asiento por el cobro entero: Debe Banco por el monto pagado (1.000 + 600 + 1.000), Haber Deudores por 2.000,00 y Haber Atraso por 600,00."""
+        pago = self.cobrar(self.e.vendedor, [self.en_mora(dias_de_mora=2), self.concretada()])
+        self.assertEqual(
+            self.lineas(self.asiento_de(pago)),
+            sorted([(cuentas.BANCO, DEBE, D("2600.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("2000.00")), (cuentas.INDEMNIZACIONES_POR_ATRASO, HABER, D("600.00"))]),
+        )
+        self.assertEqual(AsientoContable.objects.count(), 1)
+
+    def test_post_g_el_registro_de_auditoria_nombra_el_asiento_y_no_se_audita_aparte(self):
+        """Postcondición g y D-86 punto 4: el único registro `registro_cobro` nombra el asiento entre sus afectados y en `datos["asientos"]`."""
+        pago = self.cobrar(self.e.vendedor, [self.concretada()])
+        registro = RegistroAuditoria.objects.filter(accion="registro_cobro").get()
+        asiento = self.asiento_de(pago)
+        self.assertTrue(any(a["id"] == asiento.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_asiento_no_queda_ni_el_cobro_ni_nada(self):
+        """Garantía mínima 1: si el asiento falla, no queda el pago, ni las líneas, ni el asiento, ni la auditoría, y la entrega sigue sin pagar."""
+        e = self.concretada()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.cobrar(self.e.vendedor, [e])
+        self.assertEqual((PagoCliente.objects.count(), LineaPago.objects.count(), AsientoContable.objects.count(), RegistroAuditoria.objects.filter(accion="registro_cobro").count()), (0, 0, 0, 0))
+        self.assertEqual(entregas.estado_de_pago([e.pk], HOY)[e.pk], "pendiente")
+
+    def test_d92_el_cobro_asienta_aunque_no_haya_ejercicio_abierto_y_se_recupera_solo(self):
+        """D-92 punto 2 y H9: no se verifica el ejercicio aparte (la precondición c desaparece): sin ejercicio, `registrar_asiento_automatico` se recupera solo y el cobro entra."""
+        self.assertFalse(EjercicioContable.objects.exists())
+        pago = self.cobrar(self.e.vendedor, [self.concretada()])
+        self.assertEqual(self.asiento_de(pago).ejercicio.estado_ejercicio, EjercicioContable.Estado.ABIERTO)
+
+    # ---- decisión (2) del estudiante del 26/11/2026 ----
+
+    def test_d92_cobro_de_entrega_sin_asiento_de_concrecion_va_contra_deudores(self):
+        """Decisión (2) del 26/11/2026 y D-92 punto 1: sin transición. La entrega de la fábrica no tiene asiento de concreción (como una anterior a CON-04c) y el cobro igual acredita Deudores por Ventas por
+        lo cobrado: nada va a Ventas ni se corrige por la ausencia del asiento anterior."""
+        e = self.concretada()
+        self.assertFalse(AsientoContable.objects.filter(origen_id=e.pk).exists())
+        pago = self.cobrar(self.e.vendedor, [e], medio="efectivo")
+        self.assertEqual(self.lineas(self.asiento_de(pago)), sorted([(cuentas.CAJA, DEBE, D("1000.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("1000.00"))]))
+        self.assertNotIn(cuentas.VENTAS, [c for c, _, _ in self.lineas(self.asiento_de(pago))])
+
+
+class ComRegCbrAsientoDe7aTests(BaseDeCobranza):
+    """CON-04d · paso 1, decisión (1) del estudiante del 26/11/2026: el asiento del cobro que corrige uno anulado (7a, D-94 punto 10) lleva la `fecha_pago` (la del cobro anulado) y no la actual (D-92 punto 4).
+    Si esa fecha cae en un ejercicio cerrado, lo resuelve D-102 (va al abierto con la fecha de hoy y la aclaración). El cobro original se registra en ``ANTES`` y se corrige 4 días después."""
+
+    ANTES = HOY - timedelta(days=4)
+    LUEGO = HOY
+
+    def preparar(self):
+        """Dos entregas vencidas hace 3 días al ``ANTES``, cobradas ese día por el Gerente y anuladas hoy («el cliente sí pagó»). Devuelve la anulación."""
+        self.e1, self.e2 = self.en_mora(dias_de_mora=7), self.en_mora(dias_de_mora=7)  # vencidas hace 7 días hoy: hace 3 el ``ANTES``
+        datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[self.e1.pk, self.e2.pk], medio_pago="transferencia")
+        self.original = cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, self.ANTES).huella, self.ANTES)
+        info = cobranza.datos_de_anulacion_de_cobro(self.gerente, self.original.pk, self.LUEGO)
+        return cobranza.anular_cobro(self.gerente, self.original.pk, "Se cargó mal el medio.", True, info.huella, self.LUEGO)
+
+    def corregir(self, anulacion_):
+        datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[self.e1.pk, self.e2.pk], medio_pago="efectivo", anulacion_id=anulacion_.pk, usar_fecha_anulada=True)
+        return cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, self.LUEGO).huella, self.LUEGO)
+
+    def test_d92_cobro_7a_asienta_con_la_fecha_del_cobro_anulado(self):
+        """Decisión (1): con `usar_fecha_anulada`, el cobro correcto tiene `fecha_pago` = la del anulado y su asiento lleva esa fecha (no la de hoy), en el ejercicio que la contiene."""
+        ej = ejercicio_abierto(HOY - timedelta(days=60))
+        nuevo = self.corregir(self.preparar())
+        self.assertEqual(nuevo.fecha_pago, self.ANTES)
+        asiento = AsientoContable.objects.get(origen_id=nuevo.pk)
+        self.assertEqual((asiento.fecha_asiento, asiento.ejercicio_id), (self.ANTES, ej.pk))
+        self.assertNotIn("Fecha del hecho", asiento.descripcion_asiento)
+        self.assertEqual(
+            sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta")),
+            sorted([(cuentas.CAJA, DEBE, D("3800.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("2000.00")), (cuentas.INDEMNIZACIONES_POR_ATRASO, HABER, D("1800.00"))]),
+        )
+        verificar_invariantes_contables()
+
+    def test_d102_cobro_7a_con_el_ejercicio_de_esa_fecha_cerrado_va_al_abierto_con_la_fecha_de_hoy_y_la_aclaracion(self):
+        """Decisión (1) y D-102: si el ejercicio de la fecha del cobro anulado ya está cerrado, el asiento NO falla: va al abierto con la fecha de hoy y la descripción aclara la fecha real."""
+        cerrado = ejercicio_abierto(HOY - timedelta(days=60))
+        anulacion_ = self.preparar()  # el cobro original y su anulación se asientan mientras el ejercicio está abierto; después se cierra (la fecha del cobro anulado queda en un ejercicio cerrado)
+        EjercicioContable.objects.filter(pk=cerrado.pk).update(estado_ejercicio=EjercicioContable.Estado.CERRADO, fecha_cierre_ejercicio=HOY - timedelta(days=3))
+        abierto = ejercicio_abierto(HOY - timedelta(days=2))
+        nuevo = self.corregir(anulacion_)
+        asiento = AsientoContable.objects.get(origen_id=nuevo.pk)
+        self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento), (abierto.pk, HOY))
+        self.assertIn(f"Fecha del hecho: {self.ANTES:%d/%m/%Y}", asiento.descripcion_asiento)
+        self.assertIn("ya está cerrado", asiento.descripcion_asiento)
+        self.assertFalse(AsientoContable.objects.filter(ejercicio=cerrado, origen_id=nuevo.pk).exists())
+        verificar_invariantes_contables()
+
+    def test_regla_sin_la_casilla_el_cobro_comun_asienta_con_la_fecha_de_hoy(self):
+        """Fuera de 7a rige la regla «Fecha del pago»: el cobro común lleva y asienta la fecha de hoy."""
+        ejercicio_abierto(HOY - timedelta(days=60))
+        self.preparar()
+        datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[self.e1.pk], medio_pago="efectivo")
+        nuevo = cobranza.registrar_cobro(self.gerente, datos, cobranza.resumen_de_cobro(self.gerente, datos, self.LUEGO).huella, self.LUEGO)
+        self.assertEqual((nuevo.fecha_pago, AsientoContable.objects.get(origen_id=nuevo.pk).fecha_asiento), (self.LUEGO, self.LUEGO))

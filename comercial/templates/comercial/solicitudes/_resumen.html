@@ -8,7 +8,7 @@ Recibe «resumen», «datos», «bloqueantes», «errores», «confirmando», «
     <div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{% for campo, mensajes in bloqueantes.items %}{% for m in mensajes %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
   {% else %}
     <ul class="clist">{% for t in resumen.textos %}<li>{{ t }}</li>{% endfor %}</ul>
-    {% if resumen.decision == "aceptar" and resumen.monto > 0 %}<p class="muted" style="margin-top:8px">El asiento de la indemnización (Indemnizaciones por Incumplimiento a Cliente contra Deudores por Ventas, o Caja / Banco si se reintegra) no se programa en esta ronda: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span></p>{% endif %}
+    {% if resumen.asiento %}{% include "comercial/_asiento.html" with titulo="Asiento que se registra al confirmar" filas=resumen.asiento %}{% endif %}
     {% if resumen.resolveria %}<div class="alert alert-danger" role="status" style="margin-top:8px">{% icono "warn" 16 %}<div>Confirmar no pide una confirmación adicional: el contrato se resolverá por incumplimientos.</div></div>{% endif %}
   {% endif %}
   </div>

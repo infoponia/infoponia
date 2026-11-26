@@ -32,10 +32,13 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_resolucion,
     verificar_invariantes_de_solicitudes,
 )
-from contabilidad.tests.fabricas import asegurar_plan_de_cuentas
-from core.models import Notificacion, RegistroAuditoria
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.servicios import ejercicios
+from contabilidad.tests.fabricas import asegurar_plan_de_cuentas, ejercicio, ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador, Notificacion, RegistroAuditoria
 from core.tests.concurrencia import codigos, correr_a_la_vez
-from core.tests.fabricas import crear_gerente
+from core.tests.fabricas import crear_cuenta, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_inventario
 from maestros.models import Localidad
 from maestros.tests.fabricas import asegurar_datos_de_maestros
@@ -269,3 +272,38 @@ class ResolucionConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         self.assertTrue({"resolucion_del_contrato", "solicitud_cambio"} & set(codigos(rechazos[0])), codigos(rechazos[0]))
         contrato = Suministro.objects.get(pk=x.contrato.pk)
         self.assertEqual((contrato.estado_suministro, contrato.cantidad_incumplimientos, contrato.solicitud_resolucion_id), ("resuelto", 4, x.quejas[-1].pk))
+
+    # ---- CON-04d · paso 4: el asiento de la multa y el ejercicio (D-86 punto 2; D-102) ----
+
+    def _cierre_y_resolucion(self, primera_la_resolucion):
+        self.armar_con_ejercicios()
+        resolucion, cierre = self.resolver(self.x), lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk)  # noqa: E731
+        resultados = correr_a_la_vez(*((resolucion, cierre) if primera_la_resolucion else (cierre, resolucion)), primera="a")
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+        asiento = AsientoContable.objects.get(origen_id=self.x.contrato.pk)
+        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento, asiento.fecha_asiento), (self.abierto.pk, 1, HOY))
+        self.assertEqual(EjercicioContable.objects.get(pk=self.en_cierre.pk).estado_ejercicio, EjercicioContable.Estado.CERRADO)
+        verificar_invariantes_contables()
+
+    def armar_con_ejercicios(self):
+        """El ejercicio en cierre cubre desde hace 400 días hasta hace unos 36; el abierto empieza hace 20 días y contiene a hoy."""
+        self.x = self.armar()
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        self.en_cierre = ejercicio(EjercicioContable.Estado.EN_CIERRE, HOY - timedelta(days=400))
+        self.abierto = ejercicio_abierto(HOY - timedelta(days=20))
+
+    def test_d102_el_cierre_primero_y_la_resolucion_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """El cierre tiene su fila tomada; la resolución de hoy no la necesita."""
+        self._cierre_y_resolucion(primera_la_resolucion=False)
+
+    def test_d102_la_resolucion_primero_y_el_cierre_a_la_vez_los_dos_terminan_y_el_asiento_va_al_abierto(self):
+        """La resolución ya asentó y tiene el ejercicio abierto bloqueado; el cierre toca solo su fila."""
+        self._cierre_y_resolucion(primera_la_resolucion=True)
+
+    def test_regla_d86_el_ejercicio_es_lo_ultimo_que_la_resolucion_bloquea(self):
+        """La resolución se detiene justo ANTES de bloquear el ejercicio (con el invernadero, el suministro y lo que cancela ya tomados); un cierre del ejercicio en cierre, que toca solo su fila, termina sin esperarla y la
+        resolución, al seguir, asienta en el abierto con el N.º 1: nadie queda esperando una fila que el otro tiene."""
+        self.armar_con_ejercicios()
+        resultados = correr_a_la_vez(self.resolver(self.x), lambda: ejercicios.cerrar_ejercicio(self.contador, self.en_cierre.pk), primera="a", detener_antes_de=(servicio_de_asientos, "_bloquear_ejercicio"))
+        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
+        self.assertEqual(AsientoContable.objects.get(origen_id=self.x.contrato.pk).numero_asiento, 1)

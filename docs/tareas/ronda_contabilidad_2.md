@@ -12,7 +12,7 @@ de su tarea al cerrar (M3).
 | PRD-05 | Registrar Lote Existente (**hecha**, 25/11/2026) | produccion | PROD-REG-LTE | CON-02, PRD-03 (hecha) | mediana |
 | CON-04a | Asientos de producción (**hecha**, 25/11/2026) | produccion | PROD-CNC-SMB, PROD-CNC-TRN, PROD-REG-MRM, PROD-REG-APL, PROD-PNR-FDS | CON-02 (PRD-04, hecha) | mediana |
 | CON-04c | Asientos de cosecha, cámara y entregas (**hecha**, 26/11/2026) | comercial, produccion | PROD-CNC-CSC, PROD-REG-MRM (cámara), PROD-VNC-CAM, COM-CNC-ENT | CON-02, COM-04a, COM-04b, COM-06a | mediana |
-| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | COM-REG-CBR, COM-ANL-CBR, COM-CNL-CVT, COM-EVL-DSC, COM-RSV-QJA, COM-ANL-SRV, COM-RSV-SUM, COM-ATN-ENR | CON-02, USR-11, COM-06b a COM-08b | mediana (o vacía) |
+| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | COM-REG-CBR, COM-ANL-CBR, COM-CNL-CVT, COM-EVL-DSC, COM-RSV-QJA, COM-ANL-SRV, COM-RSV-SUM, COM-ATN-ENR | CON-02, USR-11, COM-06b a COM-08b | mediana (o vacía) · **hecha el 26/11/2026** (las ocho filas, ninguna estaba hecha) |
 
 ## 2. Por qué este orden
 

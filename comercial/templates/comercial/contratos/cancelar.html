@@ -55,7 +55,7 @@ entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja s
             {% for valor, texto in medios %}<label><input type="radio" name="medio_pago" value="{{ valor }}"{% if medio_pago == valor %} checked{% endif %}{% if errores.medio_pago %} aria-invalid="true"{% endif %}> {{ texto }}</label>{% endfor %}
           </fieldset>
           {% for m in errores.medio_pago %}<div class="err" role="alert">{{ m }}</div>{% empty %}<div class="hint" id="medio-ayuda">El cliente paga ahora, con un solo medio. El efectivo va a Caja; los demás, a Banco.</div>{% endfor %}
-          <p class="muted">El asiento del cobro: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span></p>
+          <p class="muted">Al confirmar se registra el asiento del cobro: Debe Caja (efectivo) o Banco c/c (los demás medios) / Haber Deudores por Ventas. Lo ves completo en el resumen.</p>
         </section>
         {% endif %}
         <section class="card">

@@ -1,4 +1,4 @@
-{% load comercial %}{% comment %}Lo que dice el resumen de la cancelación (pasos 6 y 7 de COM-CNL-CVT), en la ventana y en la página. Con entregas concretadas (6a, COM-08b) suma el cobro de lo entregado y el medio; el asiento, «Fuera de esta ronda · contabilidad» (D-57). Recibe «resumen» (ResumenDeCancelacionDeVenta) y «cuantos».{% endcomment %}
+{% load comercial %}{% comment %}Lo que dice el resumen de la cancelación (pasos 6 y 7 de COM-CNL-CVT), en la ventana y en la página. Con entregas concretadas (6a, COM-08b) suma el cobro de lo entregado y el medio; el asiento del cobro con sus líneas (CON-04d). Recibe «resumen» (ResumenDeCancelacionDeVenta) y «cuantos».{% endcomment %}
 {% with d=resumen.datos %}
 <dl class="dl">
   <dt>Compra-venta</dt><dd><span class="mono">{{ d.venta.codigo }}</span> · {{ d.cliente }}</dd>
@@ -11,6 +11,6 @@
   <dt>Estado final</dt><dd><span class="status-badge status-neutral">{{ resumen.estado_final }}</span></dd>
   <dt>Comprobante</dt><dd>{% if d.comprobante %}Se envía a {{ d.comprobante }}.{% else %}El cliente no tiene correo: se imprime.{% endif %}</dd>
 </dl>
-{% if d.cobro %}<p class="muted">El asiento del cobro: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span></p>{% endif %}
+{% if resumen.asiento %}{% include "comercial/_asiento.html" with titulo="Asiento que se registra al confirmar" filas=resumen.asiento %}{% endif %}
 <div class="alert alert-warn"><div>La cancelación no se puede deshacer.</div></div>
 {% endwith %}

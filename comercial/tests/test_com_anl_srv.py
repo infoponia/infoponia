@@ -7,9 +7,11 @@
 # `huella`); `anular_resolucion(actor, solicitud_id, motivo, huella) -> Anulacion`; códigos `motivo_obligatorio`, `motivo_largo` (en `motivo`), `solicitud_no_resuelta`, `resolucion_del_contrato`, `entrega_cobrada`,
 # `indemnizacion_reintegrada` y `solicitud_cambio`.
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 
@@ -18,8 +20,13 @@ from comercial.servicios import solicitudes
 from comercial.tests.fabricas import cobro
 from comercial.tests.base_solicitudes import BaseDeSolicitudes, HOY, codigos, poner_estado
 from comercial.tests.fabricas import queja_aceptada, resolucion_del_suministro
-from contabilidad.models import AsientoContable
-from core.models import RegistroAuditoria, Usuario
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import ejercicio_abierto, verificar_invariantes_contables
+from core.models import Contador, RegistroAuditoria, Usuario
+from core.tests.fabricas import crear_cuenta
 from maestros.models import Alerta
 from produccion.models import Bitacora
 
@@ -89,13 +96,12 @@ class ComAnlSrvServicioTests(BaseDeSolicitudes):
             ("aceptada", HOY, self.gerente.pk, "Procede.", D("15.00"), D("15.00"), D("0.00"), None),
         )
 
-    def test_post_c_el_contador_baja_en_uno_el_monto_a_cobrar_vuelve_y_no_hay_contraasiento(self):
-        """Postcondición c: el contador de incumplimientos baja en 1 y el monto a cobrar vuelve a su valor sin la indemnización; el contraasiento es «Fuera de esta ronda · contabilidad» (D-57): no se crea."""
+    def test_post_c_el_contador_baja_en_uno_y_el_monto_a_cobrar_vuelve(self):
+        """Postcondición c: el contador de incumplimientos baja en 1 y el monto a cobrar vuelve a su valor sin la indemnización. El contraasiento (antes «Fuera de esta ronda», D-57) lo prueba `ComAnlSrvAsientoTests` (CON-04d)."""
         x = self.aceptada(incumplimientos=1)
         self.assertEqual(self.contrato(x).cantidad_incumplimientos, 2)
         self.anular(x)
         self.assertEqual(self.contrato(x).cantidad_incumplimientos, 1)
-        self.assertEqual(AsientoContable.objects.count(), 0)
 
     def test_post_d_el_evento_de_bitacora_va_en_el_invernadero_de_origen_solo_si_estaba_aceptada(self):
         """Postcondición d y D-69 punto 6: un evento `anulacion_de_resolucion` en el invernadero de origen de la entrega, con el motivo; una rechazada no deja bitácora."""
@@ -129,7 +135,7 @@ class ComAnlSrvServicioTests(BaseDeSolicitudes):
         x = self.aceptada()
         a = self.anular(x)
         (registro,) = RegistroAuditoria.objects.filter(accion="anulacion_resolucion_solicitud")
-        self.assertEqual([m["modelo"] for m in registro.afectados], ["comercial.discrepanciaentrega", "comercial.anulacion", "comercial.suministro", "produccion.bitacora"])
+        self.assertEqual([m["modelo"] for m in registro.afectados], ["comercial.discrepanciaentrega", "comercial.anulacion", "comercial.suministro", "produccion.bitacora", "contabilidad.asientocontable"])  # CON-04d: el contraasiento entra en los afectados
         self.assertEqual(registro.afectados[1]["id"], a.pk)
         self.assertEqual(registro.detalle["cambios"]["estado_solicitud"], {"antes": "aceptada", "despues": "pendiente"})
         self.assertEqual(registro.detalle["cambios"]["monto_descontado"], {"antes": "15.00", "despues": None})
@@ -300,3 +306,108 @@ class ComAnlSrvServicioTests(BaseDeSolicitudes):
         self.assertEqual((self.solicitud(x).estado_solicitud, self.contrato(x).cantidad_incumplimientos, Anulacion.objects.count()), ("aceptada", 1, 0))
         self.assertEqual(RegistroAuditoria.objects.filter(accion="anulacion_resolucion_solicitud").count(), 0)
         self.assertEqual(solicitudes.entregas.monto_a_cobrar([x.entrega.pk])[x.entrega.pk], D("485.00"))
+
+
+class ComAnlSrvAsientoTests(BaseDeSolicitudes):
+    """CON-04d · paso 3: el contraasiento de la anulación de una resolución (COM-ANL-SRV postcondición c; D-92 puntos 6 y 8; D-86; regla «Contraasiento»). Lo origina la `Anulacion` (no `contraasentar`): los movimientos del
+    asiento de la indemnización con el Debe y el Haber invertidos, con la fecha de hoy (si el ejercicio del original está cerrado, va al abierto: D-102). Una rechazada no tiene asiento ni contraasiento. Solo se pueden anular las
+    resoluciones cuya indemnización no se reintegró (2c), así que el original siempre es contra Deudores por Ventas."""
+
+    def lineas(self, asiento):
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def aceptada(self, **kw):
+        x = self.armar(**kw)
+        self.resolver(x.solicitud)
+        return x
+
+    def anular(self, x, motivo=MOTIVO):
+        datos = solicitudes.datos_de_anulacion(self.gerente, x.solicitud.pk)
+        return solicitudes.anular_resolucion(self.gerente, x.solicitud.pk, motivo, datos.huella)
+
+    def test_post_c_la_anulacion_origina_el_contraasiento_de_la_indemnizacion_con_los_movimientos_invertidos(self):
+        """Postcondición c: la indemnización de $ 15,00 (Debe Indemnizaciones por Incumplimiento / Haber Deudores) se contraasienta con el Debe y el Haber invertidos, originado en la `Anulacion`, con la fecha de hoy; el original no cambia."""
+        x = self.aceptada()
+        original = AsientoContable.objects.get(origen_id=x.solicitud.pk)
+        lineas_del_original = self.lineas(original)
+        anulacion_ = self.anular(x)
+        contra = AsientoContable.objects.get(origen_id=anulacion_.pk)
+        self.assertEqual(self.lineas(contra), sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, HABER, D("15.00")), (cuentas.DEUDORES_POR_VENTAS, DEBE, D("15.00"))]))
+        self.assertEqual((contra.fecha_asiento, AsientoContable.objects.count()), (HOY, 2))
+        self.assertEqual(self.lineas(AsientoContable.objects.get(pk=original.pk)), lineas_del_original)
+        verificar_invariantes_contables()
+
+    def test_regla_si_el_ejercicio_del_original_esta_cerrado_el_contraasiento_va_al_abierto_con_la_fecha_de_hoy(self):
+        """Regla «Contraasiento» y D-102: el original quedó en un ejercicio que después se cerró; el contraasiento no falla y va al ejercicio abierto con la fecha de hoy. El original sigue donde estaba."""
+        viejo = ejercicio_abierto(HOY - timedelta(days=60))
+        x = self.aceptada()
+        original = AsientoContable.objects.get(origen_id=x.solicitud.pk)
+        EjercicioContable.objects.filter(pk=viejo.pk).update(estado_ejercicio=EjercicioContable.Estado.CERRADO, fecha_cierre_ejercicio=HOY - timedelta(days=3))
+        abierto = ejercicio_abierto(HOY - timedelta(days=2))
+        contra = AsientoContable.objects.get(origen_id=self.anular(x).pk)
+        self.assertEqual((contra.ejercicio_id, contra.fecha_asiento, AsientoContable.objects.get(pk=original.pk).ejercicio_id), (abierto.pk, HOY, viejo.pk))
+        verificar_invariantes_contables()
+
+    def test_regla_solicitud_rechazada_vuelve_a_pendiente_sin_contraasiento(self):
+        """Extensión 2d y regla «Solicitud rechazada»: una rechazada nunca tuvo asiento; al anularla no se crea ninguno."""
+        x = self.armar()
+        self.resolver(x.solicitud, decision="rechazar", observaciones="No procede.")
+        self.anular(x)
+        self.assertEqual((SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, AsientoContable.objects.count()), ("pendiente", 0))
+
+    def test_regla_una_aceptada_sin_indemnizacion_se_anula_sin_contraasiento_y_sin_fallar(self):
+        """H11: una queja aceptada con monto 0 no tuvo asiento; al anularla no hay nada que revertir y no falla."""
+        x = self.armar(tipo="queja")
+        self.resolver(x.solicitud, monto="0")
+        self.assertEqual(AsientoContable.objects.count(), 0)
+        self.anular(x)
+        self.assertEqual((SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, AsientoContable.objects.count()), ("pendiente", 0))
+
+    def test_regla_una_aceptada_anterior_a_con04d_sin_asiento_se_anula_sin_contraasiento(self):
+        """D-92 punto 1 (sin asientos hacia atrás): una aceptación que quedó sin asiento (anterior a esta tarea) se anula igual; no hay contraasiento porque no hay original."""
+        x = self.armar()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", return_value=None):
+            self.resolver(x.solicitud)
+        self.anular(x)
+        self.assertEqual((SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, AsientoContable.objects.count()), ("pendiente", 0))
+
+    def test_post_f_el_registro_de_auditoria_nombra_el_contraasiento_y_no_se_audita_aparte(self):
+        """Postcondición f y D-86 punto 4: el único registro `anulacion_resolucion_solicitud` nombra el contraasiento entre sus afectados y en `datos["asientos"]`."""
+        x = self.aceptada()
+        anulacion_ = self.anular(x)
+        registro = RegistroAuditoria.objects.filter(accion="anulacion_resolucion_solicitud").get()
+        contra = AsientoContable.objects.get(origen_id=anulacion_.pk)
+        self.assertTrue(any(a["id"] == contra.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_contraasiento_la_resolucion_sigue_aceptada(self):
+        """Garantía mínima: si el contraasiento falla, la solicitud sigue «aceptada» con su contador, sin `Anulacion`, sin otro asiento y sin el registro de auditoría de la anulación."""
+        x = self.aceptada()
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.anular(x)
+        self.assertEqual((SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, Suministro.objects.get(pk=x.contrato.pk).cantidad_incumplimientos), ("aceptada", 1))
+        self.assertEqual((Anulacion.objects.count(), AsientoContable.objects.count(), RegistroAuditoria.objects.filter(accion="anulacion_resolucion_solicitud").count()), (0, 1, 0))
+
+    # ---- decisión (4) del estudiante del 26/11/2026: anular una re-aceptación (el original ya se revirtió) ----
+
+    def test_tarea_con04d_anular_reaceptacion_no_contraasienta_de_nuevo(self):
+        """Decisión (4) del 26/11/2026: aceptada (asiento 1) → anulada (contraasiento 2) → vuelta a aceptar (sin asiento, aviso) → anulada otra vez. La segunda anulación NO revierte dos veces el mismo asiento: no crea otro contraasiento
+        y avisa al responsable contable (el Contador) por si registró a mano la indemnización de la re-aceptación («Revertir a mano…»). La anulación en sí se hace y no falla."""
+        cache.clear()
+        contador = crear_cuenta(Contador, email="contador@infoponia.com")
+        x = self.aceptada()
+        self.anular(x)
+        self.resolver(x.solicitud)  # re-aceptación: sin asiento nuevo
+        self.assertEqual(AsientoContable.objects.count(), 2)
+        antes = len(self.avisos(contador))
+        segunda = self.anular(x)
+        self.assertEqual(SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, "pendiente")
+        self.assertEqual((AsientoContable.objects.count(), AsientoContable.objects.filter(origen_id=segunda.pk).count()), (2, 0))
+        nuevos = self.avisos(contador)[antes:]
+        self.assertEqual(len(nuevos), 1)
+        self.assertTrue(nuevos[0].titulo.startswith(f"Revertir a mano el asiento de {x.solicitud.codigo}"))
+        self.assertEqual(self.avisos(self.gerente, "Revertir a mano"), [])
+        registro = RegistroAuditoria.objects.filter(accion="anulacion_resolucion_solicitud").latest("pk")
+        self.assertIn("asiento_manual_pendiente", registro.detalle["datos"])
+        verificar_invariantes_contables()

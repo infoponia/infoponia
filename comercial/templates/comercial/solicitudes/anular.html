@@ -29,7 +29,7 @@ después; el contraasiento figura «Fuera de esta ronda · contabilidad», D-57)
         <li>Sin cambios en los incumplimientos ni en el monto a cobrar: la rechazada no los tocó.</li>
         {% endif %}
       </ul>
-      <p class="muted">{% if datos.aceptada %}El contraasiento de la indemnización: <span class="status-badge status-neutral">Fuera de esta ronda · contabilidad</span>{% else %}Sin contraasiento: la rechazada no generó asiento.{% endif %}</p>
+      {% if datos.aceptada %}{% if datos.contraasiento %}{% include "comercial/_asiento.html" with titulo="Contraasiento que se registra" filas=datos.contraasiento %}{% else %}<p class="muted">Sin contraasiento: la indemnización no tiene asiento que revertir (anterior a que se asienten, sin monto, o ya revertido).</p>{% endif %}{% else %}<p class="muted">Sin contraasiento: la rechazada no generó asiento.</p>{% endif %}
     </div>
   </div>
   <form method="post" action="{% url 'comercial:solicitud_anular' s.pk %}" novalidate>

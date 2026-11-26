@@ -28,7 +28,7 @@ contabilidad» (D-57). «Confirmar cobro» manda lo elegido y la huella a `regis
         <dt>Fecha del pago</dt><dd>{{ resumen.fecha_pago|date:"d/m/Y" }}{% if con_fecha_anulada %}<span class="sub2">Es la fecha del cobro anulado: el cliente pagó ese día.</span>{% endif %}</dd>
       </dl>
       {% if resumen.hay_pendientes %}<div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Una entrega elegida tiene una queja o una discrepancia pendiente. Si se acepta después del cobro, la indemnización ya no se descuenta: se reintegra al cliente.</div></div>{% endif %}
-      <p class="muted">El asiento del cobro no se programa en esta ronda: «Fuera de esta ronda · contabilidad».</p>
+      {% include "comercial/_asiento.html" with titulo="Asiento que se registra al confirmar" filas=resumen.asiento %}
     </div>
   </div>
   <form method="post" action="{% url 'comercial:cobranza_registrar' %}" novalidate style="margin-top:12px">

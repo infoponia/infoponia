@@ -135,7 +135,7 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 | PRD-05 | Registrar Lote Existente | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02, PRD-03 (hecha) | `produccion/PRD-05-registrar-lote-existente.md` |
 | CON-04a | Asientos de producción (reapertura) | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02 (hecha), PRD-04 (hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, COM-04a, COM-04b, COM-06a (hechas) | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
-| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | pendiente | CON-02, USR-11 (hecha), COM-06b a COM-08b | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
+| CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, USR-11 (hecha), COM-06b a COM-08b (hechas) | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
 
 ### Ronda «Estadísticas 1» (D-93)
 

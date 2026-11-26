@@ -1,6 +1,6 @@
 {% extends "core/base_con_sesion.html" %}{% load estaticos iconos comercial %}
 {% comment %}«Atender entrega no reconocida» (COM-ATN-ENR, COM-06b; `INIT.atnenr` y `VIEWS.atnenr` del prototipo; D-61): lo que dijo el cliente, todo lo que generó la entrega (regla 1: detalles y cantidades, transportista y vehículo, fecha y
-hora de la concreción, intentos fallidos, confirmación, envases consumidos, cobro y asientos «Fuera de esta ronda · contabilidad», D-57) y el formulario del resultado (regla 2) con su descripción obligatoria. Solo el Gerente.
+hora de la concreción, intentos fallidos, confirmación, envases consumidos, cobro y los asientos de la entrega con sus líneas, como texto sin enlace: CON-04d) y el formulario del resultado (regla 2) con su descripción obligatoria. Solo el Gerente.
 Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo), «generales» (los de la cabecera), «resultado» y «descripcion» (lo ya elegido). Todo se escapa.{% endcomment %}
 {% block titulo %}Entrega no reconocida · {{ ficha.entrega.codigo }} · InfoPonia{% endblock %}
 {% block contenido %}
@@ -37,7 +37,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
       <dl class="dl two">
         <dt>Intentos fallidos</dt><dd>{% if ficha.intentos %}<ul class="portal-lista">{% for i in ficha.intentos %}<li>{{ i.fecha_hora|date:"d/m/Y H:i" }} · {{ i.get_motivo_display }}{% if i.descripcion %} · {{ i.descripcion }}{% endif %}</li>{% endfor %}</ul>{% else %}<span class="muted">Ninguno</span>{% endif %}</dd>
         <dt>Envases consumidos</dt><dd>{% if ficha.consumos %}{{ ficha.consumos|join:", " }}{% else %}<span class="muted">Ninguno</span>{% endif %}</dd>
-        <dt>Asientos</dt><dd><span class="status-badge status-neutral">{{ ficha.asientos }}</span></dd>
+        <dt>Asientos</dt><dd>{% for a in ficha.asientos %}{% include "comercial/_asiento.html" with titulo=a.titulo filas=a.filas numero=a.numero fecha=a.fecha %}{% empty %}<span class="muted">Sin asientos (la entrega es anterior a que se asienten).</span>{% endfor %}</dd>
       </dl>
     </div>
   </div>
@@ -54,7 +54,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
           {% endfor %}
           {% for e in errores.resultado %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
         </fieldset>
-        <div class="alert alert-warn" role="status" style="margin-top:12px">{% icono "warn" 16 %}<div>Con «no llegó» corresponde corregir la venta con un asiento manual: se avisa al Vendedor y a quien registra los asientos. Si la entrega ya se cobró, primero hay que anular el cobro.</div></div>
+        <div class="alert alert-warn" role="status" style="margin-top:12px">{% icono "warn" 16 %}<div>Con «no llegó» corresponde corregir la venta con un asiento manual: se avisa a quien registra los asientos (el Contador). Si la entrega ya se cobró, primero hay que anular el cobro.</div></div>
         <div class="alert alert-info" role="status" style="margin-top:12px">{% icono "info" 16 %}<div>El reingreso del producto devuelto a la cámara todavía no está disponible: registralo en la descripción.</div></div>
         <div class="fld" style="margin-top:12px">
           <label class="lbl" for="descripcion">Lo averiguado <span class="req">*</span></label>

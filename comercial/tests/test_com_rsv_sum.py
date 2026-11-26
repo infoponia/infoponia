@@ -35,6 +35,11 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_resolucion,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
+from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Notificacion, RegistroAuditoria, Usuario
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -47,7 +52,7 @@ D = Decimal
 MOTIVO = "Resolución del suministro {codigo} por incumplimientos."
 
 
-class BaseDeResolucion(ConDatosDeInventario, TestCase):
+class BaseDeResolucion(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor, su Agrónomo y su Capataz, un lote con 5000 plantas, un Transportista y un Gerente. `armar()` deja un suministro «vigente» con más incumplimientos que los tolerados."""
 
     @classmethod
@@ -62,6 +67,7 @@ class BaseDeResolucion(ConDatosDeInventario, TestCase):
         self.addCleanup(verificar_invariantes_de_entregas)
         self.addCleanup(verificar_invariantes_de_solicitudes)
         self.addCleanup(verificar_invariantes_de_resolucion)
+        self.addCleanup(verificar_invariantes_contables)  # CON-04d: la resolución asienta la multa
 
     # ---- armado ----
 
@@ -233,14 +239,7 @@ class ComRsvSumServicioTests(BaseDeResolucion):
 
     # ---- la multa y la alerta ----
 
-    def test_post_h_no_se_crea_ningun_asiento_aunque_haya_multa(self):
-        """Postcondición h: FUERA de la ronda (D-57, D-69 punto 8): el asiento de la multa no se crea; la multa solo se informa en la alerta y en el aviso."""
-        from contabilidad.models import AsientoContable
-
-        x = self.armar(multa="50000.00")
-        antes = AsientoContable.objects.count()
-        self.resolver(x)
-        self.assertEqual(AsientoContable.objects.count(), antes)
+    # `test_post_h_no_se_crea_ningun_asiento_aunque_haya_multa` (COM-07b, D-57) se REEMPLAZÓ por `ComRsvSumAsientoTests` (CON-04d): la regla cambió, la multa ahora asienta (D-92 punto 10).
 
     def test_post_i_la_alerta_suministro_resuelto_es_para_el_gerente_y_describe_lo_que_se_deshizo(self):
         """Postcondición i y D-69 punto 14: alerta activa de evento, crítica, para el Gerente, con su `AlertaComercial(suministro=…)`; la descripción (hasta 200: el límite de `Alerta.descripcion_alerta`, el caso de uso dice 500) identifica el contrato, el cliente, la solicitud, los incumplimientos, la multa y lo que se deshizo."""
@@ -705,3 +704,98 @@ class ComRsvSumRecuperacionDiariaTests(BaseDeResolucion):
         self.pasar()
         suministros.cerrar_rescisiones(HOY)
         self.assertEqual(self.releer(Suministro, x.contrato.pk).estado_suministro, "resuelto")
+
+
+class ComRsvSumAsientoTests(BaseDeResolucion):
+    """CON-04d · paso 4: el asiento de la multa por resolución (COM-RSV-SUM postcondición h; D-92 punto 10; D-86). El actor es InfoPonia (sin usuario). Origen: el `Suministro` (R012); fecha: la de la resolución (hoy). Debe «Indemnizaciones
+    por Resolución de Contratos» / Haber «Indemnizaciones a Pagar» (2.1.02) por `multa_resolucion`. Multa 0: sin asiento y sin error (H11). Su pago no tiene caso de uso: lo registra el Contador con un asiento manual."""
+
+    def lineas(self, asiento):
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def test_post_h_la_multa_asienta_indemnizaciones_por_resolucion_contra_indemnizaciones_a_pagar(self):
+        """Postcondición h: con una multa de $ 50.000,00, un asiento Debe Indemnizaciones por Resolución de Contratos / Haber Indemnizaciones a Pagar, originado en el suministro, con la fecha de hoy."""
+        x = self.armar(multa="50000.00")
+        self.resolver(x)
+        asiento = AsientoContable.objects.get(origen_id=x.contrato.pk)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.INDEMNIZACIONES_POR_RESOLUCION, DEBE, D("50000.00")), (cuentas.INDEMNIZACIONES_A_PAGAR, HABER, D("50000.00"))]))
+        self.assertEqual((asiento.fecha_asiento, AsientoContable.objects.count()), (HOY, 1))
+        verificar_invariantes_contables()
+
+    def test_post_h_el_asiento_lleva_la_fecha_de_la_resolucion_que_se_le_pasa(self):
+        """D-92 punto 4: la fecha del asiento es la de la resolución (el `hoy` del servicio), no la del reloj."""
+        ejercicio_abierto(HOY - timedelta(days=60))
+        x = self.armar(multa="50000.00")
+        self.resolver(x, hoy=HOY - timedelta(days=1))
+        self.assertEqual(AsientoContable.objects.get(origen_id=x.contrato.pk).fecha_asiento, HOY - timedelta(days=1))
+
+    def test_ext_5a_con_multa_cero_no_hay_asiento_y_no_falla(self):
+        """Extensión 5a y H11: sin multa no se arma ningún asiento; la resolución se hace igual."""
+        x = self.armar(multa="0.00")
+        self.resolver(x)
+        self.assertEqual((self.releer(Suministro, x.contrato.pk).estado_suministro, AsientoContable.objects.count()), ("resuelto", 0))
+
+    def test_post_m_el_registro_de_auditoria_de_proceso_automatico_nombra_el_asiento(self):
+        """Postcondición m y D-86 punto 4: el único registro `resolucion_suministro` (sin usuario) nombra el asiento entre sus afectados y en `datos["asientos"]`; el asiento no se audita aparte con el usuario de la resolución."""
+        x = self.armar(multa="50000.00")
+        self.resolver(x)
+        (registro,) = self.registros("resolucion_suministro")
+        asiento = AsientoContable.objects.get(origen_id=x.contrato.pk)
+        self.assertTrue(any(a["id"] == asiento.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+        self.assertIsNone(registro.usuario_id)
+
+    def test_garantia_si_falla_el_asiento_no_se_resuelve_nada(self):
+        """Garantía mínima y extensión *a: si el asiento de la multa falla, el suministro sigue «vigente», no se cancela la entrega ni la cosecha, no hay alerta ni asiento ni registro de auditoría; el disparo queda pendiente."""
+        x = self.armar(multa="50000.00")
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.resolver(x)
+        self.assertEqual(self.releer(Suministro, x.contrato.pk).estado_suministro, "vigente")
+        self.assertEqual(self.releer(Entrega, x.entrega.pk).estado_orden, "a_realizar")
+        self.assertEqual((AsientoContable.objects.count(), Alerta.objects.filter(tipo_alerta="comercial_suministro_resuelto").count(), len(self.registros("resolucion_suministro"))), (0, 0, 0))
+
+    def test_disparador_2_el_paso_33_asienta_la_multa_una_sola_vez(self):
+        """Disparador 2 (paso diario 33): la recuperación diaria resuelve el contrato cuyo disparo se perdió y asienta su multa; un segundo pase el mismo día no duplica el asiento."""
+        x = self.armar(multa="50000.00")
+        with self.captureOnCommitCallbacks(execute=True):
+            resoluciones.resolver_suministros_pendientes(HOY)
+            resoluciones.resolver_suministros_pendientes(HOY)
+        self.assertEqual(AsientoContable.objects.filter(origen_id=x.contrato.pk).count(), 1)
+
+    # ---- el actor del asiento de la multa coincide con el del registro de auditoría de la resolución (InfoPonia, sin usuario) en los dos caminos ----
+
+    def _registro_de_alta_del_asiento(self, asiento):
+        """El registro `alta_asiento_contable` que hizo `registrar_asiento_automatico` para ese asiento (D-86 punto 4)."""
+        return RegistroAuditoria.objects.filter(accion="alta_asiento_contable", afectados__contains=[{"modelo": "contabilidad.asientocontable", "id": asiento.pk}]).get()
+
+    def test_actor_el_paso_diario_33_asienta_la_multa_sin_usuario_igual_que_su_registro_de_auditoria(self):
+        """Camino 1 (paso diario 33): el actor es `None` (InfoPonia, D-27). El alta del asiento de la multa y el registro `resolucion_suministro` no tienen usuario."""
+        x = self.armar(multa="50000.00")
+        with self.captureOnCommitCallbacks(execute=True):
+            resoluciones.resolver_suministros_pendientes(HOY)
+        asiento = AsientoContable.objects.get(origen_id=x.contrato.pk)
+        (resolucion,) = self.registros("resolucion_suministro")
+        self.assertEqual((self._registro_de_alta_del_asiento(asiento).usuario_id, resolucion.usuario_id), (None, None))
+
+    def test_actor_la_aceptacion_de_una_queja_por_una_persona_asienta_la_multa_sin_usuario_y_la_indemnizacion_con_el_gerente(self):
+        """Camino 2 (la aceptación de la cuarta queja por el Gerente; la resolución corre después del commit, como InfoPonia): el asiento de la INDEMNIZACIÓN lleva al Gerente y el de la MULTA, sin usuario, igual que el
+        registro `resolucion_suministro`. Cada asiento tiene su propio origen (la queja y el suministro, R012)."""
+        from comercial.servicios import solicitudes
+        from comercial.servicios.solicitudes import DatosDeResolucion
+
+        x = self.armar(con_solicitudes=False, multa="50000.00")
+        self.incumplimientos(x.contrato, x.detalle, 3)
+        Suministro.objects.filter(pk=x.contrato.pk).update(cantidad_incumplimientos=3)
+        r = reserva_lista(None, self.lote, 5, fecha_entrega=HOY - timedelta(days=19), detalle_suministro=x.detalle)
+        concretada = marcar_concretada(entrega(x.contrato, [r], fecha=HOY - timedelta(days=19)), cantidades=[(5, 0, 0)])
+        ReservaStock.objects.filter(pk=r.pk).update(estado_reserva="entregada")
+        pendiente = queja(concretada, "otro")
+        datos = DatosDeResolucion("aceptar", "", "10.00", "")
+        huella = solicitudes.resumen_de_resolucion(self.gerente, pendiente.pk, datos).huella
+        with self.captureOnCommitCallbacks(execute=True):
+            solicitudes.resolver_solicitud(self.gerente, pendiente.pk, datos, huella)
+        self.assertEqual(self.releer(Suministro, x.contrato.pk).estado_suministro, "resuelto")
+        indemnizacion, multa = AsientoContable.objects.get(origen_id=pendiente.pk), AsientoContable.objects.get(origen_id=x.contrato.pk)
+        (resolucion,) = self.registros("resolucion_suministro")
+        self.assertEqual((self._registro_de_alta_del_asiento(indemnizacion).usuario_id, self._registro_de_alta_del_asiento(multa).usuario_id, resolucion.usuario_id), (self.gerente.pk, None, None))

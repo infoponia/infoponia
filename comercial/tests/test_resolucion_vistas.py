@@ -26,6 +26,7 @@ from comercial.tests.fabricas import (
     verificar_invariantes_de_resolucion,
     verificar_invariantes_de_solicitudes,
 )
+from contabilidad.tests.fabricas import PlanDeCuentasMixin
 from core.models import RegistroAuditoria
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
@@ -36,7 +37,7 @@ from produccion.tests.fabricas import lote_maduro
 HOY = timezone.localdate()
 
 
-class ResolucionVistasTests(ConDatosDeInventario, TestCase):
+class ResolucionVistasTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un suministro resuelto por incumplimientos (con el caso de uso, no a mano) con una entrega cancelada, su Gerente y su Vendedor."""
 
     def setUp(self):
@@ -81,13 +82,13 @@ class ResolucionVistasTests(ConDatosDeInventario, TestCase):
     # ---- la ficha ----
 
     def test_regla_la_ficha_del_gerente_muestra_la_resolucion_con_la_solicitud_la_multa_y_dar_por_atendida(self):
-        """Regla «Ficha»: «Resuelto por incumplimientos el dd/mm/aaaa: 4 de 3 tolerados, por SR-… Multa: $ 50.000,00. Las entregas concretadas se siguen cobrando.», con el enlace a la solicitud y la multa como «fuera de esta ronda»;
+        """Regla «Ficha»: «Resuelto por incumplimientos el dd/mm/aaaa: 4 de 3 tolerados, por SR-… Multa: $ 50.000,00. Las entregas concretadas se siguen cobrando.», con el enlace a la solicitud y la multa con su asiento (CON-04d);
         el Gerente ve el botón «Dar por atendida» con su texto."""
         x = self.resuelto()
         respuesta = self.ficha(x, self.gerente)
         self.assertEqual(respuesta.status_code, 200)
         for esperado in (
-            f"Resuelto por incumplimientos el {HOY:%d/%m/%Y}", "4 de 3", x.quejas[-1].codigo, "$ 50.000,00", "fuera de esta ronda", "Las entregas concretadas se siguen cobrando",
+            f"Resuelto por incumplimientos el {HOY:%d/%m/%Y}", "4 de 3", x.quejas[-1].codigo, "$ 50.000,00", "Asiento N.º 1", "Las entregas concretadas se siguen cobrando",
             f"Entregas canceladas: <span class=\"mono\">{x.entrega.codigo}</span>", "Dar por atendida", "Usalo cuando hayas pagado la multa y avisado al cliente. La alerta deja de figurar entre tus pendientes.",
         ):
             self.assertContains(respuesta, esperado)
@@ -232,3 +233,25 @@ class ResolucionVistasTests(ConDatosDeInventario, TestCase):
         (correo,) = [m for m in mail.outbox if m.subject == f"Resolución de tu suministro {x.contrato.codigo}"]
         self.assertIn("4 de 3", correo.body)
         self.assertEqual(Suministro.objects.get(pk=x.contrato.pk).estado_comprobante, "enviado")
+
+    # ---- CON-04d · paso 6, decisión (3) del 26/11/2026 ----
+
+    def test_tarea_con04d_la_ficha_muestra_el_asiento_de_la_multa_sin_enlace_a_quien_ya_ve_el_importe(self):
+        """La multa de la ficha ya no dice «fuera de esta ronda»: muestra «Asiento N.º 1» con Debe Indemnizaciones por Resolución de Contratos / Haber Indemnizaciones a Pagar, como texto. La ve el Gerente y el Vendedor del
+        contrato (que ya ven la multa); el Agrónomo y el Contador no entran a la ficha (403) y no ven nada."""
+        from contabilidad.tests.fabricas import verificar_invariantes_contables  # noqa: F401
+
+        x = self.resuelto()
+        for actor in (self.gerente, self.e.vendedor):
+            respuesta = self.ficha(x, actor)
+            for esperado in ("Asiento N.º 1", "Indemnizaciones por Resolución de Contratos", "Indemnizaciones a Pagar", "$ 50.000,00"):
+                self.assertContains(respuesta, esperado)
+            self.assertNotContains(respuesta, "fuera de esta ronda")
+            self.assertNotRegex(respuesta.content.decode(), r"<a [^>]*>[^<]*Asiento N")
+        self.assertEqual(self.ficha(x, self.e.agronomo).status_code, 403)
+
+    def test_tarea_con04d_sin_multa_la_ficha_dice_que_el_contrato_no_preve_multa_y_no_muestra_asiento(self):
+        x = self.resuelto(multa="0.00")
+        respuesta = self.ficha(x, self.gerente)
+        self.assertContains(respuesta, "El contrato no prevé multa.")
+        self.assertNotContains(respuesta, "Asiento N.º")

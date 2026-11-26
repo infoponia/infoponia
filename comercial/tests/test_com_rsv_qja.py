@@ -19,7 +19,11 @@ from comercial.models import IntentoFallido, Queja, SolicitudRevision, Suministr
 from comercial.servicios import solicitudes
 from comercial.tests.base_solicitudes import BaseDeSolicitudes, HOY, codigos
 from comercial.tests.fabricas import cobro, queja_aceptada, transportista_con_vehiculo
+from contabilidad import cuentas
+from contabilidad.constantes import DEBE, HABER
 from contabilidad.models import AsientoContable
+from contabilidad.servicios import asientos as servicio_de_asientos
+from contabilidad.tests.fabricas import verificar_invariantes_contables
 from core.models import RegistroAuditoria
 from maestros.models import Alerta
 from produccion.models import Bitacora
@@ -52,7 +56,7 @@ class ComRsvQjaServicioTests(BaseDeSolicitudes):
         self.assertEqual((s.fecha_resolucion, s.gerente_id, s.monto_indemnizacion, s.monto_descontado), (HOY, self.gerente.pk, D("30.00"), D("30.00")))
         self.assertEqual(self.contrato(x).cantidad_incumplimientos, 1)
         self.assertEqual(Alerta.objects.get(vinculo_comercial__solicitud=x.solicitud.pk).estado_alerta, "resuelta")
-        self.assertEqual(AsientoContable.objects.count(), 0)  # postcondición e: fuera de la ronda (D-57)
+        self.assertEqual(AsientoContable.objects.count(), 1)  # postcondición e (CON-04d): el asiento de la indemnización; el detalle, en `ComRsvQjaAsientoTests`
 
     def test_regla_retraso_suma_los_detalles_con_dias_de_retraso(self):
         """Regla «Retraso»: la suma de todos los detalles de la queja: dos líneas con 3 días a $10 cada una = $60,00."""
@@ -232,7 +236,7 @@ class ComRsvQjaServicioTests(BaseDeSolicitudes):
         x = self.retraso()
         self.resolver(x.solicitud)
         (registro,) = RegistroAuditoria.objects.filter(accion="resolucion_queja")
-        self.assertEqual([a["modelo"] for a in registro.afectados], ["comercial.queja", "maestros.alerta", "comercial.suministro", "produccion.bitacora"])
+        self.assertEqual([a["modelo"] for a in registro.afectados], ["comercial.queja", "maestros.alerta", "comercial.suministro", "produccion.bitacora", "contabilidad.asientocontable"])  # CON-04d: el asiento de la indemnización entra en los afectados
         self.assertEqual(registro.detalle["cambios"]["monto_indemnizacion"], {"antes": None, "despues": "30.00"})
         self.assertEqual(RegistroAuditoria.objects.filter(accion="evaluacion_discrepancia").count(), 0)
 
@@ -255,3 +259,60 @@ class ComRsvQjaServicioTests(BaseDeSolicitudes):
             with self.assertRaises(RuntimeError):
                 solicitudes.resolver_solicitud(self.gerente, x.solicitud.pk, self.datos(), resumen.huella)
         self.assertEqual((self.solicitud(x).estado_solicitud, self.contrato(x).cantidad_incumplimientos, Bitacora.objects.filter(tipo_evento="incumplimiento_de_clausula").count()), ("pendiente", 0, 0))
+
+
+class ComRsvQjaAsientoTests(BaseDeSolicitudes):
+    """CON-04d · paso 2: el asiento de la indemnización de una queja aceptada (COM-RSV-QJA postcondición e; D-92 puntos 5 y 6). Igual que la discrepancia, y solo si el monto es mayor que 0 (con descuento y reintegro,
+    el asiento es compuesto: extensiones 4a, 6a y 6d)."""
+
+    def lineas(self, asiento):
+        return sorted((m.cuenta.codigo_cuenta, m.tipo_movimiento, m.importe_movimiento) for m in asiento.movimientos.select_related("cuenta"))
+
+    def test_post_e_una_queja_por_retraso_sin_pagar_asienta_contra_deudores(self):
+        """Postcondición e: 3 días × $ 10 = $ 30,00 descontados: Debe Indemnizaciones por Incumplimiento / Haber Deudores por Ventas, originado en la queja, con la fecha de hoy."""
+        x = self.armar(tipo="queja", queja_tipo="retraso", entregada=10, retraso=3)
+        self.resolver(x.solicitud)
+        asiento = AsientoContable.objects.get(origen_id=x.solicitud.pk)
+        self.assertEqual(self.lineas(asiento), sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, DEBE, D("30.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("30.00"))]))
+        self.assertEqual((asiento.fecha_asiento, AsientoContable.objects.count()), (HOY, 1))
+        verificar_invariantes_contables()
+
+    def test_ext_6d_con_monto_manual_mayor_que_lo_que_queda_el_asiento_es_compuesto_con_caja_o_banco(self):
+        """Extensión 6d y regla «Asiento»: quedan $ 100 por cobrar y se aceptan $ 300: Debe Indemnizaciones 300,00 / Haber Deudores 100,00 / Haber Banco c/c 200,00 (reintegro por transferencia)."""
+        x = self.armar(tipo="queja")
+        queja_aceptada(x.entrega, "otro", monto="400.00")
+        self.resolver(x.solicitud, monto="300", medio="transferencia")
+        self.assertEqual(
+            self.lineas(AsientoContable.objects.get(origen_id=x.solicitud.pk)),
+            sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, DEBE, D("300.00")), (cuentas.DEUDORES_POR_VENTAS, HABER, D("100.00")), (cuentas.BANCO, HABER, D("200.00"))]),
+        )
+
+    def test_ext_6a_con_la_entrega_pagada_el_asiento_reintegra_con_caja(self):
+        """Extensión 6a: con un cobro real, todo se reintegra: Debe Indemnizaciones $ 80,00 / Haber Caja 80,00 (efectivo)."""
+        x = self.armar(tipo="queja")
+        cobro([x.entrega])
+        self.resolver(x.solicitud, monto="80", medio="efectivo")
+        self.assertEqual(self.lineas(AsientoContable.objects.get(origen_id=x.solicitud.pk)), sorted([(cuentas.INDEMNIZACIONES_POR_INCUMPLIMIENTO, DEBE, D("80.00")), (cuentas.CAJA, HABER, D("80.00"))]))
+
+    def test_ext_4a_con_monto_cero_no_hay_asiento_y_no_falla(self):
+        """Postcondición e («solo si el monto es mayor que 0») y H11: con monto 0 la queja se acepta y no se crea asiento."""
+        x = self.armar(tipo="queja")
+        self.resolver(x.solicitud, monto="0")
+        self.assertEqual((SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, AsientoContable.objects.count()), ("aceptada", 0))
+
+    def test_post_l_el_registro_de_auditoria_nombra_el_asiento(self):
+        """Postcondición l y D-86 punto 4: el único registro `resolucion_queja` nombra el asiento entre sus afectados y en `datos["asientos"]`."""
+        x = self.armar(tipo="queja")
+        self.resolver(x.solicitud, monto="80")
+        registro = RegistroAuditoria.objects.filter(accion="resolucion_queja").get()
+        asiento = AsientoContable.objects.get(origen_id=x.solicitud.pk)
+        self.assertTrue(any(a["id"] == asiento.pk and a["texto"].startswith("Asiento") for a in registro.afectados))
+        self.assertEqual(len(registro.detalle["datos"]["asientos"]), 1)
+
+    def test_garantia_si_falla_el_asiento_la_queja_sigue_pendiente(self):
+        """Garantía mínima: si el asiento falla, la queja sigue «pendiente» y no queda nada de la resolución."""
+        x = self.armar(tipo="queja")
+        with mock.patch.object(servicio_de_asientos, "registrar_asiento_automatico", side_effect=RuntimeError("falla del asiento")):
+            with self.assertRaises(RuntimeError):
+                self.resolver(x.solicitud, monto="80")
+        self.assertEqual((SolicitudRevision.objects.get(pk=x.solicitud.pk).estado_solicitud, AsientoContable.objects.count(), RegistroAuditoria.objects.filter(accion="resolucion_queja").count()), ("pendiente", 0, 0))

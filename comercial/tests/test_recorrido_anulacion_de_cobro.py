@@ -101,7 +101,7 @@ class RecorridoDeAnulacionDeCobroTests(BaseDeCobranza):
         self.assertIn(f"{a.codigo}", pantalla)
         self.assertIn("vuelve a «en mora»", pantalla)
         self.assertIn("vuelve a «pendiente»", pantalla)
-        self.assertIn("Fuera de esta ronda · contabilidad", pantalla)
+        self.assertIn("Contraasiento que se registra", pantalla)
         huella = self.ir("cobro_anular", primero.pk, usuario=gerente).context["datos"].huella
         sin_motivo = self.enviar("cobro_anular", primero.pk, usuario=gerente, datos={"huella": huella, "motivo": "", "cliente_pago_en_fecha": "1"})
         self.assertIn("Escribí el motivo de la anulación.", texto(sin_motivo))
