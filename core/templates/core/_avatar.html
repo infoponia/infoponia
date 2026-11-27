@@ -1,0 +1,5 @@
+{% comment %}Avatar de una cuenta: su foto de perfil si tiene (USR-GST-PRF regla 1, SEG-19; ``av()`` del prototipo) y, si no, la sigla de su
+rol. Recibe «cuenta», «sigla» (la del rol), «estilo» (opcional, para el tamaño) y «alt» (opcional: el texto de la foto; vacío en
+el encabezado, donde el botón ya dice quién es). La foto sale del almacenamiento privado con una URL firmada que vence a la
+hora (D-106); ``object-fit: cover`` la ajusta al círculo sin deformarla.{% endcomment %}
+{% if cuenta.foto_perfil %}<img class="avatar photo" src="{{ cuenta.foto_perfil.url }}" alt="{{ alt }}" decoding="async"{% if estilo %} style="{{ estilo }}"{% endif %}>{% else %}<div class="avatar"{% if estilo %} style="{{ estilo }}"{% endif %}>{{ sigla }}</div>{% endif %}

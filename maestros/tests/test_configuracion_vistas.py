@@ -1,13 +1,24 @@
 # Pruebas de las pantallas de «Configuración» (MAE-04: ADM-MOD-CFG y ADM-MOD-ORG): permisos, errores por campo con y sin HTMX,
-# todo o nada, el mensaje de guardado tras la redirección, la advertencia de la regla 5, sin logo (D-45) y la entrada del menú.
+# todo o nada, el mensaje de guardado tras la redirección, la advertencia de la regla 5, el logo (D-106; reemplaza a D-45) y la
+# entrada del menú.
 
 import re
 
 from django.test import TestCase
 from django.urls import reverse
 
+from django.core.files.uploadedfile import SimpleUploadedFile
+
 from core.models import RegistroAuditoria
-from core.tests.fabricas import CLAVE, crear_administrador, crear_capataz, crear_gerente
+from core.tests.fabricas import (
+    CLAVE,
+    VaciaImagenesMixin,
+    archivo_de_imagen,
+    archivos_guardados,
+    crear_administrador,
+    crear_capataz,
+    crear_gerente,
+)
 from maestros.models import PARAMETROS_DE_CONFIGURACION, ConfiguracionOperativa, PerfilOrganizacion
 from maestros.tests.fabricas import ConDatosDeMaestros, crear_agronomo
 
@@ -130,14 +141,19 @@ class ConfiguracionVistasTests(ConDatosDeMaestros, TestCase):
         self.assertEqual((fila.porc_margen_pedido_automatico, fila.porc_merma_maxima), (20, 15))
         self.assertEqual(auditorias().count(), 0)
 
-    def test_flujo_principal_la_pestana_organizacion_no_tiene_logo(self):
-        """ADM-MOD-ORG regla 1 y D-45: se muestran los datos actuales y cuatro colores, sin campo de archivo ni de logo."""
+    def test_flujo_principal_la_pestana_organizacion_muestra_los_datos_actuales_y_el_campo_del_logo(self):
+        """ADM-MOD-ORG regla 1 y D-106 punto 10 (reemplaza a D-45): se muestran los datos actuales, cuatro colores y el campo del
+        logo; sin logo cargado, no hay casilla «Quitar el logo»."""
         respuesta = self.client.get(URL_ORGANIZACION_PANTALLA)
         self.assertEqual(respuesta.status_code, 200)
         for nombre in CAMPOS_DEL_PERFIL:
             self.assertContains(respuesta, f'name="{nombre}"')
-        self.assertNotContains(respuesta, 'type="file"')
-        self.assertNotRegex(respuesta.content.decode(), r'name="[^"]*logo')  # «logo» es también la clase del marco
+        self.assertContains(respuesta, 'type="file" name="logo"')
+        self.assertContains(respuesta, 'enctype="multipart/form-data"')
+        self.assertContains(respuesta, 'hx-encoding="multipart/form-data"')
+        self.assertContains(respuesta, "JPG, PNG o WebP, de hasta 5 MB")
+        self.assertNotContains(respuesta, "quitar_logo")
+        self.assertNotContains(respuesta, "Quitar el logo")
         self.assertEqual(auditorias().count(), 0)
 
     # ---- guardar: parámetros ----
@@ -275,3 +291,131 @@ class ConfiguracionVistasTests(ConDatosDeMaestros, TestCase):
         estilos = " ".join(re.findall(r'style="([^"]*)"', respuesta.content.decode()))
         self.assertNotIn("url(", estilos)
         self.assertNotIn("red", estilos)
+
+
+class ConfiguracionLogoVistasTests(VaciaImagenesMixin, ConDatosDeMaestros, TestCase):
+    """El logo en la pestaña «Organización» (ADM-MOD-ORG regla 4 y D-106 puntos 10 a 14) con el cliente de prueba."""
+
+    def setUp(self):
+        super().setUp()
+        self.gerente = crear_gerente()
+        self.client.login(username=self.gerente.email, password=CLAVE)
+
+    def guardado(self):
+        return PerfilOrganizacion.objects.get()
+
+    def enviar(self, logo=None, quitar=False, htmx=False, **cambios):
+        """POST de la pestaña con lo guardado más ``cambios``, el archivo ``logo`` y, si ``quitar``, la casilla marcada."""
+        datos = organizacion(**cambios)
+        if logo is not None:
+            datos["logo"] = logo
+        if quitar:
+            datos["quitar_logo"] = "on"
+        return self.client.post(URL_ORGANIZACION, datos, **(HTMX if htmx else {}))
+
+    def con_logo(self):
+        """Deja un logo cargado y devuelve su nombre."""
+        with self.captureOnCommitCallbacks(execute=True):
+            self.enviar(logo=archivo_de_imagen("l.png", tamano=(600, 200)))
+        return self.guardado().logo.name
+
+    def test_flujo_principal_carga_el_logo_y_se_ve_en_la_pestana(self):
+        """ADM-MOD-ORG regla 4: se carga, se avisa «Se guardó la configuración.», y la pestaña muestra el logo con su casilla de quitar."""
+        respuesta = self.enviar(logo=archivo_de_imagen("l.png", tamano=(600, 200)))
+        self.assertRedirects(respuesta, URL_ORGANIZACION_PANTALLA, fetch_redirect_response=False)
+        nombre = self.guardado().logo.name
+        self.assertRegex(nombre, r"^logos/[0-9a-f-]{36}\.webp$")
+        pantalla = self.client.get(URL_ORGANIZACION_PANTALLA)
+        self.assertContains(pantalla, "Se guardó la configuración.")
+        self.assertContains(pantalla, "Logo actual de la organización")
+        self.assertContains(pantalla, 'name="quitar_logo"')
+        self.assertContains(pantalla, "Quitar el logo")
+
+    def test_flujo_principal_con_htmx_redirige_para_que_el_logo_se_vea_desde_esa_carga(self):
+        """D-48 y D-106 punto 14: con HTMX se responde 204 con ``HX-Redirect`` (recarga la página con el logo ya en el encabezado)."""
+        respuesta = self.enviar(logo=archivo_de_imagen("l.png"), htmx=True)
+        self.assertEqual(respuesta.status_code, 204)
+        self.assertEqual(respuesta["HX-Redirect"], URL_ORGANIZACION_PANTALLA)
+        self.assertTrue(self.guardado().logo.name.startswith("logos/"))
+
+    def test_post_b_cargar_el_logo_se_audita_sin_la_imagen(self):
+        """ADM-MOD-ORG postcondición b: queda «sin logo» → «con logo», sin el archivo."""
+        self.enviar(logo=archivo_de_imagen("l.png"))
+        registro = auditorias().get()
+        self.assertEqual(registro.detalle["cambios"], {"logo": {"antes": "sin logo", "despues": "con logo"}})
+
+    def test_flujo_principal_quitar_el_logo_borra_el_archivo_y_la_casilla_desaparece(self):
+        """D-106 punto 12: «Quitar el logo» deja la organización sin logo, borra el archivo y vuelve a ocultar la casilla."""
+        self.con_logo()
+        with self.captureOnCommitCallbacks(execute=True):
+            respuesta = self.enviar(quitar=True)
+        self.assertRedirects(respuesta, URL_ORGANIZACION_PANTALLA, fetch_redirect_response=False)
+        self.assertEqual(self.guardado().logo.name, "")
+        self.assertEqual(archivos_guardados("logos"), set())
+        pantalla = self.client.get(URL_ORGANIZACION_PANTALLA)
+        self.assertNotContains(pantalla, "Quitar el logo")
+        self.assertEqual(auditorias().order_by("id").last().detalle["cambios"], {"logo": {"antes": "con logo", "despues": "sin logo"}})
+
+    def test_regla_1_guardar_sin_elegir_un_archivo_no_toca_el_logo(self):
+        """D-106 punto 12 y D-28: guardar otro dato sin elegir un archivo ni marcar la casilla deja el logo y su archivo."""
+        nombre = self.con_logo()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.enviar(email_organizacion="a@b.com")
+        self.assertEqual(self.guardado().logo.name, nombre)
+        self.assertEqual(archivos_guardados("logos"), {nombre})
+
+    def test_regla_7_un_logo_invalido_marca_su_campo_y_conserva_lo_que_escribio_el_gerente(self):
+        """Regla 7 y D-106 punto 12: si el logo no es válido el error sale en el campo del logo, los demás campos conservan lo que
+        se escribió y no se guarda nada (ni el nombre). Con y sin HTMX."""
+        invalido = SimpleUploadedFile("l.png", b"no soy una imagen")
+        for htmx in (False, True):
+            with self.subTest(htmx=htmx):
+                invalido.seek(0)
+                respuesta = self.enviar(logo=invalido, htmx=htmx, nombre_organizacion="Vivero Nuevo", email_organizacion="x@y.com")
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertEqual(set(respuesta.context["form"].errors), {"logo"})
+                self.assertContains(respuesta, "No se pudo abrir ese archivo como imagen")
+                self.assertContains(respuesta, 'value="Vivero Nuevo"')
+                self.assertContains(respuesta, 'value="x@y.com"')
+                self.assertEqual("<title>" in respuesta.content.decode(), not htmx)
+        self.assertEqual(self.guardado().nombre_organizacion, organizacion()["nombre_organizacion"])
+        self.assertEqual(self.guardado().logo.name, "")
+        self.assertEqual(auditorias().count(), 0)
+
+    def test_regla_7_un_logo_nuevo_con_quitar_marcado_es_un_error_que_conserva_lo_escrito(self):
+        """Precisión de D-106 (punto 12): logo nuevo y «Quitar el logo» a la vez dan ``logo_y_quitar`` en el campo del logo; los
+        demás campos conservan lo que escribió el Gerente, la casilla sigue marcada y no se guarda nada."""
+        nombre = self.con_logo()
+        antes = auditorias().count()
+        respuesta = self.enviar(
+            logo=archivo_de_imagen("otro.png"), quitar=True, nombre_organizacion="Vivero Nuevo", direccion_organizacion="Calle 123"
+        )
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(set(respuesta.context["form"].errors), {"logo"})
+        self.assertEqual(respuesta.context["form"].errors["logo"].as_data()[0].code, "logo_y_quitar")
+        self.assertContains(respuesta, "Elegí un logo nuevo o marcá")
+        self.assertContains(respuesta, 'value="Vivero Nuevo"')
+        self.assertContains(respuesta, 'value="Calle 123"')
+        self.assertRegex(respuesta.content.decode(), r'name="quitar_logo"[^>]*checked')
+        self.assertContains(respuesta, "Logo actual de la organización")
+        self.assertEqual(self.guardado().logo.name, nombre)
+        self.assertNotEqual(self.guardado().nombre_organizacion, "Vivero Nuevo")
+        self.assertEqual(archivos_guardados("logos"), {nombre})
+        self.assertEqual(auditorias().count(), antes)
+
+    def test_regla_4_la_casilla_de_quitar_solo_se_muestra_si_hay_un_logo(self):
+        """D-106 punto 12: sin logo no hay casilla, tampoco al volver de un error; con logo sí."""
+        respuesta = self.enviar(logo=SimpleUploadedFile("l.png", b"no soy una imagen"))
+        self.assertNotContains(respuesta, "quitar_logo")
+        self.con_logo()
+        self.assertContains(self.client.get(URL_ORGANIZACION_PANTALLA), 'name="quitar_logo"')
+
+    def test_pre_a_solo_el_gerente_guarda_el_logo(self):
+        """Precondición a y SEG-13: un Agrónomo o un Capataz que envía el formulario recibe 403 y no queda ningún archivo."""
+        for cuenta in (crear_agronomo(), crear_capataz()):
+            with self.subTest(cuenta=cuenta):
+                self.client.logout()
+                self.client.login(username=cuenta.email, password=CLAVE)
+                self.assertEqual(self.enviar(logo=archivo_de_imagen("l.png")).status_code, 403)
+        self.assertEqual(archivos_guardados("logos"), set())
+        self.assertEqual(self.guardado().logo.name, "")

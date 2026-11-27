@@ -22,6 +22,17 @@ invernadero del Transportista. Solo se muestra lo que existe (D-25). Los botones
 
   <div class="card">
     <div class="card-title">Datos</div>
+    {# USR-CNS-USR regla 3 y USR-MOD-USR regla 8 (USR-07): la foto, si tiene. Quien gestiona la cuenta puede quitarla, nunca cambiarla. #}
+    <div class="photo-row">
+      {% include "core/_avatar.html" with cuenta=cuenta sigla=cuenta|sigla estilo="width:72px;height:72px;font-size:20px" alt="Foto de perfil de "|add:cuenta.get_full_name %}
+      <div>
+        {% if "quitar_foto" in acciones %}
+        <a class="btn btn-ghost btn-sm" href="{% url 'core:usuario_quitar_foto' cuenta.pk %}"
+           hx-get="{% url 'core:usuario_quitar_foto' cuenta.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Quitar foto</a>
+        {% endif %}
+        <div class="hint">{% if cuenta.foto_perfil %}Cada persona cambia su foto desde Mi perfil; acá solo se puede quitar.{% else %}Sin foto de perfil.{% endif %}</div>
+      </div>
+    </div>
     <dl class="dl">
       <dt>Nombre</dt><dd>{{ cuenta.first_name }}</dd>
       <dt>Apellido</dt><dd>{{ cuenta.last_name }}</dd>

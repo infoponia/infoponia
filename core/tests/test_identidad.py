@@ -121,3 +121,55 @@ class IdentidadEnElCorreoTests(TestCase):
             )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Vivero Los Álamos", mail.outbox[0].body)
+
+
+class LogoDeLaIdentidadTests(TestCase):
+    """D-106 puntos 14 y 15: ``Identidad`` suma ``logo_url`` (con ``None`` por defecto) y el marco lo muestra en lugar del ícono."""
+
+    def setUp(self):
+        crear_gerente()
+
+    def paginas(self):
+        sin_sesion = self.client.get(reverse("core:iniciar_sesion")).content.decode()
+        self.client.login(username="gerente@infoponia.com", password=CLAVE)
+        con_sesion = self.client.get(reverse("core:inicio")).content.decode()
+        return sin_sesion, con_sesion
+
+    def test_d106_identidad_con_dos_valores_sigue_funcionando(self):
+        """D-106 punto 15: ``Identidad("Nombre", "#336699")`` es válida y su ``logo_url`` es ``None``."""
+        identidad_vieja = Identidad("Nombre", "#336699")
+        self.assertEqual((identidad_vieja.nombre, identidad_vieja.color_principal), ("Nombre", "#336699"))
+        self.assertIsNone(identidad_vieja.logo_url)
+        self.assertEqual(Identidad("Nombre", "#336699", "https://x/logo.webp").logo_url, "https://x/logo.webp")
+
+    def test_d106_logo_de_la_organizacion_sale_de_la_identidad_registrada(self):
+        """D-106 punto 15: ``logo_de_la_organizacion()`` devuelve la URL; sin registrante, sin logo o con un valor raro, ``None``."""
+        with mock.patch.object(extensiones, "_IDENTIDAD", [lambda: Identidad("N", "#336699", "https://x/logo.webp")]):
+            self.assertEqual(identidad.logo_de_la_organizacion(), "https://x/logo.webp")
+        for registrante in (lambda: Identidad("N", "#336699"), lambda: Identidad("N", "#336699", ""), lambda: Identidad("N", "#336699", 5), lambda: None):
+            with self.subTest(registrante=registrante), mock.patch.object(extensiones, "_IDENTIDAD", [registrante]):
+                self.assertIsNone(identidad.logo_de_la_organizacion())
+        with mock.patch.object(extensiones, "_IDENTIDAD", []):
+            self.assertIsNone(identidad.logo_de_la_organizacion())
+
+    def test_d106_con_logo_el_encabezado_y_el_inicio_de_sesion_muestran_la_imagen(self):
+        """D-106 punto 14: con logo, el encabezado y la pantalla de inicio de sesión muestran la imagen en lugar del ícono."""
+        registrante = lambda: Identidad("Vivero", "#336699", "https://r2.example/logos/abc.webp?firma=1&vence=2")
+        with mock.patch.object(extensiones, "_IDENTIDAD", [registrante]):
+            for html in self.paginas():
+                self.assertIn('<div class="logo logo-imagen"><img src="https://r2.example/logos/abc.webp?firma=1&amp;vence=2" alt="" decoding="async"></div>', html)
+                self.assertNotIn('<div class="logo"><svg', html)
+
+    def test_d106_sin_logo_se_muestra_el_icono(self):
+        """D-106 punto 14: sin logo, el ícono de siempre, con y sin sesión."""
+        with mock.patch.object(extensiones, "_IDENTIDAD", [lambda: Identidad("Vivero", "#336699")]):
+            for html in self.paginas():
+                self.assertIn('<div class="logo"><svg', html)
+                self.assertNotIn("logo-imagen", html)
+
+    def test_d106_la_url_del_logo_se_escapa_en_el_html(self):
+        """D-106 punto 14: la URL va dentro de un atributo; una URL con comillas o etiquetas no puede romperlo."""
+        registrante = lambda: Identidad("Vivero", "#336699", 'x" onerror="alert(1)')
+        with mock.patch.object(extensiones, "_IDENTIDAD", [registrante]):
+            for html in self.paginas():
+                self.assertNotIn('onerror="alert(1)"', html)

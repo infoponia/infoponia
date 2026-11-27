@@ -25,6 +25,8 @@ from types import SimpleNamespace
 
 from django.core import mail
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import IntegrityError
 from django.http import Http404
 from django.test import Client, TestCase, TransactionTestCase, override_settings, tag
@@ -45,6 +47,9 @@ from core.models import (
 from core.tests.concurrencia import codigos, correr_a_la_vez, separar
 from core.tests.fabricas import (
     BACKEND_QUE_FALLA,
+    VaciaImagenesMixin,
+    archivo_de_imagen,
+    archivos_guardados,
     CLAVE,
     PATRON_INVITACION,
     afectado,
@@ -1774,3 +1779,239 @@ class UsrModUsrExtensionTests(TestCase):
             efecto = extensiones.aplicar_efectos_de_reactivacion_de_cuenta(gerente, cuenta)
 
         self.assertEqual(efecto, Efecto([], {}))
+
+
+class UsrModUsrQuitarFotoServicioTests(VaciaImagenesMixin, TestCase):
+    """USR-MOD-USR postcondición e y regla 8: quien gestiona la cuenta puede quitar su foto, pero no cambiarla. La quita no se
+    audita (postcondición d). Servicio: ``quitar_foto_de_cuenta(actor, cuenta_id)``."""
+
+    def setUp(self):
+        super().setUp()
+        self.gerente = crear_gerente()
+        self.cuenta = crear_cuenta(Capataz, email="capataz@infoponia.com")
+
+    def con_foto(self, cuenta):
+        """Le carga una foto a ``cuenta`` y devuelve su nombre."""
+        with self.captureOnCommitCallbacks(execute=True):
+            servicios.cambiar_foto_perfil(cuenta, archivo_de_imagen("f.png"))
+        return Usuario.objects.get(pk=cuenta.pk).foto_perfil.name
+
+    def foto_de(self, cuenta):
+        return Usuario.objects.get(pk=cuenta.pk).foto_perfil.name
+
+    def test_post_e_el_gerente_quita_la_foto_de_una_cuenta_de_su_alcance(self):
+        """Postcondición e y regla 8: la cuenta queda sin foto y el archivo se borra (al confirmar la transacción)."""
+        nombre = self.con_foto(self.cuenta)
+        with self.captureOnCommitCallbacks(execute=False) as pendientes:
+            servicios.quitar_foto_de_cuenta(self.gerente, self.cuenta.pk)
+            self.assertTrue(default_storage.exists(nombre))  # el archivo se borra después de confirmar
+        for pendiente in pendientes:
+            pendiente()
+        self.assertEqual(self.foto_de(self.cuenta), "")
+        self.assertFalse(default_storage.exists(nombre))
+
+    def test_post_d_la_quita_de_la_foto_no_se_audita(self):
+        """Postcondición d y SEG-14: la quita de la foto no genera registro de auditoría."""
+        self.con_foto(self.cuenta)
+        antes = RegistroAuditoria.objects.count()
+        with self.captureOnCommitCallbacks(execute=True):
+            servicios.quitar_foto_de_cuenta(self.gerente, self.cuenta.pk)
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
+
+    def test_regla_8_no_se_puede_cambiar_la_foto_de_otra_cuenta(self):
+        """Regla 8: quien gestiona la cuenta quita la foto, pero no la cambia: ``modificar_usuario`` no recibe una foto."""
+        with self.assertRaises(TypeError):
+            servicios.modificar_usuario(
+                self.gerente, self.cuenta.pk, "Nombre", "Apellido", "capataz@infoponia.com", foto_perfil=archivo_de_imagen("f.png")
+            )
+        self.assertEqual(self.foto_de(self.cuenta), "")
+
+    def test_regla_1_una_cuenta_fuera_del_alcance_da_403_y_conserva_su_foto(self):
+        """Regla 1 y SEG-13: el Gerente no gestiona la cuenta de un Administrador."""
+        admin = crear_administrador()
+        nombre = self.con_foto(admin)
+        with self.assertRaises(PermissionDenied):
+            servicios.quitar_foto_de_cuenta(self.gerente, admin.pk)
+        self.assertEqual(self.foto_de(admin), nombre)
+        self.assertTrue(default_storage.exists(nombre))
+
+    def test_regla_1_un_id_inexistente_da_404(self):
+        """Regla 1 (D-28): un id que no existe da ``Http404``."""
+        with self.assertRaises(Http404):
+            servicios.quitar_foto_de_cuenta(self.gerente, 999999)
+
+    def test_pre_a_quien_no_gestiona_no_quita_la_foto(self):
+        """Precondición a: solo un Gerente o un Administrador activos; un Capataz que prueba la URL recibe 403."""
+        otro = crear_cuenta(Capataz, email="otro@infoponia.com")
+        nombre = self.con_foto(self.cuenta)
+        with self.assertRaises(PermissionDenied):
+            servicios.quitar_foto_de_cuenta(otro, self.cuenta.pk)
+        self.assertEqual(self.foto_de(self.cuenta), nombre)
+
+    def test_regla_1_el_administrador_quita_la_foto_del_gerente_y_la_suya(self):
+        """Regla 1 (D-16): el Administrador gestiona al Gerente y a los Administradores, incluido él mismo."""
+        admin = crear_administrador()
+        self.con_foto(self.gerente)
+        self.con_foto(admin)
+        with self.captureOnCommitCallbacks(execute=True):
+            servicios.quitar_foto_de_cuenta(admin, self.gerente.pk)
+            servicios.quitar_foto_de_cuenta(admin, admin.pk)
+        self.assertEqual(self.foto_de(self.gerente), "")
+        self.assertEqual(self.foto_de(admin), "")
+
+    def test_regla_10_se_puede_quitar_la_foto_de_una_cuenta_inactiva(self):
+        """Regla 10 (D-28): los datos de una cuenta inactiva también se pueden modificar; su foto, quitar."""
+        inactiva = crear_cuenta(Capataz, email="baja@infoponia.com", activo=False)
+        Usuario.objects.filter(pk=inactiva.pk).update(foto_perfil="fotos_perfil/vieja.webp")
+        default_storage.save("fotos_perfil/vieja.webp", ContentFile(b"x"))
+        with self.captureOnCommitCallbacks(execute=True):
+            servicios.quitar_foto_de_cuenta(self.gerente, inactiva.pk)
+        self.assertEqual(self.foto_de(inactiva), "")
+
+    def test_post_e_quitar_una_foto_que_no_hay_no_falla(self):
+        """Postcondición e: sin foto no hay nada que quitar; no falla ni cambia nada."""
+        with self.captureOnCommitCallbacks(execute=True):
+            servicios.quitar_foto_de_cuenta(self.gerente, self.cuenta.pk)
+        self.assertEqual(self.foto_de(self.cuenta), "")
+
+    def test_d106_si_la_transaccion_se_deshace_el_archivo_queda(self):
+        """D-106 punto 7: si la quita no se confirma, el archivo no se borra."""
+        nombre = self.con_foto(self.cuenta)
+        with mock.patch.object(Usuario, "save", side_effect=RuntimeError("falla la base")):
+            with self.captureOnCommitCallbacks(execute=True):
+                with self.assertRaises(RuntimeError):
+                    servicios.quitar_foto_de_cuenta(self.gerente, self.cuenta.pk)
+        self.assertEqual(self.foto_de(self.cuenta), nombre)
+        self.assertTrue(default_storage.exists(nombre))
+
+    def test_d30_quitar_foto_solo_se_ofrece_si_la_cuenta_tiene_foto_y_esta_en_el_alcance(self):
+        """D-30: ``acciones_permitidas`` suma «quitar_foto» solo cuando hay foto y la cuenta es del alcance de quien mira."""
+        self.assertNotIn("quitar_foto", servicios.acciones_permitidas(self.gerente, self.cuenta))
+        self.con_foto(self.cuenta)
+        cuenta = Usuario.objects.get(pk=self.cuenta.pk)
+        self.assertIn("quitar_foto", servicios.acciones_permitidas(self.gerente, cuenta))
+        otro = crear_cuenta(Capataz, email="otro@infoponia.com")
+        self.assertEqual(servicios.acciones_permitidas(otro, cuenta), frozenset())
+        admin = crear_administrador()
+        self.con_foto(admin)
+        self.assertNotIn("quitar_foto", servicios.acciones_permitidas(self.gerente, Usuario.objects.get(pk=admin.pk)))
+
+
+class UsrModUsrQuitarFotoVistaTests(VaciaImagenesMixin, TestCase):
+    """La ficha con la foto y «Quitar foto» (USR-CNS-USR regla 3, USR-MOD-USR postcondición e y regla 8) con el cliente de prueba."""
+
+    def setUp(self):
+        super().setUp()
+        self.gerente = crear_gerente()
+        self.cuenta = crear_cuenta(Capataz, email="capataz@infoponia.com", nombre="Juan", apellido="Pérez")
+        self.client.force_login(self.gerente)
+
+    def poner_foto(self, cuenta):
+        with self.captureOnCommitCallbacks(execute=True):
+            servicios.cambiar_foto_perfil(cuenta, archivo_de_imagen("f.png"))
+
+    def foto(self, cuenta=None):
+        return Usuario.objects.get(pk=(cuenta or self.cuenta).pk).foto_perfil.name
+
+    def test_flujo_principal_la_ficha_sin_foto_no_ofrece_quitarla(self):
+        """Regla 3 de USR-CNS-USR y D-30: sin foto se ve la sigla y no hay botón «Quitar foto»."""
+        respuesta = self.client.get(reverse("core:usuario", args=[self.cuenta.pk]))
+        self.assertContains(respuesta, "Sin foto de perfil.")
+        self.assertNotContains(respuesta, "Quitar foto")
+        self.assertNotContains(respuesta, 'class="avatar photo"')
+
+    def test_flujo_principal_la_ficha_con_foto_la_muestra_y_ofrece_quitarla(self):
+        """Regla 3 de USR-CNS-USR y regla 8 de USR-MOD-USR: se ve la foto y «Quitar foto»; nunca un campo para cambiarla."""
+        self.poner_foto(self.cuenta)
+        respuesta = self.client.get(reverse("core:usuario", args=[self.cuenta.pk]))
+        self.assertContains(respuesta, 'class="avatar photo"')
+        self.assertContains(respuesta, "Foto de perfil de Juan Pérez")
+        self.assertContains(respuesta, "Quitar foto")
+        self.assertContains(respuesta, "solo se puede quitar")
+        self.assertNotContains(respuesta, 'type="file"')
+
+    def test_flujo_principal_abrir_la_ventana_no_cambia_nada(self):
+        """D-28: abrir la confirmación (GET) no quita la foto; con HTMX llega solo la ventana y sin JavaScript, la ficha abierta."""
+        self.poner_foto(self.cuenta)
+        nombre = self.foto()
+        url = reverse("core:usuario_quitar_foto", args=[self.cuenta.pk])
+        htmx = self.client.get(url, HTTP_HX_REQUEST="true")
+        self.assertContains(htmx, "¿Quitar la foto de perfil?")
+        self.assertNotContains(htmx, "<html")
+        completa = self.client.get(url)
+        self.assertContains(completa, "¿Quitar la foto de perfil?")
+        self.assertContains(completa, "<html")
+        self.assertEqual(self.foto(), nombre)
+
+    def test_flujo_principal_confirmar_quita_la_foto_y_avisa(self):
+        """USR-MOD-USR postcondición e: el POST quita la foto, borra el archivo y vuelve a la ficha con un aviso breve."""
+        self.poner_foto(self.cuenta)
+        url = reverse("core:usuario_quitar_foto", args=[self.cuenta.pk])
+        with self.captureOnCommitCallbacks(execute=True):
+            respuesta = self.client.post(url, follow=True)
+        self.assertRedirects(respuesta, reverse("core:usuario", args=[self.cuenta.pk]))
+        self.assertContains(respuesta, "Se quitó la foto de perfil de Juan Pérez.")
+        self.assertEqual(self.foto(), "")
+        self.assertEqual(archivos_guardados(), set())
+
+    def test_post_d_quitar_la_foto_no_se_audita(self):
+        """USR-MOD-USR postcondición d: la quita no deja registro de auditoría."""
+        self.poner_foto(self.cuenta)
+        antes = RegistroAuditoria.objects.count()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("core:usuario_quitar_foto", args=[self.cuenta.pk]))
+        self.assertEqual(RegistroAuditoria.objects.count(), antes)
+
+    def test_regla_8_modificar_datos_no_permite_cambiar_la_foto(self):
+        """Regla 8: la pantalla de modificar no tiene campo de archivo y un ``foto`` enviado a mano se ignora."""
+        self.poner_foto(self.cuenta)
+        nombre = self.foto()
+        url = reverse("core:usuario_modificar", args=[self.cuenta.pk])
+        self.assertNotContains(self.client.get(url), 'type="file"')
+        self.client.post(
+            url,
+            {"nombre": "Juan", "apellido": "Pérez", "email": "capataz@infoponia.com", "telefono": "", "foto": archivo_de_imagen("g.png")},
+        )
+        self.assertEqual(self.foto(), nombre)
+
+    def test_ext_sin_foto_no_hay_nada_que_confirmar(self):
+        """Sin foto, abrir o confirmar la quita vuelve a la ficha sin ventana."""
+        url = reverse("core:usuario_quitar_foto", args=[self.cuenta.pk])
+        for respuesta in (self.client.get(url), self.client.post(url)):
+            self.assertRedirects(respuesta, reverse("core:usuario", args=[self.cuenta.pk]))
+
+    def test_regla_1_fuera_del_alcance_da_403_y_la_foto_queda(self):
+        """Regla 1 y SEG-13: el Gerente no quita la foto de un Administrador; un id inexistente da 404."""
+        admin = crear_administrador()
+        self.poner_foto(admin)
+        url = reverse("core:usuario_quitar_foto", args=[admin.pk])
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.assertTrue(self.foto(admin).startswith("fotos_perfil/"))
+        self.assertEqual(self.client.get(reverse("core:usuario_quitar_foto", args=[999999])).status_code, 404)
+
+    def test_seg13_quien_no_gestiona_recibe_403(self):
+        """SEG-13: un Capataz que prueba la dirección recibe 403 y la foto de la otra cuenta queda."""
+        self.poner_foto(self.cuenta)
+        otro = crear_cuenta(Capataz, email="otro@infoponia.com")
+        self.client.force_login(otro)
+        url = reverse("core:usuario_quitar_foto", args=[self.cuenta.pk])
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.assertTrue(self.foto().startswith("fotos_perfil/"))
+
+    def test_regla_1_el_administrador_quita_la_foto_del_gerente(self):
+        """Regla 1 (D-16): el Administrador ve «Quitar foto» en la ficha del Gerente y puede quitarla."""
+        self.poner_foto(self.gerente)
+        self.client.force_login(crear_administrador())
+        ficha = self.client.get(reverse("core:usuario", args=[self.gerente.pk]))
+        self.assertContains(ficha, "Quitar foto")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(reverse("core:usuario_quitar_foto", args=[self.gerente.pk]))
+        self.assertEqual(self.foto(self.gerente), "")
+
+    def test_regla_10_la_ficha_de_una_cuenta_inactiva_con_foto_tambien_la_ofrece(self):
+        """Regla 10 (D-28): los datos de una cuenta inactiva se pueden modificar; su foto, quitar."""
+        inactiva = crear_cuenta(Capataz, email="baja@infoponia.com", activo=False)
+        Usuario.objects.filter(pk=inactiva.pk).update(foto_perfil="fotos_perfil/vieja.webp")
+        default_storage.save("fotos_perfil/vieja.webp", ContentFile(b"x"))
+        self.assertContains(self.client.get(reverse("core:usuario", args=[inactiva.pk])), "Quitar foto")

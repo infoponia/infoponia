@@ -157,11 +157,13 @@
   // de restablecer, reactivar y baja): en los dos casos se llama a abrirVentana.
   var enfocables = "a[href], button:not([hidden]):not(:disabled), input, select, textarea";
 
-  function abrirVentana(ventana) {
+  // ``alCerrar`` (opcional) se llama al cerrarla por cualquier vía (Cancelar, Esc…). Devuelve la función que la cierra.
+  function abrirVentana(ventana, alCerrar) {
     var fondo = document.querySelectorAll(".shell > header, .shell > aside, .shell > main, .shell > footer");
     var disparador = document.activeElement; // a quien se le devuelve el foco al cerrar
 
     function cerrar() {
+      if (!ventana.isConnected) return; // ya cerrada
       ventana.remove();
       fondo.forEach(function (parte) {
         parte.removeAttribute("inert");
@@ -175,6 +177,7 @@
         if (!destino.matches(enfocables)) destino.tabIndex = -1;
         destino.focus();
       }
+      if (alCerrar) alCerrar();
     }
 
     function teclado(e) {
@@ -208,7 +211,13 @@
     });
     var inicial = ventana.querySelector("[data-foco-inicial]") || ventana.querySelector(enfocables);
     if (inicial) inicial.focus();
+    return cerrar;
   }
+
+  // La usa el editor de encuadre de la foto (encuadre_foto.js): mismas reglas que las demás ventanas (fondo inerte, foco
+  // atrapado, Esc, devolución del foco).
+  window.InfoPonia = window.InfoPonia || {};
+  window.InfoPonia.abrirVentana = abrirVentana;
 
   var ventanaEnLaPagina = document.querySelector("[data-ventana]");
   if (ventanaEnLaPagina) abrirVentana(ventanaEnLaPagina);

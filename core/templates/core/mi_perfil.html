@@ -20,9 +20,58 @@ pide la contraseña actual). Tarea 06a.
 
   <div class="card">
     <div class="card-title">Mis datos</div>
-    {# Tarea 07 (SEG-19): acá van la foto y sus botones. #}
+    {# USR-07 (SEG-19, USR-GST-PRF regla 5): la foto y sus botones. Con JavaScript, al elegir el archivo se abre el editor de encuadre #}
+    {# (encuadre_foto.js) y «Guardar foto» completa los tres campos ocultos; sin JavaScript queda el botón «Guardar foto» (recorte #}
+    {# central). «Quitar» es otro formulario (no se anidan): el botón lo apunta con form=. #}
     <div class="photo-row">
-      <div class="avatar" style="width:72px;height:72px;font-size:20px">{{ sigla }}</div>
+      {% include "core/_avatar.html" with cuenta=user estilo="width:72px;height:72px;font-size:20px" alt="Tu foto de perfil" %}
+      <div>
+        <form method="post" action="{% url 'core:cambiar_mi_foto' %}" enctype="multipart/form-data" data-foto-form data-enviando="Subiendo…">
+          {% csrf_token %}
+          <div class="row">
+            <label class="btn btn-ghost btn-sm" for="f-file">{% if user.foto_perfil %}Cambiar foto{% else %}Elegir foto{% endif %}</label>
+            <label class="btn btn-ghost btn-sm cam" for="f-cam">Tomar foto</label>
+            {% if user.foto_perfil %}<button class="btn btn-ghost btn-sm" type="submit" form="form-quitar-foto" data-enviando="Quitando…">Quitar</button>{% endif %}
+          </div>
+          <input class="sr" type="file" id="f-file" name="foto" accept="image/jpeg,image/png,image/webp" data-foto>
+          <input class="sr" type="file" id="f-cam" name="foto_camara" accept="image/*" capture="user" data-foto>
+          {# El encuadre elegido en el editor: enteros en píxeles de la imagen ya orientada. Vacíos = recorte central. #}
+          <input type="hidden" name="recorte_x" value="">
+          <input type="hidden" name="recorte_y" value="">
+          <input type="hidden" name="recorte_lado" value="">
+          <noscript>
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Guardar foto</button>
+          </noscript>
+          <div class="hint">JPG, PNG o WebP, de hasta 5 MB. Al elegirla, la encuadrás en el círculo.</div>
+          <noscript><div class="hint">Sin JavaScript no se puede encuadrar: la foto se recorta en forma cuadrada, desde el centro.</div></noscript>
+          <div class="hint" role="status" data-foto-estado></div>
+        </form>
+        {# Editor de encuadre (USR-07): la ventana se abre con JavaScript al elegir un archivo. Guía circular = cómo se ve el avatar. #}
+        <template data-encuadre>
+          <div class="ov" data-ventana>
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="encuadre-titulo">
+              <h2 id="encuadre-titulo">Encuadrá tu foto</h2>
+              <p>Arrastrá la foto o usá las flechas; acercá o alejá con + y −.</p>
+              <div class="encuadre" data-encuadre-escenario tabindex="0" data-foco-inicial role="group"
+                   aria-label="Encuadre de la foto: flechas para mover, más y menos para acercar o alejar">
+                <img data-encuadre-imagen alt="" draggable="false">
+                <div class="encuadre-guia" aria-hidden="true"></div>
+              </div>
+              <div class="encuadre-zoom">
+                <button class="btn btn-ghost btn-sm" type="button" aria-label="Alejar" data-encuadre-menos>−</button>
+                <button class="btn btn-ghost btn-sm" type="button" aria-label="Acercar" data-encuadre-mas>+</button>
+              </div>
+              <div class="acts">
+                <button class="btn btn-ghost" type="button" data-cerrar-ventana>Cancelar</button>
+                <button class="btn btn-primary" type="button" data-encuadre-guardar>Guardar foto</button>
+              </div>
+            </div>
+          </div>
+        </template>
+        {% if user.foto_perfil %}
+        <form id="form-quitar-foto" method="post" action="{% url 'core:quitar_mi_foto' %}">{% csrf_token %}</form>
+        {% endif %}
+      </div>
     </div>
     <dl class="dl">
       <dt>Nombre</dt><dd>{{ user.first_name }}</dd>
@@ -114,6 +163,7 @@ pide la contraseña actual). Tarea 06a.
   {% endif %}
 </div>
 <script src="{% static_v 'core/js/politica_contrasena.js' %}" defer></script>
+<script src="{% static_v 'core/js/encuadre_foto.js' %}" defer></script>
 {% endblock %}
 
 {% block ventanas %}

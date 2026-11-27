@@ -38,6 +38,12 @@ jobs:
       DJANGO_SECRET_KEY: clave-falsa-de-ci-no-usar-en-produccion
       DJANGO_DEBUG: "0"
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      # USR-07 (D-106 punto 4): con DJANGO_DEBUG=0 el proyecto no arranca sin las cuatro variables de R2. Son falsas: ninguna prueba
+      # llama a R2 (en las pruebas se usa InMemoryStorage) y los pasos `check` y `makemigrations --check` solo necesitan que arranque.
+      R2_ACCOUNT_ID: cuenta-falsa-de-ci
+      R2_ACCESS_KEY_ID: clave-falsa-de-ci
+      R2_SECRET_ACCESS_KEY: secreto-falso-de-ci
+      R2_BUCKET: bucket-falso-de-ci
 
     steps:
       # Descarga el código del repositorio.

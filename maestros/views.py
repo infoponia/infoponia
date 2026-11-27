@@ -696,7 +696,10 @@ def _contexto_de_configuracion(pestana, form_parametros=None, form_perfil=None, 
     en los parámetros, la advertencia de la regla 5 junto al formulario."""
     contexto = {"pestana": pestana}
     if pestana == PESTANA_ORGANIZACION:
-        contexto["form"] = form_perfil or FormularioPerfil(perfil=api_perfil.obtener())
+        guardado = api_perfil.obtener()
+        contexto["form"] = form_perfil or FormularioPerfil(perfil=guardado)
+        # D-106 punto 12: la casilla «Quitar el logo» se muestra solo si ya hay un logo cargado (con su URL firmada).
+        contexto["logo_actual"] = guardado.logo.url if guardado.logo else None
     else:
         configuracion = api_configuracion.obtener()
         form = form_parametros or FormularioConfiguracion(configuracion=configuracion)
@@ -728,7 +731,7 @@ def configuracion(request):
 def _guardar(request, pestana, formulario, servicio, plantilla_fragmento):
     """Lo común de las dos pestañas: valida con el servicio (todo o nada), y si sale bien avisa y recarga la pantalla; si no,
     muestra los errores por campo (el fragmento con HTMX, la página entera sin JavaScript)."""
-    form = formulario(request.POST)
+    form = formulario(request.POST, request.FILES)
     form.is_valid()  # los campos son de texto libre; las reglas son del servicio
     try:
         servicio(request.user, **form.datos_del_servicio())
@@ -803,7 +806,9 @@ def configuracion_guardar_parametros(request):
 @never_cache
 @vary_on_headers("HX-Request")
 def configuracion_guardar_organizacion(request):
-    """Guarda la pestaña «Organización» (ADM-MOD-ORG): todo o nada. Sin el campo del logo (D-45)."""
+    """Guarda la pestaña «Organización» (ADM-MOD-ORG): todo o nada, con el logo (D-106 puntos 10 a 12). Si el servicio rechaza algo
+    (incluido el logo), la pestaña vuelve con los errores y con lo que escribió el Gerente en los demás campos; un archivo
+    elegido no puede conservarse (el navegador no lo permite): hay que elegirlo otra vez."""
     return _guardar(
         request,
         PESTANA_ORGANIZACION,

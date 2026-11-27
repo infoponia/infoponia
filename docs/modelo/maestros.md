@@ -423,7 +423,7 @@ fila, creada por migración con el nombre inicial `NOMBRE_ORGANIZACION` (MD-89):
 | `telefonoOrganizacion` | opcional; formato de D-21 (8 a 15 dígitos, espacios y `+ - ( )`) | → `telefono_organizacion` |
 | `emailOrganizacion` | opcional; formato de email | → `email_organizacion` |
 | `direccionOrganizacion` | opcional, texto hasta 200 | → `direccion_organizacion`. Es texto libre, no una `Direccion` de Georef |
-| `logo` | — | **Fuera de la ronda (D-45).** No se crea el campo |
+| `logo` | — | ~~Fuera de la ronda (D-45).~~ **Hecho en USR-07 (27/11/2026, D-106):** imagen opcional, WebP de 512 px de lado mayor como máximo, sin recortar y con transparencia, en `logos/<uuid4>.webp`, en R2 (disco en desarrollo) → `logo` |
 | `colorPrimario`, `colorSecundario`, `colorTerciario`, `colorCuaternario` | opcionales; `#RRGGBB` | MD-93. → `color_primario`… `color_cuaternario` (los nombres del 3.º y 4.º, a confirmar en el modelo). Se cargan en orden (regla 5). Formato precisado por D-48 |
 
 Sin asociaciones. El cálculo del CUIT (módulo 11 con pesos 5,4,3,2,7,6,5,4,3,2) es el de `cuitOk` del prototipo.

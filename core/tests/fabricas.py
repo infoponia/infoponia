@@ -175,3 +175,77 @@ class BackendQueFalla(BaseEmailBackend):
 
 
 BACKEND_QUE_FALLA = "core.tests.fabricas.BackendQueFalla"
+
+
+# ---- Imágenes de prueba (USR-07, D-106): se arman en memoria con Pillow, sin archivos en el repo ----
+
+
+CUADRANTES = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0))  # arriba-izq. rojo, arriba-der. verde, abajo-izq. azul, abajo-der. amarillo
+
+
+def imagen_en_bytes(
+    formato="PNG", tamano=(100, 100), color=(200, 30, 30), modo="RGB", orientacion=None, mitades=None, cuadrantes=None
+):
+    """Bytes de una imagen de ``tamano`` y ``formato``. ``orientacion`` escribe la etiqueta EXIF de orientación (y una de
+    «fabricante», para comprobar que se descarta); ``mitades=(color_izq, color_der)`` pinta la mitad izquierda y la derecha;
+    ``cuadrantes=(arriba_izq, arriba_der, abajo_izq, abajo_der)`` (por ejemplo ``CUADRANTES``) pinta los cuatro cuadrantes, para
+    comprobar con píxeles qué zona se recortó (USR-07, editor de encuadre)."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    imagen = Image.new(modo, tamano, color)
+    if mitades:
+        for x in range(tamano[0]):
+            for y in range(tamano[1]):
+                imagen.putpixel((x, y), mitades[0] if x < tamano[0] // 2 else mitades[1])
+    if cuadrantes:
+        ancho, alto = tamano
+        medio_x, medio_y = ancho // 2, alto // 2
+        cajas = ((0, 0, medio_x, medio_y), (medio_x, 0, ancho, medio_y), (0, medio_y, medio_x, alto), (medio_x, medio_y, ancho, alto))
+        for caja, color_del_cuadrante in zip(cajas, cuadrantes):
+            imagen.paste(color_del_cuadrante, caja)
+    parametros = {}
+    if orientacion:
+        exif = Image.Exif()
+        exif[0x0112] = orientacion
+        exif[0x010F] = "Telefono de prueba"
+        parametros["exif"] = exif
+    salida = BytesIO()
+    imagen.save(salida, formato, **parametros)
+    return salida.getvalue()
+
+
+def archivo_de_imagen(nombre="foto.png", **datos):
+    """Un ``SimpleUploadedFile`` con una imagen de ``imagen_en_bytes`` (el formato sale de la extensión de ``nombre`` si
+    no se pasa ``formato``)."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    formato = datos.pop("formato", {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP", "gif": "GIF"}[nombre.rsplit(".", 1)[-1]])
+    return SimpleUploadedFile(nombre, imagen_en_bytes(formato=formato, **datos))
+
+
+def archivos_guardados(carpeta="fotos_perfil"):
+    """Nombres de los archivos que hay hoy en ``carpeta`` del almacenamiento (en las pruebas, InMemoryStorage)."""
+    from django.core.files.storage import default_storage
+
+    try:
+        return {f"{carpeta}/{nombre}" for nombre in default_storage.listdir(carpeta)[1]}
+    except FileNotFoundError:
+        return set()
+
+
+class VaciaImagenesMixin:
+    """Mixin de pruebas: al terminar cada prueba vacía las carpetas de imágenes, para que ninguna dependa de lo que dejó otra."""
+
+    def setUp(self):
+        super().setUp()
+        self.addCleanup(self._vaciar_imagenes)
+
+    @staticmethod
+    def _vaciar_imagenes():
+        from django.core.files.storage import default_storage
+
+        for carpeta in ("fotos_perfil", "logos"):
+            for nombre in archivos_guardados(carpeta):
+                default_storage.delete(nombre)
