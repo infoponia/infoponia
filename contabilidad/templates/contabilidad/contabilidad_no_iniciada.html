@@ -1,0 +1,16 @@
+{% extends base_de_la_pagina %}{% load iconos %}
+{% comment %}Página de «la contabilidad no está iniciada» (CON-INI-EJE, regla 9 y extensión 1b; tarea CON-05) para un pedido común (sin HTMX). La arma `ContabilidadNoIniciadaMiddleware`.
+Recibe «titulo», «texto», «puede_iniciar», «url_iniciar» (ya con `?volver=` si el Referer es del mismo sitio), «url_cerrar» y «base_de_la_pagina» (con sesión o, para un enlace externo, sin sesión).{% endcomment %}
+{% block titulo %}No se pudo registrar · InfoPonia{% endblock %}
+{% block contenido %}
+{% if base_de_la_pagina == "core/base_con_sesion.html" %}<div class="page">{% endif %}
+  <h1>{{ titulo }}</h1>
+  <div style="margin:12px 0">
+    <div class="alert alert-danger" role="alert">{% icono "warn" 16 %}<div>{{ texto }}</div></div>
+  </div>
+  <div class="row">
+    {% if puede_iniciar %}<a class="btn btn-primary" href="{{ url_iniciar }}">Iniciar ejercicio</a>{% endif %}
+    {% if url_cerrar %}<a class="btn btn-ghost" href="{{ url_cerrar }}">Cerrar</a>{% endif %}
+  </div>
+{% if base_de_la_pagina == "core/base_con_sesion.html" %}</div>{% endif %}
+{% endblock %}

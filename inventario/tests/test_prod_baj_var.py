@@ -42,6 +42,7 @@ from inventario.tests.fabricas import (
 from maestros.extensiones import Impedimento
 from maestros.models import Alerta, Ciclo, EtapaProductiva, Variedad
 from maestros.tests.fabricas import codigos_de, crear_agronomo, crear_cultivo, crear_invernadero, error_de
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 variedades = perezoso("inventario.servicios.variedades")
 iin_servicio = perezoso("inventario.servicios.insumos_invernadero")
@@ -334,6 +335,7 @@ class SemillaAjustableTrasLaBajaTests(BaseDeAjustes, TestCase):
     inventario.md, «Diferencias» n.º 6): el stock que queda se descarta con un ajuste porque la existencia sigue activa."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.preparar()
         self.variedad = variedad_con_semilla(crear_cultivo("Lechuga"), "Crespa")
         self.iin_semilla = existencia(self.variedad.semilla, self.invernadero, minimo=5, precio="3")

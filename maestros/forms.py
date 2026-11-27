@@ -388,8 +388,8 @@ class FormularioConfiguracionIot(forms.Form):
 
 
 class FormularioPerfil(forms.Form):
-    """Pestaña «Organización» (ADM-MOD-ORG): los datos y hasta cuatro colores. Sin logo (D-45). Las reglas son del servicio
-    (``maestros/servicios/perfil.py``)."""
+    """Pestaña «Organización» (ADM-MOD-ORG): los datos, hasta cuatro colores y el logo (D-106 puntos 10 a 12). Las reglas son del
+    servicio (``maestros/servicios/perfil.py``): acá el archivo solo se recibe, no se valida."""
 
     nombre_organizacion = _texto("Nombre", 120)
     cuit_organizacion = _texto("CUIT", 20)
@@ -400,6 +400,12 @@ class FormularioPerfil(forms.Form):
     color_secundario = _texto("Color 2", 7, placeholder="Sin color · Ej. #1A6B3C")
     color_terciario = _texto("Color 3", 7, placeholder="Sin color · Ej. #1A6B3C")
     color_cuaternario = _texto("Color 4", 7, placeholder="Sin color · Ej. #1A6B3C")
+    logo = forms.FileField(
+        label="Logo (opcional)",
+        required=False,
+        widget=forms.FileInput(attrs={"class": "field-input", "accept": "image/jpeg,image/png,image/webp"}),
+    )
+    quitar_logo = forms.BooleanField(label="Quitar el logo", required=False)
 
     def __init__(self, *args, perfil=None, **kwargs):
         if perfil is not None and not args and "data" not in kwargs:
@@ -418,5 +424,7 @@ class FormularioPerfil(forms.Form):
         return resultado
 
     def datos_del_servicio(self):
-        """Los argumentos de ``modificar_perfil`` (sin el actor): todos los datos, tal como se escribieron."""
-        return {campo: self.cleaned_data.get(campo, "") for campo in perfil_servicio.CAMPOS}
+        """Los argumentos de ``modificar_perfil`` (sin el actor): todos los datos, tal como se escribieron, el archivo del logo
+        (``None`` si no se eligió uno) y la casilla «Quitar el logo»."""
+        datos = {campo: self.cleaned_data.get(campo, "") for campo in perfil_servicio.CAMPOS}
+        return datos | {"logo": self.cleaned_data.get("logo"), "quitar_logo": bool(self.cleaned_data.get("quitar_logo"))}

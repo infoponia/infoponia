@@ -17,6 +17,7 @@ from inventario.tests.ajustes_comunes import RECUENTO, ROTURA, VENCIMIENTO, Base
 from inventario.tests.fabricas import categoria_del_sistema, existencia, insumo, lote, perezoso
 from maestros.models import Alerta
 from maestros.tests.fabricas import codigos_de, error_de
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 iin_servicio = perezoso("inventario.servicios.insumos_invernadero")
 D = Decimal
@@ -25,6 +26,7 @@ BAJO_MINIMO = "inv_insumo_bajo_minimo"
 
 class CmpAjtStkSemillaInactivaTests(BaseDeAjustes, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.preparar()
         self.semilla = insumo(
             "Semilla de lechuga", tipo=categoria_del_sistema("semillas"), unidad="unidad", controla_vencimiento=True

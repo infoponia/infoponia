@@ -788,8 +788,9 @@ class ConfiguracionOperativa(models.Model):
 
 
 class PerfilOrganizacion(models.Model):
-    """Identidad de la organización (ADM-MOD-ORG, D-48). Singleton como ``ConfiguracionOperativa``. Sin logo (D-45). Los
-    colores van en orden: el primero es el principal y tiñe el sistema."""
+    """Identidad de la organización (ADM-MOD-ORG, D-48). Singleton como ``ConfiguracionOperativa``. Los colores van en orden:
+    el primero es el principal y tiñe el sistema. El logo (USR-07, D-106 puntos 10 a 15; reemplaza a D-45) es opcional: lo deja
+    ``core.imagenes`` (WebP, lado mayor de 512 px, ``logos/<uuid4>.webp``) y lo maneja ``maestros.servicios.perfil``."""
 
     singleton = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
     nombre_organizacion = models.CharField("nombre", max_length=120)
@@ -801,6 +802,7 @@ class PerfilOrganizacion(models.Model):
     color_secundario = models.CharField("color 2", max_length=7, blank=True, default="")
     color_terciario = models.CharField("color 3", max_length=7, blank=True, default="")
     color_cuaternario = models.CharField("color 4", max_length=7, blank=True, default="")
+    logo = models.ImageField("logo", upload_to="logos/", blank=True, default="")
 
     class Meta:
         verbose_name = "Perfil de la organización"

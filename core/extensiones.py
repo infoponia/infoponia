@@ -106,8 +106,9 @@ def secciones_de_inicio(usuario):
 # no puede importarlo (regla A1 de D-37). ``maestros`` registra en ``ready()`` una función que devuelve el perfil
 # guardado (lo hace MAE-04); ``core`` la consulta sin conocerla.
 
-# El nombre y el color principal (``#RRGGBB`` o vacío) de la organización.
-Identidad = namedtuple("Identidad", "nombre color_principal")
+# El nombre, el color principal (``#RRGGBB`` o vacío) y la URL del logo de la organización. ``logo_url`` (USR-07, D-106 punto 15)
+# vale ``None`` por defecto, así las llamadas con dos valores, ``Identidad("Nombre", "#336699")``, siguen funcionando.
+Identidad = namedtuple("Identidad", "nombre color_principal logo_url", defaults=(None,))
 
 _IDENTIDAD = []
 

@@ -23,6 +23,7 @@ from core.tests.fabricas import crear_cuenta
 from inventario.tests.fabricas import verificar_invariantes
 from maestros.models import Alerta
 from maestros.servicios import alertas as servicio_de_alertas
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 
 @override_settings(CORREO_CONFIGURADO=True)
@@ -30,6 +31,7 @@ class RecorridoDeRecepcionTests(RecepcionBase):
     """Fuente: docs/casos_de_uso/compras/recepcion.md (CMP-REG-RCP, CMP-CRR-FLT), docs/casos_de_uso/contabilidad/libro_de_gestion.md («Enlace al origen»), D-86, D-89, D-90 y D-36."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         envio_inmediato = mock.patch.object(transaction, "on_commit", lambda funcion, **kwargs: funcion())
         envio_inmediato.start()
         self.addCleanup(envio_inmediato.stop)

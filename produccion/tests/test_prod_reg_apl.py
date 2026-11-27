@@ -51,6 +51,7 @@ from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_
 from produccion.errores import ErrorDeProduccion
 from produccion.models import AplicacionInsumos, Bitacora, Consumo, ImputacionCosto, Lote, OcupacionSector
 from produccion.tests.fabricas import invernadero_con_produccion, lote_activo
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 alcance = perezoso("produccion.servicios.alcance")
 aplicaciones = perezoso("produccion.servicios.aplicaciones")
@@ -77,6 +78,7 @@ def tipo(consumo):
 class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     @classmethod
     def setUpTestData(cls):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         cls.e = invernadero_con_produccion()
         # Dos lotes de plantas: 60 en germinación (costo 100,00) y 40 en crecimiento (costo 50,00).
         cls.a = lote_activo(cls.e, cantidad=60, sector="germinacion", costo="100.00")
@@ -692,5 +694,6 @@ class RegistrarAsientoTests(Base):
 
     def test_garantia_un_rechazo_no_crea_asientos_ni_abre_el_ejercicio(self):
         """Un rechazo (cantidad inválida) no deja asientos ni abre un ejercicio."""
+        ejercicios_antes = EjercicioContable.objects.count()  # CON-05: la clase trae el ejercicio del helper; lo que se verifica es que el rechazo no crea ninguno
         rechazo(lambda: self.registrar(self.linea(self.limpiador, "-1")))
-        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, 0))
+        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, ejercicios_antes))

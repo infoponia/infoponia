@@ -25,6 +25,7 @@ from inventario.models import InsumoInvernadero, LoteInsumo, MovimientoInsumo
 from inventario.servicios import stock
 from inventario.tests.fabricas import ConDatosDeInventario, perezoso
 from maestros.models import Alerta
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 recepciones = perezoso("compras.servicios.recepciones")
 D = Decimal
@@ -38,6 +39,7 @@ class RecepcionBase(PlanDeCuentasMixin, ConDatosDeInventario, EscenarioDeRecepci
     """Ver ``EscenarioDeRecepcion``: Ana recibe lo de la orden aprobada (A en Norte, B en Norte 2). Los auxiliares arman los datos y ejecutan los correos."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.armar()
 
     def linea(self, detalle, cantidad=None, vence=None, inconvenientes=(), partes=None):

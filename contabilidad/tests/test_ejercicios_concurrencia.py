@@ -1,12 +1,10 @@
 # Pruebas de concurrencia de la apertura de ejercicios (CON-02 paso 3; CON-ABR-EJE «Pruebas»; D-84 punto 2; docs/patrones/bloqueos.md, sección «Contabilidad»):
-# dos aperturas a la vez de un abierto vencido (una sola crea) y dos primeras puestas en marcha a la vez (una sola crea; la otra atrapa el
-# `IntegrityError` de la restricción única y sigue). Dos hilos con `correr_a_la_vez`: la primera operación se detiene después de auditar
+# dos aperturas a la vez de un abierto vencido (una sola crea) (la puesta en marcha a la vez la prueba CON-INI-EJE, paso 2 de CON-05: sin ejercicio la apertura no escribe nada y no hay qué disputar). Dos hilos con `correr_a_la_vez`: la primera operación se detiene después de auditar
 # (con el bloqueo tomado y sin confirmar) y entonces arranca la otra. Cada una tiene que fallar si se quita la protección que cuida.
 import datetime
 from decimal import Decimal
 
 from django.core.cache import cache
-from django.db import IntegrityError
 from django.test import TransactionTestCase, tag
 
 from contabilidad import cuentas
@@ -54,37 +52,6 @@ class ConAbrEjeConcurrenciaTests(TransactionTestCase):
         )
         self.assertEqual(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE).count(), 1)
         verificar_invariantes_contables()
-
-    def test_regla_4_dos_puestas_en_marcha_a_la_vez_crean_un_solo_primer_ejercicio(self):
-        """Regla 4 de CON-ABR-EJE y docs/patrones/asientos.md, sección 2: sin nada que bloquear, la restricción única respalda; la segunda atrapa el `IntegrityError`, relee y sigue."""
-        hoy = datetime.date(2027, 5, 20)
-
-        def crear():
-            return ejercicios.abrir_ejercicio_si_corresponde(hoy)
-
-        resultados = correr_a_la_vez(crear, crear, primera="a")
-
-        errores = [r for r in resultados.values() if isinstance(r, Exception)]
-        self.assertEqual(errores, [], "la segunda no puede fallar con un IntegrityError: tiene que releer y seguir")
-        self.assertFalse([r for r in resultados.values() if isinstance(r, IntegrityError)])
-        creados = [r for r in resultados.values() if r.primero_creado is not None]
-        self.assertEqual(len(creados), 1)
-        self.assertEqual(EjercicioContable.objects.count(), 1)
-        self.assertEqual(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE).count(), 1)
-
-    def test_regla_4_crear_primer_ejercicio_a_la_vez_deja_uno_solo(self):
-        """D-84 punto 3: el comando y la primera operación a la vez no duplican el primer ejercicio."""
-        hoy = datetime.date(2027, 5, 20)
-
-        resultados = correr_a_la_vez(
-            lambda: ejercicios.crear_primer_ejercicio(datetime.date(2027, 5, 1), hoy=hoy),
-            lambda: ejercicios.abrir_ejercicio_si_corresponde(hoy),
-            primera="a",
-        )
-
-        self.assertEqual([r for r in resultados.values() if isinstance(r, Exception)], [])
-        self.assertEqual(EjercicioContable.objects.count(), 1)
-        self.assertEqual(EjercicioContable.objects.get().fecha_inicio_ejercicio, datetime.date(2027, 5, 1))
 
 
 @tag("concurrencia")
@@ -180,3 +147,43 @@ class ConCrrEjeConcurrenciaTests(TransactionTestCase):
         self.assertEqual((cerrado.estado_ejercicio, cerrado.contador_id), (EjercicioContable.Estado.CERRADO, None))
         self.assertEqual(self._auditorias_del_2026().count(), 1)
         verificar_invariantes_contables()
+
+
+@tag("concurrencia")
+class ConIniEjeConcurrenciaTests(TransactionTestCase):
+    """CON-INI-EJE, requisito especial y extensión 7a: dos inicios a la vez crean un solo ejercicio. Sin ejercicio no hay fila que bloquear: la que lo evita es
+    la restricción única de la base (`un_solo_ejercicio_abierto`); el segundo espera, recibe el `IntegrityError` y lo traduce a `contabilidad_ya_iniciada`."""
+
+    HOY = datetime.date(2027, 3, 10)
+    IMPORTES = {cuentas.CAJA: Decimal("1000.00"), cuentas.CAPITAL_INICIAL: Decimal("1000.00")}
+
+    def setUp(self):
+        cache.clear()
+        asegurar_plan_de_cuentas()
+        self.contador = crear_cuenta(Contador, email="contador@infoponia.com")
+
+    def _iniciar(self, fecha):
+        return lambda: ejercicios.iniciar_ejercicio(self.contador, fecha, self.IMPORTES, hoy=self.HOY)
+
+    def test_requisito_dos_inicios_a_la_vez_uno_gana_y_el_otro_recibe_contabilidad_ya_iniciada(self):
+        """Requisito especial y 7a: la primera ya creó el ejercicio (sin confirmar) y la segunda espera; al confirmarse la primera, la segunda recibe
+        `contabilidad_ya_iniciada` (nunca un `IntegrityError`) y queda un solo ejercicio con un solo asiento, el de apertura."""
+        resultados = correr_a_la_vez(self._iniciar(datetime.date(2027, 1, 1)), self._iniciar(datetime.date(2027, 2, 1)), primera="a")
+
+        self.assertIsInstance(resultados["a"], AsientoContable)
+        self.assertIsInstance(resultados["b"], ErrorContable)
+        self.assertEqual(resultados["b"].codigo, "contabilidad_ya_iniciada")
+        self.assertEqual(EjercicioContable.objects.count(), 1)
+        self.assertEqual(EjercicioContable.objects.get().fecha_inicio_ejercicio, datetime.date(2027, 1, 1))
+        self.assertEqual(AsientoContable.objects.count(), 1)
+        self.assertEqual(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE).count(), 1)
+        verificar_invariantes_contables()
+
+    def test_requisito_si_gana_la_segunda_el_resultado_es_simetrico(self):
+        """Requisito especial: da lo mismo cuál de las dos arranca primero; la que llega segunda recibe `contabilidad_ya_iniciada`."""
+        resultados = correr_a_la_vez(self._iniciar(datetime.date(2027, 1, 1)), self._iniciar(datetime.date(2027, 2, 1)), primera="b")
+
+        self.assertIsInstance(resultados["b"], AsientoContable)
+        self.assertEqual(resultados["a"].codigo, "contabilidad_ya_iniciada")
+        self.assertEqual(EjercicioContable.objects.get().fecha_inicio_ejercicio, datetime.date(2027, 2, 1))
+        self.assertEqual(AsientoContable.objects.count(), 1)

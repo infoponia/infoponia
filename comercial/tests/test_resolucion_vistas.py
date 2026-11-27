@@ -33,6 +33,7 @@ from inventario.tests.fabricas import ConDatosDeInventario
 from maestros.extensiones import enlaces_registrados
 from maestros.models import Alerta
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 
@@ -41,6 +42,7 @@ class ResolucionVistasTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un suministro resuelto por incumplimientos (con el caso de uso, no a mano) con una entrega cancelada, su Gerente y su Vendedor."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 5000)
         self.gerente = crear_gerente()

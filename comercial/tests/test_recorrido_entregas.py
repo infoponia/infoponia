@@ -27,6 +27,7 @@ from core.servicios import baja_usuario
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 
@@ -37,6 +38,7 @@ def texto(respuesta):
 
 class RecorridoDeEntregasTests(ConDatosDeInventario, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 300)
         self.gerente = crear_gerente()

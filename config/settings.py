@@ -16,6 +16,7 @@ import os
 import sys
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 from config.correo import correo_configurado, correo_por_consola
 from config.seguridad import ajustes_https, debug_encendido
@@ -110,6 +111,8 @@ MIDDLEWARE = [
     # SEG-04: con contraseña temporal solo se puede elegir una propia (o cerrar sesión).
     'core.middleware.ContrasenaTemporalMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # CON-05 (regla 9 de CON-INI-EJE): la ventana de «la contabilidad no está iniciada»; solo atiende esa excepción.
+    'contabilidad.middleware.ContabilidadNoIniciadaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -201,6 +204,51 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# ---- Almacenamiento de archivos subidos: foto de perfil y logo (USR-07, D-20 y D-106 puntos 1 a 4) ----
+# Producción: Cloudflare R2 (API de S3), bucket privado; Django entrega cada imagen con una URL firmada que vence a la hora
+# (la firma se calcula acá, sin llamar a R2). Desarrollo sin R2: el disco local (``media/``, que no se versiona). Pruebas:
+# InMemoryStorage, así ninguna prueba llama a R2. Las credenciales viven solo en variables de entorno (el repositorio es público).
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+VARIABLES_DE_R2 = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
+_R2 = {variable: os.environ.get(variable, "").strip() for variable in VARIABLES_DE_R2}
+_R2_FALTANTES = [variable for variable, valor in _R2.items() if not valor]
+
+if sys.argv[1:2] == ["test"]:
+    _ALMACENAMIENTO = {"BACKEND": "django.core.files.storage.InMemoryStorage"}
+elif _R2["R2_BUCKET"] or not DEBUG:
+    # D-106 punto 4: en producción (DEBUG apagado) faltar cualquiera de las cuatro variables es un error al arrancar: si cayera
+    # al disco local sin avisar, las imágenes desaparecerían en el siguiente despliegue (el disco de Render no es persistente).
+    # Precisión de D-106: con DEBUG y ``R2_BUCKET`` también se exigen las otras tres; sin ellas, boto3 buscaría credenciales por su cuenta.
+    if _R2_FALTANTES:
+        raise ImproperlyConfigured(
+            "Falta configurar Cloudflare R2 para guardar las imágenes (D-106). Variables de entorno que faltan: "
+            + ", ".join(_R2_FALTANTES)
+            + "."
+        )
+    _ALMACENAMIENTO = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": _R2["R2_BUCKET"],
+            "access_key": _R2["R2_ACCESS_KEY_ID"],
+            "secret_key": _R2["R2_SECRET_ACCESS_KEY"],
+            "endpoint_url": f"https://{_R2['R2_ACCOUNT_ID']}.r2.cloudflarestorage.com",
+            "region_name": "auto",
+            "signature_version": "s3v4",
+            "querystring_auth": True,  # bucket privado: URLs firmadas
+            "querystring_expire": 3600,  # vencen a la hora
+        },
+    }
+else:
+    _ALMACENAMIENTO = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+
+STORAGES = {
+    "default": _ALMACENAMIENTO,
+    # D-29 y D-99: los estáticos siguen como están (WhiteNoise los sirve como middleware); no se cambia el almacenamiento.
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

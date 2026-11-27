@@ -38,6 +38,7 @@ from maestros.tests.fabricas import crear_capataz_activo, crear_sector
 from produccion.errores import ErrorDeProduccion
 from produccion.models import Bitacora, Consumo, Lote, OcupacionSector, OrdenTrabajo, ReservaInsumo, Siembra
 from produccion.tests.fabricas import insumo_adicional, invernadero_con_produccion, orden_de_siembra, orden_suelta, reservar
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 siembras = perezoso("produccion.servicios.siembras")
 D = Decimal
@@ -60,6 +61,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero completo (sectores de 100 agujeros, semilla con 1.000 unidades de precio 2,00) y una orden de 50 plantines."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = invernadero_con_produccion()
         self.orden = orden_de_siembra(self.e, plantines=50)
 
@@ -613,6 +615,7 @@ class ConcretarSiembraAsientoTests(Base):
 
     def test_garantia_un_rechazo_no_crea_asientos_ni_abre_el_ejercicio(self):
         """Un rechazo de la concreción (cantidad inválida) no deja asientos ni abre un ejercicio: lo verificado va antes de lo escrito."""
+        ejercicios_antes = EjercicioContable.objects.count()  # CON-05: la clase trae el ejercicio del helper; lo que se verifica es que el rechazo no crea ninguno
         self.rechazo(sembrado=((self.e.sectores["germinacion"].pk, 51),))
         self.assertEqual(AsientoContable.objects.count(), 0)
-        self.assertEqual(EjercicioContable.objects.count(), 0)
+        self.assertEqual(EjercicioContable.objects.count(), ejercicios_antes)

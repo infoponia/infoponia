@@ -9,6 +9,7 @@ from unittest import mock
 from django.test import Client, TestCase
 from django.urls import reverse
 
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 from core import extensiones, notificaciones, servicios
 from core.extensiones import ItemDeAlerta
 from core.models import Notificacion, Usuario
@@ -34,6 +35,7 @@ class CampanaAlertasFuenteTests(ConGeoref, TestCase):
     """``items_de_campana(usuario)``: las alertas activas de ``usuario`` como ``ItemDeAlerta`` (D-42)."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 10: sin ejercicio la campana del Gerente (sin Contador) suma «Falta iniciar la contabilidad»
         self.gerente = crear_gerente()
         self.agronomo = crear_agronomo()
         self.invernadero = crear_invernadero("Invernadero Norte", agronomo=self.agronomo)
@@ -317,6 +319,7 @@ class CampanaConAlertasDeMaestrosTests(ConGeoref, TestCase):
     """La campana de punta a punta con la fuente real de `maestros` (verificación a mano, paso 4 de NOT-01)."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 10: sin ejercicio la campana del Gerente (sin Contador) suma «Falta iniciar la contabilidad»
         self.gerente = crear_gerente()
         self.agronomo = crear_agronomo()
         self.invernadero = crear_invernadero("Invernadero Norte", agronomo=self.agronomo)

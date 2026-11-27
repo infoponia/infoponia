@@ -264,8 +264,8 @@ Modelo: `docs/modelo/contabilidad.md` (`EjercicioContable`). Contrato: `docs/api
   asiento de apertura; su ejercicio es `asiento.ejercicio`). `importes` es un `dict` de código de cuenta a `Decimal` con las cinco cuentas
   de la regla 6 (`CAJA`, `BANCO`, `DEUDORES_POR_VENTAS` al Debe; `CAPITAL_INICIAL`, `PROVEEDORES` al Haber, de `contabilidad/cuentas.py`);
   una clave que no es de esas cinco es `ErrorContable` `cuenta_no_permitida_en_apertura`. Orden, dentro de `transaction.atomic()`:
-  (1) permisos con `responsables.puede_registrar_asientos(actor)` (si no, `PermissionDenied`); (2) validar fecha (reglas 4: `fecha_futura`,
-  `fecha_inicio_demasiado_antigua`) e importes (reglas 6 y 8: `capital_inicial_obligatorio`, `importe_invalido`, `asiento_desbalanceado`);
+  (1) permisos con `responsables.puede_registrar_asientos(actor)` (si no, `PermissionDenied`); (2) validar fecha (reglas 4: `fecha_invalida`,
+  `fecha_futura`, `fecha_inicio_demasiado_antigua`) e importes (reglas 6 y 8: `capital_inicial_obligatorio`, `importe_invalido`, `asiento_desbalanceado`);
   si hay varios errores de campo, `ErroresContables`, como el asiento manual; (3) verificar que el actor siga activo; (4) crear el ejercicio con
   `_crear(fecha_inicio, "puesta en marcha")` pero **auditado con el actor** (agregale un parámetro `actor=None` a `_crear`) y respaldado por la
   restricción única: si ya existe algún ejercicio o el alta choca (`IntegrityError` en un `atomic()` anidado), `ErrorContable`

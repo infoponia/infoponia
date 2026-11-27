@@ -114,7 +114,8 @@ class ConRegAsiVistaTests(VistaDeAsientosBase):
     # --- el formulario ---
 
     def test_flujo_principal_el_formulario_trae_hoy_dos_filas_el_buscador_de_cuenta_y_los_atajos(self):
-        """Pasos 2 y 3: la fecha por defecto es hoy, hay dos filas (una al Debe y otra al Haber), la lista de cuentas del plan para el buscador y los dos atajos."""
+        """Pasos 2 y 3: la fecha por defecto es hoy, hay dos filas (una al Debe y otra al Haber), la lista de cuentas del plan para el buscador y el atajo de venta previa (CON-05: el de
+        «Asiento de apertura» se quitó; antes decía «los dos atajos»)."""
         contenido = _texto(self.get(self.contador, NUEVO))
 
         self.assertIn('value="2027-03-10"', contenido)
@@ -124,7 +125,7 @@ class ConRegAsiVistaTests(VistaDeAsientosBase):
         self.assertIn('<datalist id="cuentas-del-plan">', contenido)
         self.assertIn('<option value="1.1.01 · Caja">', contenido)
         self.assertEqual(contenido.count("<option value=\"") - contenido.count('<option value="D"') - contenido.count('<option value="H"'), CuentaContable.objects.count())
-        self.assertIn("Asiento de apertura", contenido)
+        self.assertNotIn("Asiento de apertura", contenido)
         self.assertIn("Venta de producción previa", contenido)
 
     def test_flujo_principal_se_puede_cancelar_volviendo_al_libro(self):
@@ -173,13 +174,14 @@ class ConRegAsiVistaTests(VistaDeAsientosBase):
         self.assertIn('value="30,00"', contenido)
         self.assertNotIn('value="20,00"', contenido)
 
-    def test_ext_3a_el_atajo_de_apertura_precarga_la_descripcion_y_las_cuentas_sin_importes(self):
-        """Extensión 3a: «Asiento de apertura» solo precarga la descripción y sugiere Caja (Debe) y Capital Inicial (Haber); los importes los completa la persona y no se registra nada."""
+    def test_ext_3a_quitada_el_atajo_de_apertura_ya_no_precarga_nada(self):
+        """CON-REG-ASI, extensión 3a quitada (CON-05; reemplaza `test_ext_3a_el_atajo_de_apertura_precarga_la_descripcion_y_las_cuentas_sin_importes`): la apertura es CON-INI-EJE y ya no es un
+        asiento manual; un `accion=atajo:apertura` escrito a mano no precarga la descripción ni las cuentas y no registra nada. La pantalla ya no ofrece el botón."""
         contenido = _texto(self.post(self.contador, NUEVO, _form(descripcion="", filas=[("", "D", ""), ("", "H", "")], accion="atajo:apertura")))
 
-        self.assertIn('value="Asiento de apertura"', contenido)
-        self.assertIn(f'value="{_etiqueta(cuentas.CAJA)}"', contenido)
-        self.assertIn(f'value="{_etiqueta(cuentas.CAPITAL_INICIAL)}"', contenido)
+        self.assertNotIn('value="Asiento de apertura"', contenido)
+        self.assertIn('name="cuenta_0" list="cuentas-del-plan" autocomplete="off" value=""', contenido)  # la fila sigue vacía: nada se precargó
+        self.assertNotIn("atajo:apertura", contenido)
         self.assertFalse(AsientoContable.objects.exists())
 
     def test_ext_3b_el_atajo_de_venta_previa_precarga_caja_y_ventas(self):

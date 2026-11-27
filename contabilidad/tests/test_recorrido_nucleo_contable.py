@@ -1,5 +1,5 @@
 # Recorrido de CON-02 (D-96, `docs/patrones/verificacion_a_mano.md`): una prueba larga que hace de punta a punta lo que hará la persona en la
-# «Verificación a mano», con `hoy` simulado. La tarea no tiene pantallas: el recorrido usa el comando, los servicios y el proceso diario.
+# «Verificación a mano», con `hoy` simulado. La tarea no tiene pantallas: el recorrido usa los servicios y el proceso diario.
 # Puesta en marcha → primer ejercicio → asiento automático (con sus movimientos y su auditoría) → numeración → asiento desbalanceado →
 # paso diario 5 con fechas simuladas (el ejercicio abierto pasa a «en cierre» al día siguiente de su fecha de cierre) → asiento en cada
 # ejercicio → un año más (el que estaba en cierre se cierra solo).
@@ -16,7 +16,7 @@ from contabilidad.constantes import DEBE, HABER
 from contabilidad.errores import ErrorContable
 from contabilidad.models import AsientoContable, EjercicioContable
 from contabilidad.servicios import asientos, libro
-from contabilidad.tests.fabricas import PlanDeCuentasMixin, origen_de_prueba, verificar_invariantes_contables
+from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio_abierto, origen_de_prueba, verificar_invariantes_contables
 from core.models import Contador, Notificacion, RegistroAuditoria
 from core.tests.fabricas import crear_cuenta
 
@@ -34,13 +34,9 @@ class RecorridoDeNucleoContableTests(PlanDeCuentasMixin, TestCase):
     def test_recorrido_de_la_puesta_en_marcha_al_cierre_automatico(self):
         contador = crear_cuenta(Contador, email="contador@infoponia.com")
 
-        # 1. Puesta en marcha con el comando: el primer ejercicio empieza el 1/1/2027.
-        salida = io.StringIO()
-        with mock.patch("django.utils.timezone.localdate", return_value=HOY):
-            call_command("poner_en_marcha_contabilidad", "--fecha-inicio", "2027-01-01", stdout=salida)
-        primero = EjercicioContable.objects.get()
+        # 1. Primer ejercicio abierto desde el 1/1/2027 (CON-05: la puesta en marcha real es CON-INI-EJE y tiene su propio recorrido; acá se arma directo).
+        primero = ejercicio_abierto(datetime.date(2027, 1, 1))
         self.assertEqual((primero.estado_ejercicio, primero.fecha_cierre_ejercicio), (Estado.ABIERTO, datetime.date(2027, 12, 31)))
-        self.assertIn("01/01/2027", salida.getvalue())
 
         # 2. Asiento automático (una recepción de 3.000): número 1, sus dos movimientos y su auditoría.
         recepcion = origen_de_prueba()

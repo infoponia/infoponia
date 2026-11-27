@@ -31,6 +31,7 @@ from core.models import Notificacion
 from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
 from produccion.tests.fabricas import lote_maduro, variedad_con_stock
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 
@@ -68,6 +69,7 @@ class BaseDeSolicitudes(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
         cls.gerente = crear_gerente()
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.addCleanup(verificar_invariantes_de_entregas)
         self.addCleanup(verificar_invariantes_de_solicitudes)
         self.addCleanup(verificar_invariantes_contables)  # CON-04d: aceptar y anular una resolución asientan

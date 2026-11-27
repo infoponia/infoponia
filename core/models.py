@@ -197,6 +197,11 @@ class Usuario(AbstractUser):
         editable=False,
     )
 
+    # USR-07, SEG-19, D-20 y D-106: foto de perfil, opcional y propia de cada cuenta (no se comparte con las vinculadas). La deja
+    # ``core.imagenes`` (WebP de 256 px como máximo, ``fotos_perfil/<uuid4>.webp``) y la maneja ``core.servicios``: nunca se
+    # asigna a mano ni se sube con un formulario del modelo. El almacenamiento es R2 (o el disco en desarrollo, D-106).
+    foto_perfil = models.ImageField("foto de perfil", upload_to="fotos_perfil/", blank=True, default="")
+
     # D-17: grupo de cuentas vinculadas; opcional. PROTECT: un grupo no se borra mientras tenga cuentas (el
     # servicio las saca antes de borrarlo).
     grupo = models.ForeignKey(
@@ -826,6 +831,8 @@ class RegistroAuditoria(models.Model):
         # de un ejercicio es ``modificacion_ejercicio_contable``.
         ALTA_EJERCICIO_CONTABLE = "alta_ejercicio_contable", "Alta de ejercicio contable"
         MODIFICACION_EJERCICIO_CONTABLE = "modificacion_ejercicio_contable", "Modificación de ejercicio contable"
+        # CON-05: la baja del ejercicio que creó la puesta en marcha automática (comando de uso único `eliminar_ejercicio_sin_apertura`); actor `None` (InfoPonia).
+        BAJA_EJERCICIO_CONTABLE = "baja_ejercicio_contable", "Baja de ejercicio contable"
         ALTA_ASIENTO_CONTABLE = "alta_asiento_contable", "Alta de asiento contable"
         ALTA_MOVIMIENTO_CONTABLE = "alta_movimiento_contable", "Alta de movimiento contable"
         # COM-05a1 (D-66): las entregas. Un registro por entrega creada o cambiada por InfoPonia (origen: proceso automático, D-27). La cancelación de una
@@ -1058,6 +1065,7 @@ class RegistroAuditoria(models.Model):
         "color_secundario": "Color 2",
         "color_terciario": "Color 3",
         "color_cuaternario": "Color 4",
+        "logo": "Logo",
         # Clientes y vehículos (COM-01): «nombre», «apellido», «telefono», «email», «estado» y «localidad» ya existen.
         "tipo_cliente": "Tipo de cliente",
         "cuit": "CUIT",
@@ -1700,6 +1708,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.VENCIMIENTO_ENLACE,
         RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.MODIFICACION_EJERCICIO_CONTABLE,
+        RegistroAuditoria.Accion.BAJA_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_ASIENTO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_MOVIMIENTO_CONTABLE,
         RegistroAuditoria.Accion.PLANIFICACION_ENTREGA,

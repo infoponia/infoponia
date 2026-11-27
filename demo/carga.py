@@ -8,8 +8,9 @@
 #
 # Orden de EJECUCIÓN distinto del orden del archivo (decisión del estudiante, 25/11/2026): 4, 1, 2, 3, 11, 5 a 10, 12, 14 y 13 (los suministros,
 # al final: reservan el stock de los lotes y su comprobante sale por correo solo si todo lo anterior anduvo). Las secciones 1 y 2
-# exigen un Gerente activo (que nace en la 4) y la carga inicial de stock (7) genera asientos: sin ejercicio previo, el sistema abriría
-# uno que empieza HOY y la sección 11 (desde el día 1 del mes) ya no haría nada. La salida se informa en el orden del archivo.
+# exigen un Gerente activo (que nace en la 4) y la carga inicial de stock (7) genera asientos: desde CON-05 (regla 9 de CON-INI-EJE) sin ejercicio
+# ninguna operación con asiento se registra, así que la sección 11 inicia la contabilidad (el ejercicio y el asiento de apertura N.º 1) antes de todo lo que asienta.
+# La salida se informa en el orden del archivo.
 #
 # Los secretos (contraseña y base de los correos) entran por ``Contexto`` y no se escriben en ningún mensaje ni archivo.
 
@@ -24,6 +25,7 @@ from comercial.servicios import clientes as servicios_clientes
 from comercial.servicios import suministros as servicios_suministros
 from comercial.servicios import vehiculos as servicios_vehiculos
 from compras.servicios import proveedores as servicios_proveedores
+from contabilidad import cuentas as plan_de_cuentas
 from contabilidad.servicios import ejercicios
 from core import servicios as servicios_core
 from core.models import Gerente, Usuario
@@ -311,9 +313,15 @@ def cargar_geografia(ctx):
 
 
 def cargar_contabilidad(ctx):
-    """Sección 11: el primer ejercicio empieza el primer día del mes de HOY (CON-ABR-EJE). Si ya hay uno, no se crea otro."""
-    ejercicio = ejercicios.crear_primer_ejercicio(ctx.hoy.replace(day=1), hoy=ctx.hoy)
-    return f"ejercicio del {ejercicio.fecha_inicio_ejercicio:%d/%m/%Y} al {ejercicio.fecha_cierre_ejercicio:%d/%m/%Y}"
+    """Sección 11 (CON-INI-EJE, CON-05): la contabilidad se inicia el **primer día del mes de HOY**, con el Contador de la demo como actor, y el asiento de apertura N.º 1 con la caja y el capital
+    inicial (1.000.000,00 cada uno: la demo no usaba ningún capital). Desde esa fecha se aceptan asientos manuales y contraasientos; uno con fecha de un mes anterior al inicio se rechaza
+    (`fecha_anterior_al_primer_ejercicio`). Los asientos automáticos con una fecha anterior van al ejercicio abierto con la fecha de hoy (D-102)."""
+    capital = Decimal("1000000.00")
+    asiento = ejercicios.iniciar_ejercicio(
+        ctx.cuenta("contador1"), ctx.hoy.replace(day=1), {plan_de_cuentas.CAJA: capital, plan_de_cuentas.CAPITAL_INICIAL: capital}, hoy=ctx.hoy
+    )
+    ejercicio = asiento.ejercicio
+    return f"ejercicio del {ejercicio.fecha_inicio_ejercicio:%d/%m/%Y} al {ejercicio.fecha_cierre_ejercicio:%d/%m/%Y}, con el asiento de apertura N.º 1 (capital inicial de $ 1.000.000,00)"
 
 
 def cargar_invernaderos_y_sectores(ctx):

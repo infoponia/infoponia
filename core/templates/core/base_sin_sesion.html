@@ -5,7 +5,7 @@ cuenta del Administrador.{% endcomment %}
 {% block cuerpo %}
 <div class="auth">
   <div class="auth-brand">
-    <div class="logo">{% icono "leafmark" 16 %}</div>
+    {% include "core/_logo.html" %}
     <div><b>{{ nombre_organizacion }}</b><small>Sistema de gestión InfoPonia</small></div>
   </div>
   {% if messages %}

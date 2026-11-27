@@ -181,8 +181,7 @@ class CmpRegRcpPostcondicionesTests(RecepcionBase):
 
     def test_post_f_el_asiento_es_debe_insumos_en_stock_haber_proveedores_originado_en_la_recepcion(self):
         """Postcondición f y D-90 punto 8: Debe Insumos en Stock / Haber Proveedores por el valor recibido, con origen la recepción y la fecha de la recepción (hoy), en el ejercicio
-        abierto (la contabilidad se recupera sola, H9)."""
-        self.assertFalse(EjercicioContable.objects.exists())
+        abierto (el que deja `iniciar_contabilidad_para_pruebas`; CON-05: ya no se crea solo, H9)."""
         recepcion = self.registrar(self.ana, [self.linea(self.l_fert, 4, self.vence)])
         asiento = self.asiento_de(recepcion)
         self.assertEqual(asiento.origen_id, recepcion.pk)

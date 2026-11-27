@@ -30,8 +30,8 @@ más adelante», que sigue la regla de D-04: se agregan cuando se programa la ta
 
 ## Cuando exista PerfilOrganizacion
 
-1. ~~**Nombre y color configurables (MAE-04, D-48).**~~ Hecho el 21/11/2026 en MAE-04 (maestros/servicios/perfil.py, registrado en MaestrosConfig.ready()). **Sigue abierto: el logo** (fuera de la ronda, D-45). Texto original: El nombre sale del perfil, por el punto de
-   extensión de `core` (D-48); `NOMBRE_ORGANIZACION` (D-25) queda como valor por defecto. El logo deja de ser un ícono fijo cuando el almacenamiento esté resuelto (USR-07, D-20); mientras tanto la
+1. ~~**Nombre y color configurables (MAE-04, D-48).**~~ Hecho el 21/11/2026 en MAE-04 (maestros/servicios/perfil.py, registrado en MaestrosConfig.ready()). ~~**Sigue abierto: el logo** (fuera de la ronda, D-45).~~ **Logo: hecho el 27/11/2026 en USR-07 (D-106).** Texto original: El nombre sale del perfil, por el punto de
+   extensión de `core` (D-48); `NOMBRE_ORGANIZACION` (D-25) queda como valor por defecto. El logo deja de ser un ícono fijo con **USR-07** (D-106, puntos 10 a 15: carpeta `logos/`, en el encabezado y en las pantallas sin sesión, no en los correos); mientras tanto la
    organización queda sin logo. En el prototipo de producción: `VIEWS.config`, `CFG` y `aplicarMarca`.
 
 ## Cuando exista la primera notificación o alerta
@@ -746,3 +746,8 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 1. **Cuando se programe CON-04d:** el aviso de «registrar asiento manual» (COM-ATN-ENR, postcondición b) pasa a `responsable_contable()` (ya está listado arriba); su detalle puede llevar a «Registrar asiento» (`contabilidad:asiento_nuevo`).
 2. ~~**Confirmar con el estudiante** que «Contraasentar» se ofrece en la ficha de un asiento de un ejercicio cerrado (ver `docs/temas_abiertos.md`, «CON-03b»). Si no, se oculta con `asiento.ejercicio.estado_ejercicio != "cerrado"` en `views.asiento` y se rechaza en `asientos.contraasentar` (hoy no lo rechaza).~~ **Confirmado por el estudiante el 25/11/2026:** «Contraasentar» se ofrece también en un ejercicio cerrado.
 3. **Aclarar D-84** (puntos 2 y 6): la autorrecuperación del ejercicio va antes de validar la fecha de un asiento manual o de un contraasiento, y menos de dos movimientos es un error (`faltan_movimientos`) en el manual y `None` en el automático. Si el estudiante lo pide, va como decisión nueva (el número se toma al final).
+
+## Lo que deja CON-05 (nace el 27/11/2026)
+
+1. **Cuando se retire el comando `eliminar_ejercicio_sin_apertura`:** es de uso único. Se retira (con su prueba `test_comando_eliminar_ejercicio.py` y, si ya no hace falta, la acción `baja_ejercicio_contable`, que dejaría de usarse) en una tarea posterior, **después de correrlo en producción** (pasos de «Después del merge» de CON-05).
+2. **Cuando se decida el contraasiento de la apertura:** hoy el asiento de apertura (N.º 1, de tipo manual) se puede contraasentar como cualquier otro (ver `docs/temas_abiertos.md`, «CON-05», punto 1). Si el estudiante decide impedirlo o advertirlo, se toca `asientos.contraasentar` y la pantalla del contraasiento.

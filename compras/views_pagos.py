@@ -15,7 +15,7 @@ from django.views.decorators.http import require_safe
 from compras.errores import ErrorDeCompras
 from compras.models import Pago
 from compras.servicios import pagos as api
-from contabilidad.errores import ErrorContable
+from contabilidad.errores import ErrorContable, relanzar_si_no_iniciada
 from contabilidad.models import AsientoContable
 from contabilidad.servicios import responsables
 from core.acceso import rol_requerido
@@ -93,6 +93,7 @@ def pago_nuevo(request, orden_id, proveedor_id):
         (messages.info if error.codigo == "pago_ya_registrado" else messages.error)(request, error.mensaje)
         return redirect("compras:orden_ficha", orden_id=orden_id)
     except ErrorContable as error:
+        relanzar_si_no_iniciada(error)  # regla 9 de CON-INI-EJE: la ventana la arma el middleware
         contexto["errores"] = {error.campo or "general": error.mensaje}
         return render(request, "compras/pagos/formulario.html", contexto)
     asiento = AsientoContable.objects.filter(origen_id=pago.pk).first()

@@ -30,6 +30,7 @@ from comercial.models import AlertaComercial, CompraVenta, DetalleEntrega, Detal
 from comercial.servicios import asientos_comerciales, calendario, enlaces, entregas, faltantes, stock_maduro
 from comercial.servicios.comprobantes import Destinatario
 from comercial.servicios.stock_maduro import Periodo, _cubierto
+from contabilidad.servicios import ejercicios
 from core import correo, notificaciones
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.procesos import ResumenDePaso
@@ -713,7 +714,11 @@ def vencer_partidas_en_camara(hoy):
     """PROD-VNC-CAM, paso diario 20, «Vencer partidas en cámara» (D-56, D-59): da de baja las partidas «disponibles» con fecha límite ANTERIOR a hoy (el día de la fecha límite
     todavía se entrega) y avisa de las que vencen dentro del plazo. Cada partida en su transacción; una que falla se registra con `logger.exception` y las demás siguen (*a):
     al día siguiente se retoma. Idempotente. Nunca lee la fecha por su cuenta. Devuelve `ResumenDePaso(procesados=partidas vencidas, creados=avisos nuevos,
-    resueltos=alertas «partida por vencer» resueltas, detalle=«N partidas con producto reservado»)`."""
+    resueltos=alertas «partida por vencer» resueltas, detalle=«N partidas con producto reservado»)`.
+
+    Regla 9 de CON-INI-EJE (CON-05): sin ningún ejercicio contable no procesa nada (la merma por vencimiento asienta) y reintenta al día siguiente."""
+    if not ejercicios.contabilidad_iniciada():
+        return ejercicios.resumen_de_paso_sin_contabilidad()
     vencidas = resueltas = con_reservado = 0
     ids = list(
         StockCosechado.objects.filter(estado_stock_cosechado=StockCosechado.Estado.DISPONIBLE, fecha_limite__lt=hoy).order_by("fecha_limite", "pk").values_list("pk", flat=True)

@@ -80,7 +80,8 @@ b. Se creó un log de auditoría con usuario, rol, fecha, hora, identificador de
 2. El nombre es obligatorio. Los demás datos son opcionales: CUIT, teléfono, email, dirección, logo y hasta cuatro
    colores (MD-93).
 3. El email se valida por formato. El CUIT se valida por formato y dígito verificador.
-4. El logo es una imagen. Su tipo y su tamaño máximo están a precisar.
+4. El logo es una imagen JPG, PNG o WebP de hasta 5 MB (no SVG). Se guarda sin recortar, con el lado mayor de 512 px como
+   máximo y conservando la transparencia (D-106).
 5. Los colores se cargan en orden, y el primero es el principal. Si no se carga ninguno, el Sistema usa su paleta por
    defecto.
 6. Los datos aparecen en el encabezado y en los comprobantes que genera el Sistema, desde el siguiente documento que
@@ -102,7 +103,9 @@ Tarea: **MAE-04**. Todo lo de este archivo se implementa, con estas decisiones d
   lo agrega a la pantalla en el grupo «Comercial», con el mismo formato que los demás. Hay que avisarlo al equipo.
 - **Parámetros de IoT** (umbrales y tiempos del módulo IoT, MD-112) **no** son de este caso de uso: los agrega la tarea de IoT.
 - **Logo.** Fuera de la ronda (D-45). El perfil no tiene el campo y la pantalla no muestra el campo del logo: queda como
-  disparador («Cuando exista PerfilOrganizacion»).
+  disparador («Cuando exista PerfilOrganizacion»). **Actualización 27/11/2026:** lo implementa USR-07 con las reglas de
+  D-106 (puntos 10 a 15): cargar, cambiar y quitar en la pestaña «Organización»; auditoría «sin logo» / «con logo» /
+  «logo nuevo»; se ve en el encabezado y en las pantallas sin sesión, no en los correos.
 - **Colores.** Hasta cuatro, formato `#RRGGBB`, opcionales; en orden: no se puede cargar el 2.º sin el 1.º ni el 3.º sin el 2.º
   (regla 5). El primero tiñe el sistema (D-48). **El sistema no valida el contraste:** un color muy claro hace ilegible el texto
   blanco de los botones (queda anotado en `docs/temas_abiertos.md`).

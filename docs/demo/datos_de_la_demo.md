@@ -198,9 +198,13 @@ CUIT de reserva, válido y sin usar, por si hace falta un cliente más en vivo: 
 
 ## 11. Contabilidad
 
-- Primer ejercicio contable: empieza el **primer día del mes de HOY** (`contabilidad.servicios.ejercicios.crear_primer_ejercicio`). Si ya hay
-  uno, no se crea otro.
-- No se cargan asientos manuales. Los asientos que aparezcan son los que generan los servicios (carga inicial de stock, lotes existentes).
+- La contabilidad se inicia con CON-INI-EJE (`contabilidad.servicios.ejercicios.iniciar_ejercicio`, tarea CON-05), con el Contador de la demo (`contador1`) como actor: el
+  ejercicio empieza el **primer día del mes de HOY** y el **asiento de apertura N.º 1** (fecha: ese día) carga **Caja $ 1.000.000,00 al Debe y Capital Inicial $ 1.000.000,00 al
+  Haber**. Es la primera sección que se ejecuta después de las cuentas, la organización, la configuración y la geografía: sin ejercicio ninguna operación con asiento se registra.
+- No se cargan asientos manuales ni contraasientos. Los demás asientos son los que generan los servicios (carga inicial de stock, lotes existentes).
+- **Fechas de asientos manuales y contraasientos:** un asiento manual o un contraasiento con fecha **de un mes anterior al inicio de la demo** se rechaza (la fecha tiene que caer
+  dentro del ejercicio, que empieza el primer día del mes de HOY). Si en la presentación se quiere registrar uno, la fecha tiene que ser de ese mes (y no posterior a hoy). Los asientos
+  automáticos con una fecha anterior (por ejemplo, un lote existente sembrado hace semanas) no se rechazan: van al ejercicio abierto con la fecha de hoy y la descripción aclara la fecha real (D-102).
 
 ## 12. Lotes existentes (PRD-05, `registrar_lote_existente`, actor = el Agrónomo del invernadero)
 

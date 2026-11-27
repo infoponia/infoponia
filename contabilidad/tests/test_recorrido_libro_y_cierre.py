@@ -1,7 +1,7 @@
 # Recorrido de CON-03a (D-96, `docs/patrones/verificacion_a_mano.md`): una prueba larga con el cliente de Django que hace de punta a punta lo que hará la persona en la
 # «Verificación a mano», por rol y por estado del ejercicio. Modelo: `test_recorrido_nucleo_contable.py`. Las pantallas se piden con «hoy» fijado (`timezone.localdate`) y el
 # paso diario con `--fecha`: nada lee la hora sola.
-# Contador: contabilidad sin poner en marcha → puesta en marcha → asientos (automático y manual) → libro (cronológica, por cuenta, ficha) y plan → un día después del fin del ejercicio
+# Contador: contabilidad sin poner en marcha → ejercicio abierto (CON-05: la puesta en marcha real es CON-INI-EJE) → asientos (automático y manual) → libro (cronológica, por cuenta, ficha) y plan → un día después del fin del ejercicio
 # el paso diario lo deja «en cierre» → alerta del Panel → el Gerente (con Contador) y el Vendedor no pueden cerrar → resumen y confirmación → cerrado → ya no recibe asientos.
 # Gerente: sin Contador activo cierra él, y la asociación queda vacía.
 import datetime
@@ -20,6 +20,7 @@ from contabilidad.servicios import asientos
 from contabilidad.tests.fabricas import (
     PlanDeCuentasMixin,
     asiento_de_prueba,
+    ejercicio_abierto,
     origen_de_prueba,
     verificar_invariantes_contables,
 )
@@ -55,8 +56,8 @@ class RecorridoDeLibroYCierreTests(PlanDeCuentasMixin, TestCase):
         return self.client.get(url, parametros)
 
     def poner_en_marcha(self):
-        call_command("poner_en_marcha_contabilidad", "--fecha-inicio", "2026-03-01", stdout=io.StringIO())
-        return EjercicioContable.objects.get()
+        """CON-05: la puesta en marcha ya no es un comando (es CON-INI-EJE); este recorrido no la ejercita, así que crea el ejercicio abierto directo."""
+        return ejercicio_abierto(datetime.date(2026, 3, 1))
 
     def test_recorrido_del_contador_de_la_puesta_en_marcha_al_cierre(self):
         # 1. CON-CNS-LGS regla 1 y CON-CNS-PCT: sin ejercicios, el libro y los ejercicios lo explican (no hay 500) y el plan se ve igual, sin saldos.

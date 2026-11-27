@@ -264,67 +264,51 @@ class ConAbrEjeCierreSoloTests(TestCase):
         verificar_invariantes_contables()
 
 
-class ConAbrEjePrimerEjercicioTests(TestCase):
-    """Regla 4 y D-84 punto 3: el primer ejercicio lo crea la puesta en marcha (o la primera operación) y empieza ese día."""
+class ConAbrEjeSinEjercicioTests(TestCase):
+    """Regla 4 de CON-ABR-EJE (cambió con CON-05) y regla 11 de CON-INI-EJE: el primer ejercicio lo crea CON-INI-EJE; la apertura automática
+    nunca lo crea. Reemplaza las pruebas de la puesta en marcha técnica de D-84 punto 3 (`crear_primer_ejercicio`, retirada)."""
 
     HOY = datetime.date(2027, 5, 20)
 
-    def test_regla_4_sin_ningun_ejercicio_crea_el_primero_que_empieza_hoy(self):
-        """Regla 4 y D-84 punto 3: si no existe NINGÚN ejercicio, se crea el primero con inicio hoy y cierre 12 meses menos un día."""
+    def test_regla_4_sin_ningun_ejercicio_no_crea_nada(self):
+        """Regla 4 de CON-ABR-EJE y regla 11 de CON-INI-EJE: sin ningún ejercicio, la apertura no hace nada y devuelve todo `None`."""
         resultado = ejercicios.abrir_ejercicio_si_corresponde(self.HOY)
 
-        primero = resultado.primero_creado
-        self.assertEqual(primero.estado_ejercicio, Estado.ABIERTO)
-        self.assertEqual(primero.fecha_inicio_ejercicio, self.HOY)
-        self.assertEqual(primero.fecha_cierre_ejercicio, datetime.date(2028, 5, 19))
-        self.assertEqual((resultado.paso_a_en_cierre, resultado.cerrado_solo, resultado.nuevo_abierto), (None, None, None))
-        self.assertEqual(EjercicioContable.objects.count(), 1)
-
-    def test_regla_4_el_primero_se_audita_como_puesta_en_marcha(self):
-        """Postcondición e y D-84 punto 9: `alta_ejercicio_contable`, actor `None`, con `datos.origen` «puesta en marcha»."""
-        primero = ejercicios.abrir_ejercicio_si_corresponde(self.HOY).primero_creado
-
-        alta = RegistroAuditoria.objects.get(accion=RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE)
-        self.assertIsNone(alta.usuario)
-        self.assertEqual([a["id"] for a in alta.afectados], [primero.pk])
-        self.assertEqual(alta.detalle["datos"], {"origen": "puesta en marcha"})
-        self.assertEqual(alta.detalle["cambios"]["fecha_inicio_ejercicio"], {"antes": None, "despues": "2027-05-20"})
-
-    def test_regla_5_no_se_crea_otro_primero(self):
-        """Regla 5: idempotente: la segunda corrida no crea otro ejercicio."""
-        ejercicios.abrir_ejercicio_si_corresponde(self.HOY)
-        segunda = ejercicios.abrir_ejercicio_si_corresponde(self.HOY)
-
-        self.assertEqual(tuple(segunda[:4]), (None, None, None, None))
-        self.assertEqual(EjercicioContable.objects.count(), 1)
-
-    def test_d84_crear_primer_ejercicio_empieza_en_la_fecha_pedida(self):
-        """D-84 punto 3: `crear_primer_ejercicio(fecha_inicio)` crea el primero con esa fecha de inicio (puede ser pasada)."""
-        primero = ejercicios.crear_primer_ejercicio(datetime.date(2027, 1, 15), hoy=self.HOY)
-
-        self.assertEqual(primero.fecha_inicio_ejercicio, datetime.date(2027, 1, 15))
-        self.assertEqual(primero.fecha_cierre_ejercicio, datetime.date(2028, 1, 14))
-        self.assertEqual(primero.estado_ejercicio, Estado.ABIERTO)
-        alta = RegistroAuditoria.objects.get(accion=RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE)
-        self.assertEqual(alta.detalle["datos"], {"origen": "puesta en marcha"})
-
-    def test_d84_crear_primer_ejercicio_no_hace_nada_si_ya_hay_uno(self):
-        """D-84 punto 3: idempotente: si ya existe algún ejercicio no crea otro y devuelve el que hay."""
-        existente = ejercicio(Estado.CERRADO, datetime.date(2026, 1, 1))
-
-        devuelto = ejercicios.crear_primer_ejercicio(datetime.date(2027, 1, 15), hoy=self.HOY)
-
-        self.assertEqual(devuelto.pk, existente.pk)
-        self.assertEqual(EjercicioContable.objects.count(), 1)
-        self.assertFalse(RegistroAuditoria.objects.exists())
-
-    def test_d84_crear_primer_ejercicio_rechaza_una_fecha_futura(self):
-        """Cómo se aplica, comando: «la fecha de inicio no puede ser futura»: `ErrorContable` `fecha_futura`."""
-        with self.assertRaises(ErrorContable) as contexto:
-            ejercicios.crear_primer_ejercicio(self.HOY + datetime.timedelta(days=1), hoy=self.HOY)
-
-        self.assertEqual(contexto.exception.codigo, "fecha_futura")
+        self.assertEqual(tuple(resultado[:4]), (None, None, None, None))
+        self.assertEqual((resultado.cantidad_creados, resultado.cantidad_cerrados_solos), (0, 0))
         self.assertFalse(EjercicioContable.objects.exists())
+
+    def test_regla_4_sin_ningun_ejercicio_no_audita_ni_avisa(self):
+        """Regla 4 de CON-ABR-EJE: sin ejercicio no queda ningún registro de auditoría ni aviso."""
+        crear_gerente()
+
+        ejercicios.abrir_ejercicio_si_corresponde(self.HOY)
+
+        self.assertFalse(RegistroAuditoria.objects.filter(accion=RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE).exists())
+        self.assertFalse(Notificacion.objects.exists())
+
+    def test_regla_11_la_apertura_ya_no_crea_el_primero_aunque_se_repita(self):
+        """Regla 5 de CON-ABR-EJE (idempotencia) con la regla 11 de CON-INI-EJE: correrla varias veces sin ejercicio sigue sin crear ninguno."""
+        ejercicios.abrir_ejercicio_si_corresponde(self.HOY)
+        ejercicios.abrir_ejercicio_si_corresponde(self.HOY + datetime.timedelta(days=400))
+
+        self.assertFalse(EjercicioContable.objects.exists())
+
+    def test_regla_11_crear_primer_ejercicio_ya_no_existe(self):
+        """CON-05, decisión «Puesta en marcha contable» punto 3: se retiró `crear_primer_ejercicio` (la puesta en marcha es `iniciar_ejercicio`)."""
+        self.assertFalse(hasattr(ejercicios, "crear_primer_ejercicio"))
+
+    def test_regla_11_contabilidad_iniciada_es_falso_sin_ejercicios(self):
+        """`ejercicios.contabilidad_iniciada()` (docs/api/asientos.md): falso si no existe ningún ejercicio."""
+        self.assertFalse(ejercicios.contabilidad_iniciada())
+
+    def test_regla_11_contabilidad_iniciada_es_verdadero_con_un_ejercicio_en_cualquier_estado(self):
+        """`contabilidad_iniciada()`: verdadero con un ejercicio abierto, en cierre o cerrado."""
+        for estado in (Estado.ABIERTO, Estado.EN_CIERRE, Estado.CERRADO):
+            with self.subTest(estado=estado):
+                EjercicioContable.objects.all().delete()
+                ejercicio(estado, datetime.date(2026, 1, 1))
+                self.assertTrue(ejercicios.contabilidad_iniciada())
 
 
 class ConAbrEjeSistemaApagadoTests(TestCase):

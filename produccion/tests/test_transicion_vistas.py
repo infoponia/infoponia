@@ -20,6 +20,7 @@ from maestros.models import Invernadero, SectorProduccion
 from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo
 from produccion.models import Lote, TransicionEtapa
 from produccion.tests.fabricas import invernadero_con_produccion, lote_con_ciclo, orden_de_transicion
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HX = {"HTTP_HX_REQUEST": "true"}
 
@@ -218,6 +219,7 @@ class NuevaTransicionTests(Base):
 
 class ConcretarTransicionTests(Base):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.orden = orden_de_transicion(self.e, self.lote)
         self.url = reverse("produccion:concretar", args=[self.orden.pk])

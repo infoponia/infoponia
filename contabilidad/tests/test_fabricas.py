@@ -123,3 +123,59 @@ class VerificarInvariantesTests(PlanDeCuentasMixin, TestCase):
 
         with self.assertRaisesRegex(AssertionError, "se pisan"):
             verificar_invariantes_contables()
+
+
+class HelperDeContabilidadIniciadaTests(PlanDeCuentasMixin, TestCase):
+    """`iniciar_contabilidad_para_pruebas` (CON-05, paso 5): deja la contabilidad iniciada para las pruebas de otras apps, y un ejercicio abierto propio de la prueba lo reemplaza."""
+
+    def test_api_el_helper_crea_el_ejercicio_abierto_desde_hoy_sin_auditoria_ni_asientos(self):
+        """API: crea el ejercicio abierto que empieza hoy (como la creación automática que reemplaza), sin auditoría ni asiento de apertura."""
+        from contabilidad.servicios import ejercicios
+        from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
+        from core.models import RegistroAuditoria
+
+        creado = iniciar_contabilidad_para_pruebas()
+
+        self.assertTrue(ejercicios.contabilidad_iniciada())
+        self.assertEqual((creado.estado_ejercicio, creado.fecha_inicio_ejercicio), (Estado.ABIERTO, datetime.date.today()))
+        self.assertFalse(AsientoContable.objects.exists())
+        self.assertFalse(RegistroAuditoria.objects.exists())
+
+    def test_api_el_helper_acepta_un_inicio_propio(self):
+        """API: `iniciar_contabilidad_para_pruebas(inicio)` empieza en esa fecha."""
+        from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
+
+        self.assertEqual(iniciar_contabilidad_para_pruebas(INICIO).fecha_inicio_ejercicio, INICIO)
+
+    def test_convencion_un_ejercicio_abierto_propio_reemplaza_al_del_helper(self):
+        """Convención: la prueba que arma su propio ejercicio abierto no choca con la restricción de un solo abierto: el suyo reemplaza al del helper (sin asientos)."""
+        from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
+
+        iniciar_contabilidad_para_pruebas()
+        propio = ejercicio_abierto(INICIO)
+
+        self.assertEqual(list(EjercicioContable.objects.values_list("pk", flat=True)), [propio.pk])
+
+    def test_convencion_un_ejercicio_cerrado_o_en_cierre_propio_no_reemplaza_al_del_helper(self):
+        """Convención: un ejercicio cerrado o en cierre propio convive con el abierto del helper (las pruebas de H10 lo usan: el asiento va al abierto)."""
+        from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
+
+        abierto = iniciar_contabilidad_para_pruebas()
+        ejercicio(Estado.CERRADO, datetime.date(2020, 1, 1))
+        ejercicio(Estado.EN_CIERRE, datetime.date(2021, 1, 1))
+
+        self.assertEqual(EjercicioContable.objects.count(), 3)
+        self.assertTrue(EjercicioContable.objects.filter(pk=abierto.pk).exists())
+
+    def test_convencion_el_del_helper_con_asientos_no_se_reemplaza(self):
+        """Convención: si el ejercicio del helper ya tiene asientos no se borra (un asiento no se borra ni se mueve): crear otro abierto falla por la restricción única, a la vista."""
+        from django.db import IntegrityError, transaction
+
+        from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
+
+        abierto = iniciar_contabilidad_para_pruebas()
+        asiento_de_prueba(abierto, abierto.fecha_inicio_ejercicio)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            ejercicio_abierto(INICIO)
+        self.assertTrue(EjercicioContable.objects.filter(pk=abierto.pk).exists())

@@ -47,6 +47,7 @@ from core.servicios import (
     alta_usuario,
     baja_usuario,
     cambiar_contrasena,
+    cambiar_foto_perfil,
     confirmar_invitacion,
     confirmar_recuperacion,
     consultar_auditoria,
@@ -66,6 +67,8 @@ from core.servicios import (
     pedir_recuperacion,
     puede_ver_auditoria_de,
     quien_gestiona,
+    quitar_foto_de_cuenta,
+    quitar_foto_perfil,
     reactivar_usuario,
     restablecer_contrasena,
     vincular_cuenta,
@@ -374,6 +377,49 @@ def cambiar_mi_contrasena(request):
     return _render_mi_perfil(request, form)
 
 
+# ---- Foto de perfil (USR-GST-PRF regla 5, SEG-19, D-20 y D-106; tarea USR-07) ----
+# Como el cambio de contraseña: solo POST (un GET vuelve a Mi perfil), ``never_cache`` y redirección con un aviso breve (D-29).
+# Siempre es la foto de ``request.user``: la cuenta no viaja en la URL ni en el formulario. El archivo llega por «Elegir foto»
+# (campo ``foto``) o por «Tomar foto» en el celular (``foto_camara``); lo valida y lo vuelve a codificar ``core/imagenes.py``.
+
+MENSAJE_FOTO_ACTUALIZADA = "Foto de perfil actualizada."
+MENSAJE_FOTO_QUITADA = "Se quitó la foto de perfil."
+MENSAJE_SIN_ARCHIVO_DE_FOTO = "Elegí una imagen para tu foto de perfil."
+
+
+@never_cache
+def cambiar_mi_foto(request):
+    """Carga o cambia la foto de la propia cuenta (USR-GST-PRF regla 5). Si el archivo no es válido (más de 5 MB, no es una
+    imagen, GIF o SVG…) se avisa con el motivo y la foto anterior queda como estaba. Corrección del prototipo: el error se
+    muestra como aviso breve (D-29) y no debajo de la foto, porque se vuelve a Mi perfil con una redirección."""
+    if request.method != "POST":
+        return redirect("core:mi_perfil")
+    archivo = request.FILES.get("foto") or request.FILES.get("foto_camara")
+    if archivo is None:
+        messages.error(request, MENSAJE_SIN_ARCHIVO_DE_FOTO)
+        return redirect("core:mi_perfil")
+    # El encuadre que armó el editor (JavaScript): tres enteros en píxeles de la imagen ya orientada. Sin JavaScript no llegan y el
+    # recorte es central. Los valida el servicio (``core/imagenes.py``): acá solo se leen, tal como llegaron.
+    recorte = tuple(request.POST.get(campo) for campo in ("recorte_x", "recorte_y", "recorte_lado"))
+    try:
+        cambiar_foto_perfil(request.user, archivo, recorte=recorte)
+    except ValidationError as error:
+        messages.error(request, error.messages[0])
+    else:
+        messages.success(request, MENSAJE_FOTO_ACTUALIZADA)
+    return redirect("core:mi_perfil")
+
+
+@never_cache
+def quitar_mi_foto(request):
+    """Quita la foto de la propia cuenta (USR-GST-PRF regla 5). Solo POST."""
+    if request.method != "POST":
+        return redirect("core:mi_perfil")
+    quitar_foto_perfil(request.user)
+    messages.success(request, MENSAJE_FOTO_QUITADA)
+    return redirect("core:mi_perfil")
+
+
 # ---- Cuentas vinculadas (USR-VNC-CTA y SEG-09, tarea 06b) ----
 # Solo las cuentas de un rol del dominio: el Administrador no tiene vínculos (regla 5, SEG-13), así que recibe un
 # 403 con el mensaje de ``rol_requerido``. Las ventanas siguen el patrón de las confirmaciones de cuentas
@@ -541,6 +587,20 @@ def usuarios(request):
     return render(request, plantilla, {"form": form, "cuentas": cuentas})
 
 
+def _contexto_de_ficha(request, cuenta):
+    """Lo que dibuja la ficha de ``cuenta`` para quien mira: los botones de ``acciones_permitidas`` (D-30) y lo de solo lectura."""
+    return {
+        "cuenta": cuenta,
+        "acciones": acciones_permitidas(request.user, cuenta),
+        # Regla 3 de USR-CNS-USR y regla 7 de USR-MOD-USR: los vínculos, en solo lectura.
+        "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
+        # Regla 3 de USR-CNS-USR (MAE-05, D-55): datos de solo lectura que registran las apps (el invernadero del Transportista).
+        "datos_de_cuenta": extensiones.datos_de_cuenta(cuenta),
+        # Regla 7 de AUD-CNS-REG: «Ver auditoría» solo si quien mira puede abrir la auditoría de esa cuenta.
+        "puede_ver_auditoria": puede_ver_auditoria_de(request.user, cuenta),
+    }
+
+
 @rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
 def usuario_ficha(request, cuenta_id):
     """Ficha de una cuenta (USR-CNS-USR, vUsuario). Fuera del alcance da 403; un id inexistente, 404.
@@ -548,20 +608,30 @@ def usuario_ficha(request, cuenta_id):
     Muestra solo los botones de ``acciones_permitidas`` (D-30): nadie llega por un botón a un 403.
     """
     cuenta = obtener_cuenta(request.user, cuenta_id)
-    return render(
-        request,
-        "core/usuarios/ficha.html",
-        {
-            "cuenta": cuenta,
-            "acciones": acciones_permitidas(request.user, cuenta),
-            # Regla 3 de USR-CNS-USR y regla 7 de USR-MOD-USR: los vínculos, en solo lectura.
-            "vinculadas": cuentas_vinculadas(cuenta, actor=request.user),
-            # Regla 3 de USR-CNS-USR (MAE-05, D-55): datos de solo lectura que registran las apps (el invernadero del Transportista).
-            "datos_de_cuenta": extensiones.datos_de_cuenta(cuenta),
-            # Regla 7 de AUD-CNS-REG: «Ver auditoría» solo si quien mira puede abrir la auditoría de esa cuenta.
-            "puede_ver_auditoria": puede_ver_auditoria_de(request.user, cuenta),
-        },
-    )
+    return render(request, "core/usuarios/ficha.html", _contexto_de_ficha(request, cuenta))
+
+
+@rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)
+@never_cache
+@vary_on_headers("HX-Request")
+def usuario_quitar_foto(request, cuenta_id):
+    """Quitar la foto de una cuenta (USR-MOD-USR postcondición e y regla 8): quien la gestiona puede quitarla, no cambiarla.
+
+    Como las otras acciones sobre una cuenta (D-28): abrir la ventana (GET) no cambia nada (con HTMX llega solo la ventana; sin
+    JavaScript, la ficha con la ventana abierta) y la quita es un POST que vuelve a la ficha con un aviso breve. Si la cuenta no
+    tiene foto no hay nada que confirmar: se vuelve a la ficha. No se audita.
+    """
+    cuenta = obtener_cuenta(request.user, cuenta_id)
+    if not cuenta.foto_perfil:
+        return redirect("core:usuario", cuenta.pk)
+    if request.method == "POST":
+        quitar_foto_de_cuenta(request.user, cuenta.pk)
+        messages.success(request, f"Se quitó la foto de perfil de {cuenta.get_full_name()}.")
+        return redirect("core:usuario", cuenta.pk)
+    contexto = _contexto_de_ficha(request, cuenta) | {"accion": "quitar_foto"}
+    if _es_pedido_htmx(request):
+        return render(request, "core/usuarios/_ventana_confirmar.html", contexto)
+    return render(request, "core/usuarios/ficha.html", contexto)
 
 
 @rol_requerido(Usuario.Rol.GERENTE, ADMINISTRADOR)

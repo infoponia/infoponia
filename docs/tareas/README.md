@@ -36,7 +36,6 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 
 | ID | Título | App | Estado | Depende de / espera | Archivo |
 |---|---|---|---|---|---|
-| USR-07 | Foto de perfil | core | bloqueada | Proveedor de almacenamiento; permiso para Pillow y `django-storages` (D-20) | `usuarios/USR-07-foto-perfil.md` |
 | USR-09b | Topes de intentos de identificación y de pedidos de recuperación (USR-09a hizo el resto) | core | pendiente | — | `usuarios/USR-09-seguridad-produccion.md` |
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
 | MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | hecha (PR #45, 21/11/2026; revisión a mano pendiente) | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
@@ -136,12 +135,6 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 | CON-04a | Asientos de producción (reapertura) | produccion | hecha (PR #__, 25/11/2026; revisión a mano pendiente) | CON-02 (hecha), PRD-04 (hecha) | `contabilidad/CON-04a-asientos-de-produccion.md` |
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, COM-04a, COM-04b, COM-06a (hechas) | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
 | CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, USR-11 (hecha), COM-06b a COM-08b (hechas) | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
-
-### Puesta en marcha contable (fuera de ronda, 26/11/2026)
-
-| ID | Título | App | Estado | Depende de / espera | Archivo |
-|---|---|---|---|---|---|
-| CON-05 | Iniciar el ejercicio contable con el capital inicial (CON-INI-EJE); sin ejercicio no hay asiento | contabilidad (y `config/settings.py`, `core` acción de auditoría, los pasos diarios con asientos, las vistas que atrapan `ErrorContable` y las pruebas de todas las apps) | pendiente | CON-04d y EST-03 (hechas) | `contabilidad/CON-05-iniciar-ejercicio-contable.md` |
 
 ### Ronda «Estadísticas 1» (D-93)
 

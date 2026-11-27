@@ -58,6 +58,7 @@ from produccion.tests.fabricas import (
     orden_de_transicion,
     variedad_con_stock,
 )
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 ACCION = RegistroAuditoria.Accion.FUERA_DE_SERVICIO_SECTOR
 
@@ -67,6 +68,7 @@ class PruebaDeFueraDeServicio(PlanDeCuentasMixin, ConDatosDeInventario, TestCase
 
     @classmethod
     def setUpTestData(cls):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         cls.e = invernadero_con_produccion()
@@ -510,12 +512,12 @@ class AuditoriaYAtomicidadTests(PruebaDeFueraDeServicio):
         self.assertIn(f"{self.lote.codigo}: 25", cambios["cantidad_actual"]["despues"])
 
     def test_post_j_ninguna_otra_accion_de_auditoria_ni_una_por_orden(self):
-        """Un registro por caso de uso (D-36): ni `cancelacion_orden` ni `registro_merma` aparte. CON-04a: lo único que se suma son los registros del ejercicio que abre la autorrecuperación (H9), del
-        asiento de la merma y de su movimiento, que audita `contabilidad` (D-86 punto 4)."""
+        """Un registro por caso de uso (D-36): ni `cancelacion_orden` ni `registro_merma` aparte. CON-04a: lo único que se suma son los registros del asiento de la merma y de su movimiento, que
+        audita `contabilidad` (D-86 punto 4). CON-05: el ejercicio ya no lo abre la autorrecuperación (H9) y el que deja `iniciar_contabilidad_para_pruebas` no audita."""
         self.armar()
         self.poner(causas=((self.lote.pk, "plaga", ""),))
         acciones = set(RegistroAuditoria.objects.values_list("accion", flat=True))
-        self.assertEqual(acciones, {ACCION, "alta_ejercicio_contable", "alta_asiento_contable", "alta_movimiento_contable"})
+        self.assertEqual(acciones, {ACCION, "alta_asiento_contable", "alta_movimiento_contable"})
         self.assertEqual(RegistroAuditoria.objects.filter(accion=ACCION).count(), 1)
 
     def test_garantia_todo_o_nada_si_falla_la_notificacion_no_queda_nada(self):

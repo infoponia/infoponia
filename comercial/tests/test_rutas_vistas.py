@@ -31,6 +31,7 @@ from core.tests.fabricas import crear_capataz, crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
 from maestros.tests.fabricas import crear_agronomo, crear_vendedor
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
 HOY = timezone.localdate()
@@ -43,6 +44,7 @@ def texto(respuesta):
 
 class Base(ConDatosDeInventario, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 5000)
         self.gerente = crear_gerente()

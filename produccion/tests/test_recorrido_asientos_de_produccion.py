@@ -15,6 +15,7 @@ from django.utils import timezone
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
 from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Contador
 from core.tests.fabricas import crear_cuenta, crear_gerente
@@ -48,12 +49,16 @@ class RecorridoDeAsientosDeProduccionTests(PlanDeCuentasMixin, ConDatosDeInventa
         libro = reverse("contabilidad:libro")
         self.assertEqual(EjercicioContable.objects.count(), 0)  # estado inicial: contabilidad sin ejercicio, todavía sin poner en marcha
 
-        # --- 1. El Capataz concreta la siembra (PROD-CNC-SMB): «Ver resumen» no asienta; «Confirmar» crea el asiento del consumo de la semilla y abre el primer ejercicio ---
+        # --- 1. El Capataz concreta la siembra (PROD-CNC-SMB): «Ver resumen» no asienta; sin ejercicio «Confirmar» no registra nada (regla 9 de CON-INI-EJE, CON-05); iniciada la contabilidad, crea el asiento del consumo de la semilla ---
         orden = orden_de_siembra(e, plantines=50)
         cliente.force_login(e.capataz)
         url = reverse("produccion:concretar", args=[orden.pk])
         resumen = cliente.post(url, {"accion": "calcular"})
         self.assertEqual(AsientoContable.objects.count(), 0)
+        sin_ejercicio = cliente.post(url, {"accion": "confirmar", "firma": resumen.context["firma"]})
+        self.assertContains(sin_ejercicio, "La operación no se registró.")
+        self.assertEqual((EjercicioContable.objects.count(), AsientoContable.objects.count(), Lote.objects.filter(siembra=orden).count()), (0, 0, 0))
+        iniciar_contabilidad_para_pruebas()  # el helper y no `iniciar_ejercicio`: su asiento de apertura N.º 1 correría los números de abajo
         confirmada = cliente.post(url, {"accion": "confirmar", "firma": resumen.context["firma"]})
         self.assertRedirects(confirmada, reverse("produccion:bandeja"))
         lote = Lote.objects.get(siembra=orden)

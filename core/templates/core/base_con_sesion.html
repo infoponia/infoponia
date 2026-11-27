@@ -11,7 +11,7 @@ mostradas. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecer
   <header class="top">
     {% block boton_volver %}{% endblock %}
     <div class="brand">
-      <div class="logo">{% icono "leafmark" 16 %}</div>
+      {% include "core/_logo.html" %}
       <b>{{ nombre_organizacion }}</b>
     </div>
     <div class="spacer"></div>
@@ -20,7 +20,7 @@ mostradas. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecer
     <button class="acct" type="button" data-menu-cuenta aria-haspopup="dialog"
             aria-controls="menu-cuenta" aria-expanded="false"
             aria-label="Menú de cuenta: {{ user.get_full_name }}, {{ rol_visible }}">
-      <div class="avatar">{{ sigla }}</div>
+      {% include "core/_avatar.html" with cuenta=user %}
       <div class="who"><b>{{ user.get_full_name }}</b><span>{{ rol_visible }}</span></div>
       {% icono "chev" 12 %}
     </button>

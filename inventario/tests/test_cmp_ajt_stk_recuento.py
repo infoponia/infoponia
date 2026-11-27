@@ -13,12 +13,14 @@ from decimal import Decimal
 from django.test import TestCase
 
 from contabilidad import cuentas
+from contabilidad.errores import ErrorContable
 from contabilidad.models import AsientoContable, EjercicioContable
 from core.models import RegistroAuditoria
 from inventario.models import InsumoInvernadero, LoteInsumo, MovimientoInsumo
 from inventario.tests.ajustes_comunes import RECUENTO, BaseDeAjustes, ajustes
 from inventario.tests.fabricas import existencia, faltante, insumo, lote
 from maestros.tests.fabricas import crear_agronomo
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 D = Decimal
 Mov = MovimientoInsumo.TipoMovimiento
@@ -69,6 +71,7 @@ class CmpAjtStkRecuentoTests(BaseDeAjustes, TestCase):
     """Flujo del recuento físico: calcular (paso 12) y confirmar (pasos 13 a 15)."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.preparar()
         self.l1 = lote(self.iin, 10, vence=self.vence)
         self.l2 = lote(self.iin, 20, vence=self.vence + timedelta(days=30))
@@ -277,16 +280,18 @@ class CmpAjtStkRecuentoTests(BaseDeAjustes, TestCase):
         self.assertEqual(RegistroAuditoria.objects.filter(accion=acciones.ALTA_ASIENTO_CONTABLE).count(), 2)  # uno por lote que cambió
         self.assertEqual(RegistroAuditoria.objects.filter(accion=acciones.ALTA_MOVIMIENTO_CONTABLE).count(), 4)  # dos líneas por asiento
 
-    def test_d92_sin_ejercicio_el_ajuste_se_registra_abre_el_primero_y_muestra_el_valor(self):
-        """D-92 punto 2: las precondiciones c y d (ejercicio vigente y cuentas) se cumplen solas: sin ejercicio en la base, el asiento abre el primero
-        (autorrecuperación, H9) y el ajuste se registra. El valor sigue mostrándose en el resumen."""
+    def test_regla_9_sin_ejercicio_el_ajuste_no_se_registra_y_el_resumen_sigue_mostrando_el_valor(self):
+        """Regla 9 de CON-INI-EJE (CON-05; reemplaza `test_d92_sin_ejercicio_el_ajuste_se_registra_abre_el_primero_y_muestra_el_valor`, de D-92 punto 2 y H9): sin ejercicio el resumen sigue
+        mostrando el valor del ajuste, pero confirmarlo se rechaza con `contabilidad_no_iniciada` y no cambia ni el stock ni el ejercicio."""
+        EjercicioContable.objects.all().delete()  # la clase trae el ejercicio del helper
+        resumen = self.calcular(RECUENTO, {"contados": {self.l1.pk: "8"}})
+        self.assertEqual(resumen.valor, D("-200.00"))
+        with self.assertRaises(ErrorContable) as contexto:
+            self.confirmar(RECUENTO, {"contados": {self.l1.pk: "8"}})
+        self.assertEqual(contexto.exception.codigo, "contabilidad_no_iniciada")
         self.assertEqual(EjercicioContable.objects.count(), 0)
-        resultado = self.confirmar(RECUENTO, {"contados": {self.l1.pk: "8"}})
-        self.assertEqual(resultado.resumen.valor, D("-200.00"))
-        [ejercicio] = EjercicioContable.objects.all()
-        self.assertEqual((ejercicio.estado_ejercicio, ejercicio.fecha_inicio_ejercicio), (EjercicioContable.Estado.ABIERTO, self.hoy))
-        self.assertEqual([a.ejercicio_id for a in resultado.asientos], [ejercicio.pk])
-        self.invariantes()
+        self.l1.refresh_from_db()
+        self.assertEqual(self.l1.cantidad_disponible, D("10"))
 
     # ---- CON-04b: un asiento por cada movimiento de ajuste del recuento (postcondición e, R012) ----
 

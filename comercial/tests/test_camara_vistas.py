@@ -20,6 +20,7 @@ from inventario.tests.fabricas import ConDatosDeInventario
 from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo
 from produccion.models import Merma
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
 HOY = timezone.localdate()
@@ -34,6 +35,7 @@ class Base(ConDatosDeInventario, TestCase):
     """Un invernadero con Agrónomo, Capataz y Vendedor, un lote de 300 en Maduración y una partida de 50 plantas con 20 reservadas para una venta con envío."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 300)
         self.partida = partida(self.lote, 50, fecha_limite=HOY + timedelta(days=2))

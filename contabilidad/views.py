@@ -9,24 +9,30 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_safe
 from django.views.decorators.vary import vary_on_headers
 
 from contabilidad import cuentas
-from contabilidad.errores import ErrorContable
+from contabilidad.errores import ErrorContable, relanzar_si_no_iniciada
 from contabilidad.constantes import DEBE, HABER
 from contabilidad.forms import (
+    CUENTAS_DE_INICIO_AL_DEBE,
+    CUENTAS_DE_INICIO_AL_HABER,
     FormularioDelLibro,
     asiento_precargado,
     asiento_vacio,
     errores_para_pantalla,
+    errores_de_inicio,
     etiqueta_de_cuenta,
     fecha_desde_texto,
     leer_asiento,
+    leer_inicio,
+    volver_seguro,
 )
-from contabilidad.models import EjercicioContable
+from contabilidad.models import CuentaContable, EjercicioContable
 from contabilidad.servicios import ejercicios as servicio_de_ejercicios
 from contabilidad.servicios import asientos, libro, plan, responsables
 from core.acceso import rol_requerido
@@ -213,7 +219,8 @@ def pestana_de_ejercicios(request):
         {"numero": e.numero, "ejercicio": e.ejercicio, "asientos": e.cantidad_de_asientos, "dias_desde_el_fin": (hoy - e.ejercicio.fecha_cierre_ejercicio).days}
         for e in reversed(numerados)
     ]
-    contexto = {"filas": filas, "puede_cerrar": responsables.puede_registrar_asientos(request.user), **_contexto_de_pestanas(numerados)}
+    puede = responsables.puede_registrar_asientos(request.user)
+    contexto = {"filas": filas, "puede_cerrar": puede, "puede_iniciar": puede, **_contexto_de_pestanas(numerados)}
     return render(request, "contabilidad/ejercicios.html", contexto)
 
 
@@ -238,6 +245,7 @@ def cierre(request, ejercicio_id):
             try:
                 servicio_de_ejercicios.cerrar_ejercicio(request.user, ejercicio_id)
             except ErrorContable as error:  # `ejercicio_no_esta_en_cierre`: otro lo cerró mientras se miraba el resumen
+                relanzar_si_no_iniciada(error)
                 messages.error(request, error.mensaje)
             else:
                 messages.success(request, f"Cerraste el ejercicio N.º {numero}. Ya no recibe asientos.")
@@ -256,11 +264,97 @@ def cierre(request, ejercicio_id):
     return render(request, "contabilidad/cierre.html", contexto, status=200)
 
 
+# ---- iniciar ejercicio (CON-INI-EJE) ----
+
+
+def _filas_de_inicio(datos, errores):
+    """Las cinco líneas del formulario en dos bloques, «Debe» y «Haber»: cada una con su código, su nombre (del plan), lo escrito y sus errores."""
+    nombres = dict(CuentaContable.objects.filter(codigo_cuenta__in=[*CUENTAS_DE_INICIO_AL_DEBE, *CUENTAS_DE_INICIO_AL_HABER]).values_list("codigo_cuenta", "nombre_cuenta"))
+
+    def filas(codigos):
+        return [
+            {"codigo": c, "nombre": nombres.get(c, c), "texto": datos.importes_texto.get(c, ""), "errores": errores["importes"].get(c, [])} for c in codigos
+        ]
+
+    return filas(CUENTAS_DE_INICIO_AL_DEBE), filas(CUENTAS_DE_INICIO_AL_HABER)
+
+
+def _dibujar_inicio(request, datos, errores=None, solo_el_cuerpo=False):
+    """El formulario del paso 2 (la página entera o, para «Calcular cierre» con HTMX, solo su cuerpo): la fecha con el rango de la regla 4, el cierre previsto que resulta (`—` si la fecha
+    no es válida), las cinco líneas en «Debe» y «Haber» y el texto de la regla 7. Cada error vuelve junto a su campo y lo escrito se conserva."""
+    errores = errores or {"fecha": [], "importes": {}, "general": []}
+    hoy = timezone.localdate()
+    debe, haber = _filas_de_inicio(datos, errores)
+    contexto = {
+        "modo": "formulario",
+        "datos": datos,
+        "errores": errores,
+        "filas_del_debe": debe,
+        "filas_del_haber": haber,
+        "hoy": hoy,
+        "fecha_minima": servicio_de_ejercicios.fecha_inicio_minima(hoy),
+        "cierre": servicio_de_ejercicios.cierre_previsto(datos.fecha) if datos.fecha else None,
+    }
+    return render(request, "contabilidad/_iniciar_formulario.html" if solo_el_cuerpo else "contabilidad/iniciar.html", contexto)
+
+
+def _iniciar_ya_iniciada(request, volver, listo):
+    """Con la contabilidad iniciada: la confirmación del paso 8 (si se llegó por `?listo=1`) o el mensaje de la extensión 2a, con el enlace a «Ejercicios»."""
+    contexto = {"modo": "listo" if listo else "ya_iniciada", "volver": volver}
+    if listo:
+        ejercicio = servicio_de_ejercicios.ejercicio_abierto() or EjercicioContable.objects.order_by("fecha_inicio_ejercicio", "id").first()
+        contexto.update(
+            {
+                "ejercicio": ejercicio,
+                "numero_de_ejercicio": servicio_de_ejercicios.numero_de_ejercicio(ejercicio),
+                "puede_registrar_lote": request.user.rol == GERENTE,  # «Registrar lote existente» es del Agrónomo y del Gerente: no se enlaza a quien llevaría a un 403 (D-30)
+            }
+        )
+    return render(request, "contabilidad/iniciar.html", contexto)
+
+
+@rol_requerido(GERENTE, CONTADOR)
+@require_http_methods(["GET", "POST"])
+@never_cache
+@vary_on_headers("HX-Request")
+def iniciar_ejercicio(request):
+    """«Iniciar ejercicio» (CON-INI-EJE; sin prototipo: se armó con el estilo de «Registrar asiento»). Solo el responsable contable entra (regla 1; si no, 403 con el motivo: no hay botón que
+    lleve acá, D-30). Paso 2: el formulario; «Calcular cierre» solo recalcula el cierre previsto, sin validar (interfaz.md); paso 5: «Ver resumen» valida y muestra el resumen; pasos 6 a 8:
+    «Confirmar e iniciar» crea el ejercicio y el asiento N.º 1 y redirige a la confirmación (`?listo=1`). Con la contabilidad ya iniciada (extensiones 2a y 7a), el mensaje y el enlace a
+    «Ejercicios». `?volver=<ruta>` (solo del mismo sitio) viaja oculto y ofrece «Volver a la operación» al terminar (extensión 1b)."""
+    servicio_de_ejercicios.exigir_quien_inicia(request.user)
+    hoy = timezone.localdate()
+    volver = volver_seguro(request.POST.get("volver") or request.GET.get("volver"))
+    if servicio_de_ejercicios.contabilidad_iniciada():
+        return _iniciar_ya_iniciada(request, volver, listo=request.method == "GET" and request.GET.get("listo") == "1")
+    if request.method == "GET":
+        return _dibujar_inicio(request, leer_inicio(request.GET, hoy, volver))
+
+    datos = leer_inicio(request.POST, hoy, volver)
+    accion = request.POST.get("accion", "revisar")
+    if accion == "calcular":  # solo el cierre previsto, sin validar nada
+        return _dibujar_inicio(request, datos, solo_el_cuerpo=bool(request.headers.get("HX-Request")))
+    if accion not in ("revisar", "confirmar"):  # «editar» (volver del resumen) o una acción desconocida
+        return _dibujar_inicio(request, datos)
+    try:
+        if accion == "confirmar":
+            servicio_de_ejercicios.iniciar_ejercicio(request.user, datos.fecha, datos.importes(), hoy=hoy)
+        else:
+            resumen = servicio_de_ejercicios.resumir_inicio(request.user, datos.fecha, datos.importes(), hoy=hoy)
+    except ErrorContable as error:
+        if error.codigo == "contabilidad_ya_iniciada":  # otro la inició mientras tanto (extensiones 2a y 7a)
+            return _iniciar_ya_iniciada(request, volver, listo=False)
+        return _dibujar_inicio(request, datos, errores_de_inicio(error))
+    if accion == "confirmar":
+        return redirect(f"{reverse('contabilidad:iniciar')}?{urlencode({'listo': 1, **({'volver': volver} if volver else {})})}")
+    return render(request, "contabilidad/iniciar.html", {"modo": "resumen", "datos": datos, "resumen": resumen})
+
+
 # ---- asiento manual (CON-REG-ASI) ----
 
 ATAJOS = {
-    # Extensiones 3a y 3b: solo precargan la descripción y sugieren cuentas; no tienen código propio (el asiento se registra como cualquier manual).
-    "apertura": ("Asiento de apertura", [(cuentas.CAJA, DEBE), (cuentas.CAPITAL_INICIAL, HABER)]),
+    # Extensión 3b: solo precarga la descripción y sugiere cuentas; no tiene código propio (el asiento se registra como cualquier manual). La 3a («Asiento de apertura») se quitó con CON-05: la
+    # apertura es CON-INI-EJE.
     "venta_previa": ("Venta de producción previa a la puesta en marcha", [(cuentas.CAJA, DEBE), (cuentas.VENTAS, HABER)]),
 }
 
@@ -297,7 +391,7 @@ def _numero_corregido(texto):
 @never_cache
 @vary_on_headers("HX-Request")
 def asiento_nuevo(request):
-    """«Registrar asiento» (CON-REG-ASI; ``VIEWS.k_new``): formulario con filas que se agregan y se quitan, buscador de cuenta, los atajos de apertura y venta previa, el
+    """«Registrar asiento» (CON-REG-ASI; ``VIEWS.k_new``): formulario con filas que se agregan y se quitan, buscador de cuenta, el atajo de venta previa, el
     resumen previo y la confirmación en una pantalla aparte. Todo son botones de un formulario (``accion``): funciona sin JavaScript; con HTMX, agregar y quitar una
     fila solo redibuja el formulario. ``?corrige=<id>`` precarga las líneas de un asiento anulado (C4; extensión 1b). Quien no puede registrar ve el motivo (no hay
     botón que lleve acá, D-30); un POST suyo es 403."""
@@ -306,6 +400,8 @@ def asiento_nuevo(request):
         if request.method == "POST":
             raise PermissionDenied("Lo registra el Contador.")
         return render(request, "contabilidad/asiento_nuevo.html", {"puede": False})
+    if request.method == "GET" and not servicio_de_ejercicios.contabilidad_iniciada():  # regla 9 de CON-INI-EJE: no se ofrece el formulario; un POST lo atiende el middleware
+        return render(request, "contabilidad/asiento_nuevo.html", {"puede": True, "sin_contabilidad": True})
     cuentas_del_plan = _cuentas_del_arbol(plan.arbol())
     if request.method == "GET":
         corrige = request.GET.get("corrige")
@@ -338,6 +434,7 @@ def asiento_nuevo(request):
             asientos.resumir_asiento_manual(request.user, hoy, datos.descripcion, movimientos, hoy=hoy)
             errores = _errores_vacios()
         except ErrorContable as error:
+            relanzar_si_no_iniciada(error)  # regla 9 de CON-INI-EJE: la ventana la arma el middleware
             errores = errores_para_pantalla(error, datos.filas)
         errores["fecha"].insert(0, "Indicá una fecha válida.")
         return _dibujar_formulario(request, datos, errores, corrige)
@@ -347,6 +444,7 @@ def asiento_nuevo(request):
         else:
             resumen = asientos.resumir_asiento_manual(request.user, datos.fecha, datos.descripcion, movimientos, hoy=hoy)
     except ErrorContable as error:
+        relanzar_si_no_iniciada(error)  # regla 9 de CON-INI-EJE
         return _dibujar_formulario(request, datos, errores_para_pantalla(error, datos.filas), corrige)
     if accion == "confirmar":
         numero = servicio_de_ejercicios.numero_de_ejercicio(asiento.ejercicio)
@@ -394,6 +492,7 @@ def contraasiento(request, ejercicio_id, numero):
         else:
             resumen = asientos.resumir_contraasiento(request.user, asiento.pk, fecha, motivo, hoy=hoy)
     except ErrorContable as error:
+        relanzar_si_no_iniciada(error)  # regla 9 de CON-INI-EJE
         errores = errores_para_pantalla(error)
         if error.codigo == "asiento_no_anulable":  # otro lo anuló mientras tanto (6a): la ficha ya lo muestra anulado
             messages.error(request, error.mensaje)

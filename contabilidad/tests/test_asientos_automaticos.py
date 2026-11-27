@@ -407,14 +407,15 @@ class AsientoAutomaticoAutorrecuperacionTests(PlanDeCuentasMixin, TestCase):
         self.assertEqual(asiento.fecha_asiento, datetime.date(2027, 12, 20))
         self.assertEqual(asiento.descripcion_asiento, "")
 
-    def test_regla_4_sin_ningun_ejercicio_crea_el_primero_que_empieza_hoy_y_asienta(self):
-        """D-84 punto 3: la primera operación contable crea el primer ejercicio (empieza hoy) y asienta en él."""
-        asiento = _registrar(fecha=HOY)
+    def test_regla_9_sin_ningun_ejercicio_no_crea_el_primero_y_lanza_contabilidad_no_iniciada(self):
+        """Regla 9 de CON-INI-EJE (CON-05; reemplaza la prueba de D-84 punto 3, «la primera operación crea el primer ejercicio»): sin ejercicio
+        no se crea ninguno ni se asienta, y se lanza `contabilidad_no_iniciada`."""
+        with self.assertRaises(ErrorContable) as contexto:
+            _registrar(fecha=HOY)
 
-        primero = EjercicioContable.objects.get()
-        self.assertEqual((primero.fecha_inicio_ejercicio, primero.estado_ejercicio), (HOY, Estado.ABIERTO))
-        self.assertEqual((asiento.ejercicio_id, asiento.numero_asiento), (primero.pk, 1))
-        verificar_invariantes_contables()
+        self.assertEqual(contexto.exception.codigo, "contabilidad_no_iniciada")
+        self.assertFalse(EjercicioContable.objects.exists())
+        self.assertFalse(AsientoContable.objects.exists())
 
 
 class AsientoAutomaticoFechaTests(PlanDeCuentasMixin, TestCase):

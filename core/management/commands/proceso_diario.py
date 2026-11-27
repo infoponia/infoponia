@@ -33,7 +33,7 @@ class Command(BaseCommand):
         python manage.py proceso_diario --fecha 2026-12-15
         python manage.py proceso_diario --solo revisar_vencimientos
 
-    En Render también se puede correr a mano desde la «Shell» del web service, sin crear ningún cron job.
+    En producción lo corre el cron job `infoponia-proceso-diario` de Render (decisión de CON-05, «Crons»); para correrlo a mano, botón «Trigger Run» de ese cron.
     Termina con código 0 si todos los pasos salieron bien y con 1 si alguno falló (los demás igual corren).
     """
 

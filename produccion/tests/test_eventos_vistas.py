@@ -21,6 +21,7 @@ from maestros.models import Invernadero
 from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_invernadero
 from produccion.models import AplicacionInsumos, Bitacora, Lote, Merma
 from produccion.tests.fabricas import invernadero_con_produccion, lote_activo
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HX = {"HTTP_HX_REQUEST": "true"}
 D = Decimal
@@ -32,6 +33,7 @@ def hoy():
 
 class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: estos servicios asientan
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = invernadero_con_produccion()
         self.gerente = crear_gerente()
         self.lote = lote_activo(self.e, cantidad=50, sector="germinacion", costo="100.00")

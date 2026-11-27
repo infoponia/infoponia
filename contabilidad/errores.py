@@ -3,6 +3,10 @@
 # corresponde, el campo del formulario. Mismo molde que `ErrorDeProduccion` y `ErrorDeCompras`.
 
 
+# Código del error de la regla 9 de CON-INI-EJE («sin ejercicio no hay asiento», tarea CON-05). Lo atiende `contabilidad.middleware`; nadie más lo atrapa.
+CODIGO_NO_INICIADA = "contabilidad_no_iniciada"
+
+
 class ErrorContable(Exception):
     """Rechazo de una regla de `contabilidad`. `codigo` es estable (`asiento_desbalanceado`, `cuenta_inexistente`, `origen_con_asiento`,
     `importe_invalido`, `tipo_de_movimiento_invalido`, `fecha_en_ejercicio_cerrado`, `fecha_futura`,
@@ -21,6 +25,13 @@ class ErrorContable(Exception):
     def errores(self):
         """La lista de errores que lleva este rechazo: uno solo (él mismo). `ErroresContables` lleva varios (CON-03b, patrón ABM sección 2)."""
         return [self]
+
+
+def relanzar_si_no_iniciada(error):
+    """Para las vistas que atrapan `ErrorContable` de forma general: si es `contabilidad_no_iniciada`, lo vuelve a lanzar para que lo atienda el middleware (regla 9 de CON-INI-EJE).
+    Se llama primero dentro del `except`; con cualquier otro código no hace nada."""
+    if error.codigo == CODIGO_NO_INICIADA:
+        raise error
 
 
 class ErroresContables(ErrorContable):

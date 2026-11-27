@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
-from core import correo, extensiones, notificaciones
+from core import correo, extensiones, imagenes, notificaciones
 from core.models import (
     ADMINISTRADOR,
     MODELO_CUENTA,
@@ -45,6 +45,7 @@ from core.validadores import validar_telefono
 MENSAJE_EMAIL_REPETIDO = "Ya existe una cuenta con ese email."
 MENSAJE_FUERA_DE_ALCANCE = "Esa cuenta no está dentro de las que gestionás."
 MENSAJE_SIN_ACCESO = "Tu cuenta no tiene acceso a la gestión de usuarios."
+MENSAJE_SIN_ACCESO_A_LA_FOTO = "Tu cuenta no puede cambiar su foto de perfil."
 # Consultar el registro de auditoría (AUD-CNS-REG, D-36).
 MENSAJE_SIN_ACCESO_A_AUDITORIA = "Tu cuenta no tiene acceso a la auditoría."
 MENSAJE_REGISTRO_FUERA_DE_ALCANCE = "Ese registro de auditoría no está dentro de los que podés consultar."
@@ -416,7 +417,7 @@ def obtener_cuenta(actor, cuenta_id):
 
 def acciones_permitidas(actor, cuenta):
     """Acciones que ``actor`` puede hacer hoy sobre ``cuenta``: un subconjunto de ``{"modificar",
-    "restablecer", "reactivar", "baja"}``. La ficha y el aviso de la regla 8 del alta muestran solo estos
+    "restablecer", "reactivar", "baja", "quitar_foto"}``. La ficha y el aviso de la regla 8 del alta muestran solo estos
     botones, para que nadie llegue por un botón a un error 403 (D-30).
 
     - USR-MOD-USR y USR-BAJ-USR: sobre una cuenta de su alcance (regla 1), el Gerente y el Administrador
@@ -428,6 +429,7 @@ def acciones_permitidas(actor, cuenta):
       Administrador activo (el caso real es la propia cuenta del único Administrador activo).
     - Regla 5 de USR-MOD-USR: «reactivar» se ofrece para cualquier cuenta inactiva; si es un Gerente y ya
       hay otro activo, el rechazo se explica al confirmar (D-30), no es un 403.
+    - Regla 8 de USR-MOD-USR (USR-07): «quitar_foto» se ofrece sobre una cuenta de su alcance que tiene foto, esté activa o no.
 
     No consulta ni cambia nada más que el alcance y los Administradores activos.
     """
@@ -437,9 +439,10 @@ def acciones_permitidas(actor, cuenta):
         return frozenset()
     if not Usuario.objects.en_alcance_de(actor).filter(pk=cuenta.pk).exists():
         return frozenset()
+    foto = {"quitar_foto"} if cuenta.foto_perfil else set()
     if not cuenta.is_active:
-        return frozenset({"modificar", "reactivar"})
-    acciones = {"modificar", "restablecer", "baja"}
+        return frozenset({"modificar", "reactivar"} | foto)
+    acciones = {"modificar", "restablecer", "baja"} | foto
     if cuenta.pk == actor.pk:
         acciones.discard("restablecer")  # regla 4
     if cuenta.is_superuser and not _hay_otro_administrador_activo(cuenta):
@@ -906,6 +909,92 @@ def modificar_usuario(actor, cuenta_id, nombre, apellido, email, telefono=""):
             afectados=[cuenta],
             detalle={"cambios": cambios},
         )
+    return cuenta
+
+
+# ---- Foto de perfil (USR-07: USR-GST-PRF regla 5, USR-MOD-USR regla 8 y postcondición e; SEG-19, D-20 y D-106) ----
+# Ninguna de estas operaciones se audita (USR-GST-PRF regla 4, SEG-14, D-20, USR-MOD-USR postcondición d). Un archivo que ya
+# se guardó en el almacenamiento y cuya fila no se pudo guardar se borra enseguida; el archivo anterior se borra recién cuando
+# la transacción se confirma (``imagenes.borrar_al_confirmar``, D-106 punto 7). Límite conocido: si el que se deshace es una
+# transacción de afuera (que envuelve a esta operación), el archivo nuevo ya guardado queda huérfano; ninguna vista lo hace.
+
+LADO_DE_LA_FOTO = 256  # D-20 y D-106: la foto se achica hasta 256 px de lado (nunca se agranda)
+CARPETA_DE_FOTOS = "fotos_perfil"
+LADO_MINIMO_DE_LA_FOTO = 64  # precisión de D-106: toda foto mide al menos 64 px de lado, con o sin encuadre elegido
+
+
+def _bloquear_para_la_foto(cuenta_id):
+    """La fila de la cuenta, bloqueada (``FOR NO KEY UPDATE``, como ``_bloquear_cuenta_en_alcance``) para que dos cambios
+    simultáneos no dejen un archivo huérfano. Hay que llamarla dentro de ``transaction.atomic()``."""
+    return Usuario.objects.select_for_update(no_key=True).get(pk=cuenta_id)
+
+
+def _poner_foto(fila, nombre_nuevo):
+    """Deja ``nombre_nuevo`` (``""`` para quitarla) como foto de ``fila`` y programa el borrado de la anterior. Si no se puede
+    guardar, borra el archivo nuevo (si lo hay) y repite el error. Devuelve el nombre de la foto anterior."""
+    anterior = fila.foto_perfil.name
+    try:
+        fila.foto_perfil = nombre_nuevo
+        fila.save(update_fields=["foto_perfil"])
+    except BaseException:
+        imagenes.borrar(nombre_nuevo)
+        raise
+    imagenes.borrar_al_confirmar(anterior)
+    return anterior
+
+
+def cambiar_foto_perfil(usuario, archivo, recorte=None):
+    """USR-GST-PRF regla 5 y SEG-19: carga o cambia la foto de la propia cuenta y devuelve ``usuario`` con la foto nueva.
+
+    - Precondición a (SEG-13): cuenta identificada y activa; si no, ``PermissionDenied``. Es por cuenta: no se comparte con
+      las cuentas vinculadas (D-20).
+    - El archivo lo valida y lo vuelve a codificar ``core.imagenes`` (D-106 puntos 5 a 8): recortado en cuadrado, achicado hasta
+      256 px sin agrandar y guardado en WebP. ``recorte=(x, y, lado)`` es el encuadre que eligió la persona, en píxeles de la imagen ya
+      orientada (precisión de D-106); sin él, recorte central. La foto mide al menos 64 px de lado. Un archivo no válido lanza ``ValidationError`` y no cambia nada.
+    - Postcondición a: la cuenta queda con la foto nueva. Sin auditoría (regla 4, SEG-14).
+    """
+    if usuario is None or not usuario.is_active:
+        raise PermissionDenied(MENSAJE_SIN_ACCESO_A_LA_FOTO)
+    contenido = imagenes.procesar(
+        archivo, LADO_DE_LA_FOTO, recortar_en_cuadrado=True, recorte=recorte, lado_minimo=LADO_MINIMO_DE_LA_FOTO
+    )
+    with transaction.atomic():
+        fila = _bloquear_para_la_foto(usuario.pk)
+        if not fila.is_active:  # pudo darse de baja mientras esperaba el bloqueo
+            raise PermissionDenied(MENSAJE_SIN_ACCESO_A_LA_FOTO)
+        nuevo = imagenes.guardar(contenido, CARPETA_DE_FOTOS)
+        _poner_foto(fila, nuevo)
+    usuario.foto_perfil = nuevo
+    return usuario
+
+
+def quitar_foto_perfil(usuario):
+    """USR-GST-PRF regla 5: quita la foto de la propia cuenta. Sin foto no hace nada. Misma precondición y mismo borrado del
+    archivo que ``cambiar_foto_perfil``; sin auditoría (regla 4). Devuelve ``usuario``."""
+    if usuario is None or not usuario.is_active:
+        raise PermissionDenied(MENSAJE_SIN_ACCESO_A_LA_FOTO)
+    with transaction.atomic():
+        fila = _bloquear_para_la_foto(usuario.pk)
+        if not fila.is_active:
+            raise PermissionDenied(MENSAJE_SIN_ACCESO_A_LA_FOTO)
+        if fila.foto_perfil:
+            _poner_foto(fila, "")
+    usuario.foto_perfil = ""
+    return usuario
+
+
+def quitar_foto_de_cuenta(actor, cuenta_id):
+    """USR-MOD-USR postcondición e y regla 8: quien gestiona la cuenta puede quitar su foto, pero no cambiarla.
+
+    - Precondición a y regla 1: ``actor`` es un Gerente o un Administrador activo y la cuenta está dentro de su alcance
+      (``PermissionDenied`` si no; ``Http404`` si el id no existe), como en ``modificar_usuario``. Vale también para una
+      cuenta inactiva (regla 10, D-28).
+    - Postcondición d: la quita no se audita. Sin foto no hace nada. Devuelve la cuenta.
+    """
+    with transaction.atomic():
+        cuenta = _bloquear_cuenta_en_alcance(actor, cuenta_id)
+        if cuenta.foto_perfil:
+            _poner_foto(cuenta, "")
     return cuenta
 
 

@@ -30,6 +30,7 @@ from inventario.tests.ajustes_comunes import (
     BaseDeAjustes,
 )
 from inventario.tests.fabricas import existencia, faltante, insumo, lote
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 D = Decimal
 Mov = MovimientoInsumo.TipoMovimiento
@@ -38,6 +39,7 @@ AJUSTE = RegistroAuditoria.Accion.AJUSTE_STOCK
 
 class CmpAjtStkMotivosTests(BaseDeAjustes, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.preparar()
         self.l1 = lote(self.iin, 10, vence=self.vence)
         self.l2 = lote(self.iin, 20, vence=self.vence + timedelta(days=30))

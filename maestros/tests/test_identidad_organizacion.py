@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core import extensiones, servicios
-from core.tests.fabricas import CLAVE, crear_gerente
+from core.tests.fabricas import CLAVE, VaciaImagenesMixin, archivo_de_imagen, crear_gerente
 from maestros.models import PerfilOrganizacion
 from maestros.servicios import perfil
 from maestros.tests.fabricas import ConDatosDeMaestros
@@ -82,3 +82,60 @@ class IdentidadDeLaOrganizacionTests(ConDatosDeMaestros, TestCase):
         PerfilOrganizacion.objects.all().delete()
         for html in self.paginas():
             self.assertIn("Nombre por defecto", html)
+
+
+class LogoEnElMarcoTests(VaciaImagenesMixin, ConDatosDeMaestros, TestCase):
+    """D-106 puntos 14 y 15: el logo guardado reemplaza al ícono en el encabezado y en las pantallas sin sesión; sin logo, el ícono.
+    Aquí NO se reemplaza el punto de extensión: es el registro real de ``MaestrosConfig.ready()``."""
+
+    def setUp(self):
+        super().setUp()
+        self.gerente = crear_gerente()
+
+    def paginas(self):
+        """El HTML de una pantalla sin sesión y de otra con sesión."""
+        self.client.logout()
+        sin_sesion = self.client.get(reverse("core:iniciar_sesion")).content.decode()
+        self.client.login(username="gerente@infoponia.com", password=CLAVE)
+        con_sesion = self.client.get(reverse("core:inicio")).content.decode()
+        return sin_sesion, con_sesion
+
+    def test_d106_sin_logo_el_marco_muestra_el_icono(self):
+        """D-106 punto 14: sin logo, el cuadro ``.logo`` lleva el ícono ``leafmark`` de siempre, con y sin sesión."""
+        for html in self.paginas():
+            self.assertIn('<div class="logo"><svg', html)
+            self.assertNotIn("logo-imagen", html)
+
+    def test_d106_con_logo_el_marco_muestra_la_imagen_en_lugar_del_icono(self):
+        """D-106 punto 14: con logo, el encabezado y la pantalla de inicio de sesión muestran la imagen y no el ícono."""
+        perfil.modificar_perfil(self.gerente, logo=archivo_de_imagen("l.png", tamano=(300, 100)))
+        url = PerfilOrganizacion.objects.get().logo.url
+        for html in self.paginas():
+            self.assertIn(f'<div class="logo logo-imagen"><img src="{url}" alt="" decoding="async"></div>', html)
+            self.assertNotIn('<div class="logo"><svg', html)
+
+    def test_d106_la_identidad_de_la_organizacion_trae_la_url_del_logo(self):
+        """D-106 punto 15: el contexto del marco trae ``logo_url``, que sale de la identidad registrada por ``maestros``."""
+        self.assertIsNone(self.client.get(reverse("core:iniciar_sesion")).context["logo_url"])
+        perfil.modificar_perfil(self.gerente, logo=archivo_de_imagen("l.png"))
+        self.assertEqual(
+            self.client.get(reverse("core:iniciar_sesion")).context["logo_url"], PerfilOrganizacion.objects.get().logo.url
+        )
+
+    def test_d106_al_quitar_el_logo_el_marco_vuelve_al_icono_desde_el_pedido_siguiente(self):
+        """D-48 y D-106 punto 14: sin caché de proceso, quitar el logo se ve en el pedido siguiente."""
+        perfil.modificar_perfil(self.gerente, logo=archivo_de_imagen("l.png"))
+        with self.captureOnCommitCallbacks(execute=True):
+            perfil.modificar_perfil(self.gerente, quitar_logo=True)
+        for html in self.paginas():
+            self.assertNotIn("logo-imagen", html)
+
+    def test_d106_los_correos_siguen_con_el_nombre_y_sin_imagen(self):
+        """D-106 punto 14: el logo no va en los correos (la URL firmada vence a la hora): el cuerpo no menciona la imagen."""
+        perfil.modificar_perfil(self.gerente, logo=archivo_de_imagen("l.png"))
+        servicios._enviar_correo(
+            self.gerente, "Asunto", "core/correos/recuperar_contrasena.txt", {"nombre": "Gabriela", "enlace": "https://x/y"}
+        )
+        cuerpo = mail.outbox[0].body
+        self.assertNotIn("logos/", cuerpo)
+        self.assertNotIn("<img", cuerpo)
