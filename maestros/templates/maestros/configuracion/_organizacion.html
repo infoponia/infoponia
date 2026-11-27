@@ -1,8 +1,10 @@
-{% load iconos %}{% comment %}Pestaña «Organización» (ADM-MOD-ORG): los datos de identidad y hasta cuatro colores. SIN el campo del logo (D-45). Recibe «form».
+{% load iconos %}{% comment %}Pestaña «Organización» (ADM-MOD-ORG): los datos de identidad, hasta cuatro colores y el logo (USR-07, D-106). Recibe «form» y «logo_actual» (la URL del logo guardado, o nada).
+La casilla «Quitar el logo» solo existe si ya hay un logo cargado.
 Las muestras de color usan solo valores ya validados como #RRGGBB (``form.colores``). Con HTMX el formulario se reemplaza a sí mismo
 con los errores por campo; sin JavaScript es un POST común.{% endcomment %}
 <form id="form-organizacion" method="post" novalidate action="{% url 'configuracion:guardar_organizacion' %}"
-      hx-post="{% url 'configuracion:guardar_organizacion' %}" hx-target="this" hx-swap="outerHTML">
+      hx-post="{% url 'configuracion:guardar_organizacion' %}" hx-target="this" hx-swap="outerHTML"
+      enctype="multipart/form-data" hx-encoding="multipart/form-data">
   {% csrf_token %}
   {% if form.errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>Revisá los campos marcados: no se guardó ningún cambio.</div></div>{% endif %}
   <div class="stack">
@@ -31,6 +33,19 @@ con los errores por campo; sin JavaScript es un POST común.{% endcomment %}
           {% for error in campo.errors %}<div class="err">{{ error }}</div>{% endfor %}
         </div>
         {% endfor %}
+      </div>
+      {# Logo (ADM-MOD-ORG regla 4, D-106 puntos 10 a 12). Se ve en el encabezado y en las pantallas sin sesión; no va en los correos. #}
+      <div class="fld" style="margin-top:6px">
+        <label for="{{ form.logo.id_for_label }}">{{ form.logo.label }}</label>
+        {% if logo_actual %}
+        <div class="row" style="gap:12px;margin-bottom:8px">
+          <img src="{{ logo_actual }}" alt="Logo actual de la organización" style="max-width:160px;max-height:64px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff">
+          <label style="display:flex;gap:8px;align-items:center;font-weight:400">{{ form.quitar_logo }} {{ form.quitar_logo.label }}</label>
+        </div>
+        {% endif %}
+        {{ form.logo }}
+        <div class="hint">JPG, PNG o WebP, de hasta 5 MB. No se recorta: el lado mayor queda en 512 px como máximo y se conserva la transparencia. Si no elegís un archivo, el logo no cambia.</div>
+        {% for error in form.logo.errors %}<div class="err">{{ error }}</div>{% endfor %}
       </div>
     </div>
   </div>

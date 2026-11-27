@@ -1,0 +1,5 @@
+{% load iconos %}{% comment %}Cuadro del logo de la organización (``.logo``): su imagen si cargó una (ADM-MOD-ORG regla 4, D-106 punto 14) y, si no, el
+ícono ``leafmark`` de siempre. La imagen va ajustada al cuadro sin deformarse (``object-fit: contain``, sobre fondo blanco: un
+logo transparente o de colores claros no queda sobre el verde del cuadro). Es decorativa: el nombre de la organización está
+escrito al lado, así que el ``alt`` va vacío. No va en los correos (la URL firmada vence a la hora).{% endcomment %}
+{% if logo_url %}<div class="logo logo-imagen"><img src="{{ logo_url }}" alt="" decoding="async"></div>{% else %}<div class="logo">{% icono "leafmark" 16 %}</div>{% endif %}

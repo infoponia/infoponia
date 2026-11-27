@@ -21,6 +21,7 @@ def marco(request):
     contexto = {
         "nombre_organizacion": identidad.nombre_de_la_organizacion(registrada),
         "color_principal": identidad.color_principal(registrada),
+        "logo_url": identidad.logo_de_la_organizacion(registrada),
     }
     usuario = getattr(request, "user", None)
     if usuario is None or not usuario.is_authenticated:

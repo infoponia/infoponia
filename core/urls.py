@@ -25,6 +25,9 @@ urlpatterns = [
     # Mi perfil y cambio voluntario de contraseña (USR-GST-PRF y USR-CMB-CTR; tarea 06a).
     path("mi-perfil/", views.mi_perfil, name="mi_perfil"),
     path("mi-perfil/contrasena/", views.cambiar_mi_contrasena, name="cambiar_mi_contrasena"),
+    # Foto de perfil (USR-GST-PRF regla 5, SEG-19; tarea USR-07).
+    path("mi-perfil/foto/", views.cambiar_mi_foto, name="cambiar_mi_foto"),
+    path("mi-perfil/foto/quitar/", views.quitar_mi_foto, name="quitar_mi_foto"),
     # Cuentas vinculadas (USR-VNC-CTA y SEG-09; tarea 06b).
     path("mi-perfil/vincular/", views.vincular, name="vincular_cuenta"),
     path("mi-perfil/desvincular/<int:cuenta_id>/", views.desvincular, name="desvincular_cuenta"),
@@ -38,6 +41,8 @@ urlpatterns = [
     path("usuarios/<int:cuenta_id>/restablecer/", views.usuario_restablecer, name="usuario_restablecer"),
     path("usuarios/<int:cuenta_id>/reactivar/", views.usuario_reactivar, name="usuario_reactivar"),
     path("usuarios/<int:cuenta_id>/baja/", views.usuario_baja, name="usuario_baja"),
+    # Quitar la foto de una cuenta (USR-MOD-USR postcondición e y regla 8; tarea USR-07).
+    path("usuarios/<int:cuenta_id>/foto/quitar/", views.usuario_quitar_foto, name="usuario_quitar_foto"),
     # Consultar el registro de auditoría (AUD-CNS-REG; D-36): solo lectura.
     path("auditoria/", views.auditoria, name="auditoria"),
     path("auditoria/<int:registro_id>/", views.auditoria_registro, name="auditoria_registro"),

@@ -41,3 +41,14 @@ urlpatterns = [
 # responde 404 incluso a un Administrador con sesión abierta.
 if settings.ADMIN_DJANGO_HABILITADO:
     urlpatterns.insert(0, path("admin/", admin.site.urls))
+
+# USR-07 (D-106 punto 4): en desarrollo sin R2 las imágenes están en el disco local (``media/``) y Django las sirve. Sin sesión: el
+# logo se ve también en el inicio de sesión. Solo con DEBUG y con el almacenamiento de disco: en producción las imágenes salen de
+# R2 con URL firmada y esta ruta no existe.
+if settings.DEBUG and settings.STORAGES["default"]["BACKEND"] == "django.core.files.storage.FileSystemStorage":
+    from django.contrib.auth.decorators import login_not_required
+    from django.views.static import serve
+
+    urlpatterns.append(
+        path(f"{settings.MEDIA_URL.strip('/')}/<path:path>", login_not_required(serve), {"document_root": settings.MEDIA_ROOT})
+    )

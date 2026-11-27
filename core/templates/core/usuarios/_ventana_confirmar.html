@@ -36,6 +36,9 @@ core.extensiones) la ventana los lista todos, cada uno con cómo resolverlo, y n
     {% if accion == "restablecer" %}
     <h2 id="ventana-titulo">¿Restablecer el acceso?</h2>
     <p>Se restablece el acceso de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}): su contraseña actual deja de servir y se cierran sus sesiones abiertas{% if cuenta.grupo_id %}. La cuenta <b>sale de su grupo</b> de cuentas vinculadas{% endif %}.</p>
+    {% elif accion == "quitar_foto" %}
+    <h2 id="ventana-titulo">¿Quitar la foto de perfil?</h2>
+    <p>Se quita la foto de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) y el archivo se borra. {{ cuenta.first_name }} puede cargar otra desde Mi perfil; quien gestiona la cuenta no puede cambiarla.</p>
     {% elif accion == "reactivar" %}
     <h2 id="ventana-titulo">¿Reactivar la cuenta?</h2>
     <p>La cuenta de {{ cuenta.get_full_name }} ({{ cuenta|rol_visible }}) vuelve a estar activa y se restablece su acceso{% if cuenta.grupo_id %}. La cuenta <b>sale de su grupo</b> de cuentas vinculadas{% endif %}.</p>
@@ -58,13 +61,15 @@ core.extensiones) la ventana los lista todos, cada uno con cómo resolverlo, y n
     {% endif %}
     {% endif %}
     {% if error %}<div class="alert alert-danger" role="alert" style="margin-bottom:6px">{% icono "x" 16 %}<div>{{ error }}</div></div>{% endif %}
-    <form method="post" action="{% if accion == 'restablecer' %}{% url 'core:usuario_restablecer' cuenta.pk %}{% elif accion == 'reactivar' %}{% url 'core:usuario_reactivar' cuenta.pk %}{% else %}{% url 'core:usuario_baja' cuenta.pk %}{% endif %}">
+    <form method="post" action="{% if accion == 'restablecer' %}{% url 'core:usuario_restablecer' cuenta.pk %}{% elif accion == 'reactivar' %}{% url 'core:usuario_reactivar' cuenta.pk %}{% elif accion == 'quitar_foto' %}{% url 'core:usuario_quitar_foto' cuenta.pk %}{% else %}{% url 'core:usuario_baja' cuenta.pk %}{% endif %}">
       {% csrf_token %}
-      {% if accion != "baja" %}{% include "core/usuarios/_forma_de_acceso.html" %}{% endif %}
+      {% if accion == "restablecer" or accion == "reactivar" %}{% include "core/usuarios/_forma_de_acceso.html" %}{% endif %}
       <div class="acts">
         <a class="btn btn-primary" href="{% url 'core:usuario' cuenta.pk %}" data-cerrar-ventana data-foco-inicial>Cancelar</a>
         {% if accion == "baja" %}
         <button class="btn btn-danger" type="submit" data-enviando="Dando de baja…">Dar de baja</button>
+        {% elif accion == "quitar_foto" %}
+        <button class="btn btn-danger" type="submit" data-enviando="Quitando…">Quitar foto</button>
         {% elif accion == "reactivar" %}
         <button class="btn btn-ghost" type="submit" data-enviando="Reactivando…">Reactivar</button>
         {% else %}

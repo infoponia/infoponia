@@ -547,6 +547,8 @@ button.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,
 a.nav-item,a.chip,a.btn,a.gh,a.rowlink{text-decoration:none}
 .chip[aria-current="page"]{background:var(--primary);border-color:var(--primary);color:#fff}
 .logo svg{color:#fff}
+.logo.logo-imagen{background:#fff;border:1px solid var(--border);overflow:hidden}
+.logo-imagen img{width:100%;height:100%;object-fit:contain;display:block}
 .shell.sin-lateral{grid-template-columns:1fr}
 .shell form.pop-form{display:block}
 label.btn{cursor:pointer}
@@ -563,7 +565,7 @@ label.btn{cursor:pointer}
 .btn.cam{display:none}
 @media(hover:none) and (pointer:coarse){.btn.cam{display:inline-flex}}
 .photo-row{display:flex;gap:16px;align-items:center;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)}
-.avatar.photo{background-size:cover;background-position:center;background-repeat:no-repeat}
+.avatar.photo{background-size:cover;background-position:center;background-repeat:no-repeat;object-fit:cover}
 select.field-input{appearance:auto}
 @supports (appearance:base-select){
   select.field-input,select.field-input::picker(select){appearance:base-select}
@@ -718,3 +720,11 @@ a.icon-btn{text-decoration:none}
 .sev-informativa{color:#1d4f9c}
 /* Roles de campo (celular): el botón de la campana mide al menos 44 px (D-42). */
 .field .icon-btn{min-height:44px;min-width:44px;justify-content:center}
+
+/* ---- Editor de encuadre de la foto de perfil (USR-07). El cuadro es el recorte cuadrado; la guía circular es el avatar. ---- */
+.encuadre{position:relative;width:min(320px,100%);aspect-ratio:1;margin:0 auto 12px;overflow:hidden;background:#111820;border-radius:10px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.encuadre.moviendo{cursor:grabbing}
+.encuadre img{position:absolute;left:0;top:0;max-width:none;pointer-events:none;-webkit-user-drag:none}
+.encuadre-guia{position:absolute;inset:0;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 999px rgba(17,24,32,.55);pointer-events:none}
+.encuadre:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.encuadre-zoom{display:flex;gap:8px;justify-content:center}

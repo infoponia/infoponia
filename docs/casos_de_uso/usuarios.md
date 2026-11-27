@@ -408,7 +408,9 @@ Requisitos técnicos que citan los casos de uso. No son pasos de un actor.
   InfoPonia. El panel de administración de Django está deshabilitado en producción.
 - **SEG-19 · Foto de perfil.** Acepta JPG, PNG o WebP. El servidor verifica que el archivo sea una
   imagen real y la vuelve a codificar; después la recorta en cuadrado y la achica a 256 px. Se guarda
-  en almacenamiento de objetos, no en el disco del servidor (D-20).
+  en almacenamiento de objetos, no en el disco del servidor (D-20). El archivo subido pesa como máximo
+  5 MB; la foto se guarda en WebP, con la orientación corregida y sin metadatos, en un bucket privado:
+  se muestra con una URL firmada que vence a la hora (D-106).
 - **SEG-20 · Invitación por correo.** El enlace es de un solo uso y vence a los 7 días, el mismo plazo que la
   contraseña temporal. Mientras la persona no elige su contraseña, la cuenta no puede identificarse y el
   intento recibe el mensaje genérico de SEG-06. Elegir la contraseña con el enlace la reemplaza y no la
@@ -489,5 +491,6 @@ documentación de Django 5.2.
 - **SEG-12:** las vistas de restablecimiento de contraseña de Django y `PASSWORD_RESET_TIMEOUT`.
 - **SEG-15:** `select_for_update()` dentro de `transaction.atomic()`, como pide `CLAUDE.md`.
 - **SEG-04:** el módulo `secrets` de Python para generar la contraseña temporal.
-- **SEG-19:** Pillow para verificar y volver a codificar la imagen; el almacenamiento con la
-  configuración `STORAGES` de Django.
+- **SEG-19:** Pillow para verificar y volver a codificar la imagen (`ImageOps.exif_transpose` para la
+  orientación); el almacenamiento con la configuración `STORAGES` de Django y el backend S3 de
+  `django-storages` apuntado a Cloudflare R2 (D-106).

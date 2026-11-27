@@ -33,7 +33,7 @@ Copiados sin cambios de `docs/estado.md`, «Temas abiertos», el 18/11/2026. Act
 | Tope de pedidos de recuperación de contraseña | USR-09b: `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
 | Tope de intentos de identificación | USR-09b: `docs/tareas/usuarios/USR-09-seguridad-produccion.md` |
 | `DEBUG` apagado por defecto (Render ya tiene `DJANGO_DEBUG=0`) | Hecho en USR-09a: D-99 |
-| Proveedor del almacenamiento para la foto de perfil | `docs/tareas/usuarios/USR-07-foto-perfil.md` y «Esperas» de `docs/estado.md` |
+| Proveedor del almacenamiento para la foto de perfil | Resuelto el 27/11/2026: D-106 (Cloudflare R2, bucket privado) |
 | Logo y nombre de la organización configurables | `docs/disparadores.md`, «Cuando exista PerfilOrganizacion» |
 | Estilo del prototipo de producción contra el del sistema | D-47 y la tarea UI-01 (`docs/tareas/ronda_produccion_1.md`) |
 | Campana y notificaciones del marco | `docs/disparadores.md`, «Cuando exista la primera notificación», y la tarea NOT-01 (`docs/tareas/ronda_produccion_1.md`; el tema salió de acá el 19/11/2026) |
@@ -1001,3 +1001,13 @@ Diferencias con la documentación:
 4. **Prototipo `stCom`:** muestra indicadores del libro («Cobrado», «Venta promedio por entrega», «Ventas por mes», tabla «Entregas del período»); mandan los de COM-CNS-EST (L7, D-61). La pestaña copia el marcado de «Comercial › Estadísticas» (COM-08c), no el de `stCom`.
 5. **Dependencia de plantilla:** `estadisticas/templates/estadisticas/_comercial.html` carga los filtros de plantilla de `comercial` (`{% load comercial %}`: `pesos`, `porcentaje`, `miles`, `un_decimal`, `ancho_de_barra`) para mostrar los números con el mismo formato. Es una dependencia de `estadisticas` (nivel 8) hacia `comercial` (nivel 6), permitida por A1; si esos filtros se mueven o se renombran, esta pestaña se rompe (la cubren las pruebas de la vista).
 6. **Prueba de EST-02 que cambió:** `test_pestanas_la_pantalla_ofrece_resumen_produccion_compras_y_resultados` exigía que NO estuviera «Comercial» («llega con EST-03»); ahora exige las cinco pestañas en orden. El texto del paso 1 de la «Verificación a mano» de EST-02 y el comentario de su vista decían «llega con EST-03»: se actualizaron.
+
+## USR-07 (foto de perfil y logo; 27/11/2026): lo que se implementó distinto de lo escrito
+
+1. **`STORAGES["staticfiles"]`.** D-106 (punto 4) decía «sigue siendo el de WhiteNoise (D-29)», pero `settings.py` no definía `STORAGES`: WhiteNoise sirve los estáticos como middleware y el almacenamiento era el `StaticFilesStorage` de Django. Se dejó ese (no cambia nada) y se corrigió el texto de D-106. D-29 no lo dice; lo decía la sección «Leer» de la tarea («D-29: `STORAGES["staticfiles"]` no se toca»), que sigue siendo cierta.
+2. **Archivos fuera de las apps**, autorizados por el estudiante y no listados en «Permitido»: `.github/workflows/pruebas.yml` (cuatro variables de R2 falsas: el CI corre `check` y `makemigrations --check` con `DJANGO_DEBUG=0`, que sin ellas no arranca), `config/urls.py` (sirve `media/` solo con DEBUG y disco local), `.gitignore` (`media/`) y `.env.example` (las cuatro variables, comentadas).
+3. **Límite conocido de los archivos huérfanos.** Si la operación de la foto o del logo corre dentro de una transacción de afuera que se deshace después de que la operación terminó, el archivo nuevo ya guardado queda en el almacenamiento (Django no tiene «al deshacer»). Ninguna vista lo hace; se cumple D-106 punto 7 cuando la operación es la transacción exterior.
+4. **El error de una foto no válida** se muestra como aviso breve (D-29) y no debajo de la foto, como en el prototipo (`S.photoErr`): se vuelve a Mi perfil con una redirección. Aprobado por el estudiante. Los errores del logo sí van debajo de su campo.
+5. **Posible mejora futura: miniatura de la foto en la lista de cuentas.** USR-CNS-USR regla 3 («datos visibles de cada cuenta … foto de perfil si tiene») se cubrió en la ficha; la lista sigue sin foto (aprobado por el estudiante).
+6. **Foco con el teclado en «Elegir foto» y «Tomar foto».** Son etiquetas de un campo de archivo oculto con `.sr`, como en el prototipo: con Tab el foco llega al campo, pero puede no verse. A revisar en la verificación a mano (paso 28).
+7. **Comando de pruebas de la tarea:** se sumaron `core.tests.test_usr_mod_usr` (regla 8), `maestros.tests.test_configuracion_vistas` (la pestaña; su prueba «la pestaña no tiene logo», de D-45, pasó a comprobar que lo tiene) y el recorrido `maestros.tests.test_recorrido_foto_y_logo` (en `maestros` por A3).

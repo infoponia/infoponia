@@ -197,6 +197,11 @@ class Usuario(AbstractUser):
         editable=False,
     )
 
+    # USR-07, SEG-19, D-20 y D-106: foto de perfil, opcional y propia de cada cuenta (no se comparte con las vinculadas). La deja
+    # ``core.imagenes`` (WebP de 256 px como máximo, ``fotos_perfil/<uuid4>.webp``) y la maneja ``core.servicios``: nunca se
+    # asigna a mano ni se sube con un formulario del modelo. El almacenamiento es R2 (o el disco en desarrollo, D-106).
+    foto_perfil = models.ImageField("foto de perfil", upload_to="fotos_perfil/", blank=True, default="")
+
     # D-17: grupo de cuentas vinculadas; opcional. PROTECT: un grupo no se borra mientras tenga cuentas (el
     # servicio las saca antes de borrarlo).
     grupo = models.ForeignKey(
@@ -1058,6 +1063,7 @@ class RegistroAuditoria(models.Model):
         "color_secundario": "Color 2",
         "color_terciario": "Color 3",
         "color_cuaternario": "Color 4",
+        "logo": "Logo",
         # Clientes y vehículos (COM-01): «nombre», «apellido», «telefono», «email», «estado» y «localidad» ya existen.
         "tipo_cliente": "Tipo de cliente",
         "cuit": "CUIT",
