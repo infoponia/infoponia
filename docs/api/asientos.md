@@ -40,12 +40,13 @@ asiento = asientos.registrar_asiento_automatico(
   aclara la fecha real: «Fecha del hecho: dd/mm/aaaa (el ejercicio de esa fecha ya está cerrado | anterior al primer ejercicio | posterior a la
   fecha de hoy); se registra con la fecha de hoy.». Tu `descripcion` va primero, separada por « — »; el total no pasa de 300 caracteres (se
   recorta la tuya, terminada en «…», nunca la aclaración). Antes de elegir, **se recupera solo** si el ejercicio
-  abierto ya venció (H9) o si todavía no hay ninguno (puesta en marcha).
+  abierto ya venció (H9). **Si todavía no hay ninguno, no lo crea:** lanza `contabilidad_no_iniciada` (CON-INI-EJE, regla 9; `docs/patrones/asientos.md`, 2b).
 - **Numera** correlativo por ejercicio (H8) y **audita** el asiento y cada movimiento (`alta_asiento_contable`, `alta_movimiento_contable`):
   no los audites vos. En tu propio registro de auditoría nombrá el asiento entre los `afectados` o con `referencia(asiento)` en `datos`.
 - **Lanza `ErrorContable`** (siempre errores de programación): `asiento_desbalanceado` (Debe ≠ Haber), `cuenta_inexistente`,
   `origen_con_asiento` (ese origen ya tiene su asiento: R012 en 0..1), `importe_invalido` (negativo o con más de dos decimales),
-  `tipo_de_movimiento_invalido`.
+  `tipo_de_movimiento_invalido`. **La excepción es `contabilidad_no_iniciada`**: no es un error de programación sino de puesta en marcha;
+  no lo atrapes (lo atiende el middleware de `contabilidad`).
 - `Decimal`, nunca `float`. Los importes llegan con dos decimales (redondeá vos con `ROUND_HALF_UP` antes de llamar y documentá cómo).
 
 ```python
@@ -67,7 +68,9 @@ class ErrorContable(Exception):
 | `ejercicios.destino_previsto(fecha, *, hoy=None) -> DestinoPrevisto` | Dónde iría un asiento manual o un contraasiento, calculado **en memoria** (reproduce las vueltas de la apertura, sin crear nada): `numero`, `inicio`, `cierre`, `estado`, `por_abrir`. Lanza los mismos errores de fecha que el registro |
 | `ejercicios.cerrar_ejercicio(actor, ejercicio_id) -> EjercicioContable` | CON-CRR-EJE |
 | `ejercicios.abrir_ejercicio_si_corresponde(hoy=None) -> ResultadoApertura` | CON-ABR-EJE. La llaman el paso diario `abrir_ejercicio` y el servicio de asientos; idempotente. `ResultadoApertura` suma `cantidad_creados` y `cantidad_cerrados_solos` (varias vueltas si el sistema estuvo apagado) |
-| `ejercicios.crear_primer_ejercicio(fecha_inicio) -> EjercicioContable` | La puesta en marcha (D-84 punto 3); la llama el comando `poner_en_marcha_contabilidad` |
+| `ejercicios.iniciar_ejercicio(actor, fecha_inicio, importes, *, hoy=None) -> AsientoContable` | CON-INI-EJE completo: el primer ejercicio y el asiento de apertura N.º 1, juntos. Reemplaza a `crear_primer_ejercicio` y al comando `poner_en_marcha_contabilidad`, que se retiran (CON-05) |
+| `ejercicios.resumir_inicio(actor, fecha_inicio, importes, *, hoy=None) -> ResumenDeInicio` | Paso 5 de CON-INI-EJE: las mismas validaciones, sin escribir ni bloquear |
+| `ejercicios.contabilidad_iniciada() -> bool` | Lectura: ¿existe algún ejercicio? La usan la alerta, las pantallas y los pasos diarios con asientos |
 
 ## Lectura (no escribe, no bloquea)
 

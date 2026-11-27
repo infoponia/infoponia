@@ -567,7 +567,11 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
 
 
 
-## Cuando se arme el cron único
+## ~~Cuando se arme el cron único~~ — resuelto el 26/11/2026 (decisión de la tarea CON-05, «Crons»)
+
+Se armaron **dos** cron jobs de Render contra producción, con el grupo de variables `infoponia-produccion`: `infoponia-proceso-diario`
+(`python manage.py proceso_diario`, `0 9 * * *`: 6:00 de Argentina) e `infoponia-revision-iot` (`python manage.py revision_iot`, `*/5 * * * *`,
+suspendido salvo en las presentaciones, D-71). Texto original:
 
 1. **Un solo cron job de Render para todo el proceso diario (D-56).** Se crea **al final de la implementación**, cuando estén
    registrados todos los pasos de `core/procesos.py`. Ejecuta `python manage.py proceso_diario`, con:

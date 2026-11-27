@@ -21,7 +21,7 @@ Caso de uso extendido del módulo Contabilidad (versión 0.1, 23/11/2026), con e
 **Personal involucrado e intereses**
 
 **Contador:**
-- quiere registrar hechos económicos que el Sistema no asienta solo (la apertura, las ventas de producción previa a la puesta en marcha, el arqueo de caja, un pago no previsto);
+- quiere registrar hechos económicos que el Sistema no asienta solo (las ventas de producción previa a la puesta en marcha, el arqueo de caja, un pago no previsto);
 - quiere que el asiento quede balanceado y con el motivo explicado, sin tener que corregirlo después.
 
 **Gerente:**
@@ -29,7 +29,7 @@ Caso de uso extendido del módulo Contabilidad (versión 0.1, 23/11/2026), con e
 - quiere poder registrar el asiento cuando no hay un Contador activo.
 
 **Organización (Jardín Botánico):**
-- quiere que lo anterior a la puesta en marcha entre a la contabilidad por una vía controlada (Capital Inicial);
+- quiere que lo anterior a la puesta en marcha entre a la contabilidad por una vía controlada (Capital Inicial, con el asiento de apertura de CON-INI-EJE);
 - quiere que el libro de gestión nunca tenga un asiento desbalanceado ni con huecos de numeración.
 
 **Relaciones con otros casos de uso**
@@ -41,7 +41,7 @@ Caso de uso extendido del módulo Contabilidad (versión 0.1, 23/11/2026), con e
 
 **Precondiciones**
 a. El actor está autenticado en el Sistema con una cuenta activa de Contador o, si no hay un Contador activo, de Gerente.
-b. Existe al menos un ejercicio contable «abierto» (siempre existe: ver CON-ABR-EJE y H9).
+b. Existe al menos un ejercicio contable «abierto»: la contabilidad está iniciada (CON-INI-EJE) y CON-ABR-EJE abre los siguientes (H9). Si no está iniciada, el Sistema no ofrece registrar asientos (CON-INI-EJE, regla 9).
 c. Existen las cuentas contables del plan de cuentas (se cargan por migración, D-37).
 
 **Garantías mínimas**
@@ -95,9 +95,7 @@ d. Se creó un log de auditoría por el asiento y por cada movimiento creado, co
 2. En el paso 7, el log de auditoría deja al Gerente como autor (rol Gerente).
 3. Si hay un Contador activo, el Sistema no permite el registro al Gerente e indica que lo registra el Contador (regla «Quién registra»).
 
-**3a. El actor quiere registrar el asiento de apertura (carga inicial de saldos):**
-1. El actor usa como descripción «Asiento de apertura» (o equivalente) y carga Debe en Caja, Banco c/c y/o las demás cuentas de activo previas, y Haber en Capital Inicial y/o Proveedores (deudas previas).
-2. El caso de uso continúa en el paso 4. (H3/H4; la parte de insumos va por el ajuste «carga inicial» de CMP-AJT-STK, no por acá.)
+**3a. (Quitada el 26/11/2026, tarea CON-05.)** El asiento de apertura ya no es un asiento manual: se carga al iniciar la contabilidad, con CON-INI-EJE. Una corrección posterior de los saldos iniciales se hace con un asiento manual común. La letra 3a no se reutiliza.
 
 **3b. El actor quiere registrar la venta de producción previa a la puesta en marcha:**
 1. El actor carga Debe Caja o Banco c/c / Haber Ventas.
@@ -148,7 +146,7 @@ d. Se creó un log de auditoría por el asiento y por cada movimiento creado, co
 - **Fecha:** la del hecho, no la del registro, salvo en el caso anterior. (H10)
 - **Numeración:** correlativa por ejercicio, sin huecos; el número indica el orden de registro, no el de la fecha (consecuencia aceptada de H1 b). (H8)
 - **Plan de cuentas:** solo se usan cuentas del plan vigente (CON-CNS-PCT). No hay restricciones sobre qué cuentas se pueden usar a mano (C6). No hay IVA (simplificación declarada). (H5/H6/H7)
-- **Apertura:** la realidad previa a la puesta en marcha entra con asiento manual de apertura, acreditando Capital Inicial, más el ajuste de insumo «carga inicial». (H3/H4; extensión 3a)
+- **Apertura:** la realidad previa a la puesta en marcha entra con el asiento de apertura de CON-INI-EJE, acreditando Capital Inicial, más el ajuste de insumo «carga inicial» y los lotes existentes. No es un asiento manual (la extensión 3a se quitó, CON-05).
 - **Sin efecto operativo:** el asiento no toca stock, contratos ni entregas.
 - **Auditoría:** el usuario real queda en el log, con su rol. (Regla 16 de 8.20)
 
@@ -156,7 +154,7 @@ d. Se creó un log de auditoría por el asiento y por cada movimiento creado, co
 - **3.** Cuenta: de la lista del plan de cuentas (código rubro.subrubro.cuenta; tipos Activo, Pasivo, Patrimonio neto, Resultado positivo, Resultado negativo). Importe: hasta dos decimales. Descripción: texto libre, obligatoria.
 
 **Frecuencia**
-Baja: unas pocas por mes, más algunas muy al comienzo (apertura y ventas previas).
+Baja: unas pocas por mes, más algunas muy al comienzo (ventas previas).
 
 
 
@@ -340,9 +338,11 @@ Patrón de bloqueos: `docs/patrones/asientos.md`, sección 2.
 - **Resumen previo (paso 5 de ambos casos de uso):** `asientos.resumir_asiento_manual(...)` y `resumir_contraasiento(...)` hacen **las mismas
   validaciones** y devuelven el resumen (ejercicio destino y su estado, totales, diferencia, tipo de cada cuenta, o los movimientos invertidos) sin
   escribir ni bloquear. La pantalla lo muestra antes del botón «Confirmar».
-- **Apertura y ventas previas (extensiones 3a y 3b de CON-REG-ASI):** no tienen código propio: son un asiento manual común. La pantalla ofrece
-  dos atajos de **precarga** («Asiento de apertura» y «Venta de producción previa») que solo completan la descripción y sugieren cuentas
-  (Capital Inicial / Proveedores y Caja / Banco c/c; Caja o Banco / Ventas).
+- **Ventas previas (extensión 3b de CON-REG-ASI):** no tiene código propio: es un asiento manual común. La pantalla ofrece el atajo de
+  **precarga** «Venta de producción previa», que solo completa la descripción y sugiere cuentas (Caja o Banco / Ventas). El atajo «Asiento de
+  apertura» se quita (CON-05): la apertura es CON-INI-EJE.
+- **Sin ejercicio (CON-INI-EJE, regla 9):** `registrar_asiento_manual` y `contraasentar` lanzan `contabilidad_no_iniciada`; el botón
+  «Registrar asiento» no se muestra mientras la contabilidad no esté iniciada.
 - **Quién es «Contador o Gerente sin Contador»:** `responsables.puede_registrar_asientos`. Un Gerente con un Contador activo no puede registrar
   (extensión 1a, punto 3).
 
@@ -350,7 +350,7 @@ Patrón de bloqueos: `docs/patrones/asientos.md`, sección 2.
 
 | Qué | Archivo |
 |---|---|
-| CON-REG-ASI: cada regla, extensión y postcondición, y los atajos de apertura y venta previa | `test_con_reg_asi.py` |
+| CON-REG-ASI: cada regla, extensión y postcondición, y el atajo de venta previa | `test_con_reg_asi.py` |
 | CON-CTR-ASI: cada regla, extensión y postcondición, la notificación al Gerente y la auditoría | `test_con_ctr_asi.py` |
 | Todo o nada (el asiento falla en medio) y `verificar_invariantes_contables` | en los dos |
 | Concurrencia: dos asientos a la vez toman números distintos y sin hueco; dos contraasientos del mismo asiento (uno gana); un asiento contra el cierre del ejercicio; **orden de bloqueos** (asiento a anular antes del ejercicio) | `test_asientos_concurrencia.py` |

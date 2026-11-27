@@ -15,7 +15,8 @@ Actualizado: 26/11/2026 (EST-03 en rama). Máx. 2 KB; detalle en `docs/historial
 
 - Rondas A0 aprobadas: Contabilidad 1–2, Compras 1, Estadísticas 1 (D-84–D-93). Orden: `docs/tareas/orden_de_implementacion.md`.
 - USR-09b y AUD-02.
-- Procesos: `proceso_diario` (D-56; pasos 5, 20, 25, 27, 30, 33, 35, 40, 50 y 60–62) y `revision_iot` (D-71); cron al final.
+- **CON-05** (CON-INI-EJE: iniciar el ejercicio con el capital inicial; sin ejercicio no hay asiento): pendiente, **antes de operar en producción**. Hasta su despliegue: cron diario suspendido y nada que genere asientos en producción.
+- Procesos: `proceso_diario` (D-56; pasos 5, 10, 20, 25, 27, 30, 33, 35, 40, 50, 60–63) en el cron `infoponia-proceso-diario` (6:00) y `revision_iot` (D-71) en `infoponia-revision-iot` (cada 5 min, suspendido salvo presentaciones).
 
 ## Revisiones a mano pendientes (`docs/revisiones_pendientes.md`; D-96)
 

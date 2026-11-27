@@ -137,6 +137,12 @@ achican si cada tarea de Comercial ya trae su asiento, D-92 punto 9).
 | CON-04c | Asientos de cosecha, cámara y entregas | comercial, produccion | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, COM-04a, COM-04b, COM-06a (hechas) | `contabilidad/CON-04c-asientos-de-cosecha-camara-y-entregas.md` |
 | CON-04d | Asientos de cobros, indemnizaciones y multas | comercial | hecha (PR #__, 26/11/2026; revisión a mano pendiente) | CON-02, USR-11 (hecha), COM-06b a COM-08b (hechas) | `contabilidad/CON-04d-asientos-de-cobros-indemnizaciones-y-multas.md` |
 
+### Puesta en marcha contable (fuera de ronda, 26/11/2026)
+
+| ID | Título | App | Estado | Depende de / espera | Archivo |
+|---|---|---|---|---|---|
+| CON-05 | Iniciar el ejercicio contable con el capital inicial (CON-INI-EJE); sin ejercicio no hay asiento | contabilidad (y `config/settings.py`, `core` acción de auditoría, los pasos diarios con asientos, las vistas que atrapan `ErrorContable` y las pruebas de todas las apps) | pendiente | CON-04d y EST-03 (hechas) | `contabilidad/CON-05-iniciar-ejercicio-contable.md` |
+
 ### Ronda «Estadísticas 1» (D-93)
 
 Plan completo en `docs/tareas/ronda_estadisticas_1.md`. Sin tareas pendientes: EST-03 (26/11/2026) cerró la ronda.

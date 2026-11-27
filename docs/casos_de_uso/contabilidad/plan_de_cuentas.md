@@ -66,7 +66,7 @@ Decisión **D-84** (punto 7). Modelo: `docs/modelo/contabilidad.md` (`CuentaCont
 | 1.1.06 Productos Terminados | Valor de lo cosechado y todavía no entregado | Cosecha (Debe), entregas, mermas y vencimientos en cámara (Haber) |
 | 2.1.01 Proveedores | Lo que la organización les debe a sus proveedores | Recepción (Haber), pago y corrección de recepción (Debe) |
 | 2.1.02 Indemnizaciones a Pagar | Multas por resolución de contratos que la organización todavía no pagó | Resolución del suministro (Haber, COM-RSV-SUM); su pago, asiento manual del Contador (Debe) |
-| 3.1.01 Capital Inicial | Lo que ya existía al poner en marcha InfoPonia | Ajuste «carga inicial» de insumos, lotes existentes y asiento de apertura (Haber) |
+| 3.1.01 Capital Inicial | Lo que ya existía al poner en marcha InfoPonia | Asiento de apertura de CON-INI-EJE, ajuste «carga inicial» de insumos y lotes existentes (Haber) |
 | 4.1.01 Ventas | Ingresos por entregas | Entregas concretadas (Haber) |
 | 4.1.02 Indemnizaciones por Atraso en el Pago | Lo que cobra la organización por atraso de un cliente | Pago en mora (COM-VNC-PAG, COM-REG-CBR) |
 | 4.1.03 Otros Ingresos | Ingresos sin cuenta propia | Asientos manuales |
