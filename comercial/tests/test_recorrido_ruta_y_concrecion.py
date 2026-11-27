@@ -39,6 +39,7 @@ from maestros.models import Alerta
 from maestros.servicios import transportistas as servicio_de_transportistas
 from produccion.models import Consumo, Merma
 from produccion.tests.fabricas import lote_maduro, reservar
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -59,6 +60,7 @@ def huella_de(respuesta):
 @override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test")
 class RecorridoDeRutaYConcrecionTests(ConDatosDeInventario, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 5000)
         self.gerente = crear_gerente()

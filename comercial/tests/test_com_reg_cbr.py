@@ -42,6 +42,7 @@ from comercial.tests.fabricas import (
 )
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
+from contabilidad.errores import ErrorContable
 from contabilidad.models import AsientoContable, EjercicioContable
 from contabilidad.servicios import asientos as servicio_de_asientos
 from contabilidad.tests.fabricas import ejercicio_abierto, verificar_invariantes_contables
@@ -716,11 +717,15 @@ class ComRegCbrAsientoTests(BaseDeCobranza):
         self.assertEqual((PagoCliente.objects.count(), LineaPago.objects.count(), AsientoContable.objects.count(), RegistroAuditoria.objects.filter(accion="registro_cobro").count()), (0, 0, 0, 0))
         self.assertEqual(entregas.estado_de_pago([e.pk], HOY)[e.pk], "pendiente")
 
-    def test_d92_el_cobro_asienta_aunque_no_haya_ejercicio_abierto_y_se_recupera_solo(self):
-        """D-92 punto 2 y H9: no se verifica el ejercicio aparte (la precondición c desaparece): sin ejercicio, `registrar_asiento_automatico` se recupera solo y el cobro entra."""
-        self.assertFalse(EjercicioContable.objects.exists())
-        pago = self.cobrar(self.e.vendedor, [self.concretada()])
-        self.assertEqual(self.asiento_de(pago).ejercicio.estado_ejercicio, EjercicioContable.Estado.ABIERTO)
+    def test_regla_9_el_cobro_sin_ejercicio_no_se_registra(self):
+        """Regla 9 de CON-INI-EJE (CON-05; reemplaza `test_d92_el_cobro_asienta_aunque_no_haya_ejercicio_abierto_y_se_recupera_solo`, que verificaba D-92 punto 2 y H9 con el primer ejercicio
+        creado solo): sin ejercicio no se verifica nada aparte, pero `registrar_asiento_automatico` rechaza con `contabilidad_no_iniciada` y el cobro no queda registrado."""
+        entrega_ = self.concretada()
+        EjercicioContable.objects.all().delete()  # la base de pruebas trae el ejercicio del helper
+        with self.assertRaises(ErrorContable) as contexto:
+            self.cobrar(self.e.vendedor, [entrega_])
+        self.assertEqual(contexto.exception.codigo, "contabilidad_no_iniciada")
+        self.assertEqual((PagoCliente.objects.count(), EjercicioContable.objects.count()), (0, 0))
 
     # ---- decisión (2) del estudiante del 26/11/2026 ----
 

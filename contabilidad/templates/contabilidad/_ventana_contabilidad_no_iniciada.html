@@ -1,0 +1,14 @@
+{% comment %}Ventana de «la contabilidad no está iniciada» (CON-INI-EJE, regla 9 y extensión 1b; tarea CON-05). La arma `ContabilidadNoIniciadaMiddleware` para un pedido HTMX y se agrega
+encima de la pantalla actual (`HX-Retarget: body`, `HX-Reswap: beforeend`), con el marco de `core/_ventana_desvincular.html`. Recibe: «titulo», «texto», «puede_iniciar» (el responsable contable:
+Contador, o Gerente sin Contador activo), «url_iniciar». El botón abre la pantalla de inicio en OTRA pestaña: la operación queda abierta con lo que se escribió.{% endcomment %}
+<div class="ov" data-ventana>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ventana-titulo">
+    <h2 id="ventana-titulo">{{ titulo }}</h2>
+    <p>{{ texto }}</p>
+    {% if puede_iniciar %}<p class="muted">Se abre en otra pestaña. Cuando termines, volvé a esta y confirmá la operación de nuevo.</p>{% endif %}
+    <div class="acts">
+      {% if puede_iniciar %}<a class="btn btn-primary" href="{{ url_iniciar }}" target="_blank" rel="noopener" data-foco-inicial>Iniciar ejercicio</a>{% endif %}
+      <button class="btn btn-ghost" type="button" data-cerrar-ventana{% if not puede_iniciar %} data-foco-inicial{% endif %}>Cerrar</button>
+    </div>
+  </div>
+</div>

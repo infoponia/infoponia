@@ -48,6 +48,7 @@ from maestros.models import Invernadero
 from maestros.tests.fabricas import crear_agronomo, crear_vendedor
 from produccion.models import Cosecha, MovimientoStock, ReservaInsumo, StockCosechado
 from produccion.tests.fabricas import lote_maduro, variedad_con_stock
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 MOTIVO = "Se canceló la compra-venta {codigo}: el cliente desistió."
@@ -64,6 +65,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero con su Vendedor, su Agrónomo, su Capataz y un transportista de 800 kg, y un Gerente."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.gerente = crear_gerente()
         self.t = transportista_con_vehiculo(self.e.invernadero, "800")

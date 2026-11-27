@@ -56,9 +56,19 @@ def origen_de_prueba(tipo=OrigenDocumento.Tipo.BITACORA):
     return OrigenDocumento.objects.bulk_create([OrigenDocumento(tipo=tipo)])[0]
 
 
+# Los ejercicios que dejó `iniciar_contabilidad_para_pruebas` (por `pk`): `ejercicio(ABIERTO, ...)` los reemplaza si todavía no tienen asientos (ver el docstring de `ejercicio`).
+_CREADOS_POR_EL_HELPER = set()
+
+
 def ejercicio(estado, inicio, cierre=None):
     """Crea un ejercicio en el `estado` dado (`EjercicioContable.Estado`), directo en la base: sin auditoría ni avisos. El cierre
-    previsto es de doce meses menos un día si no se pasa (el mismo que calcula el servicio)."""
+    previsto es de doce meses menos un día si no se pasa (el mismo que calcula el servicio).
+
+    Convención de CON-05: si la clase de pruebas llamó a `iniciar_contabilidad_para_pruebas()` en su `setUp` y una prueba arma su propio ejercicio ABIERTO (con fechas propias), el de
+    esa prueba reemplaza al del helper cuando este todavía no tiene asientos; así las pruebas que arman su escenario de ejercicios no chocan con la restricción de un solo abierto. Un
+    ejercicio en cierre o cerrado no reemplaza nada."""
+    if estado == EjercicioContable.Estado.ABIERTO and _CREADOS_POR_EL_HELPER:
+        EjercicioContable.objects.filter(pk__in=_CREADOS_POR_EL_HELPER, asientos__isnull=True).delete()
     return EjercicioContable.objects.create(
         fecha_inicio_ejercicio=inicio,
         fecha_cierre_ejercicio=cierre or cierre_previsto(inicio),
@@ -69,6 +79,15 @@ def ejercicio(estado, inicio, cierre=None):
 def ejercicio_abierto(inicio=None, cierre=None):
     """Crea el ejercicio abierto; empieza hoy (`timezone.localdate()`) si no se pasa `inicio`."""
     return ejercicio(EjercicioContable.Estado.ABIERTO, inicio or timezone.localdate(), cierre)
+
+
+def iniciar_contabilidad_para_pruebas(inicio=None):
+    """CON-05 (regla 9 de CON-INI-EJE): deja la contabilidad «iniciada» para una prueba de otra app: crea el ejercicio abierto directo en la base (como `ejercicio_abierto`: sin
+    auditoría, sin asiento de apertura ni pasar por `iniciar_ejercicio`). Sin ejercicio, toda operación con asiento se rechaza (`contabilidad_no_iniciada`) y la campana del responsable
+    contable suma «Falta iniciar la contabilidad». ``inicio`` es el día en que empieza (por omisión, hoy): tiene que contener las fechas de la prueba. Devuelve el ejercicio."""
+    creado = ejercicio_abierto(inicio)
+    _CREADOS_POR_EL_HELPER.add(creado.pk)
+    return creado
 
 
 def asiento_de_prueba(ejercicio, fecha, movimientos=None, *, origen=None, descripcion=None, anula=None):

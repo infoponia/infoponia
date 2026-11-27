@@ -567,7 +567,11 @@ aprobar) y CMP-04 (el tránsito al recibir o cerrar con faltante); el punto 2, C
 
 
 
-## Cuando se arme el cron único
+## ~~Cuando se arme el cron único~~ — resuelto el 26/11/2026 (decisión de la tarea CON-05, «Crons»)
+
+Se armaron **dos** cron jobs de Render contra producción, con el grupo de variables `infoponia-produccion`: `infoponia-proceso-diario`
+(`python manage.py proceso_diario`, `0 9 * * *`: 6:00 de Argentina) e `infoponia-revision-iot` (`python manage.py revision_iot`, `*/5 * * * *`,
+suspendido salvo en las presentaciones, D-71). Texto original:
 
 1. **Un solo cron job de Render para todo el proceso diario (D-56).** Se crea **al final de la implementación**, cuando estén
    registrados todos los pasos de `core/procesos.py`. Ejecuta `python manage.py proceso_diario`, con:
@@ -742,3 +746,8 @@ El servicio `registrar_asiento_automatico`, los ejercicios y el libro existen de
 1. **Cuando se programe CON-04d:** el aviso de «registrar asiento manual» (COM-ATN-ENR, postcondición b) pasa a `responsable_contable()` (ya está listado arriba); su detalle puede llevar a «Registrar asiento» (`contabilidad:asiento_nuevo`).
 2. ~~**Confirmar con el estudiante** que «Contraasentar» se ofrece en la ficha de un asiento de un ejercicio cerrado (ver `docs/temas_abiertos.md`, «CON-03b»). Si no, se oculta con `asiento.ejercicio.estado_ejercicio != "cerrado"` en `views.asiento` y se rechaza en `asientos.contraasentar` (hoy no lo rechaza).~~ **Confirmado por el estudiante el 25/11/2026:** «Contraasentar» se ofrece también en un ejercicio cerrado.
 3. **Aclarar D-84** (puntos 2 y 6): la autorrecuperación del ejercicio va antes de validar la fecha de un asiento manual o de un contraasiento, y menos de dos movimientos es un error (`faltan_movimientos`) en el manual y `None` en el automático. Si el estudiante lo pide, va como decisión nueva (el número se toma al final).
+
+## Lo que deja CON-05 (nace el 27/11/2026)
+
+1. **Cuando se retire el comando `eliminar_ejercicio_sin_apertura`:** es de uso único. Se retira (con su prueba `test_comando_eliminar_ejercicio.py` y, si ya no hace falta, la acción `baja_ejercicio_contable`, que dejaría de usarse) en una tarea posterior, **después de correrlo en producción** (pasos de «Después del merge» de CON-05).
+2. **Cuando se decida el contraasiento de la apertura:** hoy el asiento de apertura (N.º 1, de tipo manual) se puede contraasentar como cualquier otro (ver `docs/temas_abiertos.md`, «CON-05», punto 1). Si el estudiante decide impedirlo o advertirlo, se toca `asientos.contraasentar` y la pantalla del contraasiento.

@@ -41,6 +41,7 @@ from produccion.tests.fabricas import (
     lote_de_carga_inicial,
     orden_de_siembra,
 )
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 registros = perezoso("produccion.servicios.lotes_existentes")
 D = Decimal
@@ -77,6 +78,7 @@ class ProdRegLteBase(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un invernadero sin siembras con dos sectores de Maduración de 100 agujeros (`maduracion` y `maduracion_2`)."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = invernadero_con_produccion()
         self.e.sectores["maduracion_2"] = crear_sector(self.e.invernadero, nombre="Sector maduracion 2", tipo="maduracion", agujeros=100)
 

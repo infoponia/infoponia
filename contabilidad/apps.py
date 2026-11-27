@@ -24,3 +24,5 @@ class ContabilidadConfig(AppConfig):
         registrar_entrada(("Contabilidad", "contabilidad:libro", "book"), (Usuario.Rol.GERENTE, Usuario.Rol.CONTADOR), despues_de="Panel de control")
         # CON-03a (disparador «Cuando se programe CON-03a»): la alerta del ejercicio en cierre, solo para quien puede cerrarlo.
         extensiones.registrar_seccion_de_inicio(inicio.seccion_de_inicio)
+        # CON-05 (regla 10 de CON-INI-EJE): la alerta «Falta iniciar la contabilidad» en la campana del responsable contable.
+        extensiones.registrar_fuente_de_alertas(inicio.items_de_campana)

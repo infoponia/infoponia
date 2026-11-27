@@ -1,7 +1,7 @@
-# Ejercicios contables (CON-ABR-EJE, D-84 puntos 2, 3, 5 y 10): apertura automática (paso diario 5 y autorrecuperación), primer ejercicio,
-# lecturas, elección del ejercicio donde va un asiento y el cierre manual (CON-CRR-EJE, CON-03a).
-# Bloqueos (docs/patrones/asientos.md, sección 2): la apertura bloquea la fila del abierto y la del en cierre, en orden de `id`, y nada más; el
-# primer ejercicio no tiene nada que bloquear y lo respalda la restricción única de la base (el perdedor atrapa el `IntegrityError` y relee).
+# Ejercicios contables (CON-ABR-EJE, D-84 puntos 2, 5 y 10): apertura automática (paso diario 5 y autorrecuperación), lecturas, elección del
+# ejercicio donde va un asiento y el cierre manual (CON-CRR-EJE, CON-03a). El PRIMER ejercicio ya no lo crea este módulo por su cuenta: la puesta en
+# marcha es CON-INI-EJE (tarea CON-05, reemplaza el punto 3 de D-84); sin ejercicio, la apertura no hace nada.
+# Bloqueos (docs/patrones/asientos.md, sección 2): la apertura bloquea la fila del abierto y la del en cierre, en orden de `id`, y nada más.
 # El cierre bloquea SOLO la fila del ejercicio que cierra (FOR NO KEY UPDATE) y no bloquea nada después: así no cruza el orden de nadie.
 import datetime
 from collections import namedtuple
@@ -13,11 +13,13 @@ from django.db.models import Count, Q, Sum
 from django.http import Http404
 from django.utils import timezone
 
+from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
-from contabilidad.errores import ErrorContable
+from contabilidad.errores import CODIGO_NO_INICIADA, ErrorContable, ErroresContables
 from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
 from contabilidad.servicios import responsables
-from core.models import RegistroAuditoria, referencia, rol_de
+from contabilidad.templatetags.formato_contable import pesos
+from core.models import RegistroAuditoria, Usuario, referencia, rol_de
 from core.procesos import ResumenDePaso
 
 Estado = EjercicioContable.Estado
@@ -59,6 +61,21 @@ def cierre_previsto(inicio):
 
 
 # --- Lecturas (no escriben ni bloquean) -------------------------------------------------------------------------------------------------------------
+
+
+def contabilidad_iniciada():
+    """¿Existe algún ejercicio, en cualquier estado? Es la lectura de la regla 9 de CON-INI-EJE («sin ejercicio no hay asiento»): la usan la alerta,
+    las pantallas y los pasos diarios con asientos."""
+    return EjercicioContable.objects.exists()
+
+
+DETALLE_DEL_PASO_SIN_CONTABILIDAD = "contabilidad no iniciada: queda pendiente para mañana"
+
+
+def resumen_de_paso_sin_contabilidad():
+    """El `ResumenDePaso` de un paso diario que genera asientos cuando la contabilidad no está iniciada (regla 9 de CON-INI-EJE): no procesa nada y reintenta al día siguiente. Lo devuelven,
+    como primera cosa, `vencer_partidas_en_camara` (20) y `resolver_suministros_pendientes` (33)."""
+    return ResumenDePaso(0, 0, 0, DETALLE_DEL_PASO_SIN_CONTABILIDAD)
 
 
 def ejercicio_abierto():
@@ -132,6 +149,8 @@ def destino_previsto(fecha, *, hoy=None):
     Devuelve `DestinoPrevisto(numero, inicio, cierre, estado, por_abrir)` (``por_abrir``: el ejercicio todavía no existe); lanza los mismos
     `ErrorContable` de fecha que el registro."""
     hoy = hoy or timezone.localdate()
+    if not contabilidad_iniciada():  # regla 9 de CON-INI-EJE: no se simula un primer ejercicio
+        raise ErrorContable(CODIGO_NO_INICIADA, "La contabilidad no está iniciada.")
     simulados = [
         {"id": e.pk, "inicio": e.fecha_inicio_ejercicio, "cierre": e.fecha_cierre_ejercicio, "estado": e.estado_ejercicio}
         for e in EjercicioContable.objects.order_by("fecha_inicio_ejercicio", "id")
@@ -155,9 +174,7 @@ def destino_previsto(fecha, *, hoy=None):
             )
         vueltas += 1
         abierto = con_estado(Estado.ABIERTO)
-        if not simulados:
-            simulados.append(nuevo(hoy))
-        elif abierto is None:
+        if abierto is None:
             ultimo = max(simulados, key=lambda e: e["cierre"])
             simulados.append(nuevo(ultimo["cierre"] + datetime.timedelta(days=1)))
         else:
@@ -204,14 +221,15 @@ def ejercicios_numerados():
     return [EjercicioNumerado(numero, ejercicio, ejercicio.cantidad_de_asientos) for numero, ejercicio in enumerate(lista, start=1)]
 
 
-def _crear(inicio, origen):
-    """Crea un ejercicio abierto que empieza en ``inicio`` y lo audita con actor `None` (InfoPonia): `alta_ejercicio_contable`."""
+def _crear(inicio, origen, actor=None):
+    """Crea un ejercicio abierto que empieza en ``inicio`` y lo audita (`alta_ejercicio_contable`) con ``actor``: `None` es InfoPonia (apertura automática) y la
+    cuenta real en la puesta en marcha (CON-INI-EJE, regla 12)."""
     cierre = cierre_previsto(inicio)
     nuevo = EjercicioContable.objects.create(
         fecha_inicio_ejercicio=inicio, fecha_cierre_ejercicio=cierre, estado_ejercicio=Estado.ABIERTO
     )
     RegistroAuditoria.objects.registrar(
-        None,
+        actor,
         Accion.ALTA_EJERCICIO_CONTABLE,
         [nuevo],
         {
@@ -246,16 +264,16 @@ def _necesita_apertura(hoy):
 def abrir_ejercicio_si_corresponde(hoy=None):
     """CON-ABR-EJE: abre ejercicios hasta que haya un abierto que no venció; devuelve `ResultadoApertura`. Idempotente (regla 5).
 
+    Si no existe ningún ejercicio no hace nada: el primero lo crea CON-INI-EJE (regla 4 de CON-ABR-EJE y regla 11 de CON-INI-EJE, tarea CON-05).
     Si el abierto no venció, no escribe nada. Si hay que actuar, en una transacción bloquea el abierto y el en cierre (orden de `id`),
     vuelve a leer y, por cada vuelta: cierra solo el que estaba en cierre (C1, sin Contador), pasa el abierto a «en cierre» y crea el
-    siguiente (que empieza el día siguiente al cierre previsto del anterior). Sin ningún ejercicio crea el primero, que empieza hoy
-    (D-84 punto 3). Hasta 10 vueltas; superado, `ErrorContable` `ejercicios_atrasados` y no queda nada escrito.
+    siguiente (que empieza el día siguiente al cierre previsto del anterior). Hasta 10 vueltas; superado, `ErrorContable` `ejercicios_atrasados` y no queda nada escrito.
     """
     hoy = hoy or timezone.localdate()
-    if not _necesita_apertura(hoy):
+    if not contabilidad_iniciada() or not _necesita_apertura(hoy):
         return ResultadoApertura(None, None, None, None)
 
-    primero = en_cierre = cerrado = nuevo = None
+    en_cierre = cerrado = nuevo = None
     creados = cerrados = vueltas = 0
     with transaction.atomic():
         # El bloqueo va ANTES de releer: si otra apertura lo tenía, esperamos y vemos su resultado (read committed).
@@ -272,15 +290,6 @@ def abrir_ejercicio_si_corresponde(hoy=None):
                 )
             vueltas += 1
             abierto = ejercicio_abierto()
-            if not EjercicioContable.objects.exists():
-                # Primera operación contable: no hay nada que bloquear; si otra la crea a la vez, la restricción única nos frena.
-                try:
-                    with transaction.atomic():
-                        primero = _crear(hoy, "puesta en marcha")
-                except IntegrityError:
-                    continue  # otra operación creó el primero: se relee y se sigue
-                creados += 1
-                continue
             if abierto is None:
                 ultimo = EjercicioContable.objects.order_by("-fecha_cierre_ejercicio", "-id").first()
                 nuevo = _crear(ultimo.fecha_cierre_ejercicio + datetime.timedelta(days=1), "apertura automática")
@@ -303,32 +312,144 @@ def abrir_ejercicio_si_corresponde(hoy=None):
             )
             nuevo = _crear(abierto.fecha_cierre_ejercicio + datetime.timedelta(days=1), "apertura automática")
             creados += 1
-    return ResultadoApertura(primero, en_cierre, cerrado, nuevo, creados, cerrados)
+    # `primero_creado` queda siempre en `None`: se conserva el campo para no cambiar el contrato de `docs/api/asientos.md` (CON-05).
+    return ResultadoApertura(None, en_cierre, cerrado, nuevo, creados, cerrados)
 
 
-def crear_primer_ejercicio(fecha_inicio, hoy=None):
-    """La puesta en marcha (D-84 punto 3): crea el primer ejercicio, que empieza en ``fecha_inicio`` (no puede ser futura).
+# --- Puesta en marcha (CON-INI-EJE, tarea CON-05) ------------------------------------------------------------------------------------------------------
 
-    Idempotente: si ya existe algún ejercicio no hace nada y devuelve el primero que hay. Respaldada por la restricción única si dos
-    puestas en marcha corren a la vez.
-    """
+# Las cinco cuentas del asiento de apertura (regla 6): al Debe, Caja, Banco c/c y Deudores por Ventas; al Haber, Capital Inicial (obligatoria) y Proveedores.
+# Insumos y productos NO van (regla 7): entran por la carga inicial y los lotes existentes, que también acreditan Capital Inicial.
+CUENTAS_DE_LA_APERTURA_AL_DEBE = (cuentas.CAJA, cuentas.BANCO, cuentas.DEUDORES_POR_VENTAS)
+CUENTAS_DE_LA_APERTURA_AL_HABER = (cuentas.CAPITAL_INICIAL, cuentas.PROVEEDORES)
+DESCRIPCION_DE_LA_APERTURA = "Asiento de apertura"
+# Lo que muestra el paso 5: el ejercicio que se crearía y las líneas del asiento (`LineaDeResumen` de `asientos`, las del Debe primero).
+ResumenDeInicio = namedtuple("ResumenDeInicio", "inicio cierre lineas total_debe total_haber diferencia")
+
+
+def fecha_inicio_minima(hoy):
+    """La fecha de inicio más antigua que admite CON-INI-EJE (extensión 5b): el día siguiente a «hoy menos 12 meses», de modo que el cierre previsto no sea
+    anterior a hoy (`cierre_previsto(minima) >= hoy`). El 29 de febrero se toma como 28 de febrero del año anterior."""
+    try:
+        mismo_dia = hoy.replace(year=hoy.year - 1)
+    except ValueError:  # 29 de febrero
+        mismo_dia = datetime.date(hoy.year - 1, 2, 28)
+    return mismo_dia + datetime.timedelta(days=1)
+
+
+def _validar_inicio(fecha_inicio, importes, hoy):
+    """Valida la fecha y los importes de CON-INI-EJE sin escribir (reglas 4, 6 y 8; extensiones 5a a 5e) y devuelve `[(codigo, "D"|"H", Decimal)]` con las líneas de
+    importe mayor que cero, las del Debe primero. Junta TODOS los errores de campo y los lanza a la vez (`ErroresContables`; orden: fecha, líneas, capital, balance).
+    Campos: `fecha_inicio` e `importes[<código>]` (el balance, `importes`)."""
+    from contabilidad.servicios import asientos  # `asientos` importa este módulo: se importa acá para no cerrar el círculo
+
+    errores = []
+    if not isinstance(fecha_inicio, datetime.date):
+        errores.append(ErrorContable("fecha_invalida", "Indicá una fecha de inicio válida.", campo="fecha_inicio"))
+    elif fecha_inicio > hoy:
+        errores.append(ErrorContable("fecha_futura", "La fecha de inicio no puede ser futura.", campo="fecha_inicio"))
+    elif cierre_previsto(fecha_inicio) < hoy:
+        minima = fecha_inicio_minima(hoy)
+        mensaje = f"La fecha de inicio es tan antigua que el ejercicio ya habría terminado: la más antigua que se puede elegir es el {minima:%d/%m/%Y}."
+        errores.append(ErrorContable("fecha_inicio_demasiado_antigua", mensaje, campo="fecha_inicio"))
+
+    lados = {**{c: DEBE for c in CUENTAS_DE_LA_APERTURA_AL_DEBE}, **{c: HABER for c in CUENTAS_DE_LA_APERTURA_AL_HABER}}
+    for codigo in importes:
+        if codigo not in lados:
+            mensaje = f"La cuenta {codigo} no se usa en el asiento de apertura: Insumos y productos entran con la carga inicial y los lotes existentes."
+            errores.append(ErrorContable("cuenta_no_permitida_en_apertura", mensaje, campo=f"importes[{codigo}]"))
+    lineas, con_error = [], set()
+    for codigo, lado in lados.items():
+        importe = importes.get(codigo)
+        if importe is None or (isinstance(importe, Decimal) and importe.is_finite() and importe == 0):
+            continue  # extensión 5e: sin importe o en cero se omite
+        if not asientos._importe_valido(importe):
+            mensaje = "El importe tiene que ser un número mayor que cero, con hasta dos decimales."
+            errores.append(ErrorContable("importe_invalido", mensaje, campo=f"importes[{codigo}]"))
+            con_error.add(codigo)
+            continue
+        lineas.append((codigo, lado, importe.quantize(asientos.CENTAVOS)))
+    if cuentas.CAPITAL_INICIAL not in con_error and not any(codigo == cuentas.CAPITAL_INICIAL for codigo, _, _ in lineas):
+        mensaje = "El capital inicial es obligatorio para iniciar la contabilidad."
+        errores.append(ErrorContable("capital_inicial_obligatorio", mensaje, campo=f"importes[{cuentas.CAPITAL_INICIAL}]"))
+    if not con_error:  # con una línea inválida no se puede calcular el balance
+        debe = sum((i for _, t, i in lineas if t == DEBE), Decimal("0.00"))
+        haber = sum((i for _, t, i in lineas if t == HABER), Decimal("0.00"))
+        if debe != haber:
+            mensaje = f"El Debe ({pesos(debe)}) y el Haber ({pesos(haber)}) no coinciden: la diferencia es de {pesos(abs(debe - haber))}."
+            errores.append(ErrorContable("asiento_desbalanceado", mensaje, campo="importes"))
+    if errores:
+        raise errores[0] if len(errores) == 1 else ErroresContables(errores)
+    return lineas
+
+
+def exigir_quien_inicia(actor):
+    """Regla 1 de CON-INI-EJE: solo inicia el responsable contable (el Contador activo o, sin Contador activo, el Gerente). Si no, `PermissionDenied`; al Gerente con un Contador activo le
+    dice que lo inicia el Contador (extensión 1a, punto 3). La usan `iniciar_ejercicio`, `resumir_inicio` y la pantalla (que así da el mismo 403 y el mismo mensaje)."""
+    if responsables.puede_registrar_asientos(actor):
+        return
+    es_gerente = actor is not None and getattr(actor, "is_active", False) and rol_de(actor) == Usuario.Rol.GERENTE
+    if es_gerente and responsables.contador_activo() is not None:
+        raise PermissionDenied("Lo inicia el Contador: mientras haya un Contador activo, el Gerente no inicia la contabilidad.")
+    raise PermissionDenied("Solo el Contador, o el Gerente si no hay un Contador activo, inicia la contabilidad.")
+
+
+def _ya_iniciada():
+    """El `ErrorContable` de las extensiones 2a y 7a: la contabilidad ya tiene un ejercicio."""
+    return ErrorContable("contabilidad_ya_iniciada", "La contabilidad ya está iniciada: ya existe un ejercicio contable.")
+
+
+def iniciar_ejercicio(actor, fecha_inicio, importes, *, hoy=None):
+    """CON-INI-EJE: inicia la contabilidad. Crea el primer ejercicio «abierto» y el asiento de apertura N.º 1 en una sola transacción y devuelve el asiento
+    (su ejercicio es `asiento.ejercicio`). ``importes`` es `{codigo_de_cuenta: Decimal}` con las cinco cuentas de la regla 6.
+
+    Orden (docs/casos_de_uso/contabilidad/ejercicio.md, «Cómo se aplica»): (1) permisos, solo el responsable contable (regla 1; `PermissionDenied`); (2) si ya
+    hay un ejercicio, `contabilidad_ya_iniciada` (extensión 2a); (3) valida fecha e importes sin escribir (`ErrorContable`, errores por campo); (4) en una
+    transacción, vuelve a verificar al actor y que siga sin haber ejercicio y crea el ejercicio auditado con el actor (si otro lo creó a la vez, la restricción
+    única de la base lo frena y se traduce a `contabilidad_ya_iniciada`, extensión 7a); (5) bloquea el ejercicio nuevo y crea el asiento y sus movimientos con
+    la misma función que el asiento manual (`asientos._crear_y_auditar`). Todo o nada. No llama a `registrar_asiento_manual`, que exige un ejercicio."""
+    from contabilidad.servicios import asientos
+
     hoy = hoy or timezone.localdate()
-    if fecha_inicio > hoy:
-        raise ErrorContable(
-            "fecha_futura", "La fecha de inicio del primer ejercicio no puede ser futura.", campo="fecha_inicio"
-        )
-
-    def existente():
-        return EjercicioContable.objects.order_by("fecha_inicio_ejercicio", "id").first()
-
+    exigir_quien_inicia(actor)
+    if contabilidad_iniciada():
+        raise _ya_iniciada()
+    lineas = _validar_inicio(fecha_inicio, importes, hoy)
     with transaction.atomic():
-        if existente() is not None:
-            return existente()
+        exigir_quien_inicia(actor)  # pudo dejar de ser el responsable mientras tanto (D-30)
+        if contabilidad_iniciada():
+            raise _ya_iniciada()
+        cuentas_por_codigo = asientos._cuentas_por_codigo(lineas)  # extensión 7b: `cuenta_inexistente`
         try:
             with transaction.atomic():
-                return _crear(fecha_inicio, "puesta en marcha")
-        except IntegrityError:
-            return existente()  # otra operación lo creó a la vez
+                nuevo = _crear(fecha_inicio, "puesta en marcha", actor)
+        except IntegrityError as error:
+            if EjercicioContable.objects.exists():  # otro inició a la vez (extensión 7a)
+                raise _ya_iniciada() from error
+            raise
+        ejercicio = asientos._bloquear_ejercicio(nuevo.pk)
+        return asientos._crear_y_auditar(
+            actor, ejercicio, fecha_inicio, DESCRIPCION_DE_LA_APERTURA, lineas, cuentas_por_codigo, afectados=[ejercicio]
+        )
+
+
+def resumir_inicio(actor, fecha_inicio, importes, *, hoy=None):
+    """Paso 5 de CON-INI-EJE: las mismas validaciones que `iniciar_ejercicio` y el resumen (`ResumenDeInicio`), SIN escribir, auditar ni bloquear."""
+    from contabilidad.servicios import asientos
+
+    hoy = hoy or timezone.localdate()
+    exigir_quien_inicia(actor)
+    if contabilidad_iniciada():
+        raise _ya_iniciada()
+    lineas = _validar_inicio(fecha_inicio, importes, hoy)
+    cuentas_por_codigo = asientos._cuentas_por_codigo(lineas)
+    filas = []
+    for indice, (codigo, tipo, importe) in enumerate(lineas):
+        cuenta = cuentas_por_codigo[codigo]
+        filas.append(asientos.LineaDeResumen(indice, codigo, cuenta.nombre_cuenta, cuenta.tipo_cuenta, cuenta.get_tipo_cuenta_display(), tipo, importe))
+    debe = sum((f.importe for f in filas if f.tipo_movimiento == DEBE), Decimal("0.00"))
+    haber = sum((f.importe for f in filas if f.tipo_movimiento == HABER), Decimal("0.00"))
+    return ResumenDeInicio(fecha_inicio, cierre_previsto(fecha_inicio), filas, debe, haber, debe - haber)
 
 
 # --- Cierre manual (CON-CRR-EJE) ---------------------------------------------------------------------------------------------------------------------
@@ -394,11 +515,11 @@ def cerrar_ejercicio(actor, ejercicio_id):
 
 def paso_abrir_ejercicio(hoy):
     """Paso 5 del proceso diario (D-56, CON-ABR-EJE): llama a `abrir_ejercicio_si_corresponde(hoy)` y resume lo que hizo."""
+    if not contabilidad_iniciada():
+        return ResumenDePaso(procesados=0, creados=0, resueltos=0, detalle="contabilidad no iniciada")
     existia = ejercicio_abierto() is not None
     resultado = abrir_ejercicio_si_corresponde(hoy)
     partes = []
-    if resultado.primero_creado is not None:
-        partes.append(f"primer ejercicio creado ({resultado.primero_creado})")
     if resultado.cerrado_solo is not None:
         partes.append(f"{resultado.cantidad_cerrados_solos} cerrado(s) solo(s)")
     if resultado.paso_a_en_cierre is not None:

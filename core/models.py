@@ -831,6 +831,8 @@ class RegistroAuditoria(models.Model):
         # de un ejercicio es ``modificacion_ejercicio_contable``.
         ALTA_EJERCICIO_CONTABLE = "alta_ejercicio_contable", "Alta de ejercicio contable"
         MODIFICACION_EJERCICIO_CONTABLE = "modificacion_ejercicio_contable", "Modificación de ejercicio contable"
+        # CON-05: la baja del ejercicio que creó la puesta en marcha automática (comando de uso único `eliminar_ejercicio_sin_apertura`); actor `None` (InfoPonia).
+        BAJA_EJERCICIO_CONTABLE = "baja_ejercicio_contable", "Baja de ejercicio contable"
         ALTA_ASIENTO_CONTABLE = "alta_asiento_contable", "Alta de asiento contable"
         ALTA_MOVIMIENTO_CONTABLE = "alta_movimiento_contable", "Alta de movimiento contable"
         # COM-05a1 (D-66): las entregas. Un registro por entrega creada o cambiada por InfoPonia (origen: proceso automático, D-27). La cancelación de una
@@ -1706,6 +1708,7 @@ ACCIONES_DE_NEGOCIO = frozenset(
         RegistroAuditoria.Accion.VENCIMIENTO_ENLACE,
         RegistroAuditoria.Accion.ALTA_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.MODIFICACION_EJERCICIO_CONTABLE,
+        RegistroAuditoria.Accion.BAJA_EJERCICIO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_ASIENTO_CONTABLE,
         RegistroAuditoria.Accion.ALTA_MOVIMIENTO_CONTABLE,
         RegistroAuditoria.Accion.PLANIFICACION_ENTREGA,

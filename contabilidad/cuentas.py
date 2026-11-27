@@ -93,8 +93,8 @@ DESCRIPCION_DE_CUENTA = {
         "(Haber, COM-RSV-SUM); su pago, un asiento manual del Contador (Debe)."
     ),
     CAPITAL_INICIAL: (
-        "Lo que ya existía al poner en marcha InfoPonia. La mueven: el ajuste «carga inicial» de insumos, los lotes existentes y el "
-        "asiento de apertura (Haber)."
+        "Lo que ya existía al poner en marcha InfoPonia. La mueven el asiento de apertura (CON-INI-EJE), el ajuste «carga inicial» de "
+        "insumos y los lotes existentes (Haber)."
     ),
     VENTAS: "Ingresos por entregas. La mueven: entregas concretadas (Haber).",
     INDEMNIZACIONES_POR_ATRASO: (

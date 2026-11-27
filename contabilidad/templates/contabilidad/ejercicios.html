@@ -33,7 +33,9 @@ Contador, o «sin Contador» si lo cerró el Gerente o el Sistema: la persona es
     </table>
   </div>
   {% else %}
-  <div class="empty"><b>Todavía no hay ejercicios contables</b><span>El primer ejercicio se crea al poner en marcha la contabilidad.</span></div>
+  <div class="empty"><b>Todavía no hay ejercicios contables</b>
+    {% if puede_iniciar %}<span>La contabilidad todavía no está iniciada. Iniciá el primer ejercicio y cargá el capital inicial.</span> <a class="btn btn-primary" href="{% url 'contabilidad:iniciar' %}">Iniciar ejercicio</a>
+    {% else %}<span>La contabilidad todavía no está iniciada. La inicia el Contador (o el Gerente, si no hay un Contador activo).</span>{% endif %}</div>
   {% endif %}
   {% if not puede_cerrar %}<p class="hint" style="margin-top:12px">Los ejercicios los cierra el Contador (si no hay un Contador activo, el Gerente). Acá solo los consultás.</p>{% endif %}
 </div>

@@ -17,6 +17,7 @@ from maestros.models import SectorProduccion
 from maestros.tests.fabricas import crear_agronomo, crear_invernadero, crear_sector, crear_vendedor
 from produccion.models import FueraDeServicio, Merma, OcupacionSector, OrdenTrabajo, Reubicacion
 from produccion.tests.fabricas import invernadero_con_produccion, lote_activo, orden_de_siembra
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HX = {"HTTP_HX_REQUEST": "true"}
 URL = "produccion:fuera_de_servicio"
@@ -26,6 +27,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):  # CON-04a: esto
     """Un invernadero con un sector por etapa; `germ` es el de origen y `g2` un destino de Germinación."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = invernadero_con_produccion()
         self.germ = self.e.sectores["germinacion"]
         self.g2 = crear_sector(self.e.invernadero, "Germinación 2", "germinacion", 100)

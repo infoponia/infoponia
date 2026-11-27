@@ -111,6 +111,8 @@ MIDDLEWARE = [
     # SEG-04: con contraseña temporal solo se puede elegir una propia (o cerrar sesión).
     'core.middleware.ContrasenaTemporalMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # CON-05 (regla 9 de CON-INI-EJE): la ventana de «la contabilidad no está iniciada»; solo atiende esa excepción.
+    'contabilidad.middleware.ContabilidadNoIniciadaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 

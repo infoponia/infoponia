@@ -51,6 +51,7 @@ from maestros.models import Alerta
 from maestros.servicios import configuracion
 from produccion.models import Merma, MovimientoStock, StockCosechado
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 AYER = HOY - timedelta(days=1)
@@ -61,6 +62,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         cls.e = escenario_comercial()
         cls.lote = lote_maduro(cls.e, 300)
 

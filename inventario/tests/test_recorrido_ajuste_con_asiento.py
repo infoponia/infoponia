@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from contabilidad import cuentas
 from contabilidad.models import AsientoContable, EjercicioContable
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 from contabilidad.tests.fabricas import verificar_invariantes_contables
 from core.models import Agronomo, Capataz, Contador, Gerente, Vendedor
 from core.tests.fabricas import crear_cuenta
@@ -43,11 +44,18 @@ class RecorridoDeAjusteConAsientoTests(AjusteVistaBase):
         return self.client.get(url)
 
     def test_recorrido_del_ajuste_con_su_asiento_por_rol_y_por_estado(self):
-        # --- Sin ejercicio todavía: el primer asiento abre el primero (D-92 punto 2) ---
+        # --- Sin ejercicio todavía (regla 9 de CON-INI-EJE, CON-05): la carga inicial no se registra y se explica; después se inicia la contabilidad con el helper ---
+        EjercicioContable.objects.all().delete()  # la base de la clase trae el ejercicio del helper
         self.assertEqual(EjercicioContable.objects.count(), 0)
+        campos = {"cantidad": "10", "vencimiento": en(60).isoformat()}
+        self.client.force_login(self.agronomo)
+        calculo = self.calcular("carga_inicial", **campos)
+        sin_ejercicio = self.confirmar_con(calculo, "carga_inicial", **campos)
+        self.assertContains(sin_ejercicio, "La operación no se registró.")
+        self.assertEqual((EjercicioContable.objects.count(), AsientoContable.objects.count(), LoteInsumo.objects.count()), (0, 0, 0))
+        iniciar_contabilidad_para_pruebas()
 
         # --- Agrónomo: carga inicial de 10 L a $ 500 ---
-        campos = {"cantidad": "10", "vencimiento": en(60).isoformat()}
         resumen = self.ajustar("carga_inicial", **campos).context["resumen"]
         self.assertEqual([(a.debe[1], a.haber[1], a.importe) for a in resumen.asientos], [("Insumos en Stock", "Capital Inicial", D("5000.00"))])
         [ejercicio] = EjercicioContable.objects.all()

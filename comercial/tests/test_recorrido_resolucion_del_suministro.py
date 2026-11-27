@@ -29,6 +29,7 @@ from core.models import Notificacion, RegistroAuditoria
 from maestros.models import Alerta
 from produccion.models import Cosecha, StockCosechado
 from produccion.tests.fabricas import reservar
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 
 def texto(respuesta):
@@ -38,6 +39,7 @@ def texto(respuesta):
 @override_settings(CORREO_CONFIGURADO=True)
 class RecorridoDeResolucionDelSuministroTests(BaseDeSolicitudes):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.addCleanup(verificar_invariantes_de_reservas)
         self.addCleanup(verificar_invariantes_de_resolucion)

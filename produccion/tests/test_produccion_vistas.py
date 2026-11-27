@@ -25,6 +25,7 @@ from produccion.tests.fabricas import (
     orden_suelta,
     variedad_con_stock,
 )
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HX = {"HTTP_HX_REQUEST": "true"}
 
@@ -273,6 +274,7 @@ class NuevaSiembraTests(Base):
 
 class BandejaYConcretarTests(Base):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.orden = orden_de_siembra(self.e, plantines=40)
         self.entrar(self.e.capataz)

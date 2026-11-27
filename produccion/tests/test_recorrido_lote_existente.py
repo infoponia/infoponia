@@ -24,6 +24,7 @@ from maestros.tests.fabricas import crear_sector
 from produccion.models import Bitacora, Lote, OcupacionSector, OrdenTrabajo, Siembra, TransicionEtapa
 from produccion.servicios import transiciones
 from produccion.tests.fabricas import invernadero_con_produccion, lote_activo
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 URL = reverse("produccion:registrar_lote_existente")
 D = Decimal
@@ -34,6 +35,10 @@ def hoy():
 
 
 class RecorridoDeLoteExistenteTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
+    def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
+        super().setUp()
+
     def test_recorrido_del_agronomo_con_un_invernadero_sin_siembras(self):
         e = invernadero_con_produccion()
         segundo = crear_sector(e.invernadero, nombre="Sector maduracion 2", tipo="maduracion", agujeros=100)

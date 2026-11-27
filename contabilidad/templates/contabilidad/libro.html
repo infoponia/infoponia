@@ -7,7 +7,8 @@ se envían con «Filtrar»: sin JavaScript funciona igual. Sin las acciones de C
 <link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
 <div class="page">
   <div class="page-h"><h1>Contabilidad</h1><span class="spacer"></span>
-    {% if puede_registrar %}<a class="btn btn-primary" href="{% url 'contabilidad:asiento_nuevo' %}">{% icono "plus" 15 %} Registrar asiento</a>
+    {% if not elegido %}{# sin ejercicio no se registra nada (regla 9 de CON-INI-EJE): la entrada es «Iniciar ejercicio», más abajo #}
+    {% elif puede_registrar %}<a class="btn btn-primary" href="{% url 'contabilidad:asiento_nuevo' %}">{% icono "plus" 15 %} Registrar asiento</a>
     {% else %}<span class="muted"><b>Lo registra el Contador.</b> Los asientos manuales los carga él.</span>{% endif %}
   </div>
   {% include "contabilidad/_pestanas.html" with activa="libro" %}
@@ -15,7 +16,9 @@ se envían con «Filtrar»: sin JavaScript funciona igual. Sin las acciones de C
   <p class="muted" style="margin:-6px 0 14px">El libro de gestión es el registro interno de los asientos de InfoPonia, para controlar la contabilidad y saber cómo van los números. No es el libro diario ni el mayor legales y no está homologado.</p>
 
   {% if not elegido %}
-  <div class="empty"><b>Todavía no hay ejercicios contables</b><span>El primer ejercicio se crea al poner en marcha la contabilidad (con el comando «poner_en_marcha_contabilidad») o con la primera operación contable del sistema.</span></div>
+  <div class="empty"><b>Todavía no hay ejercicios contables</b>
+    {% if puede_registrar %}<span>La contabilidad todavía no está iniciada. Iniciá el primer ejercicio y cargá el capital inicial.</span> <a class="btn btn-primary" href="{% url 'contabilidad:iniciar' %}">Iniciar ejercicio</a>
+    {% else %}<span>La contabilidad todavía no está iniciada. La inicia el Contador (o el Gerente, si no hay un Contador activo).</span>{% endif %}</div>
   {% else %}
 
   <form class="filters" method="get" action="{% url 'contabilidad:libro' %}" aria-label="Filtros del libro">

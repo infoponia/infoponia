@@ -8,7 +8,9 @@ from decimal import Decimal, InvalidOperation
 
 from django import forms
 from django.http import QueryDict
+from django.utils.http import url_has_allowed_host_and_scheme
 
+from contabilidad import cuentas as plan_de_cuentas
 from contabilidad.constantes import DEBE, HABER
 from contabilidad.models import OrigenDocumento
 
@@ -228,6 +230,58 @@ def errores_para_pantalla(error, filas=None):
             salida["filas"].setdefault(fila, {}).setdefault(linea.group(2), []).append(e.mensaje)
         elif e.campo in ("descripcion", "fecha"):
             salida[e.campo].append(e.mensaje)
+        else:
+            salida["general"].append(e.mensaje)
+    return salida
+
+
+# --- «Iniciar ejercicio» (CON-INI-EJE, tarea CON-05) -------------------------------------------------------------------------------------------------------------
+
+# Las cinco cuentas del asiento de apertura (regla 6), cada una con el lado al que va: el formulario solo lee estas; cualquier otro `importe_<código>` enviado a mano se ignora.
+CUENTAS_DE_INICIO_AL_DEBE = (plan_de_cuentas.CAJA, plan_de_cuentas.BANCO, plan_de_cuentas.DEUDORES_POR_VENTAS)
+CUENTAS_DE_INICIO_AL_HABER = (plan_de_cuentas.CAPITAL_INICIAL, plan_de_cuentas.PROVEEDORES)
+
+
+def volver_seguro(texto):
+    """La ruta a la que ofrecer «Volver a la operación» (extensión 1b, paso 4): solo una ruta de este mismo sitio (empieza con una sola «/»); cualquier otra cosa (otro host,
+    `javascript:`, `//otro-sitio`) se descarta y devuelve `""`, para no armar una redirección abierta."""
+    texto = (texto or "").strip()
+    if not texto.startswith("/") or texto.startswith("//") or not url_has_allowed_host_and_scheme(texto, allowed_hosts=None):
+        return ""
+    return texto
+
+
+@dataclass
+class DatosDeInicio:
+    """Lo que se escribió en «Iniciar ejercicio»: la fecha (texto y `date` o `None` si no es válida), el texto de cada importe (para mostrarlo tal como se escribió) y el `volver`."""
+
+    fecha_texto: str
+    fecha: datetime.date | None
+    importes_texto: dict = field(default_factory=dict)
+    volver: str = ""
+
+    def importes(self):
+        """`{código: Decimal}` de las cinco cuentas, para el servicio (un texto que no es un número queda como un valor que el servicio rechaza en su campo)."""
+        return {codigo: importe_desde_texto(self.importes_texto.get(codigo, "")) for codigo in (*CUENTAS_DE_INICIO_AL_DEBE, *CUENTAS_DE_INICIO_AL_HABER)}
+
+
+def leer_inicio(post, hoy, volver=""):
+    """Lee el formulario de «Iniciar ejercicio»: `fecha_inicio` (por omisión, hoy) e `importe_<código>` de las cinco cuentas."""
+    texto = post.get("fecha_inicio", hoy.isoformat())
+    importes = {codigo: post.get(f"importe_{codigo}", "") for codigo in (*CUENTAS_DE_INICIO_AL_DEBE, *CUENTAS_DE_INICIO_AL_HABER)}
+    return DatosDeInicio(texto, fecha_desde_texto(texto), importes, volver)
+
+
+def errores_de_inicio(error):
+    """Los errores de `iniciar_ejercicio` o `resumir_inicio` ordenados para la plantilla: `{"fecha": [...], "importes": {código: [...]}, "general": [...]}`. Los de `fecha_inicio` y de
+    `importes[<código>]` van junto a su campo; el balance y cualquier otro (por ejemplo, una cuenta que ya no existe) son generales."""
+    salida = {"fecha": [], "importes": {}, "general": []}
+    for e in error.errores:
+        campo = e.campo or ""
+        if campo == "fecha_inicio":
+            salida["fecha"].append(e.mensaje)
+        elif campo.startswith("importes[") and campo.endswith("]"):
+            salida["importes"].setdefault(campo[len("importes[") : -1], []).append(e.mensaje)
         else:
             salida["general"].append(e.mensaje)
     return salida

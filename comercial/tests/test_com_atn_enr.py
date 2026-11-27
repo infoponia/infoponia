@@ -28,6 +28,7 @@ from maestros.models import Alerta
 from maestros.tests.fabricas import crear_alerta
 from produccion.models import MovimientoStock, StockCosechado
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 
@@ -53,6 +54,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
         cls.gerente = crear_gerente()
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.addCleanup(verificar_invariantes_de_entregas)
         self.addCleanup(verificar_invariantes_de_solicitudes)
 

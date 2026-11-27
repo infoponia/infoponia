@@ -9,13 +9,15 @@ se escribe (interfaz.md). El primer botón es «Revisar asiento» (oculto): es e
   <div class="page-h" style="margin-top:8px"><h1>Registrar asiento</h1></div>
   {% if not puede %}
   <div class="empty"><b>Lo registra el Contador</b><span>Mientras haya un Contador activo, el Gerente consulta el libro de gestión pero no registra asientos.</span></div>
+  {% elif sin_contabilidad %}
+  <div class="empty"><b>La contabilidad todavía no está iniciada</b><span>Para registrar asientos hace falta iniciar el primer ejercicio y cargar el capital inicial.</span>
+    <a class="btn btn-primary" href="{% url 'contabilidad:iniciar' %}">Iniciar ejercicio</a></div>
   {% else %}
   <form method="post" action="{% url 'contabilidad:asiento_nuevo' %}" novalidate>
     {% csrf_token %}
     <button type="submit" name="accion" value="revisar" class="sr" tabindex="-1" aria-hidden="true">Revisar asiento</button>
     <div class="atajos" role="group" aria-label="Precargar un asiento habitual">
       <span class="muted">Precargar:</span>
-      <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="atajo:apertura" data-sin-envio-en-curso>Asiento de apertura</button>
       <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="atajo:venta_previa" data-sin-envio-en-curso>Venta de producción previa</button>
     </div>
     <div id="cuerpo-asiento">{% include "contabilidad/_asiento_formulario.html" %}</div>

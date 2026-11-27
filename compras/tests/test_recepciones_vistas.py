@@ -18,12 +18,14 @@ from contabilidad.tests.fabricas import verificar_invariantes_contables
 from core.models import Contador
 from core.tests.fabricas import crear_cuenta
 from inventario.models import LoteInsumo
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 
 class VistasDeRecepcionBase(RecepcionBase):
     """Las URLs y los auxiliares para enviar los formularios."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.ficha_url = reverse("compras:orden_ficha", args=[self.orden.pk])
         self.recibir_url = reverse("compras:recepcion_nueva", args=[self.orden.pk])

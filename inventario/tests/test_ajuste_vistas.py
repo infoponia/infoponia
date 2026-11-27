@@ -30,6 +30,7 @@ from inventario.tests.fabricas import (
 from inventario.tests.test_salida_por_consumo import consumo_simulado
 from maestros.models import Alerta
 from maestros.tests.fabricas import crear_agronomo, crear_invernadero
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HX = {"HTTP_HX_REQUEST": "true"}
 HOY = timezone.localdate()
@@ -44,6 +45,7 @@ class AjusteVistaBase(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     """Un Agrónomo con sesión y «Nutriente A» (L, controla vencimiento; precio 1500) y «Bolsas» (unidad) habilitados en su invernadero."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.agronomo = crear_agronomo(nombre="Ana", apellido="Paz")
         self.invernadero = crear_invernadero("Invernadero Uno", agronomo=self.agronomo)
         self.nutriente = insumo("Nutriente A", tipo=tipo_de_insumo("Nutrientes"), unidad="l", controla_vencimiento=True)
@@ -203,6 +205,7 @@ class RecuentoVistaTests(AjusteVistaBase):
     """Recuento físico por lote (CMP-AJT-STK, pasos 8 a 12; extensiones 10a, 10b y 10c)."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.grande = lote(self.iin, 30, vence=en(40))
         self.chico = lote(self.iin, 10, vence=en(5))
@@ -306,6 +309,7 @@ class OtrosMotivosVistaTests(AjusteVistaBase):
     """Rotura, vencimiento, corrección entre lotes y «otro»."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.a = lote(self.iin, 30, vence=en(40))
         self.b = lote(self.iin, 10, vence=en(5))
@@ -415,6 +419,7 @@ class AdvertenciaYDesactualizadoVistaTests(AjusteVistaBase):
     """La advertencia 12b y el aviso de datos desactualizados (extensión 14a)."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.lote = lote(self.iin, 20, vence=en(40))
         self.origen = origen_falso()

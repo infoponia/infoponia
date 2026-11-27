@@ -37,6 +37,7 @@ from produccion.tests.fabricas import (
     reservar,
     separar,
 )
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 aplicaciones = perezoso("produccion.servicios.aplicaciones")
 mermas = perezoso("produccion.servicios.mermas")
@@ -51,6 +52,7 @@ class AplicarConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()  # el flush de la prueba anterior vació los tipos de etapa y las categorías
         asegurar_plan_de_cuentas()  # CON-04a: concretar una siembra asienta (y, desde el paso 3, también la aplicación)
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = invernadero_con_produccion(geografia_propia=True)
         self.lote_de_plantas = lote_activo(self.e, cantidad=50, sector="germinacion", costo="100.00")
         tipo = TipoInsumo.objects.filter(nombre_tipo_insumo="Cat costo").first() or tipo_de_insumo("Cat costo", consumo="como_costo_de_los_lotes")

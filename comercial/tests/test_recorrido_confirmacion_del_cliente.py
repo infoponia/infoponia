@@ -34,6 +34,7 @@ from core.tests.fabricas import crear_gerente
 from inventario.tests.fabricas import ConDatosDeInventario
 from maestros.models import Alerta, ConfiguracionOperativa
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 PORTAL = "/cliente/enlace/"
@@ -55,6 +56,7 @@ def huella_de(respuesta):
 @override_settings(CORREO_CONFIGURADO=True, URL_DEL_SITIO="https://sitio.test")
 class RecorridoDeConfirmacionDelClienteTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 5000)
         self.gerente = crear_gerente()

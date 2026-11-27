@@ -41,6 +41,7 @@ from produccion.tests.fabricas import (
 )
 from produccion.tests.test_prod_cnc_trn import datos as datos_de_concrecion
 from produccion.tests.test_prod_pnf_smb import datos as datos_de_siembra
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 mermas = perezoso("produccion.servicios.mermas")
 siembras = perezoso("produccion.servicios.siembras")
@@ -56,6 +57,7 @@ class FueraDeServicioConcurrenciaTests(ConDatosDeInventario, TransactionTestCase
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()  # el flush de la prueba anterior vació los tipos de etapa y las categorías
         asegurar_plan_de_cuentas()  # CON-04a: las mermas asientan; el flush de la prueba anterior vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = invernadero_con_produccion(geografia_propia=True)
         self.germ = self.e.sectores["germinacion"]
         self.lote = lote_activo(self.e, cantidad=plantas) if plantas else None

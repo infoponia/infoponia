@@ -1,0 +1,58 @@
+{% load iconos %}{% comment %}Cuerpo del formulario de «Iniciar ejercicio» (CON-INI-EJE pasos 2 y 3; tarea CON-05, sin prototipo: estilo de «Registrar asiento» de CON-03b): la fecha de inicio con el rango de la
+regla 4 y el cierre previsto que resulta, y las cinco líneas del asiento de apertura en dos bloques («Debe» y «Haber»), con el texto de la regla 7. «Calcular cierre» es un botón del formulario: con HTMX
+solo vuelve a dibujar este cuerpo (``#cuerpo-inicio``, ``hx-swap="innerHTML show:none"``) y NO valida (interfaz.md: nada de recalcular al cambiar o al escribir); sin JavaScript vuelve a dibujar la página.
+Cada error vuelve junto a su campo y lo escrito se conserva. Recibe «datos», «errores», «filas_del_debe», «filas_del_haber», «hoy», «fecha_minima» y «cierre» (`None` si la fecha no es válida). Todo se escapa.{% endcomment %}
+{% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
+<div class="stack">
+  <section class="sec" aria-labelledby="sec-ini-fecha">
+    <div class="sec-h" id="sec-ini-fecha"><span class="sec-num">1</span>Cuándo empieza</div>
+    <div class="grid2">
+      <div class="fld">
+        <label for="ini-fecha">Fecha de inicio <span class="req">*</span></label>
+        <input type="date" class="field-input{% if errores.fecha %} bad{% endif %}" id="ini-fecha" name="fecha_inicio" value="{{ datos.fecha_texto }}" min="{{ fecha_minima|date:'Y-m-d' }}" max="{{ hoy|date:'Y-m-d' }}" required>
+        {% for e in errores.fecha %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="hint">Desde el {{ fecha_minima|date:"d/m/Y" }} hasta hoy. Es la fecha del asiento de apertura: lo que la organización ya tenía ese día.</div>
+      </div>
+      <div class="fld">
+        <span class="lbl">Cierre previsto</span>
+        <p style="margin:6px 0"><strong id="cierre-previsto">{% if cierre %}{{ cierre|date:"d/m/Y" }}{% else %}—{% endif %}</strong></p>
+        <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="calcular" hx-post="{% url 'contabilidad:iniciar' %}" hx-target="#cuerpo-inicio" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Calcular cierre</button>
+        <div class="hint">El ejercicio dura 12 meses: cierra un año menos un día después del inicio. Tocá «Calcular cierre» después de cambiar la fecha.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="sec-ini-lineas">
+    <div class="sec-h" id="sec-ini-lineas"><span class="sec-num">2</span>Lo que la organización ya tenía</div>
+    <p class="hint" style="margin:0 0 10px">Cargá solo las cuentas que correspondan; las que dejes en blanco o en cero se omiten. El Debe y el Haber tienen que sumar lo mismo, y el Capital Inicial es obligatorio.</p>
+    <div class="tablewrap flat">
+      <table class="data-table asi-lineas">
+        <thead><tr><th colspan="2">Debe <span class="muted">(lo que hay)</span></th></tr></thead>
+        <tbody>
+        {% for f in filas_del_debe %}
+          <tr>
+            <td class="asi-cuenta"><label for="ini-{{ f.codigo }}">{{ f.codigo }} · {{ f.nombre }}</label></td>
+            <td class="asi-importe"><input id="ini-{{ f.codigo }}" class="field-input num{% if f.errores %} bad{% endif %}" name="importe_{{ f.codigo }}" inputmode="decimal" autocomplete="off" value="{{ f.texto }}" placeholder="0,00">
+              {% for e in f.errores %}<div class="err">{{ e }}</div>{% endfor %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="tablewrap flat" style="margin-top:12px">
+      <table class="data-table asi-lineas">
+        <thead><tr><th colspan="2">Haber <span class="muted">(lo que se debe y el capital)</span></th></tr></thead>
+        <tbody>
+        {% for f in filas_del_haber %}
+          <tr>
+            <td class="asi-cuenta"><label for="ini-{{ f.codigo }}">{{ f.codigo }} · {{ f.nombre }}{% if f.codigo == "3.1.01" %} <span class="req">*</span>{% endif %}</label></td>
+            <td class="asi-importe"><input id="ini-{{ f.codigo }}" class="field-input num{% if f.errores %} bad{% endif %}" name="importe_{{ f.codigo }}" inputmode="decimal" autocomplete="off" value="{{ f.texto }}" placeholder="0,00">
+              {% for e in f.errores %}<div class="err">{{ e }}</div>{% endfor %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint" style="margin-top:12px">Los insumos y los lotes que ya existían no van acá: se cargan después, con la carga inicial de insumos y con «Registrar lote existente», y también acreditan Capital Inicial.</p>
+  </section>
+</div>

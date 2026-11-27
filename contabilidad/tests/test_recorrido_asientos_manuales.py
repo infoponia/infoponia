@@ -92,11 +92,12 @@ class RecorridoDeAsientosManualesTests(PlanDeCuentasMixin, TestCase):
         self.assertIn('value="2027-03-10"', formulario)
         self.assertIn('<option value="1.1.01 · Caja">', formulario)
 
-        # 3. Extensión 3a: el atajo «Asiento de apertura» precarga la descripción y las cuentas, sin importes y sin registrar nada.
+        # 3. Extensión 3a quitada (CON-05): la pantalla ya no ofrece el atajo «Asiento de apertura» (la apertura es CON-INI-EJE) y escribir la acción a mano no precarga nada ni registra;
+        #    el atajo de venta previa (3b) sigue.
+        self.assertNotIn("atajo:apertura", formulario)
+        self.assertIn("atajo:venta_previa", formulario)
         atajo = _texto(self.enviar(self.contador, NUEVO, _form("", "2027-03-10", [("", "D", ""), ("", "H", "")], accion="atajo:apertura")))
-        self.assertIn('value="Asiento de apertura"', atajo)
-        self.assertIn(f'value="{_etiqueta(cuentas.CAJA)}"', atajo)
-        self.assertIn(f'value="{_etiqueta(cuentas.CAPITAL_INICIAL)}"', atajo)
+        self.assertNotIn('value="Asiento de apertura"', atajo)
         self.assertFalse(AsientoContable.objects.exists())
 
         # 4. Pasos 4 a 8: agrega una fila (Banco), revisa (resumen, sin registrar) y confirma; el asiento N.º 1 queda en el ejercicio abierto (el 2) y la ficha dice quién lo registró.

@@ -42,6 +42,7 @@ from contabilidad.tests.fabricas import asiento_de_prueba, ejercicio, ejercicio_
 from core.models import Notificacion, RegistroAuditoria
 from maestros.models import Alerta, Invernadero
 from maestros.tests.fabricas import crear_capataz_activo
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 D = Decimal
 DatosDeCobro = cobranza.DatosDeCobro
@@ -334,6 +335,7 @@ class ComAnlCbrCobroCorrectoTests(BaseDeCobranza):
     LUEGO = HOY + timedelta(days=4)
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         super().setUp()
         self.e1, self.e2 = self.en_mora(dias_de_mora=3), self.en_mora(dias_de_mora=3)  # vencidas hace 3 días: $ 900,00 de atraso por entrega al cobrarse hoy
         datos = DatosDeCobro(cliente_id=self.e.cliente.pk, entrega_ids=[self.e1.pk, self.e2.pk], medio_pago="transferencia")

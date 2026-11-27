@@ -25,6 +25,7 @@ el núcleo contable primero; Estadísticas, último, porque solo lee lo que ya e
 | 17 | EST-01 | App `estadisticas` (nivel 8) y estadísticas de producción | PRD-03 (hecha); mejor después de 14 | Estadísticas 1 | 4 | `estadisticas/EST-01-app-y-estadisticas-de-produccion.md` |
 | 18 | EST-02 | Estadísticas consolidadas del Gerente (sin lo comercial) | 17, 3 y 11 | Estadísticas 1 | 4 | `estadisticas/EST-02-estadisticas-consolidadas.md` |
 | 19 | EST-03 | Lo comercial dentro de las consolidadas | 18 y COM-08c | Estadísticas 1 | 4 | `estadisticas/EST-03-estadisticas-comerciales-en-las-consolidadas.md` |
+| 20 | CON-05 | Iniciar el ejercicio contable con el capital inicial (CON-INI-EJE) y «sin ejercicio no hay asiento» | 1 a 19 | — (puesta en marcha) | — | `contabilidad/CON-05-iniciar-ejercicio-contable.md` |
 
 **Paralelismo.** 1 a 4 y 5 a 8 pueden empezar ya, en dos líneas paralelas: la contable y la de compras (la orden de compra no asienta).
 Se juntan en 9 (la recepción necesita CON-02) y 10 (el pago necesita además USR-11). 12 a 14 pueden ir apenas esté 2; 15 y 16 esperan a Comercial, y si 2 llega antes

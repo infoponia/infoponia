@@ -24,8 +24,17 @@ Es **lo último que cualquier servicio bloquea**. Por eso:
 - La apertura de un ejercicio (`abrir_ejercicio_si_corresponde`) bloquea la fila del ejercicio abierto y la del en cierre, en orden de `id`, y
   nada más. Si un servicio ya tiene el ejercicio bloqueado, no la llama (la autorrecuperación corre al empezar la función, **antes** de
   bloquear el ejercicio, en una transacción corta propia con `atomic()` anidado).
-- El primer ejercicio (no hay nada que bloquear) lo respalda la restricción única de la base: si dos operaciones lo crean a la vez, la
-  segunda atrapa el `IntegrityError`, vuelve a leer y sigue.
+- El primer ejercicio ya no lo crea un asiento: lo crea CON-INI-EJE (`iniciar_ejercicio`), respaldado por la restricción única (el segundo
+  inicio simultáneo recibe `contabilidad_ya_iniciada`).
+
+## 2b. Sin ejercicio no hay asiento (CON-INI-EJE, regla 9; tarea CON-05)
+
+Si la contabilidad no está iniciada, `registrar_asiento_automatico` lanza `ErrorContable` `contabilidad_no_iniciada` **antes** de bloquear
+nada. **No lo atrapes**: tu transacción se deshace entera (la operación no queda registrada) y la ventana para el usuario la muestra el
+middleware de `contabilidad` (`ContabilidadNoIniciadaMiddleware`). Si tu vista atrapa `ErrorContable` para mostrar un mensaje, volvé a lanzar
+el de ese código. Un **paso diario** que genera asientos empieza con `if not ejercicios.contabilidad_iniciada(): return ResumenDePaso(0, 0, 0,
+"contabilidad no iniciada: queda pendiente para mañana")`. En las pruebas, creá el ejercicio antes de la operación (`fabricas.ejercicio(...)`
+o `iniciar_ejercicio`); hay una prueba por caso de uso con asiento que verifica la negativa sin ejercicio solo en `test_contabilidad_no_iniciada.py`.
 
 ## 3. Qué fecha se pasa
 

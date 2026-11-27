@@ -11,6 +11,7 @@ urlpatterns = [
     path("asientos/nuevo/", views.asiento_nuevo, name="asiento_nuevo"),
     path("asientos/<int:ejercicio_id>/<int:numero>/contraasentar/", views.contraasiento, name="contraasiento"),
     path("ejercicios/", views.pestana_de_ejercicios, name="ejercicios"),
+    path("ejercicios/iniciar/", views.iniciar_ejercicio, name="iniciar"),
     path("ejercicios/<int:ejercicio_id>/cerrar/", views.cierre, name="cierre"),
     path("plan-de-cuentas/", views.plan_de_cuentas, name="plan"),
 ]

@@ -49,6 +49,7 @@ from produccion.tests.fabricas import (
     orden_de_siembra,
     orden_de_transicion,
 )
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 
 def hoy():
@@ -76,6 +77,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     «a realizar» a Floración, planificada por el Agrónomo para el sector de Floración."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = invernadero_con_produccion()
         self.lote = lote_con_ciclo(self.e, cantidad=50, costo="100.00")
         self.orden = orden_de_transicion(self.e, self.lote)

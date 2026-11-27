@@ -44,6 +44,7 @@ from comercial.tests.fabricas import (
 )
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
+from contabilidad.errores import ErrorContable
 from contabilidad.models import AsientoContable, EjercicioContable
 from contabilidad.servicios import asientos as servicio_de_asientos
 from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio, ejercicio_abierto, verificar_invariantes_contables
@@ -53,6 +54,7 @@ from inventario.tests.fabricas import ConDatosDeInventario
 from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_sector
 from produccion.models import Bitacora, Cosecha, Lote, Merma, MovimientoStock, OcupacionSector, OrdenTrabajo, StockCosechado
 from produccion.tests.fabricas import lote_maduro
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 
@@ -74,6 +76,7 @@ class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     (compra-venta con envío de 50 plantas para dentro de 10 días) que reserva 30 plantas de él. La postcosecha es de 7 días."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = escenario_comercial()
         self.lote = lote_maduro(self.e, 100)
         self.sector = self.e.sectores["maduracion"]
@@ -678,11 +681,15 @@ class ConcretarCosechaAsientoTests(Base):
         self.assertEqual((asiento.ejercicio_id, asiento.fecha_asiento), (self.ejercicio.pk, HOY))
         self.assertIn(f"Fecha del hecho: {hecho:%d/%m/%Y}", asiento.descripcion_asiento)
 
-    def test_d92_punto_2_sin_ejercicio_el_primero_se_abre_solo(self):
-        """D-92 punto 2: no hay precondición de ejercicio; con la base sin ejercicios, el primer asiento lo abre (D-84 punto 3)."""
+    def test_regla_9_sin_ejercicio_la_cosecha_no_se_registra(self):
+        """Regla 9 de CON-INI-EJE (CON-05; reemplaza `test_d92_punto_2_sin_ejercicio_el_primero_se_abre_solo`, que verificaba D-84 punto 3): sin ejercicio no hay asiento, así que la
+        concreción de la cosecha se rechaza con `contabilidad_no_iniciada` y no queda nada: ni ejercicio, ni asiento, ni cosecha concretada."""
         EjercicioContable.objects.all().delete()
-        self.cosechando(30)
-        self.assertEqual((EjercicioContable.objects.count(), AsientoContable.objects.get().numero_asiento), (1, 1))
+        with self.assertRaises(ErrorContable) as contexto:
+            self.cosechando(30)
+        self.assertEqual(contexto.exception.codigo, "contabilidad_no_iniciada")
+        self.assertEqual((EjercicioContable.objects.count(), AsientoContable.objects.count()), (0, 0))
+        self.assertEqual(Cosecha.objects.get(pk=self.cosecha.pk).estado_orden, "a_realizar")
 
     def test_paso_4_el_libro_muestra_el_origen_de_la_cosecha_como_texto_sin_direccion(self):
         """CON-04c paso 4 (criterio de CON-04a, D-30): el origen del asiento de la cosecha se ve como «Salida por cosecha · OT-…, lote L-…, 30 plantas», SIN enlace (el

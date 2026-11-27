@@ -1,0 +1,81 @@
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos estaticos %}
+{% comment %}«Iniciar ejercicio» (CON-INI-EJE, tarea CON-05; sin prototipo: estilo de «Registrar asiento» de CON-03b). Una sola plantilla con cuatro estados según «modo»:
+«formulario» (paso 2: el cuerpo está en ``_iniciar_formulario.html``), «resumen» (paso 5: el ejercicio, el asiento N.º 1, las líneas y los totales; lo escrito viaja en campos ocultos),
+«listo» (paso 8: la confirmación, con el libro, lo que sigue y, si llegó, «Volver a la operación») y «ya_iniciada» (extensión 2a). Funciona sin JavaScript: todo son botones de un formulario.
+Todo se escapa.{% endcomment %}
+{% block titulo %}Iniciar ejercicio · InfoPonia{% endblock %}
+{% block contenido %}
+<link rel="stylesheet" href="{% static_v 'contabilidad/css/contabilidad.css' %}">
+<div class="page narrow">
+  <a class="btn btn-text btn-sm" href="{% url 'contabilidad:libro' %}">{% icono "back" 14 %} Libro de gestión</a>
+  <div class="page-h" style="margin-top:8px"><h1>{% if modo == "resumen" %}Revisá el inicio{% elif modo == "listo" %}Contabilidad iniciada{% else %}Iniciar ejercicio{% endif %}</h1></div>
+
+  {% if modo == "formulario" %}
+  <p class="muted" style="margin:-6px 0 14px">Es el primer paso de la contabilidad: elegí desde qué día empieza y cargá lo que la organización ya tenía. Hasta que lo hagas, ninguna operación que genera un asiento se registra.</p>
+  <form method="post" action="{% url 'contabilidad:iniciar' %}" novalidate>
+    {% csrf_token %}
+    <button type="submit" name="accion" value="revisar" class="sr" tabindex="-1" aria-hidden="true">Ver resumen</button>
+    {% if datos.volver %}<input type="hidden" name="volver" value="{{ datos.volver }}">{% endif %}
+    <div id="cuerpo-inicio">{% include "contabilidad/_iniciar_formulario.html" %}</div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="revisar" data-enviando="Revisando…">Ver resumen</button>
+      <a class="btn btn-ghost" href="{% if datos.volver %}{{ datos.volver }}{% else %}{% url 'contabilidad:libro' %}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+
+  {% elif modo == "resumen" %}
+  <form method="post" action="{% url 'contabilidad:iniciar' %}" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="fecha_inicio" value="{{ datos.fecha_texto }}">{% if datos.volver %}<input type="hidden" name="volver" value="{{ datos.volver }}">{% endif %}
+    {% for codigo, texto in datos.importes_texto.items %}<input type="hidden" name="importe_{{ codigo }}" value="{{ texto }}">{% endfor %}
+    <div class="stack">
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">1</span>Qué se crea</div>
+        <div class="facts">
+          <div><span class="k">Ejercicio</span><span class="v">Ejercicio 1</span><span class="d">Empieza el {{ resumen.inicio|date:"d/m/Y" }} y cierra el {{ resumen.cierre|date:"d/m/Y" }} (12 meses) · abierto</span></div>
+          <div><span class="k">Asiento</span><span class="v">Asiento N.º 1 · Asiento de apertura</span><span class="d">Fecha {{ resumen.inicio|date:"d/m/Y" }}</span></div>
+        </div>
+      </section>
+      <section class="sec">
+        <div class="sec-h"><span class="sec-num">2</span>Movimientos</div>
+        <div class="tablewrap flat">
+          <table class="data-table">
+            <thead><tr><th>Cuenta</th><th class="right">Debe</th><th class="right">Haber</th></tr></thead>
+            <tbody>
+            {% for l in resumen.lineas %}
+              <tr><td>{{ l.codigo }} · {{ l.nombre }}<span class="sub2">{{ l.tipo_cuenta_texto }}</span></td><td class="right nowrap mono">{% if l.tipo_movimiento == 'D' %}{{ l.importe|pesos }}{% endif %}</td><td class="right nowrap mono">{% if l.tipo_movimiento == 'H' %}{{ l.importe|pesos }}{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot><tr><td class="right"><b>Totales</b></td><td class="right mono"><b>{{ resumen.total_debe|pesos }}</b></td><td class="right mono"><b>{{ resumen.total_haber|pesos }}</b></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="balrow okb"><span>Diferencia <b>{{ resumen.diferencia|pesos }}</b></span><span>Balanceado</span></div>
+        <p class="hint">Los insumos y los lotes que ya existían se cargan después, con sus propios casos de uso, y también acreditan Capital Inicial.</p>
+      </section>
+    </div>
+    <div class="footbar">
+      <button class="btn btn-primary" type="submit" name="accion" value="confirmar" data-enviando="Iniciando…">Confirmar e iniciar</button>
+      <button class="btn btn-ghost" type="submit" name="accion" value="editar" data-sin-envio-en-curso>Volver a editar</button>
+      <a class="btn btn-text" href="{% if datos.volver %}{{ datos.volver }}{% else %}{% url 'contabilidad:libro' %}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+
+  {% elif modo == "listo" %}
+  <div class="alert alert-ok" role="status">{% icono "check" 16 %}<div><b>La contabilidad quedó iniciada.</b> Se creó el Ejercicio {{ numero_de_ejercicio }} (del {{ ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}) con el asiento N.º 1, el asiento de apertura.</div></div>
+  <section class="sec" style="margin-top:16px">
+    <div class="sec-h"><span class="sec-num">→</span>Lo que sigue</div>
+    <p>Lo que la organización ya tenía en insumos y en lotes se carga con sus propios casos de uso, y también acredita Capital Inicial: el Agrónomo carga los insumos con «Ajustar stock» (motivo «carga inicial») y los lotes existentes se registran con «Registrar lote existente».</p>
+    <div class="row">
+      <a class="btn btn-primary" href="{% url 'contabilidad:libro' %}?ejercicio={{ ejercicio.pk }}">Ver el libro de gestión</a>
+      {% if puede_registrar_lote %}<a class="btn btn-ghost" href="{% url 'produccion:registrar_lote_existente' %}">Registrar lote existente</a>{% endif %}
+      {% if volver %}<a class="btn btn-ghost" href="{{ volver }}">Volver a la operación</a>{% endif %}
+    </div>
+    {% if volver %}<p class="hint">La operación que estabas haciendo no se registró: volvé a ella y cargá los datos de nuevo.</p>{% endif %}
+  </section>
+
+  {% else %}
+  <div class="empty"><b>La contabilidad ya está iniciada</b><span>Ya existe un ejercicio contable: la contabilidad se inicia una sola vez.</span>
+    <a class="btn btn-primary" href="{% url 'contabilidad:ejercicios' %}">Ver los ejercicios</a></div>
+  {% endif %}
+</div>
+{% endblock %}

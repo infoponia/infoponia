@@ -19,6 +19,7 @@ from inventario.tests.ajustes_comunes import CARGA_INICIAL, RECUENTO, ROTURA, VE
 from inventario.tests.fabricas import faltante, lote, perezoso, reservas_de_prueba
 from maestros.models import Alerta
 from maestros.tests.fabricas import crear_alerta
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 alertas_de_stock = perezoso("inventario.servicios.alertas_de_stock")
 D = Decimal
@@ -30,6 +31,7 @@ VENCIDO = "inv_insumo_vencido"
 
 class CmpAjtStkAlertasTests(BaseDeAjustes, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.preparar()
         self.l1 = lote(self.iin, 10, vence=self.vence)
 

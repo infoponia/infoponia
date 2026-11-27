@@ -10,7 +10,7 @@ from django.http import Http404
 from django.utils import timezone
 
 from contabilidad.constantes import DEBE, HABER
-from contabilidad.errores import ErrorContable, ErroresContables
+from contabilidad.errores import CODIGO_NO_INICIADA, ErrorContable, ErroresContables
 from contabilidad.models import AsientoContable, CuentaContable, EjercicioContable, MovimientoContable
 from contabilidad.servicios import ejercicios, responsables
 from contabilidad.templatetags.formato_contable import pesos
@@ -72,6 +72,13 @@ def _descripcion_con_aclaracion(descripcion, aclaracion):
     return f"{descripcion[: lugar - 1]}…{SEPARADOR}{aclaracion}"
 
 
+def _exigir_contabilidad_iniciada():
+    """Regla 9 de CON-INI-EJE, «Sin ejercicio no hay asiento» (tarea CON-05): sin ningún ejercicio no se registra nada. Se llama ANTES de validar y de
+    bloquear; la transacción de quien llama se deshace entera y la ventana la arma `contabilidad.middleware`. No lo atrapes."""
+    if not ejercicios.contabilidad_iniciada():
+        raise ErrorContable(CODIGO_NO_INICIADA, "La contabilidad no está iniciada.")
+
+
 def _bloquear_ejercicio(ejercicio_id):
     """Bloquea el ejercicio con `FOR NO KEY UPDATE` y devuelve la fila releída (D-86 punto 2). Es LO ÚLTIMO que se bloquea."""
     return EjercicioContable.objects.select_for_update(no_key=True).get(pk=ejercicio_id)
@@ -91,6 +98,7 @@ def registrar_asiento_automatico(actor, origen, fecha, movimientos, *, descripci
     """
     if getattr(origen, "pk", None) is None:
         raise ValueError("El documento de origen tiene que estar guardado antes de crear su asiento.")
+    _exigir_contabilidad_iniciada()  # regla 9 de CON-INI-EJE: al principio, también para una operación de importe cero
     hoy = hoy or timezone.localdate()
     lineas = _validar_movimientos(movimientos)
     cuentas = _cuentas_por_codigo(lineas)
@@ -290,6 +298,7 @@ def registrar_asiento_manual(actor, fecha, descripcion, movimientos, *, hoy=None
     extensión 7b); (7) crea el asiento y sus movimientos y audita. Todo o nada."""
     hoy = hoy or timezone.localdate()
     _exigir_responsable(actor)
+    _exigir_contabilidad_iniciada()
     descripcion, lineas, cuentas, _ = _validar_manual(descripcion, movimientos)
     lineas = [(codigo, tipo, importe) for _, codigo, tipo, importe in lineas]
     with transaction.atomic():
@@ -318,6 +327,7 @@ def resumir_asiento_manual(actor, fecha, descripcion, movimientos, *, hoy=None):
     venció y falta abrir el siguiente, no lo abre: calcula en memoria el ejercicio que se abriría (`ejercicios.destino_previsto`)."""
     hoy = hoy or timezone.localdate()
     _exigir_responsable(actor)
+    _exigir_contabilidad_iniciada()
     descripcion, lineas, cuentas, omitidas = _validar_manual(descripcion, movimientos)
     destino = ejercicios.destino_previsto(fecha, hoy=hoy)
     filas = [
@@ -401,6 +411,7 @@ def contraasentar(actor, asiento_id, fecha, descripcion, *, hoy=None):
     transacción (D-42), salvo que él sea quien registra; sin Gerente activo no falla y la auditoría lo deja anotado (7a)."""
     hoy = hoy or timezone.localdate()
     _exigir_responsable(actor)
+    _exigir_contabilidad_iniciada()  # antes de leer el asiento: sin ejercicio no puede haber asientos y el 404 taparía el motivo real
     motivo = _validar_motivo(descripcion)
     _verificar_anulable(_leer_asiento(asiento_id))
     gerente = Gerente.objects.filter(is_active=True).first()
@@ -442,6 +453,7 @@ def resumir_contraasiento(actor, asiento_id, fecha, descripcion, *, hoy=None):
     calcula en memoria el ejercicio que se abriría (`ejercicios.destino_previsto`)."""
     hoy = hoy or timezone.localdate()
     _exigir_responsable(actor)
+    _exigir_contabilidad_iniciada()
     _validar_motivo(descripcion)
     asiento = _leer_asiento(asiento_id)
     _verificar_anulable(asiento)

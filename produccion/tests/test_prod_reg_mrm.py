@@ -51,6 +51,7 @@ from maestros.tests.fabricas import crear_agronomo, crear_capataz_activo, crear_
 from produccion.errores import ErrorDeProduccion
 from produccion.models import AlertaDeMerma, Bitacora, Lote, Merma, OcupacionSector
 from produccion.tests.fabricas import invernadero_con_produccion, lote_con_ciclo, orden_de_transicion
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 alcance = perezoso("produccion.servicios.alcance")
 mermas = perezoso("produccion.servicios.mermas")
@@ -72,6 +73,7 @@ def rechazo(llamada):
 class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     @classmethod
     def setUpTestData(cls):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         cls.e = invernadero_con_produccion()
 
     def lote(self, cantidad=100, costo="100.00", etapa="crecimiento"):
@@ -684,5 +686,6 @@ class RegistrarMermaAsientoTests(Base):
     def test_garantia_un_rechazo_no_crea_asientos(self):
         """Un rechazo (más plantas que las del sector) no deja asiento ni abre ejercicio."""
         lote = self.lote(cantidad=10)
+        ejercicios_antes = EjercicioContable.objects.count()  # CON-05: la clase trae el ejercicio del helper; lo que se verifica es que el rechazo no crea ninguno
         rechazo(lambda: self.registrar(lote, {self.e.sectores["crecimiento"]: 11}))
-        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, 0))
+        self.assertEqual((AsientoContable.objects.count(), EjercicioContable.objects.count()), (0, ejercicios_antes))

@@ -19,6 +19,7 @@ from maestros.tests.fabricas import crear_agronomo, crear_sector
 from produccion.models import Lote, Siembra
 from produccion.servicios import registrantes
 from produccion.tests.fabricas import invernadero_con_produccion, lote_activo, lote_de_carga_inicial
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HX = {"HTTP_HX_REQUEST": "true"}
 URL = "produccion:registrar_lote_existente"
@@ -30,6 +31,7 @@ def hoy():
 
 class Base(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.e = invernadero_con_produccion()
         self.e.sectores["maduracion_2"] = crear_sector(self.e.invernadero, nombre="Sector maduracion 2", tipo="maduracion", agujeros=100)
         self.gerente = crear_gerente()

@@ -34,6 +34,7 @@ from inventario.tests.fabricas import (
 )
 from inventario.tests.test_salida_por_consumo import consumo_simulado
 from maestros.tests.fabricas import asegurar_datos_de_maestros, crear_invernadero_con_geografia_propia
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 stock = perezoso("inventario.servicios.stock")
 D = Decimal
@@ -45,6 +46,7 @@ class CmpAjtStkDesactualizadoTests(BaseDeAjustes, TestCase):
     """Extensión 14a: entre la carga y la confirmación otra operación cambió lo que el ajuste usó."""
 
     def setUp(self):
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento
         self.preparar()
         self.l1 = lote(self.iin, 10, vence=self.vence)
         self.l2 = lote(self.iin, 20, vence=self.vence + timedelta(days=30))
@@ -150,6 +152,7 @@ class CmpAjtStkConcurrenciaTests(BaseDeAjustes, TransactionTestCase):
         asegurar_datos_de_inventario()
         asegurar_datos_de_maestros()
         asegurar_plan_de_cuentas()  # CON-04b: el ajuste asienta y el ``flush`` de la prueba anterior vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.preparar(geografia_propia=True)
         self.l1 = lote(self.iin, 10, vence=self.vence)
         self.origen = origen_falso()

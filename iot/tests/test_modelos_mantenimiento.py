@@ -49,7 +49,7 @@ class MantenimientoTecnicoModeloTests(fabricas.ConCatalogoIot, TestCase):
         orden = MantenimientoTecnico.objects.create(**self.datos(tipo_orden="siembra"))
         orden.refresh_from_db()
         self.assertEqual(orden.tipo_orden, OrdenTrabajo.Tipo.MANTENIMIENTO)
-        self.assertRegex(orden.codigo, r"^OT-\d{4}$")
+        self.assertRegex(orden.codigo, r"^OT-\d{4,}$")
         self.assertEqual(orden.codigo, f"OT-{orden.numero:04d}")
         self.assertTrue(OrdenTrabajo.objects.filter(pk=orden.pk, tipo_orden="mantenimiento").exists())
 

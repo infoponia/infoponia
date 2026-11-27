@@ -32,6 +32,7 @@ from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_in
 from maestros.tests.fabricas import asegurar_datos_de_maestros
 from produccion.models import Lote, Merma, StockCosechado
 from produccion.tests.fabricas import codigos_del_rechazo, lote_maduro, separar
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 
@@ -45,6 +46,7 @@ class CamaraConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         asegurar_plan_de_cuentas()  # CON-04c: la merma en cámara y el vencimiento asientan; el flush vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = escenario_comercial(geografia_propia=True)
         lote = lote_maduro(self.e, 10)
         self.partida = partida(lote, disponible, fecha_limite=fecha_limite)

@@ -1,17 +1,15 @@
-# Pruebas del paso diario de orden 5 «Abrir ejercicio contable» y del comando `poner_en_marcha_contabilidad` (CON-02 paso 3; CON-ABR-EJE,
-# «Cómo se aplica»; D-56 y D-84 puntos 2 y 3). Cada prueba arma sus propios datos.
+# Pruebas del paso diario de orden 5 «Abrir ejercicio contable» (CON-02 paso 3; CON-ABR-EJE, «Cómo se aplica»; D-56 y D-84 punto 2). Desde CON-05 el
+# comando `poner_en_marcha_contabilidad` se retiró (la puesta en marcha es CON-INI-EJE). Cada prueba arma sus propios datos.
 import datetime
 import io
-from unittest import mock
 
-from django.core.management import CommandError, call_command
+from django.core.management import call_command
 from django.test import TestCase
 
 from contabilidad.models import EjercicioContable
 from contabilidad.servicios import ejercicios
 from contabilidad.tests.fabricas import ejercicio, ejercicio_abierto
 from core import procesos
-from core.models import RegistroAuditoria
 
 Estado = EjercicioContable.Estado
 INICIO = datetime.date(2027, 1, 1)
@@ -62,11 +60,22 @@ class PasoDiarioEjercicioTests(TestCase):
         self.assertEqual((resumen.procesados, resumen.creados, resumen.resueltos), (1, 0, 0))
         self.assertEqual(EjercicioContable.objects.count(), 1)
 
-    def test_post_sin_ningun_ejercicio_crea_el_primero(self):
-        """«Paso diario» y D-84 punto 3: si no había abierto, `procesados=0` y el primero cuenta como creado."""
+    def test_post_sin_ningun_ejercicio_dice_contabilidad_no_iniciada_y_no_crea_nada(self):
+        """Regla 4 de CON-ABR-EJE y regla 11 de CON-INI-EJE (CON-05; antes, D-84 punto 3): sin ejercicio el paso 5 no crea el primero:
+        `procesados=0`, nada creado ni resuelto y el detalle dice «contabilidad no iniciada» (ajuste del estudiante, 26/11/2026)."""
         resumen = ejercicios.paso_abrir_ejercicio(datetime.date(2027, 6, 1))
 
-        self.assertEqual((resumen.procesados, resumen.creados, resumen.resueltos), (0, 1, 0))
+        self.assertEqual((resumen.procesados, resumen.creados, resumen.resueltos), (0, 0, 0))
+        self.assertEqual(resumen.detalle, "contabilidad no iniciada")
+        self.assertFalse(EjercicioContable.objects.exists())
+
+    def test_post_con_abierto_y_nada_que_abrir_el_detalle_sigue_siendo_sin_cambios(self):
+        """«Paso diario»: con un ejercicio abierto que no venció no hay nada que abrir y el detalle sigue siendo «sin cambios»."""
+        ejercicio_abierto(INICIO)
+
+        resumen = ejercicios.paso_abrir_ejercicio(datetime.date(2027, 6, 1))
+
+        self.assertEqual(resumen.detalle, "sin cambios")
 
     def test_d56_corre_con_el_proceso_diario_y_una_fecha_simulada(self):
         """D-56 punto 3: `correr_proceso_diario(hoy=..., solo="abrir_ejercicio")` lo corre con la fecha simulada."""
@@ -87,60 +96,3 @@ class PasoDiarioEjercicioTests(TestCase):
 
         self.assertIn("Abrir ejercicio contable", salida.getvalue())
         self.assertEqual(EjercicioContable.objects.count(), 2)
-
-
-class PonerEnMarchaContabilidadTests(TestCase):
-    """CON-ABR-EJE, «Comando»: `poner_en_marcha_contabilidad [--fecha-inicio AAAA-MM-DD]` (D-84 punto 3)."""
-
-    HOY = datetime.date(2027, 5, 20)
-
-    def _correr(self, *argumentos):
-        salida = io.StringIO()
-        with mock.patch("django.utils.timezone.localdate", return_value=self.HOY):
-            call_command("poner_en_marcha_contabilidad", *argumentos, stdout=salida)
-        return salida.getvalue()
-
-    def test_d84_sin_fecha_crea_el_primer_ejercicio_que_empieza_hoy(self):
-        """D-84 punto 3: sin `--fecha-inicio`, el primer ejercicio empieza hoy."""
-        salida = self._correr()
-
-        primero = EjercicioContable.objects.get()
-        self.assertEqual((primero.fecha_inicio_ejercicio, primero.fecha_cierre_ejercicio), (self.HOY, datetime.date(2028, 5, 19)))
-        self.assertEqual(primero.estado_ejercicio, Estado.ABIERTO)
-        self.assertIn("20/05/2027", salida)
-        self.assertIn("19/05/2028", salida)
-
-    def test_d84_con_fecha_inicio_empieza_ese_dia(self):
-        """D-84 punto 3: `--fecha-inicio` permite que el primer ejercicio empiece antes (para fechar el asiento de apertura)."""
-        self._correr("--fecha-inicio", "2027-01-15")
-
-        primero = EjercicioContable.objects.get()
-        self.assertEqual((primero.fecha_inicio_ejercicio, primero.fecha_cierre_ejercicio), (datetime.date(2027, 1, 15), datetime.date(2028, 1, 14)))
-
-    def test_d84_es_idempotente_y_lo_dice(self):
-        """D-84 punto 3: si ya hay un ejercicio, no hace nada y lo dice."""
-        self._correr("--fecha-inicio", "2027-01-15")
-        auditoria = RegistroAuditoria.objects.count()
-
-        salida = self._correr("--fecha-inicio", "2026-01-01")
-
-        self.assertEqual(EjercicioContable.objects.count(), 1)
-        self.assertEqual(EjercicioContable.objects.get().fecha_inicio_ejercicio, datetime.date(2027, 1, 15))
-        self.assertEqual(RegistroAuditoria.objects.count(), auditoria)
-        self.assertIn("Ya existe un ejercicio contable", salida)
-
-    def test_d84_rechaza_una_fecha_futura(self):
-        """Cómo se aplica, comando: la fecha de inicio no puede ser futura; no se crea nada."""
-        with self.assertRaises(CommandError) as contexto:
-            self._correr("--fecha-inicio", "2027-05-21")
-
-        self.assertIn("futura", str(contexto.exception))
-        self.assertFalse(EjercicioContable.objects.exists())
-
-    def test_d84_rechaza_una_fecha_con_formato_invalido(self):
-        """Mismo criterio que `proceso_diario`: una fecha imposible o sin ceros se rechaza con un mensaje claro."""
-        for texto in ("2027-13-01", "2027-1-5", "mañana"):
-            with self.assertRaises(CommandError) as contexto:
-                self._correr("--fecha-inicio", texto)
-            self.assertIn("AAAA-MM-DD", str(contexto.exception))
-        self.assertFalse(EjercicioContable.objects.exists())

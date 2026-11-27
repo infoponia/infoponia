@@ -32,6 +32,7 @@ from comercial.tests.fabricas import (
 from contabilidad import cuentas
 from contabilidad.constantes import DEBE, HABER
 from contabilidad.models import AsientoContable, EjercicioContable, MovimientoContable
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 from contabilidad.tests.fabricas import PlanDeCuentasMixin, ejercicio, ejercicio_abierto, verificar_invariantes_contables
 from core.models import Contador
 from core.tests.fabricas import crear_cuenta, crear_gerente
@@ -90,6 +91,12 @@ class RecorridoDeAsientosComercialesTests(PlanDeCuentasMixin, ConDatosDeInventar
         }
         resumen = self.client.post(reverse("comercial:cosecha_concretar_revisar", args=[cosecha.pk]), datos)
         self.assertEqual((resumen.status_code, AsientoContable.objects.count()), (200, 0))
+        # --- 1a. Regla 9 de CON-INI-EJE (CON-05): sin ejercicio, «Confirmar» no registra nada (el middleware muestra la ventana). Después se inicia la contabilidad con el helper y no con
+        #         `iniciar_ejercicio`, cuyo asiento de apertura N.º 1 correría los números de los asientos de abajo ---
+        sin_ejercicio = self.client.post(reverse("comercial:cosecha_concretar", args=[cosecha.pk]), {**datos, "firma": resumen.context["firma"]})
+        self.assertContains(sin_ejercicio, "La operación no se registró.")
+        self.assertEqual((EjercicioContable.objects.count(), AsientoContable.objects.count()), (0, 0))
+        iniciar_contabilidad_para_pruebas()
         self.client.post(reverse("comercial:cosecha_concretar", args=[cosecha.pk]), {**datos, "firma": resumen.context["firma"]})
         salida, merma_de_cosecha = AsientoContable.objects.get(numero_asiento=1), AsientoContable.objects.get(numero_asiento=2)
         self.assertEqual(self.lineas(salida), sorted([(cuentas.PRODUCTOS_TERMINADOS, DEBE, D("30.00")), (cuentas.PRODUCTOS_EN_PROCESO, HABER, D("30.00"))]))

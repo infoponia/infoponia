@@ -24,6 +24,7 @@ from django.urls import reverse
 from comercial.models import AlertaComercial, Cliente, Contrato, DetalleReserva, DetalleSuministro, Entrega, ReservaStock, SolicitudRevision, Suministro
 from comercial.servicios import asientos_comerciales, comprobantes, entregas, faltantes, stock_maduro
 from comercial.servicios.compra_ventas import texto_de_pesos
+from contabilidad.servicios import ejercicios
 from core import notificaciones
 from core.procesos import ResumenDePaso
 from core.models import RegistroAuditoria, Usuario, referencia, rol_de
@@ -488,7 +489,11 @@ def resolver_suministros_pendientes(hoy):
     35, 40 y 50, para que un contrato que hay que resolver no reciba reservas ni entregas nuevas ese día.
 
     Devuelve `ResumenDePaso(procesados=candidatos, creados=0, resueltos=los que se resolvieron, detalle=«N suministros resueltos, N descartados, N con error»)`; «descartados» son los que
-    ya no correspondían al leerlos de nuevo (2a o 2b)."""
+    ya no correspondían al leerlos de nuevo (2a o 2b).
+
+    Regla 9 de CON-INI-EJE (CON-05): sin ningún ejercicio contable no procesa nada (la multa asienta) y reintenta al día siguiente."""
+    if not ejercicios.contabilidad_iniciada():
+        return ejercicios.resumen_de_paso_sin_contabilidad()
     candidatos = _candidatos(hoy)
     resueltos = descartados = fallaron = 0
     for suministro_id in candidatos:

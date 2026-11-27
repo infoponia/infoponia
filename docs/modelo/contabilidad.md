@@ -28,7 +28,7 @@ Bloque: Contabilidad. Período contable de 12 meses donde se registran los asien
 | Atributo (código) | Tipo y restricciones | Nota |
 |---|---|---|
 | `id` | automático | — |
-| `fecha_inicio_ejercicio` | `DateField`, obligatorio | El primero empieza el día de la puesta en marcha o el que indique `poner_en_marcha_contabilidad` (D-84 punto 3); los demás, el día siguiente al cierre previsto del anterior |
+| `fecha_inicio_ejercicio` | `DateField`, obligatorio | El primero empieza el día que elige el Contador en CON-INI-EJE (no futuro y con el cierre previsto no anterior a hoy; tarea CON-05, reemplaza D-84 punto 3); los demás, el día siguiente al cierre previsto del anterior |
 | `fecha_cierre_ejercicio` | `DateField`, obligatorio, ≥ `fecha_inicio_ejercicio` | **Fecha prevista de fin**, fijada al abrir: un año menos un día después del inicio (12 meses). No se modifica (H1) |
 | `estado_ejercicio` | `Estado`: `abierto`, `en_cierre`, `cerrado` | Ver reglas |
 | `ultimo_numero_asiento` (técnico, D-84 punto 4) | `PositiveIntegerField`, default 0 | Último número usado en el ejercicio; lo toma y suma el servicio con el ejercicio bloqueado |
@@ -63,7 +63,7 @@ Bloque: Contabilidad. Período contable de 12 meses donde se registran los asien
    Sin verificaciones que lo bloqueen (C9).
 4. **Sin refundición (H2.3):** el cierre no genera asientos. El libro calcula: las cuentas de resultado, solo del ejercicio elegido; las
    patrimoniales, acumuladas.
-5. El **primer ejercicio** lo crea la puesta en marcha (D-84 punto 3): no hay período de uso sin contabilidad (MD-119). **2.1.02 «Indemnizaciones a Pagar»** es el haber de la multa por resolución de un suministro (MD-123); la agregó
+5. El **primer ejercicio** lo crea CON-INI-EJE junto con su asiento de apertura N.º 1 (Capital Inicial), en una sola transacción (tarea CON-05; reemplaza D-84 punto 3). Mientras no existe, ninguna operación que genera un asiento se registra (regla 9 de CON-INI-EJE): no hay período de uso con asientos sin contabilidad (MD-119). **2.1.02 «Indemnizaciones a Pagar»** es el haber de la multa por resolución de un suministro (MD-123); la agregó
 Ezequiel el 23/11/2026 (faltaba en H5/H6/H7).
 
 ## AsientoContable
