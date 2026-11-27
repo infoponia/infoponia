@@ -24,6 +24,7 @@ from maestros.tests.fabricas import asegurar_datos_de_maestros
 from produccion.models import Cosecha, Lote
 from produccion.servicios import mermas
 from produccion.tests.fabricas import codigos_del_rechazo, lote_maduro, separar
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 
 def datos_de_retiro(e, invernadero, cantidad, dias=3):
@@ -45,6 +46,7 @@ class StockMaduroConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         asegurar_plan_de_cuentas()  # CON-04a: registrar una merma asienta; el flush de la prueba anterior vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = escenario_comercial(geografia_propia=True)
         self.gerente = crear_gerente()
         self.addCleanup(verificar_invariantes_de_reservas)

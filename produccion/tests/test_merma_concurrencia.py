@@ -29,6 +29,7 @@ from produccion.models import Lote, Merma, OcupacionSector, TransicionEtapa
 from produccion.servicios import transiciones
 from produccion.tests.fabricas import codigos_del_rechazo, invernadero_con_produccion, lote_con_ciclo, orden_de_transicion, separar
 from produccion.tests.test_prod_cnc_trn import datos as datos_de_concrecion
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 mermas = perezoso("produccion.servicios.mermas")
 
@@ -39,6 +40,7 @@ class RegistrarMermaConcurrenciaTests(ConDatosDeInventario, TransactionTestCase)
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         asegurar_plan_de_cuentas()  # CON-04a: registrar una merma asienta; el flush de la prueba anterior vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = invernadero_con_produccion(geografia_propia=True)
         self.lote = lote_con_ciclo(self.e, cantidad=cantidad)
         self.sector = self.e.sectores["crecimiento"]

@@ -41,6 +41,7 @@ from inventario.tests.fabricas import ConDatosDeInventario, asegurar_datos_de_in
 from maestros.tests.fabricas import asegurar_datos_de_maestros, crear_variedad
 from produccion.models import Bitacora, Cosecha, Lote, MovimientoStock, StockCosechado
 from produccion.tests.fabricas import codigos_del_rechazo, lote_maduro, separar
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 HOY = timezone.localdate()
 ACEPTAR, RECHAZAR = "aceptar", "rechazar"
@@ -469,6 +470,7 @@ class ComDcdFltConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         asegurar_plan_de_cuentas()  # CON-04c: concretar una entrega o registrar una merma asienta; el flush vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = escenario_comercial(geografia_propia=True)
         self.lote = lote_maduro(self.e, 100)
         self.venta = compra_venta(self.e, modalidad="retiro", retiro=self.e.invernadero, estado="pendiente_decision")

@@ -152,6 +152,7 @@ class CmpAjtStkConcurrenciaTests(BaseDeAjustes, TransactionTestCase):
         asegurar_datos_de_inventario()
         asegurar_datos_de_maestros()
         asegurar_plan_de_cuentas()  # CON-04b: el ajuste asienta y el ``flush`` de la prueba anterior vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.preparar(geografia_propia=True)
         self.l1 = lote(self.iin, 10, vence=self.vence)
         self.origen = origen_falso()

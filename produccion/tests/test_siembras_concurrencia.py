@@ -32,6 +32,7 @@ from inventario.models import LoteInsumo
 from produccion.models import Lote, OcupacionSector, ReservaInsumo, Siembra
 from produccion.tests.fabricas import codigos_del_rechazo, invernadero_con_produccion, orden_de_siembra, separar
 from produccion.tests.test_prod_pnf_smb import datos
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 siembras = perezoso("produccion.servicios.siembras")
 
@@ -149,6 +150,7 @@ class ConcretarConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         asegurar_plan_de_cuentas()  # CON-04a: la concreción asienta y el flush de la prueba anterior vació el plan
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = invernadero_con_produccion(geografia_propia=True, **opciones)
 
     def concretar(self, orden):

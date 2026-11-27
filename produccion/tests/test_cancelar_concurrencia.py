@@ -27,6 +27,7 @@ from produccion.tests.fabricas import (
     separar,
 )
 from produccion.tests.test_prod_pnf_trn import datos as datos_de_planificacion
+from contabilidad.tests.fabricas import iniciar_contabilidad_para_pruebas
 
 ordenes = perezoso("produccion.servicios.ordenes")
 siembras = perezoso("produccion.servicios.siembras")
@@ -40,6 +41,7 @@ class CancelarOrdenConcurrenciaTests(ConDatosDeInventario, TransactionTestCase):
         asegurar_datos_de_maestros()
         asegurar_datos_de_inventario()
         asegurar_plan_de_cuentas()  # CON-04a: concretar una siembra asienta
+        iniciar_contabilidad_para_pruebas()  # CON-05, regla 9: sin ejercicio no hay asiento; el flush de esta TransactionTestCase lo vacía en cada prueba
         self.e = invernadero_con_produccion(geografia_propia=True)
         self.orden = orden_de_siembra(self.e, plantines=50)
 
