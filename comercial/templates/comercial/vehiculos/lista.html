@@ -27,18 +27,18 @@ Recibe «filas» (FilaDeVehiculo), «q», «estado», «invernadero_id» e «inv
   </form>
 
   <div class="tablewrap">
-    <table class="data-table">
-      <thead><tr><th>Patente</th><th>Tipo y modelo</th><th class="right">Capacidad</th><th>Transportista</th><th class="right">Entregas a realizar</th><th>Situación</th><th>Estado</th><th></th></tr></thead>
+    <table class="data-table tabla-apilable">
+      <thead><tr><th>Patente</th><th>Tipo y modelo</th><th class="right">Capacidad</th><th>Transportista</th><th class="right">Entregas a realizar</th><th>Situación</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for fila in filas %}
         <tr>
-          <td><b class="mono" style="font-weight:600">{{ fila.vehiculo.patente }}</b></td>
-          <td>{{ fila.vehiculo.get_tipo_vehiculo_display }}<span class="sub2">{{ fila.vehiculo.marca }} {{ fila.vehiculo.modelo }}</span></td>
-          <td class="right">{{ fila.vehiculo.capacidad_carga|kg }}</td>
-          <td>{% if fila.vehiculo.transportista %}{{ fila.vehiculo.transportista.get_full_name|default:fila.vehiculo.transportista.email }}<span class="sub2">{% if fila.invernadero %}{{ fila.invernadero.nombre_invernadero }}{% else %}Sin invernadero{% endif %}</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
-          <td class="right">{% if fila.entregas_a_realizar %}<a class="rowlink" href="{% url 'comercial:entregas' %}?transportista={{ fila.vehiculo.transportista_id }}">{{ fila.entregas_a_realizar }}<span class="sr"> entregas a realizar de {{ fila.vehiculo.patente }}</span></a>{% else %}<span class="muted">0</span>{% endif %}</td>
-          <td>{% if fila.en_ruta %}<span class="status-badge status-info">En ruta</span>{% endif %}</td>
-          <td>{% if fila.vehiculo.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+          <td data-rotulo="Patente"><b class="mono" style="font-weight:600">{{ fila.vehiculo.patente }}</b></td>
+          <td data-rotulo="Tipo y modelo">{{ fila.vehiculo.get_tipo_vehiculo_display }}<span class="sub2">{{ fila.vehiculo.marca }} {{ fila.vehiculo.modelo }}</span></td>
+          <td data-rotulo="Capacidad" class="right">{{ fila.vehiculo.capacidad_carga|kg }}</td>
+          <td data-rotulo="Transportista">{% if fila.vehiculo.transportista %}{{ fila.vehiculo.transportista.get_full_name|default:fila.vehiculo.transportista.email }}<span class="sub2">{% if fila.invernadero %}{{ fila.invernadero.nombre_invernadero }}{% else %}Sin invernadero{% endif %}</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
+          <td data-rotulo="Entregas a realizar" class="right">{% if fila.entregas_a_realizar %}<a class="rowlink" href="{% url 'comercial:entregas' %}?transportista={{ fila.vehiculo.transportista_id }}">{{ fila.entregas_a_realizar }}<span class="sr"> entregas a realizar de {{ fila.vehiculo.patente }}</span></a>{% else %}<span class="muted">0</span>{% endif %}</td>
+          <td data-rotulo="Situación">{% if fila.en_ruta %}<span class="status-badge status-info">En ruta</span>{% endif %}</td>
+          <td data-rotulo="Estado">{% if fila.vehiculo.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:vehiculo' fila.vehiculo.pk %}">Ver<span class="sr"> el vehículo {{ fila.vehiculo.patente }}</span></a></td>
         </tr>
       {% empty %}

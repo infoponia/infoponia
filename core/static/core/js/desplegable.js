@@ -43,6 +43,9 @@
     } else if (select.getAttribute("aria-label")) {
       boton.setAttribute("aria-label", select.getAttribute("aria-label"));
     }
+    // Un <select> con error (aria-invalid, que pone Django o el filtro «marcado_invalido») queda oculto para los lectores: el
+    // botón lo repite para que se anuncie como inválido (UX-12, D-109 punto 8).
+    if (select.getAttribute("aria-invalid") === "true") boton.setAttribute("aria-invalid", "true");
 
     var texto = document.createElement("span");
     texto.className = "dd-texto";

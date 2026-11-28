@@ -67,6 +67,8 @@ _TRAZOS = {
     "wrench": '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z"/>',
     # EST-01: «Estadísticas» (el del prototipo).
     "chart": '<path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/>',
+    # UI-05 (UX-07): botón «Menú» del celular (tres rayas).
+    "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
 }
 
 

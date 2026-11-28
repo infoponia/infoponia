@@ -21,7 +21,7 @@ página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo lle
     {% with c=t.cultivo %}
     <div class="card seg{% if not c.activo %} cult-off{% endif %}">
       <div class="card-h">
-        <h3>{{ c.nombre_cultivo }}</h3>
+        <h2>{{ c.nombre_cultivo }}</h2>
         {% if c.activo %}<span class="muted sm">{{ c.variedades_activas }} variedad{{ c.variedades_activas|pluralize:",es" }} activa{{ c.variedades_activas|pluralize }}</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}
         <span class="spacer"></span>
         {% if "modificar" in t.acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'maestros:cultivo_renombrar' c.pk %}" hx-get="{% url 'maestros:cultivo_renombrar' c.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML" aria-label="Renombrar el cultivo {{ c.nombre_cultivo }}">{% icono "pencil" 14 %} Renombrar</a>{% endif %}

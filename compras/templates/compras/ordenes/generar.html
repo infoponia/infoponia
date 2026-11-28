@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Comparar cotizaciones y generar orden» (CMP-GNR-ODC pasos 3 a 8; ``VIEWS.c_gen`` del prototipo). Recibe «pedido», «comparacion» (``Comparacion``), «eleccion» (``EleccionActual``: la cobertura de lo elegido hasta ahora),
 «elegidas_ids», «observaciones» y «errores». Dos vistas (paso 4): por insumo (cada detalle con su tabla de líneas del precio unitario más bajo al más alto, junto al precio de referencia y a la cobertura) y por cotización (cada
 una completa). El Sistema no preselecciona nada. **Se elige la cotización completa** (regla «Cotización elegida completa»; el prototipo permitía líneas sueltas, que el caso de uso no admite): cada fila de la tabla de
@@ -11,7 +11,7 @@ cada botón vuelve a dibujar la pantalla con la cobertura nueva, sin JavaScript 
   <a class="btn btn-text" href="{% url 'compras:pedido_ficha' pedido.pk %}">{% icono "back" 14 %} Pedido {{ pedido }}</a>
   <div class="page-h"><h1>Generar la orden del pedido {{ pedido }}</h1></div>
 
-  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
   {% if not comparacion.puede_generar %}
   <div class="alert alert-warn" role="status" style="margin-bottom:16px">{% icono "warn" 16 %}<div><b>Con las cotizaciones que se pueden elegir, el pedido no podrá generar una orden.</b> Hay insumos sin ofertas o con ofertas insuficientes. Cancelá el pedido y hacé uno nuevo.</div></div>
   {% endif %}

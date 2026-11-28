@@ -1,11 +1,11 @@
-{% load iconos comercial %}{% comment %}El cuerpo del formulario «Nueva compra-venta» (COM-REG-CVT; VIEWS.cvnew del prototipo): tres secciones numeradas (Cliente, Entrega, Variedades) y el
+{% load iconos comercial vista %}{% comment %}El cuerpo del formulario «Nueva compra-venta» (COM-REG-CVT; VIEWS.cvnew del prototipo): tres secciones numeradas (Cliente, Entrega, Variedades) y el
 resumen a la derecha. Es lo que redibuja HTMX en cada cambio de un selector (`calcular/`): solo los selectores y los botones lo piden, NUNCA un campo de
 texto, de número o de fecha mientras se tipea (.claude/rules/interfaz.md). Sin JavaScript, cada cambio se manda con «Actualizar». Los pasos están bloqueados
 hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el cálculo de `datos_del_formulario`), «datos», «cliente_q», «encontrados»,
 «busco_sin_resultado», «puede_registrar», «motivo», «es_gerente», «url_para_volver», «hay_variedades_cargadas», «errores_generales» y «aviso_de_stock».{% endcomment %}
 {% url 'comercial:compra_venta_calcular' as url_calcular %}
 {% if errores_generales %}
-<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{% for mensaje in errores_generales %}{{ mensaje }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
+<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{% for mensaje in errores_generales %}{{ mensaje }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
 {% endif %}
 <div class="cv-layout">
   <div class="cv-pasos">
@@ -22,7 +22,7 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
           <option value="{{ vendedor.pk }}"{% if f.vendedor and f.vendedor.pk == vendedor.pk %} selected{% endif %}>{{ vendedor.get_full_name }} · {% for i in invernaderos %}{{ i.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}</option>
           {% endfor %}
         </select>
-        {% for mensaje in f.errores|get_item:"vendedor" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        {% for mensaje in f.errores|get_item:"vendedor" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
         <div class="hint">La venta queda a nombre de este Vendedor; el registro de auditoría dice que la cargaste vos.</div>
       </div>
       {% endif %}
@@ -41,7 +41,7 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
           <input class="field-input" id="cv-cliente-q" type="search" name="cliente_q" value="{{ cliente_q }}" autocomplete="off" placeholder="Desde 2 caracteres">
           <button class="btn btn-ghost" type="submit" name="actualizar" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-cv" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Buscar</button>
         </div>
-        {% for mensaje in f.errores|get_item:"cliente" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        {% for mensaje in f.errores|get_item:"cliente" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
       </div>
       {% if encontrados %}
       <ul class="cli-lista" aria-label="Clientes que coinciden">
@@ -67,14 +67,14 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
         <div class="fld">
           <label for="cv-fecha">Fecha pactada<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="cv-fecha" type="date" name="fecha" value="{{ f.fecha|date:'Y-m-d' }}{% if not f.fecha %}{{ datos.fecha_pactada }}{% endif %}">
-          {% for mensaje in f.errores|get_item:"fecha_pactada" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"fecha_pactada" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
           <div class="hint">El día en que el cliente recibe o retira el producto. Puede ser hoy.</div>
         </div>
         <fieldset class="fld modalidad">
           <legend>Modalidad de entrega<span class="req" aria-hidden="true"> *</span></legend>
           <label><input type="radio" name="modalidad" value="envio"{% if datos.modalidad == "envio" %} checked{% endif %} hx-post="{{ url_calcular }}" hx-trigger="change" hx-target="#cuerpo-cv" hx-swap="innerHTML show:none" data-sin-envio-en-curso> Envío a domicilio</label>
           <label><input type="radio" name="modalidad" value="retiro"{% if datos.modalidad == "retiro" %} checked{% endif %} hx-post="{{ url_calcular }}" hx-trigger="change" hx-target="#cuerpo-cv" hx-swap="innerHTML show:none" data-sin-envio-en-curso> Retiro en invernadero</label>
-          {% for mensaje in f.errores|get_item:"modalidad" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"modalidad" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
         </fieldset>
       </div>
 
@@ -89,7 +89,7 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
         {% else %}
         <p class="muted">El cliente no tiene direcciones activas.</p>
         {% endif %}
-        {% for mensaje in f.errores|get_item:"direccion" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        {% for mensaje in f.errores|get_item:"direccion" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
         <p class="hint">¿Otra dirección? <a href="{% url 'comercial:cliente_modificar' f.cliente.pk %}?volver={{ url_para_volver|urlencode:'' }}">Agregar una dirección al cliente</a>.{% if hay_variedades_cargadas %} Vas a tener que volver a cargar las variedades.{% endif %}</p>
       </div>
       {% elif datos.modalidad == "retiro" %}
@@ -104,7 +104,7 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
         {% else %}
         <p class="muted">{% if es_gerente and not f.vendedor %}Elegí primero el Vendedor.{% else %}El Vendedor no tiene invernaderos activos.{% endif %}</p>
         {% endif %}
-        {% for mensaje in f.errores|get_item:"invernadero" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        {% for mensaje in f.errores|get_item:"invernadero" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
       </div>
       {% endif %}
       {% endif %}
@@ -121,7 +121,7 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
       <p class="muted" style="margin-bottom:12px">Cada variedad va una sola vez, con un único precio. «Disponible» es lo que se puede reservar para esa fecha en {% if datos.modalidad == "retiro" %}el invernadero de retiro{% else %}{% if es_gerente %}los invernaderos del Vendedor{% else %}tus invernaderos{% endif %}{% endif %}: producto en cámara y lotes en Maduración que llegan a tiempo.</p>
       <div class="tablewrap">
         <table class="data-table renglones">
-          <thead><tr><th>Variedad</th><th class="right">Cantidad</th><th class="right">Precio unitario ($)</th><th class="right">Subtotal</th><th></th></tr></thead>
+          <thead><tr><th>Variedad</th><th class="right">Cantidad</th><th class="right">Precio unitario ($)</th><th class="right">Subtotal</th><th><span class="sr">Acciones</span></th></tr></thead>
           <tbody>
           {% for fila in f.filas %}
           <tr>
@@ -130,13 +130,13 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
                 <option value="">Seleccionar…</option>
                 {% for variedad, disponible in f.variedades_ofrecidas %}<option value="{{ variedad.pk }}"{% if variedad.pk|stringformat:"s" == fila.renglon.variedad_id %} selected{% endif %}>{{ variedad }} · Disponible: {{ disponible.total }} plantas</option>{% endfor %}
               </select>
-              {% if fila.errores.variedad %}<div class="err">{{ fila.errores.variedad }}</div>{% endif %}
+              {% if fila.errores.variedad %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.variedad }}</div>{% endif %}
               {% if fila.disponible is not None and fila.variedad %}<span class="sub2">Disponible: {{ fila.disponible }} plantas</span>{% endif %}
             </td>
             <td class="right"><input class="field-input num" type="text" inputmode="numeric" name="renglon-{{ fila.renglon.indice }}-cantidad" value="{{ fila.renglon.cantidad }}" aria-label="Cantidad de plantas" autocomplete="off">
-              {% if fila.errores.cantidad %}<div class="err">{{ fila.errores.cantidad }}</div>{% endif %}</td>
+              {% if fila.errores.cantidad %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.cantidad }}</div>{% endif %}</td>
             <td class="right"><input class="field-input num" type="text" inputmode="decimal" name="renglon-{{ fila.renglon.indice }}-precio" value="{{ fila.renglon.precio }}" aria-label="Precio unitario en pesos" autocomplete="off">
-              {% if fila.errores.precio %}<div class="err">{{ fila.errores.precio }}</div>
+              {% if fila.errores.precio %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.precio }}</div>
               {% elif fila.variedad and fila.precio_propuesto is None %}<div class="hint">Nunca se vendió: ingresá el precio.</div>
               {% elif fila.precio_propuesto is not None %}<div class="hint">Último precio: {{ fila.precio_propuesto|pesos }}</div>{% endif %}</td>
             <td class="right nowrap mono">{{ fila.subtotal|pesos }}</td>

@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos vista %}
 {% comment %}Formulario de una variedad (PROD-ALT-VAR, PROD-MOD-VAR y detalle de PROD-CNS-VAR; VIEWS['var-form'] del prototipo). Paso 1 de 2: se completa y «Revisar resumen»
 valida todo en el servidor y muestra el resumen. Recibe «cultivo», «variedad» (None en el alta), «form» (FormularioVariedad), «solo_lectura» y, de una variedad guardada,
 «acciones», «semilla», «habilitada_en», «ciclo_guardado», «dias_guardados», «maduracion_guardada» y «otros». Una variedad inactiva o que la cuenta no puede gestionar se ve
@@ -11,8 +11,8 @@ con los campos deshabilitados y el motivo (regla 4 de PROD-CNS-VAR, D-30). Sin v
   <a class="back" href="{% url 'maestros:cultivos' %}">{% icono "back" 14 %} Cultivos y variedades</a>
   <div class="page-h"><h1>{% if not variedad %}Nueva variedad{% elif solo_lectura %}{{ variedad.nombre_variedad }}{% else %}Modificar variedad{% endif %}</h1><div class="sub">Cultivo: {{ cultivo.nombre_cultivo }}</div></div>
 
-  {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div></div>{% endif %}
-  {% if form.errors and not form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>Revisá los campos marcados.</div></div>{% endif %}
+  {% if form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div></div>{% endif %}
+  {% if form.errors and not form.non_field_errors %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>Revisá los campos marcados.</div></div>{% endif %}
   {% if variedad and solo_lectura %}
     <div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "lock" 16 %}<div>
       {% if not variedad.activa %}Esta variedad está inactiva: solo se puede reactivar.{% else %}No podés modificar esta variedad.{% endif %}

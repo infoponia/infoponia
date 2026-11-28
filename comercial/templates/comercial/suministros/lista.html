@@ -41,17 +41,17 @@ contrato al que le queda un solo incumplimiento tolerado (o ya usó todos). «Pa
   </form>
 
   <div class="tablewrap">
-    <table class="data-table">
-      <thead><tr><th>Suministro</th><th>Cliente</th><th>Vigencia</th><th class="right">Detalles vigentes</th><th>Incumplimientos</th><th>Estado</th><th></th></tr></thead>
+    <table class="data-table tabla-apilable">
+      <thead><tr><th>Suministro</th><th>Cliente</th><th>Vigencia</th><th class="right">Detalles vigentes</th><th>Incumplimientos</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for s in pagina.object_list %}
         <tr>
-          <td class="nowrap"><b style="font-weight:600" class="mono">{{ s.codigo }}</b>{% if s.tiene_rescision_acordada %} <span class="status-badge status-warn">Rescisión acordada</span>{% endif %}{% if es_gerente %}<span class="sub2">{{ s.vendedor.get_full_name }}</span>{% endif %}</td>
-          <td>{{ s.cliente }}</td>
-          <td class="nowrap">{{ s.fecha_realizacion|date:"d/m/Y" }} al {{ s.fecha_fin|date:"d/m/Y" }}<span class="sub2">{{ s.duracion_meses }} meses</span></td>
-          <td class="right mono">{{ s.detalles_vigentes }}</td>
-          <td class="nowrap">{{ s.cantidad_incumplimientos }} de {{ s.incumplimientos_tolerados }}{% if s.al_limite %} <span class="status-badge status-warn">Al límite</span>{% endif %}</td>
-          <td>{% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}{% if s.resolucion_sin_atender %}<span class="sub2"><span class="status-badge status-danger">Resolución sin atender</span></span>{% endif %}</td>
+          <td data-rotulo="Suministro" class="nowrap"><b style="font-weight:600" class="mono">{{ s.codigo }}</b>{% if s.tiene_rescision_acordada %} <span class="status-badge status-warn">Rescisión acordada</span>{% endif %}{% if es_gerente %}<span class="sub2">{{ s.vendedor.get_full_name }}</span>{% endif %}</td>
+          <td data-rotulo="Cliente">{{ s.cliente }}</td>
+          <td data-rotulo="Vigencia" class="nowrap">{{ s.fecha_realizacion|date:"d/m/Y" }} al {{ s.fecha_fin|date:"d/m/Y" }}<span class="sub2">{{ s.duracion_meses }} meses</span></td>
+          <td data-rotulo="Detalles vigentes" class="right mono">{{ s.detalles_vigentes }}</td>
+          <td data-rotulo="Incumplimientos" class="nowrap">{{ s.cantidad_incumplimientos }} de {{ s.incumplimientos_tolerados }}{% if s.al_limite %} <span class="status-badge status-warn">Al límite</span>{% endif %}</td>
+          <td data-rotulo="Estado">{% include "comercial/suministros/_estado.html" with estado=s.estado_suministro texto=s.get_estado_suministro_display %}{% if s.resolucion_sin_atender %}<span class="sub2"><span class="status-badge status-danger">Resolución sin atender</span></span>{% endif %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:suministro' s.pk %}">Ver<span class="sr"> el suministro {{ s.codigo }}</span></a></td>
         </tr>
       {% empty %}

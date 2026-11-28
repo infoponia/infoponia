@@ -9,24 +9,24 @@
   {% include "compras/proveedores/_pestanas.html" with activa="reclamos" %}
   <p class="muted" style="margin:0 0 14px">Reclamos por los inconvenientes de una recepción. Nacen sin emitir; el Gerente los emite (el proveedor recibe un correo) y después los cierra. Reclamar deja registrado lo que pasó: no se espera una devolución.</p>
   <div class="filters"><div class="chips" role="group" aria-label="Estado del reclamo">
-    <a class="chip" href="{% url 'compras:reclamos' %}" aria-pressed="{% if not estado %}true{% else %}false{% endif %}">Todos</a>
-    <a class="chip" href="{% url 'compras:reclamos' %}?estado=sin_emitir" aria-pressed="{% if estado == 'sin_emitir' %}true{% else %}false{% endif %}">Sin emitir{% if sin_emitir %} <b>{{ sin_emitir }}</b>{% endif %}</a>
-    <a class="chip" href="{% url 'compras:reclamos' %}?estado=emitido_abierto" aria-pressed="{% if estado == 'emitido_abierto' %}true{% else %}false{% endif %}">Emitidos abiertos</a>
-    <a class="chip" href="{% url 'compras:reclamos' %}?estado=cerrado" aria-pressed="{% if estado == 'cerrado' %}true{% else %}false{% endif %}">Cerrados</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}"{% if not estado %} aria-current="page"{% endif %}>Todos</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}?estado=sin_emitir"{% if estado == 'sin_emitir' %} aria-current="page"{% endif %}>Sin emitir{% if sin_emitir %} <b>{{ sin_emitir }}</b>{% endif %}</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}?estado=emitido_abierto"{% if estado == 'emitido_abierto' %} aria-current="page"{% endif %}>Emitidos abiertos</a>
+    <a class="chip" href="{% url 'compras:reclamos' %}?estado=cerrado"{% if estado == 'cerrado' %} aria-current="page"{% endif %}>Cerrados</a>
   </div></div>
 
   {% if filas %}
   <div class="tablewrap">
-    <table class="data-table">
-      <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Orden</th><th>Inconvenientes</th><th>Estado</th><th></th></tr></thead>
+    <table class="data-table tabla-apilable">
+      <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Orden</th><th>Inconvenientes</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       <tr>
-        <td><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
-        <td>{{ f.proveedor.nombre_para_mostrar }}</td>
-        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}">{{ f.orden }}</a><span class="sub2">{{ f.invernadero.nombre_invernadero }}</span></td>
-        <td>{% for i in f.inconvenientes %}{{ i.tipo_inconveniente|tipo_de_inconveniente }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td><span class="status-badge {% if f.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ f.reclamo.get_estado_reclamo_display }}</span>
+        <td data-rotulo="Reclamo"><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
+        <td data-rotulo="Proveedor">{{ f.proveedor.nombre_para_mostrar }}</td>
+        <td data-rotulo="Orden"><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}">{{ f.orden }}</a><span class="sub2">{{ f.invernadero.nombre_invernadero }}</span></td>
+        <td data-rotulo="Inconvenientes">{% for i in f.inconvenientes %}{{ i.tipo_inconveniente|tipo_de_inconveniente }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td data-rotulo="Estado"><span class="status-badge {% if f.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ f.reclamo.get_estado_reclamo_display }}</span>
           <span class="status-badge {% if f.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">{% if f.reclamo.emitido %}Emitido{% else %}Sin emitir{% endif %}</span></td>
         <td class="right nowrap"><a class="btn btn-ghost btn-sm" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}">Ver<span class="sr"> el reclamo {{ f.reclamo }}</span></a></td>
       </tr>

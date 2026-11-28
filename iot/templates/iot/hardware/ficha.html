@@ -50,13 +50,13 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
     {% endif %}
   </div>
   <div class="card" style="margin-top:14px">
-    <div class="card-h"><h3>{% icono "sliders" 16 %} Reglas activas que lo usan</h3></div>
+    <div class="card-h"><h2>{% icono "sliders" 16 %} Reglas activas que lo usan</h2></div>
     {% if reglas_activas %}<div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table"><caption class="sr-only">Reglas de actuación activas que usan el equipo</caption><tbody>
       {% for r in reglas_activas %}<tr><td><a class="id" href="{% url 'iot:regla_ficha' r.pk %}">{{ r.codigo }}</a></td><td>{{ r.texto }}</td></tr>{% endfor %}
     </tbody></table></div>{% else %}<div class="card-b muted">Ninguna.</div>{% endif %}
   </div>
   <div class="card" style="margin-top:14px">
-    <div class="card-h"><h3>{% icono "wrench" 16 %} Órdenes de mantenimiento</h3></div>
+    <div class="card-h"><h2>{% icono "wrench" 16 %} Órdenes de mantenimiento</h2></div>
     {% if mantenimientos %}<div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
       <caption class="sr-only">Órdenes de mantenimiento que incluyen al equipo</caption>
       <thead><tr><th>Código</th><th>Tipo</th><th>Estado</th><th>Prioridad</th><th>Programada</th><th>Técnico</th><th>Descripción</th><th><span class="sr-only">Acciones</span></th></tr></thead>
@@ -71,7 +71,7 @@ Sin JavaScript, cada ventana es esta página con la ventana abierta («plantilla
   </div>
   {% if equipo.clase == "actuador" %}
   <div class="card" style="margin-top:14px">
-    <div class="card-h"><h3>{% icono "send" 16 %} Comandos</h3><span class="spacer"></span>{% if historial_total > historial|length %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;filtro_actuador={{ equipo.pk }}">Ver todos ({{ historial_total }})</a>{% endif %}</div>
+    <div class="card-h"><h2>{% icono "send" 16 %} Comandos</h2><span class="spacer"></span>{% if historial_total > historial|length %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;filtro_actuador={{ equipo.pk }}">Ver todos ({{ historial_total }})</a>{% endif %}</div>
     <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
       <caption class="sr-only">Últimos comandos del actuador</caption>
       <thead><tr><th>Código</th><th>Acción</th><th>Origen</th><th>Estado</th><th>Intentos</th><th>Último intento</th><th><span class="sr-only">Acciones</span></th></tr></thead>

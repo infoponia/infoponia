@@ -1,4 +1,5 @@
 {% comment %}Los campos de departamento y localidad de la provincia elegida (regla 3 de PROD-ALT-INV). Con HTMX, al
-cambiar la provincia se reemplaza este bloque; al cambiar el departamento, solo la localidad. Recibe «form».{% endcomment %}
-{% include "core/usuarios/_campo.html" with campo=form.departamento requerido=True %}
+cambiar la provincia se reemplaza este bloque; al cambiar el departamento, solo la localidad. Recibe «form». Si falta la ubicación, el error va en Localidad y el Departamento vacío
+se marca también (UX-12).{% endcomment %}
+{% if form.localidad.errors and not form.departamento.value %}{% include "core/usuarios/_campo.html" with campo=form.departamento requerido=True invalido=True %}{% else %}{% include "core/usuarios/_campo.html" with campo=form.departamento requerido=True %}{% endif %}
 <div id="campo-localidad" style="display:contents">{% include "maestros/invernaderos/_localidad.html" %}</div>

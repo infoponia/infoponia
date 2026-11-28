@@ -1,9 +1,9 @@
-{% load produccion %}{% comment %}El formulario de «Modificar cosecha». Recibe «ficha» (FichaDeModificacion), «lotes_para_elegir» ([(lote_id, código, libre, fecha máxima, reservada)]), «valores», «errores», «verificacion» (VerificacionDeModificacion,
+{% load produccion vista %}{% comment %}El formulario de «Modificar cosecha». Recibe «ficha» (FichaDeModificacion), «lotes_para_elegir» ([(lote_id, código, libre, fecha máxima, reservada)]), «valores», «errores», «verificacion» (VerificacionDeModificacion,
 solo con el resumen), «firma» y «huella» (lo que se leyó al abrir: el servicio compara al registrar, 10a). El stock libre de cada lote INCLUYE lo que ya reserva esta cosecha. Todo se escapa.{% endcomment %}
 <form method="post" action="{% url 'comercial:cosecha_modificar' cosecha.pk %}" novalidate>
   {% csrf_token %}
   <input type="hidden" name="huella" value="{{ huella }}">
-  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{% for m in errores.general %}{{ m }} {% endfor %}</div>{% endif %}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista_una_vez %}>{% for m in errores.general %}{{ m }} {% endfor %}</div>{% endif %}
   {% if aviso_de_cambio %}<div class="hint" role="status" style="margin-bottom:10px">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
   <div class="stack">
     <div class="card"><div class="card-title">Fecha, prioridad y descripción</div>
@@ -11,14 +11,14 @@ solo con el resumen), «firma» y «huella» (lo que se leyó al abrir: el servi
       <div class="grid2">
         <div class="fld"><label for="fecha_programada">Fecha programada</label>
           <input class="field-input" id="fecha_programada" name="fecha_programada" type="date" value="{{ valores.fecha_programada }}"{% if errores.fecha_programada %} aria-invalid="true"{% endif %}>
-          {% for m in errores.fecha_programada %}<div class="err">{{ m }}</div>{% endfor %}</div>
+          {% for m in errores.fecha_programada %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
         <div class="fld"><label for="prioridad">Prioridad</label>
           <select class="field-input" id="prioridad" name="prioridad" data-desplegable>{% for valor, texto in prioridades %}<option value="{{ valor }}"{% if valores.prioridad == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}</select>
-          {% for m in errores.prioridad %}<div class="err">{{ m }}</div>{% endfor %}</div>
+          {% for m in errores.prioridad %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
       </div>
       <div class="fld"><label for="descripcion">Descripción (opcional)</label>
         <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="500">{{ valores.descripcion }}</textarea>
-        {% for m in errores.descripcion %}<div class="err">{{ m }}</div>{% endfor %}</div>
+        {% for m in errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
     </div>
     <div class="card"><div class="card-title">Reparto entre lotes</div>
       <p class="hint">El total tiene que seguir siendo el reservado. Para reducirlo, cancelá la orden y planificá otra.</p>
@@ -26,14 +26,14 @@ solo con el resumen), «firma» y «huella» (lo que se leyó al abrir: el servi
       {% for lote_id, codigo, libre, maxima, reservada in lotes_para_elegir %}
         <tr><td class="mono">{{ codigo }}</td><td class="right mono">{{ libre }}</td><td>{{ maxima|date:"d/m/Y"|default:"—" }}</td>
           <td><input class="field-input" id="lote_{{ lote_id }}" name="lote_{{ lote_id }}" type="number" min="0" max="{{ libre }}" step="1" inputmode="numeric" aria-label="Plantas del lote {{ codigo }}" value="{% campo valores 'lote' lote_id %}">
-            {% campo errores 'lote' lote_id as errores_del_lote %}{% for m in errores_del_lote %}<div class="err">{{ m }}</div>{% endfor %}</td></tr>
+            {% campo errores 'lote' lote_id as errores_del_lote %}{% for m in errores_del_lote %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</td></tr>
       {% endfor %}
       </tbody></table>
-      {% for m in errores.lotes %}<div class="err">{{ m }}</div>{% endfor %}
+      {% for m in errores.lotes %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}
       {% if verificacion %}{% for codigo, mensaje in verificacion.advertencias %}{% if codigo == 'lotes_no_alcanzan' %}<div class="hint" role="status">{{ mensaje }} <a href="{% url 'comercial:cosecha_cancelar' cosecha.pk %}">Cancelar cosecha</a></div>{% endif %}{% endfor %}{% endif %}
     </div>
     {% if verificacion %}
-    <div class="card" role="region" aria-label="Resumen de los cambios"><div class="card-title">Resumen de los cambios</div>
+    <div class="card" role="region" aria-label="Resumen de los cambios"{% llevar_vista_una_vez %}><div class="card-title">Resumen de los cambios</div>
       <input type="hidden" name="firma" value="{{ firma }}">
       <table class="data-table"><thead><tr><th>Dato</th><th>Antes</th><th>Después</th></tr></thead><tbody>
       {% for campo, antes, despues in verificacion.cambios %}<tr><td>{{ campo|capfirst }}</td><td>{{ antes|default:"—" }}</td><td>{{ despues|default:"—" }}</td></tr>{% endfor %}

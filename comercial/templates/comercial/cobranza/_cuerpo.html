@@ -1,6 +1,6 @@
-{% load iconos comercial %}{% comment %}El cuerpo de «Registrar cobro» (también es lo que devuelve HTMX): «1 Cliente», «2 Entregas que paga», «3 Pago» y el resumen parcial. Nada se valida acá: marcar una entrega, los filtros y el cliente solo redibujan.
+{% load iconos comercial vista %}{% comment %}El cuerpo de «Registrar cobro» (también es lo que devuelve HTMX): «1 Cliente», «2 Entregas que paga», «3 Pago» y el resumen parcial. Nada se valida acá: marcar una entrega, los filtros y el cliente solo redibujan.
 Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se cambia. Recibe «grupos», «cliente», «cliente_fijo», «filas», «contratos», «datos», «filtros», «marcadas», «ocultas», «elegidas», «base», «indemnizacion», «total», «hay_pendientes», «medios», «errores», «error» y, en 7a (COM-08b), «anulacion», «usa_fecha» y «fecha_pago».{% endcomment %}
-{% if error %}<div class="alert alert-warn" role="alert" style="margin-bottom:14px">{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
+{% if error %}<div class="alert alert-warn" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
 <input type="hidden" name="cliente_fijo" value="{% if cliente_fijo %}1{% else %}0{% endif %}">
 {% if anulacion %}<input type="hidden" name="anulacion" value="{{ anulacion.anulacion.pk }}">{% endif %}
 {% for id in ocultas %}<input type="hidden" name="entrega" value="{{ id }}">{% endfor %}
@@ -37,7 +37,7 @@ Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se 
       </select>
     </div>
     <p class="hint">De la que vence primero a la última. Cada entrega se paga completa. Si el cliente paga menos que el total, elegí solo las que su pago cubre.</p>
-    {% if errores.entregas %}<div class="err" role="alert">Elegí al menos una entrega.</div>{% endif %}
+    {% if errores.entregas %}<div class="err" role="alert"{% llevar_vista_una_vez %}>Elegí al menos una entrega.</div>{% endif %}
     <div class="tablewrap">
     <table class="data-table plain">
       <thead><tr><th style="width:40px"><span class="sr">Incluir</span></th><th>Entrega</th><th>Concretada</th><th class="right">Monto a cobrar</th><th>Vencimiento del pago</th><th>Estado</th></tr></thead>
@@ -73,7 +73,7 @@ Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se 
         {% for valor, texto in medios %}<option value="{{ valor }}"{% if datos.medio_pago == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
       </select>
       <div class="hint">Uno por cobro. El efectivo va a Caja; los demás, a Banco.</div>
-      {% if errores.medio_pago %}<div class="err" role="alert">Elegí el medio de pago.</div>{% endif %}
+      {% if errores.medio_pago %}<div class="err" role="alert"{% llevar_vista_una_vez %}>Elegí el medio de pago.</div>{% endif %}
     </div>
     {% if anulacion and anulacion.usa_fecha %}
     <div class="fld">
@@ -86,7 +86,7 @@ Con «cliente_fijo» (llegó desde la alerta o desde un grupo) el cliente no se 
   {% endif %}
 
   <div class="card seg">
-    <div class="card-h"><h3>Resumen</h3></div>
+    <div class="card-h"><h2>Resumen</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Entregas</dt><dd class="mono">{{ elegidas|length }}</dd>

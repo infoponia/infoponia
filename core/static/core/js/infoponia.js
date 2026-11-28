@@ -33,6 +33,24 @@
     });
   }
 
+  // ---- Menú del celular (UI-05, UX-07): un <details> que ya abre y cierra sin JavaScript. Acá se suma lo que el menú de
+  // cuenta también hace: Esc lo cierra (y devuelve el foco al botón «Menú») y un clic afuera lo cierra.
+  var menuCelular = document.querySelector("[data-menu-celular]");
+  if (menuCelular) {
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && menuCelular.open) {
+        menuCelular.open = false;
+        var resumen = menuCelular.querySelector("summary");
+        if (resumen) resumen.focus();
+      }
+    });
+    document.addEventListener("click", function (e) {
+      if (menuCelular.open && !menuCelular.contains(e.target)) menuCelular.open = false;
+    });
+    // Al volver atrás desde una entrada, el navegador puede restaurar la página con el menú abierto: se cierra.
+    window.addEventListener("pageshow", function () { menuCelular.open = false; });
+  }
+
   // ---- Botón del ojo en los campos de contraseña. Se engancha en el documento (no en cada botón) para que
   // también funcione en una ventana que inserta HTMX después de cargar la página (vincular cuenta).
   document.addEventListener("click", function (e) {
@@ -500,4 +518,35 @@
     var primera = ventana.querySelector("[data-campana-tab]");
     if (primera) primera.focus();
   });
+})();
+
+// ---- Llevar la vista al resumen o al primer error (UI-06, D-109 punto 9). Después de «Ver resumen», de «Revisar» o de un envío con
+// errores, la página vuelve con el resumen o el primer error marcados con ``data-llevar-vista`` (y ``tabindex="-1"``, para poder recibir
+// el foco): acá se les lleva la vista y el foco, al cargar la página y después de cada intercambio de HTMX. Los redibujos que solo
+// cambian campos dependientes (``data-sin-envio-en-curso``, ``hx-swap="… show:none"``) no traen el atributo y no mueven nada (regla de
+// INV-02). Sin JavaScript no cambia nada: la página es la de siempre.
+(function () {
+  "use strict";
+
+  var reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)");
+  // Los elementos a los que ya se les llevó la vista: un intercambio posterior no vuelve a saltar a uno viejo.
+  var llevados = new WeakSet();
+
+  function llevarLaVista() {
+    // Con una ventana abierta, el foco ya es de la ventana (abrirVentana): no se le quita.
+    if (document.querySelector("[data-ventana]")) return;
+    var candidatos = document.querySelectorAll("[data-llevar-vista]");
+    for (var i = 0; i < candidatos.length; i++) {
+      var elemento = candidatos[i];
+      // «Visible» = ocupa lugar en la página (un elemento oculto no puede recibir la vista ni el foco).
+      if (llevados.has(elemento) || !elemento.getClientRects().length) continue;
+      llevados.add(elemento);
+      elemento.scrollIntoView({ block: "start", behavior: reducirMovimiento.matches ? "auto" : "smooth" });
+      elemento.focus({ preventScroll: true });
+      return; // solo el primero
+    }
+  }
+
+  llevarLaVista();
+  document.addEventListener("htmx:afterSwap", llevarLaVista);
 })();

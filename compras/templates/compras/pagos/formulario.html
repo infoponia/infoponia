@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Registrar pago a proveedor» (CMP-REG-PAG pasos 4 y 5; ``VIEWS.c_pag`` del prototipo). Recibe «detalle», «medios», «medio» (lo elegido; **sin preselección**, extensión 5a), «fecha» (por defecto hoy), «hoy» (el
 máximo de la fecha) y «errores» (por campo: ``medio_pago``, ``fecha`` o ``general``). Sin JavaScript: «Ver resumen» lleva al paso 6. No hay número de comprobante: el modelo no lo tiene.{% endcomment %}
 {% block titulo %}Registrar pago · {{ detalle.proveedor.nombre_para_mostrar }} · InfoPonia{% endblock %}
@@ -7,7 +7,7 @@ máximo de la fecha) y «errores» (por campo: ``medio_pago``, ``fecha`` o ``gen
 <div class="page narrow">
   <a class="btn btn-text" href="{% url 'compras:pagos' %}">{% icono "back" 14 %} Pagos a proveedores</a>
   <div class="page-h"><h1>Registrar pago a proveedor</h1></div>
-  {% if errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{{ errores.general }}</div></div>{% endif %}
+  {% if errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{{ errores.general }}</div></div>{% endif %}
   <form method="post" action="{% url 'compras:pago_nuevo' detalle.orden.pk detalle.proveedor.pk %}" novalidate>
     {% csrf_token %}
     <div class="stack">
@@ -21,12 +21,12 @@ máximo de la fecha) y «errores» (por campo: ``medio_pago``, ``fecha`` o ``gen
             <label class="chip" style="cursor:pointer"><input type="radio" name="medio_pago" value="{{ valor }}"{% if medio == valor %} checked{% endif %}> {{ texto }}</label>
             {% endfor %}
           </div>
-          {% if errores.medio_pago %}<div class="field-error" role="alert">{{ errores.medio_pago }}</div>{% endif %}
+          {% if errores.medio_pago %}<div class="field-error" role="alert"{% llevar_vista_una_vez %}>{{ errores.medio_pago }}</div>{% endif %}
           <p class="hint" id="ayuda-medio">Elegí cómo se paga: el efectivo sale de Caja y los demás medios, del Banco.</p>
         </fieldset>
         <div class="fld"><label for="fecha">Fecha del pago</label>
           <input class="field-input" type="date" id="fecha" name="fecha" value="{{ fecha }}" max="{{ hoy }}" required>
-          {% if errores.fecha %}<div class="field-error" role="alert">{{ errores.fecha }}</div>{% endif %}
+          {% if errores.fecha %}<div class="field-error" role="alert"{% llevar_vista_una_vez %}>{{ errores.fecha }}</div>{% endif %}
           <p class="hint">Por defecto, hoy. No puede ser posterior a hoy ni caer en un ejercicio cerrado.</p></div>
       </div>
     </div>

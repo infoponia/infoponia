@@ -1,13 +1,17 @@
 # Pruebas del punto de extensión del menú lateral (MAE-01b, regla A4 de D-37, D-25): las apps de nivel mayor registran su
 # entrada en ``AppConfig.ready()`` con ``core.menu.registrar_entrada`` y el menú se arma con ``core.menu.menu_de``.
 # ``core`` no nombra «Producción»: la registra ``maestros``.
+# UI-05 (UX-07; D-109 punto 4): el botón «Menú» del celular despliega las mismas entradas que el menú lateral.
 
+import re
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 
 from core import menu
-from core.models import Usuario
+from core.models import Agronomo, Capataz, Contador, Gerente, Tecnico, Transportista, Usuario, Vendedor
+from core.tests.fabricas import crear_administrador, crear_cuenta
 
 ROL = Usuario.Rol
 NUEVA = ("Cosecha", "core:inicio", "dash")
@@ -65,3 +69,79 @@ class MenuExtensionTests(SimpleTestCase):
                 textos = [texto for texto, _, _ in menu.menu_de(rol)]
                 self.assertEqual(textos[:2], ["Panel de control", "Producción"])
         self.assertNotIn("Producción", [texto for texto, _, _ in menu.menu_de(ROL.VENDEDOR)])
+
+
+def _entradas(html, apertura, cierre):
+    """``[(texto, href, aria-current)]`` de los enlaces que hay entre ``apertura`` y ``cierre`` en ``html``."""
+    inicio = html.index(apertura)
+    tramo = html[inicio : html.index(cierre, inicio)]
+    entradas = []
+    for atributos, interior in re.findall(r"<a ([^>]*)>(.*?)</a>", tramo, flags=re.S):
+        texto = " ".join(re.sub(r"<[^>]+>", " ", interior).split())
+        href = re.search(r'href="([^"]*)"', atributos).group(1)
+        actual = re.search(r'aria-current="([^"]*)"', atributos)
+        entradas.append((texto, href, actual.group(1) if actual else None))
+    return entradas
+
+
+class MenuDelCelularTests(TestCase):
+    """UI-05 paso 1 (UX-07; D-109 punto 4): en menos de 760 px, el botón «Menú» (un ``<details>``) despliega las mismas entradas
+    del menú lateral, con la activa marcada. Que se vea como botón y se cierre con Esc se mira a mano."""
+
+    PANEL = '<nav class="menu-celular-panel"'
+
+    def abrir(self, cuenta, ruta="core:mi_perfil"):
+        """Entra con ``cuenta`` y devuelve el HTML de ``ruta`` (por defecto «Mi perfil», que tienen todos los roles)."""
+        self.client.force_login(cuenta)
+        respuesta = self.client.get(reverse(ruta))
+        self.assertEqual(respuesta.status_code, 200)
+        return respuesta.content.decode()
+
+    def test_ui05_el_menu_del_celular_trae_las_mismas_entradas_que_el_lateral_para_cada_rol(self):
+        """D-109 punto 4: «Menú» reutiliza ``core/menu.py`` (la misma lista, en el mismo orden); no hay una segunda lista."""
+        cuentas = {
+            Usuario.Rol.GERENTE: crear_cuenta(Gerente, "ger@infoponia.com"),
+            Usuario.Rol.AGRONOMO: crear_cuenta(Agronomo, "agr@infoponia.com"),
+            Usuario.Rol.VENDEDOR: crear_cuenta(Vendedor, "ven@infoponia.com"),
+            Usuario.Rol.CONTADOR: crear_cuenta(Contador, "con@infoponia.com"),
+        }
+        for rol, cuenta in cuentas.items():
+            with self.subTest(rol=rol):
+                html = self.abrir(cuenta)
+                celular = _entradas(html, self.PANEL, "</nav>")
+                lateral = _entradas(html, '<aside class="side">', "</aside>")
+                self.assertEqual(celular, lateral)
+                self.assertEqual([texto for texto, _, _ in celular], [texto for texto, _, _ in menu.menu_de(rol)])
+                self.assertIn('<summary class="btn btn-ghost">', html)
+                self.assertIn("<span>Menú</span>", html)
+
+    def test_ui05_el_administrador_tambien_tiene_el_menu_del_celular(self):
+        """D-109 punto 4: el Administrador (Cuentas y Auditoría) tiene menú lateral, así que también tiene «Menú»."""
+        html = self.abrir(crear_administrador())
+        celular = _entradas(html, self.PANEL, "</nav>")
+        self.assertEqual(celular, _entradas(html, '<aside class="side">', "</aside>"))
+        self.assertEqual([texto for texto, _, _ in celular], ["Cuentas", "Auditoría"])
+
+    def test_ui05_la_entrada_activa_se_marca_igual_en_los_dos_menus(self):
+        """D-109 punto 4: en «Usuarios y seguridad», las dos listas marcan esa entrada con ``aria-current="page"`` y ninguna otra."""
+        html = self.abrir(crear_cuenta(Gerente, "ger@infoponia.com"), ruta="core:usuarios")
+        for tramo in (self.PANEL, '<aside class="side">'):
+            with self.subTest(tramo=tramo):
+                entradas = _entradas(html, tramo, "</nav>" if tramo == self.PANEL else "</aside>")
+                activas = [texto for texto, _, actual in entradas if actual == "page"]
+                self.assertEqual(activas, ["Usuarios y seguridad"])
+
+    def test_ui05_el_modo_campo_no_muestra_el_menu_del_celular(self):
+        """D-25 y D-109 punto 4: Capataz, Técnico y Transportista no tienen menú lateral ni «Menú»; su marco no cambia."""
+        for clase in (Capataz, Tecnico, Transportista):
+            with self.subTest(rol=clase.__name__):
+                html = self.abrir(crear_cuenta(clase, f"{clase.__name__.lower()}@infoponia.com"))
+                self.assertNotIn("data-menu-celular", html)
+                self.assertNotIn("menu-celular", html)
+                self.assertNotIn('<aside class="side">', html)
+                self.assertIn('class="shell field"', html)
+
+    def test_ui05_ninguna_plantilla_usa_la_fila_mnav(self):
+        """D-109 punto 4 y UI-05, paso 1: la fila de fichas ``.mnav`` salió del marco; el menú del celular es ``.menu-celular``."""
+        html = self.abrir(crear_cuenta(Gerente, "ger@infoponia.com"))
+        self.assertNotIn("mnav", html)

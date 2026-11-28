@@ -1462,3 +1462,69 @@ Los 16 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-02-celu
 - [ ] 14. **Ventana de baja.** Como Gerente, «Dar de baja» de un Agrónomo con alertas: «Pasan al Gerente hasta que asignes otro Agrónomo.» sin «(regla 4 de 8.22)». Cancelá sin confirmar.
 - [ ] 15. **Navegador real (obligatorio).** En una ventana privada, como Vendedor, el paso 11 hasta confirmar: llega a la ficha del cobro con el aviso, sin 403, error de CSRF ni errores en la consola.
 - [ ] 16. **(Opcional) Sin JavaScript.** A 360 px como Gerente: la página no se sale de la pantalla, la fila de módulos se desplaza, «volver» y pestañas se ven igual.
+
+## UI-03 · Tarea UI-03 (accesibilidad: encabezados de acciones, vista activa, etiquetas y títulos)
+
+Los 13 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-03-accesibilidad.md` (ahí está el detalle). **Sin migración.**
+La red ya comprobó los cuatro controles en las pantallas de la demo; acá se mira el aspecto, el teclado y la voz del Narrador.
+
+- [ ] 1. «Acciones» en las tablas (Gerente, Cuentas y tres listas más): igual a la vista; el Narrador dice «Acciones».
+- [ ] 2. Columnas que no son de acciones (Libro diario: «Descripción»; Estadísticas comerciales: «Proporción del monto»).
+- [ ] 3. Compras · Órdenes y Reclamos: el atajo activo se ve igual; el Narrador dice «página actual».
+- [ ] 4. Cobranza: la pestaña activa sigue verde; el Narrador dice «pestaña, seleccionada».
+- [ ] 5. Libro diario: «Cronológica» y «Por cuenta» se ven y cambian como antes.
+- [ ] 6. Nueva variedad: el Narrador lee «Duración estimada de … en días»; se sigue leyendo al cambiar el perfil.
+- [ ] 7. Mi perfil: «Elegir foto» con Tab y Enter; «Tomar foto» solo en el celular.
+- [ ] 8. Concretar cosecha a 360 px: perdidas, causa y descripción con su etiqueta (Tab y Narrador).
+- [ ] 9. Nuevo invernadero sin ubicación: los tres en rojo, el error una vez; con provincia, solo dos; con ubicación, ninguno; Narrador «no válido».
+- [ ] 10. (Opcional) Nuevo invernadero sin JavaScript: los tres nativos en rojo.
+- [ ] 11. Navegador real: Nuevo invernadero completo en ventana privada hasta la ficha, sin 403 ni CSRF.
+- [ ] 12. Títulos a 1366 y 360 px: se ven igual que antes (fichas, Estadísticas, IoT, Compras); Narrador `H` en nivel 2.
+- [ ] 13. Desplegable propio en Nuevo invernadero y Concretar cosecha: mouse, teclado y listas encadenadas (HTMX).
+
+## UI-05 · Tarea UI-05 (celular: botón «Menú» y listas como tarjetas)
+
+Los 17 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-05-menu-y-tablas-en-el-celular.md` (ahí está el detalle). **Sin migración.**
+La red ya comprobó el `data-rotulo` de cada celda y el recorrido, las entradas de «Menú»; acá se mira el aspecto, el ancho real, el teclado y el JavaScript.
+Modo celular: `F12` y `Ctrl+Shift+M`, 360 de ancho. Para ver Entregas con datos, usar la base de la demo.
+
+- [ ] 1. «Menú» a 360 px (Gerente): botón con tres rayas a la izquierda del logo; sin la fila de fichas; el panel trae todas las entradas, con la actual resaltada; la página no se desplaza de costado.
+- [ ] 2. Ir a Contabilidad y volver desde «Menú»; con «atrás» del navegador el panel no queda abierto.
+- [ ] 3. `Esc` cierra el panel y deja el foco en «Menú».
+- [ ] 4. Clic afuera cierra el panel; el botón de la cuenta cierra «Menú» y abre el menú de cuenta.
+- [ ] 5. Con el teclado: `Tab` a «Menú», `Enter`, recorrer las entradas con foco visible.
+- [ ] 6. Sin JavaScript: «Menú» abre y cierra, las entradas navegan; `Esc` y clic afuera no cierran (esperado).
+- [ ] 7. Agrónomo, Vendedor y Contador a 360 px: «Menú» = menú lateral a 1366 px, mismo orden.
+- [ ] 8. A 1366 px no hay «Menú» y el menú lateral es el de siempre; el cambio ocurre en 760 px.
+- [ ] 9. Clientes como tarjetas (Vendedor): título, pares «rótulo: valor», «Ver» al final; sin encabezado ni desplazamiento de costado; búsqueda sin resultados.
+- [ ] 10. Entregas como tarjetas (con la demo): acciones en fila que se parte; franja de «Sin transportista»; códigos sin cortarse.
+- [ ] 11. Contratos, Cobranza (las dos vistas, con los desplegables por cliente), Solicitudes, Faltantes (Vendedor) y Vehículos (Gerente) como tarjetas.
+- [ ] 12. Cuentas, Compras (Pedidos, Órdenes, Proveedores, Reclamos, Pagos, Por recibir), Ejercicios, Catálogo, Categorías y Variedades como tarjetas; Catálogo sin desplazamiento.
+- [ ] 13. El libro de gestión, el plan de cuentas y Existencias siguen como tabla con desplazamiento dentro de su caja.
+- [ ] 14. A 1366 px las tablas son las de siempre, con las mismas columnas en el mismo orden.
+- [ ] 15. Capataz, Técnico y Transportista (360 y 1366 px): sin «Menú», marco angosto como antes.
+- [ ] 16. (Opcional) Narrador: «Menú» como botón, la entrada actual «página actual», y si las tarjetas siguen anunciándose como tabla.
+- [ ] 17. Navegador real: pasos 1 a 6 con la ventana angosta y la consola (`F12`) sin errores; opcional, en un celular después del despliegue.
+
+## UI-06 · Tarea UI-06 (resumen y errores a la vista; obligatorios independientes juntos)
+
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-06-resumen-y-errores-a-la-vista.md` (ahí está el detalle, con los datos a crear). **Sin migración.**
+Las pruebas ya comprobaron qué elemento lleva la marca, que los obligatorios salen juntos y que un selector no valida; acá se mira el salto, el foco, Narrador y el navegador real.
+Probar a 1366 px y a 360 px (`F12`, modo dispositivo). Crear a mano el invernadero «Norte UI06» con Agrónomo, Capataz y el sector «Germ 1», y la variedad «Lechuga UI06» con semilla habilitada y 500 de stock.
+
+- [ ] 1. Nueva siembra, carga inicial (1366 px): abre arriba, sin errores y sin saltar.
+- [ ] 2. Elegir el invernadero y la variedad: los campos aparecen sin que la página salte y sin errores.
+- [ ] 3. «Ver resumen» con todo vacío: salen a la vez los errores de Plantines y de Fecha; la página baja al primero y queda enfocado.
+- [ ] 4. Con 30 plantines y sin fecha: queda un solo error, el de la fecha, y la vista va a él.
+- [ ] 5. Con fecha y 10 en «Germ 1»: el único error es «La distribución tiene que sumar 30…».
+- [ ] 6. Con «Germ 1» en 30: «Ver resumen» baja a «Resumen de la orden» con el foco; «Confirmar planificación» vuelve a la lista con el aviso.
+- [ ] 7. Lo mismo (pasos 3 y 6) a 360 px: se llega al error y al resumen, enteros.
+- [ ] 8. «Reducir movimiento» de Windows activado: el salto del paso 3 es inmediato; desactivado, suave.
+- [ ] 9. Teclado y Narrador (obligatorio): «Ver resumen» con Enter en Nueva siembra vacía; el foco cae en el primer error y Narrador lo lee; Tab pasa al campo siguiente; Shift + Tab llega al campo.
+- [ ] 10. Concretar siembra en el celular (Capataz, 360 px): con 99 va al error; con 30, al «Resumen de la concreción».
+- [ ] 11. Registrar merma y Registrar aplicación: elegir invernadero y lote no mueve la vista ni muestra errores.
+- [ ] 12. Enviar vacíos y ver los obligatorios juntos: lote existente, merma, aplicación, Habilitar insumo (ventana), habilitar en Nuevo pedido, Registrar hardware y Entrega no reconocida; un campo con solo espacios cuenta como vacío.
+- [ ] 13. Planificar cosecha «cubre un contrato» sin elegir el detalle: aparece «Elegí la variedad de la cosecha.» debajo del detalle y la vista va a él.
+- [ ] 14. Nueva compra-venta: el resumen se abre en una ventana (la página de atrás no salta); Nuevo pedido: el resumen es otra página.
+- [ ] 15. (Opcional) Sin JavaScript: Nueva siembra vacía muestra los errores sin saltar.
+- [ ] 16. Navegador real (obligatorio): portal en ventana privada a 360 px; sin elegir nada va al error; con «Recibí conforme» va al resumen; enviar hasta el final y volver a abrir el enlace; consola (`F12`) sin errores.

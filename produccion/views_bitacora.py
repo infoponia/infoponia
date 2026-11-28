@@ -17,11 +17,18 @@ from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
 from core.models import Usuario, rol_de
+from core.obligatorios import sumar_faltantes
 from produccion import formularios
 from produccion.extensiones import entradas_de_comercial
 from produccion.errores import ErrorDeProduccion
 from produccion.servicios import alcance, aplicaciones, bitacora, mermas
 from produccion.views import _en_vivo, _errores_por_campo, _firma, _ocultar_al_gerente, _servicio
+
+# UI-06 (UX-27, D-109 punto 9): lo que el servicio exige y la vista suma si vino vacío cuando el servicio rechazó antes de llegar (`core/obligatorios.py`). Cada fila: (clave del error, campo, texto).
+OBLIGATORIOS_DE_MERMA = (
+    ("causa", "causa", "Indicá la causa de la merma."),  # mermas.py:349 (`_planear`), después de las cantidades (:347)
+)
+SIN_INSUMOS = "Indicá al menos un insumo."  # aplicaciones.py:288 (`_planear`): «al menos un insumo», después del alcance (:286)
 
 AGRONOMO, CAPATAZ, GERENTE = Usuario.Rol.AGRONOMO, Usuario.Rol.CAPATAZ, Usuario.Rol.GERENTE
 
@@ -94,7 +101,7 @@ def registrar_merma(request):
             cambio_la_firma = accion == "confirmar"
             resumen = _servicio(mermas.resumen_de_merma, request.user, formularios.merma_desde_post(datos, con_vistos=False))
         except ErrorDeProduccion as error:
-            errores = _errores_por_campo(error)
+            errores = sumar_faltantes(_errores_por_campo(error), datos, OBLIGATORIOS_DE_MERMA)
             firma = ""
     contexto = {
         "invernaderos": invernaderos,
@@ -161,8 +168,12 @@ def registrar_aplicacion(request):
             plantas_vistas = ",".join(f"{lote_id}:{plantas}" for lote_id, plantas in _servicio(aplicaciones.plantas_del_alcance, request.user, sin_vistos))
         except ErrorDeProduccion as error:
             errores = _errores_por_campo(error)
+            # «Al menos un insumo» sale de las líneas que la vista ya armó: no repite ninguna regla del servicio (que lo mira después del alcance).
+            # Si el servicio ya rechazó por eso (`sin_insumos`, que no trae campo y la vista guarda como «general»), no se repite.
+            if error.codigo != "sin_insumos" and not formularios.aplicacion_desde_post(datos, existencia_ids, con_vistos=False).lineas:
+                errores.setdefault("sin_insumos", SIN_INSUMOS)
             firma = ""
-    vencimientos = {lote_id: vence for f in filas for lote_id, _, vence in f.lotes}
+    vencimientos ={lote_id: vence for f in filas for lote_id, _, vence in f.lotes}
     grupos = [(tipo, list(lista)) for tipo, lista in groupby(sectores, key=lambda s: s.tipo_etapa)]
     contexto = {
         "invernaderos": invernaderos,

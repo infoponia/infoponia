@@ -1,12 +1,12 @@
-{% load comercial %}{% comment %}El resumen de la concreción (paso 12; también es lo que devuelve HTMX): por línea, lo planificado, lo entregado, lo perdido y lo devuelto y el monto; los envases; el total a cobrar con su medio de pago (o el vencimiento del
+{% load comercial vista %}{% comment %}El resumen de la concreción (paso 12; también es lo que devuelve HTMX): por línea, lo planificado, lo entregado, lo perdido y lo devuelto y el monto; los envases; el total a cobrar con su medio de pago (o el vencimiento del
 pago en un suministro); las advertencias (5a, 7a, 8a, 8b, 9a, 10b y 14c) y, si no hay errores, «Confirmar entrega» con la huella y todo lo cargado en campos ocultos. Con errores, los lista y no ofrece confirmar. «Corregir» es
 volver al formulario de arriba (13a). No escribe. Recibe «resumen», «datos», «form» y «medios».{% endcomment %}
 {% if resumen.hay_errores %}
-<div class="card" style="margin-top:12px"><div class="card-title">Revisá estos datos</div>
+<div class="card" style="margin-top:12px"{% llevar_vista_una_vez %}><div class="card-title">Revisá estos datos</div>
   <ul>{% for campo, lista in resumen.errores.items %}{% for codigo, mensaje in lista %}<li class="err" role="alert">{{ mensaje }}</li>{% endfor %}{% endfor %}</ul>
   <p class="muted">Corregilos arriba y volvé a tocar «Ver resumen».</p></div>
 {% else %}
-<div class="card" style="margin-top:12px"><div class="card-title">Resumen de la concreción</div>
+<div class="card" style="margin-top:12px"{% llevar_vista_una_vez %}><div class="card-title">Resumen de la concreción</div>
   <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Plan.</th><th class="right">Entreg.</th><th class="right">Perd.</th><th class="right">Dev.</th><th class="right">Monto</th></tr></thead><tbody>
   {% for lr in resumen.lineas %}{% if lr.leida.planificada %}
     <tr><td>{{ lr.leida.variedad }}{% if lr.rechazada %} <span class="status-badge status-danger">Rechazada</span>{% endif %}</td>

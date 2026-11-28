@@ -13,16 +13,16 @@
 
   {% if pendientes %}
   <div class="tablewrap">
-    <table class="data-table">
-      <thead><tr><th>Proveedor</th><th>Orden</th><th>Listo desde</th><th class="right">Líneas</th><th class="right">Monto a pagar</th><th></th></tr></thead>
+    <table class="data-table tabla-apilable">
+      <thead><tr><th>Proveedor</th><th>Orden</th><th>Listo desde</th><th class="right">Líneas</th><th class="right">Monto a pagar</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for p in pendientes %}
       <tr>
-        <td>{{ p.proveedor.nombre_para_mostrar }}</td>
-        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' p.orden.pk %}"><b>{{ p.orden }}</b></a></td>
-        <td class="nowrap">{{ p.listo_desde|date:"d/m/Y" }}</td>
-        <td class="right">{{ p.cantidad_de_lineas }}</td>
-        <td class="right nowrap mono"><b>{{ p.monto|pesos }}</b></td>
+        <td data-rotulo="Proveedor">{{ p.proveedor.nombre_para_mostrar }}</td>
+        <td data-rotulo="Orden"><a class="prv-nombre" href="{% url 'compras:orden_ficha' p.orden.pk %}"><b>{{ p.orden }}</b></a></td>
+        <td data-rotulo="Listo desde" class="nowrap">{{ p.listo_desde|date:"d/m/Y" }}</td>
+        <td data-rotulo="Líneas" class="right">{{ p.cantidad_de_lineas }}</td>
+        <td data-rotulo="Monto a pagar" class="right nowrap mono"><b>{{ p.monto|pesos }}</b></td>
         <td class="right nowrap">{% if puede_registrar %}<a class="btn btn-primary btn-sm" href="{% url 'compras:pago_nuevo' p.orden.pk p.proveedor.pk %}">Registrar pago<span class="sr"> a {{ p.proveedor.nombre_para_mostrar }} por {{ p.orden }}</span></a>{% endif %}</td>
       </tr>
       {% endfor %}
@@ -36,17 +36,17 @@
   <h2 class="ped-sub" style="margin-top:28px">Pagos registrados</h2>
   {% if registrados %}
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Fecha</th><th>Pago</th><th>Proveedor</th><th>Orden</th><th>Medio</th><th class="right">Monto</th></tr></thead>
       <tbody>
       {% for p in registrados %}
       <tr>
-        <td class="nowrap">{{ p.fecha_pago|date:"d/m/Y" }}</td>
-        <td>{{ p }}</td>
-        <td>{{ p.proveedor.nombre_para_mostrar }}</td>
-        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' p.orden.pk %}">{{ p.orden }}</a></td>
-        <td>{{ p.get_medio_pago_display }}</td>
-        <td class="right nowrap mono">{{ p.monto_pago|pesos }}</td>
+        <td data-rotulo="Fecha" class="nowrap">{{ p.fecha_pago|date:"d/m/Y" }}</td>
+        <td data-rotulo="Pago">{{ p }}</td>
+        <td data-rotulo="Proveedor">{{ p.proveedor.nombre_para_mostrar }}</td>
+        <td data-rotulo="Orden"><a class="prv-nombre" href="{% url 'compras:orden_ficha' p.orden.pk %}">{{ p.orden }}</a></td>
+        <td data-rotulo="Medio">{{ p.get_medio_pago_display }}</td>
+        <td data-rotulo="Monto" class="right nowrap mono">{{ p.monto_pago|pesos }}</td>
       </tr>
       {% endfor %}
       </tbody>

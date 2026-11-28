@@ -1,9 +1,9 @@
-{% load produccion %}{% comment %}El formulario de «Planificar cosecha» (lo que HTMX reemplaza al cambiar un selector). Recibe el contexto de `_contexto_de_planificacion`: «invernaderos» (InvernaderoParaCosechar), «habilitado»,
+{% load produccion vista %}{% comment %}El formulario de «Planificar cosecha» (lo que HTMX reemplaza al cambiar un selector). Recibe el contexto de `_contexto_de_planificacion`: «invernaderos» (InvernaderoParaCosechar), «habilitado»,
 «detalles», «variedades», «lotes» (LoteCosechable), «valores», «modo», «errores» ({campo: [mensajes]}), «verificacion» (VerificacionDeCosecha, solo con el resumen) y «firma». Todo se escapa. Sin JavaScript: «Actualizar» y «Ver resumen»
 son botones de envío con su propia ruta (`formaction`).{% endcomment %}
 <form method="post" action="{% url 'comercial:cosecha_planificar' %}" novalidate>
   {% csrf_token %}
-  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{% for m in errores.general %}{{ m }} {% endfor %}</div>{% endif %}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista_una_vez %}>{% for m in errores.general %}{{ m }} {% endfor %}</div>{% endif %}
   {% if aviso_de_cambio %}<div class="hint" role="status" style="margin-bottom:10px">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
   <div class="stack">
     <div class="card"><div class="card-title">1 · Invernadero</div>
@@ -12,7 +12,7 @@ son botones de envío con su propia ruta (`formaction`).{% endcomment %}
           <option value="">Elegí un invernadero</option>
           {% for f in invernaderos %}<option value="{{ f.invernadero.pk }}"{% if valores.invernadero == f.invernadero.pk|stringformat:"s" %} selected{% endif %}{% if f.motivo %} disabled{% endif %}>{{ f.invernadero.nombre_invernadero }}{% if f.motivo == 'sin_capataz' %} · sin Capataz activo{% elif f.motivo == 'sin_stock_maduro' %} · sin stock maduro libre{% endif %}</option>{% endfor %}
         </select>
-        {% for m in errores.invernadero %}<div class="err">{{ m }}</div>{% endfor %}
+        {% for m in errores.invernadero %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}
         {% if not invernaderos %}<div class="hint">No tenés invernaderos activos a cargo.</div>{% endif %}</div></div>
 
     {% if habilitado %}
@@ -26,11 +26,11 @@ son botones de envío con su propia ruta (`formaction`).{% endcomment %}
       <div class="fld"><label for="busqueda">Buscar por cliente o variedad (opcional)</label>
         <input class="field-input" id="busqueda" name="busqueda" type="text" value="{{ valores.busqueda }}" autocomplete="off"><div class="hint">Se aplica con «Actualizar».</div></div>
       <div class="fld"><label for="detalle">Contrato y detalle a cubrir</label>
-        <select class="field-input" id="detalle" name="detalle" data-desplegable hx-post="{% url 'comercial:cosecha_planificar_calcular' %}" hx-trigger="change" hx-include="closest form" hx-target="#cosecha-formulario" hx-swap="innerHTML show:none" data-sin-envio-en-curso{% if errores.detalle %} aria-invalid="true"{% endif %}>
+        <select class="field-input" id="detalle" name="detalle" data-desplegable hx-post="{% url 'comercial:cosecha_planificar_calcular' %}" hx-trigger="change" hx-include="closest form" hx-target="#cosecha-formulario" hx-swap="innerHTML show:none" data-sin-envio-en-curso{% if errores.detalle or errores.variedad %} aria-invalid="true"{% endif %}>
           <option value="">Elegí un detalle</option>
           {% for d in detalles %}<option value="{{ d.clave }}"{% if valores.detalle == d.clave %} selected{% endif %}>{{ d.contrato }} · {{ d.cliente }} · {{ d.variedad }} · faltan {{ d.sin_cubrir }} · entrega {{ d.fecha_entrega|date:"d/m/Y" }}{% if d.tipo == 'suministro' %} (período){% endif %}</option>{% endfor %}
         </select>
-        {% for m in errores.detalle %}<div class="err">{{ m }}</div>{% endfor %}
+        {% for m in errores.detalle %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}{% for m in errores.variedad %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}{# UI-06: sin elegir el detalle el servicio rechaza en «variedad» (cosechas.py:478) y acá no se veía nada #}
         {% if not detalles %}<div class="hint">No hay contratos con cantidad sin cubrir que puedan atenderse desde este invernadero: planificá una cosecha sin contrato, elegí otro invernadero o cancelá.</div>{% endif %}</div>
       {% else %}
       <div class="fld"><label for="variedad">Variedad</label>
@@ -38,7 +38,7 @@ son botones de envío con su propia ruta (`formaction`).{% endcomment %}
           <option value="">Elegí una variedad</option>
           {% for id, nombre in variedades %}<option value="{{ id }}"{% if valores.variedad == id|stringformat:"s" %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
         </select>
-        {% for m in errores.variedad %}<div class="err">{{ m }}</div>{% endfor %}</div>
+        {% for m in errores.variedad %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
       {% endif %}
     </div>
 
@@ -46,14 +46,14 @@ son botones de envío con su propia ruta (`formaction`).{% endcomment %}
       <div class="grid2">
         <div class="fld"><label for="fecha_programada">Fecha programada</label>
           <input class="field-input" id="fecha_programada" name="fecha_programada" type="date" value="{{ valores.fecha_programada }}"{% if errores.fecha_programada %} aria-invalid="true"{% endif %}>
-          {% for m in errores.fecha_programada %}<div class="err">{{ m }}</div>{% endfor %}</div>
+          {% for m in errores.fecha_programada %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
         <div class="fld"><label for="prioridad">Prioridad</label>
           <select class="field-input" id="prioridad" name="prioridad" data-desplegable>{% for valor, texto in prioridades %}<option value="{{ valor }}"{% if valores.prioridad == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}</select>
-          {% for m in errores.prioridad %}<div class="err">{{ m }}</div>{% endfor %}</div>
+          {% for m in errores.prioridad %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
       </div>
       <div class="fld"><label for="descripcion">Descripción (opcional)</label>
         <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="500">{{ valores.descripcion }}</textarea>
-        {% for m in errores.descripcion %}<div class="err">{{ m }}</div>{% endfor %}</div>
+        {% for m in errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
     </div>
 
     <div class="card"><div class="card-title">4 · Lotes y cantidades</div>
@@ -62,17 +62,17 @@ son botones de envío con su propia ruta (`formaction`).{% endcomment %}
       {% for l in lotes %}
         <tr><td class="mono">{{ l.codigo }}</td><td class="right mono">{{ l.libre }}</td><td>{{ l.fecha_maxima|date:"d/m/Y"|default:"—" }}{% if l.dias_de_exceso %} <span class="status-badge status-warn">{{ l.dias_de_exceso }} día{{ l.dias_de_exceso|pluralize }} de exceso</span>{% endif %}</td>
           <td><input class="field-input" id="lote_{{ l.lote_id }}" name="lote_{{ l.lote_id }}" type="number" min="0" max="{{ l.libre }}" step="1" inputmode="numeric" aria-label="Plantas a cosechar del lote {{ l.codigo }}" value="{% campo valores 'lote' l.lote_id %}">
-            {% campo errores 'lote' l.lote_id as errores_del_lote %}{% for m in errores_del_lote %}<div class="err">{{ m }}</div>{% endfor %}</td></tr>
+            {% campo errores 'lote' l.lote_id as errores_del_lote %}{% for m in errores_del_lote %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</td></tr>
       {% endfor %}
       </tbody></table>
       {% else %}
       <div class="hint">{% if habilitado and modo == 'contrato' and not valores.detalle %}Elegí un detalle para ver sus lotes.{% elif habilitado and modo == 'sin' and not valores.variedad %}Elegí una variedad para ver sus lotes.{% else %}No hay lotes en Maduración con stock libre de esa variedad en este invernadero.{% endif %}</div>
       {% endif %}
-      {% for m in errores.lotes %}<div class="err">{{ m }}</div>{% endfor %}
+      {% for m in errores.lotes %}<div class="err"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}
     </div>
 
     {% if verificacion %}
-    <div class="card" role="region" aria-label="Resumen de la cosecha"><div class="card-title">Resumen</div>
+    <div class="card" role="region" aria-label="Resumen de la cosecha"{% llevar_vista_una_vez %}><div class="card-title">Resumen</div>
       <input type="hidden" name="firma" value="{{ firma }}">
       <p class="sm"><b>Invernadero:</b> {{ habilitado.invernadero.nombre_invernadero }} · <b>Capataz:</b> {{ habilitado.capataz.get_full_name|default:habilitado.capataz.email }}</p>
       <p class="sm"><b>Fecha programada:</b> {{ valores.fecha_programada }} · <b>Prioridad:</b> {{ valores.prioridad|capfirst }}</p>

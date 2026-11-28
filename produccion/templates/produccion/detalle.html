@@ -31,19 +31,19 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
     {% if hija.motivo_diferencia_siembra %}<p class="sm" style="margin-top:10px"><b>Motivo de la diferencia:</b> {{ hija.motivo_diferencia_siembra }}</p>{% endif %}
   </div></div>
   {% if detalle.ocupaciones %}
-  <div class="card" style="margin-top:12px"><div class="card-h"><h3>Distribución por sector</h3></div><div class="card-b flush">
+  <div class="card" style="margin-top:12px"><div class="card-h"><h2>Distribución por sector</h2></div><div class="card-b flush">
     <table class="data-table"><thead><tr><th>Sector</th><th class="right">Planificados</th><th class="right">Ocupados</th></tr></thead><tbody>
     {% for o in detalle.ocupaciones %}<tr><td>{{ o.sector.nombre_sector }}</td><td class="right mono">{{ o.cant_agujeros_planificados }}</td><td class="right mono">{{ o.cant_agujeros_ocupados }}</td></tr>{% endfor %}
     </tbody></table></div></div>
   {% endif %}
   {% if orden.tipo_orden == "cosecha" and detalle_de_cosecha.lotes %}
-  <div class="card" style="margin-top:12px"><div class="card-h"><h3>Lotes</h3></div><div class="card-b flush">
+  <div class="card" style="margin-top:12px"><div class="card-h"><h2>Lotes</h2></div><div class="card-b flush">
     <table class="data-table"><thead><tr><th>Lote</th><th class="right">Reservadas</th><th class="right">Cosechadas</th></tr></thead><tbody>
     {% for lote_id, reservada, cosechada in detalle_de_cosecha.lotes %}<tr><td class="mono">L-{{ lote_id }}</td><td class="right mono">{{ reservada }}</td><td class="right mono">{% if cosechada is None %}—{% else %}{{ cosechada }}{% endif %}</td></tr>{% endfor %}
     </tbody></table></div></div>
   {% endif %}
   {% if detalle.reservas %}
-  <div class="card" style="margin-top:12px"><div class="card-h"><h3>Insumos reservados</h3></div><div class="card-b flush">
+  <div class="card" style="margin-top:12px"><div class="card-h"><h2>Insumos reservados</h2></div><div class="card-b flush">
     <table class="data-table"><thead><tr><th>Insumo</th><th class="right">Reservado</th><th class="right">Utilizado</th><th class="right">Devuelto</th><th>Estado</th></tr></thead><tbody>
     {% for r in detalle.reservas %}<tr><td>{{ r.insumo_invernadero.insumo.nombre_insumo }}</td><td class="right mono">{{ r.cantidad_reservada|cantidad }}</td><td class="right mono">{{ r.cantidad_utilizada|cantidad }}</td><td class="right mono">{{ r.cantidad_devuelta|cantidad }}</td><td>{{ r.get_estado_display }}</td></tr>{% endfor %}
     </tbody></table></div></div>

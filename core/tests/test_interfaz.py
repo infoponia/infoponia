@@ -302,15 +302,74 @@ class MarcoEnElCelularTests(TestCase):
         self.assertIsNotNone(celular, "la regla del celular tiene que estar dentro del bloque de menos de 760px")
         self.assertIn("minmax(0,1fr)", celular.group(1))
 
-    def test_ui02_las_fichas_del_menu_del_celular_no_se_encogen(self):
-        """D-109 punto 4: la fila de módulos del celular (`.mnav`) se desplaza dentro de su lugar: sus fichas no se encogen ni parten
-        el texto, y la fila tiene desplazamiento horizontal."""
+    def test_ui05_el_menu_del_celular_no_ensancha_la_pagina(self):
+        """D-109 punto 4 (UX-01, ahora con el menú «Menú» de UI-05 en lugar de la fila `.mnav`): el panel del menú del celular va
+        pegado a los dos bordes de la ventana y se desplaza hacia abajo dentro de su lugar, así que no estira la página. Es una
+        regla de menos de 760px: en escritorio el menú del celular está oculto."""
         css = _css()
-        ficha = _regla(css, ".mnav .chip")
-        self.assertIn("flex-shrink:0", ficha)
-        self.assertIn("white-space:nowrap", ficha)
-        reglas_de_la_fila = re.findall(r"(?<![\w-])\.mnav\{([^}]*)\}", css)  # la base y las del bloque de menos de 760px
-        self.assertTrue(any("overflow-x:auto" in regla for regla in reglas_de_la_fila), reglas_de_la_fila)
+        panel = _regla(css, ".menu-celular-panel")
+        self.assertIn("position:absolute", panel)
+        self.assertIn("left:8px", panel)
+        self.assertIn("right:8px", panel)
+        self.assertIn("overflow-y:auto", panel)
+        self.assertIn("max-height:", panel)
+        self.assertIn("display:none", _regla(css, ".menu-celular"))
+        self.assertIn(
+            ".menu-celular{display:block}",
+            re.search(r"@media\(max-width:760px\)\{\s*/\*.*?\*/\s*\.menu-celular\{display:block\}", css, flags=re.S).group(0),
+        )
+
+
+def _bloque_ui05(css):
+    """El bloque propio de UI-05 de la hoja de estilos, desde su comentario hasta la regla que le sigue (`.grid2`)."""
+    inicio = css.index("/* ---- UI-05")
+    return css[inicio : css.index(".grid2{", inicio)]
+
+
+def _sin_el_bloque_del_celular(bloque):
+    """``bloque`` sin su ``@media(max-width:760px){…}`` (con las llaves anidadas): lo que rige en escritorio."""
+    inicio = bloque.index("@media(max-width:760px){")
+    profundidad, i = 0, inicio
+    while True:
+        if bloque[i] == "{":
+            profundidad += 1
+        elif bloque[i] == "}":
+            profundidad -= 1
+            if profundidad == 0:
+                break
+        i += 1
+    return bloque[:inicio] + bloque[i + 1 :]
+
+
+class TablasEnElCelularTests(TestCase):
+    """UI-05 (UX-02 y UX-07; D-109 punto 4): lo que se ve a 1366 px no cambia; las tarjetas rigen solo en menos de 760 px. Se verifica en
+    la hoja de estilos; cómo se ven las tarjetas se mira a mano."""
+
+    def test_ui05_en_escritorio_el_bloque_solo_oculta_el_menu_del_celular(self):
+        """D-109 punto 2: fuera de `@media(max-width:760px)`, el bloque de UI-05 solo tiene reglas de `.menu-celular` (que lo oculta y le
+        saca el marcador al botón); ninguna regla de `.tabla-apilable` ni de `data-rotulo` rige a 1366 px."""
+        fuera = _sin_el_bloque_del_celular(_bloque_ui05(_css()))
+        sin_comentarios = re.sub(r"/\*.*?\*/", "", fuera, flags=re.S)
+        selectores = [s.strip() for s, _ in re.findall(r"([^{}]+)\{([^}]*)\}", sin_comentarios)]
+        self.assertEqual(
+            selectores, [".menu-celular", ".menu-celular > summary", ".menu-celular > summary::-webkit-details-marker"]
+        )
+        self.assertIn("display:none", _regla(fuera, ".menu-celular"))
+        self.assertNotIn("tabla-apilable", fuera)
+        self.assertNotIn("data-rotulo", fuera)
+
+    def test_ui05_en_el_celular_cada_fila_es_una_tarjeta_con_su_rotulo(self):
+        """UX-02: en menos de 760px, la fila es una tarjeta (bloque con borde), el rótulo sale del atributo `data-rotulo`, la primera celda
+        es el título sin rótulo, los encabezados quedan solo para lectores de pantalla y la caja de la tabla no desplaza de costado."""
+        celular = _bloque_ui05(_css())
+        self.assertIn("content:attr(data-rotulo)", _regla(celular, ".tabla-apilable td::before"))
+        self.assertIn("display:none", _regla(celular, ".tabla-apilable td:first-child::before"))
+        tarjeta = _regla(celular, ".tabla-apilable tbody tr")
+        self.assertIn("display:block", tarjeta)
+        self.assertIn("border:1px solid var(--border)", tarjeta)
+        self.assertIn("clip:rect(0 0 0 0)", _regla(celular, ".tabla-apilable thead"))
+        self.assertIn("overflow:visible", _regla(celular, ".tablewrap:has(.tabla-apilable)"))
+        self.assertIn("min-width:0 !important", _regla(celular, ".tabla-apilable"))
 
 
 def _mezcla(color, porcentaje, otro):

@@ -1,14 +1,14 @@
-{% load iconos produccion %}{% comment %}El formulario de «Registrar lote existente» (PROD-REG-LTE): lo que HTMX reemplaza dentro de #lote-existente-vivo. Recibe «ofrecido» (DatosDeRegistro: invernaderos, variedades, etapas,
+{% load iconos produccion vista %}{% comment %}El formulario de «Registrar lote existente» (PROD-REG-LTE): lo que HTMX reemplaza dentro de #lote-existente-vivo. Recibe «ofrecido» (DatosDeRegistro: invernaderos, variedades, etapas,
 sectores, no_elegibles), «valores» (lo escrito), «invernadero_id», «variedad_id», «etapa_id», «es_primera_etapa», «errores» ({campo: mensaje}), «resumen» (ResumenDeRegistro o None), «firma» y «cambio_la_firma».
 Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero, la variedad o la etapa solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con
 «Ver resumen» y «Confirmar registro». No hay refresco al escribir. Todo se escapa. Los errores van debajo de su campo; lo que no tiene campo, arriba.{% endcomment %}
 <form id="lote-existente-form" method="post" action="{% url 'produccion:registrar_lote_existente' %}" novalidate>
-  {% csrf_token %}
-  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}</div>{% endif %}
+  {% csrf_token %}{% primer_error errores "general" "invernadero" "variedad" "etapa" "fecha_siembra" "fecha_ingreso_etapa" "cantidad" "costo_estimado" "distribucion" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" %}>{{ errores.general }}</div>{% endif %}
   <div class="stack">
     {% if not ofrecido.invernaderos %}
     <div class="empty"><b>No hay invernaderos donde cargar un lote existente</b><span>Este caso de uso solo se usa en invernaderos activos a tu cargo que todavía no tuvieron siembras por el flujo normal. Cuando se concreta una siembra normal, la acción deja de estar disponible para ese invernadero.</span></div>
-    {% if errores.invernadero %}<div class="err" role="alert">{{ errores.invernadero }}</div>{% endif %}
+    {% if errores.invernadero %}<div class="err" role="alert"{% llevar_vista primero "invernadero" %}>{{ errores.invernadero }}</div>{% endif %}
     {% else %}
     <div class="card">
       <div class="card-title">¿Dónde y qué?</div>
@@ -18,21 +18,21 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero, la varie
             <option value="">Seleccionar…</option>
             {% for i in ofrecido.invernaderos %}<option value="{{ i.pk }}"{% if i.pk == invernadero_id %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
           </select>
-          {% if errores.invernadero %}<div class="err">{{ errores.invernadero }}</div>{% endif %}</div>
+          {% if errores.invernadero %}<div class="err"{% llevar_vista primero "invernadero" %}>{{ errores.invernadero }}</div>{% endif %}</div>
         <div class="fld"><label for="variedad">Variedad<span class="req" aria-hidden="true"> *</span></label>
           <select class="field-input" id="variedad" name="variedad" data-desplegable hx-post="{% url 'produccion:registrar_lote_existente' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso{% if not invernadero_id %} disabled{% endif %}>
             <option value="">{% if invernadero_id %}Seleccionar…{% else %}Elegí primero el invernadero{% endif %}</option>
             {% for v in ofrecido.variedades %}<option value="{{ v.variedad_id }}"{% if v.variedad_id == variedad_id %} selected{% endif %}>{{ v.nombre }} · {{ v.perfil|perfil_legible }}</option>{% endfor %}
           </select>
           {% if invernadero_id and not ofrecido.variedades %}<div class="hint">No hay variedades activas con ciclo para elegir.</div>{% endif %}
-          {% if errores.variedad %}<div class="err">{{ errores.variedad }}</div>{% endif %}</div>
+          {% if errores.variedad %}<div class="err"{% llevar_vista primero "variedad" %}>{{ errores.variedad }}</div>{% endif %}</div>
       </div>
       <div class="fld" style="margin-top:10px"><label for="etapa">Etapa actual del lote<span class="req" aria-hidden="true"> *</span></label>
         <select class="field-input" id="etapa" name="etapa" data-desplegable hx-post="{% url 'produccion:registrar_lote_existente' %}" hx-vals='{"accion": "actualizar"}' hx-trigger="change" data-sin-envio-en-curso{% if not variedad_id %} disabled{% endif %}>
           <option value="">{% if variedad_id %}Seleccionar…{% else %}Elegí primero la variedad{% endif %}</option>
           {% for e in ofrecido.etapas %}<option value="{{ e.etapa_id }}"{% if e.etapa_id == etapa_id %} selected{% endif %}>{{ e.nombre }} · {{ e.duracion_dias }} días</option>{% endfor %}
         </select>
-        {% if errores.etapa %}<div class="err">{{ errores.etapa }}</div>{% else %}<div class="hint">Puede ser cualquier etapa del ciclo de la variedad, no solo Germinación.</div>{% endif %}</div>
+        {% if errores.etapa %}<div class="err"{% llevar_vista primero "etapa" %}>{{ errores.etapa }}</div>{% else %}<div class="hint">Puede ser cualquier etapa del ciclo de la variedad, no solo Germinación.</div>{% endif %}</div>
       <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
     </div>
 
@@ -42,16 +42,16 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero, la varie
       <div class="grid2">
         <div class="fld"><label for="fecha_siembra">Fecha de siembra<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="fecha_siembra" name="fecha_siembra" type="date" value="{{ valores.fecha_siembra }}"{% if errores.fecha_siembra %} aria-invalid="true"{% endif %}>
-          {% if errores.fecha_siembra %}<div class="err">{{ errores.fecha_siembra }}</div>{% else %}<div class="hint">Puede ser pasada, nunca futura.</div>{% endif %}</div>
+          {% if errores.fecha_siembra %}<div class="err"{% llevar_vista primero "fecha_siembra" %}>{{ errores.fecha_siembra }}</div>{% else %}<div class="hint">Puede ser pasada, nunca futura.</div>{% endif %}</div>
         <div class="fld"><label for="fecha_ingreso_etapa">Fecha de ingreso a la etapa actual<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="fecha_ingreso_etapa" name="fecha_ingreso_etapa" type="date" value="{{ valores.fecha_ingreso_etapa }}"{% if errores.fecha_ingreso_etapa %} aria-invalid="true"{% endif %}>
-          {% if errores.fecha_ingreso_etapa %}<div class="err">{{ errores.fecha_ingreso_etapa }}</div>{% else %}<div class="hint">Entre la fecha de siembra y hoy.{% if es_primera_etapa %} Suele coincidir con la fecha de siembra.{% endif %} Con ella se calcula cuándo termina la etapa y cuándo se puede cosechar.</div>{% endif %}</div>
+          {% if errores.fecha_ingreso_etapa %}<div class="err"{% llevar_vista primero "fecha_ingreso_etapa" %}>{{ errores.fecha_ingreso_etapa }}</div>{% else %}<div class="hint">Entre la fecha de siembra y hoy.{% if es_primera_etapa %} Suele coincidir con la fecha de siembra.{% endif %} Con ella se calcula cuándo termina la etapa y cuándo se puede cosechar.</div>{% endif %}</div>
         <div class="fld"><label for="cantidad">Cantidad de plantas<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="cantidad" name="cantidad" type="number" min="1" step="1" inputmode="numeric" value="{{ valores.cantidad }}"{% if errores.cantidad %} aria-invalid="true"{% endif %}>
-          {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% else %}<div class="hint">Las que hay hoy: se toman como cantidad inicial y actual.</div>{% endif %}</div>
+          {% if errores.cantidad %}<div class="err"{% llevar_vista primero "cantidad" %}>{{ errores.cantidad }}</div>{% else %}<div class="hint">Las que hay hoy: se toman como cantidad inicial y actual.</div>{% endif %}</div>
         <div class="fld"><label for="costo_estimado">Costo estimado del lote ($)</label>
           <input class="field-input mono" id="costo_estimado" name="costo_estimado" type="text" inputmode="decimal" autocomplete="off" value="{{ valores.costo_estimado|default:'0' }}"{% if errores.costo_estimado %} aria-invalid="true"{% endif %}>
-          {% if errores.costo_estimado %}<div class="err">{{ errores.costo_estimado }}</div>{% else %}<div class="hint">Con dos decimales como mucho. Con $0 no se registra asiento.</div>{% endif %}</div>
+          {% if errores.costo_estimado %}<div class="err"{% llevar_vista primero "costo_estimado" %}>{{ errores.costo_estimado }}</div>{% else %}<div class="hint">Con dos decimales como mucho. Con $0 no se registra asiento.</div>{% endif %}</div>
       </div>
     </div>
 
@@ -67,11 +67,11 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero, la varie
       </div>
       {% else %}<div class="hint">No hay sectores activos compatibles con esta etapa y con lugar libre: no hay dónde ubicar el lote. Creá o activá un sector de este tipo, o elegí otra etapa.</div>{% endif %}
       {% for n in ofrecido.no_elegibles %}<p class="sm muted">{{ n.nombre }}: {{ n.texto }}</p>{% endfor %}
-      {% if errores.distribucion %}<div class="err" role="alert">{{ errores.distribucion }}</div>{% endif %}
+      {% if errores.distribucion %}<div class="err" role="alert"{% llevar_vista primero "distribucion" %}>{{ errores.distribucion }}</div>{% endif %}
     </div>
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen del lote">
+    <div class="card" role="region" aria-label="Resumen del lote" data-llevar-vista tabindex="-1">
       <div class="card-title">Resumen del lote</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <dl class="kv">

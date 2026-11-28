@@ -364,7 +364,7 @@ class ReservasYCosechasTests(BaseDeAsignacion):
             ("a_realizar", "cosecha", self.e.variedad.pk, self.e.invernadero.pk, self.e.capataz.pk, None),
         )
         self.assertEqual((cosecha.prioridad_orden, cosecha.fecha_creacion_orden, cosecha.fecha_programada_orden), ("media", HOY, dias(2)))
-        self.assertRegex(cosecha.codigo, r"^OT-\d{4}$")
+        self.assertRegex(cosecha.codigo, r"^OT-\d{4,5}$")  # 4 dígitos, o 5 si la numeración de una base de pruebas reutilizada (--keepdb) pasó de 9999
 
     def test_post_e_la_cantidad_total_reservada_es_la_menor_entre_lo_pedido_y_el_stock_libre(self):
         """Postcondición e: lo reservado es `min(cantidad, stock maduro libre)`."""

@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos comercial vista %}
 {% comment %}«Cancelar compra-venta» (COM-CNL-CVT, COM-05b; `INIT.cvcancel`, `VIEWS.cvcancel` del prototipo): «Qué se cancela» (cada detalle con su efecto), «Qué pasa con el producto» (lo que vuelve a los
 lotes, a las partidas y lo ya cosechado que ingresa a la cámara; las cosechas y las entregas que se cancelan) y «Motivo» (botones de opción, descripción opcional), con el resumen al costado. Con una
 entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja seguir. «Revisar y cancelar» muestra el resumen (ventana con HTMX o página sin JavaScript) y no escribe. Con entregas concretadas (6a, COM-08b) suma la sección «Cobro de lo entregado» del prototipo (los detalles ya entregados, lo que se cobra y el medio de pago) y el estado final pasa a «Concretada». Recibe «datos», «motivos», «motivo», «descripcion», «medios», «medio_pago» y «errores». Correcciones al prototipo: «Cierre» de la tarea (D-61).{% endcomment %}
@@ -54,7 +54,7 @@ entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja s
             <legend>Medio de pago <span class="req">*</span></legend>
             {% for valor, texto in medios %}<label><input type="radio" name="medio_pago" value="{{ valor }}"{% if medio_pago == valor %} checked{% endif %}{% if errores.medio_pago %} aria-invalid="true"{% endif %}> {{ texto }}</label>{% endfor %}
           </fieldset>
-          {% for m in errores.medio_pago %}<div class="err" role="alert">{{ m }}</div>{% empty %}<div class="hint" id="medio-ayuda">El cliente paga ahora, con un solo medio. El efectivo va a Caja; los demás, a Banco.</div>{% endfor %}
+          {% for m in errores.medio_pago %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ m }}</div>{% empty %}<div class="hint" id="medio-ayuda">El cliente paga ahora, con un solo medio. El efectivo va a Caja; los demás, a Banco.</div>{% endfor %}
           <p class="muted">Al confirmar se registra el asiento del cobro: Debe Caja (efectivo) o Banco c/c (los demás medios) / Haber Deudores por Ventas. Lo ves completo en el resumen.</p>
         </section>
         {% endif %}
@@ -64,10 +64,10 @@ entrega en curso (4a) o una venta que ya no se puede cancelar, avisa y no deja s
             <legend>Motivo de la cancelación</legend>
             {% for valor, texto in motivos %}<label><input type="radio" name="motivo" value="{{ valor }}"{% if motivo == valor %} checked{% endif %}{% if errores.motivo %} aria-invalid="true"{% endif %}> {{ texto }}</label>{% endfor %}
           </fieldset>
-          {% for m in errores.motivo %}<div class="err" role="alert">{{ m }}</div>{% empty %}<div class="hint" id="motivo-ayuda">Obligatorio.</div>{% endfor %}
+          {% for m in errores.motivo %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ m }}</div>{% empty %}<div class="hint" id="motivo-ayuda">Obligatorio.</div>{% endfor %}
           <div class="fld"><label for="descripcion">Descripción</label>
             <input class="field-input" id="descripcion" name="descripcion" maxlength="300" value="{{ descripcion }}" placeholder="Opcional"{% if errores.descripcion %} aria-invalid="true"{% endif %}>
-            {% for m in errores.descripcion %}<div class="err" role="alert">{{ m }}</div>{% endfor %}</div>
+            {% for m in errores.descripcion %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ m }}</div>{% endfor %}</div>
         </section>
       </div>
       <aside class="stack">

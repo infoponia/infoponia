@@ -150,7 +150,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 | `.mono` | La tarea UI-01 pedía quitar `.mono`; se conservó con la definición del prototipo (solo cifras tabulares) porque el prototipo lo usa unas 40 veces y la tarea pide poder copiar su HTML. Corregir el texto de UI-01 | Al validar UI-01 |
 | D-29 contra el prototipo | `.btn-ghost` (contraste AA del borde) y los avisos breves (radio de 6 px, animaciones, posición abajo en menos de 760 px) conservan D-29 y difieren del prototipo. Decidir si D-29 se actualiza al aspecto v2 y se ajustan las pruebas `test_d29_` | Sin fecha |
 | Íconos | `core/templatetags/iconos.py` no estaba en «Permitido fuera de la app» de UI-01; se le agregaron los 20 íconos del prototipo que faltaban para que las tareas de la ronda no toquen `core`. Anotarlo como permitido en la tarea | Al validar UI-01 |
-| `.mnav` del prototipo | El prototipo la deja siempre oculta (su `display:none` va después de la media query). En el sistema se muestra en menos de 760 px. Corregir el prototipo | Sin fecha |
+| `.mnav` del prototipo | El prototipo la deja siempre oculta (su `display:none` va después de la media query). En el sistema se mostraba en menos de 760 px y UI-05 la reemplazó por el botón «Menú» (`<details>`). Corregir el prototipo | Sin fecha |
 | Color de la organización | Las variantes oscura y clara salen de `color-mix()` (D-48, ver arriba); si MAE-04 quiere otro cálculo o validar el contraste del color elegido, se decide ahí | MAE-04 |
 | Revisión visual de UI-01 | No hubo navegador en la sesión: las pantallas de `core` (usuarios, auditoría, Mi perfil) conservan su HTML con los componentes v2 que ya usaban; falta confirmar a mano que ninguna se vea con el aspecto viejo | Revisión a mano de UI-01 |
 
@@ -1038,3 +1038,46 @@ Diferencias con la documentación:
 9. **`DESCRIPCION_DE_CUENTA`:** «Productos en Proceso» ya no dice que la mueven las transiciones (solo su merma asienta) e «Indemnizaciones por Atraso en el Pago» dice que la mueve el cobro con atraso (cierra el punto 9 de CON-04d y la nota de CON-04a sobre Productos en Proceso). **Falta** alinear el extracto `docs/casos_de_uso/contabilidad/plan_de_cuentas.md`, que conserva los textos viejos con códigos.
 10. **Docstring de `registrar_cobro`** (`comercial/servicios/cobranza.py`) dice «No crea el asiento (D-57)», pero lo crea desde CON-04d. No se tocó (es un servicio).
 11. **Decimales con punto en «Concretar siembra»:** el filtro `cantidad` de `produccion` muestra «2.5 L», no «2,5 L». Para UI-04 o UI-08.
+
+## UI-03 (accesibilidad; 28/11/2026): lo que se implementó distinto de lo escrito
+
+1. **`.sr` en lugar de sumar `.sr-only`**: la clase de core ya existía; los `.sr-only` de IoT e Inventario quedan (decisión del estudiante).
+2. **El control de etiquetas de la red saltea los campos con `aria-hidden="true"`** (el `username` oculto para el administrador de contraseñas).
+3. **Concretar cosecha ya tenía las etiquetas** que la revisión (UX-11) daba por faltantes; no se cambió.
+4. **La columna del medio del Libro diario y otras cinco columnas sin título no eran de acciones**: llevan su nombre, no «Acciones».
+5. **`.vacio h2` va en `infoponia.css`** y no en `iot.css` (decisión del estudiante, opción b).
+6. **Los `h3.ped-sub` (Registrar recepción) y `h3.sec-h` (formulario de Sistema IoT) pasaron a `h2`** y toman el espaciado del `h2` de página
+   (0,14 px), como los `h2.ped-sub` y `h2.sec-h` que ya existían.
+7. **`desplegable.js` anuncia como inválido todo desplegable con error**, no solo los de Nuevo invernadero.
+8. **Pendiente para UI-06:** Django pone `aria-describedby="id_<campo>_error"` en los campos con error, pero el `.err` de `_campo.html` no tiene
+   ese `id`.
+9. **Sin `tblib`, `--parallel` tumba la corrida ante cualquier falla** en vez de informarla. Agregarlo a las dependencias de desarrollo necesita
+   permiso.
+
+## UI-05 (menú y tablas del celular; 28/11/2026): lo que se implementó distinto de lo escrito
+
+1. **Vehículos y Faltantes (Comercial) se apilaron aunque la tarea no los nombra**, a pedido del estudiante: la revisión (UX-02) dice «listas de Comercial».
+   Misma receta: la clase `tabla-apilable` y `data-rotulo`, sin CSS nuevo. Son 21 tablas en 19 plantillas.
+2. **No se tocaron** Auditoría, IoT (hardware, reglas, tipos, comandos, monitoreo), Producción, Estadísticas ni las tablas de ficha y de resumen.
+3. **`data-rotulo` también en la primera celda** (el título de la tarjeta, que el CSS no rotula): así la prueba de la red es una sola regla («toda celda de datos»).
+4. **Siguen con desplazamiento horizontal:** el libro de gestión (las tres tablas), el plan de cuentas y Existencias de Inventario (filas de `colspan`, de movimiento y de lote).
+5. **Los portales ya se apilaban** con `data-etiqueta` y su propio CSS (`comercial.css`, `compras.css`): el mismo patrón con otro nombre. Unificarlo es de UI-08.
+6. **La entrada activa del menú se marca por prefijo de URL** (ya era así): en «Bitácora» están activas «Producción» y «Bitácora» a la vez, en el menú lateral y en «Menú».
+7. **Una prueba de IoT contaba los `<details>` de la página** y el marco ahora suma el del botón «Menú»: la cuenta lo excluye (`data-menu-celular`).
+8. **Lector de pantalla:** cambiar el `display` de una tabla puede hacer que algunos navegadores dejen de anunciarla como tabla; sin verificar (paso 16).
+
+## UI-06 (resumen y errores a la vista; 28/11/2026): lo que se implementó distinto de lo escrito
+
+1. **Foco en el error (decisión del estudiante: A).** El `div.err` queda después del campo: con el foco en el error, Tab pasa al campo siguiente y hace falta Shift + Tab para volver al campo.
+   **Alternativa B para UI-08:** llevar el foco al control del `.fld`. Riesgos: los desplegables propios de D-24 (el foco iría al botón del desplegable, no al `<select>` oculto), los errores generales sin campo (no tienen control) y la necesidad de `aria-describedby` en cada campo con error (cambio de todas las apps).
+2. **Candidato para UI-08:** altas largas con los errores abajo, en el celular (hay que desplazarse hasta el error y volver al campo).
+3. **Tres etiquetas de plantilla más de las escritas** (`llevar_vista`, `llevar_vista_fila`, `llevar_vista_una_vez`, además de `primer_error`): la tarea no las nombra; salieron de que los portales, las filas anidadas y los resúmenes por HTMX no tienen un único diccionario de errores.
+   `llevar_vista_una_vez` solo marca en una respuesta a un envío (POST): «Concretar entrega» abre diciendo que falta el medio de pago y habría robado el foco al cargar.
+4. **Sin marca, a propósito:** «Habilitar insumo» (es una ventana: `abrirVentana` maneja el foco), el resumen de «Iniciar ejercicio» (es la página entera) y los resúmenes en ventana (compra-venta, suministros). «Emitir comando» (IoT) marca el título «Resumen del comando», no el cuadro.
+5. **Deuda de mantenimiento:** los textos de los servicios se repiten en ocho vistas (con la cita del archivo y la línea) para mostrar juntos los obligatorios. Las pruebas de `test_ui06_obligatorios_juntos.py` comparan cada texto con el que da el servicio: si uno cambia y el otro no, avisan.
+6. **Fuera de alcance (no se tocó):** errores en voseo en el portal del cliente (`confirmacion.py:226`, `faltantes.py:283`, `views_cliente.py:114`; es de UI-04); `required` sin `novalidate` en la ventana de cancelar orden de IoT (`_ventana_cancelar_orden.html`: el navegador frena el envío antes que el servicio);
+   selectores con `hx-post` sin `data-sin-envio-en-curso` (Nueva siembra, ajuste, el radio de transición); selectores de dirección de maestros y clientes con `hx-get` sin `show:none`; el «Ver resumen» de pago lleva `data-sin-envio-en-curso` y dice «Guardando…»;
+   en «Concretar entrega» con HTMX los errores de cada campo no se redibujan (solo el resumen).
+7. **Quedaron afuera de «obligatorios juntos»** (decisión del estudiante): la fecha de «Poner fuera de servicio» (viene cargada) y el medio de pago de «Cancelar compra-venta» (depende de que haya cobro: repetiría una regla del servicio).
+8. **Pruebas con `--keepdb`:** la numeración de órdenes de la base de pruebas se acumula entre corridas completas y, pasadas unas diez, un código llega a 5 dígitos. Tres pruebas existentes comprobaban exactamente 4 (`test_com_reg_cbr.py`, `test_modelos_cobranza.py`, `test_prod_asg_stk.py`) y pasaron a `\d{4,5}` a pedido del estudiante.
+   Si aparece otra, recrear la base de pruebas (`--noinput`, sin `--keepdb`).

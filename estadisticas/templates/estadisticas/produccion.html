@@ -69,7 +69,7 @@ después en el formulario, su valor es el último y gana (`_ultimo` en la vista)
     <div class="stack">
       <div class="split">
         <div class="card seg">
-          <div class="card-h"><h3>{% icono "leaf" 16 %} Plantas sembradas y cosechadas</h3>{% if enlaces.bitacora %}<a class="link enlace-del-bloque" href="{{ enlaces.bitacora }}">Ver en la bitácora</a>{% endif %}</div>
+          <div class="card-h"><h2>{% icono "leaf" 16 %} Plantas sembradas y cosechadas</h2>{% if enlaces.bitacora %}<a class="link enlace-del-bloque" href="{{ enlaces.bitacora }}">Ver en la bitácora</a>{% endif %}</div>
           {% if a.sembradas_y_cosechadas.filas %}
           <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Sembradas</th><th class="right">Cosechadas</th></tr></thead><tbody>
             {% for f in a.sembradas_y_cosechadas.filas %}<tr><td>{{ f.variedad }}</td><td class="right nowrap">{{ f.sembradas|floatformat:"0g" }}</td><td class="right nowrap">{% if f.cosechadas is None %}—{% else %}{{ f.cosechadas|floatformat:"0g" }}{% endif %}</td></tr>{% endfor %}
@@ -79,7 +79,7 @@ después en el formulario, su valor es el último y gana (`_ultimo` en la vista)
         </div>
 
         <div class="card seg">
-          <div class="card-h"><h3>{% icono "chart" 16 %} Merma por causa</h3>{% if enlaces.bitacora_merma %}<a class="link enlace-del-bloque" href="{{ enlaces.bitacora_merma }}">Ver las mermas</a>{% endif %}</div>
+          <div class="card-h"><h2>{% icono "chart" 16 %} Merma por causa</h2>{% if enlaces.bitacora_merma %}<a class="link enlace-del-bloque" href="{{ enlaces.bitacora_merma }}">Ver las mermas</a>{% endif %}</div>
           <div class="card-b">
             {% if a.merma.denominador %}<p class="muted sm" style="margin:0 0 10px">{{ a.merma.perdidas|floatformat:"0g" }} plantas perdidas sobre {{ a.merma.al_inicio|floatformat:"0g" }} en producción al inicio más {{ a.merma.sembradas_en_el_periodo|floatformat:"0g" }} sembradas.</p>
             {% else %}<p class="muted sm" style="margin:0 0 10px">No había plantas en producción ni se sembró en este período: no se puede calcular el porcentaje.</p>{% endif %}
@@ -89,7 +89,7 @@ después en el formulario, su valor es el último y gana (`_ultimo` en la vista)
       </div>
 
       <div class="card seg">
-        <div class="card-h"><h3>{% icono "check" 16 %} Órdenes de trabajo a tiempo y vencidas</h3>{% if enlaces.ordenes %}<a class="link enlace-del-bloque" href="{{ enlaces.ordenes }}">Ver las órdenes</a>{% endif %}</div>
+        <div class="card-h"><h2>{% icono "check" 16 %} Órdenes de trabajo a tiempo y vencidas</h2>{% if enlaces.ordenes %}<a class="link enlace-del-bloque" href="{{ enlaces.ordenes }}">Ver las órdenes</a>{% endif %}</div>
         <div class="card-b"><div class="chips" role="group" aria-label="Qué órdenes contar">
           <button class="chip" type="submit" name="ordenes" value="todas" aria-pressed="{% if filtro.ordenes == 'todas' %}true{% else %}false{% endif %}">Todas</button>
           <button class="chip" type="submit" name="ordenes" value="produccion" aria-pressed="{% if filtro.ordenes == 'produccion' %}true{% else %}false{% endif %}">Solo de producción</button>
@@ -103,7 +103,7 @@ después en el formulario, su valor es el último y gana (`_ultimo` en la vista)
       </div>
 
       <div class="card seg">
-        <div class="card-h"><h3>{% icono "box" 16 %} Consumo de insumos</h3>{% if enlaces.insumos %}<a class="link enlace-del-bloque" href="{{ enlaces.insumos }}">Ver los insumos</a>{% endif %}</div>
+        <div class="card-h"><h2>{% icono "box" 16 %} Consumo de insumos</h2>{% if enlaces.insumos %}<a class="link enlace-del-bloque" href="{{ enlaces.insumos }}">Ver los insumos</a>{% endif %}</div>
         {% if a.consumo.categorias %}
         <div class="totrow" style="border-top:0"><span>Consumo total del período{% if deltas.consumo %} <span class="dta {{ deltas.consumo.clase }}">{{ deltas.consumo.texto }}</span>{% endif %}</span><b>$ {{ a.consumo.monto_total|floatformat:"2g" }}</b></div>
         <table class="data-table"><thead><tr><th>Categoría</th><th>Insumo</th><th class="right">Cantidad</th><th class="right">Monto</th></tr></thead><tbody>
@@ -116,7 +116,7 @@ después en el formulario, su valor es el último y gana (`_ultimo` en la vista)
 
       {% if a.alertas_iot %}
       <div class="card seg">
-        <div class="card-h"><h3>{% icono "activity" 16 %} Alertas del IoT</h3>{% if enlaces.iot %}<a class="link enlace-del-bloque" href="{{ enlaces.iot }}">Ver el monitoreo</a>{% endif %}</div>
+        <div class="card-h"><h2>{% icono "activity" 16 %} Alertas del IoT</h2>{% if enlaces.iot %}<a class="link enlace-del-bloque" href="{{ enlaces.iot }}">Ver el monitoreo</a>{% endif %}</div>
         <div class="card-b">
           <p class="muted sm" style="margin:0 0 10px">{{ a.alertas_iot.total }} alerta{{ a.alertas_iot.total|pluralize }} en el período{% if deltas.alertas_iot %} · <span class="dta {{ deltas.alertas_iot.clase }}" style="display:inline">{{ deltas.alertas_iot.texto }}</span>{% endif %}.</p>
           <div class="hb">{% for f, ancho in barras_de_alertas %}<div class="hb-r"><span class="hb-l">{{ f.texto }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>{{ f.cantidad }} alerta{{ f.cantidad|pluralize }}</b></div>{% empty %}<div class="muted sm">No hubo alertas del IoT en el período.</div>{% endfor %}</div>

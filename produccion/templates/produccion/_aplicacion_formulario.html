@@ -1,10 +1,10 @@
-{% load iconos produccion %}{% comment %}El formulario de «Registrar aplicación» (PROD-REG-APL): lo que HTMX reemplaza dentro de #aplicacion-vivo. Recibe «invernaderos», «invernadero_id», «filas» (FilaDeInsumoAplicable),
+{% load iconos produccion vista %}{% comment %}El formulario de «Registrar aplicación» (PROD-REG-APL): lo que HTMX reemplaza dentro de #aplicacion-vivo. Recibe «invernaderos», «invernadero_id», «filas» (FilaDeInsumoAplicable),
 «grupos_de_sectores» ([(tipo de etapa, [FilaDeSectorAplicable])]), «hay_sectores», «marcados» (ids), «alcance_elegido», «valores», «errores» ({campo: mensaje}), «resumen» (ResumenDeAplicacion o None), «firma», «cambio_la_firma»,
 «vistos» ({existencia_id: «lote:disponible,…»}), «plantas_vistas», «vencimientos» ({lote_de_insumo_id: fecha}) y «es_capataz». Cambiar el invernadero solo redibuja lo que depende de él (accion «actualizar»), SIN validar y sin
 mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». El Capataz NO ve valores, destinos, reparto ni avisos de stock: el servicio no se los devuelve (vienen en None) y acá tampoco se piden. Todo se escapa.{% endcomment %}
 <form id="aplicacion-form" method="post" action="{% url 'produccion:registrar_aplicacion' %}" novalidate>
-  {% csrf_token %}
-  {% if errores.general or errores.sin_insumos %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.sin_insumos }}</div>{% endif %}
+  {% csrf_token %}{% primer_error errores "general" "sin_insumos" "sector_ids" "cantidad_*" "insumo_*" "reparto_*" "descripcion" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+  {% if errores.general or errores.sin_insumos %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" "sin_insumos" %}>{{ errores.general }}{{ errores.sin_insumos }}</div>{% endif %}
   <div class="stack">
     <div class="card">
       <div class="card-title">1 · ¿Dónde?</div>
@@ -35,7 +35,7 @@ mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar».
         {% endfor %}
       </fieldset>
       {% endif %}
-      {% if errores.sector_ids %}<div class="err">{{ errores.sector_ids }}</div>{% endif %}
+      {% if errores.sector_ids %}<div class="err"{% llevar_vista primero "sector_ids" %}>{{ errores.sector_ids }}</div>{% endif %}
     </div>
 
     <div class="card">
@@ -45,8 +45,8 @@ mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar».
       <div style="padding:8px 0;border-top:1px solid var(--border)">
         <div class="fld"><label for="cantidad_{{ f.existencia_id }}"><b>{{ f.nombre }}</b> <span class="muted sm">stock libre: {{ f.stock_libre|cantidad }} {{ f.unidad }}{% if f.destino == "costo_de_los_lotes" %} · va al costo de los lotes{% elif f.destino == "gasto" %} · va a gasto{% endif %}</span></label>
           <input class="field-input" id="cantidad_{{ f.existencia_id }}" name="cantidad_{{ f.existencia_id }}" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="{% campo valores 'cantidad' f.existencia_id %}">
-          {% campo errores 'cantidad' f.existencia_id as e1 %}{% if e1 %}<div class="err">{{ e1 }}</div>{% endif %}
-          {% campo errores 'insumo' f.existencia_id as e2 %}{% if e2 %}<div class="err">{{ e2 }}</div>{% endif %}</div>
+          {% campo errores 'cantidad' f.existencia_id as e1 %}{% if e1 %}<div class="err"{% llevar_vista_fila primero "cantidad" f.existencia_id %}>{{ e1 }}</div>{% endif %}
+          {% campo errores 'insumo' f.existencia_id as e2 %}{% if e2 %}<div class="err"{% llevar_vista_fila primero "insumo" f.existencia_id %}>{{ e2 }}</div>{% endif %}</div>
         {% if f.controla_vencimiento and f.lotes %}
         <details><summary class="sm">Elegir de qué lotes sale (opcional)</summary>
           <p class="hint">Se propone el que vence primero. Si elegís lotes, indicá cuánto sale de cada uno: tiene que sumar lo usado (o lo disponible, si es menos).</p>
@@ -54,18 +54,18 @@ mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar».
           <div class="fld"><label for="reparto_{{ f.existencia_id }}_{{ lote_id }}">Lote {{ lote_id }} <span class="muted">(disponible: {{ disponible|cantidad }}{% if vence %} · vence {{ vence|date:"d/m/Y" }}{% endif %})</span></label>
             <input class="field-input" id="reparto_{{ f.existencia_id }}_{{ lote_id }}" name="reparto_{{ f.existencia_id }}_{{ lote_id }}" type="text" inputmode="decimal" autocomplete="off" value="{% campo valores 'reparto' f.existencia_id lote_id %}"></div>
           {% endfor %}
-          {% campo errores 'reparto' f.existencia_id as e3 %}{% if e3 %}<div class="err">{{ e3 }}</div>{% endif %}
+          {% campo errores 'reparto' f.existencia_id as e3 %}{% if e3 %}<div class="err"{% llevar_vista_fila primero "reparto" f.existencia_id %}>{{ e3 }}</div>{% endif %}
         </details>
         {% endif %}
       </div>
       {% endfor %}
       <div class="fld" style="margin-top:8px"><label for="descripcion">Descripción (opcional)</label>
         <textarea class="field-input" id="descripcion" name="descripcion" rows="2">{{ valores.descripcion }}</textarea>
-        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 500 caracteres. Si la aplicación fue antes, aclaralo acá: se registra con la fecha y la hora de ahora.</div>{% endif %}</div>
+        {% if errores.descripcion %}<div class="err"{% llevar_vista primero "descripcion" %}>{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 500 caracteres. Si la aplicación fue antes, aclaralo acá: se registra con la fecha y la hora de ahora.</div>{% endif %}</div>
     </div>
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen de la aplicación"><div class="card-title">Resumen</div>
+    <div class="card" role="region" aria-label="Resumen de la aplicación" data-llevar-vista tabindex="-1"><div class="card-title">Resumen</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <p class="sm"><b>Invernadero:</b> {{ resumen.invernadero.nombre_invernadero }} · <b>Alcance:</b> {% for s in resumen.sectores %}{{ s.nombre_sector }}{% if not forloop.last %}, {% endif %}{% empty %}todo el invernadero{% endfor %}</p>
       {% if resumen.descripcion %}<p class="sm"><b>Descripción:</b> {{ resumen.descripcion }}</p>{% endif %}

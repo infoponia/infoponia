@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos produccion formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos produccion formato_inventario vista %}
 {% comment %}«Concretar siembra» (PRD-01, PROD-CNC-SMB, `VIEWS['c-siembra']`), diseñada para el celular (marco angosto, D-25): una columna de pasos. Recibe «propuesta» (PropuestaDeConcrecion: orden,
 fecha_propuesta, fecha_minima, distribucion, reservas), «valores», «lotes_de_insumo» ({existencia_id: [LoteInsumo]}), «errores» ({campo: mensaje}), «resumen» y «firma». El sistema propone todo: los
 campos vacíos toman lo propuesto (se ve como texto de ayuda) y el Capataz solo escribe lo que difiere. NO hay validación ni recálculo al escribir: «Ver resumen» valida y calcula, «Confirmar concreción» escribe.
@@ -10,23 +10,23 @@ Sin JavaScript funciona igual (un POST con su «accion»). Todo se escapa.{% end
   <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "back" 14 %} Mis órdenes</a>
   <div class="page-h"><h1>Concretar <span class="mono">{{ orden.codigo }}</span></h1><div class="sub">{{ orden.variedad }} · {{ orden.invernadero.nombre_invernadero }} · {{ orden.cant_plantines_siembra }} plantines para el {{ orden.fecha_programada_orden|date:"d/m/Y" }}</div></div>
   <form method="post" action="{% url 'produccion:concretar' orden.pk %}" novalidate>
-    {% csrf_token %}
-    {% if errores.general or errores.ajustes %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.ajustes }}</div>{% endif %}
+    {% csrf_token %}{% primer_error errores "general" "ajustes" "fecha_efectiva" "sembrado" "motivo_diferencia" "utilizada" "devuelta" "lotes" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+    {% if errores.general or errores.ajustes %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" "ajustes" %}>{{ errores.general }}{{ errores.ajustes }}</div>{% endif %}
     <div class="stack">
       <div class="card"><div class="card-title">1 · Cuándo se sembró</div>
         <div class="fld"><label for="fecha_efectiva">Fecha efectiva</label>
           <input class="field-input" id="fecha_efectiva" name="fecha_efectiva" type="date" min="{{ propuesta.fecha_minima|date:'Y-m-d' }}" max="{{ propuesta.fecha_propuesta|date:'Y-m-d' }}" value="{% if valores.fecha_efectiva %}{{ valores.fecha_efectiva }}{% else %}{{ propuesta.fecha_propuesta|date:'Y-m-d' }}{% endif %}"{% if errores.fecha_efectiva %} aria-invalid="true"{% endif %}>
-          {% if errores.fecha_efectiva %}<div class="err">{{ errores.fecha_efectiva }}</div>{% else %}<div class="hint">Entre el {{ propuesta.fecha_minima|date:"d/m/Y" }} y hoy.</div>{% endif %}</div></div>
+          {% if errores.fecha_efectiva %}<div class="err"{% llevar_vista primero "fecha_efectiva" %}>{{ errores.fecha_efectiva }}</div>{% else %}<div class="hint">Entre el {{ propuesta.fecha_minima|date:"d/m/Y" }} y hoy.</div>{% endif %}</div></div>
 
       <div class="card"><div class="card-title">2 · Cuántos plantines en cada sector</div>
         {% for f in propuesta.distribucion %}
         <div class="fld"><label for="sembrado_{{ f.sector_id }}">{{ f.nombre }} <span class="muted">(planificados: {{ f.planificados }})</span></label>
           <input class="field-input" id="sembrado_{{ f.sector_id }}" name="sembrado_{{ f.sector_id }}" type="number" min="0" max="{{ f.planificados }}" step="1" inputmode="numeric" placeholder="{{ f.propuesto }}" value="{% campo valores 'sembrado' f.sector_id %}"></div>
         {% endfor %}
-        {% if errores.sembrado %}<div class="err">{{ errores.sembrado }}</div>{% else %}<div class="hint">Si no escribís nada, se toma lo planificado.</div>{% endif %}
+        {% if errores.sembrado %}<div class="err"{% llevar_vista primero "sembrado" %}>{{ errores.sembrado }}</div>{% else %}<div class="hint">Si no escribís nada, se toma lo planificado.</div>{% endif %}
         <div class="fld" style="margin-top:8px"><label for="motivo_diferencia">Motivo de la diferencia (opcional)</label>
           <textarea class="field-input" id="motivo_diferencia" name="motivo_diferencia" rows="2" maxlength="400">{{ valores.motivo_diferencia }}</textarea>
-          {% if errores.motivo_diferencia %}<div class="err">{{ errores.motivo_diferencia }}</div>{% endif %}</div></div>
+          {% if errores.motivo_diferencia %}<div class="err"{% llevar_vista primero "motivo_diferencia" %}>{{ errores.motivo_diferencia }}</div>{% endif %}</div></div>
 
       <div class="card"><div class="card-title">3 · Insumos</div>
         {% for r in propuesta.reservas %}
@@ -49,13 +49,13 @@ Sin JavaScript funciona igual (un POST con su «accion»). Todo se escapa.{% end
           </details>
         </div>
         {% endfor %}
-        {% if errores.utilizada %}<div class="err">{{ errores.utilizada }}</div>{% endif %}
-        {% if errores.devuelta %}<div class="err">{{ errores.devuelta }}</div>{% endif %}
-        {% if errores.lotes %}<div class="err">{{ errores.lotes }}</div>{% endif %}
+        {% if errores.utilizada %}<div class="err"{% llevar_vista primero "utilizada" %}>{{ errores.utilizada }}</div>{% endif %}
+        {% if errores.devuelta %}<div class="err"{% llevar_vista primero "devuelta" %}>{{ errores.devuelta }}</div>{% endif %}
+        {% if errores.lotes %}<div class="err"{% llevar_vista primero "lotes" %}>{{ errores.lotes }}</div>{% endif %}
       </div>
 
       {% if resumen %}
-      <div class="card" role="region" aria-label="Resumen de la concreción"><div class="card-title">Resumen</div>
+      <div class="card" role="region" aria-label="Resumen de la concreción" data-llevar-vista tabindex="-1"><div class="card-title">Resumen</div>
         {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
         <p class="sm"><b>Fecha efectiva:</b> {{ resumen.fecha_efectiva|date:"d/m/Y" }}</p>
         <p class="sm"><b>Sembrado:</b> {{ resumen.total_sembrado }} de {{ resumen.total_planificado }} planificados{% if resumen.diferencia %} (faltan {{ resumen.diferencia }}; la semilla y los agujeros que no se usaron quedan libres){% endif %}</p>

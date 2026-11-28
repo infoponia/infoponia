@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Cerrar con faltante» (CMP-CRR-FLT pasos 2 a 4; ``VIEWS.c_flt`` del prototipo). Recibe «orden», «lineas» (cada una con la ``LineaPorCerrar``, si está elegida, su motivo y sus errores), «errores» y «recepcion_id» (extensión
 2a: solo las líneas de esa recepción). Cada línea tiene su casilla y su propio motivo (obligatorio: extensión 4a; el prototipo pedía un único motivo para todas). Sin JavaScript: «Ver resumen» muestra el paso 5.{% endcomment %}
 {% block titulo %}Cerrar con faltante · {{ orden }} · InfoPonia{% endblock %}
@@ -8,7 +8,7 @@
   <a class="btn btn-text" href="{% url 'compras:orden_ficha' orden.pk %}">{% icono "back" 14 %} Orden {{ orden }}</a>
   <div class="page-h"><h1>Cerrar con faltante · {{ orden }}</h1></div>
   <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>Cerrar una línea significa que <b>lo que falta ya no va a llegar</b>. Se paga por lo recibido, no se registra ningún asiento y <b>no se puede volver a abrir</b>. El proveedor recibe un correo que se lo avisa.</div></div>
-  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
 
   <form method="post" action="{% url 'compras:cierre_faltante' orden.pk %}" novalidate>
     {% csrf_token %}
@@ -25,7 +25,7 @@
           {% if l.atraso_dias %}<span class="status-badge status-danger">{{ l.atraso_dias }} día{{ l.atraso_dias|pluralize }} de atraso</span>{% endif %}
         </div>
         <div style="padding:0 20px 16px">
-          {% if item.errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "warn" 16 %}<div>{{ item.errores.0 }}</div></div>{% endif %}
+          {% if item.errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{{ item.errores.0 }}</div></div>{% endif %}
           <div class="fld"><label for="motivo_{{ id }}">Motivo del faltante</label>
             <input class="field-input" id="motivo_{{ id }}" name="motivo_{{ id }}" autocomplete="off" value="{{ item.motivo }}" placeholder="Por ejemplo: el proveedor no consigue reponer."></div>
           <p class="hint">{% if l.recibida %}Se paga lo recibido ({{ l.recibida|num:unidad }}).{% else %}No llegó nada de esta línea: no se paga.{% endif %}</p>

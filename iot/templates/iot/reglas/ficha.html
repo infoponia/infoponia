@@ -32,7 +32,7 @@ de «acciones» (D-30): modificar, dar de baja (ventana) y reactivar. Sin JavaSc
     </div>
   </div>
   <div class="card" style="margin-top:14px">
-    <div class="card-h"><h3>{% icono "send" 16 %} Comandos que generó</h3><span class="spacer"></span>{% if comandos_total > comandos|length %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;origen=regla&amp;filtro_actuador={{ regla.actuador_id }}">Ver todos ({{ comandos_total }})</a>{% endif %}</div>
+    <div class="card-h"><h2>{% icono "send" 16 %} Comandos que generó</h2><span class="spacer"></span>{% if comandos_total > comandos|length %}<a class="link" href="{% url 'iot:comandos' %}?invernadero={{ elegido.pk }}&amp;origen=regla&amp;filtro_actuador={{ regla.actuador_id }}">Ver todos ({{ comandos_total }})</a>{% endif %}</div>
     <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
       <caption class="sr-only">Comandos que generó la regla</caption>
       <thead><tr><th>Código</th><th>Acción</th><th>Estado</th><th>Intentos</th><th>Emitido</th></tr></thead>

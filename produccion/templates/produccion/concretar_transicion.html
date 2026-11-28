@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos produccion %}
+{% extends "core/base_con_sesion.html" %}{% load iconos produccion vista %}
 {% comment %}«Concretar transición» (PRD-02, PROD-CNC-TRN, `VIEWS['c-trans']`), diseñada para el celular (marco angosto, D-25): una columna de pasos. Recibe «propuesta» (PropuestaDeConcrecion: orden, lote, variedad, etapa_origen, etapa_destino,
 cantidad_actual, sectores_de_origen, distribucion, fecha_propuesta, fecha_minima, origen_de_la_fecha_minima), «valores», «errores» ({campo: mensaje}), «resumen» (ResumenDeConcrecion), «firma», «causas» y «pide_causa».
 El sistema propone todo: los campos vacíos toman lo propuesto (se ve como texto de ayuda) y el Capataz solo escribe lo que difiere. NO hay validación ni recálculo al escribir: «Ver resumen» valida y calcula,
@@ -10,14 +10,14 @@ El sistema propone todo: los campos vacíos toman lo propuesto (se ve como texto
   <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "back" 14 %} Mis órdenes</a>
   <div class="page-h"><h1>Concretar <span class="mono">{{ orden.codigo }}</span></h1><div class="sub"><span class="mono">{{ propuesta.lote.codigo }}</span> · {{ propuesta.variedad }} · {{ propuesta.etapa_origen.nombre }} → {{ propuesta.etapa_destino.nombre }} · {{ propuesta.cantidad_actual }} plantas · programada para el {{ orden.fecha_programada_orden|date:"d/m/Y" }}</div></div>
   <form method="post" action="{% url 'produccion:concretar' orden.pk %}" novalidate>
-    {% csrf_token %}
+    {% csrf_token %}{% primer_error errores "general" "cantidades" "fecha_efectiva" "causa" "descripcion" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
     <input type="hidden" name="cantidad_vista" value="{% if valores.cantidad_vista %}{{ valores.cantidad_vista }}{% else %}{{ propuesta.cantidad_actual }}{% endif %}">
-    {% if errores.general or errores.cantidades %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.cantidades }}</div>{% endif %}
+    {% if errores.general or errores.cantidades %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" "cantidades" %}>{{ errores.general }}{{ errores.cantidades }}</div>{% endif %}
     <div class="stack">
       <div class="card"><div class="card-title">1 · Cuándo se trasladó</div>
         <div class="fld"><label for="fecha_efectiva">Fecha del traslado</label>
           <input class="field-input" id="fecha_efectiva" name="fecha_efectiva" type="date"{% if propuesta.fecha_minima %} min="{{ propuesta.fecha_minima|date:'Y-m-d' }}"{% endif %} max="{{ propuesta.fecha_propuesta|date:'Y-m-d' }}" value="{% if valores.fecha_efectiva %}{{ valores.fecha_efectiva }}{% else %}{{ propuesta.fecha_propuesta|date:'Y-m-d' }}{% endif %}"{% if errores.fecha_efectiva %} aria-invalid="true"{% endif %}>
-          {% if errores.fecha_efectiva %}<div class="err">{{ errores.fecha_efectiva }}</div>{% else %}<div class="hint">Entre el {{ propuesta.fecha_minima|date:"d/m/Y" }} ({% if propuesta.origen_de_la_fecha_minima == "entrada" %}entrada a {{ propuesta.etapa_origen.nombre }}{% else %}último registro del lote en la bitácora{% endif %}) y hoy.</div>{% endif %}</div></div>
+          {% if errores.fecha_efectiva %}<div class="err"{% llevar_vista primero "fecha_efectiva" %}>{{ errores.fecha_efectiva }}</div>{% else %}<div class="hint">Entre el {{ propuesta.fecha_minima|date:"d/m/Y" }} ({% if propuesta.origen_de_la_fecha_minima == "entrada" %}entrada a {{ propuesta.etapa_origen.nombre }}{% else %}último registro del lote en la bitácora{% endif %}) y hoy.</div>{% endif %}</div></div>
 
       <div class="card"><div class="card-title">2 · Cuántas plantas en cada sector</div>
         <p class="sm">Sale de: {% for sector, ocupados in propuesta.sectores_de_origen %}{{ sector.nombre_sector }} ({{ ocupados }}){% if not forloop.last %} · {% endif %}{% endfor %}.</p>
@@ -36,16 +36,16 @@ El sistema propone todo: los campos vacíos toman lo propuesto (se ve como texto
             <option value="">Elegir…</option>
             {% for valor, texto in causas %}<option value="{{ valor }}"{% if valores.causa == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
           </select>
-          {% if errores.causa %}<div class="err">{{ errores.causa }}</div>{% endif %}
+          {% if errores.causa %}<div class="err"{% llevar_vista primero "causa" %}>{{ errores.causa }}</div>{% endif %}
           {% if valores.causa == "descarte_por_seleccion" %}<div class="hint">Elegí esta causa cuando se dejaron afuera, a propósito, las plantas más débiles. No cuenta para el umbral de merma.</div>{% endif %}</div>
         <div class="fld"><label for="descripcion">Descripción (opcional)</label>
           <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="400">{{ valores.descripcion }}</textarea>
-          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+          {% if errores.descripcion %}<div class="err"{% llevar_vista primero "descripcion" %}>{{ errores.descripcion }}</div>{% endif %}</div>
       </div>
       {% endif %}
 
       {% if resumen %}
-      <div class="card" role="region" aria-label="Resumen de la concreción"><div class="card-title">Resumen</div>
+      <div class="card" role="region" aria-label="Resumen de la concreción" data-llevar-vista tabindex="-1"><div class="card-title">Resumen</div>
         {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
         <p class="sm"><b>Fecha del traslado:</b> {{ resumen.fecha_efectiva|date:"d/m/Y" }}{% if resumen.diferencia_con_la_programada %} <span class="muted">({{ resumen.diferencia_con_la_programada }} día{{ resumen.diferencia_con_la_programada|pluralize }} de diferencia con la fecha programada)</span>{% endif %}</p>
         <p class="sm"><b>Pasan a {{ resumen.etapa_destino.nombre }}:</b> {{ resumen.total_ubicado }} de {{ resumen.cantidad_actual }} plantas</p>

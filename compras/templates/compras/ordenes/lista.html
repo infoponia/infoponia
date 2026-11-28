@@ -11,11 +11,11 @@ en las pendientes de aprobación (D-30: el Agrónomo no lo ve). Los atajos «Por
 
   <div class="filters">
     <div class="chips" role="group" aria-label="Atajos">
-      <a class="chip" href="{% url 'compras:ordenes' %}" aria-pressed="{% if not atajo %}true{% else %}false{% endif %}">Todas</a>
-      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=por_aprobar" aria-pressed="{% if atajo == 'por_aprobar' %}true{% else %}false{% endif %}">Por aprobar{% if por_aprobar %} <b>{{ por_aprobar }}</b>{% endif %}</a>
-      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=por_recibir" aria-pressed="{% if atajo == 'por_recibir' %}true{% else %}false{% endif %}">Por recibir{% if por_recibir %} <b>{{ por_recibir }}</b>{% endif %}</a>
-      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=con_reclamo_sin_emitir" aria-pressed="{% if atajo == 'con_reclamo_sin_emitir' %}true{% else %}false{% endif %}">Con reclamo sin emitir{% if con_reclamo %} <b>{{ con_reclamo }}</b>{% endif %}</a>
-      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=con_pago_pendiente" aria-pressed="{% if atajo == 'con_pago_pendiente' %}true{% else %}false{% endif %}">Con pago pendiente{% if con_pago %} <b>{{ con_pago }}</b>{% endif %}</a>
+      <a class="chip" href="{% url 'compras:ordenes' %}"{% if not atajo %} aria-current="page"{% endif %}>Todas</a>
+      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=por_aprobar"{% if atajo == 'por_aprobar' %} aria-current="page"{% endif %}>Por aprobar{% if por_aprobar %} <b>{{ por_aprobar }}</b>{% endif %}</a>
+      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=por_recibir"{% if atajo == 'por_recibir' %} aria-current="page"{% endif %}>Por recibir{% if por_recibir %} <b>{{ por_recibir }}</b>{% endif %}</a>
+      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=con_reclamo_sin_emitir"{% if atajo == 'con_reclamo_sin_emitir' %} aria-current="page"{% endif %}>Con reclamo sin emitir{% if con_reclamo %} <b>{{ con_reclamo }}</b>{% endif %}</a>
+      <a class="chip" href="{% url 'compras:ordenes' %}?atajo=con_pago_pendiente"{% if atajo == 'con_pago_pendiente' %} aria-current="page"{% endif %}>Con pago pendiente{% if con_pago %} <b>{{ con_pago }}</b>{% endif %}</a>
     </div>
   </div>
   <form class="filters" method="get" action="{% url 'compras:ordenes' %}">
@@ -46,17 +46,17 @@ en las pendientes de aprobación (D-30: el Agrónomo no lo ve). Los atajos «Por
 
   {% if filas %}
   <div class="tablewrap">
-    <table class="data-table">
-      <thead><tr><th>Orden</th><th>Pedido</th><th>Proveedores</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+    <table class="data-table tabla-apilable">
+      <thead><tr><th>Orden</th><th>Pedido</th><th>Proveedores</th><th class="right">Monto</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       {% with o=f.orden %}
       <tr>
-        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' o.pk %}"><b>{{ o }}</b></a><span class="sub2">{{ o.fecha_emision|date:"d/m/Y" }}</span></td>
-        <td>{% if es_contador %}{{ f.pedido }}{% else %}<a class="prv-nombre" href="{% url 'compras:pedido_ficha' f.pedido.pk %}">{{ f.pedido }}</a>{% endif %}<span class="sub2">{{ f.agronomo.get_full_name|default:f.agronomo.email }}</span></td>
-        <td>{% for p in f.proveedores %}{{ p.nombre_para_mostrar }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-        <td class="right nowrap mono">{{ f.monto|pesos }}</td>
-        <td><span class="status-badge {% if o.estado_orden_compra == 'pendiente_aprobacion' %}status-warn{% elif o.estado_orden_compra == 'rechazada' %}status-danger{% elif o.estado_orden_compra == 'aprobada' %}status-info{% else %}status-ok{% endif %}">{{ o.get_estado_orden_compra_display }}</span>{% if f.lineas_atrasadas %} <span class="status-badge status-warn">{{ f.lineas_atrasadas }} línea{{ f.lineas_atrasadas|pluralize }} atrasada{{ f.lineas_atrasadas|pluralize }}</span>{% endif %}{% if f.reclamos_sin_emitir %} <span class="status-badge status-warn">Reclamo sin emitir</span>{% endif %}{% if f.pagos_pendientes %} <span class="status-badge status-info">Pago pendiente</span>{% endif %}</td>
+        <td data-rotulo="Orden"><a class="prv-nombre" href="{% url 'compras:orden_ficha' o.pk %}"><b>{{ o }}</b></a><span class="sub2">{{ o.fecha_emision|date:"d/m/Y" }}</span></td>
+        <td data-rotulo="Pedido">{% if es_contador %}{{ f.pedido }}{% else %}<a class="prv-nombre" href="{% url 'compras:pedido_ficha' f.pedido.pk %}">{{ f.pedido }}</a>{% endif %}<span class="sub2">{{ f.agronomo.get_full_name|default:f.agronomo.email }}</span></td>
+        <td data-rotulo="Proveedores">{% for p in f.proveedores %}{{ p.nombre_para_mostrar }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+        <td data-rotulo="Monto" class="right nowrap mono">{{ f.monto|pesos }}</td>
+        <td data-rotulo="Estado"><span class="status-badge {% if o.estado_orden_compra == 'pendiente_aprobacion' %}status-warn{% elif o.estado_orden_compra == 'rechazada' %}status-danger{% elif o.estado_orden_compra == 'aprobada' %}status-info{% else %}status-ok{% endif %}">{{ o.get_estado_orden_compra_display }}</span>{% if f.lineas_atrasadas %} <span class="status-badge status-warn">{{ f.lineas_atrasadas }} línea{{ f.lineas_atrasadas|pluralize }} atrasada{{ f.lineas_atrasadas|pluralize }}</span>{% endif %}{% if f.reclamos_sin_emitir %} <span class="status-badge status-warn">Reclamo sin emitir</span>{% endif %}{% if f.pagos_pendientes %} <span class="status-badge status-info">Pago pendiente</span>{% endif %}</td>
         <td class="right nowrap">{% if es_gerente and o.estado_orden_compra == 'pendiente_aprobacion' %}<a class="btn btn-primary btn-sm" href="{% url 'compras:orden_resolver' o.pk %}">Revisar<span class="sr"> la orden {{ o }}</span></a> {% endif %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:orden_ficha' o.pk %}">Ver<span class="sr"> la orden {{ o }}</span></a></td>
       </tr>
       {% endwith %}

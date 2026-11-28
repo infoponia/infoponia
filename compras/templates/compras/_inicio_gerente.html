@@ -13,7 +13,7 @@
     <div class="card-h"><b>Órdenes pendientes de aprobación</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:ordenes' %}?atajo=por_aprobar">Ver todas</a></div>
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Orden</th><th>Pedido</th><th class="right">Proveedores</th><th class="right">Monto</th><th></th></tr></thead>
+        <thead><tr><th>Orden</th><th>Pedido</th><th class="right">Proveedores</th><th class="right">Monto</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for f in i.ordenes_por_aprobar %}
         <tr>
@@ -34,7 +34,7 @@
     <div class="card-h"><b>Recepciones con reclamo</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:reclamos' %}?estado=sin_emitir">Ver todos</a></div>
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Reclamo</th><th>Proveedor</th><th></th></tr></thead>
+        <thead><tr><th>Reclamo</th><th>Proveedor</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for f in i.reclamos_sin_emitir %}
         <tr>

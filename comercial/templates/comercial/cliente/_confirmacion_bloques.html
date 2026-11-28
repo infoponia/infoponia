@@ -1,4 +1,4 @@
-{% load iconos %}
+{% load iconos vista %}
 {% comment %}Los dos bloques de la respuesta de COM-CNF-ENT que dependen de lo que el cliente elige (`VIEWS.cnf` del prototipo): las quejas (una por tipo: la casilla, los productos a los que se refiere y el motivo) y el motivo de «no recibí».
 Sin elegir todavía la respuesta se muestran los dos, así el formulario funciona sin JavaScript; con HTMX, al elegir se vuelve a dibujar solo este bloque (`accion=redibujar`, sin validar nada: D-29). Recibe «quejas»,
 «ver_quejas», «ver_motivo», «motivo_no_recibi», «error_motivo_no_recibi» y «respuesta». Todo se escapa.{% endcomment %}
@@ -11,16 +11,16 @@ Sin elegir todavía la respuesta se muestran los dos, así el formulario funcion
     <fieldset class="rline">
       <legend class="lbl"><label class="portal-radio"><input type="checkbox" name="queja_{{ q.valor }}" value="1"{% if q.marcada %} checked{% endif %}> <b>{{ q.texto }}</b></label></legend>
       {% if q.valor == "retraso" %}<p class="muted">Solo los productos que llegaron con retraso.</p>{% endif %}
-      {% for e in q.error_tipo %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+      {% for e in q.error_tipo %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
       <div class="lbl">¿A qué productos se refiere?</div>
       {% for p in q.productos %}
       <label class="portal-radio"><input type="checkbox" name="lineas_{{ q.valor }}" value="{{ p.id }}"{% if p.marcado %} checked{% endif %}> {{ p.variedad }}{% if q.valor == "retraso" %} · llegó con {{ p.dias }} día{{ p.dias|pluralize }} de retraso{% endif %}</label>
       {% endfor %}
-      {% for e in q.error_productos %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+      {% for e in q.error_productos %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
       <div class="fld">
         <label class="lbl" for="motivo_{{ q.valor }}">Motivo{% if q.obligatorio %} <span class="req">*</span>{% else %} (opcional){% endif %}</label>
         <textarea class="field-input" id="motivo_{{ q.valor }}" name="motivo_{{ q.valor }}" rows="2" maxlength="500">{{ q.motivo }}</textarea>
-        {% for e in q.error_motivo %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+        {% for e in q.error_motivo %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
       </div>
     </fieldset>
   {% endfor %}
@@ -32,7 +32,7 @@ Sin elegir todavía la respuesta se muestran los dos, así el formulario funcion
   <div class="fld">
     <label class="lbl" for="motivo_no_recibi">{% if respuesta.respuesta %}Cuéntenos qué pasó{% else %}Si no recibió la entrega, cuéntenos qué pasó{% endif %} <span class="req">*</span></label>
     <textarea class="field-input" id="motivo_no_recibi" name="motivo_no_recibi" rows="3" maxlength="500">{{ motivo_no_recibi }}</textarea>
-    {% for e in error_motivo_no_recibi %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+    {% for e in error_motivo_no_recibi %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
   </div>
 </section>
 {% endif %}

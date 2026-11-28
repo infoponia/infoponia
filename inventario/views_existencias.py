@@ -18,6 +18,7 @@ from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
 from core.models import Usuario
+from core.obligatorios import faltantes
 from inventario import forms
 from inventario.models import InsumoInvernadero, TipoInsumo
 from inventario.servicios import alertas_de_stock
@@ -28,6 +29,11 @@ from maestros.models import Invernadero
 
 AGRONOMO = Usuario.Rol.AGRONOMO
 PLANTILLA_DE_HABILITAR = "inventario/existencias/_ventana_habilitar.html"
+# UI-06 (UX-27): los obligatorios de «Habilitar» que el servicio mira recién cuando el insumo y el invernadero están elegidos. Fila: (campo del formulario, nombre, texto).
+OBLIGATORIOS_DE_HABILITAR = (
+    ("cant_min", "cant_min", "Ingresá el stock mínimo."),
+    ("referencia_precio", "referencia_precio", "Ingresá el precio de referencia."),
+)
 PLANTILLA_DE_MINIMO = "inventario/existencias/_ventana_minimo.html"
 PLANTILLA_DE_DESHABILITAR = "inventario/existencias/_ventana_deshabilitar.html"
 
@@ -136,6 +142,11 @@ def habilitar(request):
             form.add_error("insumo", "Elegí el insumo.")
         if invernadero is None:
             form.add_error("invernadero", "Elegí el invernadero.")
+        if insumo is None or invernadero is None:
+            # UI-06 (UX-27, D-109 punto 9): como la vista cortó antes de llamar al servicio, este no llega a mirar el mínimo ni el precio: se suman si vinieron vacíos, con los textos del
+            # servicio (`insumos_invernadero.py:64` y `:86`, regla 3 y regla 4 de CMP-HAB-IIN).
+            for campo, texto in faltantes(request.POST, OBLIGATORIOS_DE_HABILITAR).items():
+                form.add_error(campo, texto)
         if insumo is not None and invernadero is not None:
             try:
                 iin = api_iin.habilitar_insumo(request.user, insumo.pk, invernadero.pk, **form.datos_del_servicio())

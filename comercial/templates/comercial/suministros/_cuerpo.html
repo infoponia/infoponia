@@ -1,11 +1,11 @@
-{% load iconos comercial %}{% comment %}El cuerpo del formulario «Pactar suministro» (COM-PCT-SUM; VIEWS.sumnew del prototipo): tres secciones numeradas (Cliente, Contrato, Detalles) y el resumen a la
+{% load iconos comercial vista %}{% comment %}El cuerpo del formulario «Pactar suministro» (COM-PCT-SUM; VIEWS.sumnew del prototipo): tres secciones numeradas (Cliente, Contrato, Detalles) y el resumen a la
 derecha. Es lo que redibuja HTMX en cada cambio de un selector (`calcular/`): solo los selectores y los botones lo piden, NUNCA un campo de texto, de número o de fecha mientras se
 tipea (.claude/rules/interfaz.md). Sin JavaScript, cada cambio se manda con «Actualizar». Los pasos están bloqueados hasta completar el anterior; con un cliente sin correo, las
 secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de `datos_del_formulario`), «datos», «cliente_q», «encontrados», «busco_sin_resultado», «puede_pactar»,
 «motivo», «es_gerente», «url_para_volver», «hay_detalles_cargados», «errores_generales», «aviso_de_stock», «periodos_a_reservar» y «total_de_detalles».{% endcomment %}
 {% url 'comercial:suministro_calcular' as url_calcular %}
 {% if errores_generales %}
-<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{% for mensaje in errores_generales %}{{ mensaje }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
+<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{% for mensaje in errores_generales %}{{ mensaje }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>
 {% endif %}
 <div class="cv-layout">
   <div class="cv-pasos">
@@ -22,7 +22,7 @@ secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de 
           <option value="{{ vendedor.pk }}"{% if f.vendedor and f.vendedor.pk == vendedor.pk %} selected{% endif %}>{{ vendedor.get_full_name }} · {% for i in invernaderos %}{{ i.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}</option>
           {% endfor %}
         </select>
-        {% for mensaje in f.errores|get_item:"vendedor" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        {% for mensaje in f.errores|get_item:"vendedor" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
         <div class="hint">El contrato queda a nombre de este Vendedor y el stock sale de sus invernaderos; el registro de auditoría dice que lo cargaste vos.</div>
       </div>
       {% endif %}
@@ -33,7 +33,7 @@ secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de 
         <div><b style="font-weight:600">{{ f.cliente }}</b><span class="sub2">CUIT {{ f.cliente.cuit_cliente|cuit }}{% if f.cliente.email_cliente %} · {{ f.cliente.email_cliente }}{% endif %}</span></div>
         <button class="btn btn-ghost btn-sm" type="submit" name="cambiar_cliente" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Cambiar</button>
       </div>
-      {% for mensaje in f.errores|get_item:"cliente" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+      {% for mensaje in f.errores|get_item:"cliente" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
       {% if f.cliente_sin_correo %}
       <div class="alert alert-danger" role="alert" style="margin-top:10px">{% icono "x" 16 %}<div>El cliente no tiene correo. Hace falta para el comprobante y para los enlaces de confirmación de cada entrega.
         <div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="{% url 'comercial:cliente_modificar' f.cliente.pk %}?volver={{ url_para_volver|urlencode:'' }}">Cargar el correo</a></div></div></div>
@@ -45,7 +45,7 @@ secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de 
           <input class="field-input" id="sum-cliente-q" type="search" name="cliente_q" value="{{ cliente_q }}" autocomplete="off" placeholder="Desde 2 caracteres">
           <button class="btn btn-ghost" type="submit" name="actualizar" value="1" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>Buscar</button>
         </div>
-        {% for mensaje in f.errores|get_item:"cliente" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+        {% for mensaje in f.errores|get_item:"cliente" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
       </div>
       {% if encontrados %}
       <ul class="cli-lista" aria-label="Clientes que coinciden">
@@ -71,19 +71,19 @@ secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de 
         <div class="fld">
           <label for="sum-duracion">Duración<span class="req" aria-hidden="true"> *</span></label>
           <div class="suf"><input class="field-input" id="sum-duracion" type="text" inputmode="numeric" name="duracion" value="{{ datos.duracion }}" autocomplete="off"><span>meses</span></div>
-          {% for mensaje in f.errores|get_item:"duracion" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"duracion" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
           <div class="hint">{% if f.fecha_fin %}Termina el <b>{{ f.fecha_fin|date:"d/m/Y" }}</b>. {% endif %}De 1 a 120 meses.</div>
         </div>
         <div class="fld">
           <label for="sum-tolerados">Incumplimientos tolerados<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="sum-tolerados" type="text" inputmode="numeric" name="tolerados" value="{{ datos.tolerados }}" autocomplete="off">
-          {% for mensaje in f.errores|get_item:"tolerados" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"tolerados" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
           <div class="hint">Cuántos incumplimientos acepta el contrato. Al superarlos, se resuelve. Con 0, el primero lo resuelve.</div>
         </div>
         <div class="fld">
           <label for="sum-multa">Multa por resolución<span class="req" aria-hidden="true"> *</span></label>
           <div class="suf"><input class="field-input" id="sum-multa" type="text" inputmode="decimal" name="multa" value="{{ datos.multa }}" autocomplete="off"><span>$</span></div>
-          {% for mensaje in f.errores|get_item:"multa" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"multa" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
         </div>
       </div>
       <div class="sublbl">Cláusula del suministrado</div>
@@ -91,13 +91,13 @@ secciones 2 y 3 quedan bloqueadas (extensión 4b). Recibe «f» (el cálculo de 
         <div class="fld">
           <label for="sum-plazo-pago">Plazo de pago<span class="req" aria-hidden="true"> *</span></label>
           <div class="suf"><input class="field-input" id="sum-plazo-pago" type="text" inputmode="numeric" name="plazo_pago" value="{{ datos.plazo_pago }}" autocomplete="off"><span>días</span></div>
-          {% for mensaje in f.errores|get_item:"plazo_pago" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"plazo_pago" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
           <div class="hint">Desde que se concreta cada entrega. De 0 a 365 días.</div>
         </div>
         <div class="fld">
           <label for="sum-indemnizacion-pago">Indemnización por atraso en el pago<span class="req" aria-hidden="true"> *</span></label>
           <div class="suf"><input class="field-input" id="sum-indemnizacion-pago" type="text" inputmode="decimal" name="indemnizacion_pago" value="{{ datos.indemnizacion_pago }}" autocomplete="off"><span>$ por día</span></div>
-          {% for mensaje in f.errores|get_item:"indemnizacion_pago" %}<div class="err">{{ mensaje }}</div>{% endfor %}
+          {% for mensaje in f.errores|get_item:"indemnizacion_pago" %}<div class="err"{% llevar_vista_una_vez %}>{{ mensaje }}</div>{% endfor %}
         </div>
       </div>
       {% endif %}

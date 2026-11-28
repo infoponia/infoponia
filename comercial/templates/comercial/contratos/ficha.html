@@ -32,7 +32,7 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
     </div>
 
     <div class="card seg">
-      <div class="card-h"><h3>Detalle</h3></div>
+      <div class="card-h"><h2>Detalle</h2></div>
       <div class="card-b flush">
         <table class="data-table">
           <thead><tr><th>Variedad</th><th class="right">Solicitada</th><th class="right">Entregada</th><th class="right">Precio unitario</th><th class="right">Subtotal</th><th>Estado</th></tr></thead>
@@ -48,7 +48,7 @@ listo.». Las reservas no se muestran (decisión de aplicación). Recibe «ficha
             </tr>
           {% endfor %}
           </tbody>
-          <tfoot><tr><th colspan="4" class="right">Monto {% if venta.monto_es_final %}final{% else %}estimado{% endif %}</th><th class="right mono">{{ ficha.monto|pesos }}</th><th></th></tr></tfoot>
+          <tfoot><tr><th colspan="4" class="right">Monto {% if venta.monto_es_final %}final{% else %}estimado{% endif %}</th><th class="right mono">{{ ficha.monto|pesos }}</th><th><span class="sr">Sin estado</span></th></tr></tfoot>
         </table>
       </div>
     </div>

@@ -27,8 +27,8 @@ se envían con «Filtrar»: sin JavaScript funciona igual. Sin las acciones de C
       {% for e in numerados %}<option value="{{ e.ejercicio.pk }}"{% if e.ejercicio.pk == elegido.ejercicio.pk %} selected{% endif %}>Ejercicio {{ e.numero }} · {{ e.ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ e.ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}</option>{% endfor %}
     </select>
     <div class="chips" role="group" aria-label="Vista del libro">
-      <a class="chip" href="{% url 'contabilidad:libro' %}?vista=cronologica&amp;ejercicio={{ ejercicio.pk }}" aria-pressed="{% if vista == 'cronologica' %}true{% else %}false{% endif %}">Cronológica</a>
-      <a class="chip" href="{% url 'contabilidad:libro' %}?vista=cuenta&amp;ejercicio={{ ejercicio.pk }}" aria-pressed="{% if vista == 'cuenta' %}true{% else %}false{% endif %}">Por cuenta</a>
+      <a class="chip" href="{% url 'contabilidad:libro' %}?vista=cronologica&amp;ejercicio={{ ejercicio.pk }}"{% if vista == 'cronologica' %} aria-current="page"{% endif %}>Cronológica</a>
+      <a class="chip" href="{% url 'contabilidad:libro' %}?vista=cuenta&amp;ejercicio={{ ejercicio.pk }}"{% if vista == 'cuenta' %} aria-current="page"{% endif %}>Por cuenta</a>
     </div>
     {% if vista == 'cronologica' %}
     {{ form.q }}{{ form.tipo }}{{ form.origen }}{{ form.cuenta }}{{ form.anulados }}{{ form.desde }}{{ form.hasta }}
@@ -52,7 +52,7 @@ se envían con «Filtrar»: sin JavaScript funciona igual. Sin las acciones de C
     {% if filas %}
     <div class="tablewrap">
       <table class="data-table libro">
-        <thead><tr><th style="width:130px">Asiento</th><th>Cuenta</th><th></th><th class="right" style="width:150px">Debe</th><th class="right" style="width:150px">Haber</th></tr></thead>
+        <thead><tr><th style="width:130px">Asiento</th><th>Cuenta</th><th><span class="sr">Descripción</span></th><th class="right" style="width:150px">Debe</th><th class="right" style="width:150px">Haber</th></tr></thead>
         <tbody>
         {% for f in filas %}
           <tr class="grp-a">

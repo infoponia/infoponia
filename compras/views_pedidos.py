@@ -21,6 +21,7 @@ from compras.models import EnlaceProveedor, InvitacionPedido, Proveedor
 from compras.servicios import pedidos as api
 from core.acceso import rol_requerido
 from core.models import Agronomo, Usuario
+from core.obligatorios import sumar_faltantes
 from inventario.models import Insumo, InsumoInvernadero, TipoInsumo
 from inventario.servicios import insumos_invernadero, stock
 from inventario.servicios.formato import texto_cantidad
@@ -204,6 +205,13 @@ def _datos_del_servicio(filas, marcados, fecha_limite):
     }
 
 
+# UI-06 (UX-27): los obligatorios del bloque «Habilitar» que el servicio mira recién cuando el invernadero y el insumo están elegidos. Fila: (clave del error, campo del formulario, texto).
+OBLIGATORIOS_DE_HABILITAR = (
+    ("minimo", "hab_minimo", "Ingresá el stock mínimo."),  # insumos_invernadero.py:64
+    ("precio", "hab_precio", "Ingresá el precio de referencia."),  # insumos_invernadero.py:86
+)
+
+
 def _habilitar(request, filas):
     """Extensión 3a.1a: habilita el insumo (CMP-HAB-IIN) y lo suma al pedido. Devuelve ``(filas, habilitar)``: el estado de la ventana, con sus errores si los hay."""
     datos = request.POST
@@ -214,6 +222,10 @@ def _habilitar(request, filas):
         errores["invernadero"] = ["Elegí el invernadero."]
     if insumo_id is None:
         errores["insumo"] = ["Elegí el insumo."]
+    if errores:
+        # UI-06 (UX-27, D-109 punto 9): como la vista cortó antes de llamar al servicio, este no llega a mirar el mínimo ni el precio: se suman si vinieron vacíos, con los textos del
+        # servicio (`inventario/servicios/insumos_invernadero.py:64` y `:86`).
+        sumar_faltantes(errores, datos, OBLIGATORIOS_DE_HABILITAR, como_lista=True)
     if not errores:
         try:
             iin = insumos_invernadero.habilitar_insumo(request.user, insumo_id, invernadero_id, escrito["minimo"], escrito["precio"])

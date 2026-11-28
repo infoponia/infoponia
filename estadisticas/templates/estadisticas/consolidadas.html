@@ -72,7 +72,7 @@ Las barras son de CSS: sin bibliotecas de gráficos. «—» es un valor sin bas
 
     <div class="stack">
       <div class="card seg">
-        <div class="card-h"><h3>{% icono "leaf" 16 %} Producción por invernadero</h3><a class="link enlace-del-bloque" href="{{ enlace_de_produccion }}">Ver el detalle de producción</a></div>
+        <div class="card-h"><h2>{% icono "leaf" 16 %} Producción por invernadero</h2><a class="link enlace-del-bloque" href="{{ enlace_de_produccion }}">Ver el detalle de producción</a></div>
         <div class="card-b"><div class="chips" role="group" aria-label="Qué órdenes contar">
           <button class="chip" type="submit" name="ordenes" value="todas" aria-pressed="{% if filtro.ordenes == 'todas' %}true{% else %}false{% endif %}">Todas las órdenes</button>
           <button class="chip" type="submit" name="ordenes" value="produccion" aria-pressed="{% if filtro.ordenes == 'produccion' %}true{% else %}false{% endif %}">Solo de producción</button>
@@ -93,7 +93,7 @@ Las barras son de CSS: sin bibliotecas de gráficos. «—» es un valor sin bas
       </div>
 
       <div class="card seg">
-        <div class="card-h"><h3>{% icono "box" 16 %} Merma en cámara</h3></div>
+        <div class="card-h"><h2>{% icono "box" 16 %} Merma en cámara</h2></div>
         <div class="card-b">
           <p class="muted sm" style="margin:0 0 10px">Partidas ya cosechadas que se perdieron en cámara. No entran en la merma de las plantas.</p>
           <div class="hb">{% for f, ancho in barras_de_camara %}<div class="hb-r"><span class="hb-l">{{ f.texto }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>{{ f.plantas|floatformat:"0g" }} planta{{ f.plantas|pluralize }}</b></div>{% empty %}<div class="muted sm">No hubo mermas en cámara en el período.</div>{% endfor %}</div>
@@ -123,10 +123,10 @@ Las barras son de CSS: sin bibliotecas de gráficos. «—» es un valor sin bas
       y correcciones {% for texto, url in enlaces_de_correcciones %}<a class="link" href="{{ url }}">{{ texto }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}.{% endif %}</p>
     <div class="stack" style="margin-top:14px">
       <div class="split">
-        <div class="card seg"><div class="card-h"><h3>{% icono "users" 16 %} Por proveedor</h3></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_proveedor %}<div class="hb-r"><span class="hb-l">{{ f.nombre }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% empty %}<div class="muted sm">Sin compras netas en el período.</div>{% endfor %}</div></div></div>
-        <div class="card seg"><div class="card-h"><h3>{% icono "box" 16 %} Por rubro</h3></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_categoria %}<div class="hb-r"><span class="hb-l">{{ f.nombre }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% empty %}<div class="muted sm">Sin compras netas en el período.</div>{% endfor %}</div></div></div>
+        <div class="card seg"><div class="card-h"><h2>{% icono "users" 16 %} Por proveedor</h2></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_proveedor %}<div class="hb-r"><span class="hb-l">{{ f.nombre }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% empty %}<div class="muted sm">Sin compras netas en el período.</div>{% endfor %}</div></div></div>
+        <div class="card seg"><div class="card-h"><h2>{% icono "box" 16 %} Por rubro</h2></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_categoria %}<div class="hb-r"><span class="hb-l">{{ f.nombre }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% empty %}<div class="muted sm">Sin compras netas en el período.</div>{% endfor %}</div></div></div>
       </div>
-      <div class="card seg"><div class="card-h"><h3>{% icono "chart" 16 %} Compras por mes</h3></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_mes %}<div class="hb-r"><span class="hb-l">{{ f.mes|stringformat:"02d" }}/{{ f.anio }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% endfor %}</div></div></div>
+      <div class="card seg"><div class="card-h"><h2>{% icono "chart" 16 %} Compras por mes</h2></div><div class="card-b"><div class="hb">{% for f, ancho in barras_por_mes %}<div class="hb-r"><span class="hb-l">{{ f.mes|stringformat:"02d" }}/{{ f.anio }}</span><div class="hb-t"><i style="width:{{ ancho }}%"></i></div><b>$ {{ f.monto|floatformat:"2g" }}</b></div>{% endfor %}</div></div></div>
     </div>
     {% endif %}
 
@@ -142,11 +142,11 @@ Las barras son de CSS: sin bibliotecas de gráficos. «—» es un valor sin bas
     </div>
     {% if enlaces_al_libro|length > 1 %}<p class="muted sm" style="margin:10px 0 0">El período cruza dos ejercicios: las cifras suman los asientos de los dos, por su fecha. Ver el libro: {% for texto, url in enlaces_al_libro %}<a class="link" href="{{ url }}">{{ texto }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}.</p>{% endif %}
     <div class="stack" style="margin-top:14px"><div class="split">
-      <div class="card seg"><div class="card-h"><h3>{% icono "chart" 16 %} De dónde vienen los ingresos</h3></div>
+      <div class="card seg"><div class="card-h"><h2>{% icono "chart" 16 %} De dónde vienen los ingresos</h2></div>
         {% if ingresos_con_porcentaje %}<table class="data-table"><thead><tr><th>Cuenta</th><th class="right">Importe</th><th class="right">%</th></tr></thead><tbody>
           {% for f, porcentaje, enlaces in ingresos_con_porcentaje %}<tr><td>{% for texto, url in enlaces %}{% if forloop.first %}<a class="link" href="{{ url }}">{{ f.nombre }}</a>{% else %} <a class="link" href="{{ url }}" aria-label="{{ f.nombre }}: {{ texto }}">({{ texto }})</a>{% endif %}{% empty %}{{ f.nombre }}{% endfor %}</td><td class="right nowrap">$ {{ f.monto|floatformat:"2g" }}</td><td class="right">{% if porcentaje is None %}—{% else %}{{ porcentaje|floatformat:0 }} %{% endif %}</td></tr>{% endfor %}
         </tbody></table>{% else %}<div class="card-b"><span class="muted">Sin ingresos.</span></div>{% endif %}</div>
-      <div class="card seg"><div class="card-h"><h3>{% icono "cart" 16 %} En qué se gasta</h3></div>
+      <div class="card seg"><div class="card-h"><h2>{% icono "cart" 16 %} En qué se gasta</h2></div>
         {% if costos_con_porcentaje %}<table class="data-table"><thead><tr><th>Cuenta</th><th class="right">Importe</th><th class="right">%</th></tr></thead><tbody>
           {% for f, porcentaje, enlaces in costos_con_porcentaje %}<tr><td>{% for texto, url in enlaces %}{% if forloop.first %}<a class="link" href="{{ url }}">{{ f.nombre }}</a>{% else %} <a class="link" href="{{ url }}" aria-label="{{ f.nombre }}: {{ texto }}">({{ texto }})</a>{% endif %}{% empty %}{{ f.nombre }}{% endfor %}</td><td class="right nowrap">$ {{ f.monto|floatformat:"2g" }}</td><td class="right">{% if porcentaje is None %}—{% else %}{{ porcentaje|floatformat:0 }} %{% endif %}</td></tr>{% endfor %}
         </tbody></table>{% else %}<div class="card-b"><span class="muted">Sin egresos.</span></div>{% endif %}</div>

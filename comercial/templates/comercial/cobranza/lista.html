@@ -8,8 +8,8 @@
   <div class="page-h"><h1>Comercial</h1></div>
   {% include "comercial/_pestanas.html" with activa="cobranza" %}
   <div class="subtabs" role="tablist" aria-label="Cobranza" style="margin:12px 0">
-    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}" aria-pressed="{% if vista == 'pendientes' %}true{% else %}false{% endif %}" aria-selected="{% if vista == 'pendientes' %}true{% else %}false{% endif %}">Por cobrar</a>
-    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}?vista=cobros" aria-pressed="{% if vista == 'cobros' %}true{% else %}false{% endif %}" aria-selected="{% if vista == 'cobros' %}true{% else %}false{% endif %}">Cobros registrados</a>
+    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}" aria-selected="{% if vista == 'pendientes' %}true{% else %}false{% endif %}">Por cobrar</a>
+    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}?vista=cobros" aria-selected="{% if vista == 'cobros' %}true{% else %}false{% endif %}">Cobros registrados</a>
   </div>
 
   {% if vista == "cobros" %}
@@ -23,17 +23,17 @@
     <button class="btn btn-ghost" type="submit">Filtrar</button>
   </form>
   <div class="tablewrap">
-    <table class="data-table">
-      <thead><tr><th>Cobro</th><th>Cliente</th><th>Entregas</th><th>Medio</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+    <table class="data-table tabla-apilable">
+      <thead><tr><th>Cobro</th><th>Cliente</th><th>Entregas</th><th>Medio</th><th class="right">Monto</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in datos.filas %}
         <tr>
-          <td class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b><span class="sub2">{{ f.fecha|date:"d/m/Y" }}</span></td>
-          <td><b style="font-weight:600">{{ f.cliente }}</b></td>
-          <td class="mono">{{ f.entregas|join:", " }}</td>
-          <td>{{ f.medio }}</td>
-          <td class="right nowrap mono">{{ f.monto|pesos }}{% if f.atraso > 0 %}<span class="sub2">incluye {{ f.atraso|pesos }} por atraso</span>{% endif %}</td>
-          <td><span class="status-badge {% if f.estado == 'vigente' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
+          <td data-rotulo="Cobro" class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b><span class="sub2">{{ f.fecha|date:"d/m/Y" }}</span></td>
+          <td data-rotulo="Cliente"><b style="font-weight:600">{{ f.cliente }}</b></td>
+          <td data-rotulo="Entregas" class="mono">{{ f.entregas|join:", " }}</td>
+          <td data-rotulo="Medio">{{ f.medio }}</td>
+          <td data-rotulo="Monto" class="right nowrap mono">{{ f.monto|pesos }}{% if f.atraso > 0 %}<span class="sub2">incluye {{ f.atraso|pesos }} por atraso</span>{% endif %}</td>
+          <td data-rotulo="Estado"><span class="status-badge {% if f.estado == 'vigente' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
           <td class="right nowrap"><a class="rowlink" href="{% url 'comercial:cobro' f.pago_id %}">Ver<span class="sr"> el cobro {{ f.codigo }}</span></a>{% if es_gerente and f.estado == 'vigente' %} <a class="rowlink" href="{% url 'comercial:cobro_anular' f.pago_id %}">Anular<span class="sr"> el cobro {{ f.codigo }}</span></a>{% endif %}</td>
         </tr>
       {% empty %}
@@ -56,22 +56,22 @@
   {% for g in grupos %}
   <details class="card cobg" style="margin-bottom:14px"{% if g.en_mora %} open{% endif %}>
     <summary class="card-h" style="cursor:pointer">
-      <h3>{{ g.cliente }}</h3><span class="muted sm"> · {{ g.cantidad }} entrega{{ g.cantidad|pluralize }}</span>
+      <h2>{{ g.cliente }}</h2><span class="muted sm"> · {{ g.cantidad }} entrega{{ g.cantidad|pluralize }}</span>
       <span class="spacer"></span>
       <span class="cobtot">Total a cobrar <b class="mono">{{ g.total|pesos }}</b>{% if g.en_mora %} · <b class="danger-t mono">{{ g.total_en_mora|pesos }} en mora</b>{% endif %}</span>
     </summary>
     <div class="card-b">
-      <table class="data-table">
+      <table class="data-table tabla-apilable">
         <thead><tr><th>Entrega</th><th>Contrato</th><th>Concretada</th><th>Vencimiento</th><th class="right">Monto a cobrar</th><th>Estado</th></tr></thead>
         <tbody>
         {% for f in g.entregas %}
           <tr>
-            <td class="mono">{{ f.codigo }}</td>
-            <td class="mono">{{ f.contrato_codigo }}</td>
-            <td>{{ f.fecha_concrecion|date:"d/m/Y" }}</td>
-            <td>{{ f.vencimiento|date:"d/m/Y" }}<span class="sub2{% if f.estado == 'en_mora' %} danger-t{% endif %}">{{ f.cuando }}</span></td>
-            <td class="right nowrap mono">{{ f.monto_a_cobrar|pesos }}{% if f.descontado > 0 %}<span class="sub2">con descuento de {{ f.descontado|pesos }}</span>{% endif %}</td>
-            <td><span class="status-badge {% if f.estado == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{% if f.estado == "en_mora" %}En mora · {{ f.dias_de_atraso }} día{{ f.dias_de_atraso|pluralize }}{% else %}Pendiente{% endif %}</span>{% if f.no_reconocida %} <span class="status-badge status-danger">No reconocida</span>{% endif %}</td>
+            <td data-rotulo="Entrega" class="mono">{{ f.codigo }}</td>
+            <td data-rotulo="Contrato" class="mono">{{ f.contrato_codigo }}</td>
+            <td data-rotulo="Concretada">{{ f.fecha_concrecion|date:"d/m/Y" }}</td>
+            <td data-rotulo="Vencimiento">{{ f.vencimiento|date:"d/m/Y" }}<span class="sub2{% if f.estado == 'en_mora' %} danger-t{% endif %}">{{ f.cuando }}</span></td>
+            <td data-rotulo="Monto a cobrar" class="right nowrap mono">{{ f.monto_a_cobrar|pesos }}{% if f.descontado > 0 %}<span class="sub2">con descuento de {{ f.descontado|pesos }}</span>{% endif %}</td>
+            <td data-rotulo="Estado"><span class="status-badge {% if f.estado == 'en_mora' %}status-danger{% else %}status-warn{% endif %}">{% if f.estado == "en_mora" %}En mora · {{ f.dias_de_atraso }} día{{ f.dias_de_atraso|pluralize }}{% else %}Pendiente{% endif %}</span>{% if f.no_reconocida %} <span class="status-badge status-danger">No reconocida</span>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>

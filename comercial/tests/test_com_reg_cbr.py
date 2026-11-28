@@ -85,7 +85,7 @@ class ComRegCbrServicioTests(BaseDeCobranza):
         pago = self.cobrar(self.vendedor(), [e])
         self.assertEqual((pago.tipo_pago, pago.cliente_id, pago.medio_pago, pago.fecha_pago, pago.monto_pagado, pago.estado_pago), ("suministro", self.e.cliente.pk, "transferencia", HOY, D("2500.00"), "vigente"))
         self.assertEqual((pago.usuario_id, pago.compra_venta_id), (self.vendedor().pk, None))
-        self.assertRegex(pago.codigo, r"^COB-\d{4}$")
+        self.assertRegex(pago.codigo, r"^COB-\d{4,5}$")  # 4 dígitos, o 5 si la numeración de una base de pruebas reutilizada (--keepdb) pasó de 9999
         (linea,) = pago.lineas.all()
         self.assertEqual((linea.entrega_id, linea.monto_cobrado, linea.dias_atraso, linea.indemnizacion_atraso, linea.vigente), (e.pk, D("1000.00"), 5, D("1500.00"), True))
 

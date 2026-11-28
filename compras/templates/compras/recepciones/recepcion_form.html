@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Registrar recepción» (CMP-REG-RCP pasos 3 a 6; ``VIEWS.c_rcp`` del prototipo). Recibe «orden», «proveedor», «invernadero», «entregas» (las demás entregas de la orden), «lineas» (cada una con la
 ``LineaARecibir``, sus filas de lotes y de inconvenientes), «observaciones», «errores» y «tipos» (los errores de cada línea van en su ítem). Por cada línea: lo pedido, lo ya recibido y lo que falta (paso 4), uno o más lotes (cantidad y
 vencimiento si el insumo lo controla: «una cantidad por cada fecha distinta», paso 5) y los inconvenientes (5a a 5e: un tipo por fila). Corrige el prototipo: allá cada línea tenía un solo lote y un solo inconveniente;
@@ -13,10 +13,10 @@ el caso de uso pide varias fechas y un inconveniente de cada tipo. «Agregar otr
 
   {% if entregas|length > 1 %}
   <div class="chips" role="group" aria-label="Entrega que llegó" style="margin-bottom:14px">
-    {% for e in entregas %}<a class="chip" href="{% url 'compras:recepcion_nueva' orden.pk %}?proveedor={{ e.proveedor.pk }}&amp;invernadero={{ e.invernadero.pk }}" aria-pressed="{% if e.proveedor.pk == proveedor.pk and e.invernadero.pk == invernadero.pk %}true{% else %}false{% endif %}">{{ e.proveedor.nombre_para_mostrar }} · {{ e.invernadero.nombre_invernadero }}</a>{% endfor %}
+    {% for e in entregas %}<a class="chip" href="{% url 'compras:recepcion_nueva' orden.pk %}?proveedor={{ e.proveedor.pk }}&amp;invernadero={{ e.invernadero.pk }}"{% if e.proveedor.pk == proveedor.pk and e.invernadero.pk == invernadero.pk %} aria-current="page"{% endif %}>{{ e.proveedor.nombre_para_mostrar }} · {{ e.invernadero.nombre_invernadero }}</a>{% endfor %}
   </div>
   {% endif %}
-  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
 
   <form method="post" action="{% url 'compras:recepcion_nueva' orden.pk %}" novalidate>
     {% csrf_token %}
@@ -41,9 +41,9 @@ el caso de uso pide varias fechas y un inconveniente de cada tipo. «Agregar otr
           {% if l.motivo_bloqueo %}
           <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>{% if l.motivo_bloqueo == "invernadero_inactivo" %}El invernadero está inactivo.{% else %}El insumo está inactivo en el invernadero.{% endif %} Para recibir esta línea, primero hay que reactivar el destino.</div></div>
           {% else %}
-          {% if item.errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "warn" 16 %}<div>{% for m in item.errores %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+          {% if item.errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{% for m in item.errores %}{{ m }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
           <input type="hidden" name="lotes_{{ id }}" value="{{ item.lotes|length }}"><input type="hidden" name="incs_{{ id }}" value="{{ item.incs|length }}">
-          <h3 class="ped-sub">Qué llegó en buen estado</h3>
+          <h2 class="ped-sub">Qué llegó en buen estado</h2>
           {% for fila in item.lotes %}
           <div class="grid2" style="margin-bottom:8px">
             <div class="fld"><label for="cant_{{ id }}_{{ forloop.counter0 }}">Cantidad recibida{% if item.lotes|length > 1 %} (lote {{ forloop.counter }}){% endif %} <span class="muted">({{ l.insumo.unidad_medida_insumo }})</span></label>
@@ -56,7 +56,7 @@ el caso de uso pide varias fechas y un inconveniente de cada tipo. «Agregar otr
           <button class="btn btn-text btn-sm" type="submit" name="accion" value="mas_lote:{{ id }}" data-sin-envio-en-curso>Agregar otro lote{% if l.insumo.controla_vencimiento %} (otra fecha de vencimiento){% endif %}</button>
           <p class="hint">Dejá en blanco lo que no llegó: queda pendiente. Cada lote forma un lote nuevo en el invernadero (primero se cubre un faltante sin lote, si lo hay).</p>
 
-          <h3 class="ped-sub" style="margin-top:14px">Inconvenientes <span class="muted sm">(opcional)</span></h3>
+          <h2 class="ped-sub" style="margin-top:14px">Inconvenientes <span class="muted sm">(opcional)</span></h2>
           {% for fila in item.incs %}
           <div class="grid2" style="margin-bottom:8px">
             <div class="fld"><label for="inc_tipo_{{ id }}_{{ forloop.counter0 }}">Tipo</label>
