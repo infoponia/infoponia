@@ -4,7 +4,7 @@ transiciones y las cosechas se registran solas al concretar cada orden. Recibe �
 {% block titulo %}Registrar en bitácora · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% if es_capataz %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "chev" 14 %} {% if es_capataz %}Mis órdenes{% else %}Producción{% endif %}</a>
+  <a class="back" href="{% if es_capataz %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "back" 14 %} {% if es_capataz %}Mis órdenes{% else %}Producción{% endif %}</a>
   <div class="page-h"><h1>Registrar en bitácora</h1><div class="sub">Elegí qué vas a registrar.</div></div>
   {% if not es_capataz and invernaderos %}
   <form class="card" method="get" action="{% url 'produccion:registrar' %}" style="margin-bottom:16px">

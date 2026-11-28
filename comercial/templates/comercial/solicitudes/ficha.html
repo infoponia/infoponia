@@ -8,7 +8,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
 {% with l=ficha.lectura %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:solicitudes' %}">{% icono "chev" 14 %} Volver a las solicitudes</a>
+  <a class="back" href="{% url 'comercial:solicitudes' %}">{% icono "back" 14 %} Volver a las solicitudes</a>
   <div class="page-h">
     <h1><span class="mono">{{ ficha.codigo }}</span> · {{ ficha.tipo_texto }}</h1>
     <div class="sub"><span class="status-badge {% if s.estado_solicitud == 'pendiente' %}status-warn{% elif s.estado_solicitud == 'aceptada' %}status-ok{% else %}status-neutral{% endif %}">{{ s.get_estado_solicitud_display }}</span></div>
@@ -130,7 +130,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
           {% endif %}
           <dt>Incumplimientos del contrato</dt><dd class="mono">{{ previa.incumplimientos_antes }} → {{ previa.incumplimientos_despues }} de {{ previa.tolerados }} tolerados</dd>
         </dl>
-        {% if previa.resolveria %}<div class="alert alert-danger" role="status" style="margin-top:8px">{% icono "warn" 16 %}<div>Con esta aceptación se superan los {{ previa.tolerados }} incumplimientos tolerados: {{ l.suministro.codigo }} se resolverá y se aplicará la multa de {{ previa.multa|pesos }}. Hasta que se complete COM-07b, el contrato queda «vigente».</div></div>
+        {% if previa.resolveria %}<div class="alert alert-danger" role="status" style="margin-top:8px">{% icono "warn" 16 %}<div>Con esta aceptación se superan los {{ previa.tolerados }} incumplimientos tolerados: {{ l.suministro.codigo }} se resolverá y se aplicará la multa de {{ previa.multa|pesos }}.</div></div>
         {% elif previa.historial %}<div class="alert alert-info" role="status" style="margin-top:8px">{% icono "info" 16 %}<div>{{ l.suministro.codigo }} está {{ l.suministro.get_estado_suministro_display|lower }}: el incumplimiento se registra como historial, sin resolución.</div></div>{% endif %}
 
         <div class="fld" style="margin-top:12px">

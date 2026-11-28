@@ -79,7 +79,8 @@ class RecorridoDeCobranzaTests(BaseDeCobranza):
         with override_settings(CORREO_CONFIGURADO=True), self.captureOnCommitCallbacks(execute=True):
             confirmado = self.enviar("cobranza_registrar", usuario=vendedor, datos={**pedido, "accion": "confirmar", "huella": resumen.context["resumen"].huella}, follow=True)
         primero = PagoCliente.objects.get(tipo_pago="suministro")
-        self.assertIn(f"{primero.codigo} registrado", texto(confirmado))
+        # El aviso del cobro (UI-02, UX-23: antes «COB-… registrado: … El asiento no se genera en esta ronda (contabilidad).»).
+        self.assertIn(f"Se registró el cobro {primero.codigo} de {primero.cliente.nombre_visible}: $ 2.500,00.", texto(confirmado))
         self.assertEqual((primero.monto_pagado, primero.usuario_id), (D("2500.00"), vendedor.pk))
         self.assertEqual((len(mail.outbox), self.alertas_activas()), (1, 1))  # el comprobante salió y la alerta de `a` se resolvió; queda la de `d`
         self.assertIn(f"Pagada · {primero.codigo}", texto(self.ir("suministro", contrato.pk, usuario=vendedor)))

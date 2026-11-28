@@ -6,7 +6,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:suministro' ficha.contrato.pk %}">‹ Volver al suministro</a>
+  <a class="back" href="{% url 'comercial:suministro' ficha.contrato.pk %}">{% icono "back" 14 %}Volver al suministro</a>
   <div class="page-h"><h1>Entrega no reconocida · <span class="mono">{{ ficha.entrega.codigo }}</span></h1>
     <div class="sub">{{ ficha.cliente.nombre_visible }} · {{ ficha.contrato.codigo }}</div></div>
 

@@ -70,3 +70,27 @@ decisión, manda la decisión: avisá.
 - Prohibido disparar validaciones ni recálculos mientras el usuario tipea (nada de `hx-trigger="input delay:..."` ni `change` validando campos numéricos, de texto o fechas).
 - Las validaciones y resúmenes corren únicamente al presionar botones de acción («Ver resumen», «Confirmar», etc.).
 - Si un selector redibuja campos dependientes por HTMX, debe hacerlo sin validar, usando `hx-swap="innerHTML show:none"` para no mover el scroll ni robar el foco, manteniendo siempre el respaldo funcional sin JavaScript.
+## Revisión de interfaz (D-109, desde UI-02)
+
+- **No romper.** Las tareas de interfaz no cambian modelos, migraciones, servicios, permisos, rutas, nombres de URL, nombres de campos
+  ni valores de botones, ni los `id`, `data-*`, `hx-*` o clases que usan los scripts o las pruebas. Antes de cambiar algo compartido
+  (marco, `infoponia.css`, `_avatar.html`, `infoponia.js`, filtros, parciales incluidos en varias pantallas), buscá con Grep cada uso
+  en todo el repo y revisá cada uno; poné la lista en el plan. Una prueba que afirma un texto o un estilo que cambiás a propósito se
+  actualiza en el mismo PR (nunca se borra) y se lista en el «Cierre».
+- **Red de pantallas.** `demo/tests/test_red_de_pantallas.py` (UI-02) recorre las pantallas de las diez cuentas de la demo: ninguna
+  da 500, cada una da el código de su línea de base (`demo/tests/datos/pantallas_esperadas.json`) y ninguna muestra códigos internos.
+  Corrala en toda tarea que toque plantillas o estilos.
+- **Grillas:** la columna del contenido y la del encabezado usan `minmax(0,1fr)`, nunca `1fr` solo.
+- **Color:** todo texto cumple 4,5:1. `--faint` es para bordes e íconos decorativos; no va texto blanco chico sobre un color de etapa.
+- **Enlaces:** los del contenido van en `--primary`; las pestañas que son enlaces usan la regla común `a.tab`; «volver» usa el ícono
+  `back`, nunca `chev`.
+- **Textos visibles** (pantallas, avisos, correos y PDF): sin códigos de tareas, casos de uso, decisiones ni rondas; fieles a lo que
+  el código hace hoy; valores guardados con su nombre legible; «usted» en lo que leen el cliente y el proveedor (portales por enlace,
+  sus mensajes de error y los correos que se les mandan) y voseo en todo lo demás; dinero como «$ 1.500,50» con el
+  filtro de la app o de una de nivel menor; plurales con tilde («órdenes»); los códigos de documento no se cortan en dos líneas.
+- **Accesibilidad:** columna de acciones con «Acciones» solo para lectores; vista activa con `aria-current="page"` (o `aria-selected`
+  con `role="tab"`), nunca `aria-pressed` en un enlace; todo campo con etiqueta; títulos sin saltos de nivel.
+- **Resumen y errores a la vista:** el resumen, o el primer error, lleva `data-llevar-vista` y `tabindex="-1"`; `infoponia.js` le
+  lleva la vista y el foco. Los selectores que solo redibujan campos siguen sin mover la vista (regla de INV-02).
+- **Montos que se calculan al tocar un botón:** mientras no se calcularon, «—» con la ayuda «Se calcula al tocar «Actualizar»».
+- **`style="…"`** solo para valores calculados en el momento; en lo que toques, usá clases y los tamaños y colores de `:root`.

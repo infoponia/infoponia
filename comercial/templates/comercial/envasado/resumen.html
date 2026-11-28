@@ -6,7 +6,7 @@ No escribe. Todo se escapa.{% endcomment %}
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page">
-  <a class="back" href="{% url 'comercial:envasado' %}">{% icono "chev" 14 %} Envasado</a>
+  <a class="back" href="{% url 'comercial:envasado' %}">{% icono "back" 14 %} Envasado</a>
   <div class="page-h"><h1>Resumen del envasado de <span class="mono">{{ fila.codigo }}</span></h1>
     <div class="sub">{{ fila.cliente }} · {{ fila.fecha|date:"d/m/Y" }} · {% if fila.es_retiro %}Retiro en invernadero{% else %}Envío a domicilio{% endif %}</div></div>
   <form method="post" action="{% url 'comercial:envasado_entrega' fila.entrega.pk %}" novalidate>

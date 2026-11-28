@@ -6,7 +6,7 @@
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "chev" 14 %} Mi ruta</a>
+  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "back" 14 %} Mi ruta</a>
   <div class="page-h"><h1>Iniciar ruta</h1></div>
   {% if cambio %}
   <div class="alert alert-warn" role="alert"><div>{{ error }}

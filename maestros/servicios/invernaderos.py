@@ -944,7 +944,9 @@ def asignaciones_de_cuenta(cuenta):
     )
     if activos:
         if atributo == "tecnico" and not any(invernadero.tiene_sistema_iot() for invernadero in activos):
-            que_pasa = "Quedan sin Técnico; sin sistema IoT no generan alerta (regla 3 de 8.22). Lo asigna el Gerente al modificarlos."
+            # Regla 3 de 8.22 — modelo de dominio, ronda 20 (sin sistema IoT, un invernadero sin Técnico no genera alerta). La cita salió del
+            # texto visible en UI-02 (D-109 punto 7).
+            que_pasa = "Quedan sin Técnico; sin sistema IoT no generan alerta. Lo asigna el Gerente al modificarlos."
         else:
             nombre = NOMBRE_DEL_ROL[atributo]
             que_pasa = (
@@ -963,7 +965,9 @@ def asignaciones_de_cuenta(cuenta):
                 Asignacion(
                     "Alertas activas",
                     cantidad,
-                    f"{'Pasa' if cantidad == 1 else 'Pasan'} al Gerente hasta que asignes otro Agrónomo (regla 4 de 8.22).",
+                    # Regla 4 de 8.22 — modelo de dominio, ronda 20 (las alertas del Agrónomo dado de baja pasan al Gerente). La cita salió
+                    # del texto visible en UI-02 (D-109 punto 7).
+                    f"{'Pasa' if cantidad == 1 else 'Pasan'} al Gerente hasta que asignes otro Agrónomo.",
                 )
             )
     return asignaciones

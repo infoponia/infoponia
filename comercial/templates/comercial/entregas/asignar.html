@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load estaticos %}
+{% extends "core/base_con_sesion.html" %}{% load estaticos iconos %}
 {% comment %}«Asignar / Cambiar transportista» (COM-ASG-TRP, COM-05b; `INIT.asg`, `VIEWS.asg` y `candidatos` del prototipo): la entrega con su origen, su destino, su fecha y su peso; el aviso de 3a (en curso),
 de 4a (la fecha ya pasó: se reprograma para hoy) o de 4b (ningún candidato cumple); los candidatos con su capacidad libre, sus entregas y sus localidades del día (los que no cumplen, deshabilitados con
 su motivo); y la tarjeta «Cómo queda» (paso 6), que con HTMX se redibuja al elegir (`calcular/`, sin escribir) y sin JavaScript sale con «Ver cómo queda» (la misma página). «Asignar transportista» es la
@@ -7,7 +7,7 @@ confirmación (paso 7). Recibe «datos», «seleccionado», «como», «error_tr
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:entregas' %}">‹ Volver a entregas</a>
+  <a class="back" href="{% url 'comercial:entregas' %}">{% icono "back" 14 %}Volver a entregas</a>
   <div class="page-h"><h1>{% if datos.transportista_actual %}Cambiar{% else %}Asignar{% endif %} transportista · <span class="mono">{{ datos.entrega.codigo }}</span></h1>
     <div class="sub">{{ datos.cliente }} · {{ datos.contrato.codigo }}</div></div>
 

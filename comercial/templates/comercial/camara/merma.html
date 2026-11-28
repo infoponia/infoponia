@@ -3,7 +3,7 @@
 {% block titulo %}Registrar merma en cámara · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:registrar_merma' %}">{% icono "chev" 14 %} Registrar merma</a>
+  <a class="back" href="{% url 'produccion:registrar_merma' %}">{% icono "back" 14 %} Registrar merma</a>
   <div class="page-h"><h1>Registrar merma en cámara</h1><div class="sub">Elegí el invernadero y la partida, indicá cuántas plantas se perdieron y la causa. Si la pérdida supera el stock libre, vas a ver qué contratos pierden producto antes de confirmar.</div></div>
   <div id="merma-vivo" hx-target="#merma-vivo" hx-swap="innerHTML show:none">{% include "comercial/camara/_merma_formulario.html" %}</div>
 </div>

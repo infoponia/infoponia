@@ -402,7 +402,9 @@ def asignaciones_de_cuenta(cuenta):
         Asignacion(
             "Órdenes de trabajo a realizar",
             cantidad,
-            "Pasan a quien el Gerente asigne como Capataz al modificar el invernadero (regla 3 de 8.22).",
+            # Regla 3 de 8.22 — modelo de dominio, ronda 20 (las órdenes del Capataz dado de baja pasan al que asigne el Gerente). La cita
+            # salió del texto visible en UI-02 (D-109 punto 7).
+            "Pasan a quien el Gerente asigne como Capataz al modificar el invernadero.",
         )
     ]
 

@@ -4,7 +4,7 @@
 {% block titulo %}Otro evento · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:registrar' %}">{% icono "chev" 14 %} Registrar en bitácora</a>
+  <a class="back" href="{% url 'produccion:registrar' %}">{% icono "back" 14 %} Registrar en bitácora</a>
   <div class="page-h"><h1>Otro evento</h1><div class="sub">Para dejar constancia de un hecho que no es una merma ni una aplicación de insumos. Se registra con la fecha y la hora actuales.</div></div>
   <div id="evento-vivo" hx-target="#evento-vivo" hx-swap="innerHTML show:none">{% include "produccion/_evento_formulario.html" %}</div>
 </div>

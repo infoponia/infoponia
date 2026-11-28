@@ -183,7 +183,9 @@ def registrar(request):
             datos = DatosDeCobro(datos.cliente_id, [i for i in datos.entrega_ids if str(i) in cobrables], datos.medio_pago, datos.anulacion_id, datos.usar_fecha_anulada)
             return render(request, "comercial/cobranza/registrar.html", _contexto(request, datos, filtros, error=_mensaje(error)))
         return render(request, "comercial/cobranza/registrar.html", _contexto(request, datos, filtros, error=_mensaje(error)))
-    messages.success(request, f"{pago.codigo} registrado: {texto_de_pesos(pago.monto_pagado)} cobrados a {pago.cliente.nombre_visible}. El asiento no se genera en esta ronda (contabilidad).")
+    # UI-02 (UX-23, UX-35; D-109 punto 7): el texto no promete el asiento, que `registrar_cobro` crea salvo con importe cero (H11), y no
+    # termina en la razón social (con «S.A.» quedaba un punto doble).
+    messages.success(request, f"Se registró el cobro {pago.codigo} de {pago.cliente.nombre_visible}: {texto_de_pesos(pago.monto_pagado)}.")
     return redirect("comercial:cobro", pago.pk)
 
 

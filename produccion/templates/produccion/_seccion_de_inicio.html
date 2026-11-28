@@ -8,7 +8,8 @@ vencidas y las de hoy (lo urgente) y lleva a la bandeja completa. Cada tarjeta e
     {% for f in datos.bandeja.hoy %}{% include "produccion/_orden_de_la_bandeja.html" %}{% endfor %}
     {% endwith %}
   {% elif datos.bandeja.proximas %}
-    <div class="empty"><b>Nada para hoy</b><span>Tenés {{ datos.bandeja.proximas|length }} orden{{ datos.bandeja.proximas|length|pluralize:",es" }} próxima{{ datos.bandeja.proximas|length|pluralize }}.</span></div>
+    {# UI-02 (UX-35): con {% if %}, porque pluralize no pone la tilde de «órdenes». #}
+    <div class="empty"><b>Nada para hoy</b><span>Tenés {{ datos.bandeja.proximas|length }} {% if datos.bandeja.proximas|length == 1 %}orden próxima{% else %}órdenes próximas{% endif %}.</span></div>
   {% else %}
     <div class="empty"><b>No tenés órdenes pendientes</b><span>Cuando el Agrónomo planifique una siembra, te va a llegar un aviso.</span></div>
   {% endif %}

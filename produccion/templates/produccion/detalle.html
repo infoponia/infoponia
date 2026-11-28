@@ -5,7 +5,7 @@ orden, hija, invernadero, reservas, ocupaciones, puede_cancelar, puede_concretar
 {% block contenido %}
 {% with orden=detalle.orden hija=detalle.hija %}
 <div class="page narrow">
-  <a class="back" href="{% if request.user.rol == 'capataz' %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "chev" 14 %} {% if request.user.rol == 'capataz' %}Mis órdenes{% else %}Órdenes de trabajo{% endif %}</a>
+  <a class="back" href="{% if request.user.rol == 'capataz' %}{% url 'produccion:bandeja' %}{% else %}{% url 'produccion:ordenes' %}{% endif %}">{% icono "back" 14 %} {% if request.user.rol == 'capataz' %}Mis órdenes{% else %}Órdenes de trabajo{% endif %}</a>
   <div class="page-h"><h1><span class="mono">{{ orden.codigo }}</span> · {% if orden.tipo_orden == "transicion" %}{{ hija.lote.siembra.variedad }}{% else %}{{ hija.variedad|default:"Orden de trabajo" }}{% endif %}</h1><div class="sub">{{ detalle.invernadero.nombre_invernadero }} · {{ orden.get_tipo_orden_display }} · {{ orden.get_estado_orden_display }}</div></div>
   <div class="card"><div class="card-b">
     <dl class="kv">

@@ -100,6 +100,17 @@ class MarcoVistaTests(TestCase):
             for archivo in ("css/infoponia.css", "js/infoponia.js", "js/desplegable.js"):
                 self.assertRegex(pagina, rf"core/{re.escape(archivo)}\?v=\d+")
 
+    def test_ui02_el_pie_dice_en_linea_en_la_oficina_y_en_el_modo_campo(self):
+        """UI-02 (UX-21): el pie dice «En línea» en el marco de oficina (Gerente) y en el de campo (Capataz); «Sistema operativo» se leía
+        como Windows o Android."""
+        for cuenta in (crear_gerente(), crear_capataz(email="capataz-pie@infoponia.com")):
+            with self.subTest(rol=cuenta.rol):
+                self.client.force_login(cuenta)
+                pie = re.search(r'<footer class="bot">(.*?)</footer>', self.client.get(reverse("core:inicio")).content.decode(), re.S)
+                self.assertIsNotNone(pie)
+                self.assertIn("En línea", pie.group(1))
+                self.assertNotIn("Sistema operativo", pie.group(1))
+
     def test_d29_boton_secundario_cumple_contraste_wcag_aa(self):
         """D-29: el botón secundario (.btn-ghost) usa el verde primario en el borde y el texto, sobre fondo
         blanco, y cumple WCAG AA: texto de al menos 4,5:1 y borde de al menos 3:1, también en el hover."""
@@ -267,6 +278,126 @@ class AvisosYFocoEstilosTests(TestCase):
     def test_d29_botones_enlace_no_se_subrayan(self):
         """D-29: un botón que es un enlace (<a class="btn">) no se subraya, igual que uno que es <button>."""
         self.assertIn("text-decoration:none", _regla(_css(), ".btn"))
+
+
+class MarcoEnElCelularTests(TestCase):
+    """UI-02 (UX-01; D-109 punto 4): el marco no se ensancha más que la ventana en el celular. Una columna `1fr` no baja del ancho
+    mínimo de su contenido (la fila de módulos del celular suma unos 430 px); `minmax(0,1fr)` sí. Se verifica en la hoja de estilos;
+    que la pantalla mida 360 px se mira a mano."""
+
+    def test_ui02_las_columnas_del_marco_usan_minmax_en_escritorio_celular_y_modo_campo(self):
+        """D-109 punto 4: la columna del contenido y del encabezado usa `minmax(0,1fr)` en escritorio (con el menú lateral), en el celular,
+        en el modo campo y en el marco sin menú lateral."""
+        css = _css()
+        esperadas = {
+            ".shell": "grid-template-columns:var(--sidebar-width) minmax(0,1fr)",
+            ".shell.field": "grid-template-columns:minmax(0,1fr)",
+            ".shell.sin-lateral": "grid-template-columns:minmax(0,1fr)",
+            ".shell:not(.field)": "grid-template-columns:minmax(0,1fr)",
+        }
+        for selector, columnas in esperadas.items():
+            with self.subTest(selector=selector):
+                self.assertIn(columnas, _regla(css, selector))
+        celular = re.search(r"@media\(max-width:760px\)\{\s*\.shell:not\(\.field\)\{([^}]*)\}", css)
+        self.assertIsNotNone(celular, "la regla del celular tiene que estar dentro del bloque de menos de 760px")
+        self.assertIn("minmax(0,1fr)", celular.group(1))
+
+    def test_ui02_las_fichas_del_menu_del_celular_no_se_encogen(self):
+        """D-109 punto 4: la fila de módulos del celular (`.mnav`) se desplaza dentro de su lugar: sus fichas no se encogen ni parten
+        el texto, y la fila tiene desplazamiento horizontal."""
+        css = _css()
+        ficha = _regla(css, ".mnav .chip")
+        self.assertIn("flex-shrink:0", ficha)
+        self.assertIn("white-space:nowrap", ficha)
+        reglas_de_la_fila = re.findall(r"(?<![\w-])\.mnav\{([^}]*)\}", css)  # la base y las del bloque de menos de 760px
+        self.assertTrue(any("overflow-x:auto" in regla for regla in reglas_de_la_fila), reglas_de_la_fila)
+
+
+def _mezcla(color, porcentaje, otro):
+    """``color-mix(in srgb, color porcentaje%, otro)`` de CSS, canal por canal, como ``#rrggbb``."""
+    a, b = (c.lstrip("#") for c in (color, otro))
+    if len(b) == 3:
+        b = "".join(ch * 2 for ch in b)
+    p = porcentaje / 100
+    return "#" + "".join(f"{round(int(a[i:i + 2], 16) * p + int(b[i:i + 2], 16) * (1 - p)):02x}" for i in (0, 2, 4))
+
+
+class ContrasteTests(TestCase):
+    """UI-02 (UX-03; D-109 punto 5): todo texto cumple WCAG 1.4.3 (4,5:1). Con la misma función de contraste que
+    `test_d29_boton_secundario_cumple_contraste_wcag_aa`."""
+
+    def test_ui02_faint_cumple_contraste_sobre_los_cuatro_fondos(self):
+        """D-109 punto 5: `--faint` cumple 4,5:1 sobre el blanco de las tarjetas, `--subtle`, `--background` y `--primary-soft`."""
+        css = _css()
+        faint = re.search(r"--faint:(#[0-9a-fA-F]{6})", css).group(1)
+        for fondo in ("#ffffff", "#f9fafb", "#f5f6f8", "#eaf5ee"):
+            with self.subTest(fondo=fondo):
+                self.assertGreaterEqual(_contraste(faint, fondo), 4.5)
+
+    def test_ui02_el_texto_del_ciclo_no_es_blanco_y_cumple_contraste_en_cada_etapa(self):
+        """D-109 punto 5: sobre los colores de etapa no va texto blanco chico. El tramo del ciclo usa texto oscuro sobre el fondo claro (como
+        `.etapa`) y cumple 4,5:1 con cada color de etapa (`--e-ger`, `--e-cre`, `--e-flo`, `--e-fru`, `--e-mad`)."""
+        css = _css()
+        tramo = _regla(css, ".ciclo span")
+        self.assertNotIn("color:#fff", tramo)
+        fondo = re.search(r"background:color-mix\(in srgb,var\(--c\) (\d+)%,(#fff)\)", tramo)
+        texto = re.search(r"(?:^|;)color:color-mix\(in srgb,var\(--c\) (\d+)%,(#000)\)", tramo)
+        self.assertIsNotNone(fondo, tramo)
+        self.assertIsNotNone(texto, tramo)
+        etapas = dict(re.findall(r"--(e-[a-z]{3}):(#[0-9a-fA-F]{6})", css))
+        self.assertEqual(len(etapas), 5)
+        for nombre, color in etapas.items():
+            with self.subTest(etapa=nombre):
+                self.assertGreaterEqual(
+                    _contraste(_mezcla(color, int(texto.group(1)), texto.group(2)), _mezcla(color, int(fondo.group(1)), fondo.group(2))),
+                    4.5,
+                )
+
+
+def _plantillas_de_todas_las_apps():
+    """Las plantillas ``.html`` de todas las apps del proyecto (``<app>/templates/``)."""
+    return sorted(Path(settings.BASE_DIR).glob("*/templates/**/*.html"))
+
+
+class EnlacesPestanasYVolverTests(TestCase):
+    """UI-02 (UX-05 y UX-08; D-109 punto 6): estilo base de los enlaces, pestañas que son enlaces y la flecha de «volver»."""
+
+    def test_ui02_todo_volver_usa_el_icono_back_y_nunca_chev(self):
+        """D-109 punto 6: todo enlace «volver» (``<a class="back">``) de cualquier app usa el ícono ``back`` (flecha a la izquierda), nunca
+        ``chev`` (flecha hacia abajo) ni un carácter suelto («‹»)."""
+        volver = []
+        for plantilla in _plantillas_de_todas_las_apps():
+            for enlace in re.findall(r'<a class="back"[^>]*>.*?</a>', plantilla.read_text(encoding="utf-8"), re.S):
+                volver.append((plantilla.relative_to(settings.BASE_DIR).as_posix(), enlace))
+        self.assertGreater(len(volver), 50)  # que la prueba no pase sin revisar nada
+        mal = [f"{archivo}: {enlace[:100]}" for archivo, enlace in volver if '{% icono "back"' not in enlace or "chev" in enlace]
+        self.assertEqual(mal, [], "«Volver» sin el ícono back:\n" + "\n".join(mal))
+
+    def test_ui02_la_regla_de_las_pestanas_enlace_vive_solo_en_infoponia_css(self):
+        """D-109 punto 6: ``a.tab`` (sin subrayado, con foco visible) está una sola vez, en ``infoponia.css``, y en ningún CSS de app."""
+        self.assertIn("text-decoration:none", _regla(_css(), "a.tab"))
+        self.assertIn("outline:2px solid var(--primary)", _regla(_css(), "a.tab:focus-visible"))
+        hoja_comun = Path(settings.BASE_DIR) / "core/static/core/css/infoponia.css"
+        con_la_regla = []
+        for hoja in Path(settings.BASE_DIR).glob("*/static/**/*.css"):
+            if hoja.resolve() == hoja_comun.resolve():
+                continue
+            sin_comentarios = re.sub(r"/\*.*?\*/", "", hoja.read_text(encoding="utf-8"), flags=re.S)
+            if re.search(r"(?<![\w-])a\.tab\b", sin_comentarios):
+                con_la_regla.append(hoja.relative_to(settings.BASE_DIR).as_posix())
+        self.assertEqual(con_la_regla, [])
+
+    def test_ui02_los_enlaces_del_contenido_van_en_el_verde_primario_sin_tocar_botones_ni_menus(self):
+        """D-109 punto 6: hay un estilo base para los enlaces del contenido, en ``--primary`` y subrayado. Va dentro de ``:where()`` (pesa como
+        un ``a`` suelto, así cualquier regla con clase sigue mandando) y deja afuera los enlaces con forma de botón, ficha, pestaña o menú."""
+        css = _css()
+        base = re.search(r"^:where\(main\) a:where\(:not\(([^)]*)\)\)\{([^}]*)\}", css, re.M)
+        self.assertIsNotNone(base, "falta el estilo base de los enlaces del contenido")
+        excluidas = set(base.group(1).split(","))
+        self.assertTrue({".btn", ".chip", ".tab", ".nav-item", ".rowlink", ".gh", ".back", ".kpi", ".opt"} <= excluidas, excluidas)
+        self.assertIn("color:var(--primary)", base.group(2))
+        self.assertIn("text-decoration:underline", base.group(2))
+        self.assertIn("text-decoration:none", _regla(css, "a.kpi,a.opt"))
 
 
 class PlantillasTests(TestCase):

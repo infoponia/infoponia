@@ -4,7 +4,7 @@ muestra cada cambio con su valor anterior y el nuevo (paso 8, que el prototipo n
 {% block titulo %}Modificar cosecha {{ cosecha.codigo }} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page">
-  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "back" 14 %} Órdenes de trabajo</a>
   <div class="page-h"><h1>Modificar <span class="mono">{{ cosecha.codigo }}</span></h1>
     <div class="sub">{{ cosecha.variedad }} · {{ cosecha.invernadero.nombre_invernadero }}{% if ficha.contrato %} · {{ ficha.contrato }}, entrega el {{ ficha.fecha_entrega|date:"d/m/Y" }}{% else %} · sin contrato{% endif %}</div></div>
   <div id="cosecha-formulario">{% include "comercial/cosechas/_modificar_formulario.html" %}</div>

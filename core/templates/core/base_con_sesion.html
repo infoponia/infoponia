@@ -58,7 +58,7 @@ mostradas. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecer
     {% if modo_campo %}
     <span class="sdot"></span><b>En línea</b>
     {% else %}
-    <span><span class="sdot"></span>Sistema operativo</span>
+    <span><span class="sdot"></span>En línea</span>{# UI-02 (UX-21): igual que en el modo campo; «Sistema operativo» se leía como Windows o Android. #}
     <span class="spacer"></span>
     <span class="hs">{% now "d/m/Y" %}</span>
     {% endif %}

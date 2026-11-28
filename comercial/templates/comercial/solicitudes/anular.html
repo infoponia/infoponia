@@ -6,7 +6,7 @@ después; el contraasiento figura «Fuera de esta ronda · contabilidad», D-57)
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:solicitud' s.pk %}">{% icono "chev" 14 %} Volver a la solicitud</a>
+  <a class="back" href="{% url 'comercial:solicitud' s.pk %}">{% icono "back" 14 %} Volver a la solicitud</a>
   <div class="page-h"><h1>Anular la resolución de <span class="mono">{{ s.codigo }}</span></h1><div class="sub">{{ datos.entrega.codigo }} · {{ datos.suministro.codigo }}</div></div>
 
   {% if generales %}<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{% for e in generales %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
