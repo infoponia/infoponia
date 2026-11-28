@@ -5,7 +5,7 @@ advertencia de retraso, la búsqueda, el error de 11b ni el resumen: se completa
 {% block titulo %}Planificar cosecha · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page">
-  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "back" 14 %} Órdenes de trabajo</a>
   <div class="page-h"><h1>Planificar cosecha</h1><div class="sub">Elegí el invernadero, el contrato (si cubre uno) y de qué lotes se cosecha.</div></div>
   <div id="cosecha-formulario">{% include "comercial/cosechas/_planificar_formulario.html" %}</div>
 </div>

@@ -5,7 +5,7 @@
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page">
-  <a class="back" href="{% url 'comercial:envasado' %}">{% icono "chev" 14 %} Envasado</a>
+  <a class="back" href="{% url 'comercial:envasado' %}">{% icono "back" 14 %} Envasado</a>
   <div class="page-h"><h1>{% if modifica %}Modificar envasado{% else %}Envasado{% endif %} de <span class="mono">{{ fila.codigo }}</span></h1>
     <div class="sub">{{ fila.cliente }} · {{ fila.contrato_codigo }} · {{ fila.invernadero }}</div></div>
   <div id="envasado-formulario">{% include "comercial/envasado/_carga_formulario.html" %}</div>

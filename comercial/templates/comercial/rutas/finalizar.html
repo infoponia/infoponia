@@ -5,7 +5,7 @@ confirmación. Recibe «pendientes» (`FilaDeRuta`) y «datos» (`RutaDelDia`).{
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "chev" 14 %} Mi ruta</a>
+  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "back" 14 %} Mi ruta</a>
   <div class="page-h"><h1>Finalizar ruta</h1></div>
   {% if datos.situacion != "en_ruta" %}
   <div class="alert alert-info" role="status"><div>No tenés una ruta iniciada hoy: no hay nada que finalizar.</div></div>

@@ -1,8 +1,6 @@
 /* Estilos de «Compras» → «Proveedores» (CMP-01), sobre el Diseño v2 (D-47): tablas, tarjetas, filtros, avisos y ventanas salen de
-   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios: las pestañas como enlaces, el aspecto de un proveedor dado de
+   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios (las pestañas como enlaces usan la regla común de infoponia.css, UI-02): el aspecto de un proveedor dado de
    baja, el selector de tipo, las categorías con casillas y la lista de impedimentos de la baja. */
-a.tab{display:inline-block;text-decoration:none}
-a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .prv-off{opacity:.75}
 .prv-nombre{color:var(--foreground);text-decoration:none}
 .prv-nombre:hover{text-decoration:underline}

@@ -17,7 +17,7 @@
   color-scheme:light;
   --background:#f5f6f8;--foreground:#141a21;--card:#fff;--subtle:#f9fafb;
   --primary:#1a6b3c;--primary-dark:#145431;--primary-soft:#eaf5ee;--primary-foreground:#fff;
-  --secondary:#eef1f4;--muted:#eef0f3;--muted-foreground:#5f6b78;--faint:#8a94a0;
+  --secondary:#eef1f4;--muted:#eef0f3;--muted-foreground:#5f6b78;--faint:#5f6b78;
   --border:#e3e7ec;--border-strong:#cfd5dc;--radius:10px;--radius-sm:7px;
   --shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.04);
   --shadow-pop:0 12px 32px rgba(16,24,40,.14),0 2px 6px rgba(16,24,40,.06);
@@ -216,9 +216,9 @@ select.field-input{padding-right:30px}
 .people .r{display:block;color:var(--muted-foreground);font-size:12.5px;margin-bottom:1px}
 
 /* ---- marco ---- */
-.shell{position:relative;height:100%;display:grid;grid-template-rows:var(--header-height) 1fr var(--footer-height);grid-template-columns:var(--sidebar-width) 1fr;overflow:hidden}
+.shell{position:relative;height:100%;display:grid;grid-template-rows:var(--header-height) 1fr var(--footer-height);grid-template-columns:var(--sidebar-width) minmax(0,1fr);overflow:hidden}
 .shell > header,.shell > footer{grid-column:1/-1}
-.shell.field{max-width:430px;margin:0 auto;grid-template-columns:1fr;border-left:1px solid var(--border);border-right:1px solid var(--border);background:var(--background)}
+.shell.field{max-width:430px;margin:0 auto;grid-template-columns:minmax(0,1fr);border-left:1px solid var(--border);border-right:1px solid var(--border);background:var(--background)}
 header.top{background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 20px;position:relative;z-index:30}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .brand b{font-size:15.5px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -355,9 +355,11 @@ button.kpi:hover{border-color:var(--border-strong);box-shadow:0 2px 8px rgba(16,
 .sector .warnline{margin:4px 18px 10px 20px;font-size:13px;background:var(--warn-bg);color:#6b4100;border-radius:7px;padding:9px 12px;display:flex;gap:8px;align-items:flex-start}
 .sector .warnline svg{flex-shrink:0;margin-top:2px}
 .ciclo{display:flex;height:34px;border-radius:8px;overflow:hidden;background:var(--muted);gap:2px}
-.ciclo span{background:var(--c);color:#fff;font-size:12px;font-weight:600;display:block;line-height:34px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;padding:0 6px}
+/* UX-03 (D-109 punto 5): sin texto blanco sobre el color de la etapa (3,7 a 4,6:1). Texto oscuro sobre el fondo claro, como .etapa, con
+   una franja del color de la etapa abajo. La versión mini no tiene texto y sigue con el color lleno. */
+.ciclo span{background:color-mix(in srgb,var(--c) 22%,#fff);color:color-mix(in srgb,var(--c) 60%,#000);box-shadow:inset 0 -3px 0 var(--c);font-size:12px;font-weight:600;display:block;line-height:34px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;padding:0 6px}
 .ciclo.mini{height:8px;border-radius:999px;min-width:0;gap:2px;background:none}
-.ciclo.mini span{padding:0;border-radius:999px}
+.ciclo.mini span{padding:0;border-radius:999px;background:var(--c);box-shadow:none}
 .ciclo-w{min-width:0}
 .ciclo-l{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:7px;font-size:12.5px;color:var(--muted-foreground);font-variant-numeric:tabular-nums;line-height:1.5}
 .ciclo-l span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
@@ -510,7 +512,7 @@ button.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,
   .split{grid-template-columns:1fr}
 }
 @media(max-width:760px){
-  .shell:not(.field){grid-template-columns:1fr}
+  .shell:not(.field){grid-template-columns:minmax(0,1fr)}
   aside.side{display:none}
   main.main{padding:18px 16px 0}
   .grid2,.grid3{grid-template-columns:1fr}
@@ -528,6 +530,8 @@ button.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,
   .lotlist .li .act{justify-content:flex-start}
 }
 .mnav{display:none;gap:6px;overflow-x:auto;margin-bottom:16px}
+/* UX-01 (D-109 punto 4): las fichas del menú del celular no se encogen ni se parten; la fila se desplaza dentro de su lugar. */
+.mnav .chip{flex-shrink:0;white-space:nowrap}
 @media(min-width:1100px){.tablewrap{overflow:visible}}
 .tablewrap thead tr:first-child th:first-child{border-top-left-radius:9px}
 .tablewrap thead tr:first-child th:last-child{border-top-right-radius:9px}
@@ -545,11 +549,23 @@ button.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,
 /* ======== Agregados de la versión Django (no están en el prototipo) ======== */
 [hidden]{display:none !important}
 a.nav-item,a.chip,a.btn,a.gh,a.rowlink{text-decoration:none}
+/* UX-05 (D-109 punto 6): estilo base de los enlaces del contenido, en el verde primario y subrayados (antes, el azul del navegador).
+   Todo va dentro de :where(), así pesa como un simple «a» (0,0,1): cualquier regla con clase (.prv-nombre, .idlink, .link, .menu a,
+   .sel-tipo a…) sigue mandando, también en el hover. Los enlaces con forma de botón, ficha, pestaña o menú quedan afuera. */
+:where(main) a:where(:not(.btn,.chip,.tab,.nav-item,.rowlink,.gh,.pop-act,.icon-btn,.ibtn,.back,.kpi,.opt,.acc-item)){color:var(--primary);text-decoration:underline;text-underline-offset:2px}
+:where(main) a:where(:not(.btn,.chip,.tab,.nav-item,.rowlink,.gh,.pop-act,.icon-btn,.ibtn,.back,.kpi,.opt,.acc-item)):where(:hover){color:var(--primary-dark)}
+:where(main) a:where(:not(.btn,.chip,.tab,.nav-item,.rowlink,.gh,.pop-act,.icon-btn,.ibtn,.back,.kpi,.opt,.acc-item)):where(:focus-visible){outline:2px solid var(--primary);outline-offset:2px;border-radius:2px}
+/* Las tarjetas de indicadores y las opciones que son enlaces se ven como sus versiones <button> (antes, en azul y subrayadas). */
+a.kpi,a.opt{color:inherit;text-decoration:none}
+/* Pestañas que son enlaces (cada una es una página y funciona sin JavaScript): sin subrayado. Antes estaba repetida en cuatro CSS de
+   app y faltaba en las demás (UX-05). */
+a.tab{display:inline-block;text-decoration:none}
+a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .chip[aria-current="page"]{background:var(--primary);border-color:var(--primary);color:#fff}
 .logo svg{color:#fff}
 .logo.logo-imagen{background:#fff;border:1px solid var(--border);overflow:hidden}
 .logo-imagen img{width:100%;height:100%;object-fit:contain;display:block}
-.shell.sin-lateral{grid-template-columns:1fr}
+.shell.sin-lateral{grid-template-columns:minmax(0,1fr)}
 .shell form.pop-form{display:block}
 label.btn{cursor:pointer}
 

@@ -1,8 +1,6 @@
-/* Estilos de «Contabilidad» (CON-03a), sobre el Diseño v2 (D-47): tablas, tarjetas, filtros, avisos y pestañas salen de core/static/core/css/infoponia.css.
+/* Estilos de «Contabilidad» (CON-03a), sobre el Diseño v2 (D-47): tablas, tarjetas, filtros, avisos y pestañas (también las que son enlaces, UI-02) salen de core/static/core/css/infoponia.css.
    Acá quedan los detalles del libro de gestión, copiados del prototipo de compras y contabilidad (bloque «contabilidad»): la cabecera gris de cada asiento, las
    líneas de movimiento con la «a» de los Haber, el pie de totales y el enlace del número de asiento. */
-a.tab{display:inline-block;text-decoration:none}
-a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
 .libro tr.grp-a td{background:#f3f5f7;border-top:1px solid var(--border-strong);padding:11px 16px}
 .libro tr.mv td{padding:7px 16px;border-bottom:none;font-size:13.5px}
 .libro .mvc .ind{display:inline-block;width:22px;color:var(--muted-foreground)}

@@ -4,7 +4,7 @@ validaba la fecha de creación (6b), ni el máximo del lote (8b), ni las perdida
 {% block titulo %}Concretar cosecha {{ cosecha.codigo }} · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "chev" 14 %} Mis órdenes</a>
+  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "back" 14 %} Mis órdenes</a>
   <div class="page-h"><h1>Concretar <span class="mono">{{ cosecha.codigo }}</span></h1>
     <div class="sub">{{ cosecha.variedad }} · {{ cosecha.invernadero.nombre_invernadero }} · para el {{ cosecha.fecha_programada_orden|date:"d/m/Y" }}{% if ficha.contrato %} · {{ ficha.contrato }}, entrega el {{ ficha.fecha_entrega|date:"d/m/Y" }}{% else %} · sin contrato: todo va a la cámara{% endif %}</div></div>
   <div id="cosecha-formulario">{% include "comercial/cosechas/_concretar_formulario.html" %}</div>

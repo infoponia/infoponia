@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos produccion %}
+{% extends "core/base_con_sesion.html" %}{% load iconos produccion formato_inventario %}
 {% comment %}«Concretar siembra» (PRD-01, PROD-CNC-SMB, `VIEWS['c-siembra']`), diseñada para el celular (marco angosto, D-25): una columna de pasos. Recibe «propuesta» (PropuestaDeConcrecion: orden,
 fecha_propuesta, fecha_minima, distribucion, reservas), «valores», «lotes_de_insumo» ({existencia_id: [LoteInsumo]}), «errores» ({campo: mensaje}), «resumen» y «firma». El sistema propone todo: los
 campos vacíos toman lo propuesto (se ve como texto de ayuda) y el Capataz solo escribe lo que difiere. NO hay validación ni recálculo al escribir: «Ver resumen» valida y calcula, «Confirmar concreción» escribe.
@@ -7,7 +7,7 @@ Sin JavaScript funciona igual (un POST con su «accion»). Todo se escapa.{% end
 {% block contenido %}
 {% with orden=propuesta.orden %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "chev" 14 %} Mis órdenes</a>
+  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "back" 14 %} Mis órdenes</a>
   <div class="page-h"><h1>Concretar <span class="mono">{{ orden.codigo }}</span></h1><div class="sub">{{ orden.variedad }} · {{ orden.invernadero.nombre_invernadero }} · {{ orden.cant_plantines_siembra }} plantines para el {{ orden.fecha_programada_orden|date:"d/m/Y" }}</div></div>
   <form method="post" action="{% url 'produccion:concretar' orden.pk %}" novalidate>
     {% csrf_token %}
@@ -31,7 +31,8 @@ Sin JavaScript funciona igual (un POST con su «accion»). Todo se escapa.{% end
       <div class="card"><div class="card-title">3 · Insumos</div>
         {% for r in propuesta.reservas %}
         <div style="padding:8px 0;border-top:1px solid var(--border)">
-          <b>{{ r.nombre }}</b> <span class="muted sm">reservado: {{ r.reservada|cantidad }} {{ r.unidad }}</span>
+          {# UI-02 (UX-35): «unidad» en plural si la cantidad no es 1, y la etiqueta de las demás («L», no «l»), como siembras.py y el envasado. #}
+          <b>{{ r.nombre }}</b> <span class="muted sm">reservado: {{ r.reservada|cantidad }} {% if r.unidad == "unidad" %}{% if r.reservada == 1 %}unidad{% else %}unidades{% endif %}{% else %}{{ r.unidad|unidad_de }}{% endif %}</span>
           <div class="grid2">
             {% if not r.es_semilla %}<div class="fld"><label for="utilizada_{{ r.existencia_id }}">Utilizado</label>
               <input class="field-input" id="utilizada_{{ r.existencia_id }}" name="utilizada_{{ r.existencia_id }}" type="text" inputmode="decimal" autocomplete="off" placeholder="{{ r.utilizada|cantidad }}" value="{% campo valores 'utilizada' r.existencia_id %}"></div>

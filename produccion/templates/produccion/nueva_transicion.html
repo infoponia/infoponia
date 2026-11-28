@@ -4,7 +4,7 @@ sin mover el scroll ni validar; sin JavaScript, cada botón es un POST común co
 {% block titulo %}Nueva transición · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "back" 14 %} Órdenes de trabajo</a>
   <div class="page-h"><h1>Planificar transición de etapa</h1><div class="sub">Se traslada el lote entero a la etapa que sigue en su ciclo. Si al trasladar se pierden plantas, el Capataz lo declara cuando concreta la orden. Antes de confirmar vas a ver un resumen.</div></div>
   <div id="transicion-vivo" hx-target="#transicion-vivo" hx-swap="innerHTML show:none">{% include "produccion/_nueva_transicion_formulario.html" %}</div>
 </div>

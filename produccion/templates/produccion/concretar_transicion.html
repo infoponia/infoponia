@@ -7,7 +7,7 @@ El sistema propone todo: los campos vacíos toman lo propuesto (se ve como texto
 {% block contenido %}
 {% with orden=propuesta.orden %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "chev" 14 %} Mis órdenes</a>
+  <a class="back" href="{% url 'produccion:bandeja' %}">{% icono "back" 14 %} Mis órdenes</a>
   <div class="page-h"><h1>Concretar <span class="mono">{{ orden.codigo }}</span></h1><div class="sub"><span class="mono">{{ propuesta.lote.codigo }}</span> · {{ propuesta.variedad }} · {{ propuesta.etapa_origen.nombre }} → {{ propuesta.etapa_destino.nombre }} · {{ propuesta.cantidad_actual }} plantas · programada para el {{ orden.fecha_programada_orden|date:"d/m/Y" }}</div></div>
   <form method="post" action="{% url 'produccion:concretar' orden.pk %}" novalidate>
     {% csrf_token %}

@@ -1436,3 +1436,29 @@ Los 28 pasos son los de «Verificación a mano» de `docs/tareas/contabilidad/CO
 - [ ] 26. **Navegador real (obligatorio).** Abrí la pantalla en una **ventana privada** (sin sesión), entrá como Contador y **enviá el formulario hasta el final** (pasos 11 a 15 y la confirmación); después volvé a abrirla. Tiene que mostrar el resultado esperado. Probá también el aviso del paso 8 y 9 como **pedido HTMX**: tiene que verse encima de la pantalla con «Cerrar» (y Escape lo cierra). Si aparece una página «Prohibido (403)» o «Verificación CSRF fallida», o un error en la consola del navegador (F12), avisá: lo más probable es un encabezado que el cliente de Django no puede ver. Con el botón «Iniciar ejercicio» de la ventana HTMX, se abre **otra pestaña**; la operación sigue abierta en la primera.
 - [ ] 27. **(Opcional) Sin JavaScript.** Desactivá JavaScript: «Calcular cierre» vuelve a dibujar la página con el cierre calculado; Enter en un importe dispara «Ver resumen»; todos los botones funcionan.
 - [ ] 28. **(Opcional) Celular.** Abrí la pantalla en un celular o con el ancho reducido: el formulario, el resumen y la confirmación se ven en una columna y los botones se alcanzan.
+## UI-02 · Tarea UI-02 (red de pantallas, celular, contraste, enlaces y textos)
+
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-02-celular-contraste-y-textos.md` (ahí está el detalle de cada uno), copiados acá para ir tachándolos (M5). **Sin migración.** La red de pantallas ya comprobó que ninguna pantalla da error, que todas dan el código de antes y que ninguna muestra códigos internos: acá se mira lo que solo ve un navegador.
+
+**Antes de empezar**
+
+1. `python manage.py runserver` y abrí `http://localhost:8000/` en Chrome o Edge. Modo celular: `F12` y `Ctrl+Shift+M`, «Responsivo», 360 × 800.
+2. Cuentas: Gerente, Agrónomo a cargo de un invernadero, Capataz de ese invernadero, Vendedor y Contador (sirve la base `infoponia_demo`).
+3. Datos: una variedad con su ciclo; una siembra del Capataz para hoy + 3 (y otra para hoy + 4 en el paso 9; ninguna para hoy); un cliente «… S.A.» con una entrega concretada sin pagar.
+
+- [ ] 1. **Celular, Gerente a 360 px.** Sin desplazamiento horizontal; la cuenta y la campana se ven y abren; el panel de la campana no se corta; la fila de módulos se desplaza dentro de su lugar y ninguna ficha se parte; Clientes y Contabilidad siguen en 360 px.
+- [ ] 2. **Celular, Capataz a 360 px.** Marco angosto; cuenta y campana se ven y abren; pie verde «En línea». A 1366 px sigue la columna de 430 px.
+- [ ] 3. **Computadora, Gerente a 1366 px.** Menú lateral y contenido como antes; el pie dice «En línea» y la fecha.
+- [ ] 4. **Gris claro.** «Módulos» del menú y las fechas de la campana en un gris más oscuro, todavía más claro que el negro; las secciones apagadas de «Nueva siembra» se siguen distinguiendo de la activa.
+- [ ] 5. **Ciclo de una variedad.** En «Modificar» variedad, cada etapa con su nombre en texto oscuro sobre un fondo claro de su color y una raya del color abajo; la franja fina de la lista, con los colores llenos.
+- [ ] 6. **Volver.** Flecha a la izquierda en «Nueva siembra», «Concretar siembra» y «Asignar transportista» (antes, hacia abajo o «‹»).
+- [ ] 7. **Pestañas.** IoT, Comercial, Configuración y la ficha del invernadero sin subrayado; la activa con la raya verde; con `Tab`, borde verde de foco.
+- [ ] 8. **Enlaces.** «Activo» del sistema IoT en la ficha del invernadero, en verde y subrayado (se oscurece con el mouse); botones y enlaces de tablas como antes; «Ver todas» del Capataz en verde; las tarjetas de indicadores de Comercial sin azul.
+- [ ] 9. **Órdenes próximas.** Capataz sin órdenes para hoy: «Tenés 1 orden próxima.» y, con la segunda, «Tenés 2 órdenes próximas.».
+- [ ] 10. **Unidad.** «Concretar siembra» de 30 plantines: «reservado: 30 unidades»; un insumo en litros dice «L».
+- [ ] 11. **Aviso del cobro.** Registrar un cobro del cliente «… S.A.» hasta confirmar: «Se registró el cobro COB-… de … S.A.: $ ….» con un solo punto y sin «ronda»; el Contador ve el asiento «Cobro COB-…» en el libro.
+- [ ] 12. **(Opcional) Advertencia de la solicitud.** Con un suministro al límite de incumplimientos: la advertencia dice «… se resolverá y se aplicará la multa de $ …» y ya no nombra «COM-07b».
+- [ ] 13. **Plan de cuentas.** Como Contador: descripciones en palabras, sin «CON-INI-EJE», «PROD-REG-APL», «COM-RSV-SUM» ni otro código; «Productos en Proceso» sin «transiciones».
+- [ ] 14. **Ventana de baja.** Como Gerente, «Dar de baja» de un Agrónomo con alertas: «Pasan al Gerente hasta que asignes otro Agrónomo.» sin «(regla 4 de 8.22)». Cancelá sin confirmar.
+- [ ] 15. **Navegador real (obligatorio).** En una ventana privada, como Vendedor, el paso 11 hasta confirmar: llega a la ficha del cobro con el aviso, sin 403, error de CSRF ni errores en la consola.
+- [ ] 16. **(Opcional) Sin JavaScript.** A 360 px como Gerente: la página no se sale de la pantalla, la fila de módulos se desplaza, «volver» y pestañas se ven igual.

@@ -5,7 +5,7 @@ común con su «accion»). Con «registrado» (el lote recién cargado) muestra 
 {% block titulo %}Registrar lote existente · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "chev" 14 %} Producción</a>
+  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "back" 14 %} Producción</a>
   <div class="page-h"><h1>Registrar lote existente</h1><div class="sub">Cargá los lotes de plantas que ya estaban en tus sectores al poner en marcha InfoPonia, con su etapa actual y un costo estimado. Antes de confirmar vas a ver un resumen con el asiento contable.</div></div>
   {% if registrado %}
   <div class="card" role="status" style="margin-bottom:12px"><div class="card-b">

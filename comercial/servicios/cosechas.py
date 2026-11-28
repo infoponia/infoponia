@@ -781,7 +781,9 @@ def _evaluar_modificacion(cosecha, reserva, contrato, datos, hoy):
     )
     for campo, enviado, guardado, que in no_se_cambia:
         if enviado is not None and enviado != guardado:
-            errores.setdefault(campo, []).append(("no_modificable", f"No se puede cambiar {que}: cancelá la orden y planificá otra (PROD-CNL-ORD)."))
+            # Caso de uso PROD-CNL-ORD (cancelar orden de trabajo): el camino para cambiar estos datos. La cita salió del texto visible en UI-02
+            # (D-109 punto 7).
+            errores.setdefault(campo, []).append(("no_modificable", f"No se puede cambiar {que}: cancelá la orden y planificá otra."))
     _verificar_fecha(errores, advertencias, datos.fecha_programada, contrato, cosecha.variedad, hoy)
     _verificar_datos_de_la_orden(errores, datos.prioridad, datos.descripcion)
     elegibles = {e.lote.pk: e for e in _elegibles(cosecha.invernadero_id, cosecha.variedad_id, reserva.pk)}
@@ -812,8 +814,10 @@ def _evaluar_modificacion(cosecha, reserva, contrato, datos, hoy):
             ("total_distinto", f"El total asignado ({total}) no coincide con el reservado ({total_reservado}): hasta que coincidan no se puede terminar.")
         )
     if sum(e.libre for e in elegibles.values()) < total_reservado:
+        # Caso de uso PROD-CNL-ORD (cancelar orden de trabajo): el camino para reducir la cantidad. La cita salió del texto visible en UI-02
+        # (D-109 punto 7).
         advertencias.append(
-            ("lotes_no_alcanzan", "Los lotes de la variedad ya no alcanzan para cubrir lo reservado: para reducir la cantidad hay que cancelar la orden (PROD-CNL-ORD); lo que quede sin cubrir se cubre con una cosecha nueva.")
+            ("lotes_no_alcanzan", "Los lotes de la variedad ya no alcanzan para cubrir lo reservado: para reducir la cantidad hay que cancelar la orden; lo que quede sin cubrir se cubre con una cosecha nueva.")
         )
     _advertir_fecha_maxima(advertencias, datos.fecha_programada, [(e.lote, e.maxima) for e, _ in nuevas])
     if datos.fecha_programada != cosecha.fecha_programada_orden:

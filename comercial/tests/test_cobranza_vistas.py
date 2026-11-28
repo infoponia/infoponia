@@ -173,7 +173,9 @@ class RegistrarTests(BaseDeVistas):
         self.assertIn("Elegí al menos una entrega.", sin_entregas)
 
     def test_confirmar_registra_el_cobro_y_lleva_a_su_ficha_con_el_aviso(self):
-        """Pasos 10 a 12: registra, manda el comprobante (con `on_commit`) y vuelve a la ficha del cobro con «COB-… registrado»."""
+        """Pasos 10 a 12: registra, manda el comprobante (con `on_commit`) y vuelve a la ficha del cobro con el aviso «Se registró el cobro COB-… de
+        <cliente>: $ …». UI-02 (UX-23, D-109 punto 7): el aviso ya no dice que el asiento no se genera (lo genera desde CON-04d) ni nombra la ronda;
+        antes decía «COB-… registrado: $ … cobrados a <cliente>. El asiento no se genera en esta ronda (contabilidad).»."""
         e = self.en_mora(dias_de_mora=2)
         self.client.force_login(self.e.vendedor)
         datos = self.pedido([e])
@@ -183,8 +185,8 @@ class RegistrarTests(BaseDeVistas):
         pago = PagoCliente.objects.get(tipo_pago="suministro")
         self.assertEqual(respuesta.redirect_chain[-1][0], reverse("comercial:cobro", args=[pago.pk]))
         html = texto(respuesta)
-        self.assertIn(f"{pago.codigo} registrado", html)
-        self.assertIn("$ 1.600,00", html)
+        self.assertIn(f"Se registró el cobro {pago.codigo} de {pago.cliente.nombre_visible}: $ 1.600,00.", html)
+        self.assertNotIn("ronda", html)
         self.assertEqual((len(mail.outbox), pago.usuario_id), (1, self.e.vendedor.pk))
 
     def test_ext_10a_si_ya_se_cobro_vuelve_al_paso_4_con_lo_que_paso(self):

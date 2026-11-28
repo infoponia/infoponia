@@ -165,11 +165,14 @@ class IotCnsSistemaVistaTests(SistemaVistasBase):
         self.assertNotContains(respuesta, sistema.token_resumen or "sin-resumen")
 
     def test_la_ficha_muestra_en_linea_si_el_nodo_se_comunico_hace_poco(self):
-        """«Para los cinco», «Conectividad»: «En línea» si la última comunicación es más reciente que el plazo."""
+        """«Para los cinco», «Conectividad»: «En línea» si la última comunicación es más reciente que el plazo. Se busca la insignia: desde
+        UI-02 (UX-21) el pie de toda pantalla también dice «En línea», y el texto suelto pasaría aunque la ficha dijera «Sin señal»."""
         sistema = fabricas.sistema(self.norte)
         NodoCentral.objects.filter(sistema=sistema).update(ultima_comunicacion=timezone.now() - timedelta(minutes=1))
         self.client.force_login(self.laura)
-        self.assertContains(self.client.get(self.url("sistema")), "En línea")
+        respuesta = self.client.get(self.url("sistema"))
+        self.assertContains(respuesta, '<span class="status-badge status-ok">En línea</span>')
+        self.assertNotContains(respuesta, "Sin señal")
 
     def test_la_barra_de_contexto_recuerda_el_invernadero_elegido_en_la_sesion(self):
         """«Para los cinco», «Elección del invernadero»: ``?invernadero=`` y la sesión ``iot_invernadero``; sin ninguno, el primero por nombre."""

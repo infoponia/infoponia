@@ -5,7 +5,7 @@ tenía el resumen de lo que se libera ni la estimación de cuánto se vuelve a c
 {% block contenido %}
 {% with r=resumen %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <a class="back" href="{% url 'produccion:ordenes' %}?tipo=cosecha">{% icono "back" 14 %} Órdenes de trabajo</a>
   <div class="page-h"><h1>Cancelar <span class="mono">{{ cosecha.codigo }}</span></h1><div class="sub">{{ cosecha.variedad }} · {{ cosecha.invernadero.nombre_invernadero }} · para el {{ cosecha.fecha_programada_orden|date:"d/m/Y" }}</div></div>
   <div class="card"><div class="card-title">Lo que se libera</div>
     <ul>{% for codigo, cantidad in r.lineas %}<li><span class="mono">{{ codigo }}</span>: {{ cantidad }} planta{{ cantidad|pluralize }}</li>{% endfor %}</ul>

@@ -1,8 +1,6 @@
 /* Estilos de «Inventario» (INV-01), sobre el Diseño v2 (D-47): tablas, avisos, pestañas y ventanas salen de
-   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios: las pestañas como enlaces (cada una es una página y
-   funciona sin JavaScript), la barra de la página y el aspecto de una fila dada de baja. */
-a.tab{display:inline-block;text-decoration:none}
-a.tab:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
+   core/static/core/css/infoponia.css. Acá quedan solo los detalles propios (las pestañas como enlaces usan la regla común de infoponia.css, UI-02):
+   la barra de la página y el aspecto de una fila dada de baja. */
 .inv-barra{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
 .inv-off td{color:var(--muted-foreground)}
 .inv-acciones{display:inline-flex;gap:4px;align-items:center;justify-content:flex-end}

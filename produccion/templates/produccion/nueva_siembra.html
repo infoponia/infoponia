@@ -4,7 +4,7 @@ sin mover el scroll ni validar; sin JavaScript, cada botón es un POST común co
 {% block titulo %}Nueva siembra · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "chev" 14 %} Órdenes de trabajo</a>
+  <a class="back" href="{% url 'produccion:ordenes' %}">{% icono "back" 14 %} Órdenes de trabajo</a>
   <div class="page-h"><h1>Nueva siembra</h1><div class="sub">Elegí el invernadero y la variedad, indicá cuántos plantines y para cuándo, y repartilos por sector. Antes de confirmar vas a ver un resumen.</div></div>
   <div id="siembra-vivo" hx-target="#siembra-vivo" hx-swap="innerHTML show:none">{% include "produccion/_nueva_siembra_formulario.html" %}</div>
 </div>

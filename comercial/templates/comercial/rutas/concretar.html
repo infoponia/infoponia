@@ -7,7 +7,7 @@ y «es_retiro». Las correcciones al prototipo están en el «Cierre» de la tar
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{{ volver }}">{% icono "chev" 14 %} Volver</a>
+  <a class="back" href="{{ volver }}">{% icono "back" 14 %} Volver</a>
   <div class="page-h"><h1>Concretar <span class="mono">{{ resumen.entrega.codigo }}</span></h1>
     <div class="sub">{{ resumen.lectura.contrato.cliente.nombre_visible }} · {{ resumen.lectura.contrato.codigo }}{% if es_retiro %} · Retiro en {{ resumen.entrega.invernadero }}{% endif %}</div></div>
   {% if error %}<div class="alert alert-warn" role="alert"><div>{{ error }}</div></div>{% endif %}

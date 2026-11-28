@@ -4,7 +4,7 @@ scroll ni validar; sin JavaScript, cada botón es un POST común con su «accion
 {% block titulo %}Poner fuera de servicio · InfoPonia{% endblock %}
 {% block contenido %}
 <div class="page narrow">
-  <a class="back" href="{% url 'maestros:invernaderos' %}">{% icono "chev" 14 %} Invernaderos</a>
+  <a class="back" href="{% url 'maestros:invernaderos' %}">{% icono "back" 14 %} Invernaderos</a>
   <div class="page-h"><h1>Poner un sector fuera de servicio</h1><div class="sub">Registra que el sector no puede alojar plantas por una rotura, una plaga o una reparación prolongada. El mantenimiento que no requiere retirar plantas no necesita este registro. Antes de confirmar vas a ver un resumen.</div></div>
   <div id="fds-vivo" hx-target="#fds-vivo" hx-swap="innerHTML show:none">{% include "produccion/_fuera_de_servicio_formulario.html" %}</div>
 </div>

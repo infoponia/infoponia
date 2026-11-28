@@ -301,6 +301,23 @@ class BandejaYConcretarTests(Base):
         self.assertIn('placeholder="40"', html)
         self.assertNotIn("Confirmar concreción", html)
 
+    def test_ui02_lo_reservado_lleva_la_unidad_en_plural_y_con_su_etiqueta(self):
+        """UI-02 (UX-35; D-109 punto 7): «reservado: 40 unidades» (no «40 unidad»), «1 unidad» con una sola, y en las demás unidades la
+        etiqueta («L», no el código «l»), como lo muestran `siembras.py` y el envasado."""
+        from django.db import transaction
+
+        from produccion.servicios import reservas
+
+        nutriente = insumo_adicional(self.e, nombre="Nutriente líquido", unidad="l")
+        with transaction.atomic():
+            reservas.reservar(self.orden, nutriente, "2.5", hoy())
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("reservado: 40 unidades", html)
+        self.assertIn("reservado: 2.5 L", html)
+        self.assertNotIn("40 unidad<", html)
+        una = orden_de_siembra(self.e, plantines=1, sector="crecimiento")
+        self.assertIn("reservado: 1 unidad<", self.client.get(reverse("produccion:concretar", args=[una.pk])).content.decode())
+
     def test_ver_resumen_no_escribe_y_confirmar_concreta_y_vuelve_a_la_bandeja(self):
         sector = self.e.sectores["germinacion"].pk
         datos = {"fecha_efectiva": hoy().isoformat(), f"sembrado_{sector}": "35", "motivo_diferencia": "Faltó turba"}
@@ -389,6 +406,17 @@ class LotesActivosYSeccionDeInicioTests(Base):
         self.assertIn("Mis órdenes", html)
         self.assertIn(orden.codigo, html)
         self.assertIn(reverse("produccion:concretar", args=[orden.pk]), html)
+
+    def test_ui02_sin_ordenes_para_hoy_cuenta_las_proximas_con_el_plural_con_tilde(self):
+        """UI-02 (UX-35; D-109 punto 7): «Tenés 1 orden próxima» y «Tenés 2 órdenes próximas» (antes «2 ordenes próximas»: `pluralize` no pone
+        la tilde)."""
+        orden_de_siembra(self.e, plantines=5, dias=3)
+        self.entrar(self.e.capataz)
+        self.assertIn("Tenés 1 orden próxima.", self.client.get(reverse("core:inicio")).content.decode())
+        orden_de_siembra(self.e, plantines=5, sector="crecimiento", dias=4)
+        html = self.client.get(reverse("core:inicio")).content.decode()
+        self.assertIn("Tenés 2 órdenes próximas.", html)
+        self.assertNotIn("2 ordenes", html)
 
     def test_el_gerente_y_el_agronomo_ven_la_pestana_de_ordenes_en_produccion(self):
         for cuenta in (self.e.agronomo, self.gerente):

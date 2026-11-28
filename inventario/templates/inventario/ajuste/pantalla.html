@@ -5,7 +5,7 @@ y lo reemplaza; sin JavaScript, cada envío es un POST que vuelve a mostrar esta
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'inventario/css/inventario.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'inventario:existencias' %}">{% icono "chev" 14 %} Inventario</a>
+  <a class="back" href="{% url 'inventario:existencias' %}">{% icono "back" 14 %} Inventario</a>
   <div class="page-h">
     <h1>Ajustar stock de insumo</h1>
     <div class="sub">Para que el sistema coincida con lo que hay en el depósito. El uso de un insumo no es un ajuste: se registra al concretar una orden o con «Registrar aplicación de insumos».</div>

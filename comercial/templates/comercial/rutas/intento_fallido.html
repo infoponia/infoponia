@@ -5,7 +5,7 @@ Vendedor y al cliente. Sin JavaScript, una página. Recibe «fila» (`FilaDeRuta
 {% block contenido %}
 <link rel="stylesheet" href="{% static_v 'comercial/css/comercial.css' %}">
 <div class="page narrow">
-  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "chev" 14 %} Mi ruta</a>
+  <a class="back" href="{% url 'comercial:ruta' %}">{% icono "back" 14 %} Mi ruta</a>
   <div class="page-h"><h1>Intento fallido · <span class="mono">{{ fila.codigo }}</span></h1><div class="sub">{{ fila.cliente }} · {{ fila.destino }}</div></div>
   <p class="muted">La entrega se reprograma para mañana y queda sin transportista. Los envases vuelven con el producto. Se avisará al Vendedor y al cliente.</p>
   <form method="post" action="{% url 'comercial:entrega_intento_fallido' fila.entrega.pk %}" novalidate>

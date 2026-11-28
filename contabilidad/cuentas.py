@@ -64,7 +64,8 @@ SUBRUBROS = {
 }
 
 # Texto de `docs/casos_de_uso/contabilidad/plan_de_cuentas.md` (tabla de «Cómo se aplica»): para qué se usa la cuenta y qué casos de uso la
-# mueven. Cada tarea de reapertura (CON-04a a CON-04d) lo completa cuando agrega el asiento de su caso de uso.
+# mueven. Cada tarea de reapertura (CON-04a a CON-04d) lo completa cuando agrega el asiento de su caso de uso. Se muestra en el plan de cuentas:
+# los casos de uso se nombran en palabras, sin su código (UI-02; D-109 punto 7), y cada texto dice lo que el código mueve hoy.
 DESCRIPCION_DE_CUENTA = {
     CAJA: "Efectivo de la organización. La mueven: pagos a proveedores en efectivo (Haber), cobros en efectivo (Debe) y asientos manuales.",
     BANCO: (
@@ -79,8 +80,8 @@ DESCRIPCION_DE_CUENTA = {
         "corrección de recepción (Haber)."
     ),
     PRODUCTOS_EN_PROCESO: (
-        "Valor de las plantas en cultivo. La mueven: siembra, transiciones, aplicaciones sobre lotes y lotes existentes (Debe); "
-        "cosechas y mermas (Haber)."
+        "Valor de las plantas en cultivo. La mueven: siembra, aplicaciones sobre lotes y lotes existentes (Debe); cosechas y mermas, "
+        "también las de una transición, una cosecha o un sector fuera de servicio (Haber)."
     ),
     PRODUCTOS_TERMINADOS: (
         "Valor de lo cosechado y todavía no entregado. La mueven: cosecha (Debe); entregas, mermas y vencimientos en cámara (Haber)."
@@ -89,28 +90,28 @@ DESCRIPCION_DE_CUENTA = {
         "Lo que la organización les debe a sus proveedores. La mueven: recepción (Haber); pago y corrección de recepción (Debe)."
     ),
     INDEMNIZACIONES_A_PAGAR: (
-        "Multas por resolución de contratos que la organización todavía no pagó. La mueven: resolución del suministro "
-        "(Haber, COM-RSV-SUM); su pago, un asiento manual del Contador (Debe)."
+        "Multas por resolución de contratos que la organización todavía no pagó. La mueven: la resolución "
+        "de un suministro (Haber); su pago, un asiento manual del Contador (Debe)."
     ),
     CAPITAL_INICIAL: (
-        "Lo que ya existía al poner en marcha InfoPonia. La mueven el asiento de apertura (CON-INI-EJE), el ajuste «carga inicial» de "
+        "Lo que ya existía al poner en marcha InfoPonia. La mueven el asiento de apertura del ejercicio, el ajuste «carga inicial» de "
         "insumos y los lotes existentes (Haber)."
     ),
     VENTAS: "Ingresos por entregas. La mueven: entregas concretadas (Haber).",
     INDEMNIZACIONES_POR_ATRASO: (
-        "Lo que cobra la organización por atraso de un cliente. La mueve: el pago en mora (COM-VNC-PAG, COM-REG-CBR)."
+        "Lo que cobra la organización por atraso de un cliente. La mueve: el cobro de una entrega pagada con atraso."
     ),
     OTROS_INGRESOS: "Ingresos sin cuenta propia. La mueven: asientos manuales.",
     COSTO_DE_PRODUCCION_VENDIDA: "Costo de lo entregado. La mueven: entregas concretadas (Debe).",
     PERDIDAS_POR_MERMAS: "Plantas o producto perdidos. La mueven: mermas en lotes y en cámara, y vencimientos.",
-    GASTOS_DE_PRODUCCION: "Insumos aplicados sin lote en pie. La mueve: la aplicación de insumos sin lote (PROD-REG-APL).",
+    GASTOS_DE_PRODUCCION: "Insumos aplicados sin lote en pie. La mueve: la aplicación de insumos sin lote.",
     INDEMNIZACIONES_POR_INCUMPLIMIENTO: (
-        "Lo que paga la organización por cantidades o calidad faltantes. La mueven: la evaluación de discrepancias y de quejas "
-        "(COM-EVL-DSC, COM-RSV-QJA)."
+        "Lo que paga la organización por cantidades o calidad faltantes. La mueven: la evaluación de discrepancias de una entrega "
+        "y la resolución de quejas."
     ),
-    INDEMNIZACIONES_POR_RESOLUCION: "Multa por resolver un suministro. La mueve: COM-RSV-SUM.",
+    INDEMNIZACIONES_POR_RESOLUCION: "Multa por resolver un suministro. La mueve: la resolución de un suministro.",
     DIFERENCIAS_DE_INVENTARIO: (
-        "Diferencias entre el stock del sistema y el real. La mueven: los ajustes de stock (CMP-AJT-STK). Puede quedar acreedora."
+        "Diferencias entre el stock del sistema y el real. La mueven: los ajustes de stock. Puede quedar acreedora."
     ),
     GASTOS_GENERALES: "Gastos sin cuenta propia. La mueven: asientos manuales.",
 }
