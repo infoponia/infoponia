@@ -15,17 +15,17 @@ hardware e Infraestructura): manda el caso de uso, el prototipo nombra tres (L7)
   </div>
   {% include "inventario/_pestanas.html" with activa="categorias" %}
   <div class="tablewrap">
-    <table class="data-table fixed" style="min-width:760px">
+    <table class="data-table fixed tabla-apilable" style="min-width:760px">
       <colgroup><col><col style="width:200px"><col style="width:100px"><col style="width:110px"><col style="width:170px"></colgroup>
       <thead><tr><th>Categoría</th><th>Consumo directo</th><th class="right">Insumos</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       {% with t=f.tipo %}
       <tr{% if not t.activo %} class="inv-off"{% endif %}>
-        <td><b>{{ t.nombre_tipo_insumo }}</b>{% if t.es_del_sistema %} <span class="lock">{% icono "lock" 12 %} Del sistema</span>{% endif %}</td>
-        <td><span class="status-badge {% if t.consumo_directo == 'no_admite' %}status-neutral{% else %}status-ok{% endif %}">{{ t.get_consumo_directo_display }}</span></td>
-        <td class="right mono">{{ t.cantidad_de_insumos }}</td>
-        <td>{% if t.activo %}<span class="status-badge status-ok">Activa</span>{% else %}<span class="status-badge status-neutral">Inactiva</span>{% endif %}</td>
+        <td data-rotulo="Categoría"><b>{{ t.nombre_tipo_insumo }}</b>{% if t.es_del_sistema %} <span class="lock">{% icono "lock" 12 %} Del sistema</span>{% endif %}</td>
+        <td data-rotulo="Consumo directo"><span class="status-badge {% if t.consumo_directo == 'no_admite' %}status-neutral{% else %}status-ok{% endif %}">{{ t.get_consumo_directo_display }}</span></td>
+        <td data-rotulo="Insumos" class="right mono">{{ t.cantidad_de_insumos }}</td>
+        <td data-rotulo="Estado">{% if t.activo %}<span class="status-badge status-ok">Activa</span>{% else %}<span class="status-badge status-neutral">Inactiva</span>{% endif %}</td>
         <td class="right nowrap">
           <span class="inv-acciones">
           {% if t.es_del_sistema %}<span class="ibtn" role="img" aria-disabled="true" aria-label="Categoría del sistema: no se modifica" title="Categoría del sistema: no se modifica">{% icono "lock" 16 %}</span>{% endif %}

@@ -33,6 +33,24 @@
     });
   }
 
+  // ---- Menú del celular (UI-05, UX-07): un <details> que ya abre y cierra sin JavaScript. Acá se suma lo que el menú de
+  // cuenta también hace: Esc lo cierra (y devuelve el foco al botón «Menú») y un clic afuera lo cierra.
+  var menuCelular = document.querySelector("[data-menu-celular]");
+  if (menuCelular) {
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && menuCelular.open) {
+        menuCelular.open = false;
+        var resumen = menuCelular.querySelector("summary");
+        if (resumen) resumen.focus();
+      }
+    });
+    document.addEventListener("click", function (e) {
+      if (menuCelular.open && !menuCelular.contains(e.target)) menuCelular.open = false;
+    });
+    // Al volver atrás desde una entrada, el navegador puede restaurar la página con el menú abierto: se cierra.
+    window.addEventListener("pageshow", function () { menuCelular.open = false; });
+  }
+
   // ---- Botón del ojo en los campos de contraseña. Se engancha en el documento (no en cada botón) para que
   // también funcione en una ventana que inserta HTMX después de cargar la página (vincular cuenta).
   document.addEventListener("click", function (e) {

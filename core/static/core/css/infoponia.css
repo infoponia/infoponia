@@ -528,20 +528,15 @@ button.gh:hover{border-color:var(--border-strong);box-shadow:0 3px 12px rgba(16,
   .tl li{grid-template-columns:1fr;gap:4px}
   .etapa-row{grid-template-columns:44px 1fr}
   .etapa-row .dur{grid-column:2}
-  .mnav{display:flex}
   .sgrid{grid-template-columns:1fr}
   .lotlist .li{grid-template-columns:1fr 1fr}
   .lotlist .li .act{justify-content:flex-start}
 }
-.mnav{display:none;gap:6px;overflow-x:auto;margin-bottom:16px}
-/* UX-01 (D-109 punto 4): las fichas del menú del celular no se encogen ni se parten; la fila se desplaza dentro de su lugar. */
-.mnav .chip{flex-shrink:0;white-space:nowrap}
 @media(min-width:1100px){.tablewrap{overflow:visible}}
 .tablewrap thead tr:first-child th:first-child{border-top-left-radius:9px}
 .tablewrap thead tr:first-child th:last-child{border-top-right-radius:9px}
 .facts.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .facts.three > .full{grid-column:1/-1}
-.shell.field .mnav{display:none}
 .field .kpis{grid-template-columns:1fr 1fr}
 .field .grid2,.field .grid3{grid-template-columns:1fr}
 .field .with-aside,.field .split{grid-template-columns:1fr}
@@ -654,12 +649,42 @@ a.pop-act:focus-visible,.pop-act:focus-visible{outline:2px solid var(--primary);
 .field .acc-item,.field .pop-act{min-height:52px}
 .field footer.bot{background:var(--ok-bg);border-top-color:#c5e6d3;color:#134a2c;font-size:12.5px}
 @media(max-width:760px){
-  .mnav{display:flex}
   .auth .btn{min-height:48px}
   .btn.back-btn{display:inline-flex}
   .btn.back-btn ~ .brand b{display:none}
   footer.bot .hs{display:none}
   footer.bot{gap:10px}
+}
+
+/* ---- UI-05 (UX-07, UX-02; D-109 punto 4): menú y tablas en el celular. Bloque propio: lo que va fuera del @media es solo para
+   esconder lo del celular en escritorio; todo lo demás rige en menos de 760px y no cambia nada a 1366px. ---- */
+.menu-celular{display:none}
+.menu-celular > summary{list-style:none;cursor:pointer;gap:8px}
+.menu-celular > summary::-webkit-details-marker{display:none}
+@media(max-width:760px){
+  /* El menú «Menú»: el mismo contenido del menú lateral (`_menu_entradas.html`), como panel bajo el encabezado. Es `absolute`
+     respecto de `header.top` (que es `relative`) y queda entre los dos bordes, así no ensancha la página (UX-01). */
+  .menu-celular{display:block}
+  .menu-celular > summary{display:inline-flex;align-items:center;min-height:44px;padding:0 12px}
+  .menu-celular-panel{position:absolute;left:8px;right:8px;top:calc(100% + 2px);z-index:60;display:flex;flex-direction:column;gap:3px;max-height:calc(100vh - var(--header-height) - var(--footer-height) - 16px);overflow-y:auto;padding:10px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-pop)}
+  .menu-celular-panel .nav-item{min-height:44px}
+
+  /* Tablas de lista como tarjetas (UX-02): solo las que llevan `.tabla-apilable`. Cada `<td>` de datos trae `data-rotulo` con el texto
+     de su `<th>`: la primera celda es el título de la tarjeta, las demás son «rótulo: valor» y la celda de acciones (sin rótulo) va
+     al final. Los encabezados quedan para los lectores de pantalla. El `!important` de `min-width` es solo para ganarle al
+     `style="min-width:960px"` que Inventario escribe en su `<table>`. */
+  .tablewrap:has(.tabla-apilable){background:none;border:none;box-shadow:none;overflow:visible}
+  .tabla-apilable{display:block;width:100%;min-width:0 !important}
+  .tabla-apilable colgroup{display:none}
+  .tabla-apilable thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .tabla-apilable tbody{display:block}
+  .tabla-apilable tbody tr{display:block;margin-bottom:10px;padding:4px 0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .tabla-apilable td{position:relative;display:block;padding:6px 14px 6px calc(38% + 6px);border:0;text-align:left;overflow-wrap:anywhere}
+  .tabla-apilable td::before{content:attr(data-rotulo);position:absolute;left:14px;top:7px;width:calc(38% - 14px);font-size:12px;font-weight:600;line-height:1.45;color:var(--muted-foreground);overflow-wrap:anywhere}
+  .tabla-apilable td:first-child{padding:10px 14px 6px;font-size:15px}
+  .tabla-apilable td:first-child::before{display:none}
+  .tabla-apilable td:not([data-rotulo]):not([colspan]){display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px;padding:8px 14px 6px;border-top:1px solid var(--border);white-space:normal;text-align:left}
+  .tabla-apilable td[colspan]{padding:24px 14px;text-align:center}
 }
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
 

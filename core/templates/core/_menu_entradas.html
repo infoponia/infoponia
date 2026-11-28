@@ -1,0 +1,8 @@
+{% load iconos %}{% comment %}Entradas del menú de la cuenta (UI-05, UX-07; D-109 punto 4). Las incluyen el menú lateral y el menú «Menú» del
+celular, así los dos muestran la misma lista: la que arma ``core.menu.menu_de`` y deja ``core.context_processors.marco`` en «menu».
+Una entrada nueva aparece en los dos lados sin tocar esta plantilla.{% endcomment %}
+{% for entrada in menu %}
+    <a class="nav-item{% if entrada.activo %} active{% endif %}" href="{{ entrada.url }}"{% if entrada.activo %} aria-current="page"{% endif %}>
+      {% icono entrada.icono 16 %}<span>{{ entrada.texto }}</span>
+    </a>
+{% endfor %}

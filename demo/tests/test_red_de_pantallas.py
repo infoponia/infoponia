@@ -131,7 +131,13 @@ TH_SIN_TEXTO = "th sin texto"
 ENLACE_CON_ARIA_PRESSED = "enlace con aria-pressed"
 CAMPO_SIN_ETIQUETA = "campo sin etiqueta"
 SALTO_DE_TITULO = "salto de título"
-CONTROLES_DE_ACCESIBILIDAD = (TH_SIN_TEXTO, ENLACE_CON_ARIA_PRESSED, CAMPO_SIN_ETIQUETA, SALTO_DE_TITULO)
+# UI-05 (UX-02; D-109): las tablas de lista que se apilan como tarjetas en el celular (`.tabla-apilable`) llevan `data-rotulo` en cada celda.
+CELDA_SIN_ROTULO = "celda sin rótulo"
+CONTROLES_DE_ACCESIBILIDAD = (TH_SIN_TEXTO, ENLACE_CON_ARIA_PRESSED, CAMPO_SIN_ETIQUETA, SALTO_DE_TITULO, CELDA_SIN_ROTULO)
+# No es un control: marca las páginas que tienen una `.tabla-apilable`, para que la prueba de UI-05 no pase sin revisar ninguna.
+TABLAS_APILABLES = "tablas apilables"
+# El encabezado de la columna de acciones: su celda no lleva rótulo (la tarjeta la pone al final, sin «rótulo:»).
+ENCABEZADO_DE_ACCIONES = "Acciones"
 
 # Los `input` que no son campos para escribir o elegir: no necesitan etiqueta (UI-03, paso 1).
 TIPOS_DE_INPUT_SIN_ETIQUETA = ("hidden", "submit", "button", "reset", "image")
@@ -145,14 +151,14 @@ def _sin_digitos(texto):
 
 
 class _LectorDeAccesibilidad(HTMLParser):
-    """Lee una página y junta lo que miran los cuatro controles de UI-03 (D-109 punto 8): las filas con algún ``<th>`` sin texto,
+    """Lee una página y junta lo que miran los controles de UI-03 y UI-05 (D-109 punto 8): las filas con algún ``<th>`` sin texto,
     los ``<a>`` con ``aria-pressed``, los campos (``input`` que no sea de `TIPOS_DE_INPUT_SIN_ETIQUETA`, ``select``, ``textarea``,
-    salvo los que tienen ``aria-hidden="true"``) sin etiqueta asociada y los títulos que saltan niveles después del primer ``h1``. Lee el HTML, no el CSS: una etiqueta con
+    salvo los que tienen ``aria-hidden="true"``) sin etiqueta asociada y los títulos que saltan niveles después del primer ``h1``, y (UI-05) las celdas de una ``.tabla-apilable`` sin su ``data-rotulo``. Lee el HTML, no el CSS: una etiqueta con
     ``display:none`` cuenta como etiqueta."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.problemas = {control: [] for control in CONTROLES_DE_ACCESIBILIDAD}
+        self.problemas = {control: [] for control in (*CONTROLES_DE_ACCESIBILIDAD, TABLAS_APILABLES)}
         self._oculto = 0  # dentro de <script> o <style>
         # Encabezados de la fila actual: [texto, tiene_aria_label] por cada <th>; el <th> abierto es el último.
         self._fila = []
@@ -166,9 +172,47 @@ class _LectorDeAccesibilidad(HTMLParser):
         # Títulos: (nivel, texto) en orden; el abierto es el último.
         self._titulos = []
         self._en_titulo = False
+        # Tablas (UI-05): una por cada `<table>` abierta; cada una lleva si es apilable, el texto de sus `<th>`, en qué parte va
+        # (`thead` o `tbody`) y en qué columna está la fila actual.
+        self._tablas = []
+
+    def _tabla_abre(self, etiqueta, atributos):
+        """UI-05: sigue las tablas para comprobar el `data-rotulo` de cada `<td>` de una `.tabla-apilable`."""
+        if etiqueta == "table":
+            apilable = "tabla-apilable" in (atributos.get("class") or "").split()
+            self._tablas.append({"apilable": apilable, "rotulos": [], "zona": None, "columna": 0})
+            if apilable:
+                self.problemas[TABLAS_APILABLES].append("tabla")
+            return
+        if not self._tablas:
+            return
+        tabla = self._tablas[-1]
+        if etiqueta in ("thead", "tbody", "tfoot"):
+            tabla["zona"] = etiqueta
+        elif etiqueta == "tr":
+            tabla["columna"] = 0
+        elif etiqueta == "th" and tabla["zona"] == "thead":
+            tabla["rotulos"].append("")
+        elif etiqueta == "td" and tabla["apilable"] and tabla["zona"] == "tbody":
+            columna = tabla["columna"]
+            tabla["columna"] += int(atributos.get("colspan") or 1)
+            if atributos.get("colspan"):
+                return  # la fila de «no hay datos» ocupa toda la tarjeta y no lleva rótulo
+            rotulo = " ".join((atributos.get("data-rotulo") or "").split())
+            esperado = " ".join(tabla["rotulos"][columna].split()) if columna < len(tabla["rotulos"]) else None
+            if esperado is None:
+                self.problemas[CELDA_SIN_ROTULO].append(f"td {columna + 1} sin su th")
+            elif esperado == ENCABEZADO_DE_ACCIONES:
+                if rotulo:
+                    self.problemas[CELDA_SIN_ROTULO].append(f"la celda de «{esperado}» no lleva data-rotulo (lleva «{rotulo}»)")
+            elif not rotulo:
+                self.problemas[CELDA_SIN_ROTULO].append(f"la celda de «{esperado}» no tiene data-rotulo")
+            elif rotulo != esperado:
+                self.problemas[CELDA_SIN_ROTULO].append(f"la celda de «{esperado}» tiene data-rotulo «{rotulo}»")
 
     def handle_starttag(self, etiqueta, atributos):
         atributos = dict(atributos)
+        self._tabla_abre(etiqueta, atributos)
         if etiqueta in ("script", "style"):
             self._oculto += 1
         elif etiqueta == "tr":
@@ -202,6 +246,10 @@ class _LectorDeAccesibilidad(HTMLParser):
             self._en_titulo = True
 
     def handle_endtag(self, etiqueta):
+        if etiqueta == "table" and self._tablas:
+            self._tablas.pop()
+        elif etiqueta in ("thead", "tbody", "tfoot") and self._tablas:
+            self._tablas[-1]["zona"] = None
         if etiqueta in ("script", "style") and self._oculto:
             self._oculto -= 1
         elif etiqueta == "th" and self._en_th:
@@ -221,6 +269,8 @@ class _LectorDeAccesibilidad(HTMLParser):
     def handle_data(self, datos):
         if self._oculto:
             return
+        if self._en_th and self._tablas and self._tablas[-1]["zona"] == "thead" and self._tablas[-1]["rotulos"]:
+            self._tablas[-1]["rotulos"][-1] += datos  # el texto del `<th>`, para el `data-rotulo` de su columna (UI-05)
         if self._en_th and self._fila:
             self._fila[-1][0] += datos
         if self._enlace is not None:
@@ -516,6 +566,16 @@ class RedDePantallasTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
         lineas = self._inventario_de(SALTO_DE_TITULO)
         self.assertEqual(lineas, [], "Títulos que saltan niveles:\n" + "\n".join(lineas))
 
+    # ---- tablas como tarjetas en el celular (UI-05; D-109 punto 4) ----
+
+    def test_ui05_las_tablas_apilables_tienen_rotulo_en_cada_celda(self):
+        """UX-02: toda celda de datos de una `.tabla-apilable` tiene `data-rotulo` con el texto de su `<th>`; la de acciones y la fila de
+        «no hay datos» no. Con un mínimo de pantallas con tabla apilable, para que el control no pase sin mirar ninguna."""
+        con_tabla = sum(1 for v in self.visitas if v.accesibilidad is not None and v.accesibilidad[TABLAS_APILABLES])
+        self.assertGreaterEqual(con_tabla, 30, "Pocas pantallas con una `.tabla-apilable`: ¿se rompió el recorrido o la clase?")
+        lineas = self._inventario_de(CELDA_SIN_ROTULO)
+        self.assertEqual(lineas, [], "Celdas de una `.tabla-apilable` sin su `data-rotulo`:\n" + "\n".join(lineas))
+
 
 class ControlesDeAccesibilidadTests(SimpleTestCase):
     """UI-03 paso 1: cada control de accesibilidad de la red detecta su caso y deja pasar el correcto (con HTML de ejemplo)."""
@@ -559,6 +619,39 @@ class ControlesDeAccesibilidadTests(SimpleTestCase):
         self.assertEqual(
             problemas_de_accesibilidad("<h3>Marco</h3><h1>Ficha</h1><h2>A</h2><h3>B</h3><h2>C</h2><h3>D</h3>")[SALTO_DE_TITULO], []
         )
+
+
+class ControlDeRotulosTests(SimpleTestCase):
+    """UI-05 paso 2: el control de `data-rotulo` detecta su caso y deja pasar el correcto (con HTML de ejemplo)."""
+
+    ENCABEZADO = '<thead><tr><th>Cliente</th><th class="right">Contratos vigentes</th><th><span class="sr">Acciones</span></th></tr></thead>'
+
+    def tabla(self, filas, clase="data-table tabla-apilable"):
+        return f'<table class="{clase}">{self.ENCABEZADO}<tbody>{filas}</tbody></table>'
+
+    def test_ui05_celda_sin_rotulo_o_con_otro_se_detecta(self):
+        """UX-02: una celda sin `data-rotulo`, con uno que no es el de su `<th>`, o con rótulo en la columna de acciones es un problema."""
+        sin = self.tabla('<tr><td>Ana</td><td data-rotulo="Contratos vigentes">2</td><td><a href="/x/">Ver</a></td></tr>')
+        self.assertEqual(problemas_de_accesibilidad(sin)[CELDA_SIN_ROTULO], ["la celda de «Cliente» no tiene data-rotulo"])
+        otro = self.tabla('<tr><td data-rotulo="Nombre">Ana</td><td data-rotulo="Contratos vigentes">2</td><td></td></tr>')
+        self.assertEqual(problemas_de_accesibilidad(otro)[CELDA_SIN_ROTULO], ["la celda de «Cliente» tiene data-rotulo «Nombre»"])
+        acciones = self.tabla('<tr><td data-rotulo="Cliente">Ana</td><td data-rotulo="Contratos vigentes">2</td><td data-rotulo="Acciones"></td></tr>')
+        self.assertEqual(
+            problemas_de_accesibilidad(acciones)[CELDA_SIN_ROTULO], ["la celda de «Acciones» no lleva data-rotulo (lleva «Acciones»)"]
+        )
+
+    def test_ui05_tabla_bien_rotulada_o_no_apilable_pasa(self):
+        """UX-02: la tabla bien rotulada (con la fila de «no hay datos» de `colspan`) pasa, y una tabla sin `.tabla-apilable` no se mira."""
+        bien = self.tabla(
+            '<tr><td data-rotulo="Cliente">Ana</td><td data-rotulo="Contratos vigentes" class="right">2</td><td><a href="/x/">Ver</a></td></tr>'
+            '<tr><td colspan="3">Todavía no hay clientes.</td></tr>'
+        )
+        resultado = problemas_de_accesibilidad(bien)
+        self.assertEqual(resultado[CELDA_SIN_ROTULO], [])
+        self.assertEqual(resultado[TABLAS_APILABLES], ["tabla"])
+        libro = self.tabla("<tr><td>Ana</td><td>2</td><td></td></tr>", clase="data-table libro")
+        self.assertEqual(problemas_de_accesibilidad(libro)[CELDA_SIN_ROTULO], [])
+        self.assertEqual(problemas_de_accesibilidad(libro)[TABLAS_APILABLES], [])
 
 
 def _apps_propias():

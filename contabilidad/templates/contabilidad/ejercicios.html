@@ -11,18 +11,18 @@ Contador, o «sin Contador» si lo cerró el Gerente o el Sistema: la persona es
 
   {% if filas %}
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Ejercicio</th><th>Estado</th><th class="right">Asientos</th><th class="right"><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
         <tr>
-          <td><b>Ejercicio {{ f.numero }}</b><span class="sub2">{{ f.ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ f.ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}</span></td>
-          <td>
+          <td data-rotulo="Ejercicio"><b>Ejercicio {{ f.numero }}</b><span class="sub2">{{ f.ejercicio.fecha_inicio_ejercicio|date:"d/m/Y" }} al {{ f.ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}</span></td>
+          <td data-rotulo="Estado">
             {% if f.ejercicio.estado_ejercicio == 'abierto' %}<span class="status-badge status-ok">Abierto</span>
             {% elif f.ejercicio.estado_ejercicio == 'en_cierre' %}<span class="status-badge status-warn">En cierre</span><span class="sub2">{% if f.dias_desde_el_fin > 0 %}Terminó hace {{ f.dias_desde_el_fin }} día{{ f.dias_desde_el_fin|pluralize }}{% elif f.dias_desde_el_fin == 0 %}Terminó hoy{% else %}Terminó el {{ f.ejercicio.fecha_cierre_ejercicio|date:"d/m/Y" }}{% endif %}</span>
             {% else %}<span class="status-badge status-neutral">Cerrado</span><span class="sub2">{% if f.ejercicio.contador %}Lo cerró {{ f.ejercicio.contador.get_full_name|default:f.ejercicio.contador.email }}{% else %}Sin Contador asociado (lo cerró el Gerente o el Sistema; ver la Auditoría){% endif %}</span>{% endif %}
           </td>
-          <td class="right mono">{{ f.asientos }}</td>
+          <td data-rotulo="Asientos" class="right mono">{{ f.asientos }}</td>
           <td class="right nowrap">
             {% if f.ejercicio.estado_ejercicio == 'en_cierre' and puede_cerrar %}<a class="btn btn-primary btn-sm" href="{% url 'contabilidad:cierre' f.ejercicio.pk %}">Cerrar ejercicio<span class="sr"> {{ f.numero }}</span></a> {% endif %}
             <a class="rowlink" href="{% url 'contabilidad:libro' %}?ejercicio={{ f.ejercicio.pk }}">Ver libro<span class="sr"> del ejercicio {{ f.numero }}</span></a>

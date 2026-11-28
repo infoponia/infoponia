@@ -471,7 +471,8 @@ class AccionesDeMonitoreoVistaTests(MonitoreoVistasBase):
         for html in (del_agronomo, del_gerente):
             self.assertIn("Parámetros IoT", html)
             self.assertIn("Minutos sin actividad", html)
-            self.assertEqual(len(re.findall(r"<details\b", html)), 1)
+            # UI-05: el marco suma un `<details>` propio, el botón «Menú» del celular (`data-menu-celular`); no es del panel y no se cuenta.
+            self.assertEqual(len(re.findall(r"<details\b(?![^>]*data-menu-celular)", html)), 1)
         self.assertNotIn("Modificar parámetros", del_agronomo)
         self.assertNotIn(reverse("configuracion:pantalla"), enlaces(del_agronomo))
         self.assertIn("Modificar parámetros", del_gerente)

@@ -150,7 +150,7 @@ Lo que el módulo `iot` necesitaba de lo ya documentado y lo que el estudiante d
 | `.mono` | La tarea UI-01 pedía quitar `.mono`; se conservó con la definición del prototipo (solo cifras tabulares) porque el prototipo lo usa unas 40 veces y la tarea pide poder copiar su HTML. Corregir el texto de UI-01 | Al validar UI-01 |
 | D-29 contra el prototipo | `.btn-ghost` (contraste AA del borde) y los avisos breves (radio de 6 px, animaciones, posición abajo en menos de 760 px) conservan D-29 y difieren del prototipo. Decidir si D-29 se actualiza al aspecto v2 y se ajustan las pruebas `test_d29_` | Sin fecha |
 | Íconos | `core/templatetags/iconos.py` no estaba en «Permitido fuera de la app» de UI-01; se le agregaron los 20 íconos del prototipo que faltaban para que las tareas de la ronda no toquen `core`. Anotarlo como permitido en la tarea | Al validar UI-01 |
-| `.mnav` del prototipo | El prototipo la deja siempre oculta (su `display:none` va después de la media query). En el sistema se muestra en menos de 760 px. Corregir el prototipo | Sin fecha |
+| `.mnav` del prototipo | El prototipo la deja siempre oculta (su `display:none` va después de la media query). En el sistema se mostraba en menos de 760 px y UI-05 la reemplazó por el botón «Menú» (`<details>`). Corregir el prototipo | Sin fecha |
 | Color de la organización | Las variantes oscura y clara salen de `color-mix()` (D-48, ver arriba); si MAE-04 quiere otro cálculo o validar el contraste del color elegido, se decide ahí | MAE-04 |
 | Revisión visual de UI-01 | No hubo navegador en la sesión: las pantallas de `core` (usuarios, auditoría, Mi perfil) conservan su HTML con los componentes v2 que ya usaban; falta confirmar a mano que ninguna se vea con el aspecto viejo | Revisión a mano de UI-01 |
 
@@ -1053,3 +1053,15 @@ Diferencias con la documentación:
    ese `id`.
 9. **Sin `tblib`, `--parallel` tumba la corrida ante cualquier falla** en vez de informarla. Agregarlo a las dependencias de desarrollo necesita
    permiso.
+
+## UI-05 (menú y tablas del celular; 28/11/2026): lo que se implementó distinto de lo escrito
+
+1. **Vehículos y Faltantes (Comercial) se apilaron aunque la tarea no los nombra**, a pedido del estudiante: la revisión (UX-02) dice «listas de Comercial».
+   Misma receta: la clase `tabla-apilable` y `data-rotulo`, sin CSS nuevo. Son 21 tablas en 19 plantillas.
+2. **No se tocaron** Auditoría, IoT (hardware, reglas, tipos, comandos, monitoreo), Producción, Estadísticas ni las tablas de ficha y de resumen.
+3. **`data-rotulo` también en la primera celda** (el título de la tarjeta, que el CSS no rotula): así la prueba de la red es una sola regla («toda celda de datos»).
+4. **Siguen con desplazamiento horizontal:** el libro de gestión (las tres tablas), el plan de cuentas y Existencias de Inventario (filas de `colspan`, de movimiento y de lote).
+5. **Los portales ya se apilaban** con `data-etiqueta` y su propio CSS (`comercial.css`, `compras.css`): el mismo patrón con otro nombre. Unificarlo es de UI-08.
+6. **La entrada activa del menú se marca por prefijo de URL** (ya era así): en «Bitácora» están activas «Producción» y «Bitácora» a la vez, en el menú lateral y en «Menú».
+7. **Una prueba de IoT contaba los `<details>` de la página** y el marco ahora suma el del botón «Menú»: la cuenta lo excluye (`data-menu-celular`).
+8. **Lector de pantalla:** cambiar el `display` de una tabla puede hacer que algunos navegadores dejen de anunciarla como tabla; sin verificar (paso 16).

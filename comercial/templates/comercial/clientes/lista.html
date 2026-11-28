@@ -24,17 +24,17 @@ apellido; filtro por estado; 50 por página. Es un formulario GET común: sin Ja
   </form>
 
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Cliente</th><th>CUIT</th><th>Contacto</th><th class="right">Direcciones</th><th class="right">Contratos vigentes</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for c in pagina.object_list %}
         <tr>
-          <td><b style="font-weight:600">{{ c }}</b><span class="sub2">{{ c.get_tipo_cliente_display }}</span></td>
-          <td class="nowrap mono">{{ c.cuit_cliente|cuit }}</td>
-          <td>{% if c.email_cliente %}{{ c.email_cliente }}{% else %}<span class="muted">Sin correo</span>{% endif %}<span class="sub2">{% if c.telefono_cliente %}{{ c.telefono_cliente }}{% else %}Sin teléfono{% endif %}</span></td>
-          <td class="right">{{ activas_por_cliente|get_item:c.pk|default:0 }}</td>
-          <td class="right">{{ vigentes_por_cliente|get_item:c.pk|default:0 }}</td>
-          <td>{% if c.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+          <td data-rotulo="Cliente"><b style="font-weight:600">{{ c }}</b><span class="sub2">{{ c.get_tipo_cliente_display }}</span></td>
+          <td data-rotulo="CUIT" class="nowrap mono">{{ c.cuit_cliente|cuit }}</td>
+          <td data-rotulo="Contacto">{% if c.email_cliente %}{{ c.email_cliente }}{% else %}<span class="muted">Sin correo</span>{% endif %}<span class="sub2">{% if c.telefono_cliente %}{{ c.telefono_cliente }}{% else %}Sin teléfono{% endif %}</span></td>
+          <td data-rotulo="Direcciones" class="right">{{ activas_por_cliente|get_item:c.pk|default:0 }}</td>
+          <td data-rotulo="Contratos vigentes" class="right">{{ vigentes_por_cliente|get_item:c.pk|default:0 }}</td>
+          <td data-rotulo="Estado">{% if c.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:cliente' c.pk %}">Ver<span class="sr"> la ficha de {{ c }}</span></a></td>
         </tr>
       {% empty %}

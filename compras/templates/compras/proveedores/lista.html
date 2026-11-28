@@ -30,16 +30,16 @@ Los filtros (regla 2) se envían con «Filtrar»: sin JavaScript funciona igual.
   </form>
 
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Proveedor</th><th>Contacto</th><th>Categorías de insumos</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       {% with p=f.proveedor %}
       <tr{% if not p.activo %} class="prv-off"{% endif %}>
-        <td><a class="prv-nombre" href="{% url 'compras:proveedor_ficha' p.pk %}"><b>{{ p.nombre_para_mostrar }}</b></a><span class="sub2">CUIT {{ p.cuit_formateado }} · {{ p.get_tipo_proveedor_display }}</span></td>
-        <td>{% if p.telefono_proveedor %}{{ p.telefono_proveedor }}{% else %}<span class="muted">Sin teléfono</span>{% endif %}<span class="sub2">{{ p.email_proveedor }}</span></td>
-        <td>{% for c in p.categorias_activas %}{{ c.nombre_tipo_insumo }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>
-        <td>{% if p.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+        <td data-rotulo="Proveedor"><a class="prv-nombre" href="{% url 'compras:proveedor_ficha' p.pk %}"><b>{{ p.nombre_para_mostrar }}</b></a><span class="sub2">CUIT {{ p.cuit_formateado }} · {{ p.get_tipo_proveedor_display }}</span></td>
+        <td data-rotulo="Contacto">{% if p.telefono_proveedor %}{{ p.telefono_proveedor }}{% else %}<span class="muted">Sin teléfono</span>{% endif %}<span class="sub2">{{ p.email_proveedor }}</span></td>
+        <td data-rotulo="Categorías de insumos">{% for c in p.categorias_activas %}{{ c.nombre_tipo_insumo }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>
+        <td data-rotulo="Estado">{% if p.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
         <td class="right nowrap">
           <a class="btn btn-ghost btn-sm" href="{% url 'compras:proveedor_ficha' p.pk %}" aria-label="Ver a {{ p.nombre_para_mostrar }}">Ver</a>
           {% if "modificar" in f.acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'compras:proveedor_editar' p.pk %}" aria-label="Editar a {{ p.nombre_para_mostrar }}">{% icono "pencil" 14 %} Editar</a>{% endif %}
