@@ -176,7 +176,7 @@ class PagoClienteRestriccionesTests(Base):
         pago = cobro([self.concretada()])
         self.assertEqual(pago.codigo, f"COB-{pago.numero:04d}")
         self.assertEqual(str(pago), pago.codigo)
-        self.assertRegex(pago.codigo, r"^COB-\d{4}$")
+        self.assertRegex(pago.codigo, r"^COB-\d{4,5}$")  # 4 dígitos, o 5 si la numeración de una base de pruebas reutilizada (--keepdb) pasó de 9999
 
     def test_regla_la_secuencia_del_cobro_avanza_sin_repetir(self):
         """`comercial_cobro_numero_seq` (creada por la migración con `RunSQL`): dos números seguidos son distintos y crecientes."""

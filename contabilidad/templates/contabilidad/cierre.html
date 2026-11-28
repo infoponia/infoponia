@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos %}
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos vista %}
 {% comment %}«Cerrar ejercicio» (CON-CRR-EJE regla 4; ``VIEWS.k_cierre`` del prototipo): el resumen del ejercicio (rango, cantidad de asientos, total del Debe y del Haber), el aviso de que el cierre no se
 puede deshacer y la casilla de confirmación (C9). Es un formulario común: funciona sin JavaScript. Sin «Hay N pagos pendientes» del prototipo: los pagos son de ``compras`` y el cierre no tiene verificaciones (regla 4). Todo se escapa.{% endcomment %}
 {% block titulo %}Cerrar el ejercicio {{ numero_de_ejercicio }} · InfoPonia{% endblock %}
@@ -30,7 +30,7 @@ puede deshacer y la casilla de confirmación (C9). Es un formulario común: func
       <section class="sec">
         <div class="sec-h"><span class="sec-num">2</span>Confirmación</div>
         <label class="chk"><input type="checkbox" name="confirmo" value="1" aria-describedby="{% if falta_confirmar %}error-confirmo{% endif %}"> Revisé el libro de gestión y quiero cerrar el ejercicio {{ numero_de_ejercicio }}</label>
-        {% if falta_confirmar %}<div class="err" id="error-confirmo" role="alert">Confirmá que revisaste el libro para cerrar el ejercicio.</div>{% endif %}
+        {% if falta_confirmar %}<div class="err" id="error-confirmo" role="alert"{% llevar_vista_una_vez %}>Confirmá que revisaste el libro para cerrar el ejercicio.</div>{% endif %}
       </section>
     </div>
     <div class="footbar">

@@ -1,10 +1,10 @@
-{% load iconos produccion %}{% comment %}El formulario de «Registrar merma» (PROD-REG-MRM): lo que HTMX reemplaza dentro de #merma-vivo. Recibe «invernaderos», «invernadero_id», «lotes» (FilaDeLoteConMerma), «lote_id»,
+{% load iconos produccion vista %}{% comment %}El formulario de «Registrar merma» (PROD-REG-MRM): lo que HTMX reemplaza dentro de #merma-vivo. Recibe «invernaderos», «invernadero_id», «lotes» (FilaDeLoteConMerma), «lote_id»,
 «propuesta» (PropuestaDeMerma o None), «valores» (lo escrito), «errores» ({campo: mensaje}; los de un sector, «sector_<id>»), «resumen» (ResumenDeMerma o None), «firma» y «cambio_la_firma». Cambiar el invernadero o el
 lote solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Sin lotes activos (extensión 4b) el formulario queda
 deshabilitado con su motivo. Todo se escapa.{% endcomment %}
 <form id="merma-form" method="post" action="{% url 'produccion:registrar_merma' %}" novalidate>
-  {% csrf_token %}
-  {% if errores.general or errores.lote %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.lote }}</div>{% endif %}
+  {% csrf_token %}{% primer_error errores "general" "lote" "sector_*" "cantidad" "causa" "descripcion" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+  {% if errores.general or errores.lote %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" "lote" %}>{{ errores.general }}{{ errores.lote }}</div>{% endif %}
   <div class="stack">
     <div class="card">
       <div class="card-title">1 · ¿Dónde?</div>
@@ -38,25 +38,25 @@ deshabilitado con su motivo. Todo se escapa.{% endcomment %}
         {% for s in propuesta.sectores %}
         <div class="fld"><label for="cant_{{ s.sector_id }}">{{ s.nombre }} <span class="muted">(ocupados por el lote: {{ s.ocupados }})</span></label>
           <input class="field-input" id="cant_{{ s.sector_id }}" name="cant_{{ s.sector_id }}" type="number" min="0" max="{{ s.ocupados }}" step="1" inputmode="numeric" placeholder="0" value="{% campo valores 'cant' s.sector_id %}">
-          {% campo errores 'sector' s.sector_id as error_del_sector %}{% if error_del_sector %}<div class="err">{{ error_del_sector }}</div>{% endif %}</div>
+          {% campo errores 'sector' s.sector_id as error_del_sector %}{% if error_del_sector %}<div class="err"{% llevar_vista_fila primero "sector" s.sector_id %}>{{ error_del_sector }}</div>{% endif %}</div>
         {% endfor %}
       </div>
-      {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% endif %}
+      {% if errores.cantidad %}<div class="err"{% llevar_vista primero "cantidad" %}>{{ errores.cantidad }}</div>{% endif %}
       <div class="grid2">
         <div class="fld"><label for="causa">Causa<span class="req" aria-hidden="true"> *</span></label>
           <select class="field-input" id="causa" name="causa" data-desplegable>
             <option value="">Seleccionar…</option>
             {% for valor, texto in propuesta.causas %}<option value="{{ valor }}"{% if valores.causa == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
           </select>
-          {% if errores.causa %}<div class="err">{{ errores.causa }}</div>{% else %}<div class="hint">El descarte por selección son plantas que se sacan a propósito: no suma a la merma acumulada.</div>{% endif %}</div>
+          {% if errores.causa %}<div class="err"{% llevar_vista primero "causa" %}>{{ errores.causa }}</div>{% else %}<div class="hint">El descarte por selección son plantas que se sacan a propósito: no suma a la merma acumulada.</div>{% endif %}</div>
         <div class="fld"><label for="descripcion">Descripción (opcional)</label>
           <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="300">{{ valores.descripcion }}</textarea>
-          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
+          {% if errores.descripcion %}<div class="err"{% llevar_vista primero "descripcion" %}>{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
       </div>
     </div>
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen de la merma"><div class="card-title">Resumen</div>
+    <div class="card" role="region" aria-label="Resumen de la merma" data-llevar-vista tabindex="-1"><div class="card-title">Resumen</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <p class="sm"><b>Lote:</b> {{ resumen.lote.codigo }} · {{ resumen.variedad }} · {{ resumen.etapa }}</p>
       <p class="sm"><b>Plantas perdidas:</b> {{ resumen.total }} — {% for sector, plantas in resumen.por_sector %}{% if plantas %}{{ sector.nombre_sector }}: {{ plantas }}{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}</p>

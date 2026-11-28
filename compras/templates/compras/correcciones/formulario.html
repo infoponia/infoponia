@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Corregir una recepción» (CMP-COR-RCP pasos 2 a 6; ``VIEWS.c_cor`` del prototipo). Recibe «orden», «recepciones» (``RecepcionCorregible``), «actual» (la elegida), «filas» (cada una con la ``LineaCorregible``, el texto
 escrito y su error), «observacion», «motivos» (por qué una línea no se corrige) y «errores». La recepción se elige con enlaces (sin JavaScript); la cantidad a descontar es por línea; la observación es opcional.
 Sin validar mientras se escribe: «Ver resumen» muestra el paso 7.{% endcomment %}
@@ -9,7 +9,7 @@ Sin validar mientras se escribe: «Ver resumen» muestra el paso 7.{% endcomment
   <a class="btn btn-text" href="{% url 'compras:orden_ficha' orden.pk %}">{% icono "back" 14 %} Orden {{ orden }}</a>
   <div class="page-h"><h1>Corregir una recepción · {{ orden }}</h1></div>
   <div class="alert alert-info" role="status" style="margin-bottom:16px">{% icono "info" 16 %}<div>Solo se puede corregir <b>lo que se cargó de más</b>, mientras el proveedor <b>no esté pagado</b> y el lote conserve la cantidad. Lo corregido vuelve a quedar pendiente de recibir y se registra el asiento inverso. Lo que se registró de menos se corrige con otra recepción parcial.</div></div>
-  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px">{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if errores %}<div class="alert alert-danger" role="alert" style="margin-bottom:16px"{% llevar_vista_una_vez %}>{% icono "warn" 16 %}<div>{% for e in errores %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
 
   {% if recepciones|length > 1 %}
   <h2 class="ped-sub">Qué recepción</h2>
@@ -37,7 +37,7 @@ Sin validar mientras se escribe: «Ver resumen» muestra el paso 7.{% endcomment
           <td class="right" style="min-width:150px">
             {% if l.motivo_bloqueo %}<span class="muted sm">{% if l.motivo_bloqueo == "cerrada_con_faltante" %}{{ motivos.cerrada_con_faltante }}{% else %}{{ motivos.sin_stock_en_el_lote }}{% endif %}</span>
             {% else %}<input class="field-input num" id="cant_{{ id }}" name="cant_{{ id }}" inputmode="decimal" autocomplete="off" placeholder="0" value="{{ f.texto }}" aria-label="Cantidad a descontar de {{ l.insumo.nombre_insumo }}"{% if f.error %} aria-invalid="true"{% endif %}>
-            {% if f.error %}<div class="err" role="alert">{{ f.error }}</div>{% endif %}{% endif %}
+            {% if f.error %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ f.error }}</div>{% endif %}{% endif %}
           </td>
         </tr>
         {% endwith %}

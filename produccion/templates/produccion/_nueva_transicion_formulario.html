@@ -1,10 +1,10 @@
-{% load iconos produccion %}{% comment %}El formulario de «Nueva transición» (PROD-PNF-TRN): lo que HTMX reemplaza dentro de #transicion-vivo. Recibe «ofrecido» (DatosDePlanificacionDeTransicion: lotes, lote, etapa_destino,
+{% load iconos produccion vista %}{% comment %}El formulario de «Nueva transición» (PROD-PNF-TRN): lo que HTMX reemplaza dentro de #transicion-vivo. Recibe «ofrecido» (DatosDePlanificacionDeTransicion: lotes, lote, etapa_destino,
 cantidad, capataz, fecha_propuesta, dias_de_atraso, fecha_estimada_de_fin, diferencia_en_dias, fecha_maxima_de_cosecha, sectores, no_elegibles), «valores» (lo escrito), «lote_id», «hay_trasladables», «motivos»,
 «prioridades», «errores» ({campo: mensaje}), «resumen» (ResumenDeTransicion o None), «firma» y «cambio_la_firma». Reglas de interfaz (.claude/rules/interfaz.md): elegir el lote solo redibuja lo que depende
 de él (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar transición». No hay refresco al escribir. Todo se escapa. Los errores van debajo de su campo; lo que no tiene campo, arriba.{% endcomment %}
 <form id="transicion-form" method="post" action="{% url 'produccion:nueva_transicion' %}" novalidate>
-  {% csrf_token %}
-  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}</div>{% endif %}
+  {% csrf_token %}{% primer_error errores "general" "fecha_programada" "distribucion" "prioridad" "descripcion" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" %}>{{ errores.general }}</div>{% endif %}
   <div class="stack">
     <div class="card">
       <div class="card-title">1 · Lote</div>
@@ -34,7 +34,7 @@ de él (accion «actualizar»), SIN validar y sin mover el scroll; validar y cal
       <div class="grid2">
         <div class="fld"><label for="fecha_programada">Fecha programada<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="fecha_programada" name="fecha_programada" type="date" value="{% if valores.fecha_programada %}{{ valores.fecha_programada }}{% else %}{{ ofrecido.fecha_propuesta|date:'Y-m-d' }}{% endif %}"{% if errores.fecha_programada %} aria-invalid="true"{% endif %}>
-          {% if errores.fecha_programada %}<div class="err">{{ errores.fecha_programada }}</div>
+          {% if errores.fecha_programada %}<div class="err"{% llevar_vista primero "fecha_programada" %}>{{ errores.fecha_programada }}</div>
           {% else %}<div class="hint">{{ ofrecido.lote.etapa_nombre }} termina el {{ ofrecido.fecha_estimada_de_fin|date:"d/m/Y" }}.{% if ofrecido.dias_de_atraso %} Ya pasó hace {{ ofrecido.dias_de_atraso }} día{{ ofrecido.dias_de_atraso|pluralize }}: se propone hoy.{% endif %}{% if ofrecido.diferencia_en_dias %} La fecha elegida es {% if ofrecido.diferencia_en_dias > 0 %}{{ ofrecido.diferencia_en_dias }} día{{ ofrecido.diferencia_en_dias|pluralize }} posterior{{ ofrecido.diferencia_en_dias|pluralize:"," }}{% else %}{% widthratio ofrecido.diferencia_en_dias 1 -1 %} día{% if ofrecido.diferencia_en_dias != -1 %}s{% endif %} anterior{% if ofrecido.diferencia_en_dias != -1 %}es{% endif %}{% endif %} al fin estimado de la etapa.{% endif %}{% if ofrecido.fecha_maxima_de_cosecha %} Fecha máxima de cosecha estimada: <b>{{ ofrecido.fecha_maxima_de_cosecha|date:"d/m/Y" }}</b>.{% endif %}</div>{% endif %}</div>
         <div class="fld"><span class="lbl">Etapa destino</span><span class="sm" style="display:block;padding:8px 0">{{ ofrecido.etapa_destino.nombre }} · {{ ofrecido.etapa_destino.duracion_dias }} días · el Capataz es {{ ofrecido.capataz.get_full_name|default:ofrecido.capataz.email }}</span></div>
       </div>
@@ -49,7 +49,7 @@ de él (accion «actualizar»), SIN validar y sin mover el scroll; validar y cal
         <input class="field-input" id="sector_{{ s.sector_id }}" name="sector_{{ s.sector_id }}" type="number" min="0" max="{{ s.libres }}" step="1" inputmode="numeric" value="{% campo valores 'sector' s.sector_id %}"></div>
       {% empty %}<p class="err">El invernadero no tiene sectores de {{ ofrecido.etapa_destino.nombre }} con lugar.</p>{% endfor %}
       {% for n in ofrecido.no_elegibles %}<div class="hint"><b>{{ n.nombre }}:</b> {{ n.texto }}</div>{% endfor %}
-      {% if errores.distribucion %}<div class="err">{{ errores.distribucion }}</div>{% endif %}
+      {% if errores.distribucion %}<div class="err"{% llevar_vista primero "distribucion" %}>{{ errores.distribucion }}</div>{% endif %}
     </div>
 
     <div class="card">
@@ -59,15 +59,15 @@ de él (accion «actualizar»), SIN validar y sin mover el scroll; validar y cal
           <select class="field-input" id="prioridad" name="prioridad" data-desplegable>
             {% for valor, texto in prioridades %}<option value="{{ valor }}"{% if valores.prioridad == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
           </select>
-          {% if errores.prioridad %}<div class="err">{{ errores.prioridad }}</div>{% endif %}</div>
+          {% if errores.prioridad %}<div class="err"{% llevar_vista primero "prioridad" %}>{{ errores.prioridad }}</div>{% endif %}</div>
         <div class="fld"><label for="descripcion">Descripción (opcional)</label>
           <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="500">{{ valores.descripcion }}</textarea>
-          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+          {% if errores.descripcion %}<div class="err"{% llevar_vista primero "descripcion" %}>{{ errores.descripcion }}</div>{% endif %}</div>
       </div>
     </div>
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen de la transición"><div class="card-title">Resumen</div>
+    <div class="card" role="region" aria-label="Resumen de la transición" data-llevar-vista tabindex="-1"><div class="card-title">Resumen</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <p class="sm"><b>Lote:</b> <span class="mono">{{ resumen.lote.codigo }}</span> · {{ resumen.variedad }} · {{ resumen.invernadero.nombre_invernadero }}</p>
       <p class="sm"><b>Etapa:</b> {{ resumen.etapa_origen.nombre }} → {{ resumen.etapa_destino.nombre }} · <b>Plantas:</b> {{ resumen.cantidad }}</p>

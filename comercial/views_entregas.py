@@ -15,6 +15,7 @@ from comercial.models import Entrega
 from comercial.servicios import atencion, entregas
 from core.acceso import rol_requerido
 from core.models import Usuario
+from core.obligatorios import esta_vacio
 from inventario.servicios import stock
 
 GERENTE = Usuario.Rol.GERENTE
@@ -149,6 +150,9 @@ def no_reconocida(request, entrega_id):
             if "alerta_resuelta" in _codigos(error):
                 raise
             errores = {campo: [e.messages[0] for e in lista] for campo, lista in error.error_dict.items()}
+            if esta_vacio(descripcion):
+                # UI-06 (UX-27, D-109 punto 9): el servicio corta en el resultado (`atencion.py:183`) y no llega a la descripción, que se exige con cualquier resultado (`atencion.py:187`).
+                errores.setdefault("descripcion", ["Contá qué averiguaste: la descripción es obligatoria."])
             return _pagina_de_atencion(request, alerta_id, errores, resultado, descripcion.strip())
     except ValidationError as error:  # la alerta se resolvió mientras tanto
         messages.error(request, " ".join(error.messages))

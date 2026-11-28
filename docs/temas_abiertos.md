@@ -1065,3 +1065,19 @@ Diferencias con la documentación:
 6. **La entrada activa del menú se marca por prefijo de URL** (ya era así): en «Bitácora» están activas «Producción» y «Bitácora» a la vez, en el menú lateral y en «Menú».
 7. **Una prueba de IoT contaba los `<details>` de la página** y el marco ahora suma el del botón «Menú»: la cuenta lo excluye (`data-menu-celular`).
 8. **Lector de pantalla:** cambiar el `display` de una tabla puede hacer que algunos navegadores dejen de anunciarla como tabla; sin verificar (paso 16).
+
+## UI-06 (resumen y errores a la vista; 28/11/2026): lo que se implementó distinto de lo escrito
+
+1. **Foco en el error (decisión del estudiante: A).** El `div.err` queda después del campo: con el foco en el error, Tab pasa al campo siguiente y hace falta Shift + Tab para volver al campo.
+   **Alternativa B para UI-08:** llevar el foco al control del `.fld`. Riesgos: los desplegables propios de D-24 (el foco iría al botón del desplegable, no al `<select>` oculto), los errores generales sin campo (no tienen control) y la necesidad de `aria-describedby` en cada campo con error (cambio de todas las apps).
+2. **Candidato para UI-08:** altas largas con los errores abajo, en el celular (hay que desplazarse hasta el error y volver al campo).
+3. **Tres etiquetas de plantilla más de las escritas** (`llevar_vista`, `llevar_vista_fila`, `llevar_vista_una_vez`, además de `primer_error`): la tarea no las nombra; salieron de que los portales, las filas anidadas y los resúmenes por HTMX no tienen un único diccionario de errores.
+   `llevar_vista_una_vez` solo marca en una respuesta a un envío (POST): «Concretar entrega» abre diciendo que falta el medio de pago y habría robado el foco al cargar.
+4. **Sin marca, a propósito:** «Habilitar insumo» (es una ventana: `abrirVentana` maneja el foco), el resumen de «Iniciar ejercicio» (es la página entera) y los resúmenes en ventana (compra-venta, suministros). «Emitir comando» (IoT) marca el título «Resumen del comando», no el cuadro.
+5. **Deuda de mantenimiento:** los textos de los servicios se repiten en ocho vistas (con la cita del archivo y la línea) para mostrar juntos los obligatorios. Las pruebas de `test_ui06_obligatorios_juntos.py` comparan cada texto con el que da el servicio: si uno cambia y el otro no, avisan.
+6. **Fuera de alcance (no se tocó):** errores en voseo en el portal del cliente (`confirmacion.py:226`, `faltantes.py:283`, `views_cliente.py:114`; es de UI-04); `required` sin `novalidate` en la ventana de cancelar orden de IoT (`_ventana_cancelar_orden.html`: el navegador frena el envío antes que el servicio);
+   selectores con `hx-post` sin `data-sin-envio-en-curso` (Nueva siembra, ajuste, el radio de transición); selectores de dirección de maestros y clientes con `hx-get` sin `show:none`; el «Ver resumen» de pago lleva `data-sin-envio-en-curso` y dice «Guardando…»;
+   en «Concretar entrega» con HTMX los errores de cada campo no se redibujan (solo el resumen).
+7. **Quedaron afuera de «obligatorios juntos»** (decisión del estudiante): la fecha de «Poner fuera de servicio» (viene cargada) y el medio de pago de «Cancelar compra-venta» (depende de que haya cobro: repetiría una regla del servicio).
+8. **Pruebas con `--keepdb`:** la numeración de órdenes de la base de pruebas se acumula entre corridas completas y, pasadas unas diez, un código llega a 5 dígitos. Tres pruebas existentes comprobaban exactamente 4 (`test_com_reg_cbr.py`, `test_modelos_cobranza.py`, `test_prod_asg_stk.py`) y pasaron a `\d{4,5}` a pedido del estudiante.
+   Si aparece otra, recrear la base de pruebas (`--noinput`, sin `--keepdb`).

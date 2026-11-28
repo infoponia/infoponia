@@ -1,4 +1,4 @@
-{% load iconos %}{% comment %}El formulario de emisión de un comando (IOT-EMT-CMD, pasos 2 a 8; ``cmdForm`` del prototipo). Dos estados: el formulario (actuador, acción, valor si la acción lo lleva y descripción opcional) y el
+{% load iconos vista %}{% comment %}El formulario de emisión de un comando (IOT-EMT-CMD, pasos 2 a 8; ``cmdForm`` del prototipo). Dos estados: el formulario (actuador, acción, valor si la acción lo lleva y descripción opcional) y el
 resumen con sus advertencias (paso 6), donde se confirma o se vuelve a cambiar (7a y 7b). Elegir el actuador o la acción vuelve a dibujar el formulario SIN validar («paso=refrescar»: con HTMX solo cambia «#emision»; sin
 JavaScript, el botón «Actualizar el formulario»). Las validaciones corren solo al apretar «Ver resumen» o «Confirmar». Recibe «emision» (para, datos, accion, pendiente, reglas, errores, general y resumen). Paso 4: las reglas activas del actuador elegido (IOT-06); la advertencia 6b va en el resumen.{% endcomment %}
 <div id="emision" class="card" style="margin-bottom:18px">
@@ -7,7 +7,7 @@ JavaScript, el botón «Actualizar el formulario»). Las validaciones corren sol
     {% if para.elegido %}<span class="spacer"></span><span class="sm muted">Estado informado: <b>{{ para.elegido.estado_texto }}</b>{% if para.elegido.desde %} desde las {{ para.elegido.desde|date:"H:i" }}{% endif %}</span>{% endif %}
   </div>
   <div class="card-b">
-    {% for mensaje in emision.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:12px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+    {% for mensaje in emision.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:12px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
     {% if para.bloqueo and not emision.general %}<div class="alert alert-danger" role="status" style="margin-bottom:12px">{% icono "warn" 16 %}<div>{{ para.bloqueo }}
       {% if emision.pendiente %}{% if emision.pendiente.cancelable %}<div style="margin-top:8px"><a class="btn btn-ghost btn-sm" href="{% url 'iot:comando_cancelar' emision.pendiente.comando.pk %}?volver=comandos" hx-get="{% url 'iot:comando_cancelar' emision.pendiente.comando.pk %}?volver=comandos" hx-target="#ventana-confirmar" hx-swap="innerHTML">Cancelar {{ emision.pendiente.codigo }}</a></div>
       {% else %}<div class="xs" style="margin-top:6px">El nodo puede estar ejecutándolo: podés cancelarlo en {{ emision.pendiente.segundos }} s.</div>{% endif %}{% endif %}</div></div>{% endif %}
@@ -22,7 +22,7 @@ JavaScript, el botón «Actualizar el formulario»). Las validaciones corren sol
       <input type="hidden" name="accion" value="{{ resumen.accion.pk }}">
       <input type="hidden" name="valor" value="{{ datos.valor|default_if_none:'' }}">
       <input type="hidden" name="descripcion" value="{{ resumen.descripcion }}">
-      <h3 class="sec-h">Resumen del comando</h3>
+      <h3 class="sec-h"{% llevar_vista_una_vez %}>Resumen del comando</h3>
       <div class="resumen"><dl>
         <dt>Actuador</dt><dd>{{ resumen.actuador.tipo_actuador.nombre_actuador }} · {{ resumen.actuador.identificador_equipo }}</dd>
         <dt>Acción</dt><dd>{{ resumen.accion.nombre_accion }} <span class="code muted">{{ resumen.accion.comando.codigo }}</span></dd>
@@ -43,7 +43,7 @@ JavaScript, el botón «Actualizar el formulario»). Las validaciones corren sol
             <option value="">Seleccioná un actuador</option>
             {% for f in para.actuadores %}<option value="{{ f.actuador.pk }}"{% if emision.actuador_id == f.actuador.pk %} selected{% endif %}>{{ f.actuador.tipo_actuador.nombre_actuador }} · {{ f.actuador.identificador_equipo }} ({{ f.sector }}){% if f.comando_pendiente %} · pendiente{% endif %}</option>{% endfor %}
           </select>
-          {% for e in errores.actuador %}<div class="err">{{ e }}</div>{% endfor %}
+          {% for e in errores.actuador %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           {% if not para.actuadores and not para.bloqueo %}<div class="hint">Este sistema no tiene actuadores activos.</div>{% endif %}
         </div>
         <div class="fld">
@@ -56,20 +56,20 @@ JavaScript, el botón «Actualizar el formulario»). Las validaciones corren sol
           {% else %}
           <select class="field-input" id="cmd-accion" data-desplegable disabled><option>{% if para.bloqueo %}No se puede emitir ahora{% elif para.elegido %}No hay acciones disponibles{% else %}Primero elegí el actuador{% endif %}</option></select>
           {% endif %}
-          {% for e in errores.accion %}<div class="err">{{ e }}</div>{% endfor %}
+          {% for e in errores.accion %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
         </div>
       </div>
       {% if emision.accion.requiere_valor %}
       <div class="fld">
         <label for="cmd-valor">Valor ({{ emision.accion.unidad_valor }})<span class="req" aria-hidden="true"> *</span></label>
         <input class="field-input" id="cmd-valor" name="valor" type="text" inputmode="numeric" value="{{ datos.valor|default_if_none:'' }}" autocomplete="off">
-        {% for e in errores.valor %}<div class="err">{{ e }}</div>{% empty %}<div class="hint">Número entero entre {{ emision.accion.valor_minimo }} y {{ emision.accion.valor_maximo }} {{ emision.accion.unidad_valor }}.</div>{% endfor %}
+        {% for e in errores.valor %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% empty %}<div class="hint">Número entero entre {{ emision.accion.valor_minimo }} y {{ emision.accion.valor_maximo }} {{ emision.accion.unidad_valor }}.</div>{% endfor %}
       </div>
       {% endif %}
       <div class="fld">
         <label for="cmd-descripcion">Descripción (opcional)</label>
         <input class="field-input" id="cmd-descripcion" name="descripcion" type="text" maxlength="300" value="{{ datos.descripcion }}" autocomplete="off">
-        {% for e in errores.descripcion %}<div class="err">{{ e }}</div>{% endfor %}
+        {% for e in errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
       </div>
       <div class="row" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-primary" type="submit" name="paso" value="resumen" data-enviando="Verificando…"{% if para.bloqueo or not para.actuadores %} disabled{% endif %}>{% icono "send" 14 %} Ver resumen</button>

@@ -1,8 +1,8 @@
-{% load iconos %}{% comment %}Cuerpo del formulario del asiento manual (CON-REG-ASI pasos 2 y 3; ``VIEWS.k_new`` del prototipo): fecha y descripción, y las líneas del asiento con buscador de cuenta (un campo de texto con la lista del plan,
+{% load iconos vista %}{% comment %}Cuerpo del formulario del asiento manual (CON-REG-ASI pasos 2 y 3; ``VIEWS.k_new`` del prototipo): fecha y descripción, y las líneas del asiento con buscador de cuenta (un campo de texto con la lista del plan,
 que filtra mientras se escribe sin validar nada y funciona sin JavaScript), Debe o Haber e importe. «Agregar» y «Quitar» son botones del formulario: sin JavaScript vuelven a dibujar la página; con HTMX solo este cuerpo (``#cuerpo-asiento``,
 ``hx-swap="innerHTML show:none"``, sin validar, interfaz.md). Cada error vuelve junto a su campo y lo escrito se conserva. Todo se escapa.{% endcomment %}
 {% if corrige %}<div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Cargamos las mismas cuentas e importes del asiento N.º {{ corrige }}. Cambialos por los correctos.</div></div><input type="hidden" name="corrige" value="{{ corrige }}">{% endif %}
-{% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
+{% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
 <div class="stack">
   <section class="sec" aria-labelledby="sec-asi-quepaso">
     <div class="sec-h" id="sec-asi-quepaso"><span class="sec-num">1</span>Qué pasó</div>
@@ -10,14 +10,14 @@ que filtra mientras se escribe sin validar nada y funciona sin JavaScript), Debe
       <div class="fld">
         <label for="asi-fecha">Fecha <span class="req">*</span></label>
         <input type="date" class="field-input{% if errores.fecha %} bad{% endif %}" id="asi-fecha" name="fecha" value="{{ datos.fecha_texto }}" max="{{ hoy|date:'Y-m-d' }}" required>
-        {% for e in errores.fecha %}<div class="err">{{ e }}</div>{% endfor %}
+        {% for e in errores.fecha %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
         <div class="hint">La del hecho, no la de hoy. Tiene que caer en un ejercicio abierto o en cierre y no puede ser posterior a hoy.</div>
       </div>
     </div>
     <div class="fld">
       <label for="asi-descripcion">Descripción <span class="req">*</span></label>
       <input class="field-input{% if errores.descripcion %} bad{% endif %}" id="asi-descripcion" name="descripcion" maxlength="300" autocomplete="off" value="{{ datos.descripcion }}" placeholder="Por ejemplo: Pago de la factura de luz">
-      {% for e in errores.descripcion %}<div class="err">{{ e }}</div>{% endfor %}
+      {% for e in errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
     </div>
   </section>
 
@@ -33,10 +33,10 @@ que filtra mientras se escribe sin validar nada y funciona sin JavaScript), Debe
           <tr>
             <td class="asi-cuenta"><input type="hidden" name="fila" value="{{ f.i }}">
               <input class="field-input{% if f.errores.cuenta %} bad{% endif %}" name="cuenta_{{ f.i }}" list="cuentas-del-plan" autocomplete="off" value="{{ f.cuenta }}" placeholder="Buscar una cuenta" aria-label="Cuenta de la fila {{ forloop.counter }}">
-              {% for e in f.errores.cuenta %}<div class="err">{{ e }}</div>{% endfor %}</td>
+              {% for e in f.errores.cuenta %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</td>
             <td class="asi-tipo"><select class="field-input" name="tipo_{{ f.i }}" data-desplegable aria-label="Debe o Haber de la fila {{ forloop.counter }}"><option value="D"{% if f.tipo == "D" %} selected{% endif %}>Debe</option><option value="H"{% if f.tipo == "H" %} selected{% endif %}>Haber</option></select></td>
             <td class="asi-importe"><input class="field-input num{% if f.errores.importe %} bad{% endif %}" name="importe_{{ f.i }}" inputmode="decimal" autocomplete="off" value="{{ f.importe }}" aria-label="Importe de la fila {{ forloop.counter }}">
-              {% for e in f.errores.importe %}<div class="err">{{ e }}</div>{% endfor %}</td>
+              {% for e in f.errores.importe %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</td>
             <td class="right">{% if puede_quitar %}<button class="btn btn-ghost btn-sm" type="submit" name="accion" value="quitar:{{ f.i }}" hx-post="{% url 'contabilidad:asiento_nuevo' %}" hx-target="#cuerpo-asiento" hx-swap="innerHTML show:none" data-sin-envio-en-curso>{% icono "trash" 14 %}<span class="sr"> Quitar la fila {{ forloop.counter }}</span></button>{% endif %}</td>
           </tr>
         {% endfor %}

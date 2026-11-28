@@ -1,7 +1,7 @@
-{% load iconos %}{% comment %}El formulario de «Registrar merma en cámara» (COM-04b): lo que HTMX reemplaza dentro de #merma-vivo. Recibe «invernaderos», «invernadero_id», «partidas» (FilaDePartidaConMerma), «partida_id», «valores» (lo escrito), «errores» ({campo: mensaje}), «causas» ([(valor, texto)]), «resumen» (ResumenDeMermaEnCamara o None), «firma» y «cambio_la_firma». Cambiar el invernadero o la partida solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Todo se escapa.{% endcomment %}
+{% load iconos vista %}{% comment %}El formulario de «Registrar merma en cámara» (COM-04b): lo que HTMX reemplaza dentro de #merma-vivo. Recibe «invernaderos», «invernadero_id», «partidas» (FilaDePartidaConMerma), «partida_id», «valores» (lo escrito), «errores» ({campo: mensaje}), «causas» ([(valor, texto)]), «resumen» (ResumenDeMermaEnCamara o None), «firma» y «cambio_la_firma». Cambiar el invernadero o la partida solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Todo se escapa.{% endcomment %}
 <form id="merma-form" method="post" action="{% url 'comercial:merma_camara' %}" novalidate>
   {% csrf_token %}
-  {% if errores.general or errores.partida %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}{{ errores.partida }}</div>{% endif %}
+  {% if errores.general or errores.partida %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista_una_vez %}>{{ errores.general }}{{ errores.partida }}</div>{% endif %}
   <div class="stack">
     <div class="card">
       <div class="card-title">1 · ¿Dónde?</div>
@@ -31,21 +31,21 @@
       <div class="grid2">
         <div class="fld"><label for="cantidad">Plantas perdidas<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="cantidad" name="cantidad" type="number" min="1" step="1" inputmode="numeric" value="{{ valores.cantidad }}">
-          {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% else %}<div class="hint">Entre 1 y las plantas disponibles de la partida.</div>{% endif %}</div>
+          {% if errores.cantidad %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.cantidad }}</div>{% else %}<div class="hint">Entre 1 y las plantas disponibles de la partida.</div>{% endif %}</div>
         <div class="fld"><label for="causa">Causa<span class="req" aria-hidden="true"> *</span></label>
           <select class="field-input" id="causa" name="causa" data-desplegable>
             <option value="">Seleccionar…</option>
             {% for valor, texto in causas %}<option value="{{ valor }}"{% if valores.causa == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
           </select>
-          {% if errores.causa %}<div class="err">{{ errores.causa }}</div>{% else %}<div class="hint">El vencimiento lo registra InfoPonia solo.</div>{% endif %}</div>
+          {% if errores.causa %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.causa }}</div>{% else %}<div class="hint">El vencimiento lo registra InfoPonia solo.</div>{% endif %}</div>
       </div>
       <div class="fld"><label for="descripcion">Descripción (opcional)</label>
         <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="300">{{ valores.descripcion }}</textarea>
-        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
+        {% if errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.descripcion }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
     </div>
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen de la merma en cámara"><div class="card-title">Resumen</div>
+    <div class="card" role="region" aria-label="Resumen de la merma en cámara"{% llevar_vista_una_vez %}><div class="card-title">Resumen</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <p class="sm"><b>Partida:</b> <span class="mono">{{ resumen.partida.codigo }}</span> · {{ resumen.variedad }}</p>
       <p class="sm"><b>Plantas perdidas:</b> {{ resumen.cantidad }} · <b>Causa:</b> {% for valor, texto in causas %}{% if valor == resumen.causa %}{{ texto }}{% endif %}{% endfor %}{% if resumen.descripcion %} · {{ resumen.descripcion }}{% endif %}</p>

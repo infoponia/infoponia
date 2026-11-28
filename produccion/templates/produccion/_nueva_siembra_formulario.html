@@ -1,10 +1,10 @@
-{% load iconos produccion %}{% comment %}El formulario de «Nueva siembra» (PROD-PNF-SMB): lo que HTMX reemplaza dentro de #siembra-vivo. Recibe «ofrecido» (DatosDePlanificacion: invernaderos, variedades, sectores,
+{% load iconos produccion vista %}{% comment %}El formulario de «Nueva siembra» (PROD-PNF-SMB): lo que HTMX reemplaza dentro de #siembra-vivo. Recibe «ofrecido» (DatosDePlanificacion: invernaderos, variedades, sectores,
 insumos_adicionales), «valores» (lo escrito), «invernadero_id», «variedad_id», «prioridades», «errores» ({campo: mensaje}), «resumen» (ResumenDePlanificacion o None), «firma» y «cambio_la_firma».
 Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la variedad solo redibuja lo que depende de ellos (accion «actualizar»), SIN validar y sin mover el scroll; validar y calcular es solo con
 «Ver resumen» y «Confirmar planificación». No hay refresco al escribir. Todo se escapa. Los errores van debajo de su campo; lo que no tiene campo, arriba.{% endcomment %}
 <form id="siembra-form" method="post" action="{% url 'produccion:nueva_siembra' %}" novalidate>
-  {% csrf_token %}
-  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.general }}</div>{% endif %}
+  {% csrf_token %}{% primer_error errores "general" "variedad" "cantidad" "fecha_programada" "prioridad" "distribucion" "insumos_adicionales" "descripcion" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+  {% if errores.general %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" %}>{{ errores.general }}</div>{% endif %}
   <div class="stack">
     <div class="card">
       <div class="card-title">¿Dónde y qué?</div>
@@ -20,7 +20,7 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la vari
             <option value="">{% if invernadero_id %}Seleccionar…{% else %}Elegí primero el invernadero{% endif %}</option>
             {% for v in ofrecido.variedades %}<option value="{{ v.variedad_id }}"{% if v.variedad_id == variedad_id %} selected{% endif %}{% if not v.compatible or v.motivo %} disabled{% endif %}>{{ v.nombre }} · {{ v.perfil|perfil_legible }} · ciclo de {{ v.duracion_dias }} días · {% if v.stock_libre is None %}semilla sin habilitar{% else %}semilla libre: {{ v.stock_libre|cantidad }}{% endif %}{% if not v.compatible %} — no compatible: {% for c in v.conflictos %}{{ c.texto }}{% if not forloop.last %}; {% endif %}{% endfor %}{% elif v.motivo %} — {{ v.motivo }}{% endif %}</option>{% endfor %}
           </select>
-          {% if errores.variedad %}<div class="err">{{ errores.variedad }}{% if para_habilitar %} <a href="{% url 'inventario:habilitar' %}?insumo={{ para_habilitar.semilla_id }}&invernadero={{ para_habilitar.invernadero_id }}">Habilitar la semilla en este invernadero</a>.{% endif %}</div>{% endif %}</div>
+          {% if errores.variedad %}<div class="err"{% llevar_vista primero "variedad" %}>{{ errores.variedad }}{% if para_habilitar %} <a href="{% url 'inventario:habilitar' %}?insumo={{ para_habilitar.semilla_id }}&invernadero={{ para_habilitar.invernadero_id }}">Habilitar la semilla en este invernadero</a>.{% endif %}</div>{% endif %}</div>
       </div>
       <noscript><button class="btn btn-ghost btn-sm" type="submit" name="accion" value="actualizar">Continuar</button></noscript>
     </div>
@@ -31,15 +31,15 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la vari
       <div class="grid3">
         <div class="fld"><label for="cantidad">Plantines<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="cantidad" name="cantidad" type="number" min="1" step="1" inputmode="numeric" value="{{ valores.cantidad }}"{% if errores.cantidad %} aria-invalid="true"{% endif %}>
-          {% if errores.cantidad %}<div class="err">{{ errores.cantidad }}</div>{% endif %}</div>
+          {% if errores.cantidad %}<div class="err"{% llevar_vista primero "cantidad" %}>{{ errores.cantidad }}</div>{% endif %}</div>
         <div class="fld"><label for="fecha_programada">Fecha programada<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="fecha_programada" name="fecha_programada" type="date" value="{{ valores.fecha_programada }}"{% if errores.fecha_programada %} aria-invalid="true"{% endif %}>
-          {% if errores.fecha_programada %}<div class="err">{{ errores.fecha_programada }}</div>{% endif %}</div>
+          {% if errores.fecha_programada %}<div class="err"{% llevar_vista primero "fecha_programada" %}>{{ errores.fecha_programada }}</div>{% endif %}</div>
         <div class="fld"><label for="prioridad">Prioridad</label>
           <select class="field-input" id="prioridad" name="prioridad" data-desplegable>
             {% for valor, texto in prioridades %}<option value="{{ valor }}"{% if valores.prioridad == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
           </select>
-          {% if errores.prioridad %}<div class="err">{{ errores.prioridad }}</div>{% endif %}</div>
+          {% if errores.prioridad %}<div class="err"{% llevar_vista primero "prioridad" %}>{{ errores.prioridad }}</div>{% endif %}</div>
       </div>
     </div>
 
@@ -54,7 +54,7 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la vari
         {% endfor %}
       </div>
       {% else %}<div class="hint">Esta variedad no tiene sectores de germinación compatibles con lugar libre en el invernadero.</div>{% endif %}
-      {% if errores.distribucion %}<div class="err">{{ errores.distribucion }}</div>{% endif %}
+      {% if errores.distribucion %}<div class="err"{% llevar_vista primero "distribucion" %}>{{ errores.distribucion }}</div>{% endif %}
     </div>
 
     <div class="card">
@@ -67,14 +67,14 @@ Reglas de interfaz (.claude/rules/interfaz.md): cambiar el invernadero o la vari
         {% endfor %}
       </div>
       {% else %}<div class="hint">El invernadero no tiene insumos adicionales habilitados. Se reserva solo la semilla.</div>{% endif %}
-      {% if errores.insumos_adicionales %}<div class="err">{{ errores.insumos_adicionales }}</div>{% endif %}
+      {% if errores.insumos_adicionales %}<div class="err"{% llevar_vista primero "insumos_adicionales" %}>{{ errores.insumos_adicionales }}</div>{% endif %}
       <div class="fld" style="margin-top:10px"><label for="descripcion">Descripción (opcional)</label>
         <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="600">{{ valores.descripcion }}</textarea>
-        {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+        {% if errores.descripcion %}<div class="err"{% llevar_vista primero "descripcion" %}>{{ errores.descripcion }}</div>{% endif %}</div>
     </div>
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen de la orden">
+    <div class="card" role="region" aria-label="Resumen de la orden" data-llevar-vista tabindex="-1">
       <div class="card-title">Resumen de la orden</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <dl class="kv">

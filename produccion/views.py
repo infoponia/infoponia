@@ -19,6 +19,7 @@ from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
 from core.models import Usuario, rol_de
+from core.obligatorios import sumar_faltantes
 from maestros.models import Invernadero
 from produccion import formularios
 from produccion.errores import ErrorDeProduccion
@@ -29,6 +30,15 @@ from produccion.servicios import lotes_existentes, ordenes, siembras, transicion
 AGRONOMO, CAPATAZ, GERENTE = Usuario.Rol.AGRONOMO, Usuario.Rol.CAPATAZ, Usuario.Rol.GERENTE
 # Los campos que no entran en la «firma» de lo que se calculó.
 SIN_FIRMA = {"csrfmiddlewaretoken", "accion", "firma"}
+# UI-06 (UX-27, D-109 punto 9): los obligatorios que no dependen de otros se muestran juntos al enviar. El servicio rechaza en el primero; la vista suma los demás si vinieron vacíos, con el
+# texto del servicio (`core/obligatorios.py`). Cada fila: (clave del error, nombre del campo, texto).
+OBLIGATORIOS_DE_SIEMBRA = (
+    ("fecha_programada", "fecha_programada", "Indicá la fecha programada."),  # siembras.py:353 (`_verificar`), después de la cantidad (:351)
+)
+OBLIGATORIOS_DE_LOTE_EXISTENTE = (
+    ("fecha_siembra", "fecha_siembra", "Indicá la fecha de siembra."),  # lotes_existentes.py:152
+    ("fecha_ingreso_etapa", "fecha_ingreso_etapa", "Indicá la fecha de ingreso a la etapa."),  # lotes_existentes.py:156
+)
 TIPOS_DEL_FILTRO = [(t.value, t.label) for t in ordenes.TIPOS_DE_PRODUCCION]  # solo los de producción (D-67 punto 1), no `Tipo.choices`
 ESTADOS_DEL_FILTRO = [(e.value, e.label) for e in OrdenTrabajo.Estado]
 
@@ -194,7 +204,7 @@ def nueva_siembra(request):
                 contexto["resumen"] = _servicio(siembras.resumen_de_planificacion, request.user, planificacion)
                 contexto["firma"] = firma
             except ErrorDeProduccion as error:
-                contexto["errores"] = _errores_por_campo(error)
+                contexto["errores"] = sumar_faltantes(_errores_por_campo(error), datos, OBLIGATORIOS_DE_SIEMBRA)
                 contexto["para_habilitar"] = _para_habilitar_la_semilla(error)
     plantilla = "produccion/_nueva_siembra_formulario.html" if _en_vivo(request) else "produccion/nueva_siembra.html"
     return render(request, plantilla, contexto)
@@ -267,7 +277,7 @@ def registrar_lote_existente(request):
                 contexto["resumen"] = _servicio(lotes_existentes.resumen_de_registro, request.user, carga)
                 contexto["firma"] = firma
             except ErrorDeProduccion as error:
-                contexto["errores"] = _errores_por_campo(error)
+                contexto["errores"] = sumar_faltantes(_errores_por_campo(error), datos, OBLIGATORIOS_DE_LOTE_EXISTENTE)
     plantilla = "produccion/_lote_existente_formulario.html" if _en_vivo(request) else "produccion/registrar_lote_existente.html"
     return render(request, plantilla, contexto)
 

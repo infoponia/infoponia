@@ -21,6 +21,7 @@ from django.views.decorators.vary import vary_on_headers
 
 from core.acceso import rol_requerido
 from core.models import Usuario
+from core.obligatorios import sumar_faltantes
 from iot.contexto import codigos_del_servicio, contexto_del_modulo, errores_del_servicio, es_htmx
 from iot.models import ReglaActuacion, Sensor, TipoActuador
 from iot.servicios import comandos as api_comandos
@@ -220,6 +221,14 @@ def _sistema_de_la_pantalla(request, invernadero_id=None):
     return contexto, sistema
 
 
+# UI-06 (UX-27): los obligatorios del alta que no dependen del tipo de equipo. Fila: (clave del error, campo del formulario, texto del servicio).
+OBLIGATORIOS_DEL_ALTA = (
+    ("identificador", "identificador", "Ingresá el identificador del equipo."),  # iot/validadores.py:107
+    ("modelo", "modelo", "Ingresá el modelo."),  # iot/validadores.py `validar_texto(…, "el modelo")`, llamada en hardware.py:_validar
+    ("insumo", "insumo", "Seleccioná el insumo."),  # hardware.py:197
+)
+
+
 def _guardar(request, sistema, elegido, equipo, datos):
     """Llama al servicio del alta o de la modificación. Devuelve ``(respuesta, None)`` si salió bien o ``(None, contexto del formulario con errores)``."""
     try:
@@ -238,6 +247,9 @@ def _guardar(request, sistema, elegido, equipo, datos):
             messages.error(request, error.messages[0])
             return _a_la_lista(elegido.pk), None
         errores, general = errores_del_servicio(error)
+        if equipo is None:
+            # UI-06 (UX-27, D-109 punto 9): sin tipo de equipo el servicio corta antes de mirar el resto (`hardware.py:366`); lo que se ve antes de elegir el tipo se suma si vino vacío.
+            sumar_faltantes(errores, request.POST, OBLIGATORIOS_DEL_ALTA, como_lista=True)
         return None, _contexto_del_formulario(request, sistema, elegido, datos, equipo, errores, general)
     messages.success(request, mensaje)
     return _a_la_ficha(guardado), None

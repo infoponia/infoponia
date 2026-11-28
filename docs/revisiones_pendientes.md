@@ -1505,3 +1505,26 @@ Modo celular: `F12` y `Ctrl+Shift+M`, 360 de ancho. Para ver Entregas con datos,
 - [ ] 15. Capataz, Técnico y Transportista (360 y 1366 px): sin «Menú», marco angosto como antes.
 - [ ] 16. (Opcional) Narrador: «Menú» como botón, la entrada actual «página actual», y si las tarjetas siguen anunciándose como tabla.
 - [ ] 17. Navegador real: pasos 1 a 6 con la ventana angosta y la consola (`F12`) sin errores; opcional, en un celular después del despliegue.
+
+## UI-06 · Tarea UI-06 (resumen y errores a la vista; obligatorios independientes juntos)
+
+Los 16 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-06-resumen-y-errores-a-la-vista.md` (ahí está el detalle, con los datos a crear). **Sin migración.**
+Las pruebas ya comprobaron qué elemento lleva la marca, que los obligatorios salen juntos y que un selector no valida; acá se mira el salto, el foco, Narrador y el navegador real.
+Probar a 1366 px y a 360 px (`F12`, modo dispositivo). Crear a mano el invernadero «Norte UI06» con Agrónomo, Capataz y el sector «Germ 1», y la variedad «Lechuga UI06» con semilla habilitada y 500 de stock.
+
+- [ ] 1. Nueva siembra, carga inicial (1366 px): abre arriba, sin errores y sin saltar.
+- [ ] 2. Elegir el invernadero y la variedad: los campos aparecen sin que la página salte y sin errores.
+- [ ] 3. «Ver resumen» con todo vacío: salen a la vez los errores de Plantines y de Fecha; la página baja al primero y queda enfocado.
+- [ ] 4. Con 30 plantines y sin fecha: queda un solo error, el de la fecha, y la vista va a él.
+- [ ] 5. Con fecha y 10 en «Germ 1»: el único error es «La distribución tiene que sumar 30…».
+- [ ] 6. Con «Germ 1» en 30: «Ver resumen» baja a «Resumen de la orden» con el foco; «Confirmar planificación» vuelve a la lista con el aviso.
+- [ ] 7. Lo mismo (pasos 3 y 6) a 360 px: se llega al error y al resumen, enteros.
+- [ ] 8. «Reducir movimiento» de Windows activado: el salto del paso 3 es inmediato; desactivado, suave.
+- [ ] 9. Teclado y Narrador (obligatorio): «Ver resumen» con Enter en Nueva siembra vacía; el foco cae en el primer error y Narrador lo lee; Tab pasa al campo siguiente; Shift + Tab llega al campo.
+- [ ] 10. Concretar siembra en el celular (Capataz, 360 px): con 99 va al error; con 30, al «Resumen de la concreción».
+- [ ] 11. Registrar merma y Registrar aplicación: elegir invernadero y lote no mueve la vista ni muestra errores.
+- [ ] 12. Enviar vacíos y ver los obligatorios juntos: lote existente, merma, aplicación, Habilitar insumo (ventana), habilitar en Nuevo pedido, Registrar hardware y Entrega no reconocida; un campo con solo espacios cuenta como vacío.
+- [ ] 13. Planificar cosecha «cubre un contrato» sin elegir el detalle: aparece «Elegí la variedad de la cosecha.» debajo del detalle y la vista va a él.
+- [ ] 14. Nueva compra-venta: el resumen se abre en una ventana (la página de atrás no salta); Nuevo pedido: el resumen es otra página.
+- [ ] 15. (Opcional) Sin JavaScript: Nueva siembra vacía muestra los errores sin saltar.
+- [ ] 16. Navegador real (obligatorio): portal en ventana privada a 360 px; sin elegir nada va al error; con «Recibí conforme» va al resumen; enviar hasta el final y volver a abrir el enlace; consola (`F12`) sin errores.

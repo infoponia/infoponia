@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Nuevo pedido de cotización» (CMP-RLZ-PED; ``VIEWS.c_pednew`` del prototipo). Un solo formulario que se vuelve a dibujar con cada botón (agregar o quitar un insumo, filtrar y seleccionar
 proveedores, habilitar un insumo, revisar), sin JavaScript y sin validar mientras se escribe (interfaz.md). Tres bloques: 1 qué necesitás (los insumos bajo el mínimo, el catálogo de tus invernaderos y,
 para un insumo que no está habilitado, «Habilitarlo»: extensión 3a.1a), 2 a quién se lo pedís (los proveedores activos, con el filtro propuesto por las categorías de lo que pedís) y 3 hasta cuándo
@@ -9,7 +9,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
 <div class="page narrow">
   <a class="btn btn-text" href="{% url 'compras:pedidos' %}">{% icono "back" 14 %} Compras</a>
   <div class="page-h"><h1>Nuevo pedido de cotización</h1></div>
-  {% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
+  {% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
 
   <form method="post" action="{% url 'compras:pedido_nuevo' %}" novalidate>
     {% csrf_token %}
@@ -42,7 +42,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
         {% endif %}
 
         <h2 class="ped-sub">Lo que vas a pedir</h2>
-        {% if errores.detalles %}<div class="err" role="alert">{{ errores.detalles.0 }}</div>{% endif %}
+        {% if errores.detalles %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ errores.detalles.0 }}</div>{% endif %}
         {% if filas %}
         {% for f in filas %}
         <div class="rline" id="fila-{{ f.indice }}">
@@ -51,7 +51,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
             <div><b>{% if f.iin %}{{ f.iin.insumo.nombre_insumo }}{% else %}Insumo no disponible{% endif %}</b>{% if f.iin %}<span class="muted sm"> · {{ f.iin.invernadero.nombre_invernadero }}</span>{% endif %}</div>
             {% if f.existencia %}<span class="muted sm">En stock {{ f.existencia.libre|cant:f.iin.insumo.unidad_medida_insumo }} · en camino {{ f.existencia.transito|num:f.iin.insumo.unidad_medida_insumo }} · mínimo {{ f.existencia.minimo|num:f.iin.insumo.unidad_medida_insumo }}{% if f.existencia.bajo_minimo %} · <b class="warn-t">bajo el mínimo</b>{% endif %}</span>{% endif %}
           </div>
-          {% for e in f.errores.insumo %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+          {% for e in f.errores.insumo %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           {% if f.ya_pedido %}<div class="hint warn-t">Ya figura en el pedido P-{{ f.ya_pedido.pedido_id|stringformat:"04d" }}: {{ f.ya_pedido.cantidad|cant:f.iin.insumo.unidad_medida_insumo }}, {% if f.ya_pedido.orden_id %}su orden de compra está pendiente de aprobación{% else %}con cotizaciones hasta el {{ f.ya_pedido.fecha_limite|date:"d/m/Y" }}{% endif %}. Podés pedirlo igual.</div>{% endif %}
           <div class="fld ped-cantidad">
             <label for="cantidad-{{ f.indice }}">Cantidad{% if f.iin %} ({{ f.iin.insumo.get_unidad_medida_insumo_display }}){% endif %}</label>
@@ -59,7 +59,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
               <input class="field-input num{% if f.errores.cantidad %} bad{% endif %}" id="cantidad-{{ f.indice }}" name="detalle_cantidad" inputmode="decimal" autocomplete="off" value="{{ f.cantidad }}">
               <button class="btn btn-ghost btn-sm" type="submit" name="accion" value="quitar:{{ f.indice }}" data-sin-envio-en-curso>Quitar<span class="sr"> este insumo</span></button>
             </div>
-            {% for e in f.errores.cantidad %}<div class="err">{{ e }}</div>{% endfor %}
+            {% for e in f.errores.cantidad %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           </div>
         </div>
         {% endfor %}
@@ -79,22 +79,22 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
         <details class="ped-habilitar"{% if habilitar.abierto %} open{% endif %}>
           <summary>¿El insumo no está en la lista? Habilitarlo en un invernadero</summary>
           <p class="hint">Un insumo se puede pedir solo si está habilitado en el invernadero de destino. Habilitarlo lo deja con stock cero y vuelve acá con el insumo agregado.</p>
-          {% for e in habilitar.errores.general %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+          {% for e in habilitar.errores.general %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           <div class="ped-hab-grid">
             <div class="fld"><label for="hab_invernadero">Invernadero</label>
               <select class="field-input{% if habilitar.errores.invernadero %} bad{% endif %}" id="hab_invernadero" name="hab_invernadero" data-desplegable>
                 <option value="">Elegir…</option>{% for i in invernaderos_a_cargo %}<option value="{{ i.pk }}"{% if habilitar.invernadero == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_invernadero }}</option>{% endfor %}
-              </select>{% for e in habilitar.errores.invernadero %}<div class="err">{{ e }}</div>{% endfor %}</div>
+              </select>{% for e in habilitar.errores.invernadero %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</div>
             <div class="fld"><label for="hab_insumo">Insumo del catálogo</label>
               <select class="field-input{% if habilitar.errores.insumo %} bad{% endif %}" id="hab_insumo" name="hab_insumo" data-desplegable>
                 <option value="">Elegir…</option>{% for i in insumos_del_catalogo %}<option value="{{ i.pk }}"{% if habilitar.insumo == i.pk|stringformat:"s" %} selected{% endif %}>{{ i.nombre_insumo }}</option>{% endfor %}
-              </select>{% for e in habilitar.errores.insumo %}<div class="err">{{ e }}</div>{% endfor %}</div>
+              </select>{% for e in habilitar.errores.insumo %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</div>
             <div class="fld"><label for="hab_minimo">Stock mínimo</label>
               <input class="field-input num{% if habilitar.errores.minimo %} bad{% endif %}" id="hab_minimo" name="hab_minimo" inputmode="decimal" autocomplete="off" value="{{ habilitar.minimo }}">
-              {% for e in habilitar.errores.minimo %}<div class="err">{{ e }}</div>{% endfor %}</div>
+              {% for e in habilitar.errores.minimo %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</div>
             <div class="fld"><label for="hab_precio">Precio de referencia ($)</label>
               <input class="field-input num{% if habilitar.errores.precio %} bad{% endif %}" id="hab_precio" name="hab_precio" inputmode="decimal" autocomplete="off" value="{{ habilitar.precio }}">
-              {% for e in habilitar.errores.precio %}<div class="err">{{ e }}</div>{% endfor %}</div>
+              {% for e in habilitar.errores.precio %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</div>
           </div>
           <button class="btn btn-ghost" type="submit" name="accion" value="habilitar" data-enviando="Habilitando…" data-sin-envio-en-curso>Habilitar y agregar al pedido</button>
         </details>
@@ -119,7 +119,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
           <p class="muted">No hay proveedores activos para invitar. El Gerente puede dar de alta uno.</p>
           {% endfor %}
         </div>
-        {% if errores.proveedores %}<div class="err" role="alert">{{ errores.proveedores.0 }}</div>{% endif %}
+        {% if errores.proveedores %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ errores.proveedores.0 }}</div>{% endif %}
         <p class="hint">Cada proveedor recibe por correo un enlace para cargar su cotización. El Sistema no elige proveedores por tu cuenta.</p>
       </section>
 
@@ -128,7 +128,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
         <div class="fld">
           <label for="fecha_limite">Fecha límite <span class="req">*</span></label>
           <input type="date" class="field-input{% if errores.fecha_limite %} bad{% endif %}" id="fecha_limite" name="fecha_limite" value="{{ fecha_limite }}" min="{{ fecha_minima }}">
-          {% for e in errores.fecha_limite %}<div class="err">{{ e }}</div>{% endfor %}
+          {% for e in errores.fecha_limite %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           <div class="hint">Pasada esa fecha el enlace deja de aceptar cotizaciones. Como mínimo, mañana.</div>
         </div>
       </section>

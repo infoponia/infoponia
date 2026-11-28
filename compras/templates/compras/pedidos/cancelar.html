@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Cancelar pedido» (CMP-CNL-PED pasos 1 a 3; ``VIEWS.c_pedcnl`` del prototipo). Recibe «pedido», «ficha» (los destinos, las cotizaciones recibidas y los invitados), «motivo» (lo escrito) y
 «errores» (los del motivo). Sección 1: qué se cancela y que no se puede deshacer; sección 2: el motivo (obligatorio, hasta 500 caracteres). «Revisar cancelación» muestra el resumen del paso 4; nada se cancela
 hasta confirmar ahí. Las cotizaciones recibidas se descartan (el prototipo decía «se conservan como consulta»: la postcondición b dice que pasan a «descartada»).{% endcomment %}
@@ -29,7 +29,7 @@ hasta confirmar ahí. Las cotizaciones recibidas se descartan (el prototipo dec�
         <div class="field">
           <label class="field-label" for="motivo">Motivo de la cancelación <span class="req" aria-hidden="true">*</span></label>
           <textarea class="field-input{% if errores %} bad{% endif %}" id="motivo" name="motivo" rows="3" maxlength="500" required placeholder="Por ejemplo: ya no hace falta, o las cotizaciones no alcanzan." aria-describedby="motivo-ayuda{% if errores %} motivo-error{% endif %}">{{ motivo }}</textarea>
-          {% for e in errores %}<div class="err" id="motivo-error" role="alert">{{ e }}</div>{% endfor %}
+          {% for e in errores %}<div class="err" id="motivo-error" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           <div class="hint" id="motivo-ayuda">Hasta 500 caracteres. Se guarda con el pedido; los proveedores no lo ven.</div>
         </div>
       </section>

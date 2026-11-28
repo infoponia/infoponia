@@ -1,11 +1,11 @@
-{% load iconos produccion %}{% comment %}El formulario de «Poner fuera de servicio» (PROD-PNR-FDS): lo que HTMX reemplaza dentro de #fds-vivo. Recibe «grupos» (InvernaderoConSectores), «hay_sectores», «sector_id», «detalle»
+{% load iconos produccion vista %}{% comment %}El formulario de «Poner fuera de servicio» (PROD-PNR-FDS): lo que HTMX reemplaza dentro de #fds-vivo. Recibe «grupos» (InvernaderoConSectores), «hay_sectores», «sector_id», «detalle»
 (DetalleDeSector o None), «filas» ([{lote: LoteEnElSector, destinos: [Destino]}]), «causas», «valores» (lo escrito), «errores» ({campo: mensaje}; los de un destino, «reubicacion_<lote>_<destino>»; los de una causa,
 «causa_<lote>»), «resumen» (ResumenDeFueraDeServicio o None), «firma», «cambio_la_firma» y «vistos» (lo que la persona vio, extensión 14a). Elegir otro sector solo redibuja lo que depende de él (accion «actualizar»),
 SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen» y «Confirmar». Sin sectores activos (precondición b) queda deshabilitado con su motivo. Todo se escapa.{% endcomment %}
 <form id="fds-form" method="post" action="{% url 'produccion:fuera_de_servicio' %}" novalidate>
-  {% csrf_token %}
-  {% if errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px">{% icono "x" 16 %}<div>{{ errores.general }}</div></div>{% endif %}
-  {% if errores.sector %}<div class="err" role="alert" style="margin-bottom:10px">{{ errores.sector }}</div>{% endif %}
+  {% csrf_token %}{% primer_error errores "general" "sector" "motivo" "fecha" "reubicacion_*" "causa_*" as primero %}{# UI-06: el primer error que se ve lleva la vista y el foco #}
+  {% if errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:10px"{% llevar_vista primero "general" %}>{% icono "x" 16 %}<div>{{ errores.general }}</div></div>{% endif %}
+  {% if errores.sector %}<div class="err" role="alert" style="margin-bottom:10px"{% llevar_vista primero "sector" %}>{{ errores.sector }}</div>{% endif %}
   <div class="stack">
     <div class="card">
       <div class="card-title">1 · ¿Qué sector?</div>
@@ -47,10 +47,10 @@ SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen�
       <div class="grid2">
         <div class="fld"><label for="motivo">Motivo<span class="req" aria-hidden="true"> *</span></label>
           <textarea class="field-input" id="motivo" name="motivo" rows="2" maxlength="300" placeholder="Ej. Se rompió el canal de retorno">{{ valores.motivo }}</textarea>
-          {% if errores.motivo %}<div class="err">{{ errores.motivo }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
+          {% if errores.motivo %}<div class="err"{% llevar_vista primero "motivo" %}>{{ errores.motivo }}</div>{% else %}<div class="hint">Hasta 300 caracteres.</div>{% endif %}</div>
         <div class="fld"><label for="fecha">Fuera de servicio desde<span class="req" aria-hidden="true"> *</span></label>
           <input class="field-input" id="fecha" name="fecha" type="date" max="{{ hoy|date:'Y-m-d' }}" value="{{ valores.fecha }}">
-          {% if errores.fecha %}<div class="err">{{ errores.fecha }}</div>{% else %}<div class="hint">Puede ser anterior a hoy si la rotura ya pasó: la merma y la reubicación quedan con esa fecha.{% if detalle.fecha_minima.fecha %} La mínima es el {{ detalle.fecha_minima.fecha|date:"d/m/Y" }}: es {{ detalle.fecha_minima.origen }}.{% endif %}</div>{% endif %}</div>
+          {% if errores.fecha %}<div class="err"{% llevar_vista primero "fecha" %}>{{ errores.fecha }}</div>{% else %}<div class="hint">Puede ser anterior a hoy si la rotura ya pasó: la merma y la reubicación quedan con esa fecha.{% if detalle.fecha_minima.fecha %} La mínima es el {{ detalle.fecha_minima.fecha|date:"d/m/Y" }}: es {{ detalle.fecha_minima.origen }}.{% endif %}</div>{% endif %}</div>
       </div>
     </div>
 
@@ -66,7 +66,7 @@ SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen�
           {% for d in f.destinos %}
           <tr><td><b>{{ d.sector.nombre_sector }}</b></td><td>{% if d.perfil %}{{ d.perfil|perfil_legible }}{% else %}<span class="muted">Sin plantas</span>{% endif %}</td><td class="right mono">{{ d.libres }}</td>
             <td class="right"><input class="field-input num" id="reub_{{ f.lote.lote.pk }}_{{ d.sector.pk }}" name="reub_{{ f.lote.lote.pk }}_{{ d.sector.pk }}" type="number" min="0" max="{{ d.libres }}" step="1" inputmode="numeric" placeholder="0" value="{% campo valores 'reub' f.lote.lote.pk d.sector.pk %}" aria-label="Plantas de {{ f.lote.lote.codigo }} a reubicar en {{ d.sector.nombre_sector }}">
-              {% campo errores 'reubicacion' f.lote.lote.pk d.sector.pk as error_del_destino %}{% if error_del_destino %}<div class="err">{{ error_del_destino }}</div>{% endif %}</td></tr>
+              {% campo errores 'reubicacion' f.lote.lote.pk d.sector.pk as error_del_destino %}{% if error_del_destino %}<div class="err"{% llevar_vista_fila primero "reubicacion" f.lote.lote.pk d.sector.pk %}>{{ error_del_destino }}</div>{% endif %}</td></tr>
           {% endfor %}
         </tbody></table></div>
         {% else %}
@@ -78,7 +78,7 @@ SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen�
               <option value="">Seleccionar…</option>
               {% for valor, texto in causas %}<option value="{{ valor }}"{% campo valores 'causa' f.lote.lote.pk as causa_elegida %}{% if causa_elegida == valor %} selected{% endif %}>{{ texto }}</option>{% endfor %}
             </select>
-            {% campo errores 'causa' f.lote.lote.pk as error_de_la_causa %}{% if error_de_la_causa %}<div class="err">{{ error_de_la_causa }}</div>{% else %}<div class="hint">Obligatoria solo si quedan plantas sin reubicar.</div>{% endif %}</div>
+            {% campo errores 'causa' f.lote.lote.pk as error_de_la_causa %}{% if error_de_la_causa %}<div class="err"{% llevar_vista_fila primero "causa" f.lote.lote.pk %}>{{ error_de_la_causa }}</div>{% else %}<div class="hint">Obligatoria solo si quedan plantas sin reubicar.</div>{% endif %}</div>
           <div class="fld"><label for="desc_{{ f.lote.lote.pk }}">Descripción (opcional)</label>
             <input class="field-input" id="desc_{{ f.lote.lote.pk }}" name="desc_{{ f.lote.lote.pk }}" type="text" maxlength="300" value="{% campo valores 'desc' f.lote.lote.pk %}"></div>
         </div>
@@ -88,7 +88,7 @@ SIN validar y sin mover el scroll; validar y calcular es solo con «Ver resumen�
     {% endif %}
 
     {% if resumen %}
-    <div class="card" role="region" aria-label="Resumen de la puesta fuera de servicio"><div class="card-title">Resumen</div>
+    <div class="card" role="region" aria-label="Resumen de la puesta fuera de servicio" data-llevar-vista tabindex="-1"><div class="card-title">Resumen</div>
       {% if cambio_la_firma %}<div class="hint" role="status">Cambiaste un dato después de ver el resumen: revisalo de nuevo antes de confirmar.</div>{% endif %}
       <p class="sm"><b>Sector:</b> {{ resumen.sector.nombre_sector }} · {{ resumen.invernadero.nombre_invernadero }}</p>
       <p class="sm"><b>Motivo:</b> {{ resumen.motivo }}</p>

@@ -1,7 +1,7 @@
-{% load iconos comercial %}{% comment %}El resumen del paso 6 de COM-EVL-DSC y COM-RSV-QJA (también es lo que devuelve HTMX): los errores que bloquean (decisión, observaciones y monto) o, si no hay, la decisión, el monto, cómo se aplica, los incumplimientos
+{% load iconos comercial vista %}{% comment %}El resumen del paso 6 de COM-EVL-DSC y COM-RSV-QJA (también es lo que devuelve HTMX): los errores que bloquean (decisión, observaciones y monto) o, si no hay, la decisión, el monto, cómo se aplica, los incumplimientos
 y la advertencia de resolución del contrato (6b) o de historial (6c), y el formulario de confirmación con la huella y lo cargado. El medio del reintegro (6a y 6d) se elige acá, en el mismo resumen. Con errores no hay botón de confirmar.
 Recibe «resumen», «datos», «bloqueantes», «errores», «confirmando», «medios» y «s». Todo se escapa.{% endcomment %}
-<div class="card seg" style="margin-top:12px">
+<div class="card seg" style="margin-top:12px"{% llevar_vista_una_vez %}>
   <div class="card-h"><h2>Resumen</h2></div>
   <div class="card-b">
   {% if bloqueantes %}

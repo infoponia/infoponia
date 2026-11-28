@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos estaticos %}
+{% extends "core/base_con_sesion.html" %}{% load formato_contable iconos estaticos vista %}
 {% comment %}«Contraasentar el asiento N.º X» (CON-CTR-ASI pasos 2 y 3; ``VIEWS.k_contra`` del prototipo): el asiento a anular, cómo queda el contraasiento (Debe y Haber invertidos), la fecha (hoy por defecto) y el motivo, que es la descripción del contraasiento.
 Si el asiento es automático lo advierte (C5: corrige el libro de gestión pero no anula la operación que lo originó). Un asiento que no se puede anular (extensión 1b) muestra el motivo y, si ya está anulado, el enlace a su contraasiento. Es un formulario común:
 funciona sin JavaScript. Todo se escapa.{% endcomment %}
@@ -16,7 +16,7 @@ funciona sin JavaScript. Todo se escapa.{% endcomment %}
   <form method="post" action="{% url 'contabilidad:contraasiento' asiento.ejercicio_id asiento.numero_asiento %}" novalidate>
     {% csrf_token %}
     <button type="submit" name="accion" value="revisar" class="sr" tabindex="-1" aria-hidden="true">Revisar contraasiento</button>
-    {% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
+    {% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
     <div class="stack">
       <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Un asiento no se modifica ni se borra: se lo anula con otro asiento que hace lo contrario. El asiento original queda anulado y no se puede volver a anular. Se avisa al Gerente.
         {% if asiento.origen_id %}<br><b>Es un asiento automático:</b> el contraasiento corrige el libro de gestión, pero no anula la operación que lo originó.{% endif %}</div></div>
@@ -46,7 +46,7 @@ funciona sin JavaScript. Todo se escapa.{% endcomment %}
         <div class="fld" style="margin-top:14px">
           <label for="ctr-fecha">Fecha del contraasiento <span class="req">*</span></label>
           <input type="date" class="field-input{% if errores.fecha %} bad{% endif %}" id="ctr-fecha" name="fecha" value="{{ fecha_texto }}" max="{{ hoy|date:'Y-m-d' }}" required>
-          {% for e in errores.fecha %}<div class="err">{{ e }}</div>{% endfor %}
+          {% for e in errores.fecha %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
           <div class="hint">Por defecto, hoy. Puede ser de otro período, mientras caiga en un ejercicio abierto o en cierre y no sea posterior a hoy.</div>
         </div>
       </section>
@@ -56,7 +56,7 @@ funciona sin JavaScript. Todo se escapa.{% endcomment %}
         <div class="fld">
           <label for="ctr-motivo">Por qué se anula <span class="req">*</span></label>
           <textarea class="field-input{% if errores.descripcion %} bad{% endif %}" id="ctr-motivo" name="motivo" rows="2" maxlength="300" placeholder="Por ejemplo: se cargó un importe de más.">{{ motivo }}</textarea>
-          {% for e in errores.descripcion %}<div class="err">{{ e }}</div>{% endfor %}
+          {% for e in errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
         </div>
       </section>
     </div>

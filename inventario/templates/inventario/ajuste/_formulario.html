@@ -1,4 +1,4 @@
-{% load iconos formato_inventario %}{% comment %}El formulario de «Ajustar stock de insumo» (CMP-AJT-STK): lo que HTMX reemplaza dentro de #ajuste-vivo en cada cambio (ver «_vivo.html»).{% endcomment %}
+{% load iconos formato_inventario vista %}{% comment %}El formulario de «Ajustar stock de insumo» (CMP-AJT-STK): lo que HTMX reemplaza dentro de #ajuste-vivo en cada cambio (ver «_vivo.html»).{% endcomment %}
 <form id="ajuste-form" method="post" action="{% url 'inventario:ajuste' %}" novalidate>
   {% csrf_token %}
   <div class="stack">
@@ -49,7 +49,7 @@
       <div class="card-title">Datos del ajuste</div>
       {% if desactualizado %}<div class="alert alert-warn" role="alert" style="margin-bottom:14px">{% icono "info" 16 %}<div><b>Los datos cambiaron mientras tanto.</b> Otra operación movió el stock de este insumo antes de que confirmaras: no se cambió nada. Revisá los valores vigentes y volvé a confirmar.</div></div>{% endif %}
       {% if cambio_la_firma %}<div class="alert alert-info" role="status" style="margin-bottom:14px">{% icono "info" 16 %}<div>Cambiaste datos después de ver el resumen: revisá el resumen actualizado antes de confirmar.</div></div>{% endif %}
-      {% for mensaje in errores_generales %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
+      {% for mensaje in errores_generales %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{{ mensaje }}</div></div>{% endfor %}
 
       {% if motivo == "carga_inicial" %}
         <p class="muted sm" style="margin:-6px 0 12px">Para cargar lo que el invernadero ya tenía antes de usar el sistema.{% if situacion.controla_vencimiento %} Si las existencias tienen distintas fechas de vencimiento, registrá una carga por cada fecha.{% endif %}</p>
@@ -67,7 +67,7 @@
           </div>
           {% endwith %}{% endwith %}{% endfor %}
         </div>
-        {% if errores.contados %}<div class="err">{{ errores.contados }}</div>{% endif %}
+        {% if errores.contados %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.contados }}</div>{% endif %}
         <div class="divider"></div>
         <div class="card-title" style="font-size:14px">Lotes nuevos (lo que hay y no está registrado)</div>
         <input type="hidden" name="nuevos_n" value="{{ nuevos_n }}">
@@ -85,7 +85,7 @@
           <div class="fld"><label for="lote_id">Lote afectado<span class="req" aria-hidden="true"> *</span></label>
             <select class="field-input" id="lote_id" name="lote_id" data-desplegable><option value="">Seleccionar…</option>
               {% for lc in lotes_con_stock %}<option value="{{ lc.lote.pk }}"{% if valores.lote_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>Lote {{ lc.lote.pk }} · disponible {{ lc.lote.cantidad_disponible|cant:unidad }}{% if lc.lote.fecha_vencimiento %} · vence {{ lc.lote.fecha_vencimiento|fecha }}{% endif %}</option>{% endfor %}
-            </select>{% if errores.lote %}<div class="err">{{ errores.lote }}</div>{% endif %}</div>
+            </select>{% if errores.lote %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.lote }}</div>{% endif %}</div>
           {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad a descontar" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
         </div>
         {% include "inventario/ajuste/_campo.html" with nombre="descripcion" etiqueta="Descripción (opcional)" valor=valores|dato:"descripcion" error=errores|dato:"descripcion" %}
@@ -98,7 +98,7 @@
           <label class="row inv-marca"><input type="checkbox" name="lotes" value="{{ lc.lote.pk }}"{% if lc.lote.pk|stringformat:"s" in marcados %} checked{% endif %}><span class="mono">Lote {{ lc.lote.pk }}</span><span>{{ lc.lote.cantidad_disponible|cant:unidad }} · venció el {{ lc.lote.fecha_vencimiento|fecha }} ({{ lc|estado_del_lote }})</span></label>
           {% endfor %}
         </div>
-        {% if errores.lotes %}<div class="err">{{ errores.lotes }}</div>{% endif %}
+        {% if errores.lotes %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.lotes }}</div>{% endif %}
         {% else %}
         <div class="alert alert-info" role="status">{% icono "info" 16 %}<div>Este insumo no tiene lotes vencidos en este invernadero.</div></div>
         {% endif %}
@@ -109,11 +109,11 @@
           <div class="fld"><label for="origen_id">Sale del lote<span class="req" aria-hidden="true"> *</span></label>
             <select class="field-input" id="origen_id" name="origen_id" data-desplegable><option value="">Seleccionar…</option>
               {% for lc in lotes_con_stock %}<option value="{{ lc.lote.pk }}"{% if valores.origen_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>Lote {{ lc.lote.pk }} · {{ lc.lote.cantidad_disponible|cant:unidad }}</option>{% endfor %}
-            </select>{% if errores.origen %}<div class="err">{{ errores.origen }}</div>{% endif %}</div>
+            </select>{% if errores.origen %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.origen }}</div>{% endif %}</div>
           <div class="fld"><label for="destino_id">Pasa al lote<span class="req" aria-hidden="true"> *</span></label>
             <select class="field-input" id="destino_id" name="destino_id" data-desplegable><option value="">Seleccionar…</option>
               {% for lc in lotes_destino %}<option value="{{ lc.lote.pk }}"{% if valores.destino_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>{% if lc.lote.es_faltante_sin_lote %}Sin lote (faltante {{ lc.lote.cantidad_disponible|cant:unidad }}){% else %}Lote {{ lc.lote.pk }} · {{ lc.lote.cantidad_disponible|cant:unidad }}{% endif %}</option>{% endfor %}
-            </select>{% if errores.destino %}<div class="err">{{ errores.destino }}</div>{% endif %}</div>
+            </select>{% if errores.destino %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.destino }}</div>{% endif %}</div>
           {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
         </div>
 
@@ -122,7 +122,7 @@
           <div class="row">
             <label class="row inv-marca"><input type="radio" name="sentido" value="suma" hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change"{% if valores.sentido == "suma" %} checked{% endif %}> Suma stock</label>
             <label class="row inv-marca"><input type="radio" name="sentido" value="resta" hx-post="{% url 'inventario:ajuste' %}" hx-trigger="change"{% if valores.sentido == "resta" %} checked{% endif %}> Resta stock</label>
-          </div>{% if errores.sentido %}<div class="err">{{ errores.sentido }}</div>{% endif %}</div>
+          </div>{% if errores.sentido %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.sentido }}</div>{% endif %}</div>
         {% if valores.sentido == "suma" %}
           {% include "inventario/ajuste/_alta.html" %}
         {% elif valores.sentido == "resta" %}
@@ -130,18 +130,18 @@
           <div class="fld"><label for="lote_id">Lote<span class="req" aria-hidden="true"> *</span></label>
             <select class="field-input" id="lote_id" name="lote_id" data-desplegable><option value="">Seleccionar…</option>
               {% for lc in lotes_con_stock %}<option value="{{ lc.lote.pk }}"{% if valores.lote_id == lc.lote.pk|stringformat:"s" %} selected{% endif %}>Lote {{ lc.lote.pk }} · disponible {{ lc.lote.cantidad_disponible|cant:unidad }}</option>{% endfor %}
-            </select>{% if errores.lote %}<div class="err">{{ errores.lote }}</div>{% endif %}</div>
+            </select>{% if errores.lote %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.lote }}</div>{% endif %}</div>
           {% include "inventario/ajuste/_campo.html" with nombre="cantidad" etiqueta="Cantidad a descontar" requerido=True valor=valores|dato:"cantidad" error=errores|dato:"cantidad" unidad=unidad|unidad_de %}
         </div>
         {% endif %}
         <div class="fld"><label for="descripcion">Descripción<span class="req" aria-hidden="true"> *</span></label>
           <textarea class="field-input" id="descripcion" name="descripcion" rows="2" maxlength="300" placeholder="Contá qué pasó">{{ valores.descripcion }}</textarea>
-          {% if errores.descripcion %}<div class="err">{{ errores.descripcion }}</div>{% endif %}</div>
+          {% if errores.descripcion %}<div class="err"{% llevar_vista_una_vez %}>{{ errores.descripcion }}</div>{% endif %}</div>
       {% endif %}
     </div>
 
     {% if resumen %}
-    <div class="card recap">
+    <div class="card recap"{% llevar_vista_una_vez %}>
       <div class="card-title">Qué se va a registrar</div>
       <dl class="dl">
         {% if resumen.lotes %}<dt>Lotes que cambian</dt><dd><ul class="inv-lista">

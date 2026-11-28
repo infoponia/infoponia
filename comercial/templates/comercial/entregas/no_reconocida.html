@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load estaticos iconos comercial %}
+{% extends "core/base_con_sesion.html" %}{% load estaticos iconos comercial vista %}
 {% comment %}«Atender entrega no reconocida» (COM-ATN-ENR, COM-06b; `INIT.atnenr` y `VIEWS.atnenr` del prototipo; D-61): lo que dijo el cliente, todo lo que generó la entrega (regla 1: detalles y cantidades, transportista y vehículo, fecha y
 hora de la concreción, intentos fallidos, confirmación, envases consumidos, cobro y los asientos de la entrega con sus líneas, como texto sin enlace: CON-04d) y el formulario del resultado (regla 2) con su descripción obligatoria. Solo el Gerente.
 Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo), «generales» (los de la cabecera), «resultado» y «descripcion» (lo ya elegido). Todo se escapa.{% endcomment %}
@@ -10,7 +10,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
   <div class="page-h"><h1>Entrega no reconocida · <span class="mono">{{ ficha.entrega.codigo }}</span></h1>
     <div class="sub">{{ ficha.cliente.nombre_visible }} · {{ ficha.contrato.codigo }}</div></div>
 
-  {% if generales %}<div class="alert alert-danger" role="alert">{% icono "x" 16 %}<div>{% for e in generales %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
+  {% if generales %}<div class="alert alert-danger" role="alert"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{% for e in generales %}{{ e }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div></div>{% endif %}
   <div class="alert alert-danger" role="status">{% icono "warn" 16 %}<div>El cliente indicó que <b>no recibió la entrega</b>: «{{ ficha.motivo_del_cliente }}».</div></div>
 
   <div class="card seg">
@@ -52,14 +52,14 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
           {% for valor, texto in ficha.resultados %}
           <label class="portal-radio"><input type="radio" name="resultado" value="{{ valor }}"{% if resultado == valor %} checked{% endif %}> {{ texto }}</label>
           {% endfor %}
-          {% for e in errores.resultado %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+          {% for e in errores.resultado %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
         </fieldset>
         <div class="alert alert-warn" role="status" style="margin-top:12px">{% icono "warn" 16 %}<div>Con «no llegó» corresponde corregir la venta con un asiento manual: se avisa a quien registra los asientos (el Contador). Si la entrega ya se cobró, primero hay que anular el cobro.</div></div>
         <div class="alert alert-info" role="status" style="margin-top:12px">{% icono "info" 16 %}<div>El reingreso del producto devuelto a la cámara todavía no está disponible: registralo en la descripción.</div></div>
         <div class="fld" style="margin-top:12px">
           <label class="lbl" for="descripcion">Lo averiguado <span class="req">*</span></label>
           <textarea class="field-input" id="descripcion" name="descripcion" rows="3" maxlength="500" placeholder="Con quién hablaste y qué verificaste.">{{ descripcion }}</textarea>
-          {% for e in errores.descripcion %}<div class="err" role="alert">{{ e }}</div>{% endfor %}
+          {% for e in errores.descripcion %}<div class="err" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
         </div>
       </div>
     </div>

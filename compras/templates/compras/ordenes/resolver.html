@@ -1,4 +1,4 @@
-{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario %}
+{% extends "core/base_con_sesion.html" %}{% load iconos estaticos formato_inventario vista %}
 {% comment %}«Revisar y decidir» (CMP-APR-ODC paso 4; ``VIEWS.c_apr`` del prototipo). Recibe «detalle» (``DetalleParaResolver``), «orden», «motivo» (el escrito o, si una cotización quedó afectada, el propuesto por el Sistema: P1) y
 «errores_del_motivo». Muestra el pedido, el Agrónomo, las observaciones, por proveedor sus líneas y por detalle lo comprado frente a lo pedido, y el total frente al estimado. Si la orden no se puede aprobar (4a: destino
 inactivo; 4b y P1: cotización vencida o proveedor inactivo) lo dice y **no ofrece «Aprobar»** (D-30): solo se puede rechazar. «Aprobar» y «Rechazar» llevan a su resumen antes de confirmar (pasos 6 y 5a.3); nada cambia hasta confirmar.
@@ -87,7 +87,7 @@ El motivo del rechazo es obligatorio (5b). Sin JavaScript.{% endcomment %}
           <div class="field">
             <label class="field-label" for="motivo">Motivo del rechazo <span class="req" aria-hidden="true">*</span></label>
             <textarea class="field-input{% if errores_del_motivo %} bad{% endif %}" id="motivo" name="motivo" rows="4" placeholder="Qué debería cambiar el Agrónomo." aria-describedby="motivo-ayuda{% if errores_del_motivo %} motivo-error{% endif %}">{{ motivo }}</textarea>
-            {% for e in errores_del_motivo %}<div class="err" id="motivo-error" role="alert">{{ e }}</div>{% endfor %}
+            {% for e in errores_del_motivo %}<div class="err" id="motivo-error" role="alert"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
             <div class="hint" id="motivo-ayuda">Obligatorio para rechazar. Lo ve el Agrónomo; los proveedores no.{% if detalle.motivo_propuesto %} Lo propuso el Sistema: podés editarlo.{% endif %}</div>
           </div>
           <button class="btn btn-danger btn-block" type="submit" name="accion" value="revisar_rechazo" data-enviando="Revisando…">Rechazar orden</button>

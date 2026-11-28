@@ -1,8 +1,8 @@
-{% load iconos %}{% comment %}Cuerpo del formulario de «Iniciar ejercicio» (CON-INI-EJE pasos 2 y 3; tarea CON-05, sin prototipo: estilo de «Registrar asiento» de CON-03b): la fecha de inicio con el rango de la
+{% load iconos vista %}{% comment %}Cuerpo del formulario de «Iniciar ejercicio» (CON-INI-EJE pasos 2 y 3; tarea CON-05, sin prototipo: estilo de «Registrar asiento» de CON-03b): la fecha de inicio con el rango de la
 regla 4 y el cierre previsto que resulta, y las cinco líneas del asiento de apertura en dos bloques («Debe» y «Haber»), con el texto de la regla 7. «Calcular cierre» es un botón del formulario: con HTMX
 solo vuelve a dibujar este cuerpo (``#cuerpo-inicio``, ``hx-swap="innerHTML show:none"``) y NO valida (interfaz.md: nada de recalcular al cambiar o al escribir); sin JavaScript vuelve a dibujar la página.
 Cada error vuelve junto a su campo y lo escrito se conserva. Recibe «datos», «errores», «filas_del_debe», «filas_del_haber», «hoy», «fecha_minima» y «cierre» (`None` si la fecha no es válida). Todo se escapa.{% endcomment %}
-{% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px">{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
+{% for texto in errores.general %}<div class="alert alert-danger" role="alert" style="margin-bottom:14px"{% llevar_vista_una_vez %}>{% icono "x" 16 %}<div>{{ texto }}</div></div>{% endfor %}
 <div class="stack">
   <section class="sec" aria-labelledby="sec-ini-fecha">
     <div class="sec-h" id="sec-ini-fecha"><span class="sec-num">1</span>Cuándo empieza</div>
@@ -10,7 +10,7 @@ Cada error vuelve junto a su campo y lo escrito se conserva. Recibe «datos», �
       <div class="fld">
         <label for="ini-fecha">Fecha de inicio <span class="req">*</span></label>
         <input type="date" class="field-input{% if errores.fecha %} bad{% endif %}" id="ini-fecha" name="fecha_inicio" value="{{ datos.fecha_texto }}" min="{{ fecha_minima|date:'Y-m-d' }}" max="{{ hoy|date:'Y-m-d' }}" required>
-        {% for e in errores.fecha %}<div class="err">{{ e }}</div>{% endfor %}
+        {% for e in errores.fecha %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}
         <div class="hint">Desde el {{ fecha_minima|date:"d/m/Y" }} hasta hoy. Es la fecha del asiento de apertura: lo que la organización ya tenía ese día.</div>
       </div>
       <div class="fld">
@@ -33,7 +33,7 @@ Cada error vuelve junto a su campo y lo escrito se conserva. Recibe «datos», �
           <tr>
             <td class="asi-cuenta"><label for="ini-{{ f.codigo }}">{{ f.codigo }} · {{ f.nombre }}</label></td>
             <td class="asi-importe"><input id="ini-{{ f.codigo }}" class="field-input num{% if f.errores %} bad{% endif %}" name="importe_{{ f.codigo }}" inputmode="decimal" autocomplete="off" value="{{ f.texto }}" placeholder="0,00">
-              {% for e in f.errores %}<div class="err">{{ e }}</div>{% endfor %}</td>
+              {% for e in f.errores %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -47,7 +47,7 @@ Cada error vuelve junto a su campo y lo escrito se conserva. Recibe «datos», �
           <tr>
             <td class="asi-cuenta"><label for="ini-{{ f.codigo }}">{{ f.codigo }} · {{ f.nombre }}{% if f.codigo == "3.1.01" %} <span class="req">*</span>{% endif %}</label></td>
             <td class="asi-importe"><input id="ini-{{ f.codigo }}" class="field-input num{% if f.errores %} bad{% endif %}" name="importe_{{ f.codigo }}" inputmode="decimal" autocomplete="off" value="{{ f.texto }}" placeholder="0,00">
-              {% for e in f.errores %}<div class="err">{{ e }}</div>{% endfor %}</td>
+              {% for e in f.errores %}<div class="err"{% llevar_vista_una_vez %}>{{ e }}</div>{% endfor %}</td>
           </tr>
         {% endfor %}
         </tbody>

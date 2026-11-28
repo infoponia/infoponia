@@ -1,4 +1,4 @@
-{% load iconos comercial %}{% comment %}Un detalle del formulario «Pactar suministro» (COM-PCT-SUM, pasos 7 a 11; `detForm` del prototipo, segunda definición): variedad y dirección, cantidad y período (con
+{% load iconos comercial vista %}{% comment %}Un detalle del formulario «Pactar suministro» (COM-PCT-SUM, pasos 7 a 11; `detForm` del prototipo, segunda definición): variedad y dirección, cantidad y período (con
 las opciones rápidas de 7, 14 y 30 días), primera entrega, mecanismo de precio con su ajuste, la cláusula del suministrante, las advertencias 9d y 9f, y el calendario con el precio de cada
 entrega y la verificación de stock de la ventana (9e). Los errores van junto a cada campo. Los selectores y los botones redibujan por HTMX sin validar; los números y las fechas nunca
 (`.claude/rules/interfaz.md`). Recibe «fila», «n» (su posición, desde 1) y «f».{% endcomment %}
@@ -19,7 +19,7 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
         <option value="">Seleccionar…</option>
         {% for v in f.variedades_ofrecidas %}<option value="{{ v.pk }}"{% if v.pk|stringformat:"s" == r.variedad_id %} selected{% endif %}>{{ v }}</option>{% endfor %}
       </select>
-      {% if fila.errores.variedad %}<div class="err">{{ fila.errores.variedad }}</div>{% endif %}
+      {% if fila.errores.variedad %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.variedad }}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-direccion">Dirección de entrega<span class="req" aria-hidden="true"> *</span></label>
@@ -27,13 +27,13 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
         <option value="">Seleccionar…</option>
         {% for d in f.direcciones %}<option value="{{ d.pk }}"{% if fila.direccion and fila.direccion.pk == d.pk %} selected{% endif %}>{{ d.texto }} · {{ d.localidad.nombre_localidad }}</option>{% endfor %}
       </select>
-      {% if fila.errores.direccion %}<div class="err">{{ fila.errores.direccion }}</div>{% endif %}
+      {% if fila.errores.direccion %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.direccion }}</div>{% endif %}
       {% if n == 1 %}<div class="hint">¿Otra dirección? <a href="{% url 'comercial:cliente_modificar' f.cliente.pk %}?volver={{ url_para_volver|urlencode:'' }}">Agregar una dirección al cliente</a>.{% if hay_detalles_cargados %} Vas a tener que volver a cargar los detalles.{% endif %}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-cantidad">Cantidad por período<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-cantidad" type="text" inputmode="numeric" name="detalle-{{ i }}-cantidad" value="{{ r.cantidad }}" autocomplete="off"><span>plantas</span></div>
-      {% if fila.errores.cantidad %}<div class="err">{{ fila.errores.cantidad }}</div>{% endif %}
+      {% if fila.errores.cantidad %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.cantidad }}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-periodo">Período de entrega<span class="req" aria-hidden="true"> *</span></label>
@@ -43,7 +43,7 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
         <button class="btn btn-ghost btn-sm" type="submit" name="periodo_rapido" value="{{ i }}:14" aria-label="Cada 14 días" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>14</button>
         <button class="btn btn-ghost btn-sm" type="submit" name="periodo_rapido" value="{{ i }}:30" aria-label="Cada 30 días" hx-post="{{ url_calcular }}" hx-target="#cuerpo-sum" hx-swap="innerHTML show:none" data-sin-envio-en-curso>30</button>
       </div>
-      {% if fila.errores.periodo %}<div class="err">{{ fila.errores.periodo }}</div>{% endif %}
+      {% if fila.errores.periodo %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.periodo }}</div>{% endif %}
     </div>
   </div>
 
@@ -51,7 +51,7 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
     <div class="fld">
       <label for="det-{{ i }}-primera">Primera entrega<span class="req" aria-hidden="true"> *</span></label>
       <input class="field-input" id="det-{{ i }}-primera" type="date" name="detalle-{{ i }}-primera_entrega" value="{{ fila.primera|date:'Y-m-d' }}{% if not fila.primera %}{{ r.primera_entrega }}{% endif %}">
-      {% if fila.errores.primera_entrega %}<div class="err">{{ fila.errores.primera_entrega }}</div>{% endif %}
+      {% if fila.errores.primera_entrega %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.primera_entrega }}</div>{% endif %}
       <div class="hint">Desde hoy y hasta el fin del contrato. Las entregas que caen en los próximos {{ dias_de_ventana }} días se reservan al pactar.</div>
     </div>
     <div class="fld">
@@ -60,12 +60,12 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
         <option value="fijo"{% if fila.mecanismo == "fijo" %} selected{% endif %}>Fijo</option>
         <option value="ajuste_periodico"{% if fila.mecanismo == "ajuste_periodico" %} selected{% endif %}>Ajuste periódico</option>
       </select>
-      {% if fila.errores.mecanismo %}<div class="err">{{ fila.errores.mecanismo }}</div>{% endif %}
+      {% if fila.errores.mecanismo %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.mecanismo }}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-precio">Precio unitario inicial<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-precio" type="text" inputmode="decimal" name="detalle-{{ i }}-precio" value="{{ r.precio }}" autocomplete="off"><span>$</span></div>
-      {% if fila.errores.precio %}<div class="err">{{ fila.errores.precio }}</div>{% endif %}
+      {% if fila.errores.precio %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.precio }}</div>{% endif %}
     </div>
   </div>
 
@@ -74,12 +74,12 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
     <div class="fld">
       <label for="det-{{ i }}-porcentaje">Ajuste<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-porcentaje" type="text" inputmode="decimal" name="detalle-{{ i }}-porcentaje" value="{{ r.porcentaje }}" autocomplete="off"><span>%</span></div>
-      {% if fila.errores.porcentaje %}<div class="err">{{ fila.errores.porcentaje }}</div>{% endif %}
+      {% if fila.errores.porcentaje %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.porcentaje }}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-meses">Cada<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-meses" type="text" inputmode="numeric" name="detalle-{{ i }}-meses" value="{{ r.meses }}" autocomplete="off"><span>meses</span></div>
-      {% if fila.errores.meses %}<div class="err">{{ fila.errores.meses }}</div>{% endif %}
+      {% if fila.errores.meses %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.meses }}</div>{% endif %}
     </div>
   </div>
   {% endif %}
@@ -89,22 +89,22 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
     <div class="fld">
       <label for="det-{{ i }}-plazo-entrega">Tolerancia de entrega<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-plazo-entrega" type="text" inputmode="numeric" name="detalle-{{ i }}-plazo_entrega" value="{{ r.plazo_entrega }}" autocomplete="off"><span>días</span></div>
-      {% if fila.errores.plazo_entrega %}<div class="err">{{ fila.errores.plazo_entrega }}</div>{% endif %}
+      {% if fila.errores.plazo_entrega %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.plazo_entrega }}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-ind-retraso">Indemnización por retraso<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-ind-retraso" type="text" inputmode="decimal" name="detalle-{{ i }}-indemnizacion_retraso" value="{{ r.indemnizacion_retraso }}" autocomplete="off"><span>$ por día</span></div>
-      {% if fila.errores.indemnizacion_retraso %}<div class="err">{{ fila.errores.indemnizacion_retraso }}</div>{% endif %}
+      {% if fila.errores.indemnizacion_retraso %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.indemnizacion_retraso }}</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-minima">Cantidad mínima por entrega<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-minima" type="text" inputmode="numeric" name="detalle-{{ i }}-cantidad_minima" value="{{ r.cantidad_minima }}" autocomplete="off"><span>plantas</span></div>
-      {% if fila.errores.cantidad_minima %}<div class="err">{{ fila.errores.cantidad_minima }}</div>{% else %}<div class="hint">No puede superar la cantidad por período.</div>{% endif %}
+      {% if fila.errores.cantidad_minima %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.cantidad_minima }}</div>{% else %}<div class="hint">No puede superar la cantidad por período.</div>{% endif %}
     </div>
     <div class="fld">
       <label for="det-{{ i }}-ind-faltante">Indemnización por faltante<span class="req" aria-hidden="true"> *</span></label>
       <div class="suf"><input class="field-input" id="det-{{ i }}-ind-faltante" type="text" inputmode="decimal" name="detalle-{{ i }}-indemnizacion_faltante" value="{{ r.indemnizacion_faltante }}" autocomplete="off"><span>$ por planta</span></div>
-      {% if fila.errores.indemnizacion_faltante %}<div class="err">{{ fila.errores.indemnizacion_faltante }}</div>{% endif %}
+      {% if fila.errores.indemnizacion_faltante %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.indemnizacion_faltante }}</div>{% endif %}
     </div>
   </div>
 
@@ -113,7 +113,7 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
   <div class="alert alert-warn" role="status" style="margin-top:10px">{% icono "warn" 16 %}<div>{{ a.mensaje }}
     Ver <a href="{% url 'comercial:suministro' a.contrato.pk %}" target="_blank" rel="noopener">{{ a.contrato.codigo }}</a>.
     <label class="continuar"><input type="checkbox" name="detalle-{{ i }}-continuar" value="1"{% if r.continuar_superpuesto == "1" %} checked{% endif %}> Continuar igual: es una renovación o un pedido con condiciones propias</label>
-    {% if fila.errores.continuar %}<div class="err">{{ fila.errores.continuar }}</div>{% endif %}</div></div>
+    {% if fila.errores.continuar %}<div class="err"{% llevar_vista_una_vez %}>{{ fila.errores.continuar }}</div>{% endif %}</div></div>
   {% else %}
   <div class="alert alert-info" role="status" style="margin-top:10px">{% icono "info" 16 %}<div>{{ a.mensaje }}</div></div>
   {% endif %}
