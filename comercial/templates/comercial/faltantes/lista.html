@@ -10,17 +10,17 @@ Recibe «filas».{% endcomment %}
   <div class="page-h"><h1>Faltantes para decidir</h1></div>
   {% if filas %}
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Compra-venta</th><th>Cliente</th><th>Contacto</th><th>Fecha pactada</th><th>Pendiente</th><th>Desde</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
         <tr>
-          <td class="mono"><a href="{% url 'comercial:compra_venta' f.venta.pk %}">{{ f.venta.codigo }}</a></td>
-          <td>{{ f.cliente }}</td>
-          <td>{% if f.cliente.telefono_cliente %}{{ f.cliente.telefono_cliente }}{% endif %}{% if f.cliente.telefono_cliente and f.cliente.email_cliente %} · {% endif %}{% if f.cliente.email_cliente %}{{ f.cliente.email_cliente }}{% endif %}{% if not f.cliente.telefono_cliente and not f.cliente.email_cliente %}<span class="muted">Sin datos de contacto</span>{% endif %}</td>
-          <td>{{ f.venta.fecha_pactada_venta|date:"d/m/Y" }}</td>
-          <td>{% for d in f.pendientes %}{{ d.variedad }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-          <td>{{ f.desde|date:"d/m/Y" }}</td>
+          <td data-rotulo="Compra-venta" class="mono"><a href="{% url 'comercial:compra_venta' f.venta.pk %}">{{ f.venta.codigo }}</a></td>
+          <td data-rotulo="Cliente">{{ f.cliente }}</td>
+          <td data-rotulo="Contacto">{% if f.cliente.telefono_cliente %}{{ f.cliente.telefono_cliente }}{% endif %}{% if f.cliente.telefono_cliente and f.cliente.email_cliente %} · {% endif %}{% if f.cliente.email_cliente %}{{ f.cliente.email_cliente }}{% endif %}{% if not f.cliente.telefono_cliente and not f.cliente.email_cliente %}<span class="muted">Sin datos de contacto</span>{% endif %}</td>
+          <td data-rotulo="Fecha pactada">{{ f.venta.fecha_pactada_venta|date:"d/m/Y" }}</td>
+          <td data-rotulo="Pendiente">{% for d in f.pendientes %}{{ d.variedad }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+          <td data-rotulo="Desde">{{ f.desde|date:"d/m/Y" }}</td>
           <td class="right"><a class="btn btn-primary" href="{% url 'comercial:faltante_decidir' f.venta.pk %}">Registrar decisión</a></td>
         </tr>
       {% endfor %}

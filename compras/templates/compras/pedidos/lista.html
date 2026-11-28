@@ -48,18 +48,18 @@ Los filtros se envían con «Filtrar»: sin JavaScript funciona igual. Se marca 
 
   {% if filas %}
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Pedido</th><th>Destino</th><th>Fecha límite</th><th>Proveedores</th><th class="right">Monto estimado</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       {% with p=f.pedido %}
       <tr>
-        <td><a class="prv-nombre" href="{% url 'compras:pedido_ficha' p.pk %}"><b>{{ p }}</b></a><span class="sub2">{{ p.fecha_pedido|date:"d/m/Y" }}{% if es_gerente %} · {{ p.agronomo.get_full_name|default:p.agronomo.email }}{% endif %}</span></td>
-        <td>{{ f.invernaderos|join:", " }}<span class="sub2">{{ f.insumos }} insumo{{ f.insumos|pluralize }}</span></td>
-        <td class="nowrap">{{ p.fecha_limite_cotizaciones|date:"d/m/Y" }}</td>
-        <td>{{ f.cotizaciones }} de {{ f.invitados }}<span class="sub2">cotizaron</span></td>
-        <td class="right nowrap mono">{{ f.monto|pesos }}</td>
-        <td><span class="status-badge {% if p.estado_pedido == 'en_cotizacion' %}status-info{% else %}status-neutral{% endif %}">{{ p.get_estado_pedido_display }}</span>{% if f.por_resolver %} <span class="status-badge status-warn">Fecha límite vencida</span>{% endif %}</td>
+        <td data-rotulo="Pedido"><a class="prv-nombre" href="{% url 'compras:pedido_ficha' p.pk %}"><b>{{ p }}</b></a><span class="sub2">{{ p.fecha_pedido|date:"d/m/Y" }}{% if es_gerente %} · {{ p.agronomo.get_full_name|default:p.agronomo.email }}{% endif %}</span></td>
+        <td data-rotulo="Destino">{{ f.invernaderos|join:", " }}<span class="sub2">{{ f.insumos }} insumo{{ f.insumos|pluralize }}</span></td>
+        <td data-rotulo="Fecha límite" class="nowrap">{{ p.fecha_limite_cotizaciones|date:"d/m/Y" }}</td>
+        <td data-rotulo="Proveedores">{{ f.cotizaciones }} de {{ f.invitados }}<span class="sub2">cotizaron</span></td>
+        <td data-rotulo="Monto estimado" class="right nowrap mono">{{ f.monto|pesos }}</td>
+        <td data-rotulo="Estado"><span class="status-badge {% if p.estado_pedido == 'en_cotizacion' %}status-info{% else %}status-neutral{% endif %}">{{ p.get_estado_pedido_display }}</span>{% if f.por_resolver %} <span class="status-badge status-warn">Fecha límite vencida</span>{% endif %}</td>
         <td class="right"><a class="btn btn-ghost btn-sm" href="{% url 'compras:pedido_ficha' p.pk %}">Ver<span class="sr"> el pedido {{ p }}</span></a></td>
       </tr>
       {% endwith %}

@@ -10,6 +10,14 @@ mostradas. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecer
 <div class="shell{% if modo_campo %} field{% elif not mostrar_menu_lateral %} sin-lateral{% endif %}">
   <header class="top">
     {% block boton_volver %}{% endblock %}
+    {# Menú del celular (UI-05, UX-07; D-109 punto 4): un <details> que despliega las mismas entradas del menú lateral. Sin JavaScript abre #}
+    {# y cierra solo; infoponia.js suma Esc y el clic afuera. El CSS lo muestra en menos de 760px. No existe en el modo campo. #}
+    {% if mostrar_menu_lateral %}
+    <details class="menu-celular" data-menu-celular>
+      <summary class="btn btn-ghost">{% icono "menu" 16 %}<span>Menú</span></summary>
+      <nav class="menu-celular-panel" aria-label="Menú">{% include "core/_menu_entradas.html" %}</nav>
+    </details>
+    {% endif %}
     <div class="brand">
       {% include "core/_logo.html" %}
       <b>{{ nombre_organizacion }}</b>
@@ -29,22 +37,11 @@ mostradas. El bloque «boton_volver» lo usa Mi perfil: en el celular la cabecer
   {% if mostrar_menu_lateral %}
   <aside class="side">
     <div class="side-label">{% if es_administrador %}Administración{% else %}Módulos{% endif %}</div>
-    {% for entrada in menu %}
-    <a class="nav-item{% if entrada.activo %} active{% endif %}" href="{{ entrada.url }}"{% if entrada.activo %} aria-current="page"{% endif %}>
-      {% icono entrada.icono 16 %}<span>{{ entrada.texto }}</span>
-    </a>
-    {% endfor %}
+    {% include "core/_menu_entradas.html" %}
   </aside>
   {% endif %}
 
   <main class="main">
-    {# Menú de las pantallas angostas (mnav del prototipo): las mismas entradas del menú lateral, como fichas; el CSS lo muestra #}
-    {# en menos de 760px y lo oculta en el marco de celular. #}
-    {% if mostrar_menu_lateral %}
-    <nav class="mnav" aria-label="Menú">
-      {% for entrada in menu %}<a class="chip" href="{{ entrada.url }}"{% if entrada.activo %} aria-current="page"{% endif %}>{{ entrada.texto }}</a>{% endfor %}
-    </nav>
-    {% endif %}
     {% if messages %}
     <div class="page narrow" data-avisos style="margin-bottom:14px">
       {# Respaldo sin JavaScript: el mensaje queda fijo en la página. Con JavaScript, infoponia.js lo reemplaza por un aviso breve. #}

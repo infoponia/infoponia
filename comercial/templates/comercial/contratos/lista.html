@@ -41,16 +41,16 @@ solo para el Gerente, Vendedor. El monto es «estimado» si la venta no está co
   </form>
 
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Compra-venta</th><th>Cliente</th><th>Entrega</th><th class="right">Monto</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for v in pagina.object_list %}
         <tr>
-          <td class="nowrap"><b style="font-weight:600" class="mono">{{ v.codigo }}</b><span class="sub2">{{ v.fecha_realizacion|date:"d/m/Y" }}{% if es_gerente %} · {{ v.vendedor.get_full_name }}{% endif %}</span></td>
-          <td>{{ v.cliente }}</td>
-          <td>{% if v.modalidad_entrega == "envio" %}Envío{% else %}Retiro{% endif %}<span class="sub2">{{ v.fecha_pactada_venta|date:"d/m/Y" }}</span></td>
-          <td class="right nowrap mono">{{ v.monto|pesos }}<span class="sub2">{% if v.monto_es_final %}final{% else %}estimado{% endif %}</span></td>
-          <td>{% include "comercial/contratos/_estado.html" with estado=v.estado_venta texto=v.get_estado_venta_display %}</td>
+          <td data-rotulo="Compra-venta" class="nowrap"><b style="font-weight:600" class="mono">{{ v.codigo }}</b><span class="sub2">{{ v.fecha_realizacion|date:"d/m/Y" }}{% if es_gerente %} · {{ v.vendedor.get_full_name }}{% endif %}</span></td>
+          <td data-rotulo="Cliente">{{ v.cliente }}</td>
+          <td data-rotulo="Entrega">{% if v.modalidad_entrega == "envio" %}Envío{% else %}Retiro{% endif %}<span class="sub2">{{ v.fecha_pactada_venta|date:"d/m/Y" }}</span></td>
+          <td data-rotulo="Monto" class="right nowrap mono">{{ v.monto|pesos }}<span class="sub2">{% if v.monto_es_final %}final{% else %}estimado{% endif %}</span></td>
+          <td data-rotulo="Estado">{% include "comercial/contratos/_estado.html" with estado=v.estado_venta texto=v.get_estado_venta_display %}</td>
           <td class="right"><a class="rowlink" href="{% url 'comercial:compra_venta' v.pk %}">Ver<span class="sr"> la compra-venta {{ v.codigo }}</span></a></td>
         </tr>
       {% empty %}

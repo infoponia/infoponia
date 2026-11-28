@@ -1481,3 +1481,27 @@ La red ya comprobó los cuatro controles en las pantallas de la demo; acá se mi
 - [ ] 11. Navegador real: Nuevo invernadero completo en ventana privada hasta la ficha, sin 403 ni CSRF.
 - [ ] 12. Títulos a 1366 y 360 px: se ven igual que antes (fichas, Estadísticas, IoT, Compras); Narrador `H` en nivel 2.
 - [ ] 13. Desplegable propio en Nuevo invernadero y Concretar cosecha: mouse, teclado y listas encadenadas (HTMX).
+
+## UI-05 · Tarea UI-05 (celular: botón «Menú» y listas como tarjetas)
+
+Los 17 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-05-menu-y-tablas-en-el-celular.md` (ahí está el detalle). **Sin migración.**
+La red ya comprobó el `data-rotulo` de cada celda y el recorrido, las entradas de «Menú»; acá se mira el aspecto, el ancho real, el teclado y el JavaScript.
+Modo celular: `F12` y `Ctrl+Shift+M`, 360 de ancho. Para ver Entregas con datos, usar la base de la demo.
+
+- [ ] 1. «Menú» a 360 px (Gerente): botón con tres rayas a la izquierda del logo; sin la fila de fichas; el panel trae todas las entradas, con la actual resaltada; la página no se desplaza de costado.
+- [ ] 2. Ir a Contabilidad y volver desde «Menú»; con «atrás» del navegador el panel no queda abierto.
+- [ ] 3. `Esc` cierra el panel y deja el foco en «Menú».
+- [ ] 4. Clic afuera cierra el panel; el botón de la cuenta cierra «Menú» y abre el menú de cuenta.
+- [ ] 5. Con el teclado: `Tab` a «Menú», `Enter`, recorrer las entradas con foco visible.
+- [ ] 6. Sin JavaScript: «Menú» abre y cierra, las entradas navegan; `Esc` y clic afuera no cierran (esperado).
+- [ ] 7. Agrónomo, Vendedor y Contador a 360 px: «Menú» = menú lateral a 1366 px, mismo orden.
+- [ ] 8. A 1366 px no hay «Menú» y el menú lateral es el de siempre; el cambio ocurre en 760 px.
+- [ ] 9. Clientes como tarjetas (Vendedor): título, pares «rótulo: valor», «Ver» al final; sin encabezado ni desplazamiento de costado; búsqueda sin resultados.
+- [ ] 10. Entregas como tarjetas (con la demo): acciones en fila que se parte; franja de «Sin transportista»; códigos sin cortarse.
+- [ ] 11. Contratos, Cobranza (las dos vistas, con los desplegables por cliente), Solicitudes, Faltantes (Vendedor) y Vehículos (Gerente) como tarjetas.
+- [ ] 12. Cuentas, Compras (Pedidos, Órdenes, Proveedores, Reclamos, Pagos, Por recibir), Ejercicios, Catálogo, Categorías y Variedades como tarjetas; Catálogo sin desplazamiento.
+- [ ] 13. El libro de gestión, el plan de cuentas y Existencias siguen como tabla con desplazamiento dentro de su caja.
+- [ ] 14. A 1366 px las tablas son las de siempre, con las mismas columnas en el mismo orden.
+- [ ] 15. Capataz, Técnico y Transportista (360 y 1366 px): sin «Menú», marco angosto como antes.
+- [ ] 16. (Opcional) Narrador: «Menú» como botón, la entrada actual «página actual», y si las tarjetas siguen anunciándose como tabla.
+- [ ] 17. Navegador real: pasos 1 a 6 con la ventana angosta y la consola (`F12`) sin errores; opcional, en un celular después del despliegue.

@@ -2,17 +2,17 @@
 «Vencida». Un retiro no tiene transportista («No corresponde»); las acciones son «Ver contrato» (COM-05a1) y, con envío «a realizar», «Asignar transportista» (sin transportista) o «Cambiar transportista» (con transportista y no en curso), o «En curso» sin
 acción (COM-05b, COM-ASG-TRP). «Concretar retiro» es de COM-06. Recibe «datos», «filtros» y «consulta».{% endcomment %}
 <div class="tablewrap">
-  <table class="data-table">
+  <table class="data-table tabla-apilable">
     <thead><tr><th>Entrega</th><th>Cliente y destino</th><th>Fecha</th><th class="right">Peso</th><th>Transportista</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
     <tbody>
     {% for f in datos.filas %}
       <tr{% if f.sin_transportista %} class="r-warn"{% endif %}>
-        <td class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b><span class="sub2">{{ f.contrato_codigo }}</span></td>
-        <td><b style="font-weight:600">{{ f.cliente }}</b><span class="sub2">{{ f.destino }}</span>{% if f.contenido %}<span class="sub2">{{ f.contenido }}</span>{% endif %}</td>
-        <td class="nowrap">{{ f.fecha|date:"d/m/Y" }}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span></td>
-        <td class="right nowrap mono">{{ f.peso|floatformat:2 }} kg</td>
-        <td>{% if f.es_retiro %}<span class="muted">No corresponde</span>{% elif f.transportista %}{{ f.transportista }}{% elif f.estado == "a_realizar" %}<span class="status-badge status-danger">Sin transportista</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
-        <td><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
+        <td data-rotulo="Entrega" class="nowrap"><b style="font-weight:600" class="mono">{{ f.codigo }}</b><span class="sub2">{{ f.contrato_codigo }}</span></td>
+        <td data-rotulo="Cliente y destino"><b style="font-weight:600">{{ f.cliente }}</b><span class="sub2">{{ f.destino }}</span>{% if f.contenido %}<span class="sub2">{{ f.contenido }}</span>{% endif %}</td>
+        <td data-rotulo="Fecha" class="nowrap">{{ f.fecha|date:"d/m/Y" }}<span class="sub2{% if f.atrasada %} danger-t{% endif %}">{{ f.cuando }}</span></td>
+        <td data-rotulo="Peso" class="right nowrap mono">{{ f.peso|floatformat:2 }} kg</td>
+        <td data-rotulo="Transportista">{% if f.es_retiro %}<span class="muted">No corresponde</span>{% elif f.transportista %}{{ f.transportista }}{% elif f.estado == "a_realizar" %}<span class="status-badge status-danger">Sin transportista</span>{% else %}<span class="muted">Sin transportista</span>{% endif %}</td>
+        <td data-rotulo="Estado"><span class="status-badge {% if f.estado == 'a_realizar' %}status-warn{% elif f.estado == 'concretada' %}status-ok{% else %}status-neutral{% endif %}">{{ f.estado_texto }}</span></td>
         <td class="right nowrap"><a class="rowlink" href="{{ f.url_del_contrato }}">Ver contrato<span class="sr"> de la entrega {{ f.codigo }}</span></a>
           {% if f.accion == "asignar" %}<a class="rowlink" href="{% url 'comercial:entrega_asignar' f.entrega.pk %}">Asignar transportista<span class="sr"> a la entrega {{ f.codigo }}</span></a>
           {% elif f.accion == "cambiar" %}<a class="rowlink" href="{% url 'comercial:entrega_asignar' f.entrega.pk %}">Cambiar transportista<span class="sr"> de la entrega {{ f.codigo }}</span></a>

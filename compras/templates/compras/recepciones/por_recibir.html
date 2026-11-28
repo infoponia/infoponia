@@ -12,17 +12,17 @@ destino). El Agrónomo ve solo sus invernaderos; el Gerente, todos (extensión 1
 
   {% if entregas %}
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Orden</th><th>Proveedor</th><th>Invernadero</th><th class="right">Líneas pendientes</th><th>Entrega esperada</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for e in entregas %}
       <tr>
-        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' e.orden.pk %}"><b>{{ e.orden }}</b></a></td>
-        <td>{{ e.proveedor.nombre_para_mostrar }}</td>
-        <td>{{ e.invernadero.nombre_invernadero }}</td>
-        <td class="right">{{ e.lineas|length }}</td>
-        <td class="nowrap">{% if e.entrega_esperada %}{{ e.entrega_esperada|date:"d/m/Y" }}{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td>{% if e.atraso_dias %}<span class="status-badge status-danger">{{ e.atraso_dias }} día{{ e.atraso_dias|pluralize }} de atraso</span>{% else %}<span class="status-badge status-neutral">En fecha</span>{% endif %}{% if e.bloqueada %} <span class="status-badge status-warn">Destino inactivo</span>{% endif %}</td>
+        <td data-rotulo="Orden"><a class="prv-nombre" href="{% url 'compras:orden_ficha' e.orden.pk %}"><b>{{ e.orden }}</b></a></td>
+        <td data-rotulo="Proveedor">{{ e.proveedor.nombre_para_mostrar }}</td>
+        <td data-rotulo="Invernadero">{{ e.invernadero.nombre_invernadero }}</td>
+        <td data-rotulo="Líneas pendientes" class="right">{{ e.lineas|length }}</td>
+        <td data-rotulo="Entrega esperada" class="nowrap">{% if e.entrega_esperada %}{{ e.entrega_esperada|date:"d/m/Y" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-rotulo="Estado">{% if e.atraso_dias %}<span class="status-badge status-danger">{{ e.atraso_dias }} día{{ e.atraso_dias|pluralize }} de atraso</span>{% else %}<span class="status-badge status-neutral">En fecha</span>{% endif %}{% if e.bloqueada %} <span class="status-badge status-warn">Destino inactivo</span>{% endif %}</td>
         <td class="right nowrap">
           {% if e.bloqueada %}<span class="sub2">Reactivá el destino para recibirla.</span>
           {% else %}<a class="btn btn-primary btn-sm" href="{% url 'compras:recepcion_nueva' e.orden.pk %}?proveedor={{ e.proveedor.pk }}&amp;invernadero={{ e.invernadero.pk }}">Registrar recepción<span class="sr"> de {{ e.proveedor.nombre_para_mostrar }} en {{ e.invernadero.nombre_invernadero }}</span></a>{% endif %}

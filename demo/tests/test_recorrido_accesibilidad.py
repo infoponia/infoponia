@@ -113,7 +113,7 @@ class RecorridoDeAccesibilidadTests(PlanDeCuentasMixin, ConDatosDeInventario, Te
         # Contador · Libro diario (UX-09 y UX-10): «Cronológica» activa y la columna del medio con su nombre para lectores.
         self.entrar("contador1")
         html = self.abrir(reverse("contabilidad:libro"))
-        vistas = self.chips(html, reverse("contabilidad:libro") + "?vista=")  # sin el chip «Contabilidad» del menú del celular
+        vistas = self.chips(html, reverse("contabilidad:libro") + "?vista=")  # solo los atajos del libro (el menú del celular ya no son fichas `.chip`, UI-05)
         self.assertEqual(vistas, {"Cronológica": "page", "Por cuenta": None})
         self.assertIn('<th>Cuenta</th><th><span class="sr">Descripción</span></th>', html)
 

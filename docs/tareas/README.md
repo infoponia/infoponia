@@ -40,7 +40,6 @@ de programar su primera tarea. Los planes de ronda (tareas, orden, casos de uso 
 | AUD-02 | Exportar la auditoría a CSV | core | pendiente | Reglas del caso de uso, sin escribir | `auditoria/AUD-02-exportar-csv.md` |
 | MAE-05 | Transportista del invernadero: «Logística», agregar, trasladar y quitar (D-55) | maestros (y core) | hecha (PR #45, 21/11/2026; revisión a mano pendiente) | — (MAE-01b, MAE-02b y NOT-01, hechas). Va antes del módulo comercial | `maestros/MAE-05-transportista-del-invernadero.md` |
 | UI-04 | Textos y detalles: nombres legibles, «usted» para el cliente y el proveedor, dinero en correos, avatar, órdenes y paginación (D-109) | core (plantillas, correos y filtros de varias apps) | pendiente | UI-02, UI-03 | `core/UI-04-textos-y-detalles.md` |
-| UI-05 | Celular: menú desplegable y tablas como tarjetas (D-109) | core (listas de todas las apps) | pendiente | UI-02 | `core/UI-05-menu-y-tablas-en-el-celular.md` |
 | UI-06 | Resumen y errores a la vista; obligatorios juntos (D-109) | core (`infoponia.js`, formularios de varias apps) | pendiente | UI-02 | `core/UI-06-resumen-y-errores-a-la-vista.md` |
 | UI-07 | Portal del cliente por partes, monto de la compra-venta y Monitoreo de IoT (D-109) | core (plantillas de `comercial` e `iot`) | pendiente | UI-02, UI-06 | `core/UI-07-portal-compra-venta-e-iot.md` |
 | UI-09 | Los cuatro colores de la organización: papeles, contraste validado y elección sin escribir códigos (D-110) | core y maestros | pendiente | UI-02, UI-04 | `core/UI-09-colores-de-la-organizacion.md` |

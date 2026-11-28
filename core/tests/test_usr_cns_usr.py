@@ -472,7 +472,8 @@ class UsrCnsUsrVistaTests(TestCase):
         self.assertContains(respuesta, "gerente@infoponia.com")
         self.assertContains(respuesta, "admin2@infoponia.com")
         self.assertContains(respuesta, "(vos)", count=1)
-        self.assertContains(respuesta, "<td>Administrador</td>", count=2, html=True)
+        # UI-05 (UX-02): cada celda lleva su rótulo (`data-rotulo`) para la tarjeta del celular; el texto de la celda no cambia.
+        self.assertContains(respuesta, '<td data-rotulo="Rol">Administrador</td>', count=2, html=True)
         self.assertNotContains(respuesta, "capataz@infoponia.com")
         self.assertContains(respuesta, '<option value="gerente">Gerente</option>', html=True)
         self.assertContains(respuesta, '<option value="administrador">Administrador</option>', html=True)

@@ -17,16 +17,16 @@
 
   {% if filas %}
   <div class="tablewrap">
-    <table class="data-table">
+    <table class="data-table tabla-apilable">
       <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Orden</th><th>Inconvenientes</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       <tr>
-        <td><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
-        <td>{{ f.proveedor.nombre_para_mostrar }}</td>
-        <td><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}">{{ f.orden }}</a><span class="sub2">{{ f.invernadero.nombre_invernadero }}</span></td>
-        <td>{% for i in f.inconvenientes %}{{ i.tipo_inconveniente|tipo_de_inconveniente }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td><span class="status-badge {% if f.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ f.reclamo.get_estado_reclamo_display }}</span>
+        <td data-rotulo="Reclamo"><a class="prv-nombre" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}"><b>{{ f.reclamo }}</b></a><span class="sub2">{{ f.recepcion }} · {{ f.recepcion.fecha_recepcion|date:"d/m/Y" }}</span></td>
+        <td data-rotulo="Proveedor">{{ f.proveedor.nombre_para_mostrar }}</td>
+        <td data-rotulo="Orden"><a class="prv-nombre" href="{% url 'compras:orden_ficha' f.orden.pk %}">{{ f.orden }}</a><span class="sub2">{{ f.invernadero.nombre_invernadero }}</span></td>
+        <td data-rotulo="Inconvenientes">{% for i in f.inconvenientes %}{{ i.tipo_inconveniente|tipo_de_inconveniente }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td data-rotulo="Estado"><span class="status-badge {% if f.reclamo.estado_reclamo == 'cerrado' %}status-neutral{% else %}status-info{% endif %}">{{ f.reclamo.get_estado_reclamo_display }}</span>
           <span class="status-badge {% if f.reclamo.emitido %}status-ok{% else %}status-warn{% endif %}">{% if f.reclamo.emitido %}Emitido{% else %}Sin emitir{% endif %}</span></td>
         <td class="right nowrap"><a class="btn btn-ghost btn-sm" href="{% url 'compras:reclamo_ficha' f.reclamo.pk %}">Ver<span class="sr"> el reclamo {{ f.reclamo }}</span></a></td>
       </tr>

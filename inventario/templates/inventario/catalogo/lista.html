@@ -20,19 +20,19 @@ página con la ventana abierta («plantilla_de_ventana»). Solo el Agrónomo lle
     <div style="margin-top:8px"><a class="btn btn-primary btn-sm" href="{% url 'inventario:habilitar' %}?insumo={{ recien.pk }}" hx-get="{% url 'inventario:habilitar' %}?insumo={{ recien.pk }}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Habilitar en un invernadero</a></div></div></div>
   {% endif %}
   <div class="tablewrap">
-    <table class="data-table fixed" style="min-width:960px">
+    <table class="data-table fixed tabla-apilable" style="min-width:960px">
       <colgroup><col><col style="width:170px"><col style="width:80px"><col style="width:110px"><col style="width:130px"><col style="width:90px"><col style="width:270px"></colgroup>
       <thead><tr><th>Insumo</th><th>Categoría</th><th>Unidad</th><th>Vencimiento</th><th>Habilitado en</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       {% with i=f.insumo %}
       <tr{% if not i.activo %} class="inv-off"{% endif %}>
-        <td><b>{{ i.nombre_insumo }}</b>{% if i.descripcion_insumo %}<span class="sub2">{{ i.descripcion_insumo }}</span>{% endif %}{% if i.es_semilla %}<span class="sub2">Viene del alta de la variedad: se modifica y se da de baja con ella</span>{% endif %}</td>
-        <td>{% if i.tipo_insumo.es_del_sistema %}<span class="lock" style="color:var(--foreground);font-size:13px">{% icono "lock" 12 %} {{ i.tipo_insumo.nombre_tipo_insumo }}</span>{% else %}{{ i.tipo_insumo.nombre_tipo_insumo }}{% endif %}</td>
-        <td>{{ i.get_unidad_medida_insumo_display }}</td>
-        <td>{% if i.controla_vencimiento %}<span class="status-badge status-ok">Controla</span>{% else %}<span class="muted sm">No controla</span>{% endif %}</td>
-        <td>{% if i.habilitado_en %}{% for inv in i.habilitado_en %}{{ inv.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}<span class="faint">Ninguno</span>{% endif %}</td>
-        <td>{% if i.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
+        <td data-rotulo="Insumo"><b>{{ i.nombre_insumo }}</b>{% if i.descripcion_insumo %}<span class="sub2">{{ i.descripcion_insumo }}</span>{% endif %}{% if i.es_semilla %}<span class="sub2">Viene del alta de la variedad: se modifica y se da de baja con ella</span>{% endif %}</td>
+        <td data-rotulo="Categoría">{% if i.tipo_insumo.es_del_sistema %}<span class="lock" style="color:var(--foreground);font-size:13px">{% icono "lock" 12 %} {{ i.tipo_insumo.nombre_tipo_insumo }}</span>{% else %}{{ i.tipo_insumo.nombre_tipo_insumo }}{% endif %}</td>
+        <td data-rotulo="Unidad">{{ i.get_unidad_medida_insumo_display }}</td>
+        <td data-rotulo="Vencimiento">{% if i.controla_vencimiento %}<span class="status-badge status-ok">Controla</span>{% else %}<span class="muted sm">No controla</span>{% endif %}</td>
+        <td data-rotulo="Habilitado en">{% if i.habilitado_en %}{% for inv in i.habilitado_en %}{{ inv.nombre_invernadero }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}<span class="faint">Ninguno</span>{% endif %}</td>
+        <td data-rotulo="Estado">{% if i.activo %}<span class="status-badge status-ok">Activo</span>{% else %}<span class="status-badge status-neutral">Inactivo</span>{% endif %}</td>
         <td class="right nowrap">
           <span class="inv-acciones">
           {% if "modificar" in f.acciones %}

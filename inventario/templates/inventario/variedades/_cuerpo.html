@@ -5,18 +5,18 @@ lo que la cuenta no puede hacer se ve deshabilitado, con el motivo («Solo la us
 <link rel="stylesheet" href="{% static_v 'inventario/css/variedades.css' %}">
 {% if filas %}
 <div class="tablewrap">
-  <table class="data-table fixed" style="min-width:920px">
+  <table class="data-table fixed tabla-apilable" style="min-width:920px">
     <colgroup><col style="width:140px"><col style="width:130px"><col><col style="width:210px"><col style="width:90px"><col style="width:150px"></colgroup>
     <thead><tr><th>Variedad</th><th>Perfil familiar</th><th>Ciclo</th><th>Semilla</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
     <tbody>
     {% for f in filas %}
     {% with v=f.variedad a=f.acciones %}
     <tr{% if not v.activa %} class="inv-off"{% endif %}>
-      <td><a class="link" href="{% url 'variedades:variedad' v.pk %}"><b>{{ v.nombre_variedad }}</b></a></td>
-      <td>{{ v.get_perfil_familia_display }}</td>
-      <td><div class="var-ciclo"><b class="mono nowrap">{{ f.dias }} días</b>{% include "inventario/variedades/_ciclo.html" with ciclo=f.ciclo mini=True %}</div></td>
-      <td>{% if f.semilla %}{{ f.semilla.nombre_insumo }}{% else %}—{% endif %}<span class="sub2">{% if f.habilitada_en %}Habilitada en {{ f.habilitada_en|join:", " }}{% else %}<span style="color:var(--status-warn)">Sin habilitar</span>{% endif %}</span></td>
-      <td>{% if v.activa %}<span class="status-badge status-ok">Activa</span>{% else %}<span class="status-badge status-neutral">Inactiva</span>{% endif %}</td>
+      <td data-rotulo="Variedad"><a class="link" href="{% url 'variedades:variedad' v.pk %}"><b>{{ v.nombre_variedad }}</b></a></td>
+      <td data-rotulo="Perfil familiar">{{ v.get_perfil_familia_display }}</td>
+      <td data-rotulo="Ciclo"><div class="var-ciclo"><b class="mono nowrap">{{ f.dias }} días</b>{% include "inventario/variedades/_ciclo.html" with ciclo=f.ciclo mini=True %}</div></td>
+      <td data-rotulo="Semilla">{% if f.semilla %}{{ f.semilla.nombre_insumo }}{% else %}—{% endif %}<span class="sub2">{% if f.habilitada_en %}Habilitada en {{ f.habilitada_en|join:", " }}{% else %}<span style="color:var(--status-warn)">Sin habilitar</span>{% endif %}</span></td>
+      <td data-rotulo="Estado">{% if v.activa %}<span class="status-badge status-ok">Activa</span>{% else %}<span class="status-badge status-neutral">Inactiva</span>{% endif %}</td>
       <td class="right nowrap">
         <span class="inv-acciones">
           {% if v.activa %}
