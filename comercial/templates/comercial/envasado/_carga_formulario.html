@@ -21,7 +21,7 @@ envíos comunes con `formaction`; con HTMX, solo los botones (Actualizar, Buscar
     {% else %}
     <div class="card"><div class="card-title">Envases a reservar</div>
       {% if datos.filas %}
-      <table class="data-table"><thead><tr><th>Envase</th><th>Cantidad</th><th class="right">Disponible</th><th></th></tr></thead><tbody>
+      <table class="data-table"><thead><tr><th>Envase</th><th>Cantidad</th><th class="right">Disponible</th><th><span class="sr">Acciones</span></th></tr></thead><tbody>
       {% for f in datos.filas %}
         <tr>
           <td><b style="font-weight:600">{{ f.nombre }}</b>{% if f.aviso %}<span class="sub2">{{ f.aviso }}</span>{% endif %}</td>
@@ -43,7 +43,7 @@ envíos comunes con `formaction`; con HTMX, solo los botones (Actualizar, Buscar
         <button class="btn btn-ghost" type="submit" formaction="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" hx-post="{% url 'comercial:envasado_calcular' fila.entrega.pk %}" data-sin-envio-en-curso>Buscar</button>
       </div>
       {% if datos.ofrecidos %}
-      <table class="data-table"><thead><tr><th>Envase</th><th class="right">Disponible</th><th>Cantidad</th><th></th></tr></thead><tbody>
+      <table class="data-table"><thead><tr><th>Envase</th><th class="right">Disponible</th><th>Cantidad</th><th><span class="sr">Acciones</span></th></tr></thead><tbody>
       {% for o in datos.ofrecidos %}
         <tr>
           <td>{{ o.nombre }}{% if o.en_carga %}<span class="sub2">Ya está en la carga: agregarlo reemplaza su cantidad.</span>{% endif %}</td>

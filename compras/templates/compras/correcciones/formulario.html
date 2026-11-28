@@ -14,7 +14,7 @@ Sin validar mientras se escribe: «Ver resumen» muestra el paso 7.{% endcomment
   {% if recepciones|length > 1 %}
   <h2 class="ped-sub">Qué recepción</h2>
   <div class="filters"><div class="chips" role="group" aria-label="Recepciones corregibles">
-    {% for r in recepciones %}<a class="chip" href="{% url 'compras:correccion_nueva' orden.pk %}?recepcion={{ r.recepcion.pk }}" aria-pressed="{% if r.recepcion.pk == actual.recepcion.pk %}true{% else %}false{% endif %}">{{ r.recepcion }} · {{ r.recepcion.fecha_recepcion|date:"d/m/Y" }} · {{ r.proveedor.nombre_para_mostrar }} · {{ r.invernadero.nombre_invernadero }}</a>{% endfor %}
+    {% for r in recepciones %}<a class="chip" href="{% url 'compras:correccion_nueva' orden.pk %}?recepcion={{ r.recepcion.pk }}"{% if r.recepcion.pk == actual.recepcion.pk %} aria-current="page"{% endif %}>{{ r.recepcion }} · {{ r.recepcion.fecha_recepcion|date:"d/m/Y" }} · {{ r.proveedor.nombre_para_mostrar }} · {{ r.invernadero.nombre_invernadero }}</a>{% endfor %}
   </div></div>
   {% else %}
   <p class="muted" style="margin:0 0 14px"><b>{{ actual.recepcion }}</b> · {{ actual.recepcion.fecha_recepcion|date:"d/m/Y" }} · {{ actual.proveedor.nombre_para_mostrar }} · {{ actual.invernadero.nombre_invernadero }}</p>

@@ -2,7 +2,7 @@
 (solo si está aceptada) y estado; el paso 2 de COM-EVL-DSC y COM-RSV-QJA suma la fecha de la entrega y la cantidad de líneas o de detalles. «Ver» abre la ficha. Recibe «datos» (`PaginaDeSolicitudes`), «filtros» y «consulta».{% endcomment %}
 <div class="tablewrap">
   <table class="data-table">
-    <thead><tr><th>Solicitud</th><th>Tipo</th><th>Entrega y cliente</th><th>Presentada</th><th class="right">Detalles</th><th class="right">Indemnización</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Solicitud</th><th>Tipo</th><th>Entrega y cliente</th><th>Presentada</th><th class="right">Detalles</th><th class="right">Indemnización</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
     <tbody>
     {% for f in datos.filas %}
       <tr{% if f.pendiente %} class="r-warn"{% endif %}>

@@ -25,7 +25,7 @@ apellido; filtro por estado; 50 por página. Es un formulario GET común: sin Ja
 
   <div class="tablewrap">
     <table class="data-table">
-      <thead><tr><th>Cliente</th><th>CUIT</th><th>Contacto</th><th class="right">Direcciones</th><th class="right">Contratos vigentes</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Cliente</th><th>CUIT</th><th>Contacto</th><th class="right">Direcciones</th><th class="right">Contratos vigentes</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for c in pagina.object_list %}
         <tr>

@@ -166,8 +166,12 @@ select.field-input{padding-right:30px}
 .card.seg > :last-child{border-radius:0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);overflow:hidden}
 .card.seg > :only-child{border-radius:calc(var(--radius) - 1px)}
 .card-h{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--subtle);min-height:52px;flex-wrap:wrap}
-.card-h h3{display:flex;align-items:center;gap:8px;font-size:14px}
-.card-h h3 svg{color:var(--muted-foreground)}
+.card-h h3,.card-h h2{display:flex;align-items:center;gap:8px;font-size:14px}
+.card-h h3 svg,.card-h h2 svg{color:var(--muted-foreground)}
+/* Los títulos de tarjeta que quedan directamente bajo el h1 son h2 (UX-15, D-109 punto 8): se ven como el h3 de antes, sin el
+   espaciado ni el equilibrado de líneas del h2 de página. .vacio es el estado vacío de IoT (el margen es el de iot.css). */
+.card-h h2,.panel h2,.vacio h2{font-weight:600;letter-spacing:normal;text-wrap:wrap}
+.vacio h2{margin:10px 0 4px;font-size:14px}
 .card-b{padding:18px 20px}
 .card-b.flush{padding:0}
 /* Ficha de datos: cada dato en su celda, con la etiqueta arriba y el valor abajo. */
@@ -387,7 +391,7 @@ button.kpi:hover{border-color:var(--border-strong);box-shadow:0 2px 8px rgba(16,
 .shell.field .dl dd{margin-bottom:0;font-weight:500}
 .chip{padding:7px 14px;border-radius:999px;border:1px solid var(--border-strong);background:#fff;color:#2a333d;font-size:13.5px;font-weight:500;min-height:36px;display:inline-flex;align-items:center;gap:6px}
 .chip:hover{border-color:var(--primary);color:var(--primary)}
-.chip[aria-pressed="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip[aria-pressed="true"],.chip[aria-selected="true"]{background:var(--primary);border-color:var(--primary);color:#fff}
 .chip:disabled{opacity:.5;cursor:not-allowed}
 
 /* Bloque repetido dentro de una tarjeta (insumo, lote, sector): fondo gris y borde marcado; el elegido va en blanco con borde verde. */
@@ -412,9 +416,9 @@ button.kpi:hover{border-color:var(--border-strong);box-shadow:0 2px 8px rgba(16,
 .with-aside{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start}
 .with-aside > aside{position:sticky;top:0;display:grid;gap:14px}
 .panel{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
-.panel h3{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14.5px}
-.panel h3 svg{color:var(--muted-foreground)}
-.panel h3 .tag{margin-left:auto;font-weight:500}
+.panel h3,.panel h2{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14.5px}
+.panel h3 svg,.panel h2 svg{color:var(--muted-foreground)}
+.panel h3 .tag,.panel h2 .tag{margin-left:auto;font-weight:500}
 .checks{list-style:none;display:grid;gap:12px;font-size:13.5px}
 .checks li{display:flex;gap:10px;align-items:flex-start;line-height:1.45}
 .checks svg{flex-shrink:0;margin-top:1px}
@@ -611,6 +615,8 @@ select.field-input{appearance:auto}
 .acceso-opciones{display:grid;gap:10px}
 .aviso-recuperar{margin-top:16px;font-size:13px}
 .fld:has(.err) .field-input{border-color:var(--status-danger)}
+/* Un campo sin error propio que se marca junto con el de su grupo (Provincia y Departamento cuando falta la ubicación; UX-12). */
+.fld.fld-invalido .field-input{border-color:var(--status-danger)}
 .crumb{font-size:13px;color:var(--muted-foreground);margin-bottom:6px}
 .temp{background:var(--subtle);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin:12px 0}
 .temp code{display:block;font-family:var(--font-sans);font-variant-numeric:tabular-nums;font-size:22px;letter-spacing:.06em;font-weight:600;word-break:break-all;margin:4px 0 12px}

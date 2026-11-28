@@ -7,7 +7,7 @@ Cada botón es un enlace común (sin JavaScript lleva a la ficha con la ventana 
 {% with puede=acciones %}
 <div class="card seg" style="margin-bottom:20px">
   <div class="card-h">
-    <h3>{% icono "truck" 14 %} Logística</h3>
+    <h2>{% icono "truck" 14 %} Logística</h2>
     <span class="spacer"></span>
     {% if "modificar" in puede %}
     <a class="btn btn-primary btn-sm" href="{% url 'maestros:transportista_agregar' invernadero.pk %}"
@@ -20,7 +20,7 @@ Cada botón es un enlace común (sin JavaScript lleva a la ficha con la ventana 
       <thead><tr>
         <th>Transportista</th>
         {% if con_logistica %}<th>Vehículo</th><th>Situación</th><th class="right">Entregas a realizar</th>{% endif %}
-        {% if "modificar" in puede %}<th style="width:90px"></th>{% endif %}
+        {% if "modificar" in puede %}<th style="width:90px"><span class="sr">Acciones</span></th>{% endif %}
       </tr></thead>
       <tbody>
       {% for fila in transportistas %}

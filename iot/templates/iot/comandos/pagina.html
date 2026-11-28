@@ -12,7 +12,7 @@ abierta («plantilla_de_ventana»). Recibe «emision» (nulo para quien solo con
   </div>
   {% include "iot/_marco_invernadero.html" %}
   {% if not elegido %}
-  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para mostrar</h3><p class="muted">Cuando haya un invernadero a tu alcance, vas a ver acá sus comandos.</p></div></div>
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h2>No hay invernaderos para mostrar</h2><p class="muted">Cuando haya un invernadero a tu alcance, vas a ver acá sus comandos.</p></div></div>
   {% elif not sistema %}
   <div class="alert alert-warn" role="status">{% icono "warn" 16 %}<div>Este invernadero no tiene Sistema IoT.{% if opera %} Registralo para poder emitir comandos. <a href="{% url 'iot:sistema' %}?invernadero={{ elegido.pk }}">Ir a Sistema IoT</a>{% endif %}</div></div>
   {% else %}

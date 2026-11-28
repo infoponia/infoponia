@@ -35,7 +35,7 @@ confirmación (paso 7). Recibe «datos», «seleccionado», «como», «error_tr
       <div class="card-title">Transportistas candidatos para el {{ datos.fecha_de_busqueda|date:"d/m/Y" }}</div>
       <div class="tablewrap">
         <table class="data-table">
-          <thead><tr><th style="width:52px"></th><th>Transportista y vehículo</th><th class="right">Capacidad libre</th><th class="right">Entregas del día</th><th class="right">Localidades</th><th>Situación</th></tr></thead>
+          <thead><tr><th style="width:52px"><span class="sr">Elegir</span></th><th>Transportista y vehículo</th><th class="right">Capacidad libre</th><th class="right">Entregas del día</th><th class="right">Localidades</th><th>Situación</th></tr></thead>
           <tbody>
           {% for c in datos.candidatos %}
             <tr{% if c.motivo %} class="r-off"{% endif %}>

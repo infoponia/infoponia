@@ -1462,3 +1462,22 @@ Los 16 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-02-celu
 - [ ] 14. **Ventana de baja.** Como Gerente, «Dar de baja» de un Agrónomo con alertas: «Pasan al Gerente hasta que asignes otro Agrónomo.» sin «(regla 4 de 8.22)». Cancelá sin confirmar.
 - [ ] 15. **Navegador real (obligatorio).** En una ventana privada, como Vendedor, el paso 11 hasta confirmar: llega a la ficha del cobro con el aviso, sin 403, error de CSRF ni errores en la consola.
 - [ ] 16. **(Opcional) Sin JavaScript.** A 360 px como Gerente: la página no se sale de la pantalla, la fila de módulos se desplaza, «volver» y pestañas se ven igual.
+
+## UI-03 · Tarea UI-03 (accesibilidad: encabezados de acciones, vista activa, etiquetas y títulos)
+
+Los 13 pasos son los de «Verificación a mano» de `docs/tareas/core/UI-03-accesibilidad.md` (ahí está el detalle). **Sin migración.**
+La red ya comprobó los cuatro controles en las pantallas de la demo; acá se mira el aspecto, el teclado y la voz del Narrador.
+
+- [ ] 1. «Acciones» en las tablas (Gerente, Cuentas y tres listas más): igual a la vista; el Narrador dice «Acciones».
+- [ ] 2. Columnas que no son de acciones (Libro diario: «Descripción»; Estadísticas comerciales: «Proporción del monto»).
+- [ ] 3. Compras · Órdenes y Reclamos: el atajo activo se ve igual; el Narrador dice «página actual».
+- [ ] 4. Cobranza: la pestaña activa sigue verde; el Narrador dice «pestaña, seleccionada».
+- [ ] 5. Libro diario: «Cronológica» y «Por cuenta» se ven y cambian como antes.
+- [ ] 6. Nueva variedad: el Narrador lee «Duración estimada de … en días»; se sigue leyendo al cambiar el perfil.
+- [ ] 7. Mi perfil: «Elegir foto» con Tab y Enter; «Tomar foto» solo en el celular.
+- [ ] 8. Concretar cosecha a 360 px: perdidas, causa y descripción con su etiqueta (Tab y Narrador).
+- [ ] 9. Nuevo invernadero sin ubicación: los tres en rojo, el error una vez; con provincia, solo dos; con ubicación, ninguno; Narrador «no válido».
+- [ ] 10. (Opcional) Nuevo invernadero sin JavaScript: los tres nativos en rojo.
+- [ ] 11. Navegador real: Nuevo invernadero completo en ventana privada hasta la ficha, sin 403 ni CSRF.
+- [ ] 12. Títulos a 1366 y 360 px: se ven igual que antes (fichas, Estadísticas, IoT, Compras); Narrador `H` en nivel 2.
+- [ ] 13. Desplegable propio en Nuevo invernadero y Concretar cosecha: mouse, teclado y listas encadenadas (HTMX).

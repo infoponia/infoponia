@@ -62,7 +62,7 @@ límite, los detalles (una línea por cadena «reemplaza a», con el precio vige
     </div>
 
     <div class="card seg">
-      <div class="card-h"><h3>{% icono "leaf" 14 %} Detalles</h3><span class="spacer"></span><span class="xs muted">Por variedad</span></div>
+      <div class="card-h"><h2>{% icono "leaf" 14 %} Detalles</h2><span class="spacer"></span><span class="xs muted">Por variedad</span></div>
       <div class="card-b flush">
         <table class="data-table">
           <thead><tr><th>Variedad y destino</th><th class="right">Cantidad</th><th class="right">Precio vigente</th><th>Cláusula del suministrante</th><th>Estado</th></tr></thead>
@@ -84,7 +84,7 @@ límite, los detalles (una línea por cadena «reemplaza a», con el precio vige
     </div>
 
     <div class="card seg">
-      <div class="card-h"><h3>{% icono "cal" 14 %} Calendario</h3><span class="spacer"></span><span class="xs muted">Ventana de pre-reserva: hasta el {{ ficha.ventana|date:"d/m/Y" }}</span></div>
+      <div class="card-h"><h2>{% icono "cal" 14 %} Calendario</h2><span class="spacer"></span><span class="xs muted">Ventana de pre-reserva: hasta el {{ ficha.ventana|date:"d/m/Y" }}</span></div>
       <div class="card-b">
         <p class="cal-nota">{% icono "info" 15 %} <span>Los períodos del {{ ficha.desde|date:"d/m/Y" }} al {{ ficha.hasta|date:"d/m/Y" }}, por fecha pactada. Una entrega puede concretarse otro día.</span></p>
       </div>
@@ -104,7 +104,7 @@ límite, los detalles (una línea por cadena «reemplaza a», con el precio vige
     {% if ficha.por_atender %}
     <div class="card">
       <div class="card-title">Entregas que el cliente no reconoce</div>
-      <table class="data-table"><thead><tr><th>Entrega</th><th>Situación</th><th></th></tr></thead><tbody>
+      <table class="data-table"><thead><tr><th>Entrega</th><th>Situación</th><th><span class="sr">Acciones</span></th></tr></thead><tbody>
       {% for p in ficha.por_atender %}<tr><td class="mono">{{ p.codigo }}</td><td>El cliente dice que no la recibió.</td><td class="right"><a class="btn btn-primary btn-sm" href="{% url 'comercial:entrega_no_reconocida' p.entrega_id %}">Atender</a></td></tr>{% endfor %}
       </tbody></table>
     </div>
@@ -113,7 +113,7 @@ límite, los detalles (una línea por cadena «reemplaza a», con el precio vige
     {% if ficha.solicitudes %}
     <div class="card">
       <div class="card-title">Solicitudes de revisión <span class="xs muted">De la más reciente a la más antigua</span></div>
-      <table class="data-table"><thead><tr><th>Solicitud</th><th>Tipo</th><th>Estado</th><th></th></tr></thead><tbody>
+      <table class="data-table"><thead><tr><th>Solicitud</th><th>Tipo</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead><tbody>
       {% for sol in ficha.solicitudes %}<tr><td><span class="mono">{{ sol.codigo }}</span><span class="sub2">{{ sol.fecha|date:"d/m/Y" }} · {{ sol.entrega_codigo }}</span></td><td>{{ sol.tipo_texto }}</td>
         <td><span class="status-badge {% if sol.estado == 'pendiente' %}status-warn{% elif sol.estado == 'aceptada' %}status-ok{% else %}status-neutral{% endif %}">{{ sol.estado_texto }}</span>{% if sol.cuenta_como_incumplimiento %}<span class="sub2">Cuenta como incumplimiento</span>{% endif %}</td>
         <td class="right"><a class="rowlink" href="{% url 'comercial:solicitud' sol.id %}">Ver<span class="sr"> la solicitud {{ sol.codigo }}</span></a></td></tr>{% endfor %}

@@ -35,11 +35,11 @@ del alta con los datos guardados.{% endcomment %}
     </div>
 
     <div class="card seg">
-      <div class="card-h"><h3>{% icono "cart" 14 %} Contratos</h3></div>
+      <div class="card-h"><h2>{% icono "cart" 14 %} Contratos</h2></div>
       {% if contratos %}
       <div class="card-b flush">
         <table class="data-table">
-          <thead><tr><th>Contrato</th><th>Entrega o vigencia</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Contrato</th><th>Entrega o vigencia</th><th class="right">Monto</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
           <tbody>
           {% for v in contratos %}
             {% if v.tipo_contrato == "suministro" %}
@@ -70,7 +70,7 @@ del alta con los datos guardados.{% endcomment %}
 
     {% if ficha.entregas_sin_cobrar %}
     <div class="card seg">
-      <div class="card-h"><h3>Entregas sin cobrar</h3></div>
+      <div class="card-h"><h2>Entregas sin cobrar</h2></div>
       <div class="card-b flush"><table class="data-table">
         <thead><tr><th>Entrega</th><th class="right">Monto a cobrar</th><th>Vencimiento</th><th>Pago</th></tr></thead>
         <tbody>{% for f in ficha.entregas_sin_cobrar %}
@@ -82,7 +82,7 @@ del alta con los datos guardados.{% endcomment %}
     {% endif %}
     {% if ficha.discrepancias %}
     <div class="card seg">
-      <div class="card-h"><h3>Discrepancias pendientes</h3></div>
+      <div class="card-h"><h2>Discrepancias pendientes</h2></div>
       <div class="card-b flush"><table class="data-table">
         <thead><tr><th>Discrepancia</th><th>Entrega</th><th>Desde</th></tr></thead>
         <tbody>{% for d in ficha.discrepancias %}<tr><td class="mono"><a href="{% url 'comercial:suministro' d.contrato_id %}">{{ d.codigo }}</a></td><td class="mono">{{ d.entrega }}</td><td>{{ d.fecha|date:"d/m/Y" }}</td></tr>{% endfor %}</tbody></table></div>
@@ -91,7 +91,7 @@ del alta con los datos guardados.{% endcomment %}
 
     {% if ficha.quejas %}
     <div class="card seg">
-      <div class="card-h"><h3>Quejas pendientes</h3></div>
+      <div class="card-h"><h2>Quejas pendientes</h2></div>
       <div class="card-b flush"><table class="data-table">
         <thead><tr><th>Queja</th><th>Entrega</th><th>Tipo</th><th>Desde</th></tr></thead>
         <tbody>{% for q in ficha.quejas %}<tr><td class="mono"><a href="{% url 'comercial:suministro' q.contrato_id %}">{{ q.codigo }}</a></td><td class="mono">{{ q.entrega }}</td><td>{{ q.tipo }}</td><td>{{ q.fecha|date:"d/m/Y" }}</td></tr>{% endfor %}</tbody></table></div>
@@ -99,7 +99,7 @@ del alta con los datos guardados.{% endcomment %}
     {% endif %}
 
     <div class="card seg">
-      <div class="card-h"><h3>{% icono "pin" 14 %} Direcciones</h3></div>
+      <div class="card-h"><h2>{% icono "pin" 14 %} Direcciones</h2></div>
       {% if ficha.direcciones_activas or ficha.direcciones_inactivas %}
       <div class="card-b flush">
         <table class="data-table">

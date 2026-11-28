@@ -16,7 +16,7 @@ fecha de instalación y el insumo; al modificar, no (regla 2: solo el nombre, el
     <form method="post" novalidate action="{% if modificar %}{% url 'iot:sistema_modificar' sistema.pk %}{% else %}{% url 'iot:sistema_registrar' %}{% endif %}">
       {% csrf_token %}
       {% if not modificar %}<input type="hidden" name="invernadero" value="{{ elegible.invernadero.pk }}">{% endif %}
-      <h3 class="sec-h">Nodo central</h3>
+      <h2 class="sec-h">Nodo central</h2>
       <div class="grid2">
         <div class="fld"><label for="nombre">Nombre<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="nombre" name="nombre" value="{{ datos.nombre }}" maxlength="80" placeholder="Ej.: Raspberry del galpón" data-foco-inicial>{% for e in errores.nombre %}<div class="err">{{ e }}</div>{% endfor %}</div>
         <div class="fld"><label for="modelo">Modelo<span class="req" aria-hidden="true"> *</span></label><input class="field-input" id="modelo" name="modelo" value="{{ datos.modelo }}" maxlength="80" placeholder="Ej.: Raspberry Pi 4">{% for e in errores.modelo %}<div class="err">{{ e }}</div>{% endfor %}</div>
@@ -36,7 +36,7 @@ fecha de instalación y el insumo; al modificar, no (regla 2: solo el nombre, el
         <div class="hint">Repuestos de hardware.</div>
       </div>
       {% endif %}
-      <h3 class="sec-h">Temperatura de la solución nutritiva</h3>
+      <h2 class="sec-h">Temperatura de la solución nutritiva</h2>
       <p class="hint" style="margin:-4px 0 10px">Opcional. Depende de lo que se cultiva en este invernadero; sin rango, las lecturas se muestran sin comparar.</p>
       <div class="grid2">
         <div class="fld"><label for="temp_min">Mínimo (°C)</label><input class="field-input" id="temp_min" name="temp_min" inputmode="decimal" value="{{ datos.temp_min }}">{% for e in errores.temp_solucion_min %}<div class="err">{{ e }}</div>{% endfor %}</div>

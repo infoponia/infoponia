@@ -11,6 +11,9 @@
 # cuántas líneas cambiaron y por qué). Las rutas se guardan normalizadas (la ruta del resolvedor, con `<int:pk>`, y en la consulta los
 # dígitos como «N»), porque los `pk` cambian entre corridas con `--keepdb` y las fechas cambian cada día.
 #
+# UI-03 (D-109 punto 8) suma cuatro controles de accesibilidad que leen el HTML de cada pantalla: toda `<th>` con texto, ningún `<a>`
+# con `aria-pressed`, todo campo con etiqueta y títulos sin saltos de nivel después del `h1` (`_LectorDeAccesibilidad`).
+#
 # Variables de entorno para revisar la red (no cambian lo que la prueba exige):
 # - `RED_PANTALLAS_ESCRIBIR=1`: escribe la línea de base con lo que ve.
 # - `RED_PANTALLAS_DIAS=N`: corre la carga y el recorrido con «hoy» corrido N días (todo el sistema toma la fecha de
@@ -71,7 +74,7 @@ PATRONES_PROHIBIDOS = (
 
 # Una pantalla pedida: la cuenta, la ruta, su código, el texto visible (solo en 200 con HTML), la excepción si dio 500, la fase
 # («enlace» o «ruta suelta») y de dónde salió: lista de (pantalla de origen, enlace tal como estaba escrito).
-Visita = namedtuple("Visita", "cuenta ruta codigo texto error fase origenes")
+Visita = namedtuple("Visita", "cuenta ruta codigo texto error fase origenes accesibilidad")
 
 
 def codigos_internos(texto):
@@ -120,6 +123,141 @@ def leer_html(html):
     lector.feed(html)
     lector.close()
     return " ".join(lector.textos), lector.enlaces
+
+
+# ---- controles de accesibilidad (UI-03; D-109 punto 8) ----
+
+TH_SIN_TEXTO = "th sin texto"
+ENLACE_CON_ARIA_PRESSED = "enlace con aria-pressed"
+CAMPO_SIN_ETIQUETA = "campo sin etiqueta"
+SALTO_DE_TITULO = "salto de título"
+CONTROLES_DE_ACCESIBILIDAD = (TH_SIN_TEXTO, ENLACE_CON_ARIA_PRESSED, CAMPO_SIN_ETIQUETA, SALTO_DE_TITULO)
+
+# Los `input` que no son campos para escribir o elegir: no necesitan etiqueta (UI-03, paso 1).
+TIPOS_DE_INPUT_SIN_ETIQUETA = ("hidden", "submit", "button", "reset", "image")
+TITULOS = ("h1", "h2", "h3", "h4", "h5", "h6")
+
+
+def _sin_digitos(texto):
+    """``texto`` con los números como «N»: los `id`, los `name` con `pk` y los contadores cambian entre corridas. Los niveles de
+    título («h1 → h3») se conservan."""
+    return re.sub(r"(?<!\bh)\d+", "N", " ".join(texto.split()))
+
+
+class _LectorDeAccesibilidad(HTMLParser):
+    """Lee una página y junta lo que miran los cuatro controles de UI-03 (D-109 punto 8): las filas con algún ``<th>`` sin texto,
+    los ``<a>`` con ``aria-pressed``, los campos (``input`` que no sea de `TIPOS_DE_INPUT_SIN_ETIQUETA`, ``select``, ``textarea``,
+    salvo los que tienen ``aria-hidden="true"``) sin etiqueta asociada y los títulos que saltan niveles después del primer ``h1``. Lee el HTML, no el CSS: una etiqueta con
+    ``display:none`` cuenta como etiqueta."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.problemas = {control: [] for control in CONTROLES_DE_ACCESIBILIDAD}
+        self._oculto = 0  # dentro de <script> o <style>
+        # Encabezados de la fila actual: [texto, tiene_aria_label] por cada <th>; el <th> abierto es el último.
+        self._fila = []
+        self._en_th = 0
+        # Enlace abierto con aria-pressed: su texto se junta hasta cerrarlo.
+        self._enlace = None
+        # Campos y etiquetas: se resuelven al cerrar, porque la <label for> puede venir antes o después del campo.
+        self._campos = []
+        self._etiquetas_for = set()
+        self._en_label = 0
+        # Títulos: (nivel, texto) en orden; el abierto es el último.
+        self._titulos = []
+        self._en_titulo = False
+
+    def handle_starttag(self, etiqueta, atributos):
+        atributos = dict(atributos)
+        if etiqueta in ("script", "style"):
+            self._oculto += 1
+        elif etiqueta == "tr":
+            self._fila = []
+        elif etiqueta == "th":
+            self._fila.append(["", bool((atributos.get("aria-label") or "").strip())])
+            self._en_th += 1
+        elif etiqueta == "a" and "aria-pressed" in atributos:
+            self._enlace = {"href": atributos.get("href") or "", "texto": ""}
+        elif etiqueta == "label":
+            self._en_label += 1
+            if atributos.get("for"):
+                self._etiquetas_for.add(atributos["for"])
+        elif etiqueta in ("input", "select", "textarea"):
+            tipo = (atributos.get("type") or "text").lower() if etiqueta == "input" else etiqueta
+            # Un campo con aria-hidden="true" no llega al lector de pantalla (el `username` oculto para el administrador de
+            # contraseñas de Mi perfil y de elegir contraseña): no necesita etiqueta.
+            if tipo not in TIPOS_DE_INPUT_SIN_ETIQUETA and atributos.get("aria-hidden") != "true":
+                self._campos.append(
+                    {
+                        "descripcion": f"{etiqueta}{'' if etiqueta != 'input' else '[' + tipo + ']'} "
+                        f"name={atributos.get('name') or '—'} id={atributos.get('id') or '—'}",
+                        "id": atributos.get("id"),
+                        "etiquetado": self._en_label > 0
+                        or bool((atributos.get("aria-label") or "").strip())
+                        or bool((atributos.get("aria-labelledby") or "").strip()),
+                    }
+                )
+        elif etiqueta in TITULOS:
+            self._titulos.append([int(etiqueta[1]), ""])
+            self._en_titulo = True
+
+    def handle_endtag(self, etiqueta):
+        if etiqueta in ("script", "style") and self._oculto:
+            self._oculto -= 1
+        elif etiqueta == "th" and self._en_th:
+            self._en_th -= 1
+        elif etiqueta == "tr":
+            self._cerrar_fila()
+        elif etiqueta == "a" and self._enlace is not None:
+            self.problemas[ENLACE_CON_ARIA_PRESSED].append(
+                f"«{' '.join(self._enlace['texto'].split())}» → {self._enlace['href']}"
+            )
+            self._enlace = None
+        elif etiqueta == "label" and self._en_label:
+            self._en_label -= 1
+        elif etiqueta in TITULOS:
+            self._en_titulo = False
+
+    def handle_data(self, datos):
+        if self._oculto:
+            return
+        if self._en_th and self._fila:
+            self._fila[-1][0] += datos
+        if self._enlace is not None:
+            self._enlace["texto"] += datos
+        if self._en_titulo and self._titulos:
+            self._titulos[-1][1] += datos
+
+    def _cerrar_fila(self):
+        """Si la fila tiene algún ``<th>`` sin texto ni ``aria-label``, la anota con sus encabezados («∅» el vacío)."""
+        if any(not texto.strip() and not aria for texto, aria in self._fila):
+            encabezados = " | ".join(" ".join(texto.split()) or ("(aria-label)" if aria else "∅") for texto, aria in self._fila)
+            self.problemas[TH_SIN_TEXTO].append(encabezados)
+        self._fila = []
+
+    def close(self):
+        super().close()
+        self._cerrar_fila()
+        for campo in self._campos:
+            if not campo["etiquetado"] and not (campo["id"] and campo["id"] in self._etiquetas_for):
+                self.problemas[CAMPO_SIN_ETIQUETA].append(campo["descripcion"])
+        anterior = None
+        for nivel, texto in self._titulos:
+            if anterior is None:
+                if nivel == 1:
+                    anterior = 1  # los títulos de antes del primer h1 (el marco) no cuentan
+                continue
+            if nivel > anterior + 1:
+                self.problemas[SALTO_DE_TITULO].append(f"h{anterior} → h{nivel} «{' '.join(texto.split())}»")
+            anterior = nivel
+
+
+def problemas_de_accesibilidad(html):
+    """``{control: [problemas]}`` de una página, con los números de cada problema como «N» y sin repetir."""
+    lector = _LectorDeAccesibilidad()
+    lector.feed(html)
+    lector.close()
+    return {control: sorted({_sin_digitos(p) for p in problemas}) for control, problemas in lector.problemas.items()}
 
 
 def ruta_interna(href):
@@ -232,16 +370,18 @@ class RedDePantallasTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
                         respuesta = cliente.get(ruta)
                         transaction.set_rollback(True)
                     visitadas.add(clave_de_recorrido(ruta))
-                    texto, enlaces = None, []
+                    texto, enlaces, accesibilidad = None, [], None
                     tipo = respuesta.get("Content-Type", "")
                     if respuesta.status_code == 200 and tipo.startswith("text/html"):
-                        texto, enlaces = leer_html(respuesta.content.decode(respuesta.charset or "utf-8", errors="replace"))
+                        html = respuesta.content.decode(respuesta.charset or "utf-8", errors="replace")
+                        texto, enlaces = leer_html(html)
+                        accesibilidad = problemas_de_accesibilidad(html)
                     elif 300 <= respuesta.status_code < 400 and respuesta.get("Location"):
                         enlaces = [respuesta["Location"]]
                     visitas.append(
                         Visita(
                             clave, ruta, respuesta.status_code, texto, excepciones[0] if excepciones else None, fase,
-                            list(origenes.get(clave_de_recorrido(ruta), [])),
+                            list(origenes.get(clave_de_recorrido(ruta), [])), accesibilidad,
                         )
                     )
                     return enlaces
@@ -339,6 +479,87 @@ class RedDePantallasTests(PlanDeCuentasMixin, ConDatosDeInventario, TestCase):
         lineas = [f"{', '.join(sorted(cuentas))} · {ruta} · {codigo}" for (ruta, codigo), cuentas in sorted(hallazgos.items())]
         self.assertEqual(lineas, [], "Códigos internos a la vista:\n" + "\n".join(lineas))
 
+    # ---- accesibilidad (UI-03; D-109 punto 8) ----
+
+    def _inventario_de(self, control):
+        """Las líneas «cuentas · ruta · problema» de un control de accesibilidad, agrupadas por ruta normalizada y problema."""
+        hallazgos = {}
+        paginas = 0
+        for v in self.visitas:
+            if v.accesibilidad is None:
+                continue
+            paginas += 1
+            for problema in v.accesibilidad[control]:
+                hallazgos.setdefault((ruta_normalizada(v.ruta), problema), set()).add(v.cuenta)
+        self.assertGreater(paginas, 100)  # que el control no pase sin revisar nada
+        return [f"{', '.join(sorted(cuentas))} · {ruta} · {problema}" for (ruta, problema), cuentas in sorted(hallazgos.items())]
+
+    def test_ui03_toda_th_tiene_texto(self):
+        """D-109 punto 8 (UX-09): todo encabezado de tabla tiene texto, visible o solo para lectores de pantalla («Acciones»)."""
+        lineas = self._inventario_de(TH_SIN_TEXTO)
+        self.assertEqual(lineas, [], "Filas de encabezado con un <th> sin texto (∅):\n" + "\n".join(lineas))
+
+    def test_ui03_ningun_enlace_tiene_aria_pressed(self):
+        """D-109 punto 8 (UX-10): la vista activa se marca con `aria-current="page"` (o `aria-selected` con `role="tab"`); `aria-pressed`
+        solo vale en un botón."""
+        lineas = self._inventario_de(ENLACE_CON_ARIA_PRESSED)
+        self.assertEqual(lineas, [], "Enlaces con aria-pressed:\n" + "\n".join(lineas))
+
+    def test_ui03_todo_campo_tiene_etiqueta(self):
+        """D-109 punto 8 (UX-11): todo campo visible tiene una etiqueta asociada (`<label for>`, una `<label>` que lo envuelve,
+        `aria-label` o `aria-labelledby`)."""
+        lineas = self._inventario_de(CAMPO_SIN_ETIQUETA)
+        self.assertEqual(lineas, [], "Campos sin etiqueta:\n" + "\n".join(lineas))
+
+    def test_ui03_los_titulos_no_saltan_niveles(self):
+        """D-109 punto 8 (UX-15): después del `h1`, ningún título salta un nivel (`h1` → `h3` sin `h2` en el medio)."""
+        lineas = self._inventario_de(SALTO_DE_TITULO)
+        self.assertEqual(lineas, [], "Títulos que saltan niveles:\n" + "\n".join(lineas))
+
+
+class ControlesDeAccesibilidadTests(SimpleTestCase):
+    """UI-03 paso 1: cada control de accesibilidad de la red detecta su caso y deja pasar el correcto (con HTML de ejemplo)."""
+
+    def test_ui03_th_vacio_se_detecta_y_el_de_solo_lectores_pasa(self):
+        """UX-09: `<th></th>` es un problema; `<th><span class="sr">Acciones</span></th>` y `<th aria-label="…">` no."""
+        self.assertEqual(
+            problemas_de_accesibilidad("<table><tr><th>Código</th><th></th></tr></table>")[TH_SIN_TEXTO], ["Código | ∅"]
+        )
+        bien = '<table><tr><th>Código</th><th><span class="sr">Acciones</span></th><th aria-label="Ficha"></th></tr></table>'
+        self.assertEqual(problemas_de_accesibilidad(bien)[TH_SIN_TEXTO], [])
+
+    def test_ui03_aria_pressed_en_enlace_se_detecta_y_en_boton_pasa(self):
+        """UX-10: `aria-pressed` en un `<a>` es un problema; en un `<button>`, no."""
+        html = '<a class="chip" href="/x/?a=1" aria-pressed="true">Todas</a><button aria-pressed="true">Todas</button>'
+        self.assertEqual(problemas_de_accesibilidad(html)[ENLACE_CON_ARIA_PRESSED], ["«Todas» → /x/?a=N"])
+        self.assertEqual(problemas_de_accesibilidad('<a href="/x/" aria-current="page">Todas</a>')[ENLACE_CON_ARIA_PRESSED], [])
+
+    def test_ui03_campo_sin_etiqueta_se_detecta_y_las_cuatro_formas_pasan(self):
+        """UX-11: un campo sin etiqueta es un problema; `<label for>` (antes o después), `<label>` que envuelve, `aria-label` y
+        `aria-labelledby` lo resuelven. Los `hidden`, los botones y los campos con `aria-hidden="true"` no necesitan etiqueta."""
+        mal = '<input name="dias_3" id="id_dias_3"><select name="causa"></select><textarea name="d"></textarea>'
+        self.assertEqual(
+            problemas_de_accesibilidad(mal)[CAMPO_SIN_ETIQUETA],
+            ["input[text] name=dias_N id=id_dias_N", "select name=causa id=—", "textarea name=d id=—"],
+        )
+        bien = (
+            '<label for="a">A</label><input id="a" name="a"><input id="b" name="b"><label class="sr" for="b">B</label>'
+            '<label>C <input name="c" type="checkbox"></label><select aria-label="D" name="d"></select>'
+            '<span id="e-t">E</span><textarea aria-labelledby="e-t" name="e"></textarea>'
+            '<input type="hidden" name="f"><input type="submit" value="Guardar"><input type="button" value="x">'
+            '<input class="sr" name="username" autocomplete="username" tabindex="-1" aria-hidden="true">'
+        )
+        self.assertEqual(problemas_de_accesibilidad(bien)[CAMPO_SIN_ETIQUETA], [])
+
+    def test_ui03_salto_de_titulo_se_detecta_y_la_escalera_pasa(self):
+        """UX-15: después del `h1`, un `h3` sin `h2` es un salto; volver a subir (h3 → h2) no lo es, y lo de antes del `h1` no cuenta."""
+        self.assertEqual(
+            problemas_de_accesibilidad("<h3>Marco</h3><h1>Ficha</h1><h3>Datos</h3>")[SALTO_DE_TITULO], ["h1 → h3 «Datos»"]
+        )
+        self.assertEqual(
+            problemas_de_accesibilidad("<h3>Marco</h3><h1>Ficha</h1><h2>A</h2><h3>B</h3><h2>C</h2><h3>D</h3>")[SALTO_DE_TITULO], []
+        )
+
 
 def _apps_propias():
     """Las apps del proyecto (las que están dentro de BASE_DIR)."""
@@ -432,6 +653,22 @@ class EscaneoDeFuentesTests(SimpleTestCase):
                 for codigo in codigos_internos(linea):
                     hallazgos.append(f"{plantilla.resolve().relative_to(base).as_posix()} · {codigo} · {linea.strip()[:120]}")
         self.assertEqual(hallazgos, [], "Códigos internos en plantillas:\n" + "\n".join(hallazgos))
+
+    def test_ui03_ninguna_plantilla_tiene_un_enlace_con_aria_pressed(self):
+        """D-109 punto 8 (UX-10): ningún `<a>` de ninguna plantilla lleva `aria-pressed` (solo vale en un botón). La red no llega con GET a
+        todas las pantallas (Recepción y Corrección de Compras, por ejemplo): por eso se buscan también en las fuentes. Lo pidió el
+        estudiante al revisar el paso 1 de UI-03 (27/11/2026)."""
+        plantillas = [p for app in _apps_propias() for p in app.glob("templates/**/*.html")]
+        self.assertGreater(len(plantillas), 100)  # que la prueba no pase sin revisar nada
+        base = Path(settings.BASE_DIR).resolve()
+        hallazgos = []
+        for plantilla in plantillas:
+            texto = plantilla.read_text(encoding="utf-8")
+            for etiqueta in re.finditer(r"<a\b[^>]*>", texto):
+                if re.search(r"\baria-pressed\b", etiqueta.group(0)):
+                    linea = texto.count("\n", 0, etiqueta.start()) + 1
+                    hallazgos.append(f"{plantilla.resolve().relative_to(base).as_posix()}:{linea} · {etiqueta.group(0)[:120]}")
+        self.assertEqual(hallazgos, [], "Enlaces con aria-pressed en plantillas:\n" + "\n".join(hallazgos))
 
     def test_ui02_los_mensajes_de_las_vistas_no_tienen_codigos_internos(self):
         """Los avisos `messages.success/info/warning/error(…)` de los archivos de Python de las apps (sin pruebas ni migraciones)."""

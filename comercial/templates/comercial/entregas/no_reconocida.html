@@ -14,7 +14,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
   <div class="alert alert-danger" role="status">{% icono "warn" 16 %}<div>El cliente indicó que <b>no recibió la entrega</b>: «{{ ficha.motivo_del_cliente }}».</div></div>
 
   <div class="card seg">
-    <div class="card-h"><h3>Lo que registró la entrega</h3></div>
+    <div class="card-h"><h2>Lo que registró la entrega</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Concretada</dt><dd>{% if ficha.concretada_en %}{{ ficha.concretada_en|date:"d/m/Y H:i" }}{% else %}{{ ficha.entrega.fecha_resolucion_orden|date:"d/m/Y" }}{% endif %}</dd>
@@ -32,7 +32,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
   </div>
 
   <div class="card seg">
-    <div class="card-h"><h3>Intentos fallidos y envases</h3></div>
+    <div class="card-h"><h2>Intentos fallidos y envases</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Intentos fallidos</dt><dd>{% if ficha.intentos %}<ul class="portal-lista">{% for i in ficha.intentos %}<li>{{ i.fecha_hora|date:"d/m/Y H:i" }} · {{ i.get_motivo_display }}{% if i.descripcion %} · {{ i.descripcion }}{% endif %}</li>{% endfor %}</ul>{% else %}<span class="muted">Ninguno</span>{% endif %}</dd>
@@ -45,7 +45,7 @@ Sin JavaScript: una página y un POST. Recibe «ficha», «errores» (por campo)
   <form method="post" action="{% url 'comercial:entrega_no_reconocida' ficha.entrega.pk %}" novalidate>
     {% csrf_token %}
     <div class="card seg">
-      <div class="card-h"><h3>Resultado de la averiguación</h3></div>
+      <div class="card-h"><h2>Resultado de la averiguación</h2></div>
       <div class="card-b">
         <fieldset class="rline">
           <legend class="lbl">¿Qué pasó con la entrega?</legend>

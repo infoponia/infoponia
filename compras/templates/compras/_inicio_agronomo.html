@@ -15,7 +15,7 @@ con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. T
     <div class="card-h"><b>Por recibir</b><span class="muted sm">{{ i.cantidad_por_recibir }} entrega{{ i.cantidad_por_recibir|pluralize }} pendiente{{ i.cantidad_por_recibir|pluralize }}</span><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:por_recibir' %}">Ver todo</a></div>
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Orden</th><th>Proveedor</th><th>Entrega esperada</th><th></th></tr></thead>
+        <thead><tr><th>Orden</th><th>Proveedor</th><th>Entrega esperada</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for e in i.por_recibir %}
         <tr>
@@ -35,7 +35,7 @@ con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. T
     <div class="card-h"><b>Pedidos que vencieron</b></div>
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Pedido</th><th>Fecha límite</th><th class="right">Cotizaciones</th><th></th></tr></thead>
+        <thead><tr><th>Pedido</th><th>Fecha límite</th><th class="right">Cotizaciones</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for f in i.pedidos_por_resolver %}
         <tr>
@@ -55,7 +55,7 @@ con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. T
     <div class="card-h"><b>Órdenes rechazadas</b><span class="muted sm">de los últimos días</span></div>
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Orden</th><th>Pedido</th><th>Motivo</th><th></th></tr></thead>
+        <thead><tr><th>Orden</th><th>Pedido</th><th>Motivo</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for o in i.ordenes_rechazadas %}
         <tr>
@@ -75,7 +75,7 @@ con «Pedir» (extensión 1a: ``?iin=``) y los pedidos esperando cotizaciones. T
     <div class="card-h"><b>Insumos bajo el mínimo</b><span class="spacer"></span><a class="btn btn-text btn-sm" href="{% url 'compras:pedido_nuevo' %}">Nuevo pedido</a></div>
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Insumo</th><th class="right">Disponible</th><th class="right">Mínimo</th><th></th></tr></thead>
+        <thead><tr><th>Insumo</th><th class="right">Disponible</th><th class="right">Mínimo</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for f in i.bajo_el_minimo %}
         <tr>

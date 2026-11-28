@@ -16,7 +16,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
   {% if error %}<div class="alert alert-warn" role="alert">{% icono "warn" 16 %}<div>{{ error }}</div></div>{% endif %}
 
   <div class="card seg">
-    <div class="card-h"><h3>La entrega</h3></div>
+    <div class="card-h"><h2>La entrega</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Cliente</dt><dd>{{ l.suministro.cliente.nombre_visible }}</dd>
@@ -31,13 +31,13 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
 
   {% if s.tipo_solicitud == "queja" %}
   <div class="card seg">
-    <div class="card-h"><h3>Lo que indicó el cliente</h3></div>
+    <div class="card-h"><h2>Lo que indicó el cliente</h2></div>
     <div class="card-b">{% if s.motivo_queja %}{{ s.motivo_queja }}{% else %}<span class="muted">El cliente reclama el retraso de la entrega.</span>{% endif %}</div>
   </div>
   {% endif %}
 
   <div class="card seg">
-    <div class="card-h"><h3>Detalles afectados</h3></div>
+    <div class="card-h"><h2>Detalles afectados</h2></div>
     <div class="card-b flush"><table class="data-table">
       {% if s.tipo_solicitud == "discrepancia" %}
       <thead><tr><th>Producto</th><th class="right">Mínimo pactado</th><th class="right">Planif. / entreg. / perd. / dev.</th><th class="right">Por planta faltante</th><th class="right">Monto</th></tr></thead>
@@ -55,7 +55,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
   </div>
 
   <div class="card seg">
-    <div class="card-h"><h3>Pérdidas e intentos de entrega</h3></div>
+    <div class="card-h"><h2>Pérdidas e intentos de entrega</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Pérdidas</dt><dd>{% if ficha.perdidas %}<ul class="portal-lista">{% for cantidad, causa, descripcion in ficha.perdidas %}<li>{{ cantidad }} planta{{ cantidad|pluralize }} · {{ causa }}{% if descripcion %} · {{ descripcion }}{% endif %}</li>{% endfor %}</ul>{% else %}<span class="muted">Sin pérdidas registradas</span>{% endif %}</dd>
@@ -67,7 +67,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
 
   {% if s.estado_solicitud != "pendiente" %}
   <div class="card seg">
-    <div class="card-h"><h3>Decisión</h3></div>
+    <div class="card-h"><h2>Decisión</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Decisión</dt><dd>{{ s.get_estado_solicitud_display }}{% if ficha.cuenta_como_incumplimiento %}<span class="sub2">Cuenta como incumplimiento</span>{% endif %}</dd>
@@ -91,7 +91,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
 
   {% if ficha.historial %}
   <div class="card seg">
-    <div class="card-h"><h3>Historial de resoluciones anuladas</h3></div>
+    <div class="card-h"><h2>Historial de resoluciones anuladas</h2></div>
     <div class="card-b flush"><table class="data-table">
       <thead><tr><th>Resolución anulada</th><th>Anulada</th><th>Motivo</th></tr></thead>
       <tbody>{% for a in ficha.historial %}<tr>
@@ -111,7 +111,7 @@ cantidades y montos, las pérdidas, los intentos fallidos (con el destacado de 4
   <form method="post" action="{% url 'comercial:solicitud_resolver_revisar' s.pk %}" novalidate>
     {% csrf_token %}
     <div class="card seg">
-      <div class="card-h"><h3>{% if s.tipo_solicitud == "queja" %}Resolver la queja{% else %}Evaluar la discrepancia{% endif %}</h3></div>
+      <div class="card-h"><h2>{% if s.tipo_solicitud == "queja" %}Resolver la queja{% else %}Evaluar la discrepancia{% endif %}</h2></div>
       <div class="card-b">
         <fieldset class="rline">
           <legend class="lbl">Decisión <span class="req">*</span></legend>

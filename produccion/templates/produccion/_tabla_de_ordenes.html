@@ -2,7 +2,7 @@
 {% if filas %}
 <div class="card"><div class="card-b flush">
   <table class="data-table">
-    <thead><tr><th>Orden</th><th>Tipo</th><th>Invernadero</th><th>Qué</th><th>Fecha</th><th>Prioridad</th>{% if ver_cosechas %}<th>Origen</th><th>Contrato</th>{% endif %}<th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Orden</th><th>Tipo</th><th>Invernadero</th><th>Qué</th><th>Fecha</th><th>Prioridad</th>{% if ver_cosechas %}<th>Origen</th><th>Contrato</th>{% endif %}<th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
     <tbody>
     {% for f in filas %}
     <tr>

@@ -3,7 +3,7 @@ resumen con sus advertencias (paso 6), donde se confirma o se vuelve a cambiar (
 JavaScript, el botón «Actualizar el formulario»). Las validaciones corren solo al apretar «Ver resumen» o «Confirmar». Recibe «emision» (para, datos, accion, pendiente, reglas, errores, general y resumen). Paso 4: las reglas activas del actuador elegido (IOT-06); la advertencia 6b va en el resumen.{% endcomment %}
 <div id="emision" class="card" style="margin-bottom:18px">
   {% with para=emision.para datos=emision.datos errores=emision.errores resumen=emision.resumen %}
-  <div class="card-h"><h3>{% icono "send" 16 %} Emitir comando</h3>
+  <div class="card-h"><h2>{% icono "send" 16 %} Emitir comando</h2>
     {% if para.elegido %}<span class="spacer"></span><span class="sm muted">Estado informado: <b>{{ para.elegido.estado_texto }}</b>{% if para.elegido.desde %} desde las {{ para.elegido.desde|date:"H:i" }}{% endif %}</span>{% endif %}
   </div>
   <div class="card-b">
@@ -22,7 +22,7 @@ JavaScript, el botón «Actualizar el formulario»). Las validaciones corren sol
       <input type="hidden" name="accion" value="{{ resumen.accion.pk }}">
       <input type="hidden" name="valor" value="{{ datos.valor|default_if_none:'' }}">
       <input type="hidden" name="descripcion" value="{{ resumen.descripcion }}">
-      <h4 class="sec-h">Resumen del comando</h4>
+      <h3 class="sec-h">Resumen del comando</h3>
       <div class="resumen"><dl>
         <dt>Actuador</dt><dd>{{ resumen.actuador.tipo_actuador.nombre_actuador }} · {{ resumen.actuador.identificador_equipo }}</dd>
         <dt>Acción</dt><dd>{{ resumen.accion.nombre_accion }} <span class="code muted">{{ resumen.accion.comando.codigo }}</span></dd>
