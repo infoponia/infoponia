@@ -11,7 +11,7 @@ todo está asignado, pero solo si hay algún invernadero activo.{% endcomment %}
   {% if datos.filas or datos.transportistas_sin_invernadero %}
   <div class="card seg">
     <div class="card-h">
-      <h3>{% icono "users" 16 %} Personal por asignar</h3>
+      <h2>{% icono "users" 16 %} Personal por asignar</h2>
       <span class="spacer"></span>
       <span class="status-badge status-warn">{{ datos.pendientes }} pendiente{{ datos.pendientes|pluralize:"s" }}</span>
     </div>

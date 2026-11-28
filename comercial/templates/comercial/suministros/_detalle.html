@@ -133,7 +133,7 @@ entrega y la verificación de stock de la ventana (9e). Los errores van junto a 
   {% if fila.periodos_de_la_ventana %}
   <table class="data-table ventana-stock">
     <caption class="sr">Verificación de stock de los períodos de la ventana</caption>
-    <thead><tr><th>Se reserva ahora</th><th class="right">Pedido</th><th class="right">Disponible</th><th></th></tr></thead>
+    <thead><tr><th>Se reserva ahora</th><th class="right">Pedido</th><th class="right">Disponible</th><th><span class="sr">Situación</span></th></tr></thead>
     <tbody>
     {% for p in fila.periodos_de_la_ventana %}
       <tr><td>{{ p.fecha|date:"d/m/Y" }}</td><td class="right mono">{{ p.cantidad }}</td><td class="right mono">{{ p.disponible }}</td>

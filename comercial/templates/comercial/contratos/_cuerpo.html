@@ -121,7 +121,7 @@ hasta completar el anterior (criterio de interfaz del plan). Recibe «f» (el c�
       <p class="muted" style="margin-bottom:12px">Cada variedad va una sola vez, con un único precio. «Disponible» es lo que se puede reservar para esa fecha en {% if datos.modalidad == "retiro" %}el invernadero de retiro{% else %}{% if es_gerente %}los invernaderos del Vendedor{% else %}tus invernaderos{% endif %}{% endif %}: producto en cámara y lotes en Maduración que llegan a tiempo.</p>
       <div class="tablewrap">
         <table class="data-table renglones">
-          <thead><tr><th>Variedad</th><th class="right">Cantidad</th><th class="right">Precio unitario ($)</th><th class="right">Subtotal</th><th></th></tr></thead>
+          <thead><tr><th>Variedad</th><th class="right">Cantidad</th><th class="right">Precio unitario ($)</th><th class="right">Subtotal</th><th><span class="sr">Acciones</span></th></tr></thead>
           <tbody>
           {% for fila in f.filas %}
           <tr>

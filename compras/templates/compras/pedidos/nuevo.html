@@ -22,7 +22,7 @@ reciben cotizaciones. El primer botón del formulario es «Revisar pedido» (ocu
         {% if bajo_el_minimo %}
         <div class="tablewrap">
           <table class="data-table">
-            <thead><tr><th>Insumo</th><th class="right">Stock libre</th><th class="right">En camino</th><th class="right">Mínimo</th><th class="right">Sugerida</th><th></th></tr></thead>
+            <thead><tr><th>Insumo</th><th class="right">Stock libre</th><th class="right">En camino</th><th class="right">Mínimo</th><th class="right">Sugerida</th><th><span class="sr">Acciones</span></th></tr></thead>
             <tbody>
             {% for f in bajo_el_minimo %}
             <tr>

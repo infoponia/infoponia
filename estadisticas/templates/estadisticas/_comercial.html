@@ -13,7 +13,7 @@
 <div class="split est-grupo">
   <div class="card">
     <div class="card-title">Ventas por variedad</div>
-    <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Plantas</th><th class="right">Monto</th><th style="width:34%"></th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>Variedad</th><th class="right">Plantas</th><th class="right">Monto</th><th style="width:34%"><span class="sr">Proporción del monto</span></th></tr></thead><tbody>
     {% for x in v.variedades %}
       <tr><td><b>{{ x.variedad }}</b></td><td class="right">{{ x.plantas|miles }}</td><td class="right">{{ x.monto|pesos }}</td><td><div class="hbar" aria-hidden="true"><i style="width:{{ x.monto|ancho_de_barra:v.variedades.0.monto }}%"></i></div></td></tr>
     {% empty %}

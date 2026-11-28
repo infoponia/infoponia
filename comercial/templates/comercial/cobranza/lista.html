@@ -8,8 +8,8 @@
   <div class="page-h"><h1>Comercial</h1></div>
   {% include "comercial/_pestanas.html" with activa="cobranza" %}
   <div class="subtabs" role="tablist" aria-label="Cobranza" style="margin:12px 0">
-    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}" aria-pressed="{% if vista == 'pendientes' %}true{% else %}false{% endif %}" aria-selected="{% if vista == 'pendientes' %}true{% else %}false{% endif %}">Por cobrar</a>
-    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}?vista=cobros" aria-pressed="{% if vista == 'cobros' %}true{% else %}false{% endif %}" aria-selected="{% if vista == 'cobros' %}true{% else %}false{% endif %}">Cobros registrados</a>
+    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}" aria-selected="{% if vista == 'pendientes' %}true{% else %}false{% endif %}">Por cobrar</a>
+    <a class="chip" role="tab" href="{% url 'comercial:cobranza' %}?vista=cobros" aria-selected="{% if vista == 'cobros' %}true{% else %}false{% endif %}">Cobros registrados</a>
   </div>
 
   {% if vista == "cobros" %}
@@ -24,7 +24,7 @@
   </form>
   <div class="tablewrap">
     <table class="data-table">
-      <thead><tr><th>Cobro</th><th>Cliente</th><th>Entregas</th><th>Medio</th><th class="right">Monto</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Cobro</th><th>Cliente</th><th>Entregas</th><th>Medio</th><th class="right">Monto</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in datos.filas %}
         <tr>
@@ -56,7 +56,7 @@
   {% for g in grupos %}
   <details class="card cobg" style="margin-bottom:14px"{% if g.en_mora %} open{% endif %}>
     <summary class="card-h" style="cursor:pointer">
-      <h3>{{ g.cliente }}</h3><span class="muted sm"> · {{ g.cantidad }} entrega{{ g.cantidad|pluralize }}</span>
+      <h2>{{ g.cliente }}</h2><span class="muted sm"> · {{ g.cantidad }} entrega{{ g.cantidad|pluralize }}</span>
       <span class="spacer"></span>
       <span class="cobtot">Total a cobrar <b class="mono">{{ g.total|pesos }}</b>{% if g.en_mora %} · <b class="danger-t mono">{{ g.total_en_mora|pesos }} en mora</b>{% endif %}</span>
     </summary>

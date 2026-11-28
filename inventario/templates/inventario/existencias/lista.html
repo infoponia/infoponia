@@ -36,7 +36,7 @@ motivo «vencimiento». Las ventanas abren con HTMX; sin JavaScript, cada enlace
   <div class="tablewrap">
     <table class="data-table fixed" style="min-width:960px">
       <colgroup><col style="width:52px"><col><col style="width:210px"><col style="width:120px"><col style="width:170px"><col style="width:250px"></colgroup>
-      <thead><tr><th><span class="sr-only">Lotes</span></th><th>Insumo</th><th class="right">Stock libre</th><th class="right">Mínimo</th><th>Vencimiento</th><th></th></tr></thead>
+      <thead><tr><th><span class="sr-only">Lotes</span></th><th>Insumo</th><th class="right">Stock libre</th><th class="right">Mínimo</th><th>Vencimiento</th><th><span class="sr">Acciones</span></th></tr></thead>
       {% for f in filas %}
       {% with i=f.iin.insumo u=f.iin.insumo.unidad_medida_insumo %}
       <tbody class="inv-existencia">

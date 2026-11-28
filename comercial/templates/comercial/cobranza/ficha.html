@@ -10,7 +10,7 @@
   {% if ficha.puede_anular %}<div class="acts-fila" style="margin-bottom:12px"><a class="btn btn-danger" href="{% url 'comercial:cobro_anular' ficha.pago.pk %}">Anular</a></div>{% endif %}
   {% if ficha.anulacion %}
   <div class="card seg" style="margin-bottom:12px">
-    <div class="card-h"><h3>Anulación</h3></div>
+    <div class="card-h"><h2>Anulación</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Fecha</dt><dd>{{ ficha.anulacion.fecha_anulacion|date:"d/m/Y" }}</dd>
@@ -25,7 +25,7 @@
   </div>
   {% endif %}
   <div class="card seg">
-    <div class="card-h"><h3>El cobro</h3></div>
+    <div class="card-h"><h2>El cobro</h2></div>
     <div class="card-b">
       <dl class="dl two">
         <dt>Cliente</dt><dd>{{ ficha.cliente.nombre_visible }}</dd>
@@ -39,7 +39,7 @@
     </div>
   </div>
   <div class="card seg" style="margin-top:12px">
-    <div class="card-h"><h3>Entregas</h3></div>
+    <div class="card-h"><h2>Entregas</h2></div>
     <div class="card-b">
       <table class="data-table">
         <thead><tr><th>Entrega</th><th>Concretada</th><th>Vencimiento</th><th class="right">Cobrado</th><th class="right">Atraso</th></tr></thead>
@@ -55,7 +55,7 @@
     </div>
   </div>
   <div class="card seg" style="margin-top:12px">
-    <div class="card-h"><h3>Comprobante</h3></div>
+    <div class="card-h"><h2>Comprobante</h2></div>
     <div class="card-b">
       {% if ficha.aviso == "enviado" %}<p style="margin-top:0">El comprobante se envió al cliente.</p>
       {% elif ficha.aviso == "pendiente_envio" %}<p style="margin-top:0"><span class="status-badge status-warn">Pendiente de envío</span> No salió todavía: se reintenta solo cada día.</p>

@@ -11,7 +11,7 @@ el Gerente. Recibe «datos» con «cantidad», «monto_total» y «pendientes» 
     {% if datos.pendientes %}
     <div class="tablewrap">
       <table class="data-table">
-        <thead><tr><th>Proveedor</th><th>Listo desde</th><th class="right">Monto</th><th></th></tr></thead>
+        <thead><tr><th>Proveedor</th><th>Listo desde</th><th class="right">Monto</th><th><span class="sr">Acciones</span></th></tr></thead>
         <tbody>
         {% for p in datos.pendientes %}
         <tr>

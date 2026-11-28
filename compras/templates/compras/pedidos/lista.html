@@ -49,7 +49,7 @@ Los filtros se envían con «Filtrar»: sin JavaScript funciona igual. Se marca 
   {% if filas %}
   <div class="tablewrap">
     <table class="data-table">
-      <thead><tr><th>Pedido</th><th>Destino</th><th>Fecha límite</th><th>Proveedores</th><th class="right">Monto estimado</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th>Pedido</th><th>Destino</th><th>Fecha límite</th><th>Proveedores</th><th class="right">Monto estimado</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>
       {% for f in filas %}
       {% with p=f.pedido %}

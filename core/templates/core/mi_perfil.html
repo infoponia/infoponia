@@ -33,8 +33,10 @@ pide la contraseña actual). Tarea 06a.
             <label class="btn btn-ghost btn-sm cam" for="f-cam">Tomar foto</label>
             {% if user.foto_perfil %}<button class="btn btn-ghost btn-sm" type="submit" form="form-quitar-foto" data-enviando="Quitando…">Quitar</button>{% endif %}
           </div>
-          <input class="sr" type="file" id="f-file" name="foto" accept="image/jpeg,image/png,image/webp" data-foto>
-          <input class="sr" type="file" id="f-cam" name="foto_camara" accept="image/*" capture="user" data-foto>
+          {% comment %}La etiqueta visible de cada archivo es su botón; el de la cámara se oculta en computadora (.btn.cam), así que
+          los dos llevan también su aria-label (UX-11).{% endcomment %}
+          <input class="sr" type="file" id="f-file" name="foto" accept="image/jpeg,image/png,image/webp" data-foto aria-label="Elegir foto de perfil">
+          <input class="sr" type="file" id="f-cam" name="foto_camara" accept="image/*" capture="user" data-foto aria-label="Tomar foto de perfil con la cámara">
           {# El encuadre elegido en el editor: enteros en píxeles de la imagen ya orientada. Vacíos = recorte central. #}
           <input type="hidden" name="recorte_x" value="">
           <input type="hidden" name="recorte_y" value="">

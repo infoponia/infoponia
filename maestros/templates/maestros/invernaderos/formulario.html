@@ -30,7 +30,8 @@ ventana que pide confirmar el cambio de personal.{% endcomment %}
         {% for error in form.tipo_direccion.errors %}<div class="err">{{ error }}</div>{% endfor %}
       </div>
       <div class="grid3">
-        {% include "core/usuarios/_campo.html" with campo=form.provincia requerido=True %}
+        {# Si falta la ubicación, el error va en Localidad y se marcan también Provincia y Departamento si están vacíos (UX-12). #}
+        {% if form.localidad.errors and not form.provincia.value %}{% include "core/usuarios/_campo.html" with campo=form.provincia requerido=True invalido=True %}{% else %}{% include "core/usuarios/_campo.html" with campo=form.provincia requerido=True %}{% endif %}
         <div id="departamento-y-localidad" style="display:contents">{% include "maestros/invernaderos/_departamento_y_localidad.html" %}</div>
       </div>
       <div id="campos-direccion">{% include "maestros/invernaderos/_campos_direccion.html" %}</div>

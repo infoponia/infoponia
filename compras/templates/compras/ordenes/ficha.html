@@ -65,7 +65,7 @@ Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si `
       <div class="card-h"><b>Pagos</b><span class="muted sm">uno por proveedor, por lo recibido</span></div>
       <div class="tablewrap">
         <table class="data-table">
-          <thead><tr><th>Proveedor</th><th>Estado</th><th class="right">Monto</th><th></th></tr></thead>
+          <thead><tr><th>Proveedor</th><th>Estado</th><th class="right">Monto</th><th><span class="sr">Acciones</span></th></tr></thead>
           <tbody>
           {% for p in ficha.pagos %}
           <tr>
@@ -115,7 +115,7 @@ Recibe «ficha» (``FichaDeOrden``) y «orden». «Revisar y decidir» solo si `
       <div class="card-h"><b>Reclamos</b><span class="muted sm">por los inconvenientes de las recepciones</span></div>
       <div class="tablewrap">
         <table class="data-table">
-          <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead>
+          <thead><tr><th>Reclamo</th><th>Proveedor</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
           <tbody>
           {% for r in ficha.recepciones %}{% if r.reclamo %}
           <tr>

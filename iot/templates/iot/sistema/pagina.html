@@ -12,11 +12,11 @@ la ventana abierta («plantilla_de_ventana»).{% endcomment %}
   <div class="page-h"><h1>IoT</h1></div>
   {% include "iot/_marco_invernadero.html" %}
   {% if not elegido %}
-  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para mostrar</h3><p class="muted">Cuando haya un invernadero a tu alcance, vas a poder ver acá su sistema IoT.</p></div></div>
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h2>No hay invernaderos para mostrar</h2><p class="muted">Cuando haya un invernadero a tu alcance, vas a poder ver acá su sistema IoT.</p></div></div>
   {% elif not sistema %}
   <div class="card"><div class="card-b vacio">
     {% icono "router" 32 %}
-    <h3>{{ elegido.nombre_invernadero }} no tiene Sistema IoT</h3>
+    <h2>{{ elegido.nombre_invernadero }} no tiene Sistema IoT</h2>
     {% if opera and hay_insumos %}
     <p class="muted">Registrá el nodo central para empezar a recibir lecturas.</p>
     <a class="btn btn-primary" href="{% url 'iot:sistema_registrar' %}?invernadero={{ elegido.pk }}">{% icono "plus" 14 %} Registrar sistema IoT</a>
@@ -30,7 +30,7 @@ la ventana abierta («plantilla_de_ventana»).{% endcomment %}
   {% else %}
   <div class="card">
     <div class="card-h">
-      <h3>{% icono "router" 16 %} {{ nodo.nombre_nodo }}</h3><span class="spacer"></span>
+      <h2>{% icono "router" 16 %} {{ nodo.nombre_nodo }}</h2><span class="spacer"></span>
       {% if "modificar" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_modificar' sistema.pk %}">{% icono "pencil" 14 %} Modificar</a>{% endif %}
       {% if "desactivar" in acciones %}<a class="btn btn-ghost btn-sm" href="{% url 'iot:sistema_desactivar' sistema.pk %}" hx-get="{% url 'iot:sistema_desactivar' sistema.pk %}" hx-target="#ventana-confirmar" hx-swap="innerHTML">Desconectar</a>{% endif %}
       {% if "activar" in acciones %}<form method="post" action="{% url 'iot:sistema_activar' sistema.pk %}" style="display:inline">{% csrf_token %}<button class="btn btn-primary btn-sm" type="submit" data-enviando="Activando…">Activar</button></form>{% endif %}

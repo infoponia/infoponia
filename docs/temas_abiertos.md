@@ -1038,3 +1038,18 @@ Diferencias con la documentación:
 9. **`DESCRIPCION_DE_CUENTA`:** «Productos en Proceso» ya no dice que la mueven las transiciones (solo su merma asienta) e «Indemnizaciones por Atraso en el Pago» dice que la mueve el cobro con atraso (cierra el punto 9 de CON-04d y la nota de CON-04a sobre Productos en Proceso). **Falta** alinear el extracto `docs/casos_de_uso/contabilidad/plan_de_cuentas.md`, que conserva los textos viejos con códigos.
 10. **Docstring de `registrar_cobro`** (`comercial/servicios/cobranza.py`) dice «No crea el asiento (D-57)», pero lo crea desde CON-04d. No se tocó (es un servicio).
 11. **Decimales con punto en «Concretar siembra»:** el filtro `cantidad` de `produccion` muestra «2.5 L», no «2,5 L». Para UI-04 o UI-08.
+
+## UI-03 (accesibilidad; 28/11/2026): lo que se implementó distinto de lo escrito
+
+1. **`.sr` en lugar de sumar `.sr-only`**: la clase de core ya existía; los `.sr-only` de IoT e Inventario quedan (decisión del estudiante).
+2. **El control de etiquetas de la red saltea los campos con `aria-hidden="true"`** (el `username` oculto para el administrador de contraseñas).
+3. **Concretar cosecha ya tenía las etiquetas** que la revisión (UX-11) daba por faltantes; no se cambió.
+4. **La columna del medio del Libro diario y otras cinco columnas sin título no eran de acciones**: llevan su nombre, no «Acciones».
+5. **`.vacio h2` va en `infoponia.css`** y no en `iot.css` (decisión del estudiante, opción b).
+6. **Los `h3.ped-sub` (Registrar recepción) y `h3.sec-h` (formulario de Sistema IoT) pasaron a `h2`** y toman el espaciado del `h2` de página
+   (0,14 px), como los `h2.ped-sub` y `h2.sec-h` que ya existían.
+7. **`desplegable.js` anuncia como inválido todo desplegable con error**, no solo los de Nuevo invernadero.
+8. **Pendiente para UI-06:** Django pone `aria-describedby="id_<campo>_error"` en los campos con error, pero el `.err` de `_campo.html` no tiene
+   ese `id`.
+9. **Sin `tblib`, `--parallel` tumba la corrida ante cualquier falla** en vez de informarla. Agregarlo a las dependencias de desarrollo necesita
+   permiso.

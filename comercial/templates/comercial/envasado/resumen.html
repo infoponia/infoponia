@@ -16,7 +16,7 @@ No escribe. Todo se escapa.{% endcomment %}
     {% for iin_id, cantidad in carga.filas %}<input type="hidden" name="cantidad_{{ iin_id }}" value="{{ cantidad }}">{% endfor %}
     <div class="stack">
       <div class="card"><div class="card-title">Envases</div>
-        <table class="data-table"><thead><tr><th>Envase</th><th class="right">Antes</th><th class="right">Ahora</th><th class="right">Queda disponible</th><th></th></tr></thead><tbody>
+        <table class="data-table"><thead><tr><th>Envase</th><th class="right">Antes</th><th class="right">Ahora</th><th class="right">Queda disponible</th><th><span class="sr">Situación</span></th></tr></thead><tbody>
         {% for f in resumen.filas %}
           <tr>
             <td>{{ f.nombre }}</td>

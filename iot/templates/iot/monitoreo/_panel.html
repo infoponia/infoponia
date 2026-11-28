@@ -6,7 +6,7 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
 {% if not panel.sistema %}
   <div class="card"><div class="card-b vacio">
     {% icono "router" 32 %}
-    <h3>{{ elegido.nombre_invernadero }} no tiene Sistema IoT</h3>
+    <h2>{{ elegido.nombre_invernadero }} no tiene Sistema IoT</h2>
     {% if panel.puede_registrar %}
     <p class="muted">Registrá el sistema para recibir lecturas y emitir comandos.</p>
     <a class="btn btn-primary" href="{% url 'iot:sistema_registrar' %}?invernadero={{ elegido.pk }}">{% icono "plus" 14 %} Registrar Sistema IoT</a>
@@ -34,11 +34,11 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>{% icono "warn" 16 %} Alertas activas</h3></div>
+    <div class="card-h"><h2>{% icono "warn" 16 %} Alertas activas</h2></div>
     {% if panel.aviso_de_alertas %}<div class="card-b"><div class="alert alert-info" role="status">{% icono "info" 16 %}<div>{{ panel.aviso_de_alertas }}</div></div></div>{% endif %}
     {% if filas_de_alertas %}
     <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
-      <thead><tr><th>Severidad</th><th>Alerta</th><th>Detalle</th><th></th></tr></thead>
+      <thead><tr><th>Severidad</th><th>Alerta</th><th>Detalle</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>{% for f in filas_de_alertas %}
         <tr>
           <td><span class="status-badge status-{{ f.severidad.1 }}">{{ f.severidad.0 }}</span></td>
@@ -52,7 +52,7 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>{% icono "activity" 16 %} Sensores</h3></div>
+    <div class="card-h"><h2>{% icono "activity" 16 %} Sensores</h2></div>
     <div class="card-b">
       {% if panel.resumido %}<p class="xs muted" style="margin-bottom:12px">Más de 24 horas: se grafica el promedio de cada hora (línea) y su mínimo y máximo (franja), con los resúmenes horarios.</p>{% endif %}
       {% for g in panel.grupos %}
@@ -81,9 +81,9 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>{% icono "cpu" 16 %} Actuadores</h3></div>
+    <div class="card-h"><h2>{% icono "cpu" 16 %} Actuadores</h2></div>
     <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
-      <thead><tr><th>Equipo</th><th>Estado informado por el nodo</th><th>Situación</th><th>Compatibilidad</th><th></th></tr></thead>
+      <thead><tr><th>Equipo</th><th>Estado informado por el nodo</th><th>Situación</th><th>Compatibilidad</th><th><span class="sr">Acciones</span></th></tr></thead>
       <tbody>{% for f in panel.actuadores %}
         <tr>
           <td><b>{{ f.actuador.tipo_actuador.nombre_actuador }}</b><span class="sub2">{{ f.actuador.identificador_equipo }}</span></td>
@@ -102,7 +102,7 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
   </div>
 
   <div class="card">
-    <div class="card-h"><h3>{% icono "sliders" 16 %} Umbral efectivo</h3></div>
+    <div class="card-h"><h2>{% icono "sliders" 16 %} Umbral efectivo</h2></div>
     {% if panel.umbral.hay %}
     <div class="tablewrap" style="border:none;box-shadow:none"><table class="data-table">
       <thead><tr><th>Variable</th><th>Mínimo</th><th>Máximo</th><th>Lo limita</th></tr></thead>
@@ -123,7 +123,7 @@ Nunca ``|safe`` sobre texto de una persona: lo único que se marca como seguro e
       <details class="parametros">
         <summary>Parámetros IoT <span class="xs muted">(solo lectura)</span></summary>
         {% for grupo, filas in grupos_de_parametros %}
-        <h4 class="sec-h">{{ grupo }}</h4>
+        <h3 class="sec-h">{{ grupo }}</h3>
         <dl class="parametros-lista">{% for etiqueta, valor in filas %}<dt>{{ etiqueta }}</dt><dd>{{ valor }}</dd>{% endfor %}</dl>
         {% endfor %}
         {% if es_gerente %}<p><a class="link xs" href="{% url 'configuracion:pantalla' %}">Modificar parámetros</a></p>{% endif %}

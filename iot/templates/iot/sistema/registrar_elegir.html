@@ -11,7 +11,7 @@ Técnico o la marca «sin Técnico» (extensión 6b); el Gerente ve solo los que
   {% if not hay_insumos %}
   <div class="alert alert-warn" role="status" style="margin-bottom:14px">{% icono "warn" 16 %}<div>Primero registrá en Compras e Inventario el insumo del nodo, en la categoría «Repuestos de hardware».{% if es_agronomo %} <a href="{% url 'inventario:insumo_nuevo' %}">Registrar el insumo</a>{% endif %}</div></div>
   {% elif not elegibles %}
-  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h3>No hay invernaderos para registrar</h3><p class="muted">Todos los invernaderos que operás ya tienen un sistema IoT.</p></div></div>
+  <div class="card"><div class="card-b vacio">{% icono "router" 32 %}<h2>No hay invernaderos para registrar</h2><p class="muted">Todos los invernaderos que operás ya tienen un sistema IoT.</p></div></div>
   {% else %}
   <p class="muted" style="margin-bottom:14px">Elegí el invernadero del que vas a registrar el sistema IoT.</p>
   <div class="stack tight">

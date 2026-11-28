@@ -3,7 +3,7 @@
 acción (COM-05b, COM-ASG-TRP). «Concretar retiro» es de COM-06. Recibe «datos», «filtros» y «consulta».{% endcomment %}
 <div class="tablewrap">
   <table class="data-table">
-    <thead><tr><th>Entrega</th><th>Cliente y destino</th><th>Fecha</th><th class="right">Peso</th><th>Transportista</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr><th>Entrega</th><th>Cliente y destino</th><th>Fecha</th><th class="right">Peso</th><th>Transportista</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead>
     <tbody>
     {% for f in datos.filas %}
       <tr{% if f.sin_transportista %} class="r-warn"{% endif %}>

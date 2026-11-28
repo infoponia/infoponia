@@ -13,6 +13,7 @@ envía todo lo escrito sin validar y vuelve a dibujar esta sección.{% endcommen
     <div class="hint" style="margin-top:3px">{% if fila.fija %}{% if fila.tipo.codigo == "germinacion" %}Etapa obligatoria: todo cultivo comienza en Germinación.{% else %}Etapa obligatoria: es la etapa en la que el cultivo puede cosecharse.{% endif %}{% elif fila.marcada %}Incluida en el ciclo.{% else %}Opcional para este perfil: marcala para incluirla.{% endif %}</div>
   </div>
   <div class="dur">
+    <label class="sr" for="{{ fila.dias.id_for_label }}">{{ fila.dias.label }}</label>
     <div class="inv-conunidad">{{ fila.dias }}<span class="muted sm">días</span></div>
     {% for error in fila.dias.errors %}<div class="err">{{ error }}</div>{% endfor %}
   </div>
